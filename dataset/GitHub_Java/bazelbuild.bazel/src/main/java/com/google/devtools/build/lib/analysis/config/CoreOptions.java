@@ -367,6 +367,20 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   public List<Map.Entry<String, String>> hostActionEnvironment;
 
   @Option(
+      name = "repo_env",
+      converter = Converters.OptionalAssignmentConverter.class,
+      allowMultiple = true,
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+      help =
+          "Specifies additional environment variables to be available only for repository rules."
+              + " Note that repository rules see the full environment anyway, but in this way"
+              + " configuration information can be passed to repositories through options without"
+              + " invalidating the action graph.")
+  public List<Map.Entry<String, String>> repositoryEnvironment;
+
+  @Option(
       name = "collect_code_coverage",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -514,9 +528,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = {OptionEffectTag.EXECUTION},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "Deprecated in favor of aspects. Use action_listener to attach an extra_action to"
-              + " existing build actions.")
+      help = "Use action_listener to attach an extra_action to existing build actions.")
   public List<Label> actionListeners;
 
   @Option(
@@ -611,6 +623,47 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
               + "target_environment values.")
   public Label autoCpuEnvironmentGroup;
 
+  /** Values for --experimental_dynamic_configs. */
+  public enum ConfigsMode {
+    /**
+     * Deprecated mode: Each configured target is evaluated with only the configuration fragments it
+     * needs by loading the target graph and examining the transitive requirements for each target
+     * before analysis begins.
+     *
+     * <p>To become a no-op soon: b/129289764
+     */
+    ON,
+    /** Default mode: Each configured target is evaluated with all fragments known to Blaze. */
+    NOTRIM,
+    /**
+     * Experimental mode: Each configured target is evaluated with only the configuration fragments
+     * it needs by visiting them with a full configuration to begin with and collapsing the
+     * configuration down to the fragments which were actually used.
+     */
+    RETROACTIVE;
+  }
+
+  /** Converter for --experimental_dynamic_configs. */
+  public static class ConfigsModeConverter extends EnumConverter<ConfigsMode> {
+    public ConfigsModeConverter() {
+      super(ConfigsMode.class, "configurations mode");
+    }
+  }
+
+  @Option(
+      name = "experimental_dynamic_configs",
+      defaultValue = "notrim",
+      converter = ConfigsModeConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {
+        OptionEffectTag.LOSES_INCREMENTAL_STATE,
+        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
+        OptionEffectTag.LOADING_AND_ANALYSIS,
+      },
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help = "Instantiates build configurations with the specified properties")
+  public ConfigsMode configsMode;
+
   /** Values for --experimental_output_paths. */
   public enum OutputPathsMode {
     /** Use the production output path model. */
@@ -700,42 +753,8 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   public ExecutionInfoModifier executionInfoModifier;
 
   @Option(
-      name = "incompatible_genquery_use_graphless_query",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      expansion = {
-        "--experimental_genquery_use_graphless_query=auto",
-      },
-      effectTags = {
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
-      },
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "Use graphless query and disable output ordering for genquery.")
-  public Void incompatibleUseGraphlessQuery;
-
-  @Option(
-      name = "noincompatible_genquery_use_graphless_query",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      expansion = {
-        "--experimental_genquery_use_graphless_query=false",
-      },
-      effectTags = {
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
-      },
-      help = "Do not use graphless query for genquery.")
-  public Void noincompatibleUseGraphlessQuery;
-
-  @Option(
       name = "experimental_genquery_use_graphless_query",
-      defaultValue = "auto",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {
         OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
@@ -826,16 +845,14 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   public List<Map.Entry<String, String>> commandLineFlagAliases;
 
   @Option(
-      name = "archived_tree_artifact_mnemonics_filter",
-      defaultValue = "-.*", // disabled by default
+      name = "experimental_send_archived_tree_artifact_inputs",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EXECUTION},
-      converter = RegexFilter.RegexFilterConverter.class,
+      defaultValue = "false",
       help =
-          "Regex filter for mnemonics of actions for which we should create archived tree"
-              + " artifacts. This option is a no-op for actions which do not generate tree"
-              + " artifacts.")
-  public RegexFilter archivedArtifactsMnemonicsFilter;
+          "Send input tree artifacts as a single archived file rather than sending each file in the"
+              + " artifact as a separate input.")
+  public boolean sendArchivedTreeArtifactInputs;
 
   /** Ways configured targets may provide the {@link Fragment}s they require. */
   public enum IncludeConfigFragmentsEnum {
@@ -852,7 +869,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     /** Provide the fragments required <em>directly</em> by this rule. */
     DIRECT,
     /** Provide the fragments required by this rule and its transitive dependencies. */
-    TRANSITIVE
+    TRANSITIVE;
   }
 
   /** Enum converter for --include_config_fragments_provider. */
@@ -873,6 +890,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     host.compilationMode = hostCompilationMode;
     host.isHost = true;
     host.isExec = false;
+    host.configsMode = configsMode;
     host.outputPathsMode = outputPathsMode;
     host.enableRunfiles = enableRunfiles;
     host.executionInfoModifier = executionInfoModifier;
@@ -882,6 +900,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     host.cpu = hostCpu;
     host.includeRequiredConfigFragmentsProvider = includeRequiredConfigFragmentsProvider;
     host.enableAggregatingMiddleman = enableAggregatingMiddleman;
+    host.sendArchivedTreeArtifactInputs = sendArchivedTreeArtifactInputs;
 
     // === Runfiles ===
     host.buildRunfilesManifests = buildRunfilesManifests;
@@ -915,9 +934,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     // Pass host action environment variables
     host.actionEnvironment = hostActionEnvironment;
     host.hostActionEnvironment = hostActionEnvironment;
-
-    // Pass archived tree artifacts filter.
-    host.archivedArtifactsMnemonicsFilter = archivedArtifactsMnemonicsFilter;
 
     return host;
   }
