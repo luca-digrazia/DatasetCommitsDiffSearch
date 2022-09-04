@@ -8,7 +8,6 @@ import com.google.common.hash.Hashing;
 import com.google.common.io.Resources;
 import com.google.common.net.HttpHeaders;
 import com.google.common.net.MediaType;
-
 import javax.servlet.ServletException;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServlet;
@@ -19,7 +18,6 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.util.List;
-
 import static com.google.common.base.Preconditions.checkArgument;
 
 public class AssetServlet extends HttpServlet {
@@ -220,11 +218,13 @@ public class AssetServlet extends HttpServlet {
         return new CachedAsset(readResource(requestedResourceURL), lastModified);
     }
 
-    protected URL getResourceUrl(String absoluteRequestedResourcePath) {
+    protected URL getResourceUrl(String absoluteRequestedResourcePath)
+    {
         return Resources.getResource(absoluteRequestedResourcePath);
     }
 
-    protected byte[] readResource(URL requestedResourceURL) throws IOException {
+    protected byte[] readResource(URL requestedResourceURL) throws IOException
+    {
         return Resources.toByteArray(requestedResourceURL);
     }
 
@@ -243,7 +243,7 @@ public class AssetServlet extends HttpServlet {
     private ImmutableList<ByteRange> parseRangeHeader(final String rangeHeader,
             final int resourceLength) {
         final ImmutableList.Builder<ByteRange> builder = ImmutableList.builder();
-        if (rangeHeader.contains("=")) {
+        if (rangeHeader.indexOf("=") != -1) {
             final String[] parts = rangeHeader.split("=");
             if (parts.length > 1) {
                 final List<String> ranges = Splitter.on(",").trimResults().splitToList(parts[1]);
