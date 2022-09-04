@@ -374,15 +374,15 @@ public final class CustomCommandLine extends CommandLine {
             hasMapEach ? (CommandLineItem.MapFn<Object>) arguments.get(argi++) : null;
         if (isNestedSet) {
           NestedSet<Object> values = (NestedSet<Object>) arguments.get(argi++);
-          ImmutableList<Object> list = values.toList();
-          mutatedValues = new ArrayList<>(list.size());
+          Collection<Object> collection = values.toCollection();
+          mutatedValues = new ArrayList<>(collection.size());
           if (mapFn != null) {
             Consumer<String> args = mutatedValues::add; // Hoist out of loop to reduce GC
-            for (Object object : list) {
+            for (Object object : collection) {
               mapFn.expandToCommandLine(object, args);
             }
           } else {
-            for (Object object : list) {
+            for (Object object : collection) {
               mutatedValues.add(CommandLineItem.expandToCommandLine(object));
             }
           }
