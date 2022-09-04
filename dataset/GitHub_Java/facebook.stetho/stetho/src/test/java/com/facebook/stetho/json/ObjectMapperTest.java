@@ -1,8 +1,18 @@
-package  com.facebook.stetho.json;
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
+package com.facebook.stetho.json;
 
 import android.os.Build;
 import com.facebook.stetho.json.annotation.JsonProperty;
 import com.facebook.stetho.json.annotation.JsonValue;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.Before;
@@ -19,6 +29,7 @@ import java.util.ListIterator;
 import java.util.Objects;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests for {@link ObjectMapper}
@@ -59,14 +70,23 @@ public class ObjectMapperTest {
     njp.child1.testString = "testString";
     njp.child2.i = 4;
 
-    String expected = "{\"child1\":{\"testString\":\"testString\"},\"child2\":{\"i\":4}}";
-    NestedJsonProperty parsed = mObjectMapper.convertValue(
-        new JSONObject(expected),
+    // The ordering of serialization changes depending on Java 7 vs Java 8.
+    String expected7 = "{\"child1\":{\"testString\":\"testString\"},\"child2\":{\"i\":4}}";
+    String expected8 = "{\"child2\":{\"i\":4},\"child1\":{\"testString\":\"testString\"}}";
+
+    NestedJsonProperty parsed7 = mObjectMapper.convertValue(
+        new JSONObject(expected7),
         NestedJsonProperty.class);
-    assertEquals(njp, parsed);
+    assertEquals(njp, parsed7);
+
+    NestedJsonProperty parsed8 = mObjectMapper.convertValue(
+        new JSONObject(expected8),
+        NestedJsonProperty.class);
+    assertEquals(njp, parsed8);
 
     JSONObject jsonObject = mObjectMapper.convertValue(njp, JSONObject.class);
-    assertEquals(expected, jsonObject.toString());
+
+    assertTrue(expected7.equals(jsonObject.toString()) || expected8.equals(jsonObject.toString()));
   }
 
   @Test
@@ -137,6 +157,34 @@ public class ObjectMapperTest {
     String str = jsonObj.toString();
 
     assertEquals(expected, str);
+  }
+
+  @Test
+  public void testObjectToPrimitive() throws JSONException {
+    ArrayOfPrimitivesContainer container = new ArrayOfPrimitivesContainer();
+    ArrayList<Object> primitives = container.primitives;
+    primitives.add(Long.MIN_VALUE);
+    primitives.add(Long.MAX_VALUE);
+    primitives.add(Integer.MIN_VALUE);
+    primitives.add(Integer.MAX_VALUE);
+    primitives.add(Float.MIN_VALUE);
+    primitives.add(Float.MAX_VALUE);
+    primitives.add(Double.MIN_VALUE);
+    primitives.add(Double.MAX_VALUE);
+
+    String json = mObjectMapper.convertValue(container, JSONObject.class).toString();
+    JSONObject obj = new JSONObject(json);
+    JSONArray array = obj.getJSONArray("primitives");
+    ArrayList<Object> actual = new ArrayList<>();
+    for (int i = 0, N = array.length(); i < N; i++) {
+      actual.add(array.get(i));
+    }
+    assertEquals(primitives.toString(), actual.toString());
+  }
+
+  public static class ArrayOfPrimitivesContainer {
+    @JsonProperty
+    public final ArrayList<Object> primitives = new ArrayList<>();
   }
 
   public static class NestedJsonProperty {
