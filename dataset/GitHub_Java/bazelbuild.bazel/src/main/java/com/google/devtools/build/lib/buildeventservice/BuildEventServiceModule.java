@@ -51,17 +51,12 @@ import com.google.devtools.build.lib.network.ConnectivityStatus;
 import com.google.devtools.build.lib.network.ConnectivityStatus.Status;
 import com.google.devtools.build.lib.network.ConnectivityStatusProvider;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.runtime.BlazeModule;
-import com.google.devtools.build.lib.runtime.BuildEventArtifactUploaderFactory;
 import com.google.devtools.build.lib.runtime.BuildEventStreamer;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.CountingArtifactGroupNamer;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
-import com.google.devtools.build.lib.server.FailureDetails.BuildProgress;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OptionsBase;
@@ -82,6 +77,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -90,6 +86,8 @@ import javax.annotation.Nullable;
  */
 public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServiceOptions>
     extends BlazeModule {
+
+  private static final Logger logger = Logger.getLogger(BuildEventServiceModule.class.getName());
   private static final GoogleLogger googleLogger = GoogleLogger.forEnclosingClass();
 
   /**
@@ -102,7 +100,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
   private AuthAndTLSOptions authTlsOptions;
   private BuildEventStreamOptions besStreamOptions;
   private boolean isRunsPerTestOverTheLimit;
-  private BuildEventArtifactUploaderFactory uploaderFactoryToCleanup;
 
   /**
    * Holds the close futures for the upload of each transport with timeouts attached to them using
@@ -155,14 +152,14 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
       ModuleEnvironment moduleEnvironment,
       String msg,
       Exception exception,
-      ExitCode exitCode,
-      BuildProgress.Code besCode) {
+      ExitCode exitCode) {
     // Don't hide unchecked exceptions as part of the error reporting.
     Throwables.throwIfUnchecked(exception);
 
     googleLogger.atSevere().withCause(exception).log(msg);
+    AbruptExitException abruptException = new AbruptExitException(msg, exitCode, exception);
     reportCommandLineError(commandLineReporter, exception);
-    moduleEnvironment.exit(createAbruptExitException(exception, msg, exitCode, besCode));
+    moduleEnvironment.exit(abruptException);
   }
 
   @Override
@@ -316,42 +313,32 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
             : "local";
 
     CountingArtifactGroupNamer artifactGroupNamer = new CountingArtifactGroupNamer();
+    ThrowingBuildEventArtifactUploaderSupplier uploaderSupplier =
+        new ThrowingBuildEventArtifactUploaderSupplier(
+            () ->
+                cmdEnv
+                    .getRuntime()
+                    .getBuildEventArtifactUploaderFactoryMap()
+                    .select(buildEventUploadStrategy)
+                    .create(cmdEnv));
 
     // We need to wait for the previous invocation before we check the whitelist of commands to
     // allow completing previous runs using BES, for example:
     //   bazel build (..run with async BES..)
     //   bazel info <-- Doesn't run with BES unless we wait before checking the whitelist.
-    boolean commandIsShutdown = "shutdown".equals(cmdEnv.getCommandName());
-    waitForPreviousInvocation(commandIsShutdown);
-    if (commandIsShutdown && uploaderFactoryToCleanup != null) {
-      uploaderFactoryToCleanup.shutdown();
-    }
+    waitForPreviousInvocation("shutdown".equals(cmdEnv.getCommandName()));
 
     if (!whitelistedCommands(besOptions).contains(cmdEnv.getCommandName())) {
       // Exit early if the running command isn't supported.
       return;
     }
 
-    BuildEventArtifactUploaderFactory uploaderFactory =
-        cmdEnv
-            .getRuntime()
-            .getBuildEventArtifactUploaderFactoryMap()
-            .select(buildEventUploadStrategy);
-    ThrowingBuildEventArtifactUploaderSupplier uploaderSupplier =
-        new ThrowingBuildEventArtifactUploaderSupplier(() -> uploaderFactory.create(cmdEnv));
-    this.uploaderFactoryToCleanup = uploaderFactory;
-
     try {
       bepTransports = createBepTransports(cmdEnv, uploaderSupplier, artifactGroupNamer);
     } catch (IOException e) {
       cmdEnv
           .getBlazeModuleEnvironment()
-          .exit(
-              createAbruptExitException(
-                  e,
-                  "Could not create BEP transports.",
-                  ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-                  BuildProgress.Code.BES_INITIALIZATION_ERROR));
+          .exit(new AbruptExitException(ExitCode.LOCAL_ENVIRONMENTAL_ERROR, e));
       return;
     }
     if (bepTransports.isEmpty()) {
@@ -422,7 +409,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     if (streamer != null) {
       googleLogger.atWarning().log("Attempting to close BES streamer on crash");
       forceShutdownBuildEventStreamer();
-      uploaderFactoryToCleanup.shutdown();
     }
   }
 
@@ -442,9 +428,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           "Encountered Exception when closing BEP transports in Blaze's shutting down sequence");
     } finally {
       cancelAndResetPendingUploads();
-      if (uploaderFactoryToCleanup != null) {
-        uploaderFactoryToCleanup.shutdown();
-      }
     }
   }
 
@@ -467,18 +450,17 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                   },
                   executor));
 
-      try (AutoProfiler p = GoogleAutoProfilerUtils.logged("waiting for BES close")) {
+      try (AutoProfiler p = AutoProfiler.logged("waiting for BES close", logger)) {
         Uninterruptibles.getUninterruptibly(Futures.allAsList(transportFutures.values()));
       }
     } catch (ExecutionException e) {
       // Futures.withTimeout wraps the TimeoutException in an ExecutionException when the future
       // times out.
       if (isTimeoutException(e)) {
-        throw createAbruptExitException(
-            e,
-            "The Build Event Protocol upload timed out.",
+        throw new AbruptExitException(
+            "The Build Event Protocol upload timed out",
             ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
-            BuildProgress.Code.BES_UPLOAD_TIMEOUT_ERROR);
+            e);
       }
 
       Throwables.throwIfInstanceOf(e.getCause(), AbruptExitException.class);
@@ -644,8 +626,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           cmdEnv.getBlazeModuleEnvironment(),
           msg,
           new OptionsParsingException(msg),
-          ExitCode.COMMAND_LINE_ERROR,
-          BuildProgress.Code.BES_RUNS_PER_TEST_LIMIT_UNSUPPORTED);
+          ExitCode.COMMAND_LINE_ERROR);
       return null;
     }
 
@@ -671,8 +652,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
           cmdEnv.getBlazeModuleEnvironment(),
           e.getMessage(),
           e,
-          ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-          BuildProgress.Code.BES_INITIALIZATION_ERROR);
+          ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
       return null;
     }
 
@@ -730,8 +710,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                 + besStreamOptions.buildEventTextFile
                 + "'. Omitting --build_event_text_file.",
             exception,
-            ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-            BuildProgress.Code.BES_LOCAL_WRITE_ERROR);
+            ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
       }
     }
 
@@ -761,8 +740,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                 + besStreamOptions.buildEventBinaryFile
                 + "'. Omitting --build_event_binary_file.",
             exception,
-            ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-            BuildProgress.Code.BES_LOCAL_WRITE_ERROR);
+            ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
       }
     }
 
@@ -791,8 +769,7 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
                 + besStreamOptions.buildEventJsonFile
                 + "'. Omitting --build_event_json_file.",
             exception,
-            ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-            BuildProgress.Code.BES_LOCAL_WRITE_ERROR);
+            ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
       }
     }
 
@@ -805,18 +782,6 @@ public abstract class BuildEventServiceModule<BESOptionsT extends BuildEventServ
     }
 
     return bepTransportsBuilder.build();
-  }
-
-  private static AbruptExitException createAbruptExitException(
-      Exception e, String message, ExitCode exitCode, BuildProgress.Code besCode) {
-    return new AbruptExitException(
-        DetailedExitCode.of(
-            exitCode,
-            FailureDetail.newBuilder()
-                .setMessage(message + " " + e.getMessage())
-                .setBuildProgress(BuildProgress.newBuilder().setCode(besCode).build())
-                .build()),
-        e);
   }
 
   protected abstract Class<BESOptionsT> optionsClass();
