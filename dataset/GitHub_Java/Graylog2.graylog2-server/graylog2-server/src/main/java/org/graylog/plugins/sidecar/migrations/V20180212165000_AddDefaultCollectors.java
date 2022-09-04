@@ -279,14 +279,14 @@ public class V20180212165000_AddDefaultCollectors extends Migration {
                                    String defaultTemplate) {
         Collector collector = null;
         try {
-            collector = collectorService.findByNameAndOs(collectorName, nodeOperatingSystem);
+            collector = collectorService.findByName(collectorName);
             if (collector == null) {
-                final String msg = "Couldn't find collector '{} on {}' fixing it.";
-                LOG.error(msg, collectorName, nodeOperatingSystem);
-                throw new IllegalArgumentException();
+                final String msg = "Couldn't find collector '" + collectorName + "' fixing it.";
+                LOG.error(msg);
+                throw new IllegalArgumentException(msg);
             }
         } catch (IllegalArgumentException ignored) {
-            LOG.info("{} collector on {} is missing, adding it.", collectorName, nodeOperatingSystem);
+            LOG.info("{} collector is missing, adding it.", collectorName);
             final Collector newCollector;
             newCollector = Collector.create(
                     null,
