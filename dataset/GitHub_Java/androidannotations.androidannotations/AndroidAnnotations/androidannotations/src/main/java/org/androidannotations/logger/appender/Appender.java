@@ -1,7 +1,6 @@
 package org.androidannotations.logger.appender;
 
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 
 import org.androidannotations.logger.Level;
@@ -16,7 +15,7 @@ public abstract class Appender {
 
 	public abstract void open();
 
-	public abstract void append(Level level, Element element, AnnotationMirror annotationMirror, String message);
+	public abstract void append(Level level, Element element, String message);
 
 	public abstract void close();
 
