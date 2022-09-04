@@ -7,16 +7,13 @@ import org.apache.tomcat.dbcp.pool.impl.GenericObjectPool;
 import java.util.Map;
 import java.util.Properties;
 
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Gauge;
+
 public class ManagedDataSourceFactory {
-    private final DatabaseConfiguration configuration;
-
-    public ManagedDataSourceFactory(DatabaseConfiguration configuration) {
-        this.configuration = configuration;
-    }
-
-    public ManagedDataSource build() throws ClassNotFoundException {
+    public ManagedDataSource build(DatabaseConfiguration configuration) throws ClassNotFoundException {
         Class.forName(configuration.getDriverClass());
-        final GenericObjectPool pool = buildPool();
+        final GenericObjectPool pool = buildPool(configuration);
 
         final Properties properties = new Properties();
         for (Map.Entry<String, String> property : configuration.getProperties().entrySet()) {
@@ -34,14 +31,17 @@ public class ManagedDataSourceFactory {
                                                                                           pool,
                                                                                           null,
                                                                                           configuration.getValidationQuery(),
+                                                                                          configuration.getConnectionInitializationStatements(),
                                                                                           configuration.isDefaultReadOnly(),
                                                                                           true);
         connectionFactory.setPool(pool);
 
+        setupGauges(pool, configuration.getUrl());
+
         return new ManagedPooledDataSource(pool);
     }
 
-    private GenericObjectPool buildPool() {
+    private GenericObjectPool buildPool(DatabaseConfiguration configuration) {
         final GenericObjectPool pool = new GenericObjectPool(null);
         pool.setMaxWait(configuration.getMaxWaitForConnection().toMilliseconds());
         pool.setMinIdle(configuration.getMinSize());
@@ -54,5 +54,21 @@ public class ManagedDataSourceFactory {
                                                         .toMilliseconds());
         pool.setWhenExhaustedAction(GenericObjectPool.WHEN_EXHAUSTED_BLOCK);
         return pool;
+    }
+
+    private void setupGauges(final GenericObjectPool pool, String scope) {
+        Metrics.newGauge(ManagedPooledDataSource.class, "numActive", scope, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return pool.getNumActive();
+            }
+        });
+
+        Metrics.newGauge(ManagedPooledDataSource.class, "numIdle", scope, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return pool.getNumIdle();
+            }
+        });
     }
 }
