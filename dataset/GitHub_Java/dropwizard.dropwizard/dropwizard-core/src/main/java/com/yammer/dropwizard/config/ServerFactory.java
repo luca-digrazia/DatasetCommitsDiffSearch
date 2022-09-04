@@ -1,6 +1,7 @@
 package com.yammer.dropwizard.config;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
@@ -202,8 +203,11 @@ public class ServerFactory {
         for (String password : config.getSslConfiguration().getKeyManagerPassword().asSet()) {
             factory.setKeyManagerPassword(password);
         }
-        
-        factory.setIncludeProtocols(config.getSslConfiguration().getSupportedProtocols());
+
+        final ImmutableList<String> includeProtocols = config.getSslConfiguration().getIncludeProtocols().orNull();
+        if (includeProtocols != null) {
+            factory.setIncludeProtocols(includeProtocols.toArray(new String[includeProtocols.size()]));
+        }
     }
 
 
