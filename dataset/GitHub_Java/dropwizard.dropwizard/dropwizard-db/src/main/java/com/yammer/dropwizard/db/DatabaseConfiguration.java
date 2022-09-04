@@ -1,163 +1,169 @@
 package com.yammer.dropwizard.db;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.validation.ValidationMethod;
-import org.codehaus.jackson.annotate.JsonProperty;
 
+import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
 import java.util.Map;
 
 @SuppressWarnings("FieldMayBeFinal")
 public class DatabaseConfiguration {
-    @NotNull
-    @JsonProperty
-    private String driverClass = null;
+    public static class DatabaseConnectionConfiguration {
+        @NotNull
+        private String driverClass = null;
+        
+        @NotNull
+        private String user = null;
 
-    @NotNull
-    @JsonProperty
-    private String user = null;
+        private String password = "";
 
-    @JsonProperty
-    private String password = "";
+        @NotNull
+        private String url = null;
 
-    @NotNull
-    @JsonProperty
-    private String url = null;
+        @NotNull
+        private Map<String, String> properties = Maps.newHashMap();
 
-    @NotNull
-    @JsonProperty
-    private ImmutableMap<String, String> properties = ImmutableMap.of();
+        @NotNull
+        @Pattern(regexp = Duration.VALID_DURATION)
+        private String maxWaitForConnection = "1s";
+        
+        @NotNull
+        private String validationQuery = "/* Health Check */ SELECT 1";
 
-    @NotNull
-    @JsonProperty
-    private Duration maxWaitForConnection = Duration.seconds(1);
+        @Max(1024)
+        @Min(1)
+        private int minSize = 1;
 
-    @NotNull
-    @JsonProperty
-    private String validationQuery = "/* Health Check */ SELECT 1";
+        @Max(1024)
+        @Min(1)
+        private int maxSize = 8;
 
-    @Min(1)
-    @Max(1024)
-    @JsonProperty
-    private int minSize = 1;
+        private boolean checkConnectionWhileIdle;
 
-    @Min(1)
-    @Max(1024)
-    @JsonProperty
-    private int maxSize = 8;
+        @NotNull
+        @Pattern(regexp = Duration.VALID_DURATION)
+        private String checkConnectionHealthWhenIdleFor = "10s";
 
-    @JsonProperty
-    private boolean checkConnectionWhileIdle;
+        @NotNull
+        @Pattern(regexp = Duration.VALID_DURATION)
+        private String closeConnectionIfIdleFor = "10m";
 
-    @NotNull
-    @JsonProperty
-    private Duration checkConnectionHealthWhenIdleFor = Duration.seconds(10);
+        public String getDriverClass() {
+            return driverClass;
+        }
 
-    @NotNull
-    @JsonProperty
-    private Duration closeConnectionIfIdleFor = Duration.minutes(1);
+        public void setDriverClass(String driverClass) {
+            this.driverClass = driverClass;
+        }
 
-    public String getDriverClass() {
-        return driverClass;
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public String getUser() {
+            return user;
+        }
+
+        public void setUser(String user) {
+            this.user = user;
+        }
+
+        public Map<String, String> getProperties() {
+            return properties;
+        }
+
+        public void setProperties(Map<String, String> properties) {
+            this.properties = ImmutableMap.copyOf(properties);
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = url;
+        }
+
+        public Duration getMaxWaitForConnection() {
+            return Duration.parse(maxWaitForConnection);
+        }
+
+        public void setMaxWaitForConnection(Duration maxWait) {
+            this.maxWaitForConnection = maxWait.toString();
+        }
+
+        public String getValidationQuery() {
+            return validationQuery;
+        }
+
+        public void setValidationQuery(String validationQuery) {
+            this.validationQuery = validationQuery;
+        }
+
+        public int getMinSize() {
+            return minSize;
+        }
+
+        public void setMinSize(int minSize) {
+            this.minSize = minSize;
+        }
+
+        public int getMaxSize() {
+            return maxSize;
+        }
+
+        public void setMaxSize(int maxSize) {
+            this.maxSize = maxSize;
+        }
+
+        public boolean checkConnectionWhileIdle() {
+            return checkConnectionWhileIdle;
+        }
+
+        public void setCheckConnectionWhileIdle(boolean checkConnectionWhileIdle) {
+            this.checkConnectionWhileIdle = checkConnectionWhileIdle;
+        }
+
+        public Duration getCheckConnectionHealthWhenIdleFor() {
+            return Duration.parse(checkConnectionHealthWhenIdleFor);
+        }
+
+        public void setCheckConnectionHealthWhenIdleFor(Duration timeout) {
+            this.checkConnectionHealthWhenIdleFor = timeout.toString();
+        }
+
+        public Duration getCloseConnectionIfIdleFor() {
+            return Duration.parse(closeConnectionIfIdleFor);
+        }
+
+        public void setCloseConnectionIfIdleFor(Duration timeout) {
+            this.closeConnectionIfIdleFor = timeout.toString();
+        }
+
+        @ValidationMethod(message = ".minSize must be less than or equal to maxSize")
+        public boolean isPoolSizedCorrectly() {
+            return minSize <= maxSize;
+        }
     }
 
-    public void setDriverClass(String driverClass) {
-        this.driverClass = driverClass;
+    @Valid
+    private Map<String, DatabaseConnectionConfiguration> connections = Maps.newHashMap();
+    
+    public DatabaseConnectionConfiguration getConnection(String name) {
+        return connections.get(name);
     }
-
-    public String getUser() {
-        return user;
-    }
-
-    public void setUser(String user) {
-        this.user = user;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
-    }
-
-    public ImmutableMap<String, String> getProperties() {
-        return properties;
-    }
-
-    public void setProperties(Map<String, String> properties) {
-        this.properties = ImmutableMap.copyOf(properties);
-    }
-
-    public Duration getMaxWaitForConnection() {
-        return maxWaitForConnection;
-    }
-
-    public void setMaxWaitForConnection(Duration maxWaitForConnection) {
-        this.maxWaitForConnection = maxWaitForConnection;
-    }
-
-    public String getValidationQuery() {
-        return validationQuery;
-    }
-
-    public void setValidationQuery(String validationQuery) {
-        this.validationQuery = validationQuery;
-    }
-
-    public int getMinSize() {
-        return minSize;
-    }
-
-    public void setMinSize(int minSize) {
-        this.minSize = minSize;
-    }
-
-    public int getMaxSize() {
-        return maxSize;
-    }
-
-    public void setMaxSize(int maxSize) {
-        this.maxSize = maxSize;
-    }
-
-    public boolean isCheckConnectionWhileIdle() {
-        return checkConnectionWhileIdle;
-    }
-
-    public void setCheckConnectionWhileIdle(boolean checkConnectionWhileIdle) {
-        this.checkConnectionWhileIdle = checkConnectionWhileIdle;
-    }
-
-    public Duration getCheckConnectionHealthWhenIdleFor() {
-        return checkConnectionHealthWhenIdleFor;
-    }
-
-    public void setCheckConnectionHealthWhenIdleFor(Duration checkConnectionHealthWhenIdleFor) {
-        this.checkConnectionHealthWhenIdleFor = checkConnectionHealthWhenIdleFor;
-    }
-
-    public Duration getCloseConnectionIfIdleFor() {
-        return closeConnectionIfIdleFor;
-    }
-
-    public void setCloseConnectionIfIdleFor(Duration closeConnectionIfIdleFor) {
-        this.closeConnectionIfIdleFor = closeConnectionIfIdleFor;
-    }
-
-    @ValidationMethod(message = ".minSize must be less than or equal to maxSize")
-    public boolean isPoolSizedCorrectly() {
-        return minSize <= maxSize;
+    
+    public void addConnection(String name, DatabaseConnectionConfiguration config) {
+        connections.put(name, config);
     }
 }
