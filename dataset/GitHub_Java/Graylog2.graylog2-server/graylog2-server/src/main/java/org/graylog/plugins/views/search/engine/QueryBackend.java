@@ -50,7 +50,7 @@ public interface QueryBackend<T extends GeneratedQueryContext> {
     T generate(SearchJob job, Query query, Set<QueryResult> predecessorResults);
 
     default boolean isAllMessages(TimeRange timeRange) {
-        return timeRange instanceof RelativeRange && ((RelativeRange)timeRange).isAllMessages();
+        return timeRange instanceof RelativeRange && ((RelativeRange)timeRange).range() == 0;
     }
 
     default AbsoluteRange effectiveTimeRangeForResult(Query query, QueryResult queryResult) {

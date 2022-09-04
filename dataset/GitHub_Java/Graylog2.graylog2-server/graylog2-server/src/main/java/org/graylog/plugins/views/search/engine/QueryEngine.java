@@ -1,3 +1,19 @@
+/*
+ * Copyright (C) 2020 Graylog, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
+ *
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
+ */
 package org.graylog.plugins.views.search.engine;
 
 import com.google.common.collect.ImmutableSet;
@@ -5,19 +21,10 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import one.util.streamex.StreamEx;
 import org.graylog.plugins.views.search.Query;
 import org.graylog.plugins.views.search.QueryMetadata;
+import org.graylog.plugins.views.search.QueryMetadataDecorator;
 import org.graylog.plugins.views.search.QueryResult;
 import org.graylog.plugins.views.search.Search;
 import org.graylog.plugins.views.search.SearchJob;
-import org.graylog.plugins.views.search.elasticsearch.QueryMetadataDecorator;
-import org.graylog.plugins.views.search.errors.QueryError;
-import org.graylog.plugins.views.search.errors.SearchError;
-import org.graylog.plugins.views.search.errors.SearchException;
-import org.graylog.plugins.views.search.Query;
-import org.graylog.plugins.views.search.QueryMetadata;
-import org.graylog.plugins.views.search.QueryResult;
-import org.graylog.plugins.views.search.Search;
-import org.graylog.plugins.views.search.SearchJob;
-import org.graylog.plugins.views.search.elasticsearch.QueryMetadataDecorator;
 import org.graylog.plugins.views.search.errors.QueryError;
 import org.graylog.plugins.views.search.errors.SearchError;
 import org.graylog.plugins.views.search.errors.SearchException;
@@ -40,17 +47,28 @@ import static org.apache.commons.lang3.StringUtils.defaultIfEmpty;
 public class QueryEngine {
     private static final Logger LOG = LoggerFactory.getLogger(QueryEngine.class);
 
-    private final Map<String, QueryBackend<? extends GeneratedQueryContext>> queryBackends;
     private final Set<QueryMetadataDecorator> queryMetadataDecorators;
+    private final QueryParser queryParser;
 
     // TODO proper thread pool with tunable settings
     private final Executor queryPool = Executors.newFixedThreadPool(4, new ThreadFactoryBuilder().setNameFormat("query-engine-%d").build());
+    private final QueryBackend<? extends GeneratedQueryContext> elasticsearchBackend;
 
     @Inject
-    public QueryEngine(Map<String, QueryBackend<? extends GeneratedQueryContext>> queryBackends,
-                       Set<QueryMetadataDecorator> queryMetadataDecorators) {
-        this.queryBackends = queryBackends;
+    public QueryEngine(QueryBackend<? extends GeneratedQueryContext> elasticsearchBackend,
+                       Set<QueryMetadataDecorator> queryMetadataDecorators,
+                       QueryParser queryParser) {
+        this.elasticsearchBackend = elasticsearchBackend;
         this.queryMetadataDecorators = queryMetadataDecorators;
+        this.queryParser = queryParser;
+    }
+
+    // TODO: Backwards-compatible constructor to avoid breakage. Remove at some point.
+    @Deprecated
+    public QueryEngine(Map<String, QueryBackend<? extends GeneratedQueryContext>> backends,
+                       Set<QueryMetadataDecorator> queryMetadataDecorators,
+                       QueryParser queryParser) {
+        this(backends.get("elasticsearch"), queryMetadataDecorators, queryParser);
     }
 
     private static Set<QueryResult> allOfResults(Set<CompletableFuture<QueryResult>> futures) {
@@ -69,9 +87,7 @@ public class QueryEngine {
     }
 
     public QueryMetadata parse(Search search, Query query) {
-        final BackendQuery backendQuery = query.query();
-        final QueryBackend queryBackend = queryBackends.get(backendQuery.type());
-        final QueryMetadata parsedMetadata = queryBackend.parse(search.parameters(), query);
+        final QueryMetadata parsedMetadata = queryParser.parse(query);
 
         return this.queryMetadataDecorators.stream()
                 .reduce((decorator1, decorator2) -> (s, q, metadata) -> decorator1.decorate(s, q, decorator2.decorate(s, q, metadata)))
@@ -95,7 +111,7 @@ public class QueryEngine {
                                 } else {
                                     error = new QueryError(query, cause);
                                 }
-                                LOG.error("Running query {} failed: {}", query.id(), cause);
+                                LOG.debug("Running query {} failed: {}", query.id(), cause);
                                 searchJob.addError(error);
                                 return QueryResult.failedQueryWithError(query, error);
                             }
@@ -154,11 +170,6 @@ public class QueryEngine {
     }
 
     private QueryBackend<? extends GeneratedQueryContext> getQueryBackend(Query query) {
-        final BackendQuery backendQuery = query.query();
-        final QueryBackend<? extends GeneratedQueryContext> queryBackend = queryBackends.get(backendQuery.type());
-        if (queryBackend == null) {
-            throw new SearchException(new QueryError(query, "Unknown query backend " + backendQuery.type() + ". Cannot generate query."));
-        }
-        return queryBackend;
+        return elasticsearchBackend;
     }
 }
