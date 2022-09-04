@@ -49,10 +49,7 @@ public abstract class AbstractPackageLoaderTest {
     Reporter reporter = new Reporter(new EventBus());
     handler = new StoredEventHandler();
     reporter.addHandler(handler);
-    pkgLoader = makeFreshBuilder(pkgRoot)
-        .useDefaultSkylarkSemantics()
-        .setReporter(reporter)
-        .build();
+    pkgLoader = makeFreshBuilder(pkgRoot).setReporter(reporter).build();
   }
 
   protected abstract AbstractPackageLoader.Builder makeFreshBuilder(Path pkgRoot);

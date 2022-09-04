@@ -111,7 +111,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
   };
   private final Reporter reporter;
   protected final RuleClassProvider ruleClassProvider;
-  protected SkylarkSemantics skylarkSemantics;
   protected final ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions;
   protected final AtomicReference<PathPackageLocator> pkgLocatorRef;
   protected final ExternalFilesHelper externalFilesHelper;
@@ -125,7 +124,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     protected final Path workspaceDir;
     protected final BlazeDirectories directories;
     protected RuleClassProvider ruleClassProvider = getDefaultRuleClassProvider();
-    protected SkylarkSemantics skylarkSemantics;
     protected Reporter reporter = new Reporter(new EventBus());
     protected Map<SkyFunctionName, SkyFunction> extraSkyFunctions = new HashMap<>();
     protected List<PrecomputedValue.Injected> extraPrecomputedValues = new ArrayList<>();
@@ -145,16 +143,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
 
     public Builder setRuleClassProvider(RuleClassProvider ruleClassProvider) {
       this.ruleClassProvider = ruleClassProvider;
-      return this;
-    }
-
-    public Builder setSkylarkSemantics(SkylarkSemantics semantics) {
-      this.skylarkSemantics = semantics;
-      return this;
-    }
-
-    public Builder useDefaultSkylarkSemantics() {
-      this.skylarkSemantics = SkylarkSemantics.DEFAULT_SEMANTICS;
       return this;
     }
 
@@ -189,20 +177,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
       return this;
     }
 
-    /** Throws {@link IllegalArgumentException} if builder args are incomplete/inconsistent. */
-    protected void validate() {
-      if (skylarkSemantics == null) {
-        throw new IllegalArgumentException(
-            "must call either setSkylarkSemantics or useDefaultSkylarkSemantics");
-      }
-    }
-
-    public final PackageLoader build() {
-      validate();
-      return buildImpl();
-    }
-
-    protected abstract PackageLoader buildImpl();
+    public abstract PackageLoader build();
 
     protected abstract RuleClassProvider getDefaultRuleClassProvider();
 
@@ -214,7 +189,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     PathPackageLocator pkgLocator =
         new PathPackageLocator(null, ImmutableList.of(workspaceDir));
     this.ruleClassProvider = builder.ruleClassProvider;
-    this.skylarkSemantics = builder.skylarkSemantics;
     this.reporter = builder.reporter;
     this.extraSkyFunctions = ImmutableMap.copyOf(builder.extraSkyFunctions);
     this.pkgLocatorRef = new AtomicReference<>(pkgLocator);
@@ -236,14 +210,12 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     };
     this.preinjectedDiff =
         makePreinjectedDiff(
-            skylarkSemantics,
             pkgLocator,
             builder.defaultsPackageContents,
             ImmutableList.copyOf(builder.extraPrecomputedValues));
   }
 
   private static ImmutableDiff makePreinjectedDiff(
-      SkylarkSemantics skylarkSemantics,
       PathPackageLocator pkgLocator,
       String defaultsPackageContents,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues) {
@@ -265,7 +237,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     }
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(injectable, pkgLocator);
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable, ConstantRuleVisibility.PRIVATE);
-    PrecomputedValue.SKYLARK_SEMANTICS.set(injectable, skylarkSemantics);
+    PrecomputedValue.SKYLARK_SEMANTICS.set(injectable, SkylarkSemantics.DEFAULT_SEMANTICS);
     PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.set(injectable, defaultsPackageContents);
     PrecomputedValue.BLACKLISTED_PACKAGE_PREFIXES_FILE.set(injectable, PathFragment.EMPTY_FRAGMENT);
     return new ImmutableDiff(ImmutableList.<SkyKey>of(), valuesToInject);
