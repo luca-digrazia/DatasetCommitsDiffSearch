@@ -315,7 +315,7 @@ public class ExecutionOptions extends OptionsBase {
 
   @Option(
       name = "incompatible_remove_local_resources",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
       effectTags = {OptionEffectTag.EXECUTION},
       metadataTags = {
