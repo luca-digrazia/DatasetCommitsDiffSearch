@@ -1,14 +1,11 @@
 package org.graylog.plugins.map.geoip;
 
-import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
-import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Multimap;
 import com.google.common.net.InetAddresses;
 import com.google.inject.assistedinject.Assisted;
 import com.maxmind.geoip2.DatabaseReader;
@@ -36,7 +33,6 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -54,9 +50,8 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     @Inject
     protected MaxmindDataAdapter(@Assisted("id") String id,
                                  @Assisted("name") String name,
-                                 @Assisted LookupDataAdapterConfiguration config,
-                                 MetricRegistry metricRegistry) {
-        super(id, name, config, metricRegistry);
+                                 @Assisted LookupDataAdapterConfiguration config) {
+        super(id, name, config);
         this.config = (Config) config;
     }
 
@@ -98,8 +93,9 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     @Override
     protected void doRefresh(LookupCachePurge cachePurge) throws Exception {
         try {
+            clearError();
             final FileInfo.Change databaseFileCheck = fileInfo.checkForChange();
-            if (!databaseFileCheck.isChanged() && !getError().isPresent()) {
+            if (!databaseFileCheck.isChanged()) {
                 return;
             }
 
@@ -113,7 +109,6 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
                     oldReader.close();
                 }
                 fileInfo = databaseFileCheck.fileInfo();
-                clearError();
             } catch (IOException e) {
                 LOG.warn("Unable to load changed database file, leaving old one intact. Error message: {}", e.getMessage());
                 setError(e);
@@ -248,20 +243,6 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
 
         public static Config.Builder builder() {
             return new AutoValue_MaxmindDataAdapter_Config.Builder();
-        }
-
-        @Override
-        public Optional<Multimap<String, String>> validate() {
-            final ArrayListMultimap<String, String> errors = ArrayListMultimap.create();
-
-            final Path path = Paths.get(path());
-            if (!Files.exists(path)) {
-                errors.put("path", "The file does not exist.");
-            } else if (!Files.isReadable(path)) {
-                errors.put("path", "The file cannot be read.");
-            }
-
-            return errors.isEmpty() ? Optional.empty() : Optional.of(errors);
         }
 
         @AutoValue.Builder
