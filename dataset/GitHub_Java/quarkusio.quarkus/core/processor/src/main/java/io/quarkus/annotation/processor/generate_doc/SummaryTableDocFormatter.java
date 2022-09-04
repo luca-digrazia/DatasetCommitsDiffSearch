@@ -1,52 +1,110 @@
 package io.quarkus.annotation.processor.generate_doc;
 
-import java.time.Duration;
+import java.io.IOException;
+import java.io.Writer;
 import java.util.List;
 
 import io.quarkus.annotation.processor.Constants;
 
-class SummaryTableDocFormatter implements DocFormatter {
+final class SummaryTableDocFormatter implements DocFormatter {
     private static final String TABLE_CLOSING_TAG = "\n|===";
-    private static final String TABLE_ROW_FORMAT = "\n\n|<<%s, %s>>\n|%s %s\n|%s\n| %s";
-    private static final String TABLE_HEADER_FORMAT = "== Summary\n%s|===\n|Configuration property|Type|Default|Lifecycle";
+    public static final String SEARCHABLE_TABLE_CLASS = ".searchable"; // a css class indicating if a table is searchable
+    public static final String CONFIGURATION_TABLE_CLASS = ".configuration-reference";
+    private static final String TABLE_ROW_FORMAT = "\n\na|%s [[%s]]`link:#%s[%s]`\n\n[.description]\n--\n%s\n--|%s %s\n|%s\n";
+    private static final String SECTION_TITLE = "[[%s]]link:#%s[%s]";
+    private static final String TABLE_SECTION_ROW_FORMAT = "\n\nh|%s\n%s\nh|Type\nh|Default";
+    private static final String TABLE_HEADER_FORMAT = "[.configuration-legend]%s\n[%s, cols=\"80,.^10,.^10\"]\n|===";
+
+    private String anchorPrefix = "";
 
     /**
-     * Generate configuration keys in table format.
-     * Generated table will contain a key column that points to the long descriptive format.
+     * Generate configuration keys in table format with search engine activated or not.
+     * Useful when we want to optionally activate or deactivate search engine
      */
     @Override
-    public String format(List<ConfigItem> configItems) {
-        final String tableHeaders = String.format(TABLE_HEADER_FORMAT, Constants.CONFIG_PHASE_LEGEND);
-        StringBuilder generatedAsciiDoc = new StringBuilder(tableHeaders);
+    public void format(Writer writer, String initialAnchorPrefix, boolean activateSearch, List<ConfigDocItem> configDocItems)
+            throws IOException {
+        String searchableClass = activateSearch ? SEARCHABLE_TABLE_CLASS : Constants.EMPTY;
+        String tableClasses = CONFIGURATION_TABLE_CLASS + searchableClass;
+        final String tableHeaders = String.format(TABLE_HEADER_FORMAT, Constants.CONFIG_PHASE_LEGEND, tableClasses);
+        writer.append(tableHeaders);
+        anchorPrefix = initialAnchorPrefix;
 
-        for (ConfigItem configItem : configItems) {
-            String typeSimpleName = configItem.computeTypeSimpleName();
-            final String javaDocLink = configItem.getJavaDocSiteLink();
-            if (!javaDocLink.isEmpty()) {
-                typeSimpleName = String.format("link:%s[%s]\n", javaDocLink, typeSimpleName);
-            }
-
-            final String typeDetail = getTypeFormatInformationNote(configItem);
-            final String defaultValue = configItem.getDefaultValue();
-            generatedAsciiDoc.append(String.format(TABLE_ROW_FORMAT,
-                    getAnchor(configItem), configItem.getKey(),
-                    typeSimpleName, typeDetail,
-                    defaultValue.isEmpty() ? Constants.EMPTY : String.format("`%s`", defaultValue),
-                    configItem.getConfigPhase().getIllustration()));
+        // make sure that section-less configs get a legend
+        if (configDocItems.isEmpty() || configDocItems.get(0).isConfigKey()) {
+            String anchor = anchorPrefix + getAnchor("configuration");
+            writer.append(String.format(TABLE_SECTION_ROW_FORMAT,
+                    String.format(SECTION_TITLE, anchor, anchor, "Configuration property"),
+                    Constants.EMPTY));
         }
 
-        generatedAsciiDoc.append(TABLE_CLOSING_TAG); // close table
-        return generatedAsciiDoc.toString();
+        for (ConfigDocItem configDocItem : configDocItems) {
+            if (configDocItem.isConfigSection() && configDocItem.getConfigDocSection().isShowSection()
+                    && configDocItem.getConfigDocSection().getAnchorPrefix() != null) {
+                anchorPrefix = configDocItem.getConfigDocSection().getAnchorPrefix() + "_";
+            }
+            configDocItem.accept(writer, this);
+        }
+
+        writer.append(TABLE_CLOSING_TAG); // close table
     }
 
-    private String getTypeFormatInformationNote(ConfigItem configItem) {
-        if (configItem.getType().equals(Duration.class.getName())) {
-            return Constants.DURATION_INFORMATION;
-        } else if (configItem.getType().equals(Constants.MEMORY_SIZE_TYPE)) {
-            return Constants.MEMORY_SIZE_INFORMATION;
+    @Override
+    public void format(Writer writer, ConfigDocKey configDocKey) throws IOException {
+        String typeContent = "";
+        if (configDocKey.hasAcceptedValues()) {
+            typeContent = DocGeneratorUtil.joinAcceptedValues(configDocKey.getAcceptedValues());
+        } else if (configDocKey.hasType()) {
+            typeContent = configDocKey.computeTypeSimpleName();
+            final String javaDocLink = configDocKey.getJavaDocSiteLink();
+            if (!javaDocLink.isEmpty()) {
+                typeContent = String.format("link:%s[%s]\n", javaDocLink, typeContent);
+            }
+        }
+        if (configDocKey.isList()) {
+            typeContent = "list of " + typeContent;
         }
 
-        return Constants.EMPTY;
+        String doc = configDocKey.getConfigDoc();
+
+        final String typeDetail = DocGeneratorUtil.getTypeFormatInformationNote(configDocKey);
+        final String defaultValue = configDocKey.getDefaultValue();
+        // this is not strictly true, because we can have a required value with a default value, but
+        // for documentation it will do
+        String required = configDocKey.isOptional() || !defaultValue.isEmpty() ? ""
+                : "required icon:exclamation-circle[title=Configuration property is required]";
+        String key = configDocKey.getKey();
+        String configKeyAnchor = configDocKey.isPassThroughMap() ? getAnchor(key + Constants.DASH + configDocKey.getDocMapKey())
+                : getAnchor(key);
+        String anchor = anchorPrefix + configKeyAnchor;
+        writer.append(String.format(TABLE_ROW_FORMAT,
+                configDocKey.getConfigPhase().getIllustration(),
+                anchor,
+                anchor,
+                key,
+                // make sure nobody inserts a table cell separator here
+                doc.replace("|", "\\|"),
+                typeContent, typeDetail,
+                defaultValue.isEmpty() ? required
+                        : String.format("`%s`", defaultValue.replace("|", "\\|")
+                                .replace("`", "\\`"))));
+    }
+
+    @Override
+    public void format(Writer writer, ConfigDocSection configDocSection) throws IOException {
+        if (configDocSection.isShowSection()) {
+            String anchor = anchorPrefix
+                    + getAnchor(configDocSection.getName() + Constants.DASH + configDocSection.getSectionDetailsTitle());
+            String sectionTitle = String.format(SECTION_TITLE, anchor, anchor, configDocSection.getSectionDetailsTitle());
+            final String sectionRow = String.format(TABLE_SECTION_ROW_FORMAT, sectionTitle,
+                    configDocSection.isOptional() ? "This configuration section is optional" : Constants.EMPTY);
+
+            writer.append(sectionRow);
+        }
+
+        for (ConfigDocItem configDocItem : configDocSection.getConfigDocItems()) {
+            configDocItem.accept(writer, this);
+        }
     }
 
 }
