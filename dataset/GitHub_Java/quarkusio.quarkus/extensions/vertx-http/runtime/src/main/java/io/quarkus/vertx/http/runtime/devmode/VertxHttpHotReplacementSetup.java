@@ -23,12 +23,6 @@ public class VertxHttpHotReplacementSetup implements HotReplacementSetup {
     public void setupHotDeployment(HotReplacementContext context) {
         this.hotReplacementContext = context;
         VertxHttpRecorder.setHotReplacement(this::handleHotReplacementRequest, hotReplacementContext);
-        hotReplacementContext.addPreScanStep(new Runnable() {
-            @Override
-            public void run() {
-                RemoteSyncHandler.doPreScan();
-            }
-        });
     }
 
     @Override

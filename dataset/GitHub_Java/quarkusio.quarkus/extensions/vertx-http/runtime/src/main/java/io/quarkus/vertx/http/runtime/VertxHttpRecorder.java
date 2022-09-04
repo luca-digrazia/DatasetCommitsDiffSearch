@@ -451,7 +451,6 @@ public class VertxHttpRecorder {
         try {
 
             String deploymentId = futureResult.get();
-            VertxCoreRecorder.setWebDeploymentId(deploymentId);
             closeTask = new Runnable() {
                 @Override
                 public synchronized void run() {
@@ -547,7 +546,10 @@ public class VertxHttpRecorder {
             }
         }
         serverOptions.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
-        serverOptions.setMaxChunkSize(httpConfiguration.limits.maxChunkSize.asBigInteger().intValueExact());
+        Optional<MemorySize> maxChunkSize = httpConfiguration.limits.maxChunkSize;
+        if (maxChunkSize.isPresent()) {
+            serverOptions.setMaxChunkSize(maxChunkSize.get().asBigInteger().intValueExact());
+        }
         setIdleTimeout(httpConfiguration, serverOptions);
 
         if (certFile.isPresent() && keyFile.isPresent()) {
@@ -620,7 +622,6 @@ public class VertxHttpRecorder {
         serverOptions.setTcpQuickAck(httpConfiguration.tcpQuickAck);
         serverOptions.setTcpCork(httpConfiguration.tcpCork);
         serverOptions.setTcpFastOpen(httpConfiguration.tcpFastOpen);
-        serverOptions.setMaxInitialLineLength(httpConfiguration.limits.maxInitialLineLength);
 
         return serverOptions;
     }
@@ -705,13 +706,15 @@ public class VertxHttpRecorder {
         options.setPort(httpConfiguration.determinePort(launchMode));
         setIdleTimeout(httpConfiguration, options);
         options.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
-        options.setMaxChunkSize(httpConfiguration.limits.maxChunkSize.asBigInteger().intValueExact());
+        Optional<MemorySize> maxChunkSize = httpConfiguration.limits.maxChunkSize;
+        if (maxChunkSize.isPresent()) {
+            options.setMaxChunkSize(maxChunkSize.get().asBigInteger().intValueExact());
+        }
         options.setWebsocketSubProtocols(websocketSubProtocols);
         options.setReusePort(httpConfiguration.soReusePort);
         options.setTcpQuickAck(httpConfiguration.tcpQuickAck);
         options.setTcpCork(httpConfiguration.tcpCork);
         options.setTcpFastOpen(httpConfiguration.tcpFastOpen);
-        options.setMaxInitialLineLength(httpConfiguration.limits.maxInitialLineLength);
         return options;
     }
 
@@ -724,7 +727,10 @@ public class VertxHttpRecorder {
         options.setHost(httpConfiguration.domainSocket);
         setIdleTimeout(httpConfiguration, options);
         options.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
-        options.setMaxChunkSize(httpConfiguration.limits.maxChunkSize.asBigInteger().intValueExact());
+        Optional<MemorySize> maxChunkSize = httpConfiguration.limits.maxChunkSize;
+        if (maxChunkSize.isPresent()) {
+            options.setMaxChunkSize(maxChunkSize.get().asBigInteger().intValueExact());
+        }
         options.setWebsocketSubProtocols(websocketSubProtocols);
         return options;
     }
