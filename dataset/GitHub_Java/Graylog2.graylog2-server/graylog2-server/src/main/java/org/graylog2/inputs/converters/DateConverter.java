@@ -1,37 +1,42 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.converters;
 
 import org.graylog2.ConfigurationException;
-import org.graylog2.plugin.inputs.Converter;
 import org.joda.time.DateTime;
+import org.joda.time.YearMonth;
 import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class DateConverter extends Converter {
+import static com.google.common.base.Strings.isNullOrEmpty;
+
+public class DateConverter extends AbstractDateConverter {
+    private static final Logger LOG = LoggerFactory.getLogger(DateConverter.class);
+    private static final Locale DEFAULT_LOCALE = Locale.ENGLISH;
 
     private final String dateFormat;
+    private final Locale locale;
+    private final boolean containsTimeZone;
 
     public DateConverter(Map<String, Object> config) throws ConfigurationException {
         super(Type.DATE, config);
@@ -40,21 +45,45 @@ public class DateConverter extends Converter {
             throw new ConfigurationException("Missing config [date_format].");
         }
 
-        dateFormat = (String) config.get("date_format");
+        this.dateFormat = ((String) config.get("date_format")).trim();
+        this.locale = buildLocale(config.get("locale"));
+        this.containsTimeZone = dateFormat.contains("Z") || dateFormat.contains("z");
+    }
+
+    private static Locale buildLocale(Object languageTag) {
+        if (languageTag instanceof String) {
+            try {
+                return Locale.forLanguageTag((String) languageTag);
+            } catch (IllegalArgumentException e) {
+                return DEFAULT_LOCALE;
+            }
+        } else {
+            return DEFAULT_LOCALE;
+        }
     }
 
     @Override
-    public Object convert(String value) {
-        if (value == null || value.isEmpty()) {
-            return value;
+    @Nullable
+    public Object convert(@Nullable String value) {
+        if (isNullOrEmpty(value)) {
+            return null;
         }
 
-        return DateTime.parse(value, DateTimeFormat.forPattern(dateFormat).withZoneUTC());
-    }
+        LOG.debug("Trying to parse date <{}> with pattern <{}>, locale <{}>, and timezone <{}>.", value, dateFormat, locale, timeZone);
+        final DateTimeFormatter formatter;
+        if (containsTimeZone) {
+            formatter = DateTimeFormat
+                    .forPattern(dateFormat)
+                    .withDefaultYear(YearMonth.now(timeZone).getYear())
+                    .withLocale(locale);
+        } else {
+            formatter = DateTimeFormat
+                    .forPattern(dateFormat)
+                    .withDefaultYear(YearMonth.now(timeZone).getYear())
+                    .withLocale(locale)
+                    .withZone(timeZone);
+        }
 
-    @Override
-    public boolean buildsMultipleFields() {
-        return false;
+        return DateTime.parse(value, formatter);
     }
-
 }
