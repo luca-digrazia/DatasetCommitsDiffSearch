@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.math.MathEx;
 
 /**
@@ -29,13 +31,13 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class HMMPOSTagger implements POSTagger, Serializable {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(HMMPOSTagger.class);
+    private static final Logger logger = LoggerFactory.getLogger(HMMPOSTagger.class);
 
     /**
-     * Serialization Version UID.
-     */
-    private static final long serialVersionUID = 6600840654340610562L;
-    /**
+	 * Serialization Version UID.
+	 */
+	private static final long serialVersionUID = 6600840654340610562L;
+	/**
      * The emission symbols of HMM and corresponding indices.
      */
     private Map<String, Integer> symbol;

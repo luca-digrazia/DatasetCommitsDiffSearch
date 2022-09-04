@@ -1,22 +1,22 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.nlp.pos;
 
+import smile.validation.CrossValidation;
 import java.io.InputStreamReader;
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -29,9 +29,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import smile.math.MathEx;
-import smile.validation.CrossValidation;
-import smile.validation.Bag;
-import static org.junit.Assert.*;
 
 /**
  *
@@ -48,7 +45,7 @@ public class HMMPOSTaggerTest {
      * Load training data from a corpora.
      * @param dir a file object defining the top directory
      */
-    public void read(String dir) {
+    public void load(String dir) {
         List<File> files = new ArrayList<>();
         walkin(new File(dir), files);
 
@@ -136,10 +133,13 @@ public class HMMPOSTaggerTest {
     public void tearDown() {
     }
 
+    /**
+     * Test of learn method, of class HMMPOSTagger.
+     */
     @Test
     public void testWSJ() {
         System.out.println("WSJ");
-        read("PennTreebank/PennTreebank2/TAGGED/POS/WSJ");
+        load("D:\\sourceforge\\corpora\\PennTreebank\\PennTreebank2\\TAGGED\\POS\\WSJ");
         
         String[][] x = sentences.toArray(new String[sentences.size()][]);
         PennTreebankPOS[][] y = labels.toArray(new PennTreebankPOS[labels.size()][]);
@@ -147,17 +147,17 @@ public class HMMPOSTaggerTest {
         int n = x.length;
         int k = 10;
 
-        Bag[] bags = CrossValidation.of(n, k);
+        CrossValidation cv = new CrossValidation(n, k);
         int error = 0;
         int total = 0;
         
         for (int i = 0; i < k; i++) {
-            String[][] trainx = MathEx.slice(x, bags[i].samples);
-            PennTreebankPOS[][] trainy = MathEx.slice(y, bags[i].samples);
-            String[][] testx = MathEx.slice(x, bags[i].oob);
-            PennTreebankPOS[][] testy = MathEx.slice(y, bags[i].oob);
+            String[][] trainx = MathEx.slice(x, cv.train[i]);
+            PennTreebankPOS[][] trainy = MathEx.slice(y, cv.train[i]);
+            String[][] testx = MathEx.slice(x, cv.test[i]);
+            PennTreebankPOS[][] testy = MathEx.slice(y, cv.test[i]);
 
-            HMMPOSTagger tagger = HMMPOSTagger.fit(trainx, trainy);
+            HMMPOSTagger tagger = HMMPOSTagger.learn(trainx, trainy);
 
             for (int j = 0; j < testx.length; j++) {
                 PennTreebankPOS[] label = tagger.tag(testx[j]);
@@ -171,13 +171,15 @@ public class HMMPOSTaggerTest {
         }
 
         System.out.format("Error rate = %.2f as %d of %d\n", 100.0 * error / total, error, total);
-        assertEquals(51325, error);
     }
 
+    /**
+     * Test of learn method, of class HMMPOSTagger.
+     */
     @Test
     public void testBrown() {
         System.out.println("BROWN");
-        read("PennTreebank/PennTreebank2/TAGGED/POS/BROWN");
+        load("D:\\sourceforge\\corpora\\PennTreebank\\PennTreebank2\\TAGGED\\POS\\BROWN");
         
         String[][] x = sentences.toArray(new String[sentences.size()][]);
         PennTreebankPOS[][] y = labels.toArray(new PennTreebankPOS[labels.size()][]);
@@ -185,17 +187,17 @@ public class HMMPOSTaggerTest {
         int n = x.length;
         int k = 10;
 
-        Bag[] bags = CrossValidation.of(n, k);
+        CrossValidation cv = new CrossValidation(n, k);
         int error = 0;
         int total = 0;
         
         for (int i = 0; i < k; i++) {
-            String[][] trainx = MathEx.slice(x, bags[i].samples);
-            PennTreebankPOS[][] trainy = MathEx.slice(y, bags[i].samples);
-            String[][] testx = MathEx.slice(x, bags[i].oob);
-            PennTreebankPOS[][] testy = MathEx.slice(y, bags[i].oob);
+            String[][] trainx = MathEx.slice(x, cv.train[i]);
+            PennTreebankPOS[][] trainy = MathEx.slice(y, cv.train[i]);
+            String[][] testx = MathEx.slice(x, cv.test[i]);
+            PennTreebankPOS[][] testy = MathEx.slice(y, cv.test[i]);
 
-            HMMPOSTagger tagger = HMMPOSTagger.fit(trainx, trainy);
+            HMMPOSTagger tagger = HMMPOSTagger.learn(trainx, trainy);
 
             for (int j = 0; j < testx.length; j++) {
                 PennTreebankPOS[] label = tagger.tag(testx[j]);
@@ -209,6 +211,5 @@ public class HMMPOSTaggerTest {
         }
 
         System.out.format("Error rate = %.2f as %d of %d\n", 100.0 * error / total, error, total);
-        assertEquals(55649, error);
     }
 }
