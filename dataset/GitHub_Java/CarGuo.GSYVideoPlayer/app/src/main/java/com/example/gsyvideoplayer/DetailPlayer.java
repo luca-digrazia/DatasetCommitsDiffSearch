@@ -2,9 +2,9 @@ package com.example.gsyvideoplayer;
 
 import android.content.res.Configuration;
 import android.os.Bundle;
-
-import androidx.core.widget.NestedScrollView;
-import androidx.appcompat.app.AppCompatActivity;
+import android.os.Environment;
+import android.support.v4.widget.NestedScrollView;
+import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -13,6 +13,8 @@ import com.example.gsyvideoplayer.video.LandLayoutVideo;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
+import com.shuyu.gsyvideoplayer.model.VideoOptionModel;
+import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
@@ -21,7 +23,9 @@ import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import butterknife.BindView;
@@ -84,16 +88,16 @@ public class DetailPlayer extends AppCompatActivity {
 
         Map<String, String> header = new HashMap<>();
         header.put("ee", "33");
-        header.put("allowCrossProtocolRedirects", "true");
         GSYVideoOptionBuilder gsyVideoOption = new GSYVideoOptionBuilder();
         gsyVideoOption.setThumbImageView(imageView)
                 .setIsTouchWiget(true)
                 .setRotateViewAuto(false)
                 .setLockLand(false)
-                .setAutoFullWithSize(false)
+                .setAutoFullWithSize(true)
                 .setShowFullAnimation(false)
                 .setNeedLockFull(true)
                 .setUrl(url)
+                .setLooping(true)
                 .setMapHeadData(header)
                 .setCacheWithPlay(false)
                 .setVideoTitle("测试视频")

@@ -2,11 +2,12 @@
 package tv.danmaku.ijk.media.exo2;
 
 import android.content.Context;
+import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import androidx.annotation.Nullable;
-import androidx.annotation.Size;
+import android.support.annotation.Nullable;
+import android.support.annotation.Size;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
@@ -18,7 +19,6 @@ import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
-import com.google.android.exoplayer2.SeekParameters;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.Timeline;
 import com.google.android.exoplayer2.analytics.AnalyticsListener;
@@ -27,8 +27,11 @@ import com.google.android.exoplayer2.metadata.Metadata;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MediaSourceEventListener;
 import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.AdaptiveTrackSelection;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
+import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
+import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 
 import java.io.File;
 import java.io.FileDescriptor;
@@ -395,15 +398,6 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
     public boolean isCache() {
         return isCache;
     }
-
-
-    /**
-     * 设置seek 的临近帧。
-     **/
-    public void  setSeekParameter(@Nullable SeekParameters seekParameters) {
-        mInternalPlayer.setSeekParameters(seekParameters);
-    }
-
 
     /**
      * 是否开启cache
