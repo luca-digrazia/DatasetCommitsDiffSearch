@@ -153,8 +153,8 @@ public class StandaloneSpawnStrategyTest {
                 Mockito.mock(RunfilesTreeUpdater.class)));
     this.executor =
         new TestExecutorBuilder(fileSystem, directories, binTools)
-            .addStrategy(strategy, "standalone")
-            .setDefaultStrategies("standalone")
+            .addStrategy(SpawnStrategy.class, strategy, "standalone")
+            .setExecution("", "standalone")
             .build();
 
     executor.getExecRoot().createDirectoryAndParents();
