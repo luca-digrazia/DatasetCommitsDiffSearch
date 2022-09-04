@@ -5,6 +5,7 @@ import java.util.function.BiFunction;
 
 import javax.enterprise.inject.spi.CDI;
 
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.identity.SecurityIdentity;
@@ -37,7 +38,8 @@ public class HttpSecurityRecorder {
                                     }
                                 });
                             } else {
-                                event.fail(throwable);
+                                event.response().setStatusCode(HttpResponseStatus.INTERNAL_SERVER_ERROR.code());
+                                event.response().end();
                             }
                             return null;
                         }
