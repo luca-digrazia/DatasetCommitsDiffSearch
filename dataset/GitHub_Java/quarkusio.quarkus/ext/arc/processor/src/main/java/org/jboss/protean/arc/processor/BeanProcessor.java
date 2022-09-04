@@ -10,14 +10,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiFunction;
 
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
 import javax.inject.Named;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
@@ -54,11 +52,8 @@ public class BeanProcessor {
 
     private final ReflectionRegistration reflectionRegistration;
 
-    private final List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers;
-
     private BeanProcessor(String name, IndexView index, Collection<DotName> additionalBeanDefiningAnnotations, ResourceOutput output,
-            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration,
-            List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers) {
+            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration) {
         this.reflectionRegistration = reflectionRegistration;
         Objects.requireNonNull(output);
         this.name = name;
@@ -66,25 +61,25 @@ public class BeanProcessor {
         this.additionalBeanDefiningAnnotations = additionalBeanDefiningAnnotations;
         this.output = output;
         this.sharedAnnotationLiterals = sharedAnnotationLiterals;
-        this.annotationTransformers = annotationTransformers;
     }
 
     public BeanDeployment process() throws IOException {
 
-        BeanDeployment beanDeployment = new BeanDeployment(new IndexWrapper(index), additionalBeanDefiningAnnotations, annotationTransformers);
+        BeanDeployment beanDeployment = new BeanDeployment(new IndexWrapper(index), additionalBeanDefiningAnnotations);
         beanDeployment.init();
 
-        AnnotationLiteralProcessor annotationLiterals = new AnnotationLiteralProcessor(name, sharedAnnotationLiterals);
-        BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals);
+        BeanGenerator beanGenerator = new BeanGenerator();
         ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator();
-        InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals);
-        SubclassGenerator subclassGenerator = new SubclassGenerator(annotationLiterals);
-        ObserverGenerator observerGenerator = new ObserverGenerator(annotationLiterals);
+        InterceptorGenerator interceptorGenerator = new InterceptorGenerator();
+        SubclassGenerator subclassGenerator = new SubclassGenerator();
+        ObserverGenerator observerGenerator = new ObserverGenerator();
         AnnotationLiteralGenerator annotationLiteralsGenerator = new AnnotationLiteralGenerator();
 
         Map<BeanInfo, String> beanToGeneratedName = new HashMap<>();
         Map<ObserverInfo, String> observerToGeneratedName = new HashMap<>();
         Map<InterceptorInfo, String> interceptorToGeneratedName = new HashMap<>();
+
+        AnnotationLiteralProcessor annotationLiterals = new AnnotationLiteralProcessor(name, sharedAnnotationLiterals);
 
         long start = System.currentTimeMillis();
         List<Resource> resources = new ArrayList<>();
@@ -102,7 +97,7 @@ public class BeanProcessor {
 
         // Generate beans
         for (BeanInfo bean : beanDeployment.getBeans()) {
-            for (Resource resource : beanGenerator.generate(bean, reflectionRegistration)) {
+            for (Resource resource : beanGenerator.generate(bean, annotationLiterals, reflectionRegistration)) {
                 resources.add(resource);
                 if (SpecialType.BEAN.equals(resource.getSpecialType())) {
                     if (bean.getScope().isNormal()) {
@@ -119,7 +114,7 @@ public class BeanProcessor {
 
         // Generate observers
         for (ObserverInfo observer : beanDeployment.getObservers()) {
-            for (Resource resource : observerGenerator.generate(observer, reflectionRegistration)) {
+            for (Resource resource : observerGenerator.generate(observer, annotationLiterals, reflectionRegistration)) {
                 resources.add(resource);
                 if (SpecialType.OBSERVER.equals(resource.getSpecialType())) {
                     observerToGeneratedName.put(observer, resource.getName());
@@ -175,8 +170,6 @@ public class BeanProcessor {
 
         private ReflectionRegistration reflectionRegistration = ReflectionRegistration.NOOP;
 
-        private final List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers = new ArrayList<>();
-
         public Builder setName(String name) {
             this.name = name;
             return this;
@@ -207,14 +200,9 @@ public class BeanProcessor {
             return this;
         }
 
-        public Builder addAnnotationTransformer(BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>> transformer) {
-            this.annotationTransformers.add(transformer);
-            return this;
-        }
-
         public BeanProcessor build() {
             return new BeanProcessor(name, addBuiltinQualifiersIfNeeded(index), additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers);
+                    reflectionRegistration);
         }
 
     }

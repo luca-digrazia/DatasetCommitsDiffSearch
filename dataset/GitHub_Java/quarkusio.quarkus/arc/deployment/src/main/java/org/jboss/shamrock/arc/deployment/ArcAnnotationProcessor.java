@@ -4,19 +4,14 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
-import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
@@ -42,8 +37,6 @@ import io.smallrye.config.inject.ConfigProducer;
 
 public class ArcAnnotationProcessor implements ResourceProcessor {
 
-    private static final DotName JAVA_LANG_OBJECT = DotName.createSimple(Object.class.getName());
-
     @Inject
     BeanDeployment beanDeployment;
 
@@ -55,7 +48,6 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
         try (BytecodeRecorder recorder = processorContext.addStaticInitTask(RuntimePriority.ARC_DEPLOYMENT)) {
 
             ArcDeploymentTemplate template = recorder.getRecordingProxy(ArcDeploymentTemplate.class);
-            processorContext.addReflectiveClass(true, false, Observes.class.getName()); //graal bug
 
             List<DotName> additionalBeanDefiningAnnotations = new ArrayList<>();
             additionalBeanDefiningAnnotations.add(DotName.createSimple("javax.servlet.annotation.WebServlet"));
@@ -94,11 +86,6 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
                     processorContext.addReflectiveField(fieldInfo);
                 }
             });
-            for (BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>> transformer : beanDeployment
-                    .getAnnotationTransformers()) {
-                builder.addAnnotationTransformer(transformer);
-            }
-
             builder.setOutput(new ResourceOutput() {
                 @Override
                 public void writeResource(Resource resource) throws IOException {
@@ -127,7 +114,6 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
             ArcContainer container = template.getContainer();
             template.initBeanContainer(container);
             template.setupInjection(container);
-            template.setupRequestScope(null, null);
         }
     }
 
@@ -166,10 +152,6 @@ public class ArcAnnotationProcessor implements ResourceProcessor {
                 }
             }
         }
-        if (!beanInfo.superName().equals(JAVA_LANG_OBJECT)) {
-            indexBeanClass(beanInfo.superName().toString(), indexer, shamrockIndex, additionalIndex);
-        }
-
     }
 
     private void indexBeanClass(String beanClass, Indexer indexer, IndexView shamrockIndex, Set<DotName> additionalIndex, byte[] beanData) {
