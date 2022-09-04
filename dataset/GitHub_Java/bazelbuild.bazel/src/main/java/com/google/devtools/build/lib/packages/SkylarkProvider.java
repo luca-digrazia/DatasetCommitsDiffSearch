@@ -20,8 +20,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.SkylarkInfo.Layout;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import java.util.Map;
@@ -40,11 +40,10 @@ import javax.annotation.Nullable;
  * efficient since they do not use maps; see {@link SkylarkInfo}.
  *
  * <p>Exporting a {@code SkylarkProvider} creates a key that is used to uniquely identify it.
- * Usually a provider is exported by calling {@link #export}, but a test may wish to just create a
- * pre-exported provider directly. Exported providers use only their key for {@link #equals} and
+ * Usually a provider is exported by calling {@link #export}, but a test may wish to just create
+ * a pre-exported provider directly. Exported providers use only their key for {@link #equals} and
  * {@link #hashCode}.
  */
-@AutoCodec
 public class SkylarkProvider extends Provider implements SkylarkExportable {
 
   private static final FunctionSignature.WithValues<Object, SkylarkType> SCHEMALESS_SIGNATURE =
@@ -91,8 +90,7 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
    */
   public static SkylarkProvider createUnexportedSchemaful(
       Iterable<String> fields, Location location) {
-    return new SkylarkProvider(
-        /*key=*/ null, fields == null ? null : ImmutableList.copyOf(fields), location);
+    return new SkylarkProvider(/*key=*/ null, fields, location);
   }
 
   /**
@@ -117,7 +115,7 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
    */
   public static SkylarkProvider createExportedSchemaful(
       SkylarkKey key, Iterable<String> fields, Location location) {
-    return new SkylarkProvider(key, fields == null ? null : ImmutableList.copyOf(fields), location);
+    return new SkylarkProvider(key, fields, location);
   }
 
   /**
@@ -126,10 +124,8 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
    * <p>If {@code key} is null, the provider is unexported. If {@code fields} is null, the provider
    * is schemaless.
    */
-  @AutoCodec.Instantiator
-  @AutoCodec.VisibleForSerialization
-  SkylarkProvider(
-      @Nullable SkylarkKey key, @Nullable ImmutableList<String> fields, Location location) {
+  private SkylarkProvider(
+      @Nullable SkylarkKey key, @Nullable Iterable<String> fields, Location location) {
     // We override getName() in order to use the name that is assigned when export() is called.
     // Hence BaseFunction's constructor gets a null name.
     super(/*name=*/ null, buildSignature(fields), location);
@@ -139,6 +135,7 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
         key == null ? DEFAULT_ERROR_MESSAGE_FORMAT
             : makeErrorMessageFormatForUnknownField(key.getExportedName());
   }
+
 
   private static FunctionSignature.WithValues<Object, SkylarkType> buildSignature(
       @Nullable Iterable<String> fields) {
@@ -150,7 +147,7 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
   }
 
   @Override
-  protected SkylarkInfo createInstanceFromSkylark(Object[] args, Location loc) {
+  protected Info createInstanceFromSkylark(Object[] args, Location loc) throws EvalException {
     if (layout == null) {
       @SuppressWarnings("unchecked")
       Map<String, Object> kwargs = (Map<String, Object>) args[0];
@@ -256,7 +253,6 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
    * A serializable representation of Skylark-defined {@link SkylarkProvider} that uniquely
    * identifies all {@link SkylarkProvider}s that are exposed to SkyFrame.
    */
-  @AutoCodec
   public static class SkylarkKey extends Key {
     private final Label extensionLabel;
     private final String exportedName;
