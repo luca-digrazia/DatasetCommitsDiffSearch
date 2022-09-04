@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.bootstrap;
 
@@ -24,7 +24,6 @@ import com.google.inject.Module;
 import com.google.inject.ProvisionException;
 import org.graylog2.audit.AuditActor;
 import org.graylog2.audit.AuditEventSender;
-import org.graylog2.configuration.TLSProtocolsConfiguration;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
@@ -85,17 +84,13 @@ public abstract class ServerBootstrap extends CmdLineTool {
     }
 
     @Override
-    protected void beforeStart(TLSProtocolsConfiguration configuration) {
-        super.beforeStart(configuration);
+    protected void beforeStart() {
+        super.beforeStart();
 
         // Do not use a PID file if the user requested not to
         if (!isNoPidFile()) {
             savePidFile(getPidFile());
         }
-        // This needs to run before the first SSLContext is instantiated,
-        // because it sets up the default SSLAlgorithmConstraints
-        applySecuritySettings(configuration);
-
         // Set these early in the startup because netty's NativeLibraryUtil uses a static initializer
         setNettyNativeDefaults();
     }
@@ -216,7 +211,7 @@ public abstract class ServerBootstrap extends CmdLineTool {
         result.add(new SharedPeriodicalBindings());
         result.add(new SchedulerBindings());
         result.add(new GenericInitializerBindings());
-        result.add(new SystemStatsModule(configuration.isDisableNativeSystemStatsCollector()));
+        result.add(new SystemStatsModule(configuration.isDisableSigar()));
 
         return result;
     }
