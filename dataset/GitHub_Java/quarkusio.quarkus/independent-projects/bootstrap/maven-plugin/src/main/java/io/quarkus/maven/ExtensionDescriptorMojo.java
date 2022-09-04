@@ -268,13 +268,12 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
 
         final AppArtifactCoords deploymentCoords = AppArtifactCoords.fromString(deployment);
 
-        final String rootDeploymentGact = gact(deploymentCoords);
-        final Node rootDeployment = new Node(null, rootDeploymentGact, 2);
-        final Node rootRuntime = rootDeployment.newChild(gact(project.getArtifact()), 1);
+        final Node rootDeployment = new Node(null, deploymentCoords, 2);
+        final Node rootRuntime = rootDeployment.newChild(toCoords(project.getArtifact()), 1);
 
-        final Map<String, Node> expectedExtensionDeps = new HashMap<>();
-        expectedExtensionDeps.put(rootDeploymentGact, rootDeployment);
-        expectedExtensionDeps.put(rootRuntime.gact, rootRuntime);
+        final Map<AppArtifactCoords, Node> expectedExtensionDeps = new HashMap<>();
+        expectedExtensionDeps.put(deploymentCoords, rootDeployment);
+        expectedExtensionDeps.put(rootRuntime.coords, rootRuntime);
         // collect transitive extension deps
         final DependencyResult resolvedDeps;
 
@@ -315,9 +314,8 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
                                         + BootstrapConstants.PROP_DEPLOYMENT_ARTIFACT + " property in its "
                                         + BootstrapConstants.DESCRIPTOR_PATH);
                             }
-                            currentNode = currentNode.newChild(gact(AppArtifactCoords.fromString(deploymentStr)),
-                                    currentNodeId);
-                            expectedExtensionDeps.put(currentNode.gact, currentNode);
+                            currentNode = currentNode.newChild(AppArtifactCoords.fromString(deploymentStr), currentNodeId);
+                            expectedExtensionDeps.put(currentNode.coords, currentNode);
                             extDepsTotal.incrementAndGet();
                         }
                     } catch (IOException e) {
@@ -353,7 +351,9 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
                 if (artifact == null) {
                     return true;
                 }
-                final Node node = expectedExtensionDeps.get(gact(artifact));
+                final AppArtifactCoords coords = new AppArtifactCoords(artifact.getGroupId(), artifact.getArtifactId(),
+                        artifact.getClassifier(), artifact.getExtension(), artifact.getVersion());
+                final Node node = expectedExtensionDeps.get(coords);
                 if (node != null && !node.included) {
                     node.included = true;
                     extDepsTotal.decrementAndGet();
@@ -372,12 +372,12 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
             log.error("Quarkus Extension Dependency Verification Error");
             log.error("Deployment artifact " + deploymentCoords +
                     " was found to be missing dependencies on Quarkus extension artifacts marked with '-' below:");
-            final List<String> missing = rootDeployment.collectMissing(log);
+            final List<AppArtifactCoords> missing = rootDeployment.collectMissing(log);
             final StringBuilder buf = new StringBuilder();
             buf.append("Deployment artifact ");
             buf.append(deploymentCoords);
             buf.append(" is missing the following dependencies from its configuration: ");
-            final Iterator<String> i = missing.iterator();
+            final Iterator<AppArtifactCoords> i = missing.iterator();
             buf.append(i.next());
             while (i.hasNext()) {
                 buf.append(", ").append(i.next());
@@ -413,6 +413,11 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
 
     private boolean isAnalyzable(final File f) {
         return f != null && f.getName().endsWith(".jar") && f.exists() && !f.isDirectory();
+    }
+
+    private AppArtifactCoords toCoords(Artifact a) {
+        return new AppArtifactCoords(a.getGroupId(), a.getArtifactId(), a.getClassifier(),
+                a.getArtifactHandler().getExtension(), a.getVersion());
     }
 
     private void transformLegacyToNew(final Path output, ObjectNode extObject, ObjectMapper mapper)
@@ -456,6 +461,8 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
 
         extObject.set("metadata", metadata);
 
+        //   updateSourceFiles(output, extObject, mapper);
+
     }
 
     /**
@@ -484,74 +491,44 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
         }
     }
 
-    static String gact(AppArtifactCoords artifact) {
-        StringBuilder buf = new StringBuilder();
-        buf.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId()).append(':');
-        final String classifier = artifact.getClassifier();
-        if (classifier != null && !classifier.isEmpty()) {
-            buf.append(classifier);
-        }
-        return buf.append(':').append(artifact.getType()).append(':').toString();
-    }
-
-    static String gact(Artifact artifact) {
-        StringBuilder buf = new StringBuilder();
-        buf.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId()).append(':');
-        final String classifier = artifact.getClassifier();
-        if (classifier != null && !classifier.isEmpty()) {
-            buf.append(classifier);
-        }
-        return buf.append(':').append(artifact.getType()).append(':').toString();
-    }
-
-    static String gact(org.eclipse.aether.artifact.Artifact artifact) {
-        StringBuilder buf = new StringBuilder();
-        buf.append(artifact.getGroupId()).append(':').append(artifact.getArtifactId()).append(':');
-        final String classifier = artifact.getClassifier();
-        if (classifier != null && !classifier.isEmpty()) {
-            buf.append(classifier);
-        }
-        return buf.append(':').append(artifact.getExtension()).append(':').toString();
-    }
-
     private static class Node {
         final Node parent;
-        final String gact;
+        final AppArtifactCoords coords;
         final int id;
         boolean included;
         List<Node> children = new ArrayList<>(0);
 
-        Node(Node parent, String gact, int id) {
+        Node(Node parent, AppArtifactCoords artifact, int id) {
             this.parent = parent;
-            this.gact = gact;
+            this.coords = artifact;
             this.id = id;
         }
 
-        Node newChild(String gact, int id) {
-            final Node child = new Node(this, gact, id);
+        Node newChild(AppArtifactCoords artifact, int id) {
+            final Node child = new Node(this, artifact, id);
             children.add(child);
             return child;
         }
 
-        List<String> collectMissing(Log log) {
-            final List<String> missing = new ArrayList<>();
+        List<AppArtifactCoords> collectMissing(Log log) {
+            final List<AppArtifactCoords> missing = new ArrayList<>();
             collectMissing(log, 0, missing);
             return missing;
         }
 
-        private void collectMissing(Log log, int depth, List<String> missing) {
+        private void collectMissing(Log log, int depth, List<AppArtifactCoords> missing) {
             final StringBuilder buf = new StringBuilder();
             if (included) {
                 buf.append('+');
             } else {
                 buf.append('-');
-                missing.add(gact);
+                missing.add(coords);
             }
             buf.append(' ');
             for (int i = 0; i < depth; ++i) {
                 buf.append("    ");
             }
-            buf.append(gact);
+            buf.append(coords);
             log.error(buf.toString());
             for (Node child : children) {
                 child.collectMissing(log, depth + 1, missing);
