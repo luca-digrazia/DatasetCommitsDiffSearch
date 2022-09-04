@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -97,14 +97,9 @@ public class ItemClicksHandledActivity extends Activity {
 	public void listViewWithArgument(String selectedItem) {
 		listViewWithArgumentSelectedItem = selectedItem;
 	}
-	
+
 	@ItemClick(R.id.listViewWithArgumentWithParameterType)
 	protected void listViewWithArgumentWithParameterType(ArrayList<String> item) {
-		listViewParametrizedItemClicked = true;
-	}
-
-	@ItemClick(R.id.listViewWithArgumentWithGenericWildcard)
-	protected void listViewWithArgumentWithGenericWildcardType(ArrayList<?> item) {
 		listViewParametrizedItemClicked = true;
 	}
 
@@ -137,14 +132,6 @@ public class ItemClicksHandledActivity extends Activity {
 	@ItemLongClick
 	void listViewWithPositionItemLongClicked(int position) {
 
-	}
-
-	@ItemLongClick(R.id.listViewWithArgumentWithParameterType)
-	protected void listViewWithArgumentWithParameterTypeLongClick(ArrayList<String> item) {
-	}
-
-	@ItemLongClick(R.id.listViewWithArgumentWithGenericWildcard)
-	protected void listViewWithArgumentWithGenericWildcardTypeLongClick(ArrayList<?> item) {
 	}
 
 	private List<ArrayList<String>> stringLists() {
