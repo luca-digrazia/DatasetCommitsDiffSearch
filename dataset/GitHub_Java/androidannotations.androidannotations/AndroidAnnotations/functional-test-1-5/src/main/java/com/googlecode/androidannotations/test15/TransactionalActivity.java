@@ -21,7 +21,6 @@ import android.app.Activity;
 import android.database.sqlite.SQLiteDatabase;
 
 import com.googlecode.androidannotations.annotations.EActivity;
-import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.Transactional;
 import com.googlecode.androidannotations.test15.instancestate.MySerializableBean;
 
@@ -36,11 +35,6 @@ public class TransactionalActivity extends Activity {
 	@Transactional
 	void rollbackedTransaction(SQLiteDatabase db) {
 		throw new IllegalArgumentException();
-	}
-
-	@Transactional
-	MySerializableBean transactionnalWithReturnStatement(SQLiteDatabase db) {
-		return null;
 	}
 
 	@Transactional
