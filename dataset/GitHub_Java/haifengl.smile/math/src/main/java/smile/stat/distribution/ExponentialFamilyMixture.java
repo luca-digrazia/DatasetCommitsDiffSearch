@@ -31,7 +31,6 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class ExponentialFamilyMixture extends Mixture {
-    private static final long serialVersionUID = 1L;
 
     /**
      * Constructor.
