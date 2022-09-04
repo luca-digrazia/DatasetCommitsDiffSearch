@@ -40,6 +40,7 @@ import javax.inject.Inject;
  */
 public class AlarmCallbacksMigrationPeriodical extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(AlarmCallbacksMigrationPeriodical.class);
+    private static final String DUPLICATED_ID = "id";
 
     private final DBCollection dbCollection;
 
@@ -54,7 +55,7 @@ public class AlarmCallbacksMigrationPeriodical extends Periodical {
         LOG.debug("Starting alarm callbacks migration");
 
         final DBObject selection = QueryBuilder.start("id").exists(true).get();
-        final DBObject modifications = new BasicDBObject("$unset", new BasicDBObject("id", ""));
+        final DBObject modifications = new BasicDBObject("$unset", new BasicDBObject(DUPLICATED_ID, ""));
         this.dbCollection.updateMulti(selection, modifications);
 
         LOG.debug("Done with alarm callbacks migration");
