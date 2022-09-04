@@ -40,11 +40,11 @@ public interface RepositoryModuleApi {
         @Param(
             name = "implementation",
             type = BaseFunction.class,
-            named = true,
+            legacyNamed = true,
             doc =
-                "the function implementing this rule, has to have exactly one parameter: <code><a"
-                    + " href=\"repository_ctx.html\">repository_ctx</a></code>. The function is"
-                    + " called during loading phase for each instance of the rule."),
+                "the function implementing this rule, has to have exactly one parameter: "
+                    + "<code><a href=\"repository_ctx.html\">repository_ctx</a></code>. The function "
+                    + "is called during loading phase for each instance of the rule."),
         @Param(
             name = "attrs",
             type = SkylarkDict.class,
@@ -78,22 +78,6 @@ public interface RepositoryModuleApi {
                     + "an environment variable in that list change, the repository will be "
                     + "refetched.",
             named = true,
-            positional = false),
-        @Param(
-            name = "configure",
-            type = Boolean.class,
-            defaultValue = "False",
-            doc = "Indicate that the repository inspects the system for configuration purpose",
-            named = true,
-            positional = false),
-        @Param(
-            name = "doc",
-            type = String.class,
-            defaultValue = "''",
-            doc =
-                "A description of the repository rule that can be extracted by documentation "
-                    + "generating tools.",
-            named = true,
             positional = false)
       },
       useAst = true,
@@ -103,8 +87,6 @@ public interface RepositoryModuleApi {
       Object attrs,
       Boolean local,
       SkylarkList<String> environ,
-      Boolean configure,
-      String doc,
       FuncallExpression ast,
       Environment env)
       throws EvalException;
