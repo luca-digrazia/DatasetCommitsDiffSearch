@@ -17,7 +17,6 @@
 package io.quarkus.example.test;
 
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.isEmptyString;
 
 import org.junit.jupiter.api.Test;
 
@@ -161,15 +160,4 @@ public class JaxRSTestCase {
                 .body("name", is("my openapi schema"));
     }
 
-    @Test
-    public void testOpenApiResponsesWithNoContent() {
-        RestAssured.when().get("/test/openapi/no-content/api-responses").then()
-                .body(isEmptyString());
-    }
-
-    @Test
-    public void testOpenApiResponseWithNoContent() {
-        RestAssured.when().get("/test/openapi/no-content/api-response").then()
-                .body(isEmptyString());
-    }
 }
