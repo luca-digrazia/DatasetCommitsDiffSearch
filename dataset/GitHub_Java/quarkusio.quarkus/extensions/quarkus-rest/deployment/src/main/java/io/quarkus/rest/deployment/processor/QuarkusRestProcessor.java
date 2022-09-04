@@ -7,7 +7,6 @@ import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.OPTIONS;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.PATCH;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.POST;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.PUT;
-import static java.util.stream.Collectors.toList;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -25,7 +24,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import javax.ws.rs.BeanParam;
 import javax.ws.rs.Priorities;
@@ -42,10 +40,8 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
@@ -56,7 +52,6 @@ import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
-import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.runtime.BeanContainer;
@@ -75,7 +70,6 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.index.IndexingUtil;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.JandexUtil;
 import io.quarkus.gizmo.ClassCreator;
@@ -122,16 +116,15 @@ import io.quarkus.rest.runtime.model.ResourceWriterInterceptor;
 import io.quarkus.rest.runtime.model.RestClientInterface;
 import io.quarkus.rest.runtime.providers.exceptionmappers.AuthenticationFailedExceptionMapper;
 import io.quarkus.rest.runtime.providers.exceptionmappers.UnauthorizedExceptionMapper;
+import io.quarkus.rest.runtime.providers.serialisers.VertxJsonMessageBodyWriter;
+import io.quarkus.rest.runtime.providers.serialisers.jsonb.JsonbMessageBodyReader;
+import io.quarkus.rest.runtime.providers.serialisers.jsonb.JsonbMessageBodyWriter;
 import io.quarkus.rest.runtime.spi.BeanFactory;
 import io.quarkus.rest.runtime.util.Encode;
 import io.quarkus.rest.spi.ContainerRequestFilterBuildItem;
 import io.quarkus.rest.spi.ContainerResponseFilterBuildItem;
-import io.quarkus.rest.spi.CustomContainerRequestFilterBuildItem;
-import io.quarkus.rest.spi.CustomContainerResponseFilterBuildItem;
 import io.quarkus.rest.spi.DynamicFeatureBuildItem;
 import io.quarkus.rest.spi.ExceptionMapperBuildItem;
-import io.quarkus.rest.spi.MessageBodyReaderBuildItem;
-import io.quarkus.rest.spi.MessageBodyWriterBuildItem;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.UnauthorizedException;
@@ -176,18 +169,6 @@ public class QuarkusRestProcessor {
         return new AutoInjectAnnotationBuildItem(DotName.createSimple(Context.class.getName()),
                 DotName.createSimple(BeanParam.class.getName()));
 
-    }
-
-    @BuildStep
-    void beanDefiningAnnotations(BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations) {
-        beanDefiningAnnotations
-                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.PATH, BuiltinScope.SINGLETON.getName()));
-        beanDefiningAnnotations
-                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.APPLICATION_PATH,
-                        BuiltinScope.SINGLETON.getName()));
-        beanDefiningAnnotations
-                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.PROVIDER,
-                        BuiltinScope.SINGLETON.getName()));
     }
 
     @BuildStep
@@ -295,107 +276,40 @@ public class QuarkusRestProcessor {
     }
 
     @BuildStep
-    void additionalBeans(List<ContainerRequestFilterBuildItem> additionalContainerRequestFilters,
+    void additionalBeans(Capabilities capabilities,
+            List<ContainerRequestFilterBuildItem> additionalContainerRequestFilters,
             List<ContainerResponseFilterBuildItem> additionalContainerResponseFilters,
             List<DynamicFeatureBuildItem> additionalDynamicFeatures,
             List<ExceptionMapperBuildItem> additionalExceptionMappers,
             BuildProducer<AdditionalBeanBuildItem> additionalBean) {
+        if (capabilities.isPresent(Capability.JACKSON)) {
+            additionalBean.produce(AdditionalBeanBuildItem.builder()
+                    .addBeanClass(VertxJsonMessageBodyWriter.class.getName())
+                    .setUnremovable().build());
+        }
+        // make these beans to they can get instantiated with the Quarkus CDI configured Jsonb object
+        if (capabilities.isPresent(Capability.JSONB)) {
+            additionalBean.produce(AdditionalBeanBuildItem.builder()
+                    .addBeanClass(JsonbMessageBodyReader.class.getName())
+                    .addBeanClass(JsonbMessageBodyWriter.class.getName())
+                    .setUnremovable().build());
+        }
 
+        // TODO: we currently make all additional providers beans, even if they don't inject anything, perhaps we want to change that?
         AdditionalBeanBuildItem.Builder additionalProviders = AdditionalBeanBuildItem.builder();
         for (ContainerRequestFilterBuildItem requestFilter : additionalContainerRequestFilters) {
-            if (requestFilter.isRegisterAsBean()) {
-                additionalProviders.addBeanClass(requestFilter.getClassName());
-            }
+            additionalProviders.addBeanClass(requestFilter.getClassName());
         }
         for (ContainerResponseFilterBuildItem responseFilter : additionalContainerResponseFilters) {
-            if (responseFilter.isRegisterAsBean()) {
-                additionalProviders.addBeanClass(responseFilter.getClassName());
-            }
+            additionalProviders.addBeanClass(responseFilter.getClassName());
         }
         for (ExceptionMapperBuildItem exceptionMapper : additionalExceptionMappers) {
-            if (exceptionMapper.isRegisterAsBean()) {
-                additionalProviders.addBeanClass(exceptionMapper.getClassName());
-            }
+            additionalProviders.addBeanClass(exceptionMapper.getClassName());
         }
         for (DynamicFeatureBuildItem dynamicFeature : additionalDynamicFeatures) {
-            if (dynamicFeature.isRegisterAsBean()) {
-                additionalProviders.addBeanClass(dynamicFeature.getClassName());
-            }
+            additionalProviders.addBeanClass(dynamicFeature.getClassName());
         }
         additionalBean.produce(additionalProviders.setUnremovable().setDefaultScope(DotNames.SINGLETON).build());
-    }
-
-    @BuildStep
-    public void handleCustomProviders(
-            // TODO: We need to use this index instead of BeanArchiveIndexBuildItem to avoid build cycles. It it OK?
-            CombinedIndexBuildItem combinedIndexBuildItem,
-            BuildProducer<GeneratedBeanBuildItem> generatedBean,
-            List<CustomContainerRequestFilterBuildItem> customContainerRequestFilters,
-            List<CustomContainerResponseFilterBuildItem> customContainerResponseFilters,
-            BuildProducer<ContainerRequestFilterBuildItem> additionalContainerRequestFilters,
-            BuildProducer<ContainerResponseFilterBuildItem> additionalContainerResponseFilters,
-            BuildProducer<AdditionalBeanBuildItem> additionalBean) {
-        IndexView index = combinedIndexBuildItem.getIndex();
-        AdditionalBeanBuildItem.Builder additionalBeans = AdditionalBeanBuildItem.builder();
-
-        // if we have custom filters, we need to index these classes
-        if (!customContainerRequestFilters.isEmpty() || !customContainerResponseFilters.isEmpty()) {
-            Indexer indexer = new Indexer();
-            Set<DotName> additionalIndex = new HashSet<>();
-            for (CustomContainerRequestFilterBuildItem filter : customContainerRequestFilters) {
-                IndexingUtil.indexClass(filter.getClassName(), indexer, index, additionalIndex,
-                        Thread.currentThread().getContextClassLoader());
-            }
-            for (CustomContainerResponseFilterBuildItem filter : customContainerResponseFilters) {
-                IndexingUtil.indexClass(filter.getClassName(), indexer, index, additionalIndex,
-                        Thread.currentThread().getContextClassLoader());
-            }
-            index = CompositeIndex.create(index, indexer.complete());
-        }
-
-        for (AnnotationInstance instance : index
-                .getAnnotations(QuarkusRestDotNames.CUSTOM_CONTAINER_REQUEST_FILTER)) {
-            if (instance.target().kind() != AnnotationTarget.Kind.METHOD) {
-                continue;
-            }
-            MethodInfo methodInfo = instance.target().asMethod();
-            // the user class itself is made to be a bean as we want the user to be able to declare dependencies
-            additionalBeans.addBeanClass(methodInfo.declaringClass().name().toString());
-            String generatedClassName = CustomProviderGenerator.generateContainerRequestFilter(methodInfo,
-                    new GeneratedBeanGizmoAdaptor(generatedBean));
-
-            ContainerRequestFilterBuildItem.Builder builder = new ContainerRequestFilterBuildItem.Builder(generatedClassName)
-                    .setRegisterAsBean(false); // it has already been made a bean
-            AnnotationValue priorityValue = instance.value("priority");
-            if (priorityValue != null) {
-                builder.setPriority(priorityValue.asInt());
-            }
-            AnnotationValue preMatchingValue = instance.value("preMatching");
-            if (preMatchingValue != null) {
-                builder.setPreMatching(preMatchingValue.asBoolean());
-            }
-            additionalContainerRequestFilters.produce(builder.build());
-        }
-        for (AnnotationInstance instance : index
-                .getAnnotations(QuarkusRestDotNames.CUSTOM_CONTAINER_RESPONSE_FILTER)) {
-            if (instance.target().kind() != AnnotationTarget.Kind.METHOD) {
-                continue;
-            }
-            MethodInfo methodInfo = instance.target().asMethod();
-            // the user class itself is made to be a bean as we want the user to be able to declare dependencies
-            additionalBeans.addBeanClass(methodInfo.declaringClass().name().toString());
-            String generatedClassName = CustomProviderGenerator.generateContainerResponseFilter(methodInfo,
-                    new GeneratedBeanGizmoAdaptor(generatedBean));
-            ContainerResponseFilterBuildItem.Builder builder = new ContainerResponseFilterBuildItem.Builder(generatedClassName)
-                    .setRegisterAsBean(false);// it has already been made a bean
-            AnnotationValue priorityValue = instance.value("priority");
-            if (priorityValue != null) {
-                builder.setPriority(priorityValue.asInt());
-            }
-            additionalContainerResponseFilters.produce(builder.build());
-        }
-
-        additionalBean.produce(additionalBeans.setUnremovable().setDefaultScope(DotNames.SINGLETON).build());
     }
 
     @BuildStep
@@ -415,20 +329,13 @@ public class QuarkusRestProcessor {
             List<ContainerResponseFilterBuildItem> additionalContainerResponseFilters,
             List<ExceptionMapperBuildItem> additionalExceptionMappers,
             List<DynamicFeatureBuildItem> additionalDynamicFeatures,
-            List<MessageBodyReaderBuildItem> additionalMessageBodyReaders,
-            List<MessageBodyWriterBuildItem> additionalMessageBodyWriters,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<RouteBuildItem> routes) throws NoSuchMethodException {
+            BuildProducer<RouteBuildItem> routes) {
 
         if (!resourceScanningResultBuildItem.isPresent()) {
             // no detected @Path, bail out
             return;
         }
-
-        recorderContext.registerNonDefaultConstructor(
-                MediaType.class.getDeclaredConstructor(String.class, String.class, String.class),
-                mediaType -> Stream.of(mediaType.getType(), mediaType.getSubtype(), mediaType.getParameters())
-                        .collect(toList()));
 
         IndexView index = beanArchiveIndexBuildItem.getIndex();
         Collection<ClassInfo> applications = index
@@ -485,7 +392,6 @@ public class QuarkusRestProcessor {
             selectedAppClass = applicationClassInfo;
             // FIXME: yell if there's more than one
             String applicationClass = applicationClassInfo.name().toString();
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, applicationClass));
             try {
                 Class<?> appClass = Thread.currentThread().getContextClassLoader().loadClass(applicationClass);
                 application = (Application) appClass.getConstructor().newInstance();
@@ -842,17 +748,6 @@ public class QuarkusRestProcessor {
                     reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, writerClassName));
                 }
             }
-            for (MessageBodyWriterBuildItem additionalWriter : additionalMessageBodyWriters) {
-                ResourceWriter writer = new ResourceWriter();
-                writer.setBuiltin(false);
-                String writerClassName = additionalWriter.getClassName();
-                writer.setFactory(factory(writerClassName, singletonClasses, recorder, beanContainerBuildItem));
-                if (!additionalWriter.getMediaTypeStrings().isEmpty()) {
-                    writer.setMediaTypeStrings(additionalWriter.getMediaTypeStrings());
-                }
-                recorder.registerWriter(serialisers, additionalWriter.getHandledClassName(), writer);
-            }
-
             for (ClassInfo readerClass : readers) {
                 KeepProviderResult keepProviderResult = keepProvider(readerClass, filterClasses, allowedClasses);
                 if (keepProviderResult != KeepProviderResult.DISCARD) {
@@ -878,15 +773,19 @@ public class QuarkusRestProcessor {
                     reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClassName));
                 }
             }
-            for (MessageBodyReaderBuildItem additionalReader : additionalMessageBodyReaders) {
-                ResourceReader reader = new ResourceReader();
-                reader.setBuiltin(false);
-                String readerClassName = additionalReader.getClassName();
-                reader.setFactory(factory(readerClassName, singletonClasses, recorder, beanContainerBuildItem));
-                if (!additionalReader.getMediaTypeStrings().isEmpty()) {
-                    reader.setMediaTypeStrings(additionalReader.getMediaTypeStrings());
-                }
-                recorder.registerReader(serialisers, additionalReader.getHandledClassName(), reader);
+
+            // additional readers / writers based on capabilities
+
+            if (capabilities.isPresent(Capability.JACKSON)) {
+                // TODO: this is probably not the right thing to do as Vertx doesn't the Quarkus CDI configured ObjectMapper here
+                registerWriter(recorder, serialisers, Object.class, VertxJsonMessageBodyWriter.class,
+                        beanContainerBuildItem.getValue(), MediaType.APPLICATION_JSON);
+            }
+            if (capabilities.isPresent(Capability.JSONB)) {
+                registerReader(recorder, serialisers, Object.class, JsonbMessageBodyReader.class,
+                        beanContainerBuildItem.getValue(), MediaType.APPLICATION_JSON, null);
+                registerWriter(recorder, serialisers, Object.class, JsonbMessageBodyWriter.class,
+                        beanContainerBuildItem.getValue(), MediaType.APPLICATION_JSON);
             }
 
             // built-ins
@@ -936,7 +835,7 @@ public class QuarkusRestProcessor {
                     beanContainerBuildItem.getValue(), shutdownContext, config, vertxConfig, applicationPath,
                     clientImplementations,
                     genericTypeMapping, converterProviders, initClassFactory,
-                    application == null ? Application.class : application.getClass(), singletonClasses.isEmpty());
+                    application == null ? Application.class : application.getClass());
 
             String deploymentPath = sanitizeApplicationPath(applicationPath);
             // Exact match for resources matched to the root path
@@ -1076,6 +975,18 @@ public class QuarkusRestProcessor {
             return Collections.emptyList();
         }
         return Arrays.asList(produces.value().asStringArray());
+    }
+
+    @BuildStep
+    void beanDefiningAnnotations(BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations) {
+        beanDefiningAnnotations
+                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.PATH, BuiltinScope.SINGLETON.getName()));
+        beanDefiningAnnotations
+                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.APPLICATION_PATH,
+                        BuiltinScope.SINGLETON.getName()));
+        beanDefiningAnnotations
+                .produce(new BeanDefiningAnnotationBuildItem(QuarkusRestDotNames.PROVIDER,
+                        BuiltinScope.SINGLETON.getName()));
     }
 
     private Map<String, RuntimeValue<Function<WebTarget, ?>>> generateClientInvokers(RecorderContext recorderContext,

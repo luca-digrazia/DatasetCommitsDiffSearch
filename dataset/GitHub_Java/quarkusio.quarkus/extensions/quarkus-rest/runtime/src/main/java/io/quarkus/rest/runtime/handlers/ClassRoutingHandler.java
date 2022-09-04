@@ -19,7 +19,6 @@ import io.quarkus.rest.runtime.jaxrs.QuarkusRestResponseBuilder;
 import io.quarkus.rest.runtime.mapping.RequestMapper;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
-import io.quarkus.runtime.LaunchMode;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
@@ -69,8 +68,7 @@ public class ClassRoutingHandler implements RestHandler {
                                 new QuarkusRestResponseBuilder().status(Response.Status.METHOD_NOT_ALLOWED).build());
                     }
                 }
-                throwNotFound(requestContext);
-                return;
+                throw new NotFoundException();
             }
         }
         String remaining = getRemaining(requestContext);
@@ -97,8 +95,7 @@ public class ClassRoutingHandler implements RestHandler {
                                 new QuarkusRestResponseBuilder().status(Response.Status.METHOD_NOT_ALLOWED).build());
                     }
                 }
-                throwNotFound(requestContext);
-                return;
+                throw new NotFoundException();
             }
         }
 
@@ -133,14 +130,6 @@ public class ClassRoutingHandler implements RestHandler {
             }
             requestContext.setPathParamValue(i + parameterOffset, pathParamValue);
         }
-    }
-
-    private void throwNotFound(QuarkusRestRequestContext requestContext) {
-        if (LaunchMode.current() == LaunchMode.DEVELOPMENT) {
-            // the NotFoundExceptionHandler needs access to request scoped beans, so make sure we have the context
-            requestContext.requireCDIRequestScope();
-        }
-        throw new NotFoundException();
     }
 
     private String getRemaining(QuarkusRestRequestContext requestContext) {
