@@ -22,7 +22,6 @@ import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
 
 /** An interface for a set of runfiles. */
@@ -33,9 +32,8 @@ import net.starlark.java.eval.StarlarkValue;
         "A container of information regarding a set of files required at runtime execution. This"
             + " object should be passed via <a href=\"DefaultInfo.html\">DefaultInfo</a> in order"
             + " to tell the build system about the runfiles needed by the outputs produced by the"
-            + " rule. <p>See <a"
-            + " href=\"https://docs.bazel.build/skylark/rules.html#runfiles\">runfiles"
-            + " guide</a> for details.")
+            + " rule. "
+            + "<p>See <a href=\"../rules.html#runfiles\">runfiles guide</a> for details.")
 public interface RunfilesApi extends StarlarkValue {
 
   @StarlarkMethod(name = "files", doc = "Returns the set of runfiles as files.", structField = true)
@@ -71,9 +69,8 @@ public interface RunfilesApi extends StarlarkValue {
             positional = true,
             named = false,
             doc = "The runfiles object to merge into this."),
-      },
-      useStarlarkThread = true)
-  RunfilesApi merge(RunfilesApi other, StarlarkThread thread) throws EvalException;
+      })
+  RunfilesApi merge(RunfilesApi other);
 
   @StarlarkMethod(
       name = "merge_all",
@@ -89,7 +86,6 @@ public interface RunfilesApi extends StarlarkValue {
             positional = true,
             named = false,
             doc = "The sequence of runfiles objects to merge into this."),
-      },
-      useStarlarkThread = true)
-  RunfilesApi mergeAll(Sequence<?> sequence, StarlarkThread thread) throws EvalException;
+      })
+  RunfilesApi mergeAll(Sequence<?> sequence) throws EvalException;
 }

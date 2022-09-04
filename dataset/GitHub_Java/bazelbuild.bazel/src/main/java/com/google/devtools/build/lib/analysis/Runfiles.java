@@ -33,14 +33,12 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.starlarkbuildapi.RunfilesApi;
 import com.google.devtools.build.lib.starlarkbuildapi.SymlinkEntryApi;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.errorprone.annotations.DoNotCall;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -53,9 +51,6 @@ import javax.annotation.Nullable;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Printer;
 import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.syntax.Location;
 
 /**
@@ -790,11 +785,11 @@ public final class Runfiles implements RunfilesApi {
      *     <p>See also {@link Builder#addTransitiveArtifactsWrappedInStableOrder}
      */
     @Deprecated
-    @DoNotCall
     public Builder addArtifacts(NestedSet<Artifact> artifacts) {
       // Do not delete this method, or else addArtifacts(Iterable) calls with a NestedSet argument
       // will not be flagged.
-      throw new UnsupportedOperationException("Call addTransitiveArtifacts instead");
+      addArtifacts(artifacts.toList());
+      return this;
     }
 
     /**
@@ -1069,34 +1064,8 @@ public final class Runfiles implements RunfilesApi {
     }
   }
 
-  private static void verifyNestedSetDepthLimitHelper(
-      NestedSet<?> nestedSet, String name, int limit) throws EvalException {
-    if (nestedSet.getApproxDepth() > limit) {
-      throw Starlark.errorf(
-          "%s depset depth %d exceeds limit (%d)", name, nestedSet.getApproxDepth(), limit);
-    }
-  }
-
-  /**
-   * Checks that the depth of a Runfiles object's nested sets (artifacts, symlinks, root symlinks,
-   * extra middlemen) does not exceed Starlark's depset depth limit, as specified by {@code
-   * --nested_set_depth_limit}.
-   *
-   * @param semantics Starlark semantics providing {@code --nested_set_depth_limit}
-   * @return this object, in the fluent style
-   * @throws EvalException if a nested set in the Runfiles object exceeds the depth limit
-   */
-  private Runfiles verifyNestedSetDepthLimit(StarlarkSemantics semantics) throws EvalException {
-    int limit = semantics.get(BuildLanguageOptions.NESTED_SET_DEPTH_LIMIT);
-    verifyNestedSetDepthLimitHelper(artifacts, "artifacts", limit);
-    verifyNestedSetDepthLimitHelper(symlinks, "symlinks", limit);
-    verifyNestedSetDepthLimitHelper(rootSymlinks, "root symlinks", limit);
-    verifyNestedSetDepthLimitHelper(extraMiddlemen, "extra middlemen", limit);
-    return this;
-  }
-
   @Override
-  public Runfiles merge(RunfilesApi other, StarlarkThread thread) throws EvalException {
+  public Runfiles merge(RunfilesApi other) {
     Runfiles o = (Runfiles) other;
     if (isEmpty()) {
       // This is not just a memory / performance optimization. The Builder requires a valid suffix,
@@ -1106,15 +1075,11 @@ public final class Runfiles implements RunfilesApi {
     } else if (o.isEmpty()) {
       return this;
     }
-    return new Runfiles.Builder(suffix, false)
-        .merge(this)
-        .merge(o)
-        .build()
-        .verifyNestedSetDepthLimit(thread.getSemantics());
+    return new Runfiles.Builder(suffix, false).merge(this).merge(o).build();
   }
 
   @Override
-  public Runfiles mergeAll(Sequence<?> sequence, StarlarkThread thread) throws EvalException {
+  public Runfiles mergeAll(Sequence<?> sequence) throws EvalException {
     // The delayed initialization of the Builder is not just a memory / performance optimization.
     // The Builder requires a valid suffix, but the {@code Runfiles.EMPTY} singleton has an invalid
     // one, which must not be used to construct a Runfiles.Builder.
@@ -1144,7 +1109,7 @@ public final class Runfiles implements RunfilesApi {
     if (uniqueNonEmptyMergee != null) {
       return uniqueNonEmptyMergee;
     } else if (builder != null) {
-      return builder.build().verifyNestedSetDepthLimit(thread.getSemantics());
+      return builder.build();
     } else {
       return EMPTY;
     }
