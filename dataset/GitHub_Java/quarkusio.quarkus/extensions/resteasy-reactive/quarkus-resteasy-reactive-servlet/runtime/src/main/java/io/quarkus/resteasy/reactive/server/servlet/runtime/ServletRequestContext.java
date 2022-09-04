@@ -38,7 +38,6 @@ import io.netty.util.concurrent.ScheduledFuture;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.impl.LazyValue;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveSecurityContext;
-import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
 import io.undertow.server.HttpServerExchange;
@@ -59,7 +58,6 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     AsyncContext asyncContext;
     ServletWriteListener writeListener;
     byte[] asyncWriteData;
-    boolean closed;
     Consumer<Throwable> asyncWriteHandler;
     protected Consumer<ResteasyReactiveRequestContext> preCommitTask;
 
@@ -83,14 +81,10 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     }
 
     @Override
-    public synchronized void close() {
-        if (asyncWriteData != null) {
-            closed = true;
-        } else {
-            super.close();
-            if (asyncContext != null) {
-                asyncContext.complete();
-            }
+    public void close() {
+        super.close();
+        if (asyncContext != null) {
+            asyncContext.complete();
         }
     }
 
@@ -203,7 +197,7 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
 
     @Override
     public String getRequestAbsoluteUri() {
-        return request.getRequestURL().toString();
+        return request.getRequestURI();
     }
 
     @Override
@@ -286,15 +280,6 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     }
 
     @Override
-    public InputStream createInputStream() {
-        try {
-            return request.getInputStream();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
     public ServerHttpResponse pauseRequestInput() {
         //TODO
         return this;
@@ -361,31 +346,23 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
 
     @Override
     public ServerHttpResponse end(byte[] data) {
-        if (BlockingOperationControl.isBlockingAllowed()) {
-            try {
-                response.getOutputStream().write(data);
-                response.getOutputStream().close();
-            } catch (IOException e) {
-                log.debug("IoException writing response", e);
-            }
-        } else {
-            write(data, new Consumer<Throwable>() {
-                @Override
-                public void accept(Throwable throwable) {
-                    try {
-                        response.getOutputStream().close();
-                    } catch (IOException e) {
-                        log.debug("IoException writing response", e);
-                    }
-                }
-            });
+        try {
+            response.getOutputStream().write(data);
+            response.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("IoException writing response", e);
         }
         return this;
     }
 
     @Override
     public ServerHttpResponse end(String data) {
-        end(data.getBytes(StandardCharsets.UTF_8));
+        try {
+            response.getOutputStream().write(data.getBytes(StandardCharsets.UTF_8));
+            response.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("IoException writing response", e);
+        }
         return this;
     }
 
@@ -445,22 +422,17 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
                 asyncResultHandler.accept(e);
             }
         } else {
-            synchronized (this) {
-                if (asyncWriteData != null) {
-                    throw new IllegalStateException("Cannot write more than one piece of async data at a time");
+            if (writeListener == null) {
+                try {
+                    ServletOutputStream outputStream = response.getOutputStream();
+                    outputStream.setWriteListener(writeListener = new ServletWriteListener(outputStream));
+                } catch (IOException e) {
+                    asyncResultHandler.accept(e);
                 }
+            } else {
                 asyncWriteData = data;
                 asyncWriteHandler = asyncResultHandler;
-                if (writeListener == null) {
-                    try {
-                        ServletOutputStream outputStream = response.getOutputStream();
-                        outputStream.setWriteListener(writeListener = new ServletWriteListener(outputStream));
-                    } catch (IOException e) {
-                        asyncResultHandler.accept(e);
-                    }
-                } else {
-                    writeListener.onWritePossible();
-                }
+                writeListener.onWritePossible();
             }
         }
         return this;
@@ -512,37 +484,29 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
         }
 
         @Override
-        public void onWritePossible() {
-            synchronized (ServletRequestContext.this) {
-                if (!outputStream.isReady()) {
-                    return;
-                }
-                Consumer<Throwable> ctx = asyncWriteHandler;
-                byte[] data = asyncWriteData;
-                asyncWriteHandler = null;
-                asyncWriteData = null;
-                try {
-                    outputStream.write(data);
-                    ctx.accept(null);
-                } catch (IOException e) {
-                    ctx.accept(e);
-                }
-                if (closed) {
-                    close();
-                }
+        public synchronized void onWritePossible() {
+            if (!outputStream.isReady()) {
+                return;
+            }
+            Consumer<Throwable> ctx = asyncWriteHandler;
+            byte[] data = asyncWriteData;
+            asyncWriteHandler = null;
+            asyncWriteData = null;
+            try {
+                outputStream.write(data);
+                ctx.accept(null);
+            } catch (IOException e) {
+                ctx.accept(e);
             }
         }
 
         @Override
         public synchronized void onError(Throwable t) {
-            synchronized (ServletRequestContext.this) {
-                if (asyncWriteHandler != null) {
-                    Consumer<Throwable> ctx = asyncWriteHandler;
-                    asyncWriteHandler = null;
-                    asyncWriteData = null;
-                    ctx.accept(t);
-                    close();
-                }
+            if (asyncWriteHandler != null) {
+                Consumer<Throwable> ctx = asyncWriteHandler;
+                asyncWriteHandler = null;
+                asyncWriteData = null;
+                ctx.accept(t);
             }
         }
     }

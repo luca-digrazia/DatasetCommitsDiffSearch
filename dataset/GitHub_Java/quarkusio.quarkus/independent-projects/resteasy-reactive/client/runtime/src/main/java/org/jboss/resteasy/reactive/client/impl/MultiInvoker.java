@@ -5,6 +5,7 @@ import io.smallrye.mutiny.subscription.MultiEmitter;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClientResponse;
+import io.vertx.core.http.HttpConnection;
 import io.vertx.core.net.impl.ConnectionBase;
 import java.io.ByteArrayInputStream;
 import java.util.concurrent.TimeUnit;
@@ -154,9 +155,11 @@ public class MultiInvoker extends AbstractRxInvoker<Multi<?>> {
                 multiRequest.emitter.fail(t);
             }
         });
-        // we don't add a closeHandler handler on the connection as it can race with this handler
-        // and close before the emitter emits anything
-        // see: https://github.com/quarkusio/quarkus/pull/16438
+        HttpConnection connection = vertxClientResponse.request().connection();
+        // this captures the server closing
+        connection.closeHandler(v -> {
+            multiRequest.emitter.complete();
+        });
         vertxClientResponse.handler(new Handler<Buffer>() {
             @Override
             public void handle(Buffer buffer) {
