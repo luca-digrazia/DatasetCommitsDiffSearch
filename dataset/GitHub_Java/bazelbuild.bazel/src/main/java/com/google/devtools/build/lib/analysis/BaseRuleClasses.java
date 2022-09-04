@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.DISTRIBUTIONS;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
@@ -143,7 +144,7 @@ public class BaseRuleClasses {
           // Input files for every test action
           .add(
               attr("$test_runtime", LABEL_LIST)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .value(ImmutableList.of(env.getToolsLabel("//tools/test:runtime"))))
           // Input files for test actions collecting code coverage
           .add(
@@ -152,7 +153,7 @@ public class BaseRuleClasses {
           // Used in the one-per-build coverage report generation action.
           .add(
               attr("$coverage_report_generator", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .value(env.getLabel("//tools/defaults:coverage_report_generator"))
                   .singleArtifact())
 
@@ -184,7 +185,7 @@ public class BaseRuleClasses {
         .add(
             attr("visibility", NODEP_LABEL_LIST)
                 .orderIndependent()
-                .cfg(HostTransition.INSTANCE)
+                .cfg(HOST)
                 .nonconfigurable(
                     "special attribute integrated more deeply into Bazel's core logic"))
         .add(
@@ -213,13 +214,11 @@ public class BaseRuleClasses {
                 .value(testonlyDefault)
                 .nonconfigurable("policy decision: rules testability should be consistent"))
         .add(attr("features", STRING_LIST).orderIndependent())
-        .add(attr(":action_listener", LABEL_LIST)
-            .cfg(HostTransition.INSTANCE)
-            .value(ACTION_LISTENER))
+        .add(attr(":action_listener", LABEL_LIST).cfg(HOST).value(ACTION_LISTENER))
         .add(
             attr(RuleClass.COMPATIBLE_ENVIRONMENT_ATTR, LABEL_LIST)
                 .allowedRuleClasses(EnvironmentRule.RULE_NAME)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(Attribute.ConfigurationTransition.HOST)
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .dontCheckConstraints()
                 .nonconfigurable(
@@ -227,7 +226,7 @@ public class BaseRuleClasses {
         .add(
             attr(RuleClass.RESTRICTED_ENVIRONMENT_ATTR, LABEL_LIST)
                 .allowedRuleClasses(EnvironmentRule.RULE_NAME)
-                .cfg(HostTransition.INSTANCE)
+                .cfg(Attribute.ConfigurationTransition.HOST)
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .dontCheckConstraints()
                 .nonconfigurable(
