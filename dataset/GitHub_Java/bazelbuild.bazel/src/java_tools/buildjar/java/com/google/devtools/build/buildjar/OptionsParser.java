@@ -51,8 +51,7 @@ public final class OptionsParser {
   private String outputDepsProtoFile;
   private final Set<String> depsArtifacts = new LinkedHashSet<>();
 
-  /** This modes controls how a probablistic Java classpath reduction is used. */
-  public enum ReduceClasspathMode {
+  enum ReduceClasspathMode {
     BAZEL_REDUCED,
     BAZEL_FALLBACK,
     JAVABUILDER_REDUCED,

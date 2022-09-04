@@ -58,7 +58,6 @@ public final class JavaLibraryBuildRequest {
 
   private final ImmutableList<Path> processorPath;
   private final List<String> processorNames;
-  private final ImmutableSet<String> builtinProcessorNames;
 
   private final Path outputJar;
   private final Path nativeHeaderOutput;
@@ -163,7 +162,6 @@ public final class JavaLibraryBuildRequest {
     this.extClassPath = asPaths(optionsParser.getExtClassPath());
     this.processorPath = asPaths(optionsParser.getProcessorPath());
     this.processorNames = optionsParser.getProcessorNames();
-    this.builtinProcessorNames = ImmutableSet.copyOf(optionsParser.getBuiltinProcessorNames());
     // Since the default behavior of this tool with no arguments is "rm -fr <classDir>", let's not
     // default to ".", shall we?
     this.classDir = asPath(firstNonNull(optionsParser.getClassDir(), "classes"));
@@ -327,7 +325,6 @@ public final class JavaLibraryBuildRequest {
             .javacOptions(makeJavacArguments())
             .sourceFiles(ImmutableList.copyOf(getSourceFiles()))
             .processors(null)
-            .builtinProcessors(builtinProcessorNames)
             .sourcePath(getSourcePath())
             .sourceOutput(getSourceGenDir())
             .processorPath(getProcessorPath())
