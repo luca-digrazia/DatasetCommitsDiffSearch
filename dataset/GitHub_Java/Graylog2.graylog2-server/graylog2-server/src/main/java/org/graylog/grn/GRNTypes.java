@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.grn;
 
@@ -25,7 +25,6 @@ public class GRNTypes {
     public static final GRNType EVENT_DEFINITION = GRNType.create("event_definition", "eventdefinitions:");
     public static final GRNType EVENT_NOTIFICATION = GRNType.create("notification", "eventnotifications:");
     public static final GRNType GRANT = GRNType.create("grant", "grants:");
-    public static final GRNType OUTPUT = GRNType.create("output", "outputs:");
     public static final GRNType ROLE = GRNType.create("role", "roles:");
     public static final GRNType SEARCH = GRNType.create("search", "view:");
     public static final GRNType STREAM = GRNType.create("stream", "streams:");
@@ -41,7 +40,6 @@ public class GRNTypes {
             .add(EVENT_DEFINITION)
             .add(EVENT_NOTIFICATION)
             .add(GRANT)
-            .add(OUTPUT)
             .add(ROLE)
             .add(SEARCH)
             .add(STREAM)
