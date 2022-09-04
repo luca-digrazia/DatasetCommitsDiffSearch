@@ -116,6 +116,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext,
         filesBuilder,
         resourceDeps,
+        javaCommon,
         androidCommon,
         javaSemantics,
         androidSemantics);
@@ -165,13 +166,19 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ruleContext.throwWithRuleError("Data binding doesn't work with the \"resources\" attribute. "
           + "Use \"resource_files\" instead.");
     }
-    AndroidCommon.validateResourcesAttribute(ruleContext);
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")
+        && !ruleContext.getFragment(AndroidConfiguration.class).allowResourcesAttr()) {
+      ruleContext.throwWithAttributeError(
+          "resources",
+          "The resources attribute has been removed. Please use resource_files instead.");
+    }
   }
 
   private static RuleConfiguredTargetBuilder init(
       RuleContext ruleContext,
       NestedSetBuilder<Artifact> filesBuilder,
       ResourceDependencies resourceDeps,
+      JavaCommon javaCommon,
       AndroidCommon androidCommon,
       JavaSemantics javaSemantics,
       AndroidSemantics androidSemantics)
@@ -366,6 +373,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         deployJar,
         derivedJarFunction,
         /* isBinaryJarFiltered */ false,
+        javaCommon,
         androidCommon,
         javaSemantics,
         androidSemantics,
@@ -389,6 +397,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       Artifact binaryJar,
       Function<Artifact, Artifact> derivedJarFunction,
       boolean isBinaryJarFiltered,
+      JavaCommon javaCommon,
       AndroidCommon androidCommon,
       JavaSemantics javaSemantics,
       AndroidSemantics androidSemantics,
@@ -525,7 +534,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           || getMultidexMode(ruleContext) == MultidexMode.LEGACY) {
         commandLine.add("--keep-main-dex");
       }
-      rexActionBuilder.addCommandLine(commandLine.build());
+      rexActionBuilder.setCommandLine(commandLine.build());
       ruleContext.registerAction(rexActionBuilder.build(ruleContext));
     } else {
       finalDexes = dexingOutput.classesDexZip;
@@ -1032,7 +1041,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 .setExecutable(ruleContext.getExecutablePrerequisite("$merge_dexzips", Mode.HOST))
                 .addInputs(shardDexes)
                 .addOutput(classesDex)
-                .addCommandLine(mergeCommandLine)
+                .setCommandLine(mergeCommandLine)
                 .build(ruleContext));
         if (incrementalDexing.contains(AndroidBinaryType.MULTIDEX_SHARDED)) {
           // Using the deploy jar for java resources gives better "bazel mobile-install" performance
@@ -1136,7 +1145,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       dexmerger.addInput(mainDexList);
       commandLine.addExecPath("--main-dex-list", mainDexList);
     }
-    dexmerger.addCommandLine(commandLine.build());
+    dexmerger.setCommandLine(commandLine.build());
     ruleContext.registerAction(dexmerger.build(ruleContext));
   }
 
@@ -1316,7 +1325,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       }
     }
 
-    shardAction.addCommandLine(shardCommandLine.build());
+    shardAction.setCommandLine(shardCommandLine.build());
     ruleContext.registerAction(shardAction.build(ruleContext));
     return javaResourceJar;
   }
@@ -1350,7 +1359,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             .setMnemonic("TrimDexZip")
             .addInput(inputZip)
             .addOutput(outputZip)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("--exclude_build_data")
                     .add("--dont_change_compression")
@@ -1416,7 +1425,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     androidSemantics.addMainDexListActionArguments(
         ruleContext, streamlinedBuilder, streamlinedCommandLine, proguardOutputMap);
 
-    streamlinedBuilder.addCommandLine(streamlinedCommandLine.build());
+    streamlinedBuilder.setCommandLine(streamlinedCommandLine.build());
     ruleContext.registerAction(streamlinedBuilder.build(ruleContext));
 
     // Create the main dex classes list.
@@ -1431,7 +1440,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             .addOutput(mainDexList)
             .addInput(strippedJar)
             .addInput(jar)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .addExecPath(mainDexList)
                     .addExecPath(strippedJar)
