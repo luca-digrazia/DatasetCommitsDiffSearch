@@ -16,6 +16,7 @@
  */
 package org.graylog2.indexer.ranges;
 
+import com.github.rholder.retry.RetryException;
 import com.github.rholder.retry.Retryer;
 import com.github.rholder.retry.RetryerBuilder;
 import com.github.rholder.retry.StopStrategies;
@@ -29,7 +30,6 @@ import com.google.common.primitives.Ints;
 import com.mongodb.BasicDBObject;
 import com.mongodb.BasicDBObjectBuilder;
 import org.bson.types.ObjectId;
-import org.elasticsearch.indices.IndexClosedException;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
@@ -51,6 +51,8 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.Iterator;
 import java.util.SortedSet;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 public class MongoIndexRangeService implements IndexRangeService {
@@ -164,20 +166,24 @@ public class MongoIndexRangeService implements IndexRangeService {
             indices.waitForRecovery(index);
 
             final Retryer<IndexRange> retryer = RetryerBuilder.<IndexRange>newBuilder()
-                    .retryIfException(input -> !(input instanceof IndexClosedException))
+                    .retryIfException()
                     .withWaitStrategy(WaitStrategies.exponentialWait())
                     .withStopStrategy(StopStrategies.stopAfterDelay(5, TimeUnit.MINUTES))
                     .build();
 
             final IndexRange indexRange;
             try {
-                indexRange = retryer.call(() -> calculateRange(index));
-            } catch (Exception e) {
-                if (e.getCause() instanceof IndexClosedException) {
-                    LOG.debug("Couldn't calculate index range for closed index \"" + index + "\"", e.getCause());
-                    return;
-                }
+                indexRange = retryer.call(new Callable<IndexRange>() {
+                    @Override
+                    public IndexRange call() throws Exception {
+                        return calculateRange(index);
+                    }
+                });
+            } catch (ExecutionException e) {
                 LOG.error("Couldn't calculate index range for index \"" + index + "\"", e.getCause());
+                throw new RuntimeException("Couldn't calculate index range for index \"" + index + "\"", e);
+            } catch (RetryException e) {
+                LOG.error("Couldn't calculate index range for index \"" + index + "\"", e);
                 throw new RuntimeException("Couldn't calculate index range for index \"" + index + "\"", e);
             }
 

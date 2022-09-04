@@ -19,20 +19,18 @@ package org.graylog2.indexer.searches;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule;
-import com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import com.google.common.collect.ImmutableSortedSet;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
+import com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule;
+import com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch;
 import org.elasticsearch.client.Client;
 import org.graylog2.Configuration;
-import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.nosqlunit.IndexCreatingLoadStrategyFactory;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeComparator;
 import org.graylog2.indexer.ranges.IndexRangeService;
-import org.graylog2.indexer.ranges.MongoIndexRange;
 import org.graylog2.indexer.results.CountResult;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.results.HistogramResult;
@@ -54,8 +52,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.SortedSet;
 
-import static com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
-import static com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
+import static com.lordofthejars.nosqlunit.elasticsearch.ElasticsearchRule.ElasticsearchRuleBuilder.newElasticsearchRule;
+import static com.lordofthejars.nosqlunit.elasticsearch.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
@@ -70,7 +68,7 @@ public class SearchesTest {
     @Rule
     public ElasticsearchRule elasticsearchRule;
 
-    private static final String INDEX_NAME = "graylog_0";
+    private static final String INDEX_NAME = "graylog";
     private static final SortedSet<IndexRange> INDEX_RANGES = ImmutableSortedSet
             .orderedBy(new IndexRangeComparator())
             .add(new IndexRange() {
@@ -100,13 +98,6 @@ public class SearchesTest {
                 }
             }).build();
 
-    private static final ElasticsearchConfiguration CONFIG = new ElasticsearchConfiguration() {
-        @Override
-        public String getIndexPrefix() {
-            return "graylog";
-        }
-    };
-
     @Mock
     private Deflector deflector;
     @Mock
@@ -120,7 +111,7 @@ public class SearchesTest {
 
     public SearchesTest() {
         this.elasticsearchRule = newElasticsearchRule().defaultEmbeddedElasticsearch();
-        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(CONFIG, Collections.singleton(INDEX_NAME)));
+        this.elasticsearchRule.setLoadStrategyFactory(new IndexCreatingLoadStrategyFactory(Collections.singleton(INDEX_NAME)));
     }
 
     @Before
@@ -137,7 +128,7 @@ public class SearchesTest {
                 new DateTime(2015, 1, 1, 0, 0),
                 new DateTime(2015, 1, 2, 0, 0)));
 
-        assertThat(result.count()).isEqualTo(10L);
+        assertThat(result.getCount()).isEqualTo(10L);
     }
 
     @Test
@@ -175,18 +166,59 @@ public class SearchesTest {
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testTermsWithNonExistingIndex() throws Exception {
         final SortedSet<IndexRange> indexRanges = ImmutableSortedSet
-                .orderedBy(IndexRange.COMPARATOR)
-                .add(MongoIndexRange.create(INDEX_NAME,
-                        new DateTime(0L, DateTimeZone.UTC),
-                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
-                        DateTime.now(DateTimeZone.UTC),
-                        0))
-                .add(MongoIndexRange.create("does-not-exist",
-                        new DateTime(0L, DateTimeZone.UTC),
-                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
-                        DateTime.now(DateTimeZone.UTC),
-                        0))
-                .build();
+                .orderedBy(new IndexRangeComparator())
+                .add(new IndexRange() {
+                    @Override
+                    public String indexName() {
+                        return INDEX_NAME;
+                    }
+
+                    @Override
+                    public DateTime calculatedAt() {
+                        return DateTime.now();
+                    }
+
+                    @Override
+                    public DateTime end() {
+                        return new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+                    }
+
+                    @Override
+                    public int calculationDuration() {
+                        return 0;
+                    }
+
+                    @Override
+                    public DateTime begin() {
+                        return new DateTime(0L, DateTimeZone.UTC);
+                    }
+                })
+                .add(new IndexRange() {
+                    @Override
+                    public String indexName() {
+                        return "does-not-exist";
+                    }
+
+                    @Override
+                    public DateTime calculatedAt() {
+                        return DateTime.now();
+                    }
+
+                    @Override
+                    public DateTime end() {
+                        return new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+                    }
+
+                    @Override
+                    public int calculationDuration() {
+                        return 0;
+                    }
+
+                    @Override
+                    public DateTime begin() {
+                        return new DateTime(0L, DateTimeZone.UTC);
+                    }
+                }).build();
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indexRanges);
 
         TermsResult result = searches.terms("n", 25, "*", new AbsoluteRange(
@@ -231,7 +263,7 @@ public class SearchesTest {
         );
 
         assertThat(r.getResults()).hasSize(2);
-        assertThat(r.getResults().get(0))
+        assertThat((Map<String, Object>) r.getResults().get(0))
                 .hasSize(7)
                 .containsEntry("key_field", "ho");
     }
@@ -297,9 +329,9 @@ public class SearchesTest {
     @SuppressWarnings("unchecked")
     public void testHistogram() throws Exception {
         final AbsoluteRange range = new AbsoluteRange(new DateTime(2015, 1, 1, 0, 0), new DateTime(2015, 1, 2, 0, 0));
-        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.HOUR, range);
+        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.MINUTE, range);
 
-        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.HOUR);
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.MINUTE);
         assertThat(h.getHistogramBoundaries()).isEqualTo(range);
         assertThat(h.getResults())
                 .hasSize(5)
@@ -315,24 +347,65 @@ public class SearchesTest {
     @SuppressWarnings("unchecked")
     public void testHistogramWithNonExistingIndex() throws Exception {
         final SortedSet<IndexRange> indexRanges = ImmutableSortedSet
-                .orderedBy(IndexRange.COMPARATOR)
-                .add(MongoIndexRange.create(INDEX_NAME,
-                        new DateTime(0L, DateTimeZone.UTC),
-                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
-                        DateTime.now(DateTimeZone.UTC),
-                        0))
-                .add(MongoIndexRange.create("does-not-exist",
-                        new DateTime(0L, DateTimeZone.UTC),
-                        new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC),
-                        DateTime.now(DateTimeZone.UTC),
-                        0))
-                .build();
+                .orderedBy(new IndexRangeComparator())
+                .add(new IndexRange() {
+                    @Override
+                    public String indexName() {
+                        return INDEX_NAME;
+                    }
+
+                    @Override
+                    public DateTime calculatedAt() {
+                        return DateTime.now();
+                    }
+
+                    @Override
+                    public DateTime end() {
+                        return new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+                    }
+
+                    @Override
+                    public int calculationDuration() {
+                        return 0;
+                    }
+
+                    @Override
+                    public DateTime begin() {
+                        return new DateTime(0L, DateTimeZone.UTC);
+                    }
+                })
+                .add(new IndexRange() {
+                    @Override
+                    public String indexName() {
+                        return "does-not-exist";
+                    }
+
+                    @Override
+                    public DateTime calculatedAt() {
+                        return DateTime.now();
+                    }
+
+                    @Override
+                    public DateTime end() {
+                        return new DateTime(2015, 1, 1, 0, 0, DateTimeZone.UTC);
+                    }
+
+                    @Override
+                    public int calculationDuration() {
+                        return 0;
+                    }
+
+                    @Override
+                    public DateTime begin() {
+                        return new DateTime(0L, DateTimeZone.UTC);
+                    }
+                }).build();
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indexRanges);
 
         final AbsoluteRange range = new AbsoluteRange(new DateTime(2015, 1, 1, 0, 0), new DateTime(2015, 1, 2, 0, 0));
-        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.HOUR, range);
+        HistogramResult h = searches.histogram("*", Searches.DateHistogramInterval.MINUTE, range);
 
-        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.HOUR);
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.MINUTE);
         assertThat(h.getHistogramBoundaries()).isEqualTo(range);
         assertThat(h.getResults())
                 .hasSize(5)
@@ -342,7 +415,7 @@ public class SearchesTest {
                 .containsEntry(new DateTime(2015, 1, 1, 4, 0, DateTimeZone.UTC).getMillis() / 1000L, 2L)
                 .containsEntry(new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC).getMillis() / 1000L, 2L);
     }
-
+    
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     @SuppressWarnings("unchecked")
@@ -366,9 +439,9 @@ public class SearchesTest {
     @SuppressWarnings("unchecked")
     public void testFieldHistogram() throws Exception {
         final AbsoluteRange range = new AbsoluteRange(new DateTime(2015, 1, 1, 0, 0), new DateTime(2015, 1, 2, 0, 0));
-        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.HOUR, null, range, false);
+        HistogramResult h = searches.fieldHistogram("*", "n", Searches.DateHistogramInterval.MINUTE, null, range, false);
 
-        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.HOUR);
+        assertThat(h.getInterval()).isEqualTo(Searches.DateHistogramInterval.MINUTE);
         assertThat(h.getHistogramBoundaries()).isEqualTo(range);
         assertThat(h.getResults()).hasSize(5);
         assertThat((Map<String, Number>) h.getResults().get(new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC).getMillis() / 1000L))

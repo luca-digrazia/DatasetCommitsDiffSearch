@@ -23,11 +23,10 @@ import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.assertj.jodatime.api.Assertions;
 import org.bson.types.ObjectId;
-import org.elasticsearch.index.IndexNotFoundException;
+import org.elasticsearch.indices.IndexMissingException;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.esplugin.IndicesClosedEvent;
 import org.graylog2.indexer.esplugin.IndicesDeletedEvent;
 import org.graylog2.indexer.esplugin.IndicesReopenedEvent;
@@ -69,7 +68,7 @@ public class MongoIndexRangeServiceTest {
     private Indices indices;
     private EventBus localEventBus;
     @Mock
-    private ClusterEventBus clusterEventBus;
+    private EventBus clusterEventBus;
     private MongoIndexRangeService indexRangeService;
 
     @Before
@@ -186,9 +185,9 @@ public class MongoIndexRangeServiceTest {
         assertThat(range.end()).isEqualTo(new DateTime(0L, DateTimeZone.UTC));
     }
 
-    @Test(expected = IndexNotFoundException.class)
+    @Test(expected = IndexMissingException.class)
     public void testCalculateRangeWithNonExistingIndex() throws Exception {
-        when(indices.timestampStatsOfIndex("does-not-exist")).thenThrow(new IndexNotFoundException("does-not-exist"));
+        when(indices.timestampStatsOfIndex("does-not-exist")).thenThrow(IndexMissingException.class);
         indexRangeService.calculateRange("does-not-exist");
     }
 

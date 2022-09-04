@@ -32,11 +32,10 @@ import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.indices.IndexStatistics;
 import org.graylog2.indexer.indices.Indices;
-import org.graylog2.rest.models.system.indexer.responses.AllIndices;
+import org.graylog2.rest.models.system.indexer.responses.AllIndicesInfo;
 import org.graylog2.rest.models.system.indexer.responses.ClosedIndices;
 import org.graylog2.rest.models.system.indexer.responses.IndexInfo;
 import org.graylog2.rest.models.system.indexer.responses.IndexStats;
-import org.graylog2.rest.models.system.indexer.responses.OpenIndicesInfo;
 import org.graylog2.rest.models.system.indexer.responses.ShardRouting;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
@@ -55,8 +54,8 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
-import java.util.HashMap;
 import java.util.Locale;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -104,16 +103,15 @@ public class IndicesResource extends RestResource {
     }
 
     @GET
-    @Path("/open")
     @Timed
-    @ApiOperation(value = "Get information of all open indices managed by Graylog and their shards.")
+    @ApiOperation(value = "Get information of all indices managed by Graylog and their shards.")
     @RequiresPermissions(RestPermissions.INDICES_READ)
     @Produces(MediaType.APPLICATION_JSON)
-    public OpenIndicesInfo open() {
+    public AllIndicesInfo all() {
         final Set<IndexStatistics> indicesStats = indices.getIndicesStats();
 
         final Map<String, IndexInfo> indexInfos = new HashMap<>();
-        for (IndexStatistics indexStatistics : indicesStats) {
+        for(IndexStatistics indexStatistics : indicesStats) {
             final ImmutableList.Builder<ShardRouting> routing = ImmutableList.builder();
             for (org.elasticsearch.cluster.routing.ShardRouting shardRouting : indexStatistics.shardRoutings()) {
                 routing.add(shardRouting(shardRouting));
@@ -128,7 +126,7 @@ public class IndicesResource extends RestResource {
             indexInfos.put(indexStatistics.indexName(), indexInfo);
         }
 
-        return OpenIndicesInfo.create(indexInfos);
+        return AllIndicesInfo.create(indexInfos);
     }
 
     @GET
@@ -174,15 +172,6 @@ public class IndicesResource extends RestResource {
 
         return ClosedIndices.create(reopenedIndices, reopenedIndices.size());
     }
-
-    @GET
-    @Timed
-    @ApiOperation(value = "List all open, closed and reopened indices.")
-    @Produces(MediaType.APPLICATION_JSON)
-    public AllIndices all() {
-        return AllIndices.create(this.closed(), this.reopened(), this.open());
-    }
-
 
     @POST
     @Timed
