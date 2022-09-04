@@ -686,17 +686,7 @@ public final class RuleContext extends TargetContext
   @Override
   public Artifact.DerivedArtifact getPackageRelativeArtifact(
       PathFragment relative, ArtifactRoot root) {
-    return getPackageRelativeArtifact(relative, root, /*contentBasedPath=*/ false);
-  }
-
-  /**
-   * Same as {@link #getPackageRelativeArtifact(PathFragment, ArtifactRoot)} but includes the option
-   * option to use a content-based path for this artifact (see {@link
-   * BuildConfiguration#useContentBasedOutputPaths()}).
-   */
-  private Artifact.DerivedArtifact getPackageRelativeArtifact(
-      PathFragment relative, ArtifactRoot root, boolean contentBasedPath) {
-    return getDerivedArtifact(getPackageDirectory().getRelative(relative), root, contentBasedPath);
+    return getDerivedArtifact(getPackageDirectory().getRelative(relative), root);
   }
 
   /**
@@ -704,17 +694,7 @@ public final class RuleContext extends TargetContext
    * guaranteeing that it never clashes with artifacts created by rules in other packages.
    */
   public Artifact getPackageRelativeArtifact(String relative, ArtifactRoot root) {
-    return getPackageRelativeArtifact(relative, root, /*contentBasedPath=*/ false);
-  }
-
-  /**
-   * Same as {@link #getPackageRelativeArtifact(String, ArtifactRoot)} but includes the option to
-   * use a content-based path for this artifact (see {@link
-   * BuildConfiguration#useContentBasedOutputPaths()}).
-   */
-  private Artifact getPackageRelativeArtifact(
-      String relative, ArtifactRoot root, boolean contentBasedPath) {
-    return getPackageRelativeArtifact(PathFragment.create(relative), root, contentBasedPath);
+    return getPackageRelativeArtifact(PathFragment.create(relative), root);
   }
 
   @Override
@@ -732,20 +712,10 @@ public final class RuleContext extends TargetContext
   @Override
   public Artifact.DerivedArtifact getDerivedArtifact(
       PathFragment rootRelativePath, ArtifactRoot root) {
-    return getDerivedArtifact(rootRelativePath, root, /*contentBasedPath=*/ false);
-  }
-
-  /**
-   * Same as {@link #getDerivedArtifact(PathFragment, ArtifactRoot)} but includes the option to use
-   * a content-based path for this artifact (see {@link
-   * BuildConfiguration#useContentBasedOutputPaths()}).
-   */
-  public Artifact.DerivedArtifact getDerivedArtifact(
-      PathFragment rootRelativePath, ArtifactRoot root, boolean contentBasedPath) {
     Preconditions.checkState(rootRelativePath.startsWith(getPackageDirectory()),
         "Output artifact '%s' not under package directory '%s' for target '%s'",
         rootRelativePath, getPackageDirectory(), getLabel());
-    return getAnalysisEnvironment().getDerivedArtifact(rootRelativePath, root, contentBasedPath);
+    return getAnalysisEnvironment().getDerivedArtifact(rootRelativePath, root);
   }
 
   @Override
@@ -1381,16 +1351,6 @@ public final class RuleContext extends TargetContext
   @Override
   public Artifact getImplicitOutputArtifact(ImplicitOutputsFunction function)
       throws InterruptedException {
-    return getImplicitOutputArtifact(function, /*contentBasedPath=*/ false);
-  }
-
-  /**
-   * Same as {@link #getImplicitOutputArtifact(ImplicitOutputsFunction)} but includes the option to
-   * use a content-based path for this artifact (see {@link
-   * BuildConfiguration#useContentBasedOutputPaths()}).
-   */
-  public Artifact getImplicitOutputArtifact(
-      ImplicitOutputsFunction function, boolean contentBasedPath) throws InterruptedException {
     Iterable<String> result;
     try {
       result =
@@ -1400,23 +1360,14 @@ public final class RuleContext extends TargetContext
       // It's ok as long as we don't use this method from Skylark.
       throw new IllegalStateException(e);
     }
-    return getImplicitOutputArtifact(Iterables.getOnlyElement(result), contentBasedPath);
+    return getImplicitOutputArtifact(Iterables.getOnlyElement(result));
   }
 
   /**
    * Only use from Skylark. Returns the implicit output artifact for a given output path.
    */
   public Artifact getImplicitOutputArtifact(String path) {
-    return getImplicitOutputArtifact(path, /*contentBasedPath=*/ false);
-  }
-
-  /**
-   * Same as {@link #getImplicitOutputArtifact(String)} but includes the option to use a a
-   * content-based path for this artifact (see {@link
-   * BuildConfiguration#useContentBasedOutputPaths()}).
-   */
-  private Artifact getImplicitOutputArtifact(String path, boolean contentBasedPath) {
-    return getPackageRelativeArtifact(path, getBinOrGenfilesDirectory(), contentBasedPath);
+    return getPackageRelativeArtifact(path, getBinOrGenfilesDirectory());
   }
 
   /**
