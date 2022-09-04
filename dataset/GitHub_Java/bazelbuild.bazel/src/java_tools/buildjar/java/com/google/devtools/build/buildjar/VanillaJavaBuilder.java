@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.buildjar;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Locale.ENGLISH;
 
@@ -153,12 +152,7 @@ public class VanillaJavaBuilder implements Closeable {
     JavaCompiler javaCompiler = ToolProvider.getSystemJavaCompiler();
     StandardJavaFileManager fileManager =
         javaCompiler.getStandardFileManager(diagnosticCollector, ENGLISH, UTF_8);
-
-    Path tempDir = Paths.get(firstNonNull(optionsParser.getTempDir(), "_tmp"));
-    Path nativeHeaderDir = tempDir.resolve("native_headers");
-    Files.createDirectories(nativeHeaderDir);
-
-    setLocations(optionsParser, fileManager, nativeHeaderDir);
+    setLocations(optionsParser, fileManager);
     ImmutableList<JavaFileObject> sources = getSources(optionsParser, fileManager);
     boolean ok;
     if (sources.isEmpty()) {
@@ -177,7 +171,6 @@ public class VanillaJavaBuilder implements Closeable {
     }
     if (ok) {
       writeOutput(optionsParser);
-      writeNativeHeaderOutput(optionsParser, nativeHeaderDir);
     }
     writeGeneratedSourceOutput(optionsParser);
     // the jdeps output doesn't include any information about dependencies, but Bazel still expects
@@ -247,8 +240,7 @@ public class VanillaJavaBuilder implements Closeable {
   }
 
   /** Sets the compilation search paths and output directories. */
-  private static void setLocations(
-      OptionsParser optionsParser, StandardJavaFileManager fileManager, Path nativeHeaderDir)
+  private static void setLocations(OptionsParser optionsParser, StandardJavaFileManager fileManager)
       throws IOException {
     fileManager.setLocation(StandardLocation.CLASS_PATH, toFiles(optionsParser.getClassPath()));
     fileManager.setLocation(
@@ -258,21 +250,14 @@ public class VanillaJavaBuilder implements Closeable {
     fileManager.setLocation(
         StandardLocation.ANNOTATION_PROCESSOR_PATH, toFiles(optionsParser.getProcessorPath()));
     if (optionsParser.getSourceGenDir() != null) {
-      setOutputLocation(
-          fileManager, StandardLocation.SOURCE_OUTPUT, Paths.get(optionsParser.getSourceGenDir()));
+      Path sourceGenDir = Paths.get(optionsParser.getSourceGenDir());
+      createOutputDirectory(sourceGenDir);
+      fileManager.setLocation(
+          StandardLocation.SOURCE_OUTPUT, ImmutableList.of(sourceGenDir.toFile()));
     }
-    if (optionsParser.getNativeHeaderOutput() != null) {
-      setOutputLocation(fileManager, StandardLocation.NATIVE_HEADER_OUTPUT, nativeHeaderDir);
-    }
-    setOutputLocation(
-        fileManager, StandardLocation.CLASS_OUTPUT, Paths.get(optionsParser.getClassDir()));
-  }
-
-  private static void setOutputLocation(
-      StandardJavaFileManager fileManager, StandardLocation location, Path path)
-      throws IOException {
-    createOutputDirectory(path);
-    fileManager.setLocation(location, ImmutableList.of(path.toFile()));
+    Path classDir = Paths.get(optionsParser.getClassDir());
+    createOutputDirectory(classDir);
+    fileManager.setLocation(StandardLocation.CLASS_OUTPUT, ImmutableList.of(classDir.toFile()));
   }
 
   /** Sets the compilation's annotation processors. */
@@ -302,21 +287,6 @@ public class VanillaJavaBuilder implements Closeable {
     jar.setCompression(optionsParser.compressJar());
     jar.addDirectory(optionsParser.getSourceGenDir());
     jar.execute();
-  }
-
-  private static void writeNativeHeaderOutput(OptionsParser optionsParser, Path nativeHeaderDir)
-      throws IOException {
-    if (optionsParser.getNativeHeaderOutput() == null) {
-      return;
-    }
-    JarCreator jar = new JarCreator(optionsParser.getNativeHeaderOutput());
-    try {
-      jar.setNormalize(true);
-      jar.setCompression(optionsParser.compressJar());
-      jar.addDirectory(nativeHeaderDir);
-    } finally {
-      jar.execute();
-    }
   }
 
   /** Writes the class output jar, including any resource entries. */
