@@ -185,11 +185,11 @@ public final class NativeLibs {
     ruleContext.registerAction(
         new SymlinkTreeAction(
             ruleContext.getActionOwner(),
-            ruleContext.getConfiguration(),
             inputManifest,
-            runfiles,
             outputManifest,
-            /*filesetTree=*/ false));
+            false,
+            ruleContext.getConfiguration().getActionEnvironment(),
+            ruleContext.getConfiguration().runfilesEnabled()));
     return new ManifestAndRunfiles(outputManifest, runfiles);
   }
 
