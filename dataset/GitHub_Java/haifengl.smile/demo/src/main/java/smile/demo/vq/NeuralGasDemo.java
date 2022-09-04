@@ -17,15 +17,15 @@
 
 package smile.demo.vq;
 
-import java.awt.*;
+import java.awt.Dimension;
 import javax.swing.*;
 
-import smile.graph.Graph;
 import smile.math.MathEx;
 import smile.vq.LearningRate;
 import smile.vq.NeuralGas;
 import smile.plot.PlotCanvas;
 import smile.plot.ScatterPlot;
+import smile.vq.NeuralMap;
 
 /**
  *
@@ -33,8 +33,8 @@ import smile.plot.ScatterPlot;
  */
 @SuppressWarnings("serial")
 public class NeuralGasDemo extends VQDemo {
-    static int numNeurons = 200;
-    private JTextField neuronField = new JTextField(Integer.toString(numNeurons), 5);
+    static int neuronNumber = 200;
+    private JTextField neuronField = new JTextField(Integer.toString(neuronNumber), 5);
 
     public NeuralGasDemo() {
         optionPane.add(new JLabel("Neurons:"));
@@ -44,23 +44,22 @@ public class NeuralGasDemo extends VQDemo {
     @Override
     public JComponent learn() {
         try {
-            numNeurons = Integer.parseInt(neuronField.getText().trim());
-            if (numNeurons < 1) {
-                JOptionPane.showMessageDialog(this, "Invalid number of neurons: " + numNeurons, "Error", JOptionPane.ERROR_MESSAGE);
+            neuronNumber = Integer.parseInt(neuronField.getText().trim());
+            if (neuronNumber < 1) {
+                JOptionPane.showMessageDialog(this, "Invalid number of neurons: " + neuronNumber, "Error", JOptionPane.ERROR_MESSAGE);
                 return null;
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Invalid number of neurons: " + numNeurons, "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Invalid width: " + neuronField.getText(), "Error", JOptionPane.ERROR_MESSAGE);
             return null;
         }
 
-        NeuralGas gas = new NeuralGas(NeuralGas.seed(numNeurons, dataset[datasetIndex]),
-                LearningRate.exp(learningRate, dataset[datasetIndex].length * epochs / 2),
-                LearningRate.exp(neighborhood, dataset[datasetIndex].length * epochs / 8),
-                2 * dataset[datasetIndex].length);
+        NeuralGas gas = new NeuralGas(NeuralGas.random(neuronNumber, dataset[datasetIndex]),
+                LearningRate.exp(learningRate, dataset[datasetIndex].length * epochs / 10),
+                LearningRate.exp(30, dataset[datasetIndex].length * epochs / 1.25),
+                LearningRate.exp(20, dataset[datasetIndex].length * epochs / -2.5));
 
         PlotCanvas plot = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
-        plot.points(gas.neurons(), '@');
 
         int period = dataset[datasetIndex].length / 10;
         Thread thread = new Thread(() -> {
@@ -77,7 +76,15 @@ public class NeuralGasDemo extends VQDemo {
                     if (++k % period == 0) {
                         plot.clear();
                         plot.points(dataset[datasetIndex], pointLegend);
-                        plot.points(gas.neurons(), '@');
+
+                        double[][] neurons = gas.neurons();
+                        smile.graph.Graph graph = gas.network();
+                        for (int l = 0; l < neuronNumber; l++) {
+                            for (smile.graph.Graph.Edge e : graph.getEdges(l)) {
+                                plot.line(neurons[e.v1], neurons[e.v2]);
+                            }
+                        }
+                        plot.points(neurons, '@');
                         plot.repaint();
 
                         try {
@@ -88,21 +95,6 @@ public class NeuralGasDemo extends VQDemo {
                     }
                 }
             }
-
-            double[][] neurons = gas.neurons();
-            plot.clear();
-            plot.points(dataset[datasetIndex], pointLegend);
-            plot.points(gas.neurons(), '@');
-
-            Graph graph = gas.network();
-            for (int l = 0; l < numNeurons; l++) {
-                for (Graph.Edge e : graph.getEdges(l)) {
-                    if (e.v2 > e.v1) {
-                        plot.line(neurons[e.v1], neurons[e.v2]);
-                    }
-                }
-            }
-            plot.repaint();
         });
         thread.start();
 

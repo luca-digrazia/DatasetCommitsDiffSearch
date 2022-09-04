@@ -109,6 +109,7 @@ public class SOMDemo  extends VQDemo {
                         plot.points(dataset[datasetIndex], pointLegend);
                         plot.grid(som.neurons());
                         plot.setTitle("SOM");
+                        plot.repaint();
 
                         try {
                             Thread.sleep(100);
