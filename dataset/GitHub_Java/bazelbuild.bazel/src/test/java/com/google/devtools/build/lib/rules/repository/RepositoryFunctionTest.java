@@ -14,23 +14,31 @@
 
 package com.google.devtools.build.lib.rules.repository;
 
-import static org.junit.Assert.assertEquals;
+import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.actions.FileContentsProxy;
+import com.google.devtools.build.lib.actions.FileStateValue;
+import com.google.devtools.build.lib.actions.FileStateValue.RegularFileStateValue;
+import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.actions.FileValue.RegularFileValue;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunctionException;
-import com.google.devtools.build.skyframe.SkyValue;
-
+import com.google.devtools.build.skyframe.SkyKey;
+import java.util.Map;
+import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import javax.annotation.Nullable;
 
 /**
  * Tests for @{link RepositoryFunction}
@@ -45,19 +53,20 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
   static class TestingRepositoryFunction extends RepositoryFunction {
     @Nullable
     @Override
-    public SkyValue fetch(Rule rule, Path outputDirectory, SkyFunction.Environment env)
-        throws SkyFunctionException, InterruptedException {
+    public RepositoryDirectoryValue.Builder fetch(
+        Rule rule,
+        Path outputDirectory,
+        BlazeDirectories directories,
+        SkyFunction.Environment env,
+        Map<String, String> markerData,
+        SkyKey key)
+        throws InterruptedException {
       return null;
     }
 
     @Override
-    protected boolean isLocal() {
+    protected boolean isLocal(Rule rule) {
       return false;
-    }
-
-    public static PathFragment getTargetPath(Rule rule, Path workspace)
-        throws RepositoryFunctionException {
-      return RepositoryFunction.getTargetPath(rule, workspace);
     }
 
     @Override
@@ -72,8 +81,10 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
             "    name = 'z',",
             "    path = 'a/b/c',",
             ")");
-    assertEquals(rootDirectory.getRelative("a/b/c").asFragment(),
-        TestingRepositoryFunction.getTargetPath(rule, rootDirectory));
+    assertThat(
+            TestingRepositoryFunction.getTargetPath(
+                TestingRepositoryFunction.getPathAttr(rule), rootDirectory))
+        .isEqualTo(rootDirectory.getRelative("a/b/c").asFragment());
   }
 
   @Test
@@ -82,7 +93,57 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
         "    name = 'w',",
         "    path = '/a/b/c',",
         ")");
-    assertEquals(new PathFragment("/a/b/c"),
-        TestingRepositoryFunction.getTargetPath(rule, rootDirectory));
+    assertThat(
+            TestingRepositoryFunction.getTargetPath(
+                TestingRepositoryFunction.getPathAttr(rule), rootDirectory))
+        .isEqualTo(PathFragment.create("/a/b/c"));
+  }
+
+  @Test
+  public void testGenerateWorkspaceFile() throws Exception {
+    Rule rule = scratchRule("external", "abc", "local_repository(",
+        "    name = 'abc',",
+        "    path = '/a/b/c',",
+        ")");
+    RepositoryFunction.createWorkspaceFile(rootDirectory, rule.getTargetKind(), rule.getName());
+    String workspaceContent = new String(
+        FileSystemUtils.readContentAsLatin1(rootDirectory.getRelative("WORKSPACE")));
+    assertThat(workspaceContent).contains("workspace(name = \"abc\")");
+  }
+
+  private static void assertMarkerFileEscaping(String testCase) {
+    String escaped = RepositoryDelegatorFunction.escape(testCase);
+    assertThat(RepositoryDelegatorFunction.unescape(escaped)).isEqualTo(testCase);
+  }
+
+  @Test
+  public void testMarkerFileEscaping() throws Exception {
+    assertMarkerFileEscaping(null);
+    assertMarkerFileEscaping("\\0");
+    assertMarkerFileEscaping("a\\0");
+    assertMarkerFileEscaping("a b");
+    assertMarkerFileEscaping("a b c");
+    assertMarkerFileEscaping("a \\b");
+    assertMarkerFileEscaping("a \\nb");
+    assertMarkerFileEscaping("a \\\\nb");
+    assertMarkerFileEscaping("a \\\nb");
+    assertMarkerFileEscaping("a \nb");
+  }
+
+  @Test
+  public void testFileValueToMarkerValue() throws Exception {
+    RootedPath path =
+        RootedPath.toRootedPath(Root.fromPath(rootDirectory), scratch.file("foo", "bar"));
+
+    // Digest should be returned if the FileStateValue has it.
+    FileStateValue fsv = new RegularFileStateValue(3, new byte[] {1, 2, 3, 4}, null);
+    FileValue fv = new RegularFileValue(path, fsv);
+    assertThat(RepositoryFunction.fileValueToMarkerValue(fv)).isEqualTo("01020304");
+
+    // Digest should also be returned if the FileStateValue doesn't have it.
+    fsv = new RegularFileStateValue(3, null, new FileContentsProxy(100, 200));
+    fv = new RegularFileValue(path, fsv);
+    String expectedDigest = BaseEncoding.base16().lowerCase().encode(path.asPath().getDigest());
+    assertThat(RepositoryFunction.fileValueToMarkerValue(fv)).isEqualTo(expectedDigest);
   }
 }
