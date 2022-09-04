@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
+import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FilesetManifest;
@@ -374,8 +375,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
   }
 
   @Override
-  public FileArtifactValue constructMetadataForDigest(
-      Artifact output, FileStatus statNoFollow, byte[] digest) throws IOException {
+  public void injectDigest(Artifact output, FileStatus statNoFollow, byte[] digest) {
     Preconditions.checkState(executionMode.get());
     Preconditions.checkState(!output.isSymlink());
     Preconditions.checkNotNull(digest);
@@ -383,26 +383,37 @@ public final class ActionMetadataHandler implements MetadataHandler {
     // We have to add the artifact to injectedFiles before calling constructFileArtifactValue to
     // avoid duplicate chmod calls.
     store.injectedFiles().add(output);
-
-    // TODO(jhorvitz): This unnecessarily calls getFastDigest even though we know the digest.
-    return constructFileArtifactValue(
-        output, FileStatusWithDigestAdapter.adapt(statNoFollow), digest);
+    try {
+      // This call may make an extra call to Path#getFastDigest to see if the digest is readily
+      // available, even though we have the injected digest. This is necessary though, because
+      // otherwise this FileArtifactValue will not compare equal to another one created for the same
+      // file without an injected digest, because the other one will be missing its digest.
+      FileArtifactValue fileMetadata =
+          constructFileArtifactValue(
+              output, FileStatusWithDigestAdapter.adapt(statNoFollow), digest);
+      store.putArtifactData(output, fileMetadata);
+    } catch (IOException e) {
+      // Do nothing - we just failed to inject metadata. Real error handling will be done later,
+      // when somebody tries to access that file.
+    }
   }
 
   @Override
-  public void injectFile(Artifact output, FileArtifactValue metadata) {
+  public void injectRemoteFile(Artifact output, RemoteFileArtifactValue metadata) {
     Preconditions.checkArgument(
         isKnownOutput(output), "%s is not a declared output of this action", output);
     Preconditions.checkArgument(
-        !output.isTreeArtifact(), "injectFile must not be called on TreeArtifacts: %s", output);
+        !output.isTreeArtifact(),
+        "injectRemoteFile must not be called on TreeArtifacts: %s",
+        output);
     Preconditions.checkState(
         executionMode.get(), "Tried to inject %s outside of execution", output);
     store.injectOutputData(output, metadata);
   }
 
   @Override
-  public void injectDirectory(
-      SpecialArtifact output, Map<TreeFileArtifact, FileArtifactValue> children) {
+  public void injectRemoteDirectory(
+      SpecialArtifact output, Map<TreeFileArtifact, RemoteFileArtifactValue> children) {
     Preconditions.checkArgument(
         isKnownOutput(output), "%s is not a declared output of this action", output);
     Preconditions.checkArgument(output.isTreeArtifact(), "output must be a tree artifact");
@@ -413,19 +424,9 @@ public final class ActionMetadataHandler implements MetadataHandler {
 
   @Override
   public void markOmitted(Artifact output) {
-    Preconditions.checkState(
-        executionMode.get(), "Tried to mark %s omitted outside of execution", output);
-    boolean newlyOmitted = omittedOutputs.add(output);
-    if (output.isTreeArtifact()) {
-      // Tolerate marking a tree artifact as omitted multiple times so that callers don't have to
-      // deduplicate when a tree artifact has several omitted children.
-      if (newlyOmitted) {
-        store.putTreeArtifactData((SpecialArtifact) output, TreeArtifactValue.OMITTED_TREE_MARKER);
-      }
-    } else {
-      Preconditions.checkState(newlyOmitted, "%s marked as omitted twice", output);
-      store.putArtifactData(output, FileArtifactValue.OMITTED_FILE_MARKER);
-    }
+    Preconditions.checkState(executionMode.get());
+    Preconditions.checkState(omittedOutputs.add(output), "%s marked as omitted twice", output);
+    store.putArtifactData(output, FileArtifactValue.OMITTED_FILE_MARKER);
   }
 
   @Override
