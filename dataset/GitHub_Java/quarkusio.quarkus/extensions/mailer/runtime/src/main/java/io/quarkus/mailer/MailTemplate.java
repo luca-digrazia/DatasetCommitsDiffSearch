@@ -1,8 +1,7 @@
 package io.quarkus.mailer;
 
 import java.io.File;
-
-import io.smallrye.mutiny.Uni;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Represents an e-mail definition based on a template.
@@ -54,7 +53,8 @@ public interface MailTemplate {
 
         MailTemplateInstance data(String key, Object value);
 
-        Uni<Void> send();
+        CompletionStage<Void> send();
+
     }
 
 }

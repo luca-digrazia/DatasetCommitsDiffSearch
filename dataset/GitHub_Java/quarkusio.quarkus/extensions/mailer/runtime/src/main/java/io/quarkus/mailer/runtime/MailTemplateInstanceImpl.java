@@ -92,7 +92,7 @@ class MailTemplateInstanceImpl implements MailTemplate.MailTemplateInstance {
     }
 
     @Override
-    public Uni<Void> send() {
+    public CompletionStage<Void> send() {
         Object variantsAttr = templateInstance.getAttribute(TemplateInstance.VARIANTS);
         if (variantsAttr != null) {
             List<Result> results = new ArrayList<>();
@@ -123,7 +123,8 @@ class MailTemplateInstanceImpl implements MailTemplate.MailTemplateInstance {
                         public Uni<? extends Void> apply(Mail m) {
                             return mailer.send(m);
                         }
-                    });
+                    })
+                    .subscribeAsCompletionStage();
         } else {
             throw new IllegalStateException("No template variant found");
         }
