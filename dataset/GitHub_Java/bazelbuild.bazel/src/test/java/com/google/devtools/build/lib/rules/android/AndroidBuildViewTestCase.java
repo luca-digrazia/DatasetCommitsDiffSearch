@@ -55,15 +55,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
-import org.junit.Before;
 
 /** Common methods shared between Android related {@link BuildViewTestCase}s. */
 public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
-
-  @Before
-  public void setupStarlarkJavaLibrary() throws Exception {
-    setBuildLanguageOptions("--experimental_google_legacy_api");
-  }
 
   /** Override this to trigger platform-based Android toolchain resolution. */
   protected boolean platformBasedToolchains() {
