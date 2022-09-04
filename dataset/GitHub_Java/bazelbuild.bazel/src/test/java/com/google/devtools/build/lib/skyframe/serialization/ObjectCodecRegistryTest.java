@@ -134,6 +134,19 @@ public class ObjectCodecRegistryTest {
     assertThat(underTest2.maybeGetTagForConstant(constant2)).isEqualTo(2);
   }
 
+  @Test
+  public void valueConstant() {
+    String valueConstant = "ab";
+    ObjectCodecRegistry underTest =
+        ObjectCodecRegistry.newBuilder()
+            .setAllowDefaultCodec(false)
+            .addValueConstant(valueConstant)
+            .build();
+    assertThat(underTest.maybeGetTagForConstant("a")).isNull();
+    assertThat(underTest.maybeGetTagForConstant("ab")).isNotNull();
+    assertThat(underTest.maybeGetTagForConstant("cab".substring(1))).isNotNull();
+  }
+
   private static ObjectCodecRegistry.Builder builderWithThisClass() {
     return ObjectCodecRegistry.newBuilder().addClassName(ObjectCodecRegistryTest.class.getName());
   }

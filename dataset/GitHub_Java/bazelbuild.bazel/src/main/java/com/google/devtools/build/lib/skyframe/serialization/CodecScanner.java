@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import com.google.common.base.Preconditions;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.reflect.ClassPath;
 import com.google.common.reflect.ClassPath.ClassInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.RegisteredSingletonDoNotUse;
@@ -28,7 +27,8 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.function.Predicate;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /**
@@ -40,24 +40,24 @@ import java.util.stream.Stream;
  *
  * <p>See {@link CodecRegisterer} for more details.
  */
-class CodecScanner {
+public class CodecScanner {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger log = Logger.getLogger(CodecScanner.class.getName());
 
   /**
-   * Initializes an {@link ObjectCodecRegistry} builder by scanning classes matching the given
-   * package filter.
+   * Initializes an {@link ObjectCodecRegistry} builder by scanning a given package prefix.
    *
-   * @param packageFilter a filter applied to the package name of each class
+   * @param packagePrefix processes only classes in packages having this prefix
    * @see CodecRegisterer
    */
-  static ObjectCodecRegistry.Builder initializeCodecRegistry(Predicate<String> packageFilter)
+  @SuppressWarnings("unchecked")
+  static ObjectCodecRegistry.Builder initializeCodecRegistry(String packagePrefix)
       throws IOException, ReflectiveOperationException {
-    logger.atInfo().log("Building ObjectCodecRegistry");
+    log.info("Building ObjectCodecRegistry");
     ArrayList<Class<? extends ObjectCodec<?>>> codecs = new ArrayList<>();
     ArrayList<Class<? extends CodecRegisterer<?>>> registerers = new ArrayList<>();
     ObjectCodecRegistry.Builder builder = ObjectCodecRegistry.newBuilder();
-    getClassInfos(packageFilter)
+    getClassInfos(packagePrefix)
         .forEach(
             classInfo -> {
               if (classInfo.getName().endsWith("Codec")) {
@@ -141,7 +141,7 @@ class CodecScanner {
     return registered;
   }
 
-  @SuppressWarnings("rawtypes")
+  @SuppressWarnings({"rawtypes", "unchecked"})
   private static void applyDefaultRegistration(
       ObjectCodecRegistry.Builder builder,
       HashSet<Class<? extends ObjectCodec<?>>> alreadyRegistered,
@@ -156,8 +156,9 @@ class CodecScanner {
         constructor.setAccessible(true);
         builder.add((ObjectCodec<?>) constructor.newInstance());
       } catch (NoSuchMethodException e) {
-        logger.atFine().withCause(e).log(
-            "Skipping registration of %s because it had no default constructor.", codecType);
+        log.log(
+            Level.FINE,
+            "Skipping registration of " + codecType + " because it had no default constructor.");
       }
     }
   }
@@ -191,15 +192,14 @@ class CodecScanner {
     throw new IllegalStateException(registererType + " doesn't directly implement CodecRegisterer");
   }
 
-  /** Return the {@link ClassInfo}s matching {@code packageFilter}, sorted by name. */
-  private static Stream<ClassInfo> getClassInfos(Predicate<String> packageFilter)
-      throws IOException {
-    return ClassPath.from(ClassLoader.getSystemClassLoader()).getResources().stream()
+  /** Return the {@link ClassInfo} objects matching {@code packagePrefix} sorted by name. */
+  private static Stream<ClassInfo> getClassInfos(String packagePrefix) throws IOException {
+    return ClassPath.from(ClassLoader.getSystemClassLoader())
+        .getResources()
+        .stream()
         .filter(r -> r instanceof ClassInfo)
         .map(r -> (ClassInfo) r)
-        .filter(c -> packageFilter.test(c.getPackageName()))
+        .filter(c -> c.getPackageName().startsWith(packagePrefix))
         .sorted(Comparator.comparing(ClassInfo::getName));
   }
-
-  private CodecScanner() {}
 }
