@@ -58,7 +58,6 @@ public class ActionExecutionContext implements Closeable {
   private final ActionInputPrefetcher actionInputPrefetcher;
   private final ActionKeyContext actionKeyContext;
   private final MetadataHandler metadataHandler;
-  private final LostInputsCheck lostInputsCheck;
   private final FileOutErr fileOutErr;
   private final ExtendedEventHandler eventHandler;
   private final ImmutableMap<String, String> clientEnv;
@@ -79,7 +78,6 @@ public class ActionExecutionContext implements Closeable {
       ActionInputPrefetcher actionInputPrefetcher,
       ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
-      LostInputsCheck lostInputsCheck,
       FileOutErr fileOutErr,
       ExtendedEventHandler eventHandler,
       Map<String, String> clientEnv,
@@ -92,7 +90,6 @@ public class ActionExecutionContext implements Closeable {
     this.actionInputPrefetcher = actionInputPrefetcher;
     this.actionKeyContext = actionKeyContext;
     this.metadataHandler = metadataHandler;
-    this.lostInputsCheck = lostInputsCheck;
     this.fileOutErr = fileOutErr;
     this.eventHandler = eventHandler;
     this.clientEnv = ImmutableMap.copyOf(clientEnv);
@@ -113,7 +110,6 @@ public class ActionExecutionContext implements Closeable {
       ActionInputPrefetcher actionInputPrefetcher,
       ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
-      LostInputsCheck lostInputsCheck,
       FileOutErr fileOutErr,
       ExtendedEventHandler eventHandler,
       Map<String, String> clientEnv,
@@ -127,7 +123,6 @@ public class ActionExecutionContext implements Closeable {
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        lostInputsCheck,
         fileOutErr,
         eventHandler,
         clientEnv,
@@ -144,7 +139,6 @@ public class ActionExecutionContext implements Closeable {
       ActionInputPrefetcher actionInputPrefetcher,
       ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
-      LostInputsCheck lostInputsCheck,
       FileOutErr fileOutErr,
       ExtendedEventHandler eventHandler,
       Map<String, String> clientEnv,
@@ -156,7 +150,6 @@ public class ActionExecutionContext implements Closeable {
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        lostInputsCheck,
         fileOutErr,
         eventHandler,
         clientEnv,
@@ -195,10 +188,6 @@ public class ActionExecutionContext implements Closeable {
   @Nullable
   public FileSystem getActionFileSystem() {
     return actionFileSystem;
-  }
-
-  public void checkForLostInputs() throws LostInputsActionExecutionException {
-    lostInputsCheck.checkForLostInputs();
   }
 
   /**
@@ -347,7 +336,6 @@ public class ActionExecutionContext implements Closeable {
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        lostInputsCheck,
         fileOutErr,
         eventHandler,
         clientEnv,
@@ -356,17 +344,5 @@ public class ActionExecutionContext implements Closeable {
         env,
         actionFileSystem,
         skyframeDepsResult);
-  }
-
-  /**
-   * A way of checking whether any lost inputs have been detected during the execution of this
-   * action.
-   */
-  public interface LostInputsCheck {
-
-    LostInputsCheck NONE = () -> {};
-
-    /** Throws if inputs have been lost. */
-    void checkForLostInputs() throws LostInputsActionExecutionException;
   }
 }

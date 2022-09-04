@@ -195,7 +195,6 @@ public final class SkyframeActionExecutor {
   private ImmutableMap<ActionAnalysisMetadata, ConflictException> badActionMap = ImmutableMap.of();
   private OptionsProvider options;
   private boolean useAsyncExecution;
-  private boolean strictConflictChecks;
   private boolean hadExecutionError;
   private MetadataProvider perBuildFileCache;
   private ActionInputPrefetcher actionInputPrefetcher;
@@ -323,7 +322,7 @@ public final class SkyframeActionExecutor {
     SortedMap<PathFragment, Artifact> artifactPathMap = result.second;
 
     Map<ActionAnalysisMetadata, ArtifactPrefixConflictException> actionsWithArtifactPrefixConflict =
-        Actions.findArtifactPrefixConflicts(actionGraph, artifactPathMap, strictConflictChecks);
+        Actions.findArtifactPrefixConflicts(actionGraph, artifactPathMap);
     for (Map.Entry<ActionAnalysisMetadata, ArtifactPrefixConflictException> actionExceptionPair :
         actionsWithArtifactPrefixConflict.entrySet()) {
       temporaryBadActionMap.put(
@@ -424,7 +423,6 @@ public final class SkyframeActionExecutor {
     this.options = options;
     // Cache some option values for performance, since we consult them on every action.
     this.useAsyncExecution = options.getOptions(BuildRequestOptions.class).useAsyncExecution;
-    this.strictConflictChecks = options.getOptions(BuildRequestOptions.class).strictConflictChecks;
     this.finalizeActions = options.getOptions(BuildRequestOptions.class).finalizeActions;
     this.outputService = outputService;
     RemoteOptions remoteOptions = options.getOptions(RemoteOptions.class);
