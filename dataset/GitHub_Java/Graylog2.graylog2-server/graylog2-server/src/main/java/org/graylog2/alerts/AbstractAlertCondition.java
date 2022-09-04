@@ -17,17 +17,22 @@
 package org.graylog2.alerts;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.google.common.collect.ImmutableMap;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public abstract class AbstractAlertCondition implements EmbeddedPersistable, AlertCondition {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractAlertCondition.class);
 
     public enum Type {
         MESSAGE_COUNT,
@@ -65,7 +70,7 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
 
     }
 
-    protected abstract CheckResult runCheck();
+    protected abstract CheckResult runCheck(Indexer indexer);
 
     @Override
     public String getId() {
@@ -104,28 +109,30 @@ public abstract class AbstractAlertCondition implements EmbeddedPersistable, Ale
     @Override
     public Integer getBacklog() {
         Object rawParameter = getParameters().get("backlog");
-        if (rawParameter != null && rawParameter instanceof Number) {
+        if (rawParameter != null && rawParameter instanceof Number)
             return (Integer) rawParameter;
-        } else {
+        else
             return 0;
-        }
     }
 
     @Override
     public String toString() {
-        return id + ":" + type + "={" + getDescription() + "}" + ", stream:={" + stream + "}";
+        return new StringBuilder().append(id).append(":").append(type)
+                .append("={").append(getDescription()).append("}")
+                .append(", stream:={").append(stream).append("}")
+                .toString();
     }
 
     @Override
     @JsonIgnore
     public Map<String, Object> getPersistedFields() {
-        return ImmutableMap.<String, Object>builder()
-                .put("id", id)
-                .put("type", type.toString().toLowerCase())
-                .put("creator_user_id", creatorUserId)
-                .put("created_at", Tools.getISO8601String(createdAt))
-                .put("parameters", parameters)
-                .build();
+        return new HashMap<String, Object>() {{
+            put("id", id);
+            put("type", type.toString().toLowerCase());
+            put("creator_user_id", creatorUserId);
+            put("created_at", Tools.getISO8601String(createdAt));
+            put("parameters", parameters);
+        }};
     }
 
     @Override
