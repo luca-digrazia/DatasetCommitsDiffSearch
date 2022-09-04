@@ -78,11 +78,12 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     return label;
   }
 
-  /** Adds an extra_action to the action graph based on the action to shadow. */
-  public Collection<Artifact.DerivedArtifact> addExtraAction(
-      RuleContext owningRule, Action actionToShadow) {
-    Collection<Artifact.DerivedArtifact> extraActionOutputs = new LinkedHashSet<>();
-    Collection<Artifact.DerivedArtifact> protoOutputs = new ArrayList<>();
+  /**
+   * Adds an extra_action to the action graph based on the action to shadow.
+   */
+  public Collection<Artifact> addExtraAction(RuleContext owningRule, Action actionToShadow) {
+    Collection<Artifact> extraActionOutputs = new LinkedHashSet<>();
+    Collection<Artifact> protoOutputs = new ArrayList<>();
     NestedSetBuilder<Artifact> extraActionInputs = NestedSetBuilder.stableOrder();
 
     Label ownerLabel = owningRule.getLabel();
@@ -110,8 +111,8 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
 
     // We generate a file containing a protocol buffer describing the action that is being shadowed.
     // It is up to each action being shadowed to decide what contents to store here.
-    Artifact.DerivedArtifact extraActionInfoFile =
-        getExtraActionOutputArtifact(owningRule, actionToShadow, "$(ACTION_ID).xa");
+    Artifact extraActionInfoFile = getExtraActionOutputArtifact(
+        owningRule, actionToShadow, "$(ACTION_ID).xa");
     owningRule.registerAction(new ExtraActionInfoFileWriteAction(
         actionToShadow.getOwner(), extraActionInfoFile, actionToShadow));
     extraActionInputs.add(extraActionInfoFile);
@@ -147,14 +148,11 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
             createDummyOutput,
             CommandLine.of(argv),
             owningRule.getConfiguration().getActionEnvironment(),
-            owningRule.getConfiguration().modifiedExecutionInfo(executionInfo, label.getName()),
+            executionInfo,
             commandMessage,
             label.getName()));
 
-    return ImmutableSet.<Artifact.DerivedArtifact>builder()
-        .addAll(extraActionOutputs)
-        .addAll(protoOutputs)
-        .build();
+    return ImmutableSet.<Artifact>builder().addAll(extraActionOutputs).addAll(protoOutputs).build();
   }
 
   /**
@@ -179,19 +177,22 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
   }
 
   /**
-   * Creates an output artifact for the extra_action based on the output_template. The path will be
-   * in the following form: <output
-   * dir>/<target-configuration-specific-path>/extra_actions/<extra_action_label>/ +
-   * <configured_target_label>/<expanded_template>
+   * Creates an output artifact for the extra_action based on the output_template.
+   * The path will be in the following form:
+   * <output dir>/<target-configuration-specific-path>/extra_actions/<extra_action_label>/ +
+   *   <configured_target_label>/<expanded_template>
    *
-   * <p>The template can use the following variables: $(ACTION_ID): a unique id for the
-   * extra_action.
+   * The template can use the following variables:
+   * $(ACTION_ID): a unique id for the extra_action.
    *
-   * <p>Sample: extra_action: foo/bar:extra template: $(ACTION_ID).analysis target: foo/bar:main
-   * expands to: output/configuration/extra_actions/\
-   * foo/bar/extra/foo/bar/4683026f7ac1dd1a873ccc8c3d764132.analysis
+   *  Sample:
+   *    extra_action: foo/bar:extra
+   *    template: $(ACTION_ID).analysis
+   *    target: foo/bar:main
+   *    expands to: output/configuration/extra_actions/\
+   *      foo/bar/extra/foo/bar/4683026f7ac1dd1a873ccc8c3d764132.analysis
    */
-  private Artifact.DerivedArtifact getExtraActionOutputArtifact(
+  private Artifact getExtraActionOutputArtifact(
       RuleContext ruleContext, Action action, String template) {
     String actionId =
         getActionId(ruleContext.getActionKeyContext(), ruleContext.getActionOwner(), action);
@@ -202,7 +203,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     return getRootRelativePath(template, ruleContext);
   }
 
-  private Artifact.DerivedArtifact getRootRelativePath(String template, RuleContext ruleContext) {
+  private Artifact getRootRelativePath(String template, RuleContext ruleContext) {
     PathFragment extraActionPackageFragment = label.getPackageIdentifier().getSourceRoot();
     PathFragment extraActionPrefix = extraActionPackageFragment.getRelative(label.getName());
     PathFragment rootRelativePath = PathFragment.create("extra_actions")

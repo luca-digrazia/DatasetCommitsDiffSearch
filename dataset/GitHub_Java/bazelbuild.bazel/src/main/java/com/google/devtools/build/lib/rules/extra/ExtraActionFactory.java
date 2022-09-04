@@ -81,7 +81,7 @@ public final class ExtraActionFactory implements RuleConfiguredTargetFactory {
         new ExtraActionSpec(
             shExecutable,
             commandHelper.getResolvedTools(),
-            CompositeRunfilesSupplier.fromSuppliers(commandHelper.getToolsRunfilesSuppliers()),
+            new CompositeRunfilesSupplier(commandHelper.getToolsRunfilesSuppliers()),
             resolvedData,
             outputTemplates,
             command,
