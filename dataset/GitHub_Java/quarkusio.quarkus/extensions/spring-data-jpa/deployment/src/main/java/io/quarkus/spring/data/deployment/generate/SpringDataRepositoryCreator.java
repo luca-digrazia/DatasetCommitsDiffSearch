@@ -13,7 +13,6 @@ import java.util.function.Consumer;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 
-import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.ClassType;
 import org.jboss.jandex.DotName;
@@ -117,13 +116,6 @@ public class SpringDataRepositoryCreator {
     }
 
     private Map.Entry<DotName, DotName> extractIdAndEntityTypes(ClassInfo repositoryToImplement) {
-        AnnotationInstance repositoryDefinitionInstance = repositoryToImplement
-                .classAnnotation(DotNames.SPRING_DATA_REPOSITORY_DEFINITION);
-        if (repositoryDefinitionInstance != null) {
-            return new AbstractMap.SimpleEntry<>(repositoryDefinitionInstance.value("idClass").asClass().name(),
-                    repositoryDefinitionInstance.value("domainClass").asClass().name());
-        }
-
         DotName entityDotName = null;
         DotName idDotName = null;
 

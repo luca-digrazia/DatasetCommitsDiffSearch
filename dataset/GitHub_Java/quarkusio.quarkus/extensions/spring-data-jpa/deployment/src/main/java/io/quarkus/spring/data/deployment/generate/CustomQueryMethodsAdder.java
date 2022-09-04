@@ -248,9 +248,8 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                     DotName customResultTypeName = resultType.name();
 
                     if (customResultTypeName.equals(entityClassInfo.name())
-                            || customResultTypeName.equals(DotNames.OBJECT)
-                            || isIntLongOrBoolean(customResultTypeName)) {
-                        // no special handling needed
+                            || customResultTypeName.equals(DotNames.OBJECT)) {
+                        // Result is using standard entity or Object result type 
                         customResultTypeName = null;
                     } else {
                         // The result is using a custom type.
@@ -368,9 +367,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
     // Unless it is some kind of collection containing multiple types, 
     // return the type used in the query result.
     private Type verifyQueryResultType(Type t) {
-        if (isIntLongOrBoolean(t.name())) {
-            return t;
-        }
         if (t.kind() == Kind.ARRAY) {
             return verifyQueryResultType(t.asArrayType().component());
         } else if (t.kind() == Kind.PARAMETERIZED_TYPE) {
