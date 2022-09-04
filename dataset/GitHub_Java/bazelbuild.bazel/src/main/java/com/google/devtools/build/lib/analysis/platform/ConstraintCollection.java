@@ -14,11 +14,10 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
-import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.stream.Collectors.joining;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Functions;
+import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -33,80 +32,45 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
-import java.util.Map;
 import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /** A collection of constraint values. */
 @Immutable
 @AutoCodec
-@AutoValue
-public abstract class ConstraintCollection
+public final class ConstraintCollection
     implements ConstraintCollectionApi<ConstraintSettingInfo, ConstraintValueInfo> {
+  @Nullable private final ConstraintCollection parent;
+  private final ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints;
 
-  /** A builder class to help create instances of {@link ConstraintCollection}. */
-  public static final class Builder {
-    @Nullable private ConstraintCollection parent;
-    private ImmutableList.Builder<ConstraintValueInfo> constraintValues =
-        new ImmutableList.Builder<>();
-
-    private Builder() {}
-
-    /** Sets the parent {@link ConstraintCollection} of this instance. */
-    public Builder parent(@Nullable ConstraintCollection parent) {
-      this.parent = parent;
-      return this;
-    }
-
-    /** Adds the given constraints to the current collection. */
-    public Builder addConstraints(Map<ConstraintSettingInfo, ConstraintValueInfo> constraints) {
-      return addConstraints(constraints.values());
-    }
-
-    /** Adds the given constraints to the current collection. */
-    public Builder addConstraints(ConstraintValueInfo... constraints) {
-      return addConstraints(ImmutableList.copyOf(constraints));
-    }
-
-    /** Adds the given constraints to the current collection. */
-    public Builder addConstraints(Iterable<ConstraintValueInfo> constraints) {
-      constraintValues.addAll(constraints);
-      return this;
-    }
-
-    /** Returns the completed {@link ConstraintCollection} instance. */
-    public ConstraintCollection build() {
-      ImmutableList<ConstraintValueInfo> constraintValues = this.constraintValues.build();
-      // TODO(https://github.com/bazelbuild/bazel/issues/7548): validate duplicated constraints.
-      return new AutoValue_ConstraintCollection(
-          this.parent,
-          constraintValues.stream()
-              .collect(toImmutableMap(ConstraintValueInfo::constraint, Function.identity())));
-    }
+  /** Creates a new {@link ConstraintCollection} with the given constraint values. */
+  public ConstraintCollection(ImmutableList<ConstraintValueInfo> constraints) {
+    this(null, constraints);
   }
 
-  /** Returns a new {@link Builder} suitable for creating {@link ConstraintCollection} instances. */
-  public static Builder builder() {
-    return new Builder();
+  /**
+   * Creates a new {@link ConstraintCollection} which inherits constraint values from {@code
+   * parent}.
+   *
+   * <p>Any constraints passed in {@code constraints} will override values from {@code parent}.
+   */
+  public ConstraintCollection(
+      @Nullable ConstraintCollection parent, ImmutableList<ConstraintValueInfo> constraints) {
+    this(
+        parent,
+        constraints.stream()
+            .collect(
+                ImmutableMap.toImmutableMap(ConstraintValueInfo::constraint, Function.identity())));
   }
 
   @AutoCodec.Instantiator
   @VisibleForSerialization
-  static ConstraintCollection create(
+  ConstraintCollection(
       @Nullable ConstraintCollection parent,
       ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints) {
-    return builder().parent(parent).addConstraints(constraints).build();
+    this.parent = parent;
+    this.constraints = constraints;
   }
-
-  /**
-   * Returns the parent {@link ConstraintCollection} for this instance, or {@code null} if none
-   * exists.
-   */
-  @Nullable
-  abstract ConstraintCollection parent();
-
-  /** Returns the constraints supplied by this collection. */
-  abstract ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints();
 
   /**
    * Returns {@code true} if this {@link ConstraintCollection} contains every {@link
@@ -173,13 +137,13 @@ public abstract class ConstraintCollection
   @Override
   public boolean has(ConstraintSettingInfo constraint) {
     // First, check locally.
-    if (constraints().containsKey(constraint)) {
+    if (constraints.containsKey(constraint)) {
       return true;
     }
 
     // Then, check the parent, directly to ignore defaults.
-    if (parent() != null) {
-      return parent().has(constraint);
+    if (parent != null) {
+      return parent.has(constraint);
     }
 
     return constraint.hasDefaultConstraintValue();
@@ -193,13 +157,13 @@ public abstract class ConstraintCollection
   @Override
   public ConstraintValueInfo get(ConstraintSettingInfo constraint) {
     // First, check locally.
-    if (constraints().containsKey(constraint)) {
-      return constraints().get(constraint);
+    if (constraints.containsKey(constraint)) {
+      return constraints.get(constraint);
     }
 
     // Then, check the parent, directly to ignore defaults.
-    if (parent() != null) {
-      return parent().get(constraint);
+    if (parent != null) {
+      return parent.get(constraint);
     }
 
     // Finally, Since this constraint isn't set, fall back to the default.
@@ -208,7 +172,7 @@ public abstract class ConstraintCollection
 
   @Override
   public SkylarkList<ConstraintSettingInfo> constraintSettings() {
-    return SkylarkList.createImmutable(constraints().keySet());
+    return SkylarkList.createImmutable(constraints.keySet());
   }
 
   @Override
@@ -223,7 +187,24 @@ public abstract class ConstraintCollection
     return has(constraint);
   }
 
-  // It's easier to use the Starlark repr as a string form, not what AutoValue produces.
+  @Override
+  public boolean equals(Object other) {
+    if (this == other) {
+      return true;
+    }
+
+    if (!(other instanceof ConstraintCollection)) {
+      return false;
+    }
+    ConstraintCollection pc = (ConstraintCollection) other;
+    return Objects.equal(this.constraints, pc.constraints);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(constraints);
+  }
+
   @Override
   public String toString() {
     return Printer.str(this);
@@ -232,18 +213,11 @@ public abstract class ConstraintCollection
   @Override
   public void repr(SkylarkPrinter printer) {
     printer.append("<");
-    if (parent() != null) {
-      printer.append("parent: ");
-      parent().repr(printer);
-      printer.append(", ");
-    }
-    printer.append("[");
     printer.append(
-        constraints().values().stream()
+        constraints.values().stream()
             .map(ConstraintValueInfo::label)
             .map(Functions.toStringFunction())
             .collect(joining(", ")));
-    printer.append("]");
     printer.append(">");
   }
 
@@ -252,14 +226,7 @@ public abstract class ConstraintCollection
    * constraints.
    */
   public void addToFingerprint(Fingerprint fp) {
-    // Encode whether there is a parent.
-    fp.addBoolean(parent() != null);
-    // Add the parent.
-    if (parent() != null) {
-      parent().addToFingerprint(fp);
-    }
-    // Add the actual constraints.
-    fp.addInt(constraints().size());
-    constraints().values().forEach(constraintValue -> constraintValue.addTo(fp));
+    fp.addInt(constraints.size());
+    constraints.values().forEach(constraintValue -> constraintValue.addTo(fp));
   }
 }

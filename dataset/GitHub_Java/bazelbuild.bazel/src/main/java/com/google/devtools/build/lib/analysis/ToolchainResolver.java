@@ -543,7 +543,7 @@ public class ToolchainResolver {
           if (toolchainType != null) {
             ToolchainInfo toolchainInfo =
                 PlatformProviderUtils.toolchain(target.getConfiguredTarget());
-            if (toolchainInfo != null) {
+            if (toolchainType != null) {
               toolchains.put(toolchainType, toolchainInfo);
             }
           }

@@ -41,8 +41,7 @@ public class ConstraintCollectionTest extends BuildViewTestCase {
     ConstraintValueInfo value3 =
         ConstraintValueInfo.create(setting3, Label.parseAbsoluteUnchecked("//foo:value3"));
 
-    ConstraintCollection collection =
-        ConstraintCollection.builder().addConstraints(value1, value2).build();
+    ConstraintCollection collection = new ConstraintCollection(ImmutableList.of(value1, value2));
     assertThat(collection.containsAll(ImmutableList.of(value1))).isTrue();
     assertThat(collection.findMissing(ImmutableList.of(value1))).isEmpty();
     assertThat(collection.containsAll(ImmutableList.of(value2))).isTrue();
@@ -63,14 +62,13 @@ public class ConstraintCollectionTest extends BuildViewTestCase {
     ConstraintValueInfo value2 =
         ConstraintValueInfo.create(setting, Label.parseAbsoluteUnchecked("//foo:value2"));
 
-    ConstraintCollection collection1 =
-        ConstraintCollection.builder().addConstraints(value1).build();
+    ConstraintCollection collection1 = new ConstraintCollection(ImmutableList.of(value1));
     assertThat(collection1.containsAll(ImmutableList.of(value1))).isTrue();
     assertThat(collection1.findMissing(ImmutableList.of(value1))).isEmpty();
     assertThat(collection1.containsAll(ImmutableList.of(value2))).isFalse();
     assertThat(collection1.findMissing(ImmutableList.of(value2))).containsExactly(value2);
 
-    ConstraintCollection collectionWithDefault = ConstraintCollection.builder().build();
+    ConstraintCollection collectionWithDefault = new ConstraintCollection(ImmutableList.of());
     assertThat(collectionWithDefault.containsAll(ImmutableList.of(value1))).isTrue();
     assertThat(collectionWithDefault.findMissing(ImmutableList.of(value1))).isEmpty();
     assertThat(collectionWithDefault.containsAll(ImmutableList.of(value2))).isFalse();
@@ -90,10 +88,8 @@ public class ConstraintCollectionTest extends BuildViewTestCase {
     ConstraintValueInfo value2b =
         ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//foo:value2b"));
 
-    ConstraintCollection collection1 =
-        ConstraintCollection.builder().addConstraints(value1, value2a).build();
-    ConstraintCollection collection2 =
-        ConstraintCollection.builder().addConstraints(value1, value2b).build();
+    ConstraintCollection collection1 = new ConstraintCollection(ImmutableList.of(value1, value2a));
+    ConstraintCollection collection2 = new ConstraintCollection(ImmutableList.of(value1, value2b));
     assertThat(collection1.diff(collection2)).containsExactly(setting2);
     assertThat(collection1.diff(collection2)).containsAllIn(collection2.diff(collection1));
   }
