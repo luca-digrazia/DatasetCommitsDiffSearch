@@ -90,6 +90,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import javax.annotation.Nullable;
 
 /** An implementation for the "android_binary" rule. */
@@ -209,6 +210,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     AndroidResources.validateRuleContext(ruleContext);
 
     final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
+    boolean shrinkResources = dataContext.useResourceShrinking();
     Map<String, String> manifestValues = StampedAndroidManifest.getManifestValues(ruleContext);
 
     StampedAndroidManifest manifest =
@@ -224,8 +226,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                     : null);
 
     boolean shrinkResourceCycles =
-        shouldShrinkResourceCycles(
-            dataContext.getAndroidConfig(), ruleContext, dataContext.isResourceShrinkingEnabled());
+        shouldShrinkResourceCycles(dataContext.getAndroidConfig(), ruleContext, shrinkResources);
     AndroidAaptVersion aaptVersion = AndroidAaptVersion.chooseTargetAaptVersion(ruleContext);
     ProcessedAndroidData processedAndroidData =
         ProcessedAndroidData.processBinaryDataFrom(
@@ -357,6 +358,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         AndroidBinaryMobileInstall.createMobileInstallResourceApks(
             ruleContext, dataContext, manifest);
 
+    boolean optimizeResources =
+        AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2
+            && (dataContext.useResourcePathShortening()
+                || dataContext.useResourceNameObfuscation());
+
     return createAndroidBinary(
         ruleContext,
         dataContext,
@@ -370,6 +376,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         nativeLibs,
         resourceApk,
         mobileInstallResourceApks,
+        shrinkResources,
+        optimizeResources,
         resourceClasses,
         ImmutableList.<Artifact>of(),
         ImmutableList.<Artifact>of(),
@@ -391,6 +399,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       NativeLibs nativeLibs,
       ResourceApk resourceApk,
       @Nullable MobileInstallResourceApks mobileInstallResourceApks,
+      boolean shrinkResources,
+      boolean optimizeResources,
       JavaTargetAttributes resourceClasses,
       ImmutableList<Artifact> apksUnderTest,
       ImmutableList<Artifact> additionalMergedManifests,
@@ -422,13 +432,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                 : ImmutableList.<Artifact>of(),
             ruleContext.getPrerequisiteArtifacts(":extra_proguard_specs", Mode.TARGET).list(),
             proguardDeps);
-    boolean hasProguardSpecs = !proguardSpecs.isEmpty();
 
     // TODO(bazel-team): Verify that proguard spec files don't contain -printmapping directions
     // which this -printmapping command line flag will override.
     Artifact proguardOutputMap = null;
-    if (ProguardHelper.genProguardMapping(ruleContext.attributes())
-        || dataContext.isResourceShrinkingEnabled()) {
+    if (ProguardHelper.genProguardMapping(ruleContext.attributes()) || shrinkResources) {
       proguardOutputMap = androidSemantics.getProguardOutputMap(ruleContext);
     }
 
@@ -443,22 +451,20 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             proguardDictionary,
             proguardOutputMap);
 
-    if (dataContext.useResourceShrinking(hasProguardSpecs)) {
+    if (shrinkResources) {
       resourceApk =
           shrinkResources(
               ruleContext,
               androidSemantics.makeContextForNative(ruleContext),
               resourceApk,
+              proguardSpecs,
               proguardOutput,
               filesBuilder);
     }
 
-    resourceApk =
-        maybeOptimizeResources(
-            dataContext,
-            resourceApk,
-            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext),
-            hasProguardSpecs);
+    if (optimizeResources) {
+      resourceApk = optimizeResources(dataContext, resourceApk);
+    }
 
     Artifact jarToDex = proguardOutput.getOutputJar();
     DexingOutput dexingOutput =
@@ -883,36 +889,47 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       AndroidDataContext dataContext,
       ResourceApk resourceApk,
+      ImmutableList<Artifact> proguardSpecs,
       ProguardOutput proguardOutput,
       NestedSetBuilder<Artifact> filesBuilder)
       throws RuleErrorException, InterruptedException {
 
-    Artifact shrunkApk =
-        shrinkResources(
+    Optional<Artifact> maybeShrunkApk =
+        maybeShrinkResources(
             dataContext,
             resourceApk.getValidatedResources(),
             resourceApk.getResourceDependencies(),
+            proguardSpecs,
             proguardOutput.getOutputJar(),
             proguardOutput.getMapping(),
             AndroidAaptVersion.chooseTargetAaptVersion(ruleContext),
             ResourceFilterFactory.fromRuleContextAndAttrs(ruleContext),
             ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"));
 
-    filesBuilder.add(
-        ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCE_SHRINKER_LOG));
-    return resourceApk.withApk(shrunkApk);
+    if (maybeShrunkApk.isPresent()) {
+      filesBuilder.add(
+          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCE_SHRINKER_LOG));
+      return resourceApk.withApk(maybeShrunkApk.get());
+    }
+
+    return resourceApk;
   }
 
-  static Artifact shrinkResources(
+  static Optional<Artifact> maybeShrinkResources(
       AndroidDataContext dataContext,
       ValidatedAndroidResources validatedResources,
       ResourceDependencies resourceDeps,
+      ImmutableList<Artifact> proguardSpecs,
       Artifact proguardOutputJar,
       Artifact proguardMapping,
       AndroidAaptVersion aaptVersion,
       ResourceFilterFactory resourceFilterFactory,
       List<String> noCompressExtensions)
       throws InterruptedException {
+
+    if (proguardSpecs.isEmpty()) {
+      return Optional.empty();
+    }
 
     ResourceShrinkerActionBuilder resourceShrinkerActionBuilder =
         new ResourceShrinkerActionBuilder()
@@ -937,24 +954,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
           dataContext.createOutputArtifact(
               AndroidRuleClasses.ANDROID_RESOURCE_OPTIMIZATION_CONFIG));
     }
-    return resourceShrinkerActionBuilder.build(dataContext);
+    return Optional.of(resourceShrinkerActionBuilder.build(dataContext));
   }
 
-  private static ResourceApk maybeOptimizeResources(
-      AndroidDataContext dataContext,
-      ResourceApk resourceApk,
-      AndroidAaptVersion aaptVersion,
-      boolean hasProguardSpecs)
-      throws InterruptedException {
-    if (aaptVersion != AndroidAaptVersion.AAPT2) {
-      return resourceApk;
-    }
-    boolean useResourcePathShortening = dataContext.useResourcePathShortening();
-    boolean useResourceNameObfuscation = dataContext.useResourceNameObfuscation(hasProguardSpecs);
-    if (!useResourcePathShortening && !useResourceNameObfuscation) {
-      return resourceApk;
-    }
-
+  private static ResourceApk optimizeResources(
+      AndroidDataContext dataContext, ResourceApk resourceApk) throws InterruptedException {
     Artifact optimizedApk =
         dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_OPTIMIZED_APK);
 
@@ -962,12 +966,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         Aapt2OptimizeActionBuilder.builder()
             .setResourceApk(resourceApk.getArtifact())
             .setOptimizedApkOut(optimizedApk);
-    if (useResourcePathShortening) {
+    if (dataContext.useResourcePathShortening()) {
       builder.setResourcePathShorteningMapOut(
           dataContext.createOutputArtifact(
               AndroidRuleClasses.ANDROID_RESOURCE_PATH_SHORTENING_MAP));
     }
-    if (useResourceNameObfuscation) {
+    if (dataContext.useResourceNameObfuscation()) {
       builder.setResourceOptimizationConfig(
           dataContext.createOutputArtifact(
               AndroidRuleClasses.ANDROID_RESOURCE_OPTIMIZATION_CONFIG));
