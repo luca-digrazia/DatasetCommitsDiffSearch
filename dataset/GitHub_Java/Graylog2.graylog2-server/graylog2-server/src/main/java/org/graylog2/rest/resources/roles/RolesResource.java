@@ -87,7 +87,7 @@ public class RolesResource extends RestResource {
         final Set<Role> roles = roleService.loadAll();
         Set<RoleResponse> roleResponses = Sets.newHashSet();
         for (Role role : roles) {
-            roleResponses.add(RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions(), role.isReadOnly()));
+            roleResponses.add(RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions()));
         }
 
         return RolesResponse.create(roleResponses);
@@ -100,7 +100,7 @@ public class RolesResource extends RestResource {
         checkPermission(RestPermissions.ROLES_READ, name);
 
         final Role role = roleService.load(name);
-        return RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions(), role.isReadOnly());
+        return RoleResponse.create(role.getName(), Optional.fromNullable(role.getDescription()), role.getPermissions());
     }
 
     @POST
@@ -116,8 +116,6 @@ public class RolesResource extends RestResource {
         Role role = new RoleImpl();
         role.setName(roleResponse.name());
         role.setPermissions(roleResponse.permissions());
-        role.setDescription(roleResponse.description().orNull());
-
         try {
             role = roleService.save(role);
         } catch (ValidationException e) {
@@ -131,8 +129,7 @@ public class RolesResource extends RestResource {
 
         return Response.created(uri).entity(RoleResponse.create(role.getName(),
                                                                 Optional.fromNullable(role.getDescription()),
-                                                                role.getPermissions(),
-                                                                role.isReadOnly())).build();
+                                                                role.getPermissions())).build();
     }
 
     @PUT
@@ -143,9 +140,6 @@ public class RolesResource extends RestResource {
             @ApiParam(name = "JSON Body", value = "The new representation of the role", required = true) RoleResponse role) throws NotFoundException {
         final Role roleToUpdate = roleService.load(name);
 
-        if (roleToUpdate.isReadOnly()) {
-            throw new BadRequestException("Cannot update read only role " + name);
-        }
         roleToUpdate.setName(role.name());
         roleToUpdate.setDescription(role.description().orNull());
         roleToUpdate.setPermissions(role.permissions());
@@ -154,8 +148,7 @@ public class RolesResource extends RestResource {
         } catch (ValidationException e) {
             throw new BadRequestException(e);
         }
-        return RoleResponse.create(roleToUpdate.getName(), Optional.fromNullable(roleToUpdate.getDescription()), roleToUpdate.getPermissions(),
-                                   role.readOnly());
+        return RoleResponse.create(roleToUpdate.getName(), Optional.fromNullable(roleToUpdate.getDescription()), roleToUpdate.getPermissions());
     }
 
     @DELETE
