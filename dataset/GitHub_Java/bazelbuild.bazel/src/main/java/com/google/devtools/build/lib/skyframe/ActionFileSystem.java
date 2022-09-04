@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.skyframe.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -57,7 +56,7 @@ import javax.annotation.Nullable;
  *       access {@link env}, they must also used synchronized access.
  * </ul>
  */
-final class ActionFileSystem extends FileSystem implements ActionInputFileCache, InjectionListener {
+final class ActionFileSystem extends FileSystem implements ActionInputFileCache {
   private static final Logger LOGGER = Logger.getLogger(ActionFileSystem.class.getName());
 
   /** Actual underlying filesystem. */
@@ -155,18 +154,6 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
   @Nullable
   public FileArtifactValue getMetadata(ActionInput actionInput) throws IOException {
     return getMetadataChecked(actionInput.getExecPath());
-  }
-
-  // -------------------- InjectionListener Implementation --------------------
-
-  @Override
-  public void onInsert(ActionInput dest, byte[] digest, long size, int backendIndex)
-      throws IOException {
-    OutputMetadata output = outputs.get(dest.getExecPath());
-    if (output != null) {
-      output.set(new RemoteFileArtifactValue(digest, size, backendIndex),
-          /*notifyConsumer=*/ false);
-    }
   }
 
   // -------------------- FileSystem implementation --------------------
@@ -287,7 +274,7 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
           createSymbolicLinkErrorMessage(
               linkPath, targetFragment, linkPath + " is not an output."));
     }
-    outputHolder.set(inputMetadata, /*notifyConsumer=*/ true);
+    outputHolder.set(inputMetadata);
   }
 
   @Override
@@ -460,7 +447,7 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
   }
 
   @FunctionalInterface
-  public interface MetadataConsumer {
+  public static interface MetadataConsumer {
     void accept(Artifact artifact, FileArtifactValue value) throws IOException;
   }
 
@@ -516,17 +503,8 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
       return metadata;
     }
 
-    /**
-     * Sets the output metadata, and maybe notify the metadataConsumer.
-     *
-     * @param metadata the metadata to write
-     * @param notifyConsumer whether to notify metadataConsumer. Callers should not notify the
-     * metadataConsumer if it will be notified separately at the Spawn level.
-     */
-    public void set(FileArtifactValue metadata, boolean notifyConsumer) throws IOException {
-      if (notifyConsumer) {
-        metadataConsumer.accept(artifact, metadata);
-      }
+    public void set(FileArtifactValue metadata) throws IOException {
+      metadataConsumer.accept(artifact, metadata);
       this.metadata = metadata;
     }
 
@@ -540,7 +518,7 @@ final class ActionFileSystem extends FileSystem implements ActionInputFileCache,
           byte[] data = toByteArray();
           set(
               new FileArtifactValue.InlineFileArtifactValue(
-                  data, Hashing.md5().hashBytes(data).asBytes()), /*notifyConsumer=*/ true);
+                  data, Hashing.md5().hashBytes(data).asBytes()));
         }
       };
     }

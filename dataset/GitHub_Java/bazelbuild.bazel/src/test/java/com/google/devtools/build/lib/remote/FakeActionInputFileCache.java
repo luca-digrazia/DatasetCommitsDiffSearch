@@ -18,10 +18,11 @@ import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileContentsProxy;
-import com.google.devtools.build.lib.actions.MetadataProvider;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.skyframe.FileArtifactValue;
+import com.google.devtools.build.lib.skyframe.FileContentsProxy;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -30,8 +31,8 @@ import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.devtools.remoteexecution.v1test.Tree;
 import java.io.IOException;
 
-/** A fake implementation of the {@link MetadataProvider} interface. */
-final class FakeActionInputFileCache implements MetadataProvider {
+/** A fake implementation of the {@link ActionInputFileCache} interface. */
+final class FakeActionInputFileCache implements ActionInputFileCache {
   private final Path execRoot;
   private final BiMap<ActionInput, String> cas = HashBiMap.create();
   private final DigestUtil digestUtil;
@@ -42,17 +43,12 @@ final class FakeActionInputFileCache implements MetadataProvider {
   }
 
   @Override
-  public FileArtifactValue getMetadata(ActionInput input) throws IOException {
+  public Metadata getMetadata(ActionInput input) throws IOException {
     String hexDigest = Preconditions.checkNotNull(cas.get(input), input);
     Path path = execRoot.getRelative(input.getExecPath());
     FileStatus stat = path.stat(Symlinks.FOLLOW);
     return FileArtifactValue.createNormalFile(
         HashCode.fromString(hexDigest).asBytes(), FileContentsProxy.create(stat), stat.getSize());
-  }
-
-  @Override
-  public ActionInput getInput(String execPath) {
-    throw new UnsupportedOperationException();
   }
 
   void setDigest(ActionInput input, String digest) {

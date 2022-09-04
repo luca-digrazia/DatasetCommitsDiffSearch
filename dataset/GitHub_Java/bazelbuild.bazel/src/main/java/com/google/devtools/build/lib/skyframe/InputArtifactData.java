@@ -17,10 +17,10 @@ import static java.nio.charset.StandardCharsets.US_ASCII;
 
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.ByteString;
+import java.util.HashMap;
 import javax.annotation.Nullable;
 
 /** A mapping from artifacts to metadata. */
@@ -32,10 +32,7 @@ interface InputArtifactData {
   FileArtifactValue get(ActionInput input);
 
   @Nullable
-  FileArtifactValue get(PathFragment execPath);
-
-  @Nullable
-  ActionInput getInput(String execpath);
+  FileArtifactValue get(PathFragment fragment);
 
   /**
    * This implementation has a privileged {@link put} method supporting mutations.
@@ -44,36 +41,31 @@ interface InputArtifactData {
    * important that the underlying data is not modified during those phases.
    */
   final class MutableInputArtifactData implements InputArtifactData {
-    private final ActionInputMap inputs;
+    private final HashMap<PathFragment, FileArtifactValue> inputs;
 
     public MutableInputArtifactData(int sizeHint) {
-      this.inputs = new ActionInputMap(sizeHint);
+      this.inputs = new HashMap<>(sizeHint);
     }
 
     @Override
     public boolean contains(ActionInput input) {
-      return inputs.getMetadata(input) != null;
+      return inputs.containsKey(input.getExecPath());
     }
 
     @Override
     @Nullable
     public FileArtifactValue get(ActionInput input) {
-      return (FileArtifactValue) inputs.getMetadata(input);
+      return inputs.get(input.getExecPath());
     }
 
     @Override
     @Nullable
-    public FileArtifactValue get(PathFragment execPath) {
-      return (FileArtifactValue) inputs.getMetadata(execPath.getPathString());
-    }
-
-    @Override
-    public ActionInput getInput(String execPath) {
-      return inputs.getInput(execPath);
+    public FileArtifactValue get(PathFragment fragment) {
+      return inputs.get(fragment);
     }
 
     public void put(Artifact artifact, FileArtifactValue value) {
-      inputs.put(artifact, value);
+      inputs.put(artifact.getExecPath(), value);
     }
 
     @Override

@@ -51,9 +51,4 @@ class PerActionFileCache implements ActionInputFileCache {
     Preconditions.checkState(missingArtifactsAllowed || result != null, "null for %s", input);
     return result;
   }
-
-  @Override
-  public ActionInput getInput(String execPath) {
-    return inputArtifactData.getInput(execPath);
-  }
 }

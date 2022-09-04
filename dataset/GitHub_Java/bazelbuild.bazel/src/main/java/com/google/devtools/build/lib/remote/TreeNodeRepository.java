@@ -28,8 +28,8 @@ import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.DigestOfDirectoryException;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.MetadataProvider;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -441,7 +441,7 @@ public final class TreeNodeRepository {
     if (input instanceof VirtualActionInput) {
       return Preconditions.checkNotNull(virtualInputDigestCache.get(input));
     }
-    FileArtifactValue metadata = getInputMetadata(input);
+    Metadata metadata = getInputMetadata(input);
     byte[] digest = metadata.getDigest();
     if (digest == null) {
       // If the artifact does not have a digest, it is because it is a directory.
@@ -475,13 +475,11 @@ public final class TreeNodeRepository {
    * or Directory messages by cached digests and adds them to the lists.
    */
   public void getDataFromDigests(
-      Iterable<Digest> digests,
-      Map<Digest, ActionInput> actionInputs,
-      Map<Digest, Directory> nodes) {
+      Iterable<Digest> digests, List<ActionInput> actionInputs, List<Directory> nodes) {
     for (Digest digest : digests) {
       TreeNode treeNode = digestTreeNodeCache.get(digest);
       if (treeNode != null) {
-        nodes.put(digest, Preconditions.checkNotNull(directoryCache.get(treeNode)));
+        nodes.add(Preconditions.checkNotNull(directoryCache.get(treeNode)));
       } else { // If not there, it must be an ActionInput.
         ByteString hexDigest = ByteString.copyFromUtf8(digest.getHash());
         ActionInput input = reverseInputMap.get(hexDigest);
@@ -489,13 +487,13 @@ public final class TreeNodeRepository {
           // ... or a VirtualActionInput.
           input = digestVirtualInputCache.get(digest);
         }
-        actionInputs.put(digest, Preconditions.checkNotNull(input));
+        actionInputs.add(Preconditions.checkNotNull(input));
       }
     }
   }
 
-  private FileArtifactValue getInputMetadata(ActionInput input) throws IOException {
-    FileArtifactValue metadata =
+  private Metadata getInputMetadata(ActionInput input) throws IOException {
+    Metadata metadata =
         Preconditions.checkNotNull(
             inputFileCache.getMetadata(input), "Missing metadata for: %s", input);
     if (metadata.getDigest() != null) {
