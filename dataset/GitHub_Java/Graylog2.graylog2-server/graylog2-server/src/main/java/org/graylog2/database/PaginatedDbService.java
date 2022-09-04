@@ -30,6 +30,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -152,24 +153,25 @@ public abstract class PaginatedDbService<DTO> {
                                                                      DBSort.SortBuilder sort,
                                                                      int page,
                                                                      int perPage) {
-        // Calculate the total amount of items matching the query/filter, but before pagination
-        final long total;
-        try (final Stream<DTO> cursor = streamQueryWithSort(query, sort)) {
-            total = cursor.filter(filter).count();
-        }
+        final AtomicInteger total = new AtomicInteger(0);
 
-        // Then create another filtered stream and only collect the entries according to page and perPage
-        try (final Stream<DTO> resultStream = streamQueryWithSort(query, sort)) {
-            Stream<DTO> filteredResultStream = resultStream.filter(filter);
+        try (final Stream<DTO> cursor = streamQueryWithSort(query, sort)) {
+            // First created a filtered stream
+            final Stream<DTO> dtoStream = cursor
+                    .filter(filter)
+                    .peek(dto -> total.incrementAndGet());
+
+            // Then use that filtered stream and only collect the entries according to page and perPage
+            Stream<DTO> resultStream = Stream.of(dtoStream).flatMap(stream -> stream);
             if (perPage > 0) {
-                filteredResultStream = filteredResultStream.skip(perPage * Math.max(0, page - 1)).limit(perPage);
+                resultStream = resultStream.skip(perPage * Math.max(0, page - 1)).limit(perPage);
             }
 
             final long grandTotal = db.count();
 
-            return new PaginatedList<>(filteredResultStream.collect(Collectors.toList()), Math.toIntExact(total), page, perPage, grandTotal);
+            return new PaginatedList<>(resultStream.collect(Collectors.toList()), total.get(), page, perPage, grandTotal);
         }
-}
+    }
 
     /**
      * Returns an unordered stream of all entries in the database.
