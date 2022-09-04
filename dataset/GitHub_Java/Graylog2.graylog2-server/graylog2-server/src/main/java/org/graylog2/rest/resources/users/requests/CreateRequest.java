@@ -31,7 +31,6 @@ public class CreateRequest {
     public String username;
     public String password;
     public String email;
-    @JsonProperty("full_name")
     public String fullname;
     public List<String> permissions;
     public String timezone;
