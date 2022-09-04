@@ -25,7 +25,6 @@ import org.junit.platform.launcher.TestIdentifier;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.deployment.dev.ClassScanResult;
 import io.quarkus.deployment.dev.RuntimeUpdatesProcessor;
-import io.quarkus.deployment.dev.console.AeshConsole;
 import io.quarkus.dev.console.InputHandler;
 import io.quarkus.dev.console.QuarkusConsole;
 import io.quarkus.dev.spi.DevModeType;
@@ -277,16 +276,11 @@ public class TestConsoleHandler implements TestListener {
 
             @Override
             public void testStarted(TestIdentifier testIdentifier, String className) {
-                String status = "Running " + methodCount.get() + "/" + totalNoTests
+                promptHandler.setStatus("Running " + methodCount.get() + "/" + totalNoTests
                         + (failureCount.get() == 0 ? "."
                                 : ". " + failureCount + " failures so far.")
                         + " Running: "
-                        + className + "#" + testIdentifier.getDisplayName();
-                if (TestSupport.instance().get().isDisplayTestOutput() &&
-                        QuarkusConsole.INSTANCE instanceof AeshConsole) {
-                    log.info(status);
-                }
-                promptHandler.setStatus(status);
+                        + className + "#" + testIdentifier.getDisplayName());
             }
         });
 

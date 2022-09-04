@@ -326,14 +326,10 @@ public class AugmentActionImpl implements AugmentAction {
 
             BuildChain chain = chainBuilder
                     .build();
-            boolean auxiliaryApplication = curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication();
             BuildExecutionBuilder execBuilder = chain.createExecutionBuilder("main")
                     .produce(new LaunchModeBuildItem(launchMode,
                             devModeType == null ? Optional.empty() : Optional.of(devModeType),
-                            auxiliaryApplication,
-                            Optional.ofNullable(curatedApplication.getQuarkusBootstrap().isHostApplicationIsTestOnly()
-                                    ? DevModeType.TEST_ONLY
-                                    : (auxiliaryApplication ? DevModeType.LOCAL : null))))
+                            curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication()))
                     .produce(new ShutdownContextBuildItem())
                     .produce(new RawCommandLineArgumentsBuildItem())
                     .produce(new LiveReloadBuildItem());
@@ -377,11 +373,7 @@ public class AugmentActionImpl implements AugmentAction {
                 builder.setBaseName(quarkusBootstrap.getBaseName());
             }
 
-            boolean auxiliaryApplication = curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication();
-            builder.setAuxiliaryApplication(auxiliaryApplication);
-            builder.setAuxiliaryDevModeType(
-                    curatedApplication.getQuarkusBootstrap().isHostApplicationIsTestOnly() ? DevModeType.TEST_ONLY
-                            : (auxiliaryApplication ? DevModeType.LOCAL : null));
+            builder.setAuxiliaryApplication(curatedApplication.getQuarkusBootstrap().isAuxiliaryApplication());
             builder.setLaunchMode(launchMode);
             builder.setDevModeType(devModeType);
             builder.setRebuild(quarkusBootstrap.isRebuild());
