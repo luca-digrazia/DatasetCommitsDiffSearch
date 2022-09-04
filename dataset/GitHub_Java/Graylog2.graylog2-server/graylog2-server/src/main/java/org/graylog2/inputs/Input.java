@@ -153,9 +153,7 @@ public class Input extends Persisted {
                         (String) ex.get("target_field"),
                         (Map<String, Object>) ex.get("extractor_config"),
                         (String) ex.get("creator_user_id"),
-                        getConvertersOfExtractor(ex),
-                        Extractor.ConditionType.valueOf(((String) ex.get("condition_type")).toUpperCase()),
-                        (String) ex.get("condition_value")
+                        getConvertersOfExtractor(ex)
                 );
 
                 extractors.add(extractor);
