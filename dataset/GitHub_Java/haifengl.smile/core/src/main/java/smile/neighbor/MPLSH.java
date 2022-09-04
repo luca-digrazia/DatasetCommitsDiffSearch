@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.neighbor;
 
 import java.io.Serializable;
@@ -23,8 +21,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.PriorityQueue;
 
-import smile.util.IntArrayList;
-import smile.math.MathEx;
+import smile.math.IntArrayList;
+import smile.math.Math;
 import smile.sort.HeapSelect;
 import smile.stat.distribution.GaussianDistribution;
 
@@ -149,7 +147,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
                     a[i][j] = gaussian.rand();
                 }
 
-                b[i] = MathEx.random(0, r);
+                b[i] = Math.random(0, r);
             }
 
             ArrayList<HashEntry> list = new ArrayList<>();
@@ -800,7 +798,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
         data = new ArrayList<>();
         c = new int[k];
         for (int i = 0; i < c.length; i++) {
-            c[i] = MathEx.randomInt(P);
+            c[i] = Math.randomInt(P);
         }
 
         hash = new ArrayList<>(L);
@@ -938,7 +936,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
             }
 
             double[] key = keys.get(index);
-            double distance = MathEx.distance(q, key);
+            double distance = Math.distance(q, key);
             if (distance < neighbor.distance) {
                 neighbor.index = index;
                 neighbor.distance = distance;
@@ -959,7 +957,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
      * Returns the approximate k-nearest neighbors. A posteriori multiple probe
      * model has to be trained already.
      * @param q the query object.
-     * @param k the number of nearest neighbors to search for.
+     * @param k	the number of nearest neighbors to search for.
      * @param recall the expected recall rate.
      * @param T the maximum number of probes.
      */
@@ -1014,7 +1012,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
             }
 
             double[] key = keys.get(index);
-            double dist = MathEx.distance(q, key);
+            double dist = Math.distance(q, key);
             if (dist < heap.peek().distance) {
                 heap.add(new Neighbor<>(key, data.get(index), index, dist));
                 hit++;
@@ -1074,7 +1072,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
                                 continue;
                             }
 
-                            double distance = MathEx.distance(q, e.key);
+                            double distance = Math.distance(q, e.key);
                             if (distance <= radius) {
                                 boolean existed = false;
                                 for (Neighbor<double[], E> n : neighbors) {

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2017 Ernest DeFoy
+ * Copyright (c) 2017
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,10 @@ import java.util.LinkedList;
 import java.util.Iterator;
 
 /**
- *  This class represents a binary tree that represents an expression
- *     such that each node itself is an Expression and contains either
- *     one or two children, depending on if that Expression is a
- *     UnaryOperation or a BinaryOperation, respectively. </p>
+ * This class represents a binary tree that represents an expression
+ * such that each node itself is an Expression and contains either
+ * one or two children, depending on if that Expression is a
+ * UnaryOperation or a BinaryOperation, respectively. </p>
  *
  * @author Ernest DeFoy
  * @see <a href="https://en.wikipedia.org/wiki/Binary_expression_tree">

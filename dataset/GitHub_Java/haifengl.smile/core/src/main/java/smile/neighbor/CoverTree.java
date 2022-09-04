@@ -19,7 +19,11 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import smile.math.MathEx;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import smile.math.Math;
 import smile.math.distance.Metric;
 import smile.sort.DoubleHeapSelect;
 
@@ -55,7 +59,7 @@ import smile.sort.DoubleHeapSelect;
  */
 public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E>, RNNSearch<E, E>, Serializable {
     private static final long serialVersionUID = 1L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(CoverTree.class);
+    private static final Logger logger = LoggerFactory.getLogger(CoverTree.class);
 
     /**
      * The dataset to build the cover tree.
@@ -391,8 +395,8 @@ public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E
      * Returns the distance/value of a given scale/level, i.e. the value of
      * base^i (e.g. 2^i).
      *
-     * @param s the level/scale
-     * @return base^s
+     * @param s 	the level/scale
+     * @return 		base^s
      */
     private double getCoverRadius(int s) {
         return Math.pow(base, s);
@@ -401,8 +405,8 @@ public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E
     /**
      * Find the scale/level of a given value, i.e. the "i" in base^i.
      *
-     * @param d the value whose scale/level is to be determined.
-     * @return the scale/level of the given value.
+     * @param d 	the value whose scale/level is to be determined.
+     * @return 		the scale/level of the given value.
      */
     private int getScale(double d) {
         return (int) Math.ceil(invLogBase * Math.log(d));
@@ -588,7 +592,7 @@ public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E
 
         Arrays.sort(neighbors);
 
-        MathEx.reverse(neighbors);
+        Math.reverse(neighbors);
 
         if (neighbors.length > k) {
             neighbors = Arrays.copyOf(neighbors, k);

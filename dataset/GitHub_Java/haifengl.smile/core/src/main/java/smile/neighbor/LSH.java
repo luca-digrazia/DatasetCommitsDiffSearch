@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.neighbor;
 
 import java.io.Serializable;
@@ -24,8 +22,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
-import smile.util.IntArrayList;
-import smile.math.MathEx;
+import smile.math.IntArrayList;
+import smile.math.Math;
 import smile.sort.HeapSelect;
 import smile.stat.distribution.GaussianDistribution;
 
@@ -203,7 +201,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
                     a[i][j] = gaussian.rand();
                 }
 
-                b[i] = MathEx.random(0, w);
+                b[i] = Math.random(0, w);
             }
 
             table = new HashEntry[H];
@@ -454,8 +452,8 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
         r1 = new int[k];
         r2 = new int[k];
         for (int i = 0; i < k; i++) {
-            r1[i] = MathEx.randomInt(MAX_HASH_RND);
-            r2[i] = MathEx.randomInt(MAX_HASH_RND);
+            r1[i] = Math.randomInt(MAX_HASH_RND);
+            r2[i] = Math.randomInt(MAX_HASH_RND);
         }
 
         hash = new ArrayList<>(L);
@@ -505,7 +503,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
             if (q == key && identicalExcluded) {
                 continue;
             }
-            double distance = MathEx.distance(q, key);
+            double distance = Math.distance(q, key);
             if (distance < neighbor.distance) {
                 neighbor.index = index;
                 neighbor.distance = distance;
@@ -538,7 +536,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
                 continue;
             }
 
-            double distance = MathEx.distance(q, key);
+            double distance = Math.distance(q, key);
             if (distance < heap.peek().distance) {
                 heap.add(new Neighbor<>(key, data.get(index), index, distance));
                 hit++;
@@ -572,7 +570,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
                 continue;
             }
 
-            double distance = MathEx.distance(q, key);
+            double distance = Math.distance(q, key);
             if (distance <= radius) {
                 neighbors.add(new Neighbor<>(key, data.get(index), index, distance));
             }
