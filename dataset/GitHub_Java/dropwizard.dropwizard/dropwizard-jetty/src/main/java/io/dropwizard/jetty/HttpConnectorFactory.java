@@ -1,6 +1,7 @@
 package io.dropwizard.jetty;
 
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.jetty9.InstrumentedConnectionFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import io.dropwizard.util.Duration;
@@ -434,7 +435,7 @@ public class HttpConnectorFactory implements ConnectorFactory {
         final ByteBufferPool bufferPool = buildBufferPool();
 
         return buildConnector(server, scheduler, bufferPool, name, threadPool,
-                              new Jetty93InstrumentedConnectionFactory(httpConnectionFactory,
+                              new InstrumentedConnectionFactory(httpConnectionFactory,
                                                                 metrics.timer(httpConnections())));
     }
 
