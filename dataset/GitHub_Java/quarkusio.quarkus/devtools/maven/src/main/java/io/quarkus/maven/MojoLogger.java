@@ -38,7 +38,7 @@ public class MojoLogger implements LoggerProvider {
                             text = invalidFormat(String.valueOf(message), parameters);
                         }
                     }
-                    synchronized (MojoLogger.class) {
+                    synchronized (log) {
                         doActualLog(log, level, text, thrown);
                     }
                 }
@@ -65,7 +65,7 @@ public class MojoLogger implements LoggerProvider {
                             text = invalidFormat(format, parameters);
                         }
                     }
-                    synchronized (MojoLogger.class) {
+                    synchronized (log) {
                         doActualLog(log, level, text, thrown);
                     }
                 }
