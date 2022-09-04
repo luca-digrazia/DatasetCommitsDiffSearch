@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.ComputedSubstitution;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -53,8 +54,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
-/** Pluggable Java compilation semantics. */
+/**
+ * Pluggable Java compilation semantics.
+ */
 public interface JavaSemantics {
+
   LibraryLanguage LANGUAGE = new LibraryLanguage("Java");
 
   SafeImplicitOutputsFunction JAVA_LIBRARY_CLASS_JAR =
@@ -281,7 +285,7 @@ public interface JavaSemantics {
    * (java code) and {@code resources} into {@code output}.
    */
   CustomCommandLine buildSingleJarCommandLine(
-      String toolchainIdentifier,
+      BuildConfiguration configuration,
       Artifact output,
       String mainClass,
       ImmutableList<String> manifestLines,

@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.ImplicitOutputsFunction.fromTemplates;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.ALWAYS_LINK_LIBRARY;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.ALWAYS_LINK_PIC_LIBRARY;
@@ -33,16 +31,11 @@ import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.SHARED_LIBRAR
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.VERSIONED_SHARED_LIBRARY;
 
 import com.google.devtools.build.lib.analysis.LanguageDependentFragment.LibraryLanguage;
-import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.rules.cpp.transitions.EnableLipoTransition;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -154,6 +147,13 @@ public class CppRuleClasses {
   public static final String RANDOM_SEED = "random_seed";
 
   /**
+   * A string constant for the compile_action_flags_in_flag_set feature. This feature is just a
+   * transitional feature which helps telling whether -c and -o options are already in flag_set of
+   * action_config in CROSSTOOL file. Once the transition is done, it should be removed.
+   */
+  public static final String COMPILE_ACTION_FLAGS_IN_FLAG_SET = "compile_action_flags_in_flag_set";
+
+  /**
    * A string constant for the dependency_file feature. This feature generates the .d file.
    */
   public static final String DEPENDENCY_FILE = "dependency_file";
@@ -185,7 +185,7 @@ public class CppRuleClasses {
 
   /** A string constant for the header_modules_compile feature. */
   public static final String HEADER_MODULE_COMPILE = "header_module_compile";
-
+  
   /** A string constant for the header_module_codegen feature. */
   public static final String HEADER_MODULE_CODEGEN = "header_module_codegen";
 
@@ -265,12 +265,6 @@ public class CppRuleClasses {
    * A string constant for the include_paths feature.
    */
   public static final String INCLUDE_PATHS = "include_paths";
-
-  /** A string constant for the feature signalling static linking mode. */
-  public static final String STATIC_LINKING_MODE = "static_linking_mode";
-
-  /** A string constant for the feature signalling dynamic linking mode. */
-  public static final String DYNAMIC_LINKING_MODE = "dynamic_linking_mode";
 
   /**
    * A string constant for the ThinLTO feature.
@@ -377,25 +371,4 @@ public class CppRuleClasses {
 
   /** A string constant for the match-clif action. */
   public static final String MATCH_CLIF = "match_clif";
-
-  /** Ancestor for all rules that do include scanning. */
-  public static final class CcIncludeScanningRule implements RuleDefinition {
-    @Override
-    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-      return builder
-          .add(
-              attr("$grep_includes", LABEL)
-                  .cfg(HostTransition.INSTANCE)
-                  .value(env.getToolsLabel("//tools/cpp:grep-includes")))
-          .build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$cc_include_scanning_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
-  }
 }

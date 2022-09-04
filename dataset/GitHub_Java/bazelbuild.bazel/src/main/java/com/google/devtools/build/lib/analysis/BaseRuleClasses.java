@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TestSize;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
@@ -49,8 +48,7 @@ import com.google.devtools.build.lib.util.FileTypeSet;
  * Rule class definitions used by (almost) every rule.
  */
 public class BaseRuleClasses {
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final Attribute.ComputedDefault testonlyDefault =
+  private static final Attribute.ComputedDefault testonlyDefault =
       new Attribute.ComputedDefault() {
         @Override
         public Object getDefault(AttributeMap rule) {
@@ -58,8 +56,7 @@ public class BaseRuleClasses {
         }
       };
 
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final Attribute.ComputedDefault deprecationDefault =
+  private static final Attribute.ComputedDefault deprecationDefault =
       new Attribute.ComputedDefault() {
         @Override
         public Object getDefault(AttributeMap rule) {
@@ -76,7 +73,7 @@ public class BaseRuleClasses {
    * they only run on the target configuration and should not operate on action_listeners and
    * extra_actions themselves (to avoid cycles).
    */
-  @AutoCodec @VisibleForTesting
+  @VisibleForTesting
   static final LabelListLateBoundDefault<?> ACTION_LISTENER =
       LabelListLateBoundDefault.fromTargetConfiguration(
           BuildConfiguration.class,
@@ -84,7 +81,6 @@ public class BaseRuleClasses {
 
   // TODO(b/65746853): provide a way to do this without passing the entire configuration
   /** Implementation for the :run_under attribute. */
-  @AutoCodec
   public static final LabelLateBoundDefault<?> RUN_UNDER =
       LabelLateBoundDefault.fromTargetConfiguration(
           BuildConfiguration.class,
@@ -142,14 +138,6 @@ public class BaseRuleClasses {
               attr("$test_runtime", LABEL_LIST)
                   .cfg(HostTransition.INSTANCE)
                   .value(ImmutableList.of(env.getToolsLabel("//tools/test:runtime"))))
-          .add(attr("$test_setup_script", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .singleArtifact()
-              .value(env.getToolsLabel("//tools/test:test_setup")))
-          .add(attr("$collect_coverage_script", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .singleArtifact()
-              .value(env.getToolsLabel("//tools/test:collect_coverage")))
           // Input files for test actions collecting code coverage
           .add(
               attr("$coverage_support", LABEL)

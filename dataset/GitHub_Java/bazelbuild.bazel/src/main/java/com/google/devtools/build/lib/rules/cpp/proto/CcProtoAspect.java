@@ -67,7 +67,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 /** Part of the implementation of cc_proto_library. */
-public abstract class CcProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
+public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
 
   private static final String PROTO_TOOLCHAIN_ATTR = ":aspect_cc_proto_toolchain";
 
@@ -80,7 +80,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
   private final CppSemantics cppSemantics;
   private final LabelLateBoundDefault<?> ccToolchainAttrValue;
 
-  protected CcProtoAspect(
+  public CcProtoAspect(
       AspectLegalCppSemantics cppSemantics, LabelLateBoundDefault<?> ccToolchainAttrValue) {
     this.cppSemantics = cppSemantics;
     this.ccToolchainAttrValue = ccToolchainAttrValue;

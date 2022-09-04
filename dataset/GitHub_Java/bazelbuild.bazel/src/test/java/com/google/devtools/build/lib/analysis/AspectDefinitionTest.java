@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import org.junit.Test;
@@ -60,10 +60,7 @@ public class AspectDefinitionTest {
 
     @Override
     public ConfiguredAspect create(
-        ConfiguredTargetAndData ctadBase,
-        RuleContext context,
-        AspectParameters parameters,
-        String toolsRepository) {
+        ConfiguredTargetAndTarget ctatBase, RuleContext context, AspectParameters parameters) {
       throw new IllegalStateException();
     }
 
