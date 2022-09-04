@@ -13,7 +13,6 @@ import javax.ws.rs.ext.MessageBodyWriter;
 import io.quarkus.rest.runtime.spi.BeanFactory;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
 import io.quarkus.rest.runtime.util.ServerMediaType;
-import io.quarkus.runtime.annotations.IgnoreProperty;
 
 public class ResourceWriter {
 
@@ -59,7 +58,6 @@ public class ResourceWriter {
         this.builtin = builtin;
     }
 
-    @IgnoreProperty
     public MessageBodyWriter<?> getInstance() {
         if (instance == null) {
             synchronized (this) {
