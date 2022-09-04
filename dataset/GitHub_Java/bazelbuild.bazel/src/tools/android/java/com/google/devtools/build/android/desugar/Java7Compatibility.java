@@ -78,6 +78,7 @@ public class Java7Compatibility extends ClassVisitor {
       // initializer instead
       return null;
     }
+    // TODO(b/31547323): Avoid stack trace and report errors more user-friendly
     checkArgument(!isInterface
         || BitFlags.isSet(access, Opcodes.ACC_ABSTRACT)
         || "<clinit>".equals(name),

@@ -154,8 +154,7 @@ class InterfaceDesugaring extends ClassVisitor {
       companion = store.add(companionName);
       companion.visit(
           bytecodeVersion,
-          // Companion class must be public so moved methods can be called from anywhere
-          (accessFlags | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_PUBLIC) & ~Opcodes.ACC_INTERFACE,
+          (accessFlags | Opcodes.ACC_SYNTHETIC) & ~Opcodes.ACC_INTERFACE,
           companionName,
           (String) null, // signature
           "java/lang/Object",

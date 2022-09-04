@@ -13,9 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android.desugar;
 
-import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
-import com.google.devtools.build.android.desugar.io.IndexedInputs;
-import com.google.devtools.build.android.desugar.io.InputFileProvider;
 import java.io.IOException;
 import java.io.InputStream;
 import javax.annotation.Nullable;
@@ -32,7 +29,7 @@ class ClassReaderFactory {
 
   /**
    * Returns a reader for the given/internal/Class$Name if the class is defined in the wrapped input
-   * and {@code null} otherwise. For simplicity this method turns checked into runtime exceptions
+   * and {@code null} otherwise.  For simplicity this method turns checked into runtime exceptions
    * under the assumption that all classes have already been read once when this method is called.
    */
   @Nullable
