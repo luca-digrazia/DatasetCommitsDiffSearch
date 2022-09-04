@@ -95,7 +95,6 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.LogCategoryBuildItem;
-import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -507,17 +506,16 @@ public final class HibernateOrmProcessor {
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    public ServiceStartBuildItem startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
+    public void startPersistenceUnits(HibernateOrmRecorder recorder, BeanContainerBuildItem beanContainer,
             List<JdbcDataSourceBuildItem> dataSourcesConfigured,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured,
             List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
-        if (hasEntities(jpaEntities, nonJpaModels)) {
-            recorder.startAllPersistenceUnits(beanContainer.getValue());
+        if (!hasEntities(jpaEntities, nonJpaModels)) {
+            return;
         }
 
-        return new ServiceStartBuildItem("Hibernate ORM");
-
+        recorder.startAllPersistenceUnits(beanContainer.getValue());
     }
 
     @BuildStep
@@ -813,10 +811,7 @@ public final class HibernateOrmProcessor {
         // Logging
         if (persistenceUnitConfig.log.sql) {
             descriptor.getProperties().setProperty(AvailableSettings.SHOW_SQL, "true");
-
-            if (persistenceUnitConfig.log.formatSql) {
-                descriptor.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
-            }
+            descriptor.getProperties().setProperty(AvailableSettings.FORMAT_SQL, "true");
         }
 
         if (persistenceUnitConfig.log.jdbcWarnings.isPresent()) {

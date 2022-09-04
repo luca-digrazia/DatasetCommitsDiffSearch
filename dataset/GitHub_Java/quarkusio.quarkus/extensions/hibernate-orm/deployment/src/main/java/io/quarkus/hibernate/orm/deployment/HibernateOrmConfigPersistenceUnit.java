@@ -8,8 +8,6 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
-import org.hibernate.engine.query.spi.QueryPlanCache;
-
 import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -241,20 +239,11 @@ public class HibernateOrmConfigPersistenceUnit {
     @ConfigGroup
     public static class HibernateOrmConfigPersistenceUnitQuery {
 
-        private static final int DEFAULT_QUERY_PLAN_CACHE_MAX_SIZE = 2048;
-
-        public enum NullOrdering {
-            NONE,
-            FIRST,
-            LAST
-        }
-
         /**
          * The maximum size of the query plan cache.
-         * see #{@value QueryPlanCache#DEFAULT_QUERY_PLAN_MAX_COUNT}
          */
-        @ConfigItem(defaultValue = "2048")
-        public int queryPlanCacheMaxSize;
+        @ConfigItem
+        public Optional<String> queryPlanCacheMaxSize;
 
         /**
          * Default precedence of null values in `ORDER BY` clauses.
@@ -263,12 +252,11 @@ public class HibernateOrmConfigPersistenceUnit {
          *
          * @asciidoclet
          */
-        @ConfigItem(defaultValue = "none")
-        public NullOrdering defaultNullOrdering;
+        @ConfigItem
+        public Optional<String> defaultNullOrdering;
 
         public boolean isAnyPropertySet() {
-            return queryPlanCacheMaxSize != DEFAULT_QUERY_PLAN_CACHE_MAX_SIZE
-                    || defaultNullOrdering != NullOrdering.NONE;
+            return queryPlanCacheMaxSize.isPresent() || defaultNullOrdering.isPresent();
         }
     }
 
@@ -388,19 +376,13 @@ public class HibernateOrmConfigPersistenceUnit {
         public boolean sql;
 
         /**
-         * Format the SQL logs if SQL log is enabled
-         */
-        @ConfigItem(defaultValue = "true")
-        public boolean formatSql;
-
-        /**
          * Whether JDBC warnings should be collected and logged.
          */
         @ConfigItem(defaultValueDocumentation = "depends on dialect")
         public Optional<Boolean> jdbcWarnings;
 
         public boolean isAnyPropertySet() {
-            return sql || !formatSql || jdbcWarnings.isPresent();
+            return sql || jdbcWarnings.isPresent();
         }
     }
 
