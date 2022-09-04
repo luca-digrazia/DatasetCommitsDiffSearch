@@ -28,12 +28,6 @@ public final class SmallRyeOpenApiConfig {
     public boolean alwaysRunFilter;
 
     /**
-     * Do not include the provided static openapi document (eg. META-INF/openapi.yaml)
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean ignoreStaticDocument;
-
-    /**
      * Add a certain SecurityScheme with config
      */
     public Optional<SecurityScheme> securityScheme;
