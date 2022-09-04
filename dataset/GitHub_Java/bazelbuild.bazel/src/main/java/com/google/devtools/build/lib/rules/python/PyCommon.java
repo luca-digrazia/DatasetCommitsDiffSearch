@@ -277,7 +277,7 @@ public final class PyCommon {
           && semantics.prohibitHyphensInPackagePaths()
           && Util.containsHyphen(src.getLabel().getPackageFragment())
           // It's ok to have hyphens in main file - usually no one imports it.
-          && (mainArtifact == null || !src.getLabel().equals(mainArtifact.getOwnerLabel()))) {
+          && !src.getLabel().equals(mainArtifact.getOwnerLabel())) {
         ruleContext.attributeError(
             "srcs",
             src.getLabel()
