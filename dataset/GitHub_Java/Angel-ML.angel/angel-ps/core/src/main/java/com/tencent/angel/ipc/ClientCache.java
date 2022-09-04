@@ -1,35 +1,32 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Tencent is pleased to support the open source community by making Angel available.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
+ * compliance with the License. You may obtain a copy of the License at
+ *
+ * https://opensource.org/licenses/Apache-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
+ *
  */
 
-/**
- * Add clear method to fix Angel client exit problem.
- */
 
 package com.tencent.angel.ipc;
 
-import com.tencent.angel.conf.TConstants;
+import com.tencent.angel.conf.AngelConf;
+import io.netty.buffer.PooledByteBufAllocator;
+import io.netty.channel.Channel;
+import io.netty.channel.EventLoopGroup;
 import org.apache.hadoop.conf.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.net.SocketFactory;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -46,47 +43,41 @@ import java.util.Map;
 class ClientCache {
   private static final Logger LOG = LoggerFactory.getLogger(ClientCache.class.getName());
   private Map<String, NettyTransceiver> clients = new HashMap<String, NettyTransceiver>();
+  private Configuration conf = new Configuration();
 
-  protected ClientCache() {}
+  private final Class<? extends Channel> socketChannelClass;
+  private EventLoopGroup workerGroup;
+  private PooledByteBufAllocator pooledAllocator;
+
+  protected ClientCache() {
+    int nThreads =
+      conf.getInt(AngelConf.CLIENT_IO_THREAD, Math.max(8, (int)(Runtime.getRuntime().availableProcessors() * 0.25)));
+    IOMode ioMode = IOMode.valueOf(conf.get(AngelConf.NETWORK_IO_MODE, "NIO"));
+    workerGroup = NettyUtils.createEventLoop(ioMode, nThreads, "ML-client");
+    pooledAllocator = NettyUtils.createPooledByteBufAllocator(true, true, nThreads);
+    socketChannelClass = NettyUtils.getClientChannelClass(ioMode);
+  }
 
   /**
    * Construct & cache an IPC client with the user-provided SocketFactory if no cached client
    * exists.
-   * 
-   * @param conf Configuration
+   *
+   * @param conf    Configuration
    * @param factory socket factory
    * @return an IPC client
    */
   protected synchronized NettyTransceiver getClient(InetSocketAddress addr, SocketFactory factory,
-      Configuration conf) {
-
+    Configuration conf) {
     NettyTransceiver client = clients.get(addr.toString());
     if (client == null) {
-      Class<? extends NettyTransceiver> mlClientClass = NettyTransceiver.class;
-
-      // Make an ml rpc client.
       try {
-        Constructor<? extends NettyTransceiver> cst =
-            mlClientClass.getConstructor(InetSocketAddress.class, Long.class);
-        client =
-            cst.newInstance(addr, conf.getLong(TConstants.ML_CONNECTION_TIMEOUT_MILLIS,
-                TConstants.DEFAULT_CONNECTION_TIMEOUT_MILLIS));
-        client.setConf(conf);
-      } catch (InvocationTargetException e) {
-        LOG.debug("create NettryTransceiver client error1: " + e);
-        throw new RuntimeException(e);
-      } catch (InstantiationException e) {
-        LOG.debug("create NettryTransceiver client error2: " + e);
-        throw new RuntimeException(e);
-      } catch (IllegalAccessException e) {
-        LOG.debug("create NettryTransceiver client error3: " + e);
-        throw new RuntimeException(e);
-      } catch (NoSuchMethodException e) {
-        LOG.debug("create NettryTransceiver client error4: " + e);
-        throw new RuntimeException("No matching constructor in " + mlClientClass.getName(), e);
+        int connectTimeoutMillis = (int) conf.getLong(AngelConf.ML_CONNECTION_TIMEOUT_MILLIS,
+          AngelConf.DEFAULT_CONNECTION_TIMEOUT_MILLIS);
+        client = new NettyTransceiver(conf, addr, workerGroup, pooledAllocator, socketChannelClass,
+          connectTimeoutMillis);
       } catch (Exception e) {
-        LOG.debug("create NettryTransceiver client error: " + e);
-        throw new RuntimeException("create NettryTransceiver client error: ", e);
+        LOG.debug("create NettyTransceiver client error: " + e);
+        throw new RuntimeException("create NettyTransceiver client error: ", e);
       }
 
       clients.put(addr.toString(), client);
@@ -98,7 +89,7 @@ class ClientCache {
 
   /**
    * Stop a RPC client connection A RPC client is closed only when its reference count becomes zero.
-   * 
+   *
    * @param client client to stop
    */
   protected void stopClient(NettyTransceiver client) {

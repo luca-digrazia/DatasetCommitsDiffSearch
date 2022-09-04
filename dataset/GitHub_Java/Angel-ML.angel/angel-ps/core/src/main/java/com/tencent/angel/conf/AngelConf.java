@@ -25,6 +25,7 @@ import com.tencent.angel.master.slowcheck.TaskCalPerfChecker;
 import com.tencent.angel.ps.ParameterServer;
 import com.tencent.angel.ps.storage.matrix.PartitionSourceMap;
 import com.tencent.angel.psagent.PSAgent;
+import com.tencent.angel.psagent.matrix.cache.DefaultPolicy;
 import com.tencent.angel.utils.DefaultAppSubmitter;
 import com.tencent.angel.worker.Worker;
 import com.tencent.angel.worker.task.BaseTask;
@@ -54,29 +55,6 @@ public class AngelConf extends Configuration {
   private static final String ANGEL_PS_PREFIX = "angel.ps.";
   private static final String ANGEL_TASK_PREFIX = "angel.task.";
   private static final String ANGEL_WORKERGROUP_PREFIX = "angel.workergroup.";
-
-  public static final String ANGEL_KUBERNETES_PREFIX = "angel.kubernetes.";
-  public static final String ANGEL_KUBERNETES_MASTER_LABEL_PREFIX = "angel.kubernetes.master.label.";
-  public static final String ANGEL_KUBERNETES_MASTER_ANNOTATION_PREFIX = "angel.kubernetes.master.annotation.";
-  public static final String ANGEL_KUBERNETES_MASTER_SECRETS_PREFIX = "angel.kubernetes.master.secrets.";
-  public static final String ANGEL_KUBERNETES_MASTER_SECRET_KEY_REF_PREFIX = "angel.kubernetes.master.secretKeyRef.";
-  public static final String ANGEL_KUBERNETES_MASTER_ENV_PREFIX = "angel.kubernetes.masterEnv.";
-  public static final String ANGEL_KUBERNETES_EXECUTOR_ENV_PREFIX = "angel.kubernetes.executorEnv.";
-  public static final String ANGEL_KUBERNETES_MASTER_VOLUMES_PREFIX = "angel.kubernetes.master.volumes.";
-  public static final String ANGEL_KUBERNETES_EXECUTOR_LABEL_PREFIX = "angel.kubernetes.executor.label.";
-  public static final String ANGEL_KUBERNETES_EXECUTOR_ANNOTATION_PREFIX = "angel.kubernetes.executor.annotation.";
-  public static final String ANGEL_KUBERNETES_EXECUTOR_SECRETS_PREFIX = "angel.kubernetes.executor.secrets.";
-  public static final String ANGEL_KUBERNETES_EXECUTOR_SECRET_KEY_REF_PREFIX = "angel.kubernetes.executor.secretKeyRef.";
-  public static final String ANGEL_KUBERNETES_EXECUTOR_VOLUMES_PREFIX = "angel.kubernetes.executor.volumes.";
-  public static final String ANGEL_KUBERNETES_VOLUMES_HOSTPATH_TYPE = "hostPath";
-  public static final String ANGEL_KUBERNETES_VOLUMES_PVC_TYPE = "persistentVolumeClaim";
-  public static final String ANGEL_KUBERNETES_VOLUMES_EMPTYDIR_TYPE = "emptyDir";
-  public static final String ANGEL_KUBERNETES_VOLUMES_MOUNT_PATH_KEY = "mount.path";
-  public static final String ANGEL_KUBERNETES_VOLUMES_MOUNT_READONLY_KEY = "mount.readOnly";
-  public static final String ANGEL_KUBERNETES_VOLUMES_OPTIONS_PATH_KEY = "options.path";
-  public static final String ANGEL_KUBERNETES_VOLUMES_OPTIONS_CLAIM_NAME_KEY = "options.claimName";
-  public static final String ANGEL_KUBERNETES_VOLUMES_OPTIONS_MEDIUM_KEY = "options.medium";
-  public static final String ANGEL_KUBERNETES_VOLUMES_OPTIONS_SIZE_LIMIT_KEY = "options.sizeLimit";
 
   // //////////////////////////////
   // Application Configs
@@ -508,10 +486,7 @@ public class AngelConf extends Configuration {
 
   public static final String ANGEL_MODEL_PARTITIONER_PARTITION_NUM_PERSERVER =
       "angel.model.partitioner.partition.number.perserver";
-  public static final int DEFAULT_ANGEL_MODEL_PARTITIONER_PARTITION_NUM_PERSERVER = 5;
-
-  public static final String ANGEL_AM_HOST = ANGEL_AM_PREFIX + "host";
-  public static final String ANGEL_AM_PORT = ANGEL_AM_PREFIX + "port";
+  public static final int DEFAULT_ANGEL_MODEL_PARTITIONER_PARTITION_NUM_PERSERVER = 1;
 
   // //////////////////////////////
   // Worker Configs
@@ -981,7 +956,7 @@ public class AngelConf extends Configuration {
 
   public static final String ANGEL_PS_USE_ADAPTIVE_STORAGE_ENABLE =
       ANGEL_PS_PREFIX + "use.adaptive.storage.enable";
-  public static final boolean DEFAULT_ANGEL_PS_USE_ADAPTIVE_STORAGE_ENABLE = false;
+  public static final boolean DEFAULT_ANGEL_PS_USE_ADAPTIVE_STORAGE_ENABLE = true;
 
   public static final String ANGEL_PS_SPARSE_TO_DENSE_FACTOR =
       ANGEL_PS_PREFIX + "sparse.to.dense.factor";
@@ -1083,125 +1058,6 @@ public class AngelConf extends Configuration {
       ANGEL_PS_PREFIX + "jvm.g1.reserve.percent";
   public static final int DEFAULT_ANGEL_PS_JVM_G1_RESERVE_PERCENT = 10;
 
-    // //////////////////////////////
-    // Kubernetes Configs.
-    // //////////////////////////////
-    /**
-     * whether to wait for the application to finish before exiting the launcher process.
-     */
-    public static final String ANGEL_KUBERNETES_WAIT_FOR_APP_COMPLETION = ANGEL_KUBERNETES_PREFIX + "submission.waitAppCompletion";
-    public static final Boolean DEFAULT_ANGEL_KUBERNETES_WAIT_FOR_APP_COMPLETION = true;
-
-    /**
-     * kubernetes api server url.
-     */
-    public static final String ANGEL_KUBERNETES_MASTER = ANGEL_KUBERNETES_PREFIX + "master";
-
-    /**
-     * The namespace that will be used for running the master and executor pods.
-     */
-    public static final String ANGEL_KUBERNETES_NAMESPACE = ANGEL_KUBERNETES_PREFIX + "namespace";
-    public static final String DEFAULT_ANGEL_KUBERNETES_NAMESPACE = "default";
-
-    public static final String ANGEL_KUBERNETES_SERVICEACCOUNT = ANGEL_KUBERNETES_PREFIX + "serviceaccount";
-    public static final String DEFAULT_ANGEL_KUBERNETES_SERVICEACCOUNT = "default";
-
-    /**
-     * Kubernetes image pull policy. Valid values are Always, Never, and IfNotPresent.
-     */
-    public static final String ANGEL_KUBERNETES_CONTAINER_IMAGE_PULL_POLICY = ANGEL_KUBERNETES_PREFIX + "container.image.pullPolicy";
-    public static final String DEFAULT_ANGEL_KUBERNETES_CONTAINER_IMAGE_PULL_POLICY = "IfNotPresent";
-
-    /**
-     * Kubernetes executor pod role. Valid values are ps, worker
-     */
-    public static final String ANGEL_KUBERNETES_EXECUTOR_ROLE = ANGEL_KUBERNETES_PREFIX + "executor.role";
-    public static final String DEFAULT_ANGEL_KUBERNETES_EXECUTOR_ROLE = "ps";
-
-    /**
-     * Prefix to use in front of the executor pod names
-     */
-    public static final String ANGEL_KUBERNETES_EXECUTOR_POD_NAME_PREFIX = ANGEL_KUBERNETES_PREFIX + "executor.podNamePrefix";
-
-    public static final String ANGEL_KUBERNETES_AUTH_SUBMISSION_CONF_PREFIX = ANGEL_KUBERNETES_PREFIX + "authenticate.submission";
-
-    public static final String ANGEL_KUBERNETES_KUBERNETES_AUTH_CLIENT_MODE_PREFIX = ANGEL_KUBERNETES_PREFIX + "authenticate";
-
-    public static final String OAUTH_TOKEN_CONF_SUFFIX = "oauthToken";
-
-    public static final String OAUTH_TOKEN_FILE_CONF_SUFFIX = "oauthTokenFile";
-
-    public static final String CLIENT_KEY_FILE_CONF_SUFFIX = "clientKeyFile";
-
-    public static final String CLIENT_CERT_FILE_CONF_SUFFIX = "clientCertFile";
-
-    public static final String CA_CERT_FILE_CONF_SUFFIX = "caCertFile";
-
-    /**
-     * Interval between reports of the current app status, Logging interval must be a positive time value.
-     */
-    public static final String ANGEL_KUBERNETES_REPORT_INTERVAL = ANGEL_KUBERNETES_PREFIX + "report.interval";
-    public static final int DEFAULT_ANGEL_KUBERNETES_REPORT_INTERVAL = 1000;
-
-    /**
-     * Interval between successive inspection of executor events sent from the Kubernetes API.
-     */
-    public static final String ANGEL_KUBERNETES_EXECUTOR_EVENT_PROCESSING_INTERVAL = ANGEL_KUBERNETES_PREFIX + "executor.eventProcessingInterval";
-    public static final int DEFAULT_ANGEL_KUBERNETES_EXECUTOR_EVENT_PROCESSING_INTERVAL = 1000;
-
-    /**
-     * Container image to use for Angel containers.
-     */
-    public static final String ANGEL_KUBERNETES_CONTAINER_IMAGE = ANGEL_KUBERNETES_PREFIX + "container.image";
-
-    /**
-     * master and executor pods extra classpath
-     */
-    public static final String ANGEL_KUBERNETES_MASTER_EXTRA_CALSSPATH = ANGEL_KUBERNETES_PREFIX + "master.extraClassPath";
-
-    public static final String ANGEL_KUBERNETES_EXECUTOR_EXTRA_CALSSPATH = ANGEL_KUBERNETES_PREFIX + "executor.extraClassPath";
-
-    /**
-     * Specify the hard cpu limit for the angel pods
-     */
-    public static final String ANGEL_KUBERNETES_MASTER_LIMIT_CORES = ANGEL_KUBERNETES_PREFIX + "master.limit.cores";
-
-    public static final String ANGEL_KUBERNETES_PS_LIMIT_CORES = ANGEL_KUBERNETES_PREFIX + "ps.limit.cores";
-
-    public static final String ANGEL_KUBERNETES_WORKER_LIMIT_CORES = ANGEL_KUBERNETES_PREFIX + "worker.limit.cores";
-
-    public static final String ANGEL_KUBERNETES_MASTER_PORT = ANGEL_KUBERNETES_PREFIX + "master.port";
-    public static final int DEFAULT_ANGEL_KUBERNETES_MASTER_PORT = 9078;
-
-    public static final String ANGEL_KUBERNETES_MASTER_POD_IP = ANGEL_KUBERNETES_PREFIX + "master.pod.ip";
-
-    /**
-     * Number of pods to launch at once in each round of executor allocation.
-     */
-    public static final String ANGEL_KUBERNETES_ALLOCATION_BATCH_SIZE = ANGEL_KUBERNETES_PREFIX + "allocation.batch.size";
-    public static final int DEFAULT_ANGEL_KUBERNETES_ALLOCATION_BATCH_SIZE = 5;
-
-    /**
-     * Time to wait between each round of executor allocation.
-     */
-    public static final String ANGEL_KUBERNETES_ALLOCATION_BATCH_DELAY = ANGEL_KUBERNETES_PREFIX + "allocation.batch.delay";
-    public static final int DEFAULT_ANGEL_KUBERNETES_ALLOCATION_BATCH_DELAY = 1000;
-
-    /**
-     * Name of the angel master pod
-     */
-    public static final String ANGEL_KUBERNETES_MASTER_POD_NAME = ANGEL_KUBERNETES_PREFIX + "master.pod.name";
-
-    /**
-     * Interval between polls against the Kubernetes API server to inspect the state of executors.
-     */
-    public static final String ANGEL_KUBERNETES_EXECUTOR_API_POLLING_INTERVAL = ANGEL_KUBERNETES_PREFIX + "executor.apiPollingInterval";
-    public static final int DEFAULT_ANGEL_KUBERNETES_EXECUTOR_API_POLLING_INTERVAL = 30000;
-
-    public static final String ANGEL_KUBERNETES_APP_ID = ANGEL_KUBERNETES_PREFIX + "app.id";
-    public static final String ANGEL_KUBERNETES_APP_CLUSTERTIMESTAMP = ANGEL_KUBERNETES_PREFIX + "app.clusterTimestamp";
-    public static final String ANGEL_KUBERNETES_APP_RANDOMID = ANGEL_KUBERNETES_PREFIX + "app.randomId";
-
   // ////////////////// IPC //////////////////////////
   /**
    * The read buffer size for rpc message encoded by protobuf.
@@ -1226,18 +1082,6 @@ public class AngelConf extends Configuration {
    */
   public static final String ANGEL_REQUEST_SLEEP_TIME_MS = "angel.request.sleep.time.ms";
   public static final int DEFAULT_ANGEL_REQUEST_SLEEP_TIME_MS = 1000;
-
-  /**
-   * Key router type: hash or range
-   */
-  public static final String ANGEL_PS_ROUTER_TYPE = ANGEL_PS_PREFIX + "router.type";
-  public static final String DEFAULT_ANGEL_PS_ROUTER_TYPE = "hash";
-
-  /**
-   * Key router type: hash or range
-   */
-  public static final String ANGEL_PS_LOADBALANCE_PARTITION_ENABLE = ANGEL_PS_PREFIX + "router.type";
-  public static final boolean DEFAULT_ANGEL_PS_LOADBALANCE_PARTITION_ENABLE = true;
 
   // //////////////////////////////
   // Matrix transfer Configs.
@@ -1299,7 +1143,7 @@ public class AngelConf extends Configuration {
    */
   public static final String ANGEL_NETTY_MATRIXTRANSFER_CLIENT_MAX_CONN_IDLETIME_MS =
       "angel.netty.matrixtransfer.client.max.connect.idletime.ms";
-  public static final int DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_CLIENT_MAX_CONN_IDLETIME_MS = 3000000;
+  public static final int DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_CLIENT_MAX_CONN_IDLETIME_MS = 300000;
 
   /**
    * Netty channel io ratio
@@ -1371,7 +1215,7 @@ public class AngelConf extends Configuration {
   public static final String ANGEL_MATRIXTRANSFER_CLIENT_REQUESTER_POOL_SIZE =
       ANGEL_PREFIX + "matrixtransfer.client.requester.pool.size";
   public static final int DEFAULT_ANGEL_MATRIXTRANSFER_CLIENT_REQUESTER_POOL_SIZE =
-      Math.max(16, (int) (Runtime.getRuntime().availableProcessors() * 0.25));
+      Math.max(8, (int) (Runtime.getRuntime().availableProcessors() * 0.25));
 
   public static final String ANGEL_MATRIXTRANSFER_CLIENT_RESPONSER_POOL_SIZE =
       ANGEL_PREFIX + "matrixtransfer.client.responser.pool.size";
@@ -1382,7 +1226,7 @@ public class AngelConf extends Configuration {
   public static final String ANGEL_MATRIXTRANSFER_SERVER_WORKER_POOL_SIZE =
       ANGEL_PREFIX + "matrixtransfer.server.worker.pool.size";
   public static final int DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_WORKER_POOL_SIZE =
-      Math.max(16, (int) (Runtime.getRuntime().availableProcessors() * 0.25));
+      Math.max(8, (int) (Runtime.getRuntime().availableProcessors() * 0.25));
 
   public static final String ANGEL_MATRIXTRANSFER_SERVER_TOKEN_TIMEOUT_MS =
       ANGEL_PREFIX + "matrixtransfer.server.token.timeout.ms";
@@ -1395,7 +1239,12 @@ public class AngelConf extends Configuration {
 
   public static final String ANGEL_MATRIXTRANSFER_SERVER_RPC_LIMIT_GENERAL_FACTOR =
       ANGEL_PREFIX + "matrixtransfer.server.rpc.limit.general.factor";
-  public static float DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_RPC_LIMIT_GENERAL_FACTOR = 0.6f;
+  public static float DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_RPC_LIMIT_GENERAL_FACTOR = 0.0f;
+
+  public static final String ANGEL_MATRIXTRANSFER_SERVER_SENDER_POOL_SIZE =
+      ANGEL_PREFIX + "matrixtransfer.server.sender.pool.size";
+  public static final int DEFAULT_ANGEL_MATRIXTRANSFER_SERVER_SENDER_POOL_SIZE =
+      Math.max(8, (int) (Runtime.getRuntime().availableProcessors() * 0.25));
 
   public static final String ANGEL_MATRIXTRANSFER_SERVER_USE_ASYNC_HANDLER =
       ANGEL_PREFIX + "matrixtransfer.server.use.async.handler";
@@ -1408,6 +1257,9 @@ public class AngelConf extends Configuration {
 
   public static final String ANGEL_PS_USE_INDEPENDENT_WORKER_POOL = "angel.ps.use.independent.worker.pool";
   public static final boolean DEFAULT_ANGEL_PS_USE_INDEPENDENT_WORKER_POOL = true;
+
+  public static final String ANGEL_PS_USE_INDEPENDENT_SENDER_POOL = "angel.ps.use.independent.sender.pool";
+  public static final boolean DEFAULT_ANGEL_PS_USE_INDEPENDENT_SENDER_POOL = true;
 
 
   public static final String ANGEL_MATRIX_OPLOG_MERGER_POOL_SIZE =
@@ -1498,10 +1350,6 @@ public class AngelConf extends Configuration {
       ANGEL_PREFIX + "matrixtransfer.check.interval.ms";
   public static final int DEFAULT_ANGEL_MATRIXTRANSFER_CHECK_INTERVAL_MS = 100;
 
-  public static final String ANGEL_NETTY_MATRIXTRANSFER_SERVER_USE_STREAM_HANDLER =
-      "angel.netty.matrixtransfer.server.use.stream.handler";
-  public static final boolean DEFAULT_ANGEL_NETTY_MATRIXTRANSFER_SERVER_USE_STREAM_HANDLER = false;
-
   // //////////////////////////////
   // Matrix transfer Configs.
   // //////////////////////////////
@@ -1514,6 +1362,14 @@ public class AngelConf extends Configuration {
   public static final String ANGEL_PSAGENT_CACHE_SYNC_TIMEINTERVAL_MS =
       ANGEL_PSAGENT_PREFIX + "cache.sync.timeinterval.ms";
   public static final int DEFAULT_ANGEL_PSAGENT_CACHE_SYNC_TIMEINTERVAL_MS = 200;
+
+  /**
+   * The matrix caches synchronization policy
+   */
+  public static final String ANGEL_PSAGENT_CACHE_SYNC_POLICY_CLASS =
+      ANGEL_PSAGENT_PREFIX + "sync.policy.class";
+  public static final String DEFAULT_ANGEL_PSAGENT_CACHE_SYNC_POLICY_CLASS =
+      DefaultPolicy.class.getName();
 
   public static final String ANGEL_PSAGENT_TO_PS_HEARTBEAT_INTERVAL_MS =
       ANGEL_PSAGENT_PREFIX + "to.ps.heartbeat.interval.ms";
