@@ -55,8 +55,8 @@ public class GradientTreeBoostTest {
     }
 
 
-    @Test(expected = Test.None.class)
-    public void testWeather() throws Exception {
+    @Test
+    public void testWeather() {
         System.out.println("Weather");
 
         MathEx.setSeed(19650218); // to get repeatable results.
@@ -72,9 +72,6 @@ public class GradientTreeBoostTest {
 
         System.out.println("Error = " + error);
         assertEquals(6, error);
-
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
     }
 
     @Test

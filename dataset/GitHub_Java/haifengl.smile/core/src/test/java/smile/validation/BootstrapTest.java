@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.validation;
 
@@ -67,12 +67,12 @@ public class BootstrapTest {
                 hit[j] = false;
             }
 
-            int[] train = instance.splits[i].train;
+            int[] train = instance.train[i];
             for (int j = 0; j < train.length; j++) {
                 hit[train[j]] = true;
             }
 
-            int[] test = instance.splits[i].test;
+            int[] test = instance.test[i];
             for (int j = 0; j < test.length; j++) {
                 assertFalse(hit[test[j]]);
                 hit[test[j]] = true;
@@ -96,12 +96,12 @@ public class BootstrapTest {
         int[] trainhit = new int[n];
         int[] testhit = new int[n];
         for (int i = 0; i < k; i++) {
-            int[] train = instance.splits[i].train;
+            int[] train = instance.train[i];
             for (int j = 0; j < train.length; j++) {
                 trainhit[train[j]]++;
             }
 
-            int[] test = instance.splits[i].test;
+            int[] test = instance.test[i];
             for (int j = 0; j < test.length; j++) {
                 testhit[test[j]]++;
             }
@@ -120,19 +120,19 @@ public class BootstrapTest {
     public void testIris() {
         System.out.println("Iris");
 
-        ClassificationValidations<DecisionTree> result = Bootstrap.classification(100, Iris.formula, Iris.data, (f, x) -> DecisionTree.fit(f, x));
+        double[] error = Bootstrap.classification(100, Iris.formula, Iris.data, (f, x) -> DecisionTree.fit(f, x));
 
-        System.out.println("100-fold bootstrap accuracy average = " + result.avg.accuracy);
-        System.out.println("100-fold bootstrap accuracy std.dev = " + result.sd.accuracy);
+        System.out.println("100-fold bootstrap error rate average = " + MathEx.mean(error));
+        System.out.println("100-fold bootstrap error rate std.dev = " + MathEx.sd(error));
     }
 
     @Test
     public void testCPU() {
         System.out.println("CPU");
 
-        RegressionValidations<RegressionTree> result = Bootstrap.regression(100, CPU.formula, CPU.data, (f, x) -> RegressionTree.fit(f, x));
+        double[] rmse = Bootstrap.regression(100, CPU.formula, CPU.data, (f, x) -> RegressionTree.fit(f, x));
 
-        System.out.println("100-fold bootstrap RMSE average = " + result.avg.rmse);
-        System.out.println("100-fold bootstrap RMSE std.dev = " + result.sd.rmse);
+        System.out.println("100-fold bootstrap RMSE average = " + MathEx.mean(rmse));
+        System.out.println("100-fold bootstrap RMSE std.dev = " + MathEx.sd(rmse));
     }
 }

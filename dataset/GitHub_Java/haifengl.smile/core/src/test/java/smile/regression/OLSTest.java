@@ -57,8 +57,11 @@ public class OLSTest {
     public void tearDown() {
     }
 
-    @Test(expected = Test.None.class)
-    public void testLongley() throws Exception {
+    /**
+     * Test of learn method, of class LinearRegression.
+     */
+    @Test
+    public void testLongley() {
         System.out.println("longley");
 
         LinearModel model = OLS.fit(Longley.formula, Longley.data);
@@ -97,9 +100,6 @@ public class OLSTest {
         for (int i = 0; i < residuals.length; i++) {
             assertEquals(residuals[i], model.residuals()[i], 1E-4);
         }
-
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
     }
 
     /**
