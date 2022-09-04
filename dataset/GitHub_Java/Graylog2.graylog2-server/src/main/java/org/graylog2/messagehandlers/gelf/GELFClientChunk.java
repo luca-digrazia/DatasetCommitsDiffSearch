@@ -73,26 +73,6 @@ public class GELFClientChunk {
      *
      * @return
      */
-    public byte[] getRaw() {
-        return this.raw;
-    }
-
-    /**
-     *
-     * @param data
-     */
-    public void setRaw(byte[] raw, int length) {
-        // Datagram is filled up to total size. Slice down to the actual length.
-        byte[] slicedRaw = new byte[length];
-        System.arraycopy(raw, 0, slicedRaw, 0, length);
-
-        this.raw = slicedRaw;
-    }
-
-    /**
-     *
-     * @return
-     */
     public String getHash() {
         return hash;
     }
@@ -137,6 +117,14 @@ public class GELFClientChunk {
         this.sequenceNumber = sequenceNumber;
     }
 
+    public byte[] getRaw() {
+        return this.raw;
+    }
+
+    public void setRaw(byte[] raw) {
+        this.raw = raw;
+    }
+
     /**
      *
      * @return
@@ -176,7 +164,6 @@ public class GELFClientChunk {
         sb.append(this.arrival);
         sb.append("\tData size: ");
         sb.append(this.data.length);
-        sb.append("\n");
 
         return sb.toString();
     }

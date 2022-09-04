@@ -61,12 +61,12 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
         GELFHeader header = GELF.extractGELFHeader(clientMessage);
 
         GELFClientChunk chunk = new GELFClientChunk();
-        chunk.setRaw(clientMessage.getData(), clientMessage.getLength());
         chunk.setHash(header.getHash());
         chunk.setSequenceCount(header.getSequenceCount());
         chunk.setSequenceNumber(header.getSequenceNumber());
         chunk.setData(GELF.extractData(clientMessage));
         chunk.setArrival((int) (System.currentTimeMillis()/1000));
+        chunk.setRaw(clientMessage.getData());
 
         // Insert the chunk.
         ChunkedGELFMessage possiblyCompleteMessage = null;
@@ -77,8 +77,6 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
         } catch (ForeignGELFChunkException e) {
             throw new InvalidGELFHeaderException(e.toString());
         }
-
-        LOG.info("Got GELF message chunk: " + chunk.toString());
 
         // Catch the full message data if all chunks are complete.
         if (possiblyCompleteMessage != null) {
