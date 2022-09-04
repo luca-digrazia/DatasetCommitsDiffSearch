@@ -25,7 +25,6 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 
 import com.googlecode.androidannotations.annotations.ProgressChange;
-import com.googlecode.androidannotations.helper.CanonicalNameConstants;
 import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper.FallbackStrategy;
@@ -65,43 +64,43 @@ public class ProgressChangeValidator implements ElementValidator {
 		ExecutableElement executableElement = (ExecutableElement) element;
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		hasProgressChangeMethodParameters(executableElement, valid);
+		haveProgressChangeMethodParameters(executableElement, valid);
 
 		return valid.isValid();
 	}
 
-	private void hasProgressChangeMethodParameters(ExecutableElement executableElement, IsValid valid) {
+	private void haveProgressChangeMethodParameters(ExecutableElement executableElement, IsValid valid) {
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 		boolean seekBarParameterFound = false;
 		for (VariableElement parameter : parameters) {
 			String parameterType = parameter.asType().toString();
-			if (parameterType.equals(CanonicalNameConstants.SEEKBAR)) {
+			if (parameterType.equals("android.widget.SeekBar")) {
 				if (seekBarParameterFound) {
-					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. You can declare only one parameter of type " + CanonicalNameConstants.SEEKBAR);
+					annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter declaration. you can declare only one parameter of type android.widget.SeekBar");
 					valid.invalidate();
 				}
 				seekBarParameterFound = true;
 				continue;
 			}
-			if (parameter.asType().getKind() == TypeKind.INT || CanonicalNameConstants.INTEGER.equals(parameterType)) {
+			if (parameter.asType().getKind() == TypeKind.INT || "java.lang.Integer".equals(parameterType)) {
 				String parameterName = parameter.toString();
 				if ("progress".equals(parameterName)) {
 					continue;
 				}
-				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter name. The parameter name must be 'progress'.");
+				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter name. You parameter name must be 'progress'.");
 				valid.invalidate();
 				continue;
 			}
-			if (parameter.asType().getKind() == TypeKind.BOOLEAN || CanonicalNameConstants.BOOLEAN.equals(parameterType)) {
+			if (parameter.asType().getKind() == TypeKind.BOOLEAN || "java.lang.Boolean".equals(parameterType)) {
 				String parameterName = parameter.toString();
 				if ("fromUser".equals(parameterName)) {
 					continue;
 				}
-				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter name. The parameter name must be 'fromUser'.");
+				annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter name. You parameter name must be 'fromUser'.");
 				valid.invalidate();
 				continue;
 			}
-			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter '" + parameter.toString() + "'. %s signature should be " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR + " seekBar, int progress, boolean fromUser). The 'fromUser' and 'progress' parameters are optional.");
+			annotationHelper.printAnnotationError(executableElement, "Unrecognized parameter '" + parameter.toString() + "'. %s signature should be " + executableElement.getSimpleName() + "(SeekBar seekBar, int progress, boolean fromUser). The 'fromUser' and 'progress' parameters are optional.");
 			valid.invalidate();
 		}
 	}
