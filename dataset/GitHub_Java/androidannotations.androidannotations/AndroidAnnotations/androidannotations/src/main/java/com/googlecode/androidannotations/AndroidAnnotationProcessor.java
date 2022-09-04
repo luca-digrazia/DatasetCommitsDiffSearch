@@ -32,13 +32,15 @@ import javax.tools.Diagnostic;
 
 import com.googlecode.androidannotations.annotationprocessor.AnnotatedAbstractProcessor;
 import com.googlecode.androidannotations.annotationprocessor.SupportedAnnotationClasses;
-import com.googlecode.androidannotations.annotations.AfterInject;
 import com.googlecode.androidannotations.annotations.AfterViews;
 import com.googlecode.androidannotations.annotations.App;
 import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.BeforeCreate;
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.EActivity;
+import com.googlecode.androidannotations.annotations.EProvider;
+import com.googlecode.androidannotations.annotations.EReceiver;
+import com.googlecode.androidannotations.annotations.EService;
 import com.googlecode.androidannotations.annotations.EViewGroup;
 import com.googlecode.androidannotations.annotations.Enhanced;
 import com.googlecode.androidannotations.annotations.Extra;
@@ -99,13 +101,15 @@ import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.model.AnnotationElementsHolder;
 import com.googlecode.androidannotations.model.EmptyAnnotationElements;
 import com.googlecode.androidannotations.model.ModelExtractor;
-import com.googlecode.androidannotations.processing.AfterInjectProcessor;
 import com.googlecode.androidannotations.processing.AfterViewsProcessor;
 import com.googlecode.androidannotations.processing.AppProcessor;
 import com.googlecode.androidannotations.processing.BackgroundProcessor;
 import com.googlecode.androidannotations.processing.BeforeCreateProcessor;
 import com.googlecode.androidannotations.processing.ClickProcessor;
 import com.googlecode.androidannotations.processing.EActivityProcessor;
+import com.googlecode.androidannotations.processing.EProviderProcessor;
+import com.googlecode.androidannotations.processing.EReceiverProcessor;
+import com.googlecode.androidannotations.processing.EServiceProcessor;
 import com.googlecode.androidannotations.processing.EViewGroupProcessor;
 import com.googlecode.androidannotations.processing.EnhancedProcessor;
 import com.googlecode.androidannotations.processing.ExtraProcessor;
@@ -145,12 +149,14 @@ import com.googlecode.androidannotations.rclass.AndroidRClassFinder;
 import com.googlecode.androidannotations.rclass.CoumpoundRClass;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.ProjectRClassFinder;
-import com.googlecode.androidannotations.validation.AfterInjectValidator;
 import com.googlecode.androidannotations.validation.AfterViewsValidator;
 import com.googlecode.androidannotations.validation.AppValidator;
 import com.googlecode.androidannotations.validation.BeforeCreateValidator;
 import com.googlecode.androidannotations.validation.ClickValidator;
 import com.googlecode.androidannotations.validation.EActivityValidator;
+import com.googlecode.androidannotations.validation.EProviderValidator;
+import com.googlecode.androidannotations.validation.EReceiverValidator;
+import com.googlecode.androidannotations.validation.EServiceValidator;
 import com.googlecode.androidannotations.validation.EViewGroupValidator;
 import com.googlecode.androidannotations.validation.EnhancedValidator;
 import com.googlecode.androidannotations.validation.ExtraValidator;
@@ -242,7 +248,9 @@ import com.sun.codemodel.JCodeModel;
 		Enhanced.class, //
 		RootContext.class, //
 		Inject.class, //
-		AfterInject.class, //
+		EService.class, //
+		EReceiver.class, //
+		EProvider.class, //
 		Trace.class //
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
@@ -356,6 +364,9 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 	private ModelValidator buildModelValidator(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
 		ModelValidator modelValidator = new ModelValidator();
 		modelValidator.register(new EActivityValidator(processingEnv, rClass, androidManifest));
+		modelValidator.register(new EServiceValidator(processingEnv, androidManifest));
+		modelValidator.register(new EReceiverValidator(processingEnv, androidManifest));
+		modelValidator.register(new EProviderValidator(processingEnv, androidManifest));
 		modelValidator.register(new EViewGroupValidator(processingEnv, rClass));
 		modelValidator.register(new EnhancedValidator(processingEnv));
 		modelValidator.register(new RoboGuiceValidator(processingEnv));
@@ -393,7 +404,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new RestServiceValidator(processingEnv));
 		modelValidator.register(new RootContextValidator(processingEnv));
 		modelValidator.register(new InjectValidator(processingEnv));
-		modelValidator.register(new AfterInjectValidator(processingEnv));
 		if (traceActivated()) {
 			modelValidator.register(new TraceValidator(processingEnv));
 		}
@@ -424,6 +434,9 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
 		ModelProcessor modelProcessor = new ModelProcessor();
 		modelProcessor.register(new EActivityProcessor(processingEnv, rClass));
+		modelProcessor.register(new EServiceProcessor(processingEnv));
+		modelProcessor.register(new EReceiverProcessor(processingEnv));
+		modelProcessor.register(new EProviderProcessor(processingEnv));
 		modelProcessor.register(new EViewGroupProcessor(processingEnv, rClass));
 		modelProcessor.register(new EnhancedProcessor(processingEnv));
 		modelProcessor.register(new SharedPrefProcessor(processingEnv));
@@ -460,12 +473,11 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new FullscreenProcessor());
 		modelProcessor.register(new RestServiceProcessor());
 		modelProcessor.register(new RootContextProcessor());
-		modelProcessor.register(new InjectProcessor());
 		modelProcessor.register(new TraceProcessor());
+		modelProcessor.register(new InjectProcessor());
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new UiThreadDelayedProcessor());
 		modelProcessor.register(new BackgroundProcessor());
-		modelProcessor.register(new AfterInjectProcessor());
 		return modelProcessor;
 	}
 
