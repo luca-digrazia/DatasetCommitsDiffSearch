@@ -41,14 +41,7 @@ final class ProtoWorkerProtocol implements WorkerProtocolImpl {
 
   @Override
   public WorkResponse getResponse() throws IOException {
-    boolean interrupted = Thread.interrupted();
-    try {
-      return WorkResponse.parseDelimitedFrom(workersStdout);
-    } finally {
-      if (interrupted) {
-        Thread.currentThread().interrupt();
-      }
-    }
+    return WorkResponse.parseDelimitedFrom(workersStdout);
   }
 
   @Override
