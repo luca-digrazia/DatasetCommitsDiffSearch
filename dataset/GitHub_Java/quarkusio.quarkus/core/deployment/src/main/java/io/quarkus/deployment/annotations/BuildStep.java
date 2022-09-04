@@ -64,6 +64,20 @@ import io.quarkus.runtime.annotations.Recorder;
 public @interface BuildStep {
 
     /**
+     *
+     * A list of capabilities that are provided by this build step.
+     *
+     * This should not be used, {@link io.quarkus.deployment.builditem.CapabilityBuildItem} should just be produced
+     * directly instead.
+     *
+     * This method will be removed at some point post Quarkus 1.1.
+     *
+     * @return The capabilities provided by this build step
+     */
+    @Deprecated
+    String[] providesCapabilities() default {};
+
+    /**
      * Indicates that the provided file names should be considered to be application index markers.
      *
      * If these are present in library on the class path then the library will be indexed, and this index will be
@@ -92,8 +106,18 @@ public @interface BuildStep {
     Class<? extends BooleanSupplier>[] onlyIfNot() default {};
 
     /**
-     * This no longer has any effect, and will be removed in future.
+     * If this is set to true then the build step will be run with a TCCL that can load user
+     * classes from the deployment in a transformer safe way.
+     *
+     * This ClassLoader will only last for the life of the augmentation run, and then will be discarded,
+     * these classes will be loaded again in a different class loader on startup. This means that loading
+     * a class during augmentation does not stop it from being transformed when running in dev or test
+     * mode.
+     *
+     * The ClassLoader will be the one provided by {@link io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem},
+     * and an implicit dependency on this build item will be created.
+     *
+     * @return <code>true</code> if this build step wants to load deployment classes
      */
-    @Deprecated
     boolean loadsApplicationClasses() default false;
 }
