@@ -11,13 +11,14 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
 import org.jboss.resteasy.reactive.common.util.EmptyInputStream;
-import org.jboss.resteasy.reactive.server.providers.serialisers.json.AbstractJsonMessageBodyReader;
-import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
+import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
+import org.jboss.resteasy.reactive.server.spi.LazyMethod;
+import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveMessageBodyReader;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 
-public class JacksonMessageBodyReader extends AbstractJsonMessageBodyReader {
+public class JacksonMessageBodyReader implements ResteasyReactiveMessageBodyReader<Object> {
 
     private final ObjectReader reader;
 
@@ -27,13 +28,23 @@ public class JacksonMessageBodyReader extends AbstractJsonMessageBodyReader {
     }
 
     @Override
+    public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
+        return true;
+    }
+
+    @Override
     public Object readFrom(Class<Object> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException, WebApplicationException {
         return doReadFrom(type, genericType, entityStream);
     }
 
     @Override
-    public Object readFrom(Class<Object> type, Type genericType, MediaType mediaType, ServerRequestContext context)
+    public boolean isReadable(Class<?> type, Type genericType, LazyMethod lazyMethod, MediaType mediaType) {
+        return true;
+    }
+
+    @Override
+    public Object readFrom(Class<Object> type, Type genericType, MediaType mediaType, ResteasyReactiveRequestContext context)
             throws WebApplicationException, IOException {
         return doReadFrom(type, genericType, context.getInputStream());
     }

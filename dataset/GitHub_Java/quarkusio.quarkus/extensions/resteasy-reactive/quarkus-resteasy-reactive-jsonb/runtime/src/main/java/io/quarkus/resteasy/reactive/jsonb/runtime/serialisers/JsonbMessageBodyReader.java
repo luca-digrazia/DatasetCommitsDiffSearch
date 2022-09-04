@@ -12,11 +12,11 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
 import org.jboss.resteasy.reactive.common.util.EmptyInputStream;
-import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveResourceInfo;
-import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyReader;
-import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
+import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
+import org.jboss.resteasy.reactive.server.spi.LazyMethod;
+import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveMessageBodyReader;
 
-public class JsonbMessageBodyReader implements ServerMessageBodyReader<Object> {
+public class JsonbMessageBodyReader implements ResteasyReactiveMessageBodyReader<Object> {
 
     private final Jsonb json;
 
@@ -37,12 +37,12 @@ public class JsonbMessageBodyReader implements ServerMessageBodyReader<Object> {
     }
 
     @Override
-    public boolean isReadable(Class<?> type, Type genericType, ResteasyReactiveResourceInfo lazyMethod, MediaType mediaType) {
+    public boolean isReadable(Class<?> type, Type genericType, LazyMethod lazyMethod, MediaType mediaType) {
         return true;
     }
 
     @Override
-    public Object readFrom(Class<Object> type, Type genericType, MediaType mediaType, ServerRequestContext context)
+    public Object readFrom(Class<Object> type, Type genericType, MediaType mediaType, ResteasyReactiveRequestContext context)
             throws WebApplicationException, IOException {
         return doReadFrom(type, genericType, context.getInputStream());
     }
@@ -51,6 +51,7 @@ public class JsonbMessageBodyReader implements ServerMessageBodyReader<Object> {
         if (entityStream instanceof EmptyInputStream) {
             return null;
         }
-        return json.fromJson(entityStream, genericType != null ? genericType : type);
+        Type runtimeType = genericType != null ? genericType : type;
+        return json.fromJson(entityStream, runtimeType);
     }
 }
