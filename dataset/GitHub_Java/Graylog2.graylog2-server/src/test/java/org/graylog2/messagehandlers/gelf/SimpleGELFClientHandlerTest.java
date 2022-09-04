@@ -20,7 +20,11 @@
 
 package org.graylog2.messagehandlers.gelf;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.DatagramPacket;
+import java.util.zip.Deflater;
+import java.util.zip.GZIPOutputStream;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -38,8 +42,16 @@ public class SimpleGELFClientHandlerTest {
      */
     @Test
     public void testDecompressionWithZLIB() throws Exception {
+        // ZLIB compress message.
+        byte[] compressMe = this.originalMessage.getBytes();
+        byte[] compressedMessage = new byte[compressMe.length];
+        Deflater compressor = new Deflater();
+        compressor.setInput(compressMe);
+        compressor.finish();
+        compressor.deflate(compressedMessage);
+
         // Build a datagram packet.
-        DatagramPacket gelfMessage = GELFTestHelper.buildZLIBCompressedDatagramPacket(this.originalMessage);
+        DatagramPacket gelfMessage = new DatagramPacket(compressedMessage, compressedMessage.length);
 
         // Let the decompression take place.
         SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage, "foo");
@@ -52,8 +64,17 @@ public class SimpleGELFClientHandlerTest {
      */
     @Test
     public void testDecompressionWithGZIP() throws Exception {
+        // GZIP compress message.
+        ByteArrayInputStream compressMe = new ByteArrayInputStream(this.originalMessage.getBytes());
+        ByteArrayOutputStream compressedMessage = new ByteArrayOutputStream();
+        GZIPOutputStream out = new GZIPOutputStream(compressedMessage);
+        for (int c = compressMe.read(); c != -1; c = compressMe.read()) {
+            out.write(c);
+        }
+        out.close();
+
         // Build a datagram packet.
-        DatagramPacket gelfMessage = GELFTestHelper.buildGZIPCompressedDatagramPacket(this.originalMessage);
+        DatagramPacket gelfMessage = new DatagramPacket(compressedMessage.toByteArray(), compressedMessage.size());
 
         // Let the decompression take place.
         SimpleGELFClientHandler handler = new SimpleGELFClientHandler(gelfMessage, "foo");
