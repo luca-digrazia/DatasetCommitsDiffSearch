@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.TestAction;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -105,7 +104,7 @@ public class FilesystemValueCheckerTest {
         new AtomicReference<>(
             new PathPackageLocator(
                 fs.getPath("/output_base"),
-                ImmutableList.of(Root.fromPath(pkgRoot)),
+                ImmutableList.of(pkgRoot),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     BlazeDirectories directories =
         new BlazeDirectories(
@@ -158,9 +157,8 @@ public class FilesystemValueCheckerTest {
     FileSystemUtils.createEmptyFile(path);
     assertEmptyDiff(getDirtyFilesystemKeys(evaluator, checker));
 
-    SkyKey skyKey =
-        FileStateValue.key(
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/foo")));
+    SkyKey skyKey = FileStateValue.key(
+        RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo")));
     EvaluationResult<SkyValue> result =
         driver.evaluate(
             ImmutableList.of(skyKey),
@@ -211,13 +209,13 @@ public class FilesystemValueCheckerTest {
     FileSystemUtils.ensureSymbolicLink(sym1, path);
     FileSystemUtils.ensureSymbolicLink(sym2, path);
     SkyKey fooKey =
-        FileValue.key(RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/foo")));
+        FileValue.key(RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo")));
     RootedPath symlinkRootedPath =
-        RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/bar"));
+        RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("bar"));
     SkyKey symlinkKey = FileValue.key(symlinkRootedPath);
     SkyKey symlinkFileStateKey = FileStateValue.key(symlinkRootedPath);
     RootedPath sym1RootedPath =
-        RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/sym1"));
+        RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("sym1"));
     SkyKey sym1FileStateKey = FileStateValue.key(sym1RootedPath);
     Iterable<SkyKey> allKeys = ImmutableList.of(symlinkKey, fooKey);
 
@@ -279,10 +277,10 @@ public class FilesystemValueCheckerTest {
 
     SkyKey key1 =
         FileStateValue.key(
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/foo1")));
+            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo1")));
     SkyKey key2 =
         FileStateValue.key(
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/foo2")));
+            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("foo2")));
     Iterable<SkyKey> skyKeys = ImmutableList.of(key1, key2);
     EvaluationResult<SkyValue> result =
         driver.evaluate(
@@ -312,9 +310,8 @@ public class FilesystemValueCheckerTest {
     path.createSymbolicLink(PathFragment.create("bar"));
 
     fs.readlinkThrowsIoException = true;
-    SkyKey fileKey =
-        FileStateValue.key(
-            RootedPath.toRootedPath(Root.fromPath(pkgRoot), PathFragment.create("foo")));
+    SkyKey fileKey = FileStateValue.key(
+        RootedPath.toRootedPath(pkgRoot, PathFragment.create("foo")));
     EvaluationResult<SkyValue> result =
         driver.evaluate(
             ImmutableList.of(fileKey),
@@ -338,7 +335,7 @@ public class FilesystemValueCheckerTest {
     FileSystemUtils.ensureSymbolicLink(path1, path2);
     FileSystemUtils.ensureSymbolicLink(path2, path3);
     FileSystemUtils.ensureSymbolicLink(path3, path1);
-    SkyKey fileKey1 = FileValue.key(RootedPath.toRootedPath(Root.fromPath(pkgRoot), path1));
+    SkyKey fileKey1 = FileValue.key(RootedPath.toRootedPath(pkgRoot, path1));
 
     EvaluationResult<SkyValue> result =
         driver.evaluate(
@@ -611,20 +608,17 @@ public class FilesystemValueCheckerTest {
     Path outputPath = fs.getPath("/bin");
     outputPath.createDirectory();
     return new Artifact(
-        outputPath.getRelative(relPath), ArtifactRoot.asDerivedRoot(fs.getPath("/"), outputPath));
+        outputPath.getRelative(relPath), Root.asDerivedRoot(fs.getPath("/"), outputPath));
   }
 
   private Artifact createTreeArtifact(String relPath) throws IOException {
     Path outputDir = fs.getPath("/bin");
     Path outputPath = outputDir.getRelative(relPath);
     outputDir.createDirectory();
-    ArtifactRoot derivedRoot = ArtifactRoot.asDerivedRoot(fs.getPath("/"), outputDir);
-    return new SpecialArtifact(
-        outputPath,
-        derivedRoot,
-        derivedRoot.getExecPath().getRelative(derivedRoot.getRoot().relativize(outputPath)),
-        ArtifactOwner.NULL_OWNER,
-        SpecialArtifactType.TREE);
+    Root derivedRoot = Root.asDerivedRoot(fs.getPath("/"), outputDir);
+    return new SpecialArtifact(outputPath, derivedRoot,
+        derivedRoot.getExecPath().getRelative(outputPath.relativeTo(derivedRoot.getPath())),
+        ArtifactOwner.NULL_OWNER, SpecialArtifactType.TREE);
   }
 
   @Test
@@ -773,10 +767,8 @@ public class FilesystemValueCheckerTest {
 
   @Test
   public void testPropagatesRuntimeExceptions() throws Exception {
-    Collection<SkyKey> values =
-        ImmutableList.of(
-            FileValue.key(
-                RootedPath.toRootedPath(Root.fromPath(pkgRoot), PathFragment.create("foo"))));
+    Collection<SkyKey> values = ImmutableList.of(
+        FileValue.key(RootedPath.toRootedPath(pkgRoot, PathFragment.create("foo"))));
     driver.evaluate(
         values, false, SkyframeExecutor.DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
     FilesystemValueChecker checker = new FilesystemValueChecker(null, null);

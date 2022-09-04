@@ -21,11 +21,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.skyframe.DiffAwarenessManager.ProcessableModifiedFileSet;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.OptionsClassProvider;
 import java.util.List;
@@ -47,7 +46,7 @@ public class DiffAwarenessManagerTest {
 
   @Before
   public final void createFileSystem() throws Exception  {
-    fs = new InMemoryFileSystem(DigestHashFunction.MD5);
+    fs = new InMemoryFileSystem();
   }
 
   @Before
@@ -58,7 +57,7 @@ public class DiffAwarenessManagerTest {
 
   @Test
   public void testEverythingModifiedIfNoDiffAwareness() throws Exception {
-    Root pathEntry = Root.fromPath(fs.getPath("/pathEntry"));
+    Path pathEntry = fs.getPath("/pathEntry");
     DiffAwarenessFactoryStub factory = new DiffAwarenessFactoryStub();
     DiffAwarenessManager manager = new DiffAwarenessManager(ImmutableList.of(factory));
     assertWithMessage("Expected EVERYTHING_MODIFIED since there are no factories")
@@ -72,7 +71,7 @@ public class DiffAwarenessManagerTest {
 
   @Test
   public void testResetAndSetPathEntriesCallClose() throws Exception {
-    Root pathEntry = Root.fromPath(fs.getPath("/pathEntry"));
+    Path pathEntry = fs.getPath("/pathEntry");
     ModifiedFileSet diff = ModifiedFileSet.NOTHING_MODIFIED;
     DiffAwarenessStub diffAwareness1 = new DiffAwarenessStub(ImmutableList.of(diff));
     DiffAwarenessStub diffAwareness2 = new DiffAwarenessStub(ImmutableList.of(diff));
@@ -97,7 +96,7 @@ public class DiffAwarenessManagerTest {
 
   @Test
   public void testHandlesUnprocessedDiffs() throws Exception {
-    Root pathEntry = Root.fromPath(fs.getPath("/pathEntry"));
+    Path pathEntry = fs.getPath("/pathEntry");
     ModifiedFileSet diff1 = ModifiedFileSet.builder().modify(PathFragment.create("file1")).build();
     ModifiedFileSet diff2 = ModifiedFileSet.builder().modify(PathFragment.create("file2")).build();
     ModifiedFileSet diff3 = ModifiedFileSet.builder().modify(PathFragment.create("file3")).build();
@@ -133,7 +132,7 @@ public class DiffAwarenessManagerTest {
 
   @Test
   public void testHandlesBrokenDiffs() throws Exception {
-    Root pathEntry = Root.fromPath(fs.getPath("/pathEntry"));
+    Path pathEntry = fs.getPath("/pathEntry");
     DiffAwarenessFactoryStub factory1 = new DiffAwarenessFactoryStub();
     DiffAwarenessStub diffAwareness1 =
         new DiffAwarenessStub(ImmutableList.<ModifiedFileSet>of(), 1);
@@ -197,19 +196,19 @@ public class DiffAwarenessManagerTest {
 
   private static class DiffAwarenessFactoryStub implements DiffAwareness.Factory {
 
-    private final Map<Root, DiffAwareness> diffAwarenesses = Maps.newHashMap();
+    private Map<Path, DiffAwareness> diffAwarenesses = Maps.newHashMap();
 
-    public void inject(Root pathEntry, DiffAwareness diffAwareness) {
+    public void inject(Path pathEntry, DiffAwareness diffAwareness) {
       diffAwarenesses.put(pathEntry, diffAwareness);
     }
 
-    public void remove(Root pathEntry) {
+    public void remove(Path pathEntry) {
       diffAwarenesses.remove(pathEntry);
     }
 
     @Override
     @Nullable
-    public DiffAwareness maybeCreate(Root pathEntry) {
+    public DiffAwareness maybeCreate(Path pathEntry) {
       return diffAwarenesses.get(pathEntry);
     }
   }

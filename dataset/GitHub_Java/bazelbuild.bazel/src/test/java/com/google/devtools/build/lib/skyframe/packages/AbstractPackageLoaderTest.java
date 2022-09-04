@@ -37,26 +37,28 @@ import org.junit.Test;
 
 /** Abstract base class of a unit test for a {@link AbstractPackageLoader} implementation. */
 public abstract class AbstractPackageLoaderTest {
-  protected Path workspaceDir;
+  private Path pkgRoot;
   protected StoredEventHandler handler;
-  protected FileSystem fs;
-  private Reporter reporter;
+  protected PackageLoader pkgLoader;
 
   @Before
   public final void init() throws Exception {
-    fs = new InMemoryFileSystem();
-    workspaceDir = fs.getPath("/workspace/");
-    workspaceDir.createDirectoryAndParents();
-    reporter = new Reporter(new EventBus());
+    FileSystem fs = new InMemoryFileSystem();
+    pkgRoot = fs.getPath("/").getRelative("pkgRoot");
+    FileSystemUtils.createDirectoryAndParents(pkgRoot);
+    Reporter reporter = new Reporter(new EventBus());
     handler = new StoredEventHandler();
     reporter.addHandler(handler);
+    pkgLoader = makeFreshBuilder(pkgRoot)
+        .useDefaultSkylarkSemantics()
+        .setReporter(reporter)
+        .build();
   }
 
-  protected abstract AbstractPackageLoader.Builder newPackageLoaderBuilder(Path workspaceDir);
+  protected abstract AbstractPackageLoader.Builder makeFreshBuilder(Path pkgRoot);
 
   @Test
   public void simpleNoPackage() throws Exception {
-    PackageLoader pkgLoader = newPackageLoader();
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("nope"));
     try {
       pkgLoader.loadPackage(pkgId);
@@ -71,7 +73,6 @@ public abstract class AbstractPackageLoaderTest {
 
   @Test
   public void simpleBadPackage() throws Exception {
-    PackageLoader pkgLoader = newPackageLoader();
     file("bad/BUILD", "invalidBUILDsyntax");
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("bad"));
     Package badPkg = pkgLoader.loadPackage(pkgId);
@@ -82,20 +83,18 @@ public abstract class AbstractPackageLoaderTest {
 
   @Test
   public void simpleGoodPackage() throws Exception {
-    PackageLoader pkgLoader = newPackageLoader();
     file("good/BUILD", "sh_library(name = 'good')");
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("good"));
     Package goodPkg = pkgLoader.loadPackage(pkgId);
     assertThat(goodPkg.containsErrors()).isFalse();
-    assertThat(goodPkg.getTarget("good").getAssociatedRule().getRuleClass())
-        .isEqualTo("sh_library");
+    assertThat(
+        goodPkg.getTarget("good").getAssociatedRule().getRuleClass()).isEqualTo("sh_library");
     assertNoEvents(goodPkg.getEvents());
     assertNoEvents(handler.getEvents());
   }
 
   @Test
   public void simpleMultipleGoodPackage() throws Exception {
-    PackageLoader pkgLoader = newPackageLoader();
     file("good1/BUILD", "sh_library(name = 'good1')");
     file("good2/BUILD", "sh_library(name = 'good2')");
     PackageIdentifier pkgId1 = PackageIdentifier.createInMainRepo(PathFragment.create("good1"));
@@ -115,7 +114,6 @@ public abstract class AbstractPackageLoaderTest {
 
   @Test
   public void loadPackagesToleratesDuplicates() throws Exception {
-    PackageLoader pkgLoader = newPackageLoader();
     file("good1/BUILD", "sh_library(name = 'good1')");
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("good1"));
     ImmutableMap<PackageIdentifier, PackageLoader.PackageOrException> pkgs =
@@ -129,33 +127,29 @@ public abstract class AbstractPackageLoaderTest {
 
   @Test
   public void simpleGoodPackage_Skylark() throws Exception {
-    PackageLoader pkgLoader = newPackageLoader();
-    file("good/good.bzl", "def f(x):", "  native.sh_library(name = x)");
-    file("good/BUILD", "load('//good:good.bzl', 'f')", "f('good')");
+    file("good/good.bzl",
+        "def f(x):",
+        "  native.sh_library(name = x)");
+    file("good/BUILD",
+        "load('//good:good.bzl', 'f')",
+        "f('good')");
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("good"));
     Package goodPkg = pkgLoader.loadPackage(pkgId);
     assertThat(goodPkg.containsErrors()).isFalse();
-    assertThat(goodPkg.getTarget("good").getAssociatedRule().getRuleClass())
-        .isEqualTo("sh_library");
+    assertThat(
+        goodPkg.getTarget("good").getAssociatedRule().getRuleClass()).isEqualTo("sh_library");
     assertNoEvents(goodPkg.getEvents());
     assertNoEvents(handler.getEvents());
   }
 
   protected Path path(String rootRelativePath) {
-    return workspaceDir.getRelative(PathFragment.create(rootRelativePath));
+    return pkgRoot.getRelative(PathFragment.create(rootRelativePath));
   }
 
   protected Path file(String fileName, String... contents) throws Exception {
     Path path = path(fileName);
-    path.getParentDirectory().createDirectoryAndParents();
+    FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
     FileSystemUtils.writeContentAsLatin1(path, Joiner.on("\n").join(contents));
     return path;
-  }
-
-  protected PackageLoader newPackageLoader() {
-    return newPackageLoaderBuilder(workspaceDir)
-        .useDefaultSkylarkSemantics()
-        .setReporter(reporter)
-        .build();
   }
 }

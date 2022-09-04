@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.packages.Globber.BadGlobException;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -110,7 +111,7 @@ public class GlobCacheTest {
 
   @After
   public final void deleteFiles() throws Exception  {
-    scratch.getFileSystem().getPath("/").deleteTreesBelow();
+    FileSystemUtils.deleteTreesBelow(scratch.getFileSystem().getPath("/"));
   }
 
   @Test
