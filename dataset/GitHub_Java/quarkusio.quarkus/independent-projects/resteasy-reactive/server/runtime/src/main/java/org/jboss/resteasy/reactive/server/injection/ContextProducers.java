@@ -19,7 +19,6 @@ import org.jboss.resteasy.reactive.server.core.CurrentRequestManager;
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
 import org.jboss.resteasy.reactive.server.jaxrs.ResourceContextImpl;
 import org.jboss.resteasy.reactive.server.jaxrs.SseImpl;
-import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
 
 /**
@@ -87,25 +86,13 @@ public class ContextProducers {
     @RequestScoped
     @Produces
     ResourceInfo resourceInfo() {
-        RuntimeResource target = getTarget();
-        if (target != null) {
-            return target.getLazyMethod();
-        }
-        return SimpleResourceInfo.NullValues.INSTANCE;
+        return getContext().getTarget().getLazyMethod();
     }
 
     @RequestScoped
     @Produces
     SimpleResourceInfo simplifiedResourceInfo() {
-        RuntimeResource target = getTarget();
-        if (target != null) {
-            return target.getSimplifiedResourceInfo();
-        }
-        return SimpleResourceInfo.NullValues.INSTANCE;
-    }
-
-    private RuntimeResource getTarget() {
-        return getContext().getTarget();
+        return getContext().getTarget().getSimplifiedResourceInfo();
     }
 
     @ApplicationScoped
