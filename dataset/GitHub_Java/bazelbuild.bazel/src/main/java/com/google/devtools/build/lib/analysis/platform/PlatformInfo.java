@@ -29,9 +29,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -52,9 +49,7 @@ import javax.annotation.Nullable;
   category = SkylarkModuleCategory.PROVIDER
 )
 @Immutable
-@AutoCodec
 public class PlatformInfo extends NativeInfo {
-  public static final ObjectCodec<PlatformInfo> CODEC = new PlatformInfo_AutoCodec();
 
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "PlatformInfo";
@@ -104,33 +99,27 @@ public class PlatformInfo extends NativeInfo {
   private final ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints;
   private final String remoteExecutionProperties;
 
-  @AutoCodec.Instantiator
-  @VisibleForSerialization
-  PlatformInfo(
-      Label label,
-      ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints,
-      String remoteExecutionProperties,
-      Location location) {
-    super(
-        SKYLARK_CONSTRUCTOR,
-        location);
-
-    this.label = label;
-    this.constraints = constraints;
-    this.remoteExecutionProperties = remoteExecutionProperties;
-  }
-
-  static PlatformInfo create(
+  private PlatformInfo(
       Label label,
       ImmutableList<ConstraintValueInfo> constraints,
       String remoteExecutionProperties,
       Location location) {
+    super(
+        SKYLARK_CONSTRUCTOR,
+        ImmutableMap.<String, Object>of(
+            "label", label,
+            "constraints", constraints),
+        location);
+
+    this.label = label;
+    this.remoteExecutionProperties = remoteExecutionProperties;
+
     ImmutableMap.Builder<ConstraintSettingInfo, ConstraintValueInfo> constraintsBuilder =
         new ImmutableMap.Builder<>();
     for (ConstraintValueInfo constraint : constraints) {
       constraintsBuilder.put(constraint.constraint(), constraint);
     }
-    return new PlatformInfo(label, constraintsBuilder.build(), remoteExecutionProperties, location);
+    this.constraints = constraintsBuilder.build();
   }
 
   @SkylarkCallable(
@@ -150,7 +139,7 @@ public class PlatformInfo extends NativeInfo {
     structField = true
   )
   public Iterable<ConstraintValueInfo> constraints() {
-    return constraints.values().asList();
+    return constraints.values();
   }
 
   /**
@@ -219,11 +208,6 @@ public class PlatformInfo extends NativeInfo {
       return this;
     }
 
-    /** Returns the data being sent to a potential remote executor. */
-    public String getRemoteExecutionProperties() {
-      return remoteExecutionProperties;
-    }
-
     /**
      * Sets the data being sent to a potential remote executor.
      *
@@ -254,7 +238,7 @@ public class PlatformInfo extends NativeInfo {
      */
     public PlatformInfo build() throws DuplicateConstraintException {
       ImmutableList<ConstraintValueInfo> validatedConstraints = validateConstraints(constraints);
-      return PlatformInfo.create(label, validatedConstraints, remoteExecutionProperties, location);
+      return new PlatformInfo(label, validatedConstraints, remoteExecutionProperties, location);
     }
 
     public static ImmutableList<ConstraintValueInfo> validateConstraints(

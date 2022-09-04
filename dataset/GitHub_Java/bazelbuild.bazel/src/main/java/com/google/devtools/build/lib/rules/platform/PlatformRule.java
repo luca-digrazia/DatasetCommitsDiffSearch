@@ -105,10 +105,10 @@ public class PlatformRule implements RuleDefinition {
 constraint_setting(name="cpu")
 constraint_value(
     name="arm64",
-    constraint_setting=":cpu")
+    constraint=":cpu")
 constraint_value(
     name="k8",
-    constraint_setting=":cpu")
+    constraint=":cpu")
 platform(
     name="mobile_device",
     constraint_values = [
