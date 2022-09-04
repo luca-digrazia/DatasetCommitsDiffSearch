@@ -311,8 +311,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     this.actionEnv = actionEnvironment;
     this.testEnv = setupTestEnvironment();
     this.transitiveOptionDetails =
-        TransitiveOptionDetails.forOptions(
-            buildOptions.getNativeOptions(), buildOptions.getStarlarkOptions());
+        TransitiveOptionDetails.forOptions(buildOptions.getNativeOptions());
 
     ImmutableMap.Builder<String, String> globalMakeEnvBuilder = ImmutableMap.builder();
 
