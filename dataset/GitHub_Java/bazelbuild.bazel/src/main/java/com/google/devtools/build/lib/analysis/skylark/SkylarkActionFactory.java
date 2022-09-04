@@ -22,9 +22,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -102,31 +100,6 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
         : ruleContext.getBinOrGenfilesDirectory();
   }
 
-  /**
-   * Returns a {@link ActionRegistry} object to register actions using this action factory.
-   *
-   * @throws EvalException if actions cannot be registered with this object
-   */
-  public ActionRegistry asActionRegistry(
-      final Location location, SkylarkActionFactory skylarkActionFactory) throws EvalException {
-    validateActionCreation(location);
-    return new ActionRegistry() {
-
-      @Override
-      public void registerAction(ActionAnalysisMetadata... actions) {
-        ruleContext.registerAction(actions);
-      }
-
-      @Override
-      public ArtifactOwner getOwner() {
-        return skylarkActionFactory
-            .getActionConstructionContext()
-            .getAnalysisEnvironment()
-            .getOwner();
-      }
-    };
-  }
-
   @Override
   public Artifact declareFile(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_file");
@@ -161,7 +134,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   @Override
-  public void doNothing(String mnemonic, Object inputs, Location location) throws EvalException {
+  public void doNothing(String mnemonic, Object inputs) throws EvalException {
     context.checkMutable("actions.do_nothing");
     NestedSet<Artifact> inputSet = inputs instanceof SkylarkNestedSet
         ? ((SkylarkNestedSet) inputs).getSet(Artifact.class)
@@ -179,7 +152,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
             mnemonic,
             SPAWN_INFO,
             SpawnInfo.newBuilder().build());
-    registerAction(location, action);
+    ruleContext.registerAction(action);
   }
 
   @AutoCodec @AutoCodec.VisibleForSerialization
@@ -187,8 +160,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       SpawnInfo.spawnInfo;
 
   @Override
-  public void write(FileApi output, Object content, Boolean isExecutable, Location location)
-      throws EvalException {
+  public void write(FileApi output, Object content, Boolean isExecutable) throws EvalException {
     context.checkMutable("actions.write");
     final Action action;
     if (content instanceof String) {
@@ -209,7 +181,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     } else {
       throw new AssertionError("Unexpected type: " + content.getClass().getSimpleName());
     }
-    registerAction(location, action);
+    ruleContext.registerAction(action);
   }
 
   @Override
@@ -264,31 +236,19 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
         builder);
   }
 
-  private void validateActionCreation(Location location) throws EvalException {
-    if (ruleContext.getRule().isAnalysisTest()) {
-      throw new EvalException(
-          location,
-          "implementation function of a rule with "
-              + "analysis_test=true may not register actions. Analysis test rules may only return "
-              + "success/failure information via AnalysisTestResultInfo.");
-    }
-  }
-
   /**
    * Registers actions in the context of this {@link SkylarkActionFactory}.
    *
-   * <p>Use {@link #getActionConstructionContext()} to obtain the context required to create those
-   * actions.
+   * Use {@link #getActionConstructionContext()} to obtain the context required to
+   * create those actions.
    */
-  public void registerAction(Location location, ActionAnalysisMetadata... actions)
-      throws EvalException {
-    validateActionCreation(location);
+  public void registerAction(ActionAnalysisMetadata... actions) {
     ruleContext.registerAction(actions);
   }
 
   /**
-   * Returns information needed to construct actions that can be registered with {@link
-   * #registerAction(Location, ActionAnalysisMetadata...)}.
+   * Returns information needed to construct actions that can be
+   * registered with {@link #registerAction(ActionAnalysisMetadata...)}.
    */
   public ActionConstructionContext getActionConstructionContext() {
     return ruleContext;
@@ -527,7 +487,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       }
     }
     // Always register the action
-    registerAction(location, builder.build(ruleContext));
+    ruleContext.registerAction(builder.build(ruleContext));
   }
 
   private String getMnemonic(Object mnemonicUnchecked) {
@@ -548,8 +508,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       FileApi template,
       FileApi output,
       SkylarkDict<?, ?> substitutionsUnchecked,
-      Boolean executable,
-      Location location)
+      Boolean executable)
       throws EvalException {
     context.checkMutable("actions.expand_template");
     ImmutableList.Builder<Substitution> substitutionsBuilder = ImmutableList.builder();
@@ -572,7 +531,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
             (Artifact) output,
             substitutionsBuilder.build(),
             executable);
-    registerAction(location, action);
+    ruleContext.registerAction(action);
   }
 
   /**

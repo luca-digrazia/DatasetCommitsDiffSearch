@@ -402,8 +402,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           "Error, we're not re-executing a "
               + "SkyframeAwareAction which should be re-executed unconditionally. Action: %s",
           action);
-      return ActionExecutionValue.createFromOutputStore(
-          metadataHandler.getOutputStore(),
+      return ActionExecutionValue.create(
+          metadataHandler.getOutputArtifactData(),
+          metadataHandler.getOutputTreeArtifactData(),
+          metadataHandler.getAdditionalOutputData(),
           /*outputSymlinks=*/ null,
           (action instanceof IncludeScannable)
               ? ((IncludeScannable) action).getDiscoveredModules()
@@ -838,7 +840,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         throws IOException {
       if (actionFileSystem != null) {
         executor.updateActionFileSystemContext(
-            actionFileSystem, env, metadataHandler.getOutputStore()::injectOutputData, filesets);
+            actionFileSystem, env, metadataHandler::injectOutputData, filesets);
       }
     }
 

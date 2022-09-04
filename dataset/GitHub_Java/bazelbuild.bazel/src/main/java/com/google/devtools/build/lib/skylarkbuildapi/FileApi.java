@@ -18,26 +18,27 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 
-/** The interface for files in Starlark. */
+/**
+ * The interface for files in Skylark.
+ */
 @SkylarkModule(
-    name = "File",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc =
-        "This object is created during the analysis phase to represent a file or directory that "
-            + "will be read or written during the execution phase. It is not an open file"
-            + " handle, "
-            + "and cannot be used to directly read or write file contents. Rather, you use it to "
-            + "construct the action graph in a rule implementation function by passing it to "
-            + "action-creating functions. See the "
-            + "<a href='../rules.$DOC_EXT#files'>Rules page</a> for more information."
-            + "" // curse google-java-format b/145078219
-            + "<p>When a <code>File</code> is passed to an <a"
-            + " href='Args.html'><code>Args</code></a> object without using a"
-            + " <code>map_each</code> function, it is converted to a string by taking the value of"
-            + " its <code>path</code> field.")
-public interface FileApi extends StarlarkValue {
+  name = "File",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "This object is created during the analysis phase to represent a file or directory that "
+          + "will be read or written during the execution phase. It is not an open file handle, "
+          + "and cannot be used to directly read or write file contents. Rather, you use it to "
+          + "construct the action graph in a rule implementation function by passing it to "
+          + "action-creating functions. See the "
+          + "<a href='../rules.$DOC_EXT#files'>Rules page</a> for more information."
+          + ""
+          + "<p>When a <code>File</code> is passed to an <a href='Args.html'><code>Args</code></a> "
+          + "object without using a <code>map_each</code> function, it is converted to a string by "
+          + "taking the value of its <code>path</code> field."
+)
+public interface FileApi extends SkylarkValue {
 
   @SkylarkCallable(
       name = "dirname",
@@ -75,7 +76,7 @@ public interface FileApi extends StarlarkValue {
       doc = "Returns true if this is a source file, i.e. it is not generated.")
   boolean isSourceArtifact();
 
-  // TODO(rduan): Document this Starlark method once TreeArtifact is no longer experimental.
+  // TODO(rduan): Document this Skylark method once TreeArtifact is no longer experimental.
   @SkylarkCallable(name = "is_directory", structField = true, documented = false)
   boolean isDirectory();
 
@@ -86,7 +87,7 @@ public interface FileApi extends StarlarkValue {
           "The path of this file relative to its root. This excludes the aforementioned "
               + "<i>root</i>, i.e. configuration-specific fragments of the path. This is also the "
               + "path under which the file is mapped if it's in the runfiles of a binary.")
-  String getShortPathString();
+  String getRunfilesPathString();
 
   @SkylarkCallable(
       name = "path",
