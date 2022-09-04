@@ -7,7 +7,6 @@ import io.quarkus.datasource.runtime.LegacyDataSourcesRuntimeConfig;
 import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
-@SuppressWarnings("deprecation")
 public class AgroalRecorder {
 
     public void configureDatasources(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
