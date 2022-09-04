@@ -16,7 +16,6 @@ import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
 import javax.json.bind.JsonbConfig;
 import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.Consumes;
 import javax.ws.rs.CookieParam;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
@@ -79,13 +78,6 @@ public class TestResource {
     }
 
     @GET
-    @Path("/config/names")
-    @Produces("application/json")
-    public String configNames() {
-        return String.join(",", config.names());
-    }
-
-    @GET
     @Path("/count")
     public int count() {
         return count.incrementAndGet();
@@ -130,14 +122,6 @@ public class TestResource {
         XmlObject xmlObject = new XmlObject();
         xmlObject.setValue("A Value");
         return xmlObject;
-    }
-
-    @POST
-    @Consumes("application/xml")
-    @Produces("text/plain")
-    @Path("/consumeXml")
-    public String consumeXml(XmlObject xmlObject) {
-        return xmlObject.getValue();
     }
 
     @GET
@@ -270,18 +254,17 @@ public class TestResource {
     @GET
     @Path("/from-json")
     @Produces("application/json")
-    public MyEntity fromJson() throws Exception {
+    public MyEntity fromJson() {
         MyEntity entity = new MyEntity();
         entity.name = "my entity name";
         entity.value = "my entity value";
 
         JsonbConfig config = new JsonbConfig();
-        try (Jsonb jsonb = JsonbBuilder.create(config)) {
-            String json = jsonb.toJson(entity);
-            MyEntity fromJsonEntity = jsonb.fromJson(json, MyEntity.class);
+        Jsonb jsonb = JsonbBuilder.create(config);
+        String json = jsonb.toJson(entity);
+        MyEntity fromJsonEntity = jsonb.fromJson(json, MyEntity.class);
 
-            return fromJsonEntity;
-        }
+        return fromJsonEntity;
     }
 
     @GET

@@ -54,12 +54,12 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor.ResteasyCommonConfig;
 import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
@@ -136,8 +136,8 @@ public class ResteasyServerCommonProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem config() {
-        return NativeImageConfigBuildItem.builder()
+    SubstrateConfigBuildItem config() {
+        return SubstrateConfigBuildItem.builder()
                 .addResourceBundle("messages")
                 .build();
     }
@@ -146,8 +146,8 @@ public class ResteasyServerCommonProcessor {
     public void build(
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
-            BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition,
-            BuildProducer<NativeImageResourceBuildItem> resource,
+            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
+            BuildProducer<SubstrateResourceBuildItem> resource,
             BuildProducer<RuntimeInitializedClassBuildItem> runtimeClasses,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ResteasyServerConfigBuildItem> resteasyServerConfig,
@@ -158,13 +158,12 @@ public class ResteasyServerCommonProcessor {
             List<AdditionalJaxRsResourceDefiningAnnotationBuildItem> additionalJaxRsResourceDefiningAnnotations,
             List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations,
             List<AdditionalJaxRsResourceMethodParamAnnotations> additionalJaxRsResourceMethodParamAnnotations,
-            List<ResteasyDeploymentCustomizerBuildItem> deploymentCustomizers,
             JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem,
             CombinedIndexBuildItem combinedIndexBuildItem,
             BeanArchiveIndexBuildItem beanArchiveIndexBuildItem) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
 
-        resource.produce(new NativeImageResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
+        resource.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
 
         Collection<AnnotationInstance> applicationPaths = index.getAnnotations(ResteasyDotNames.APPLICATION_PATH);
 
@@ -277,11 +276,6 @@ public class ResteasyServerCommonProcessor {
         }
         resteasyInitParameters.put("resteasy.injector.factory", QuarkusInjectorFactory.class.getName());
         deployment.setInjectorFactoryClass(QuarkusInjectorFactory.class.getName());
-
-        // apply all customizers
-        for (ResteasyDeploymentCustomizerBuildItem deploymentCustomizer : deploymentCustomizers) {
-            deploymentCustomizer.getConsumer().accept(deployment);
-        }
 
         if (commonConfig.gzip.enabled) {
             resteasyInitParameters.put(ResteasyContextParameters.RESTEASY_GZIP_MAX_INPUT,
@@ -610,7 +604,7 @@ public class ResteasyServerCommonProcessor {
     }
 
     private static void registerContextProxyDefinitions(IndexView index,
-            BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition) {
+            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition) {
         // @Context uses proxies for interface injection
         for (AnnotationInstance annotation : index.getAnnotations(ResteasyDotNames.CONTEXT)) {
             DotName typeName = null;
@@ -629,14 +623,14 @@ public class ResteasyServerCommonProcessor {
                 ClassInfo type = index.getClassByName(typeName);
                 if (type != null) {
                     if (Modifier.isInterface(type.flags())) {
-                        proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(type.toString()));
+                        proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(type.toString()));
                     }
                 } else {
                     //might be a framework class, which should be loadable
                     try {
                         Class<?> typeClass = Class.forName(typeName.toString());
                         if (typeClass.isInterface()) {
-                            proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem(typeName.toString()));
+                            proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(typeName.toString()));
                         }
                     } catch (Exception e) {
                         //ignore
@@ -688,17 +682,23 @@ public class ResteasyServerCommonProcessor {
                 continue;
             }
             MethodInfo method = instance.target().asMethod();
-            reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType(), index,
-                    ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE));
-
+            if (isReflectionDeclarationRequiredFor(method.returnType())) {
+                reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(method.returnType(), index));
+            }
             for (short i = 0; i < method.parameters().size(); i++) {
                 Type parameterType = method.parameters().get(i);
-                if (!hasAnnotation(method, i, ResteasyDotNames.CONTEXT)) {
-                    reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(parameterType, index,
-                            ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE));
+                if (isReflectionDeclarationRequiredFor(parameterType)
+                        && !hasAnnotation(method, i, ResteasyDotNames.CONTEXT)) {
+                    reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(parameterType, index));
                 }
             }
         }
+    }
+
+    private static boolean isReflectionDeclarationRequiredFor(Type type) {
+        DotName className = getClassName(type);
+
+        return className != null && !ResteasyDotNames.TYPES_IGNORED_FOR_REFLECTION.contains(className);
     }
 
     private static DotName getClassName(Type type) {
