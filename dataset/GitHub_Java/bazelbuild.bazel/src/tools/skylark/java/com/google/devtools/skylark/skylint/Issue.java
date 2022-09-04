@@ -20,15 +20,11 @@ import com.google.devtools.build.lib.events.Location;
 public class Issue {
   // TODO(skylark-team): Represent issues more efficiently than just by a string
   public final String message;
-  public final LinterLocation location;
-
-  public Issue(String message, LinterLocation location) {
-    this.message = message;
-    this.location = location;
-  }
+  public final Location location;
 
   public Issue(String message, Location location) {
-    this(message, LinterLocation.from(location));
+    this.message = message;
+    this.location = location;
   }
 
   @Override
@@ -37,12 +33,12 @@ public class Issue {
   }
 
   public static int compare(Issue i1, Issue i2) {
-    LinterLocation l1 = i1.location;
-    LinterLocation l2 = i2.location;
-    int lineComparison = l1.line - l2.line;
-    if (lineComparison != 0) {
-      return lineComparison;
+    Location l1 = i1.location;
+    Location l2 = i2.location;
+    int pathComparison = l1.getPath().compareTo(l2.getPath());
+    if (pathComparison != 0) {
+      return pathComparison;
     }
-    return l1.column - l2.column;
+    return l1.getStartOffset() - l2.getStartOffset();
   }
 }

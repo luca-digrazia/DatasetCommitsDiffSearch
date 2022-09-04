@@ -14,7 +14,6 @@
 
 package com.google.devtools.skylark.skylint;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.ExpressionStatement;
@@ -27,10 +26,8 @@ import com.google.devtools.build.lib.syntax.ReturnStatement;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.syntax.SyntaxTreeVisitor;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
 
 /**
  * Performs lints related to control flow.
@@ -41,19 +38,8 @@ import javax.annotation.Nullable;
 // TODO(skylark-team): Check for unreachable statements
 public class ControlFlowChecker extends SyntaxTreeVisitor {
   private final List<Issue> issues = new ArrayList<>();
-
-  /**
-   * Represents the analyzed info at the current program point. The {@code visit()} methods
-   * implement the transfer function from the program point immediately before that AST node to the
-   * program point immediately after that node. This destructively consumes (modifies) the CFI
-   * object, so for branching nodes a copy must be made.
-   *
-   * <p>See also: https://en.wikipedia.org/wiki/Data-flow_analysis
-   *
-   * <p>This is always null whenever we're not in a function definition.
-   */
-  @Nullable
-  private ControlFlowInfo cfi = null;
+  private ControlFlowInfo cf = new ControlFlowInfo();
+  private List<ReturnStatement> returnStatementsWithoutValue = new ArrayList<>();
 
   public static List<Issue> check(BuildFileAST ast) {
     ControlFlowChecker checker = new ControlFlowChecker();
@@ -63,45 +49,41 @@ public class ControlFlowChecker extends SyntaxTreeVisitor {
 
   @Override
   public void visit(IfStatement node) {
-    if (cfi == null) {
-      return;
-    }
-    // Save the input cfi, copy its state to seed each branch, then gather the branches together
-    // with a join operation to produces the output cfi.
-    ControlFlowInfo input = cfi;
-    ArrayList<ControlFlowInfo> outputs = new ArrayList<>();
+    ControlFlowInfo saved = cf;
+    boolean someBranchHasReturnWithValue = false;
+    boolean someBranchHasReturnWithoutValue = false;
+    boolean allBranchesReturnAlwaysExplicitly = true;
     Stream<List<Statement>> branches =
         Stream.concat(
             node.getThenBlocks().stream().map(ConditionalStatements::getStatements),
             Stream.of(node.getElseBlock()));
     for (List<Statement> branch : (Iterable<List<Statement>>) branches::iterator) {
-      cfi = ControlFlowInfo.copy(input);
+      cf = new ControlFlowInfo();
       visitAll(branch);
-      outputs.add(cfi);
+      someBranchHasReturnWithValue |= cf.hasReturnWithValue;
+      someBranchHasReturnWithoutValue |= cf.hasReturnWithoutValue;
+      allBranchesReturnAlwaysExplicitly &= cf.returnsAlwaysExplicitly;
     }
-    cfi = ControlFlowInfo.join(outputs);
+    cf.hasReturnWithValue = saved.hasReturnWithValue || someBranchHasReturnWithValue;
+    cf.hasReturnWithoutValue = saved.hasReturnWithoutValue || someBranchHasReturnWithoutValue;
+    cf.returnsAlwaysExplicitly = saved.returnsAlwaysExplicitly || allBranchesReturnAlwaysExplicitly;
   }
 
   @Override
   public void visit(ReturnStatement node) {
-    // Should be rejected by parser, but we may have been fed a bad AST.
-    Preconditions.checkState(cfi != null, "AST has illegal top-level return statement");
-    cfi.returnsAlwaysExplicitly = true;
+    cf.returnsAlwaysExplicitly = true;
     if (node.getReturnExpression() != null) {
-      cfi.hasReturnWithValue = true;
+      cf.hasReturnWithValue = true;
     } else {
-      cfi.hasReturnWithoutValue = true;
-      cfi.returnStatementsWithoutValue.add(new Return(node));
+      cf.hasReturnWithoutValue = true;
+      returnStatementsWithoutValue.add(node);
     }
   }
 
   @Override
   public void visit(ExpressionStatement node) {
-    if (cfi == null) {
-      return;
-    }
     if (isFail(node.getExpression())) {
-      cfi.returnsAlwaysExplicitly = true;
+      cf.returnsAlwaysExplicitly = true;
     }
   }
 
@@ -115,92 +97,26 @@ public class ControlFlowChecker extends SyntaxTreeVisitor {
 
   @Override
   public void visit(FunctionDefStatement node) {
-    Preconditions.checkState(cfi == null);
-    cfi = ControlFlowInfo.entry();
+    cf = new ControlFlowInfo();
+    returnStatementsWithoutValue = new ArrayList<>();
     super.visit(node);
-    if (cfi.hasReturnWithValue && (!cfi.returnsAlwaysExplicitly || cfi.hasReturnWithoutValue)) {
+    if (cf.hasReturnWithValue && (!cf.returnsAlwaysExplicitly || cf.hasReturnWithoutValue)) {
       issues.add(
           new Issue(
               "some but not all execution paths of '" + node.getIdentifier() + "' return a value",
               node.getLocation()));
-      for (Return returnWrapper : cfi.returnStatementsWithoutValue) {
+      for (ReturnStatement returnStatement : returnStatementsWithoutValue) {
         issues.add(
             new Issue(
                 "return value missing (you can `return None` if this is desired)",
-                returnWrapper.node.getLocation()));
+                returnStatement.getLocation()));
       }
-    }
-    cfi = null;
-  }
-
-  /**
-   * Wrapper around {@code ReturnStatement} that supports hashing and equality based on the
-   * identity of the node it wraps.
-   */
-  private static class Return {
-
-    final ReturnStatement node;
-
-    Return(ReturnStatement node) {
-      this.node = node;
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof Return)) {
-        return false;
-      }
-      return this.node == ((Return) other).node;
-    }
-
-    @Override
-    public int hashCode() {
-      return System.identityHashCode(node);
     }
   }
 
   private static class ControlFlowInfo {
-    private boolean hasReturnWithValue;
-    private boolean hasReturnWithoutValue;
-    private boolean returnsAlwaysExplicitly;
-    private final LinkedHashSet<Return> returnStatementsWithoutValue;
-
-    private ControlFlowInfo(
-        boolean hasReturnWithValue,
-        boolean hasReturnWithoutValue,
-        boolean returnsAlwaysExplicitly,
-        LinkedHashSet<Return> returnStatementsWithoutValue) {
-      this.hasReturnWithValue = hasReturnWithValue;
-      this.hasReturnWithoutValue = hasReturnWithoutValue;
-      this.returnsAlwaysExplicitly = returnsAlwaysExplicitly;
-      this.returnStatementsWithoutValue = returnStatementsWithoutValue;
-    }
-
-    /** Create a CFI corresponding to an entry point in the control-flow graph. */
-    static ControlFlowInfo entry() {
-      return new ControlFlowInfo(false, false, false, new LinkedHashSet<>());
-    }
-
-    /** Creates a copy of a CFI, including the {@code returnStatementsWithoutValue} collection. */
-    static ControlFlowInfo copy(ControlFlowInfo existing) {
-      return new ControlFlowInfo(
-          existing.hasReturnWithValue,
-          existing.hasReturnWithoutValue,
-          existing.returnsAlwaysExplicitly,
-          new LinkedHashSet<>(existing.returnStatementsWithoutValue));
-    }
-
-    /** Joins the CFIs for several alternative paths together. */
-    static ControlFlowInfo join(List<ControlFlowInfo> infos) {
-      ControlFlowInfo result = new ControlFlowInfo(
-          false, false, true, new LinkedHashSet<>());
-      for (ControlFlowInfo info : infos) {
-        result.hasReturnWithValue |= info.hasReturnWithValue;
-        result.hasReturnWithoutValue |= info.hasReturnWithoutValue;
-        result.returnsAlwaysExplicitly &= info.returnsAlwaysExplicitly;
-        result.returnStatementsWithoutValue.addAll(info.returnStatementsWithoutValue);
-      }
-      return result;
-    }
+    boolean hasReturnWithValue = false;
+    boolean hasReturnWithoutValue = false;
+    boolean returnsAlwaysExplicitly = false;
   }
 }
