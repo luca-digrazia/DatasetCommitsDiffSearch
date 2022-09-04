@@ -2,9 +2,7 @@ package io.quarkus.gradle;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 import io.quarkus.cli.commands.CreateProject;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
@@ -26,7 +24,8 @@ public class QuarkusPluginFunctionalTest {
         BuildResult build = GradleRunner.create()
                 .forwardOutput()
                 .withPluginClasspath()
-                .withArguments(arguments("listExtensions"))
+                .withArguments("listExtensions")
+                .withEnvironment(System.getenv())
                 .withProjectDir(projectRoot)
                 .build();
 
@@ -41,21 +40,12 @@ public class QuarkusPluginFunctionalTest {
         BuildResult build = GradleRunner.create()
                 .forwardOutput()
                 .withPluginClasspath()
-                .withArguments(arguments("quarkusBuild"))
+                .withArguments("quarkusBuild")
+                .withEnvironment(System.getenv())
                 .withProjectDir(projectRoot)
                 .build();
 
         assertThat(build.task(":quarkusBuild").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
-    }
-
-    private List<String> arguments(String argument) {
-        List<String> arguments = new ArrayList<>();
-        arguments.add(argument);
-        String mavenRepoLocal = System.getProperty("maven.repo.local", System.getenv("MAVEN_LOCAL_REPO"));
-        if (mavenRepoLocal != null) {
-            arguments.add("-Dmaven.repo.local=" + mavenRepoLocal);
-        }
-        return arguments;
     }
 
     private void createProject(@TempDir File projectRoot) throws IOException {
