@@ -27,9 +27,6 @@ import org.jboss.shamrock.arc.deployment.BeanContainerListenerBuildItem;
 import org.jboss.shamrock.deployment.annotations.BuildProducer;
 import org.jboss.shamrock.deployment.annotations.BuildStep;
 import org.jboss.shamrock.deployment.annotations.Record;
-import org.jboss.shamrock.deployment.builditem.ExtensionSslNativeSupportBuildItem;
-import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
-import org.jboss.shamrock.deployment.builditem.SslNativeConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 
 class AgroalProcessor {
@@ -49,18 +46,14 @@ class AgroalProcessor {
     @Record(STATIC_INIT)
     @BuildStep
     BeanContainerListenerBuildItem build(
-        BuildProducer<FeatureBuildItem> feature,
         BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
         BuildProducer<DataSourceDriverBuildItem> datasourceDriver,
-        SslNativeConfigBuildItem sslNativeConfig, BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
         DataSourceTemplate template
     ) throws Exception {
         if (! datasource.url.isPresent() || ! datasource.driver.isPresent()) {
             log.warn("Agroal extension was included in build however no data source URL and/or driver class has been defined");
             return null;
         }
-
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.AGROAL));
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
                 io.agroal.pool.ConnectionHandler[].class.getName(),
@@ -70,13 +63,14 @@ class AgroalProcessor {
                 java.sql.ResultSet.class.getName(),
                 java.sql.ResultSet[].class.getName()
         ));
+
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, datasource.driver.get()));
 
-        datasourceDriver.produce(new DataSourceDriverBuildItem(datasource.driver.get()));
+        if (datasource.driver.isPresent()) {
+            datasourceDriver.produce(new DataSourceDriverBuildItem(datasource.driver.get()));
+        }
 
-        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.AGROAL));
-
-        return new BeanContainerListenerBuildItem(template.addDatasource(datasource, sslNativeConfig.isExplicitlyDisabled()));
+        return new BeanContainerListenerBuildItem(template.addDatasource(datasource));
     }
 
 }
