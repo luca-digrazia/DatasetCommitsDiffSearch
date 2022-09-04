@@ -1,19 +1,19 @@
 package org.jboss.shamrock.runner;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLStreamHandler;
+import java.lang.reflect.AccessibleObject;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.security.ProtectionDomain;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,79 +27,23 @@ import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 
+import sun.misc.Unsafe;
+
 public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Consumer<List<Function<String, Function<ClassVisitor, ClassVisitor>>>> {
 
     private final Map<String, byte[]> appClasses = new HashMap<>();
     private final Set<String> frameworkClasses = new HashSet<>();
 
-    private final Map<String, byte[]> resources = new HashMap<>();
-
     private volatile List<Function<String, Function<ClassVisitor, ClassVisitor>>> functions = null;
 
     private final Path applicationClasses;
-    private final Path frameworkClassesPath;
     static {
         registerAsParallelCapable();
     }
 
-    public RuntimeClassLoader(ClassLoader parent, Path applicationClasses, Path frameworkClassesPath) {
+    public RuntimeClassLoader(ClassLoader parent, Path applicationClasses) {
         super(parent);
         this.applicationClasses = applicationClasses;
-        this.frameworkClassesPath = frameworkClassesPath;
-    }
-
-    @Override
-    public Enumeration<URL> getResources(String nm) throws IOException {
-        String name;
-        if(nm.startsWith("/")) {
-            name = nm.substring(1);
-        } else {
-            name = nm;
-        }
-
-        // TODO some superugly hack for bean provider
-        byte[] data = resources.get(name);
-        if (data != null) {
-            URL url = new URL(null, "shamrock:" + name + "/", new URLStreamHandler() {
-                @Override
-                protected URLConnection openConnection(final URL u) throws IOException {
-                    return new URLConnection(u) {
-                        @Override
-                        public void connect() throws IOException {
-                        }
-
-                        @Override
-                        public InputStream getInputStream() throws IOException {
-                            return new ByteArrayInputStream(resources.get(name));
-                        }
-                    };
-                }
-            });
-            return Collections.enumeration(Collections.singleton(url));
-        }
-        return super.getResources(name);
-    }
-
-    @Override
-    public URL getResource(String nm) {
-        String name;
-        if(nm.startsWith("/")) {
-            name = nm.substring(1);
-        } else {
-            name = nm;
-        }
-        return super.getResource(name);
-    }
-
-    @Override
-    public InputStream getResourceAsStream(String nm) {
-        String name;
-        if(nm.startsWith("/")) {
-            name = nm.substring(1);
-        } else {
-            name = nm;
-        }
-        return super.getResourceAsStream(name);
     }
 
     @Override
@@ -165,7 +109,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
     protected Class<?> findClass(String name) throws ClassNotFoundException {
         byte[] bytes = appClasses.get(name);
         if (bytes == null) {
-            throw new ClassNotFoundException(name);
+            throw new ClassNotFoundException();
         }
         return defineClass(name, bytes, 0, bytes.length);
     }
@@ -181,7 +125,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
             //however as we add them to the frameworkClasses set we know to load them
             //from the parent CL
             frameworkClasses.add(className.replace('/', '.'));
-            Path fileName = frameworkClassesPath.resolve(className.replace(".", "/") + ".class");
+            Path fileName = applicationClasses.resolve(className.replace(".", "/") + ".class");
             try {
                 Files.createDirectories(fileName.getParent());
                 try(FileOutputStream out = new FileOutputStream(fileName.toFile())) {
@@ -193,12 +137,8 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput, Cons
         }
     }
 
+    @Override
     public void accept(List<Function<String, Function<ClassVisitor, ClassVisitor>>> functions) {
         this.functions = functions;
     }
-
-    public void writeResource(String name, byte[] data) throws IOException {
-        resources.put(name, data);
-    }
-
 }
