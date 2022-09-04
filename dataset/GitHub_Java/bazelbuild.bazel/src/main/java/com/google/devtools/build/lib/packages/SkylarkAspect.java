@@ -43,7 +43,7 @@ public class SkylarkAspect implements SkylarkExportable {
   private final ImmutableList<String> attributeAspects;
   private final ImmutableList<Attribute> attributes;
   private final ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> requiredAspectProviders;
-  private final ImmutableSet<SkylarkProviderIdentifier> provides;
+  private final ImmutableList<String> provides;
   private final ImmutableSet<String> paramAttributes;
   private final ImmutableSet<String> fragments;
   private final ImmutableSet<String> hostFragments;
@@ -55,7 +55,7 @@ public class SkylarkAspect implements SkylarkExportable {
       ImmutableList<String> attributeAspects,
       ImmutableList<Attribute> attributes,
       ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> requiredAspectProviders,
-      ImmutableSet<SkylarkProviderIdentifier> provides,
+      ImmutableList<String> provides,
       ImmutableSet<String> paramAttributes,
       ImmutableSet<String> fragments,
       ImmutableSet<String> hostFragments,
@@ -147,8 +147,8 @@ public class SkylarkAspect implements SkylarkExportable {
     builder.requireAspectsWithProviders(requiredAspectProviders);
     ImmutableList.Builder<SkylarkProviderIdentifier> advertisedSkylarkProviders =
         ImmutableList.builder();
-    for (SkylarkProviderIdentifier provider : provides) {
-      advertisedSkylarkProviders.add(provider);
+    for (String provider : provides) {
+      advertisedSkylarkProviders.add(SkylarkProviderIdentifier.forLegacy(provider));
     }
     builder.advertiseProvider(advertisedSkylarkProviders.build());
     builder.requiresConfigurationFragmentsBySkylarkModuleName(fragments);
