@@ -18,14 +18,11 @@
  *
  */
 package org.graylog2.periodical;
-
-import org.graylog2.Core;
 import com.beust.jcommander.internal.Lists;
 import org.elasticsearch.search.SearchHit;
 import org.graylog2.alerts.Alert;
 import org.graylog2.alerts.AlertCondition;
 import org.graylog2.alerts.AlertSender;
-import org.graylog2.notifications.Notification;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
@@ -82,21 +79,9 @@ public class AlertScannerThread extends Periodical {
                                     sender.sendEmails(stream, result);
                                 }
                             } catch (TransportConfigurationException e) {
-                                Notification notification = Notification.buildNow(server)
-                                        .addThisNode()
-                                        .addType(Notification.Type.EMAIL_TRANSPORT_CONFIGURATION_INVALID)
-                                        .addDetail("stream_id", stream.getId())
-                                        .addDetail("exception", e);
-                                notification.publishIfFirst();
                                 LOG.warn("Stream [{}] has alert receivers and is triggered, but email transport is not configured.", stream);
                             } catch (Exception e) {
-                                Notification notification = Notification.buildNow(server)
-                                        .addThisNode()
-                                        .addType(Notification.Type.EMAIL_TRANSPORT_FAILED)
-                                        .addDetail("stream_id", stream.getId())
-                                        .addDetail("exception", e);
-                                notification.publishIfFirst();
-                                LOG.error("Stream [{}] has alert receivers and is triggered, but sending emails failed", stream, e);
+                                LOG.error("Stream [{}] has alert receivers and is triggered, but sending emails failed: ", stream, e);
                             }
                         }
                     } else {
