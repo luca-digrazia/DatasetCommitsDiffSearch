@@ -1,44 +1,47 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.undertow.runtime;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.EventListener;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import javax.net.ssl.SSLContext;
+import javax.servlet.AsyncEvent;
+import javax.servlet.AsyncListener;
 import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
 import javax.servlet.MultipartConfigElement;
 import javax.servlet.Servlet;
+import javax.servlet.ServletContainerInitializer;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
 import org.jboss.logging.Logger;
-import org.jboss.quarkus.arc.ManagedContext;
+import org.wildfly.common.net.Inet;
+import org.xnio.Xnio;
+import org.xnio.XnioWorker;
+
+import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.runtime.ExecutorTemplate;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
+import io.quarkus.runtime.ThreadPoolConfig;
+import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.annotations.Template;
-
+import io.quarkus.runtime.configuration.ConfigInstantiator;
 import io.undertow.Undertow;
 import io.undertow.server.HandlerWrapper;
 import io.undertow.server.HttpHandler;
@@ -55,17 +58,22 @@ import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.ClassIntrospecter;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
+import io.undertow.servlet.api.ErrorPage;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.InstanceHandle;
 import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.ServletContainer;
+import io.undertow.servlet.api.ServletContainerInitializerInfo;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
-import io.undertow.servlet.api.ServletStackTraces;
 import io.undertow.servlet.api.ThreadSetupHandler;
 import io.undertow.servlet.handlers.DefaultServlet;
 import io.undertow.servlet.handlers.ServletPathMatches;
+import io.undertow.servlet.handlers.ServletRequestContext;
+import io.undertow.servlet.spec.HttpServletRequestImpl;
+import io.undertow.util.AttachmentKey;
+import io.undertow.util.StatusCodes;
 
 /**
  * Provides the runtime methods to bootstrap Undertow. This class is present in the final uber-jar,
@@ -82,12 +90,38 @@ public class UndertowDeploymentTemplate {
             currentRoot.handleRequest(exchange);
         }
     };
-    private static final String RESOURCES_PROP = "quarkus.undertow.resources";
 
     private static volatile Undertow undertow;
+    private static final List<HandlerWrapper> hotDeploymentWrappers = new CopyOnWriteArrayList<>();
+    private static volatile List<Path> hotDeploymentResourcePaths;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
+    private static volatile ServletContext servletContext;
 
-    public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories, LaunchMode launchMode, ShutdownContext context) {
+    private static final AttachmentKey<Collection<io.quarkus.arc.ContextInstanceHandle<?>>> REQUEST_CONTEXT = AttachmentKey
+            .create(Collection.class);
+
+    public static void setHotDeploymentResources(List<Path> resources) {
+        hotDeploymentResourcePaths = resources;
+    }
+
+    public static void startServerAfterFailedStart() {
+        try {
+            HttpConfig config = new HttpConfig();
+            ConfigInstantiator.handleObject(config);
+
+            ThreadPoolConfig threadPoolConfig = new ThreadPoolConfig();
+            ConfigInstantiator.handleObject(threadPoolConfig);
+
+            ExecutorService service = ExecutorTemplate.createDevModeExecutorForFailedStart(threadPoolConfig);
+            //we can't really do
+            doServerStart(config, LaunchMode.DEVELOPMENT, config.ssl.toSSLContext(), service);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
+            LaunchMode launchMode, ShutdownContext context) {
         DeploymentInfo d = new DeploymentInfo();
         d.setSessionIdGenerator(new QuarkusSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
@@ -101,26 +135,26 @@ public class UndertowDeploymentTemplate {
         }
         d.setClassLoader(cl);
         //TODO: we need better handling of static resources
-        String resourcesDir = System.getProperty(RESOURCES_PROP);
         ResourceManager resourceManager;
-        if (resourcesDir == null) {
-            resourceManager = new KnownPathResourceManager(knownFile, knownDirectories, new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
+        if (hotDeploymentResourcePaths == null) {
+            resourceManager = new KnownPathResourceManager(knownFile, knownDirectories,
+                    new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
         } else {
-            resourceManager = new PathResourceManager(Paths.get(resourcesDir));
+            List<ResourceManager> managers = new ArrayList<>();
+            for (Path i : hotDeploymentResourcePaths) {
+                managers.add(new PathResourceManager(i));
+            }
+            managers.add(new ClassPathResourceManager(d.getClassLoader(), "META-INF/resources"));
+            resourceManager = new DelegatingResourceManager(managers.toArray(new ResourceManager[0]));
         }
-        if(launchMode == LaunchMode.NORMAL) {
+
+        if (launchMode == LaunchMode.NORMAL) {
             //todo: cache configuration
             resourceManager = new CachingResourceManager(1000, 0, null, resourceManager, 2000);
         }
         d.setResourceManager(resourceManager);
 
-        if(launchMode == LaunchMode.DEVELOPMENT) {
-            d.setServletStackTraces(ServletStackTraces.LOCAL_ONLY);
-        } else {
-            d.setServletStackTraces(ServletStackTraces.NONE);
-        }
         d.addWelcomePages("index.html", "index.htm");
-
 
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
 
@@ -147,12 +181,20 @@ public class UndertowDeploymentTemplate {
     }
 
     public RuntimeValue<ServletInfo> registerServlet(RuntimeValue<DeploymentInfo> deploymentInfo,
-                                                     String name,
-                                                     Class<?> servletClass,
-                                                     boolean asyncSupported,
-                                                     int loadOnStartup,
-                                                     BeanContainer beanContainer) throws Exception {
-        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, new QuarkusInstanceFactory(beanContainer.instanceFactory(servletClass)));
+            String name,
+            Class<?> servletClass,
+            boolean asyncSupported,
+            int loadOnStartup,
+            BeanContainer beanContainer, Map<String, String> initParams,
+            InstanceFactory<? extends Servlet> instanceFactory) throws Exception {
+
+        InstanceFactory<? extends Servlet> factory = instanceFactory != null ? instanceFactory
+                : new QuarkusInstanceFactory(beanContainer.instanceFactory(servletClass));
+        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass,
+                factory);
+        for (Map.Entry<String, String> e : initParams.entrySet()) {
+            servletInfo.addInitParam(e.getKey(), e.getValue());
+        }
         deploymentInfo.getValue().addServlet(servletInfo);
         servletInfo.setAsyncSupported(asyncSupported);
         if (loadOnStartup > 0) {
@@ -170,7 +212,8 @@ public class UndertowDeploymentTemplate {
         sv.addMapping(mapping);
     }
 
-    public void setMultipartConfig(RuntimeValue<ServletInfo> sref, String location, long fileSize, long maxRequestSize, int fileSizeThreshold) {
+    public void setMultipartConfig(RuntimeValue<ServletInfo> sref, String location, long fileSize, long maxRequestSize,
+            int fileSizeThreshold) {
         MultipartConfigElement mp = new MultipartConfigElement(location, fileSize, maxRequestSize, fileSizeThreshold);
         sref.getValue().setMultipartConfig(mp);
     }
@@ -193,10 +236,19 @@ public class UndertowDeploymentTemplate {
     }
 
     public RuntimeValue<FilterInfo> registerFilter(RuntimeValue<DeploymentInfo> info,
-                                                   String name, Class<?> filterClass,
-                                                   boolean asyncSupported,
-                                                   BeanContainer beanContainer) throws Exception {
-        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, new QuarkusInstanceFactory(beanContainer.instanceFactory(filterClass)));
+            String name, Class<?> filterClass,
+            boolean asyncSupported,
+            BeanContainer beanContainer,
+            Map<String, String> initParams,
+            InstanceFactory<? extends Filter> instanceFactory) throws Exception {
+
+        InstanceFactory<? extends Filter> factory = instanceFactory != null ? instanceFactory
+                : new QuarkusInstanceFactory(beanContainer.instanceFactory(filterClass));
+        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, factory);
+
+        for (Map.Entry<String, String> e : initParams.entrySet()) {
+            filterInfo.addInitParam(e.getKey(), e.getValue());
+        }
         info.getValue().addFilter(filterInfo);
         filterInfo.setAsyncSupported(asyncSupported);
         return new RuntimeValue<>(filterInfo);
@@ -206,35 +258,47 @@ public class UndertowDeploymentTemplate {
         info.getValue().addInitParam(name, value);
     }
 
-    public void addFilterURLMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping, DispatcherType dispatcherType) throws Exception {
+    public void addFilterURLMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping,
+            DispatcherType dispatcherType) throws Exception {
         info.getValue().addFilterUrlMapping(name, mapping, dispatcherType);
     }
 
-    public void addFilterServletNameMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping, DispatcherType dispatcherType) throws Exception {
+    public void addFilterServletNameMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping,
+            DispatcherType dispatcherType) throws Exception {
         info.getValue().addFilterServletNameMapping(name, mapping, dispatcherType);
     }
 
     public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, BeanContainer factory) {
-        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, (InstanceFactory<? extends EventListener>) new QuarkusInstanceFactory<>(factory.instanceFactory(listenerClass))));
+        info.getValue()
+                .addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass,
+                        (InstanceFactory<? extends EventListener>) new QuarkusInstanceFactory<>(
+                                factory.instanceFactory(listenerClass))));
     }
 
-    public void addServltInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
+    public void addServletInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
     }
 
-    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, DeploymentManager manager, HttpConfig config, List<HandlerWrapper> wrappers, LaunchMode launchMode) throws ServletException {
+    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
+            DeploymentManager manager, HttpConfig config,
+            List<HandlerWrapper> wrappers, LaunchMode launchMode) throws Exception {
 
         if (undertow == null) {
-            startUndertowEagerly(config, null, launchMode);
+            SSLContext context = config.ssl.toSSLContext();
+            doServerStart(config, launchMode, context, executorService);
 
-            //in development mode undertow is started eagerly
-            shutdown.addShutdownTask(new Runnable() {
-                @Override
-                public void run() {
-                    undertow.stop();
-                    undertow = null;
-                }
-            });
+            if (launchMode != LaunchMode.DEVELOPMENT) {
+                //in development mode undertow should not be shut down
+                shutdown.addShutdownTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        XnioWorker worker = undertow.getWorker();
+                        undertow.stop();
+                        worker.shutdown();
+                        undertow = null;
+                    }
+                });
+            }
         }
         shutdown.addShutdownTask(new Runnable() {
             @Override
@@ -252,9 +316,25 @@ public class UndertowDeploymentTemplate {
             main = i.wrap(main);
         }
         currentRoot = main;
+
+        Timing.setHttpServer(String.format(
+                "Listening on: " + undertow.getListenerInfo().stream().map(l -> {
+                    String address;
+                    if (l.getAddress() instanceof InetSocketAddress) {
+                        InetSocketAddress inetAddress = (InetSocketAddress) l.getAddress();
+                        address = Inet.toURLString(inetAddress.getAddress(), true) + ":" + inetAddress.getPort();
+                    } else {
+                        address = l.getAddress().toString();
+                    }
+                    return l.getProtcol() + "://" + address;
+                }).collect(Collectors.joining(", "))));
+
         return new RuntimeValue<>(undertow);
     }
 
+    public static void addHotDeploymentWrapper(HandlerWrapper handlerWrapper) {
+        hotDeploymentWrappers.add(handlerWrapper);
+    }
 
     /**
      * Used for quarkus:run, where we want undertow to start very early in the process.
@@ -263,28 +343,36 @@ public class UndertowDeploymentTemplate {
      * be no chance to use hot deployment to fix the error. In development mode we start Undertow early, so any error
      * on boot can be corrected via the hot deployment handler
      */
-    public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper, LaunchMode launchMode) throws ServletException {
+    private static void doServerStart(HttpConfig config, LaunchMode launchMode, SSLContext sslContext, ExecutorService executor)
+            throws ServletException {
         if (undertow == null) {
             int port = config.determinePort(launchMode);
+            int sslPort = config.determineSslPort(launchMode);
             log.debugf("Starting Undertow on port %d", port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
-            if (hotDeploymentWrapper != null) {
-                rootHandler = hotDeploymentWrapper.wrap(rootHandler);
+            for (HandlerWrapper i : hotDeploymentWrappers) {
+                rootHandler = i.wrap(rootHandler);
             }
+
+            XnioWorker.Builder workerBuilder = Xnio.getInstance().createWorkerBuilder()
+                    .setExternalExecutorService(executor);
 
             Undertow.Builder builder = Undertow.builder()
                     .addHttpListener(port, config.host)
                     .setHandler(rootHandler);
             if (config.ioThreads.isPresent()) {
-                builder.setIoThreads(config.ioThreads.getAsInt());
-            } else if(launchMode.isDevOrTest()) {
+                workerBuilder.setWorkerIoThreads(config.ioThreads.getAsInt());
+            } else if (launchMode.isDevOrTest()) {
                 //we limit the number of IO and worker threads in development and testing mode
-                builder.setIoThreads(2);
+                workerBuilder.setWorkerIoThreads(2);
+            } else {
+                workerBuilder.setWorkerIoThreads(Runtime.getRuntime().availableProcessors() * 2);
             }
-            if (config.workerThreads.isPresent()) {
-                builder.setWorkerThreads(config.workerThreads.getAsInt());
-            } else if(launchMode.isDevOrTest()) {
-                builder.setWorkerThreads(6);
+            XnioWorker worker = workerBuilder.build();
+            builder.setWorker(worker);
+            if (sslContext != null) {
+                log.debugf("Starting Undertow HTTPS listener on port %d", sslPort);
+                builder.addHttpsListener(sslPort, config.host, sslContext);
             }
             undertow = builder
                     .build();
@@ -292,7 +380,31 @@ public class UndertowDeploymentTemplate {
         }
     }
 
-    public DeploymentManager bootServletContainer(RuntimeValue<DeploymentInfo> info, BeanContainer beanContainer) {
+    public Supplier<ServletContext> servletContextSupplier() {
+        return new ServletContextSupplier();
+    }
+
+    public DeploymentManager bootServletContainer(RuntimeValue<DeploymentInfo> info, BeanContainer beanContainer,
+            LaunchMode launchMode, ShutdownContext shutdownContext) {
+        if (info.getValue().getExceptionHandler() == null) {
+            //if a 500 error page has not been mapped we change the default to our more modern one, with a UID in the
+            //log. If this is not production we also include the stack trace
+            boolean alreadyMapped = false;
+            for (ErrorPage i : info.getValue().getErrorPages()) {
+                if (i.getErrorCode() != null && i.getErrorCode() == StatusCodes.INTERNAL_SERVER_ERROR) {
+                    alreadyMapped = true;
+                    break;
+                }
+            }
+            if (!alreadyMapped || launchMode.isDevOrTest()) {
+                info.getValue().setExceptionHandler(new QuarkusExceptionHandler());
+                info.getValue().addErrorPage(new ErrorPage("/@QuarkusError", StatusCodes.INTERNAL_SERVER_ERROR));
+                info.getValue().addServlet(new ServletInfo("@QuarkusError", QuarkusErrorServlet.class)
+                        .addMapping("/@QuarkusError").setAsyncSupported(true)
+                        .addInitParam(QuarkusErrorServlet.SHOW_STACK, Boolean.toString(launchMode.isDevOrTest())));
+            }
+        }
+
         try {
             ClassIntrospecter defaultVal = info.getValue().getClassIntrospecter();
             info.getValue().setClassIntrospecter(new ClassIntrospecter() {
@@ -325,6 +437,13 @@ public class UndertowDeploymentTemplate {
             DeploymentManager manager = servletContainer.addDeployment(info.getValue());
             manager.deploy();
             manager.start();
+            servletContext = manager.getDeployment().getServletContext();
+            shutdownContext.addShutdownTask(new Runnable() {
+                @Override
+                public void run() {
+                    servletContext = null;
+                }
+            });
             return manager;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -349,15 +468,55 @@ public class UndertowDeploymentTemplate {
                         return new Action<T, C>() {
                             @Override
                             public T call(HttpServerExchange exchange, C context) throws Exception {
+                                // Not sure what to do here
+                                if (exchange == null) {
+                                    return action.call(exchange, context);
+                                }
                                 ManagedContext requestContext = beanContainer.requestContext();
                                 if (requestContext.isActive()) {
                                     return action.call(exchange, context);
                                 } else {
+                                    Collection<io.quarkus.arc.ContextInstanceHandle<?>> existingRequestContext = exchange
+                                            .getAttachment(REQUEST_CONTEXT);
                                     try {
-                                        requestContext.activate();
+                                        requestContext.activate(existingRequestContext);
                                         return action.call(exchange, context);
                                     } finally {
-                                        requestContext.terminate();
+                                        ServletRequestContext src = exchange
+                                                .getAttachment(ServletRequestContext.ATTACHMENT_KEY);
+                                        HttpServletRequestImpl req = src.getOriginalRequest();
+                                        if (req.isAsyncStarted()) {
+                                            exchange.putAttachment(REQUEST_CONTEXT, requestContext.getAll());
+                                            requestContext.deactivate();
+                                            if (existingRequestContext == null) {
+                                                req.getAsyncContextInternal().addListener(new AsyncListener() {
+                                                    @Override
+                                                    public void onComplete(AsyncEvent event) throws IOException {
+                                                        for (io.quarkus.arc.InstanceHandle<?> i : exchange
+                                                                .getAttachment(REQUEST_CONTEXT)) {
+                                                            i.destroy();
+                                                        }
+                                                    }
+
+                                                    @Override
+                                                    public void onTimeout(AsyncEvent event) throws IOException {
+                                                        onComplete(event);
+                                                    }
+
+                                                    @Override
+                                                    public void onError(AsyncEvent event) throws IOException {
+                                                        onComplete(event);
+                                                    }
+
+                                                    @Override
+                                                    public void onStartAsync(AsyncEvent event) throws IOException {
+
+                                                    }
+                                                });
+                                            }
+                                        } else {
+                                            requestContext.terminate();
+                                        }
                                     }
                                 }
                             }
@@ -366,6 +525,11 @@ public class UndertowDeploymentTemplate {
                 });
             }
         };
+    }
+
+    public void addServletContainerInitializer(RuntimeValue<DeploymentInfo> deployment,
+            Class<? extends ServletContainerInitializer> sciClass, Set<Class<?>> handlesTypes) {
+        deployment.getValue().addServletContainerInitializer(new ServletContainerInitializerInfo(sciClass, handlesTypes));
     }
 
     /**
@@ -382,9 +546,11 @@ public class UndertowDeploymentTemplate {
         private static final String ALPHABET_PROPERTY = "io.undertow.server.session.SecureRandomSessionIdGenerator.ALPHABET";
 
         static {
-            String alphabet = System.getProperty(ALPHABET_PROPERTY, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_");
+            String alphabet = System.getProperty(ALPHABET_PROPERTY,
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_");
             if (alphabet.length() != 64) {
-                throw new RuntimeException("io.undertow.server.session.SecureRandomSessionIdGenerator must be exactly 64 characters long");
+                throw new RuntimeException(
+                        "io.undertow.server.session.SecureRandomSessionIdGenerator must be exactly 64 characters long");
             }
             SESSION_ID_ALPHABET = alphabet.toCharArray();
         }
@@ -398,7 +564,6 @@ public class UndertowDeploymentTemplate {
             random.nextBytes(bytes);
             return new String(encode(bytes));
         }
-
 
         public int getLength() {
             return length;
@@ -447,6 +612,14 @@ public class UndertowDeploymentTemplate {
                 out[index] = alphabet[val & 0x3F];
             }
             return out;
+        }
+    }
+
+    public static class ServletContextSupplier implements Supplier<ServletContext> {
+
+        @Override
+        public ServletContext get() {
+            return servletContext;
         }
     }
 }
