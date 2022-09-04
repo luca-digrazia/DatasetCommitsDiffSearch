@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.projection;
 
-import java.io.Serializable;
 import smile.math.Math;
 import smile.math.matrix.EigenValueDecomposition;
 import smile.math.matrix.SingularValueDecomposition;
@@ -58,8 +57,7 @@ import smile.math.matrix.SingularValueDecomposition;
  * 
  * @author Haifeng Li
  */
-public class PCA implements Projection<double[]>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class PCA implements Projection<double[]> {
 
     /**
      * The dimension of feature space.
