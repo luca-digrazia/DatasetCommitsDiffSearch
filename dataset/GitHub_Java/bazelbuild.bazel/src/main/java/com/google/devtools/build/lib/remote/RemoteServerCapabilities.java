@@ -20,12 +20,17 @@ import build.bazel.remote.execution.v2.CapabilitiesGrpc.CapabilitiesBlockingStub
 import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.ExecutionCapabilities;
 import build.bazel.remote.execution.v2.GetCapabilitiesRequest;
+import build.bazel.remote.execution.v2.PriorityCapabilities;
+import build.bazel.remote.execution.v2.PriorityCapabilities.PriorityRange;
+import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ServerCapabilities;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
+import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import io.grpc.CallCredentials;
-import io.grpc.Context;
+import io.grpc.StatusRuntimeException;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -53,26 +58,30 @@ class RemoteServerCapabilities {
     this.retrier = retrier;
   }
 
-  private CapabilitiesBlockingStub capabilitiesBlockingStub() {
+  private CapabilitiesBlockingStub capabilitiesBlockingStub(RemoteActionExecutionContext context) {
     return CapabilitiesGrpc.newBlockingStub(channel)
-        .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
+        .withInterceptors(
+            TracingMetadataUtils.attachMetadataInterceptor(context.getRequestMetadata()))
         .withCallCredentials(callCredentials)
         .withDeadlineAfter(callTimeoutSecs, TimeUnit.SECONDS);
   }
 
   public ServerCapabilities get(String buildRequestId, String commandId)
       throws IOException, InterruptedException {
-    Context withMetadata =
-        TracingMetadataUtils.contextWithMetadata(buildRequestId, commandId, "capabilities");
-    Context previous = withMetadata.attach();
+    RequestMetadata metadata =
+        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "capabilities", null);
+    RemoteActionExecutionContext context = RemoteActionExecutionContext.create(metadata);
     try {
       GetCapabilitiesRequest request =
           instanceName == null
               ? GetCapabilitiesRequest.getDefaultInstance()
               : GetCapabilitiesRequest.newBuilder().setInstanceName(instanceName).build();
-      return retrier.execute(() -> capabilitiesBlockingStub().getCapabilities(request));
-    } finally {
-      withMetadata.detach(previous);
+      return retrier.execute(() -> capabilitiesBlockingStub(context).getCapabilities(request));
+    } catch (StatusRuntimeException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      }
+      throw new IOException(e);
     }
   }
 
@@ -116,12 +125,54 @@ class RemoteServerCapabilities {
     }
   }
 
+  private static void checkPriorityInRange(
+      int priority,
+      String optionName,
+      PriorityCapabilities prCap,
+      ClientServerCompatibilityStatus.Builder result) {
+    if (priority != 0) {
+      boolean found = false;
+      StringBuilder rangeBuilder = new StringBuilder();
+      for (PriorityRange pr : prCap.getPrioritiesList()) {
+        rangeBuilder.append(String.format("%d-%d,", pr.getMinPriority(), pr.getMaxPriority()));
+        if (pr.getMinPriority() <= priority && priority <= pr.getMaxPriority()) {
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        String range = rangeBuilder.toString();
+        if (!range.isEmpty()) {
+          range = range.substring(0, range.length() - 1);
+        }
+        result.addError(
+            String.format(
+                "--%s %d is outside of server supported range %s.", optionName, priority, range));
+      }
+    }
+  }
+
+  public enum ServerCapabilitiesRequirement {
+    NONE,
+    CACHE,
+    EXECUTION,
+    EXECUTION_AND_CACHE,
+  }
+
   /** Compare the remote server capabilities with those requested by current execution. */
   public static ClientServerCompatibilityStatus checkClientServerCompatibility(
-      ServerCapabilities capabilities, RemoteOptions remoteOptions, DigestFunction digestFunction) {
+      ServerCapabilities capabilities,
+      RemoteOptions remoteOptions,
+      DigestFunction.Value digestFunction,
+      ServerCapabilitiesRequirement requirement) {
     ClientServerCompatibilityStatus.Builder result = new ClientServerCompatibilityStatus.Builder();
-    boolean remoteExecution = !Strings.isNullOrEmpty(remoteOptions.remoteExecutor);
-    if (!remoteExecution && Strings.isNullOrEmpty(remoteOptions.remoteCache)) {
+    boolean shouldCheckExecutionCapabilities =
+        (requirement == ServerCapabilitiesRequirement.EXECUTION
+            || requirement == ServerCapabilitiesRequirement.EXECUTION_AND_CACHE);
+    boolean shouldCheckCacheCapabilities =
+        (requirement == ServerCapabilitiesRequirement.CACHE
+            || requirement == ServerCapabilitiesRequirement.EXECUTION_AND_CACHE);
+    if (!(shouldCheckCacheCapabilities || shouldCheckExecutionCapabilities)) {
       return result.build();
     }
 
@@ -135,26 +186,18 @@ class RemoteServerCapabilities {
       result.addWarning(st.getMessage());
     }
 
-    // Check cache digest function.
-    CacheCapabilities cacheCap = capabilities.getCacheCapabilities();
-    if (!cacheCap.getDigestFunctionList().contains(digestFunction)) {
-      result.addError(
-          String.format(
-              "Cannot use hash function %s with remote cache. "
-                  + "Server supported functions are: %s",
-              digestFunction, cacheCap.getDigestFunctionList()));
-    }
-
-    if (remoteExecution) {
+    if (shouldCheckExecutionCapabilities) {
       // Check remote execution is enabled.
       ExecutionCapabilities execCap = capabilities.getExecutionCapabilities();
       if (!execCap.getExecEnabled()) {
-        result.addError("Remote execution is not supported by the remote server.");
+        result.addError(
+            "Remote execution is not supported by the remote server, or the current "
+                + "account is not authorized to use remote execution.");
         return result.build(); // No point checking other execution fields.
       }
 
       // Check execution digest function.
-      if (execCap.getDigestFunction() == DigestFunction.UNKNOWN) {
+      if (execCap.getDigestFunction() == DigestFunction.Value.UNKNOWN) {
         // Server side error -- this is not supposed to happen.
         result.addError("Remote server error: UNKNOWN execution digest function.");
       }
@@ -166,23 +209,52 @@ class RemoteServerCapabilities {
                 digestFunction, execCap.getDigestFunction()));
       }
 
+      // Check execution priority is in the supported range.
+      checkPriorityInRange(
+          remoteOptions.remoteExecutionPriority,
+          "remote_execution_priority",
+          execCap.getExecutionPriorityCapabilities(),
+          result);
+    }
+
+    if (shouldCheckCacheCapabilities) {
+      // Check cache digest function.
+      CacheCapabilities cacheCap = capabilities.getCacheCapabilities();
+      if (!cacheCap.getDigestFunctionList().contains(digestFunction)) {
+        result.addError(
+            String.format(
+                "Cannot use hash function %s with remote cache. "
+                    + "Server supported functions are: %s",
+                digestFunction, cacheCap.getDigestFunctionList()));
+      }
+
       // Check updating remote cache is allowed, if we ever need to do that.
-      if (remoteOptions.remoteLocalFallback
-          && remoteOptions.remoteUploadLocalResults
-          && !cacheCap.getActionCacheUpdateCapabilities().getUpdateEnabled()) {
-        result.addError(
-            "--remote_local_fallback and --remote_upload_local_results are set, "
-                + "but the remote server prohibits writing local results to the "
-                + "remote cache.");
+      boolean remoteExecution = !Strings.isNullOrEmpty(remoteOptions.remoteExecutor);
+      if (remoteExecution) {
+        if (remoteOptions.remoteLocalFallback
+            && remoteOptions.remoteUploadLocalResults
+            && !cacheCap.getActionCacheUpdateCapabilities().getUpdateEnabled()) {
+          result.addError(
+              "--remote_local_fallback and --remote_upload_local_results are set, "
+                  + "but the current account is not authorized to write local results "
+                  + "to the remote cache.");
+        }
+      } else {
+        // Local execution: check updating remote cache is allowed.
+        if (remoteOptions.remoteUploadLocalResults
+            && !cacheCap.getActionCacheUpdateCapabilities().getUpdateEnabled()) {
+          result.addError(
+              "--remote_upload_local_results is set, but the current account is not authorized "
+                  + "to write local results to the remote cache.");
+        }
       }
-    } else {
-      // Local execution: check updating remote cache is allowed.
-      if (remoteOptions.remoteUploadLocalResults
-          && !cacheCap.getActionCacheUpdateCapabilities().getUpdateEnabled()) {
-        result.addError(
-            "--remote_upload_local_results is set, but the remote server prohibits "
-                + "writing local results to remote cache.");
-      }
+
+      // Check result cache priority is in the supported range.
+      checkPriorityInRange(
+          remoteOptions.remoteResultCachePriority,
+          "remote_result_cache_priority",
+          cacheCap.getCachePriorityCapabilities(),
+          result);
     }
 
     return result.build();
