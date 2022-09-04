@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.packages.util;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -207,14 +206,11 @@ public final class MockObjcSupport {
         toolchainConfigBuilder.add(darwinX86_64().build());
       }
 
-      new Crosstool(
-              config,
-              DEFAULT_OSX_CROSSTOOL_DIR,
-              Label.parseAbsoluteUnchecked("@bazel_tools//tools/osx"))
+      new Crosstool(config, DEFAULT_OSX_CROSSTOOL_DIR)
           .setCcToolchainFile(readCcToolchainConfigFile())
           .setSupportedArchs(OSX_ARCHS)
           .setToolchainConfigs(toolchainConfigBuilder.build())
-          .setSupportsHeaderParsing(true)
+          .setSupportsHeaderParsing(false)
           .writeOSX();
     }
   }
@@ -226,14 +222,11 @@ public final class MockObjcSupport {
       }
       config.linkTools(DEFAULT_OSX_CROSSTOOL_DIR);
     } else {
-      new Crosstool(
-              config,
-              DEFAULT_OSX_CROSSTOOL_DIR,
-              Label.parseAbsoluteUnchecked("@bazel_tools//tools/osx"))
+      new Crosstool(config, DEFAULT_OSX_CROSSTOOL_DIR)
           .setCcToolchainFile(readCcToolchainConfigFile())
           .setSupportedArchs(OSX_ARCHS)
           .setToolchainConfigs(getDefaultCcToolchainConfigs())
-          .setSupportsHeaderParsing(true)
+          .setSupportsHeaderParsing(false)
           .writeOSX();
     }
   }
