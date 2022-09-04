@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
-import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -176,11 +175,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                 .singleArtifact()
                 .value(labelCache.getUnchecked(toolsRepository + "//tools/test:test_wrapper")))
         .add(
-            attr("$xml_writer", LABEL)
-                .cfg(HostTransition.INSTANCE)
-                .singleArtifact()
-                .value(labelCache.getUnchecked(toolsRepository + "//tools/test:xml_writer")))
-        .add(
             attr("$test_runtime", LABEL_LIST)
                 .cfg(HostTransition.INSTANCE)
                 .value(
@@ -282,7 +276,6 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       SkylarkList<?> execCompatibleWith,
       Object analysisTest,
       Object buildSetting,
-      Object cfg,
       FuncallExpression ast,
       Environment funcallEnv,
       StarlarkContext context)
@@ -356,24 +349,16 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     builder.addRequiredToolchains(
         collectToolchainLabels(
             toolchains.getContents(String.class, "toolchains"), ast.getLocation()));
-
-    if (!buildSetting.equals(Runtime.NONE) && !cfg.equals(Runtime.NONE)) {
-      throw new EvalException(
-          ast.getLocation(),
-          "Build setting rules cannot use the `cfg` param to apply transitions to themselves.");
-    }
     if (!buildSetting.equals(Runtime.NONE)) {
-      builder.setBuildSetting((BuildSetting) buildSetting);
-    }
-    if (!cfg.equals(Runtime.NONE)) {
-      if (!(cfg instanceof StarlarkDefinedConfigTransition)) {
+      if (funcallEnv.getSemantics().experimentalBuildSettingApi()) {
+        builder.setBuildSetting((BuildSetting) buildSetting);
+      } else {
         throw new EvalException(
             ast.getLocation(),
-            "`cfg` must be set to a transition object initialized by the transition() function.");
+            "build_setting parameter is experimental and not available for "
+                + "general use. It is subject to change at any time. It may be enabled by "
+                + "specifying --experimental_build_setting_api");
       }
-      StarlarkDefinedConfigTransition starlarkDefinedConfigTransition =
-          (StarlarkDefinedConfigTransition) cfg;
-      builder.cfg(new StarlarkRuleTransitionProvider(starlarkDefinedConfigTransition));
     }
 
     for (Object o : providesArg) {

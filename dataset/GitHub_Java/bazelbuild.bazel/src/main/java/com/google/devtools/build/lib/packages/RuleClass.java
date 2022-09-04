@@ -1210,7 +1210,7 @@ public class RuleClass {
      * {@see OutputFile.Kind}.
      */
     public Builder setOutputFileKind(OutputFile.Kind outputFileKind) {
-      this.outputFileKind = Preconditions.checkNotNull(outputFileKind);
+      this.outputFileKind = outputFileKind;
       return this;
     }
 
@@ -2414,6 +2414,7 @@ public class RuleClass {
     return executionPlatformConstraints;
   }
 
+  @Nullable
   public OutputFile.Kind  getOutputFileKind() {
     return outputFileKind;
   }
