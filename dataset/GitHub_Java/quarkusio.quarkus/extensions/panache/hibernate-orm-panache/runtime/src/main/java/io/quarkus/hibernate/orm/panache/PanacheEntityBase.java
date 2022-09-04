@@ -1,24 +1,14 @@
 package io.quarkus.hibernate.orm.panache;
 
-import static io.quarkus.hibernate.orm.panache.common.runtime.AbstractJpaOperations.implementationInjectionMissing;
-
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Stream;
 
-import javax.json.bind.annotation.JsonbTransient;
-import javax.persistence.EntityManager;
-import javax.persistence.LockModeType;
 import javax.persistence.Transient;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
-import io.quarkus.hibernate.orm.panache.common.runtime.AbstractJpaOperations;
 import io.quarkus.hibernate.orm.panache.runtime.JpaOperations;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
-import io.quarkus.panache.common.impl.GenerateBridge;
 
 /**
  * <p>
@@ -32,17 +22,8 @@ import io.quarkus.panache.common.impl.GenerateBridge;
  * @see PanacheEntity
  */
 public abstract class PanacheEntityBase {
-    /**
-     * Returns the default {@link EntityManager} for extra operations (eg. CriteriaQueries)
-     *
-     * @return the default {@link EntityManager}
-     */
-    @JsonbTransient
-    // @JsonIgnore is here to avoid serialization of this property with jackson
-    @JsonIgnore
-    public EntityManager getEntityManager() {
-        return AbstractJpaOperations.getEntityManager(this.getClass());
-    }
+
+    // Operations
 
     /**
      * Persist this entity in the database, if not already persisted. This will set your ID field if it is not already set.
@@ -53,21 +34,7 @@ public abstract class PanacheEntityBase {
      * @see #persist(Object, Object...)
      */
     public void persist() {
-        JpaOperations.INSTANCE.persist(this);
-    }
-
-    /**
-     * Persist this entity in the database, if not already persisted. This will set your ID field if it is not already set.
-     * Then flushes all pending changes to the database.
-     *
-     * @see #isPersistent()
-     * @see #persist(Iterable)
-     * @see #persist(Stream)
-     * @see #persist(Object, Object...)
-     */
-    public void persistAndFlush() {
-        JpaOperations.INSTANCE.persist(this);
-        JpaOperations.INSTANCE.flush(this);
+        JpaOperations.persist(this);
     }
 
     /**
@@ -80,7 +47,7 @@ public abstract class PanacheEntityBase {
      * @see #deleteAll()
      */
     public void delete() {
-        JpaOperations.INSTANCE.delete(this);
+        JpaOperations.delete(this);
     }
 
     /**
@@ -90,18 +57,8 @@ public abstract class PanacheEntityBase {
      *
      * @return true if this entity is persistent in the database.
      */
-    @JsonbTransient
-    // @JsonIgnore is here to avoid serialization of this property with jackson
-    @JsonIgnore
     public boolean isPersistent() {
-        return JpaOperations.INSTANCE.isPersistent(this);
-    }
-
-    /**
-     * Flushes all pending changes to the database.
-     */
-    public void flush() {
-        JpaOperations.INSTANCE.flush(this);
+        return JpaOperations.isPersistent(this);
     }
 
     // Queries
@@ -112,44 +69,8 @@ public abstract class PanacheEntityBase {
      * @param id the ID of the entity to find.
      * @return the entity found, or <code>null</code> if not found.
      */
-    @GenerateBridge(targetReturnTypeErased = true)
     public static <T extends PanacheEntityBase> T findById(Object id) {
-        throw implementationInjectionMissing();
-    }
-
-    /**
-     * Find an entity of this type by ID and lock it.
-     *
-     * @param id the ID of the entity to find.
-     * @param lockModeType the locking strategy to be used when retrieving the entity.
-     * @return the entity found, or <code>null</code> if not found.
-     */
-    @GenerateBridge(targetReturnTypeErased = true)
-    public static <T extends PanacheEntityBase> T findById(Object id, LockModeType lockModeType) {
-        throw implementationInjectionMissing();
-    }
-
-    /**
-     * Find an entity of this type by ID.
-     *
-     * @param id the ID of the entity to find.
-     * @return if found, an optional containing the entity, else <code>Optional.empty()</code>.
-     */
-    @GenerateBridge
-    public static <T extends PanacheEntityBase> Optional<T> findByIdOptional(Object id) {
-        throw implementationInjectionMissing();
-    }
-
-    /**
-     * Find an entity of this type by ID.
-     *
-     * @param id the ID of the entity to find.
-     * @param lockModeType the locking strategy to be used when retrieving the entity.
-     * @return if found, an optional containing the entity, else <code>Optional.empty()</code>.
-     */
-    @GenerateBridge
-    public static <T extends PanacheEntityBase> Optional<T> findByIdOptional(Object id, LockModeType lockModeType) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -164,9 +85,8 @@ public abstract class PanacheEntityBase {
      * @see #list(String, Object...)
      * @see #stream(String, Object...)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -182,9 +102,8 @@ public abstract class PanacheEntityBase {
      * @see #list(String, Sort, Object...)
      * @see #stream(String, Sort, Object...)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Sort sort, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -199,9 +118,8 @@ public abstract class PanacheEntityBase {
      * @see #list(String, Map)
      * @see #stream(String, Map)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -217,9 +135,8 @@ public abstract class PanacheEntityBase {
      * @see #list(String, Sort, Map)
      * @see #stream(String, Sort, Map)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Sort sort, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -234,9 +151,8 @@ public abstract class PanacheEntityBase {
      * @see #list(String, Parameters)
      * @see #stream(String, Parameters)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -252,9 +168,8 @@ public abstract class PanacheEntityBase {
      * @see #list(String, Sort, Parameters)
      * @see #stream(String, Sort, Parameters)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> find(String query, Sort sort, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -265,9 +180,8 @@ public abstract class PanacheEntityBase {
      * @see #listAll()
      * @see #streamAll()
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> findAll() {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -279,9 +193,8 @@ public abstract class PanacheEntityBase {
      * @see #listAll(Sort)
      * @see #streamAll(Sort)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> PanacheQuery<T> findAll(Sort sort) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -297,9 +210,8 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Object...)
      * @see #stream(String, Object...)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> list(String query, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -316,9 +228,8 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Sort, Object...)
      * @see #stream(String, Sort, Object...)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> list(String query, Sort sort, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -334,9 +245,8 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Map)
      * @see #stream(String, Map)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> list(String query, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -353,9 +263,8 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Sort, Map)
      * @see #stream(String, Sort, Map)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> list(String query, Sort sort, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -371,9 +280,8 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Parameters)
      * @see #stream(String, Parameters)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> list(String query, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -390,9 +298,8 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Sort, Parameters)
      * @see #stream(String, Sort, Parameters)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> list(String query, Sort sort, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -404,9 +311,8 @@ public abstract class PanacheEntityBase {
      * @see #findAll()
      * @see #streamAll()
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> listAll() {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -419,16 +325,13 @@ public abstract class PanacheEntityBase {
      * @see #findAll(Sort)
      * @see #streamAll(Sort)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> List<T> listAll(Sort sort) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find entities matching a query, with optional indexed parameters.
      * This method is a shortcut for <code>find(query, params).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param params optional sequence of indexed parameters
@@ -439,16 +342,13 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Object...)
      * @see #list(String, Object...)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> stream(String query, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find entities matching a query and the given sort options, with optional indexed parameters.
      * This method is a shortcut for <code>find(query, sort, params).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param sort the sort strategy to use
@@ -460,16 +360,13 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Sort, Object...)
      * @see #list(String, Sort, Object...)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> stream(String query, Sort sort, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find entities matching a query, with named parameters.
      * This method is a shortcut for <code>find(query, params).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param params {@link Map} of named parameters
@@ -480,16 +377,13 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Map)
      * @see #list(String, Map)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> stream(String query, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find entities matching a query and the given sort options, with named parameters.
      * This method is a shortcut for <code>find(query, sort, params).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param sort the sort strategy to use
@@ -501,16 +395,13 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Sort, Map)
      * @see #list(String, Sort, Map)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> stream(String query, Sort sort, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find entities matching a query, with named parameters.
      * This method is a shortcut for <code>find(query, params).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param params {@link Parameters} of named parameters
@@ -521,16 +412,13 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Parameters)
      * @see #list(String, Parameters)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> stream(String query, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find entities matching a query and the given sort options, with named parameters.
      * This method is a shortcut for <code>find(query, sort, params).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param sort the sort strategy to use
@@ -542,32 +430,26 @@ public abstract class PanacheEntityBase {
      * @see #find(String, Sort, Parameters)
      * @see #list(String, Sort, Parameters)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> stream(String query, Sort sort, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find all entities of this type.
      * This method is a shortcut for <code>findAll().stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @return a {@link Stream} containing all results, without paging
      * @see #streamAll(Sort)
      * @see #findAll()
      * @see #listAll()
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> streamAll() {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Find all entities of this type, in the given order.
      * This method is a shortcut for <code>findAll(sort).stream()</code>.
-     * It requires a transaction to work.
-     * Without a transaction, the underlying cursor can be closed before the end of the stream.
      *
      * @param sort the sort order to use
      * @return a {@link Stream} containing all results, without paging
@@ -575,9 +457,8 @@ public abstract class PanacheEntityBase {
      * @see #findAll(Sort)
      * @see #listAll(Sort)
      */
-    @GenerateBridge
     public static <T extends PanacheEntityBase> Stream<T> streamAll(Sort sort) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -588,9 +469,8 @@ public abstract class PanacheEntityBase {
      * @see #count(String, Map)
      * @see #count(String, Parameters)
      */
-    @GenerateBridge
     public static long count() {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -603,9 +483,8 @@ public abstract class PanacheEntityBase {
      * @see #count(String, Map)
      * @see #count(String, Parameters)
      */
-    @GenerateBridge
     public static long count(String query, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -618,9 +497,8 @@ public abstract class PanacheEntityBase {
      * @see #count(String, Object...)
      * @see #count(String, Parameters)
      */
-    @GenerateBridge
     public static long count(String query, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -633,44 +511,25 @@ public abstract class PanacheEntityBase {
      * @see #count(String, Object...)
      * @see #count(String, Map)
      */
-    @GenerateBridge
     public static long count(String query, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Delete all entities of this type from the database.
      *
-     * WARNING: the default implementation of this method uses a bulk delete query and ignores
-     * cascading rules from the JPA model.
-     * 
      * @return the number of entities deleted.
      * @see #delete(String, Object...)
      * @see #delete(String, Map)
      * @see #delete(String, Parameters)
      */
-    @GenerateBridge
     public static long deleteAll() {
-        throw implementationInjectionMissing();
-    }
-
-    /**
-     * Delete an entity of this type by ID.
-     *
-     * @param id the ID of the entity to delete.
-     * @return false if the entity was not deleted (not found).
-     */
-    @GenerateBridge
-    public static boolean deleteById(Object id) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Delete all entities of this type matching the given query, with optional indexed parameters.
      *
-     * WARNING: the default implementation of this method uses a bulk delete query and ignores
-     * cascading rules from the JPA model.
-     * 
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param params optional sequence of indexed parameters
      * @return the number of entities deleted.
@@ -678,17 +537,13 @@ public abstract class PanacheEntityBase {
      * @see #delete(String, Map)
      * @see #delete(String, Parameters)
      */
-    @GenerateBridge
     public static long delete(String query, Object... params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Delete all entities of this type matching the given query, with named parameters.
      *
-     * WARNING: the default implementation of this method uses a bulk delete query and ignores
-     * cascading rules from the JPA model.
-     * 
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param params {@link Map} of named parameters
      * @return the number of entities deleted.
@@ -696,17 +551,13 @@ public abstract class PanacheEntityBase {
      * @see #delete(String, Object...)
      * @see #delete(String, Parameters)
      */
-    @GenerateBridge
     public static long delete(String query, Map<String, Object> params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
      * Delete all entities of this type matching the given query, with named parameters.
      *
-     * WARNING: the default implementation of this method uses a bulk delete query and ignores
-     * cascading rules from the JPA model.
-     * 
      * @param query a {@link io.quarkus.hibernate.orm.panache query string}
      * @param params {@link Parameters} of named parameters
      * @return the number of entities deleted.
@@ -714,9 +565,8 @@ public abstract class PanacheEntityBase {
      * @see #delete(String, Object...)
      * @see #delete(String, Map)
      */
-    @GenerateBridge
     public static long delete(String query, Parameters params) {
-        throw implementationInjectionMissing();
+        throw JpaOperations.implementationInjectionMissing();
     }
 
     /**
@@ -727,9 +577,8 @@ public abstract class PanacheEntityBase {
      * @see #persist(Stream)
      * @see #persist(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persist(Iterable<?> entities) {
-        JpaOperations.INSTANCE.persist(entities);
+        JpaOperations.persist(entities);
     }
 
     /**
@@ -740,9 +589,8 @@ public abstract class PanacheEntityBase {
      * @see #persist(Iterable)
      * @see #persist(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persist(Stream<?> entities) {
-        JpaOperations.INSTANCE.persist(entities);
+        JpaOperations.persist(entities);
     }
 
     /**
@@ -753,51 +601,7 @@ public abstract class PanacheEntityBase {
      * @see #persist(Stream)
      * @see #persist(Iterable)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persist(Object firstEntity, Object... entities) {
-        JpaOperations.INSTANCE.persist(firstEntity, entities);
-    }
-
-    /**
-     * Update all entities of this type matching the given query, with optional indexed parameters.
-     *
-     * @param query a {@link io.quarkus.hibernate.orm.panache query string}
-     * @param params optional sequence of indexed parameters
-     * @return the number of entities updated.
-     * @see #update(String, Map)
-     * @see #update(String, Parameters)
-     */
-    @GenerateBridge
-    public static int update(String query, Object... params) {
-        throw implementationInjectionMissing();
-    }
-
-    /**
-     * Update all entities of this type matching the given query, with named parameters.
-     *
-     * @param query a {@link io.quarkus.hibernate.orm.panache query string}
-     * @param params {@link Map} of named parameters
-     * @return the number of entities updated.
-     * @see #update(String, Object...)
-     * @see #update(String, Parameters)
-     * 
-     */
-    @GenerateBridge
-    public static int update(String query, Map<String, Object> params) {
-        throw implementationInjectionMissing();
-    }
-
-    /**
-     * Update all entities of this type matching the given query, with named parameters.
-     *
-     * @param query a {@link io.quarkus.hibernate.orm.panache query string}
-     * @param params {@link Parameters} of named parameters
-     * @return the number of entities updated.
-     * @see #update(String, Object...)
-     * @see #update(String, Map)
-     */
-    @GenerateBridge
-    public static int update(String query, Parameters params) {
-        throw implementationInjectionMissing();
+        JpaOperations.persist(firstEntity, entities);
     }
 }
