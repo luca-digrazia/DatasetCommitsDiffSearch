@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException2;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -51,7 +52,7 @@ public final class AspectResolver {
       SkyFunction.Environment env,
       Map<SkyKey, ConfiguredTarget> configuredTargetMap,
       Iterable<Dependency> deps,
-      @Nullable NestedSetBuilder<Package> transitivePackages)
+      NestedSetBuilder<Package> transitivePackages)
       throws AspectFunction.AspectCreationException, InterruptedException {
     OrderedSetMultimap<Dependency, ConfiguredAspect> result = OrderedSetMultimap.create();
     Set<SkyKey> allAspectKeys = new HashSet<>();
@@ -96,10 +97,7 @@ public final class AspectResolver {
         }
 
         result.put(dep, aspectValue.getConfiguredAspect());
-        if (transitivePackages != null) {
-          transitivePackages.addTransitive(
-              aspectValue.getTransitivePackagesForPackageRootResolution());
-        }
+        transitivePackages.addTransitive(aspectValue.getTransitivePackages());
       }
     }
     return result;

@@ -18,7 +18,6 @@ import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -308,15 +307,15 @@ public final class AspectValue extends ActionLookupValue {
     }
   }
 
+
   // These variables are only non-final because they may be clear()ed to save memory. They are null
-  // only after they are cleared except for transitivePackagesForPackageRootResolution.
+  // only after they are cleared.
   @Nullable private Label label;
   @Nullable private Aspect aspect;
   @Nullable private Location location;
   @Nullable private AspectKey key;
   @Nullable private ConfiguredAspect configuredAspect;
-  // May be null either after clearing or because transitive packages are not tracked.
-  @Nullable private NestedSet<Package> transitivePackagesForPackageRootResolution;
+  @Nullable private NestedSet<Package> transitivePackages;
 
   public AspectValue(
       AspectKey key,
@@ -324,17 +323,16 @@ public final class AspectValue extends ActionLookupValue {
       Label label,
       Location location,
       ConfiguredAspect configuredAspect,
-      ActionKeyContext actionKeyContext,
       List<ActionAnalysisMetadata> actions,
-      NestedSet<Package> transitivePackagesForPackageRootResolution,
+      NestedSet<Package> transitivePackages,
       boolean removeActionsAfterEvaluation) {
-    super(actionKeyContext, actions, removeActionsAfterEvaluation);
+    super(actions, removeActionsAfterEvaluation);
     this.label = Preconditions.checkNotNull(label, actions);
     this.aspect = Preconditions.checkNotNull(aspect, label);
     this.location = Preconditions.checkNotNull(location, label);
     this.key = Preconditions.checkNotNull(key, label);
     this.configuredAspect = Preconditions.checkNotNull(configuredAspect, label);
-    this.transitivePackagesForPackageRootResolution = transitivePackagesForPackageRootResolution;
+    this.transitivePackages = Preconditions.checkNotNull(transitivePackages, label);
   }
 
   public ConfiguredAspect getConfiguredAspect() {
@@ -363,7 +361,7 @@ public final class AspectValue extends ActionLookupValue {
     Preconditions.checkNotNull(location, this);
     Preconditions.checkNotNull(key, this);
     Preconditions.checkNotNull(configuredAspect, this);
-    Preconditions.checkNotNull(transitivePackagesForPackageRootResolution, this);
+    Preconditions.checkNotNull(transitivePackages, this);
     if (clearEverything) {
       label = null;
       aspect = null;
@@ -371,17 +369,11 @@ public final class AspectValue extends ActionLookupValue {
       key = null;
       configuredAspect = null;
     }
-    transitivePackagesForPackageRootResolution = null;
+    transitivePackages = null;
   }
 
-  /**
-   * Returns the set of packages transitively loaded by this value. Must only be used for
-   * constructing the package -> source root map needed for some builds. If the caller has not
-   * specified that this map needs to be constructed (via the constructor argument in {@link
-   * AspectFunction#AspectFunction}), calling this will crash.
-   */
-  public NestedSet<Package> getTransitivePackagesForPackageRootResolution() {
-    return Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
+  public NestedSet<Package> getTransitivePackages() {
+    return Preconditions.checkNotNull(transitivePackages);
   }
 
   // TODO(janakr): Add a nice toString after cl/150542180 is submitted.

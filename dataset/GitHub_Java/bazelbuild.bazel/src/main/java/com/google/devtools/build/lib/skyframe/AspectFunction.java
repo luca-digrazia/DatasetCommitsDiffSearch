@@ -14,12 +14,11 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.AspectResolver;
@@ -52,7 +51,6 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkAspectClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.profiler.memory.CurrentRuleTracker;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredTargetFunctionException;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
@@ -62,6 +60,7 @@ import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.Skylar
 import com.google.devtools.build.lib.skyframe.ToolchainUtil.ToolchainContextException;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -93,23 +92,14 @@ public final class AspectFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
   private final RuleClassProvider ruleClassProvider;
   private final Supplier<Boolean> removeActionsAfterEvaluation;
-  /**
-   * Indicates whether the set of packages transitively loaded for a given {@link AspectValue} will
-   * be needed for package root resolution later in the build. If not, they are not collected and
-   * stored.
-   */
-  private final boolean storeTransitivePackagesForPackageRootResolution;
 
   AspectFunction(
       BuildViewProvider buildViewProvider,
       RuleClassProvider ruleClassProvider,
-      Supplier<Boolean> removeActionsAfterEvaluation,
-      boolean storeTransitivePackagesForPackageRootResolution) {
+      Supplier<Boolean> removeActionsAfterEvaluation) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
     this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
-    this.storeTransitivePackagesForPackageRootResolution =
-        storeTransitivePackagesForPackageRootResolution;
   }
 
   /**
@@ -154,6 +144,7 @@ public final class AspectFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws AspectFunctionException, InterruptedException {
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
+    NestedSetBuilder<Package> transitivePackages = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Label> transitiveRootCauses = NestedSetBuilder.stableOrder();
     AspectKey key = (AspectKey) skyKey.argument();
     ConfiguredAspectFactory aspectFactory;
@@ -225,12 +216,7 @@ public final class AspectFunction implements SkyFunction {
     Target target = associatedTarget.getTarget();
 
     if (configuredTargetValue.getConfiguredTarget().getProvider(AliasProvider.class) != null) {
-      return createAliasAspect(
-          env,
-          view.getActionKeyContext(),
-          target,
-          aspect,
-          key,
+      return createAliasAspect(env, target, aspect, key,
           configuredTargetValue.getConfiguredTarget());
     }
 
@@ -267,8 +253,6 @@ public final class AspectFunction implements SkyFunction {
     aspectPathBuilder.add(aspect);
 
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
-    NestedSetBuilder<Package> transitivePackagesForPackageRootResolution =
-        storeTransitivePackagesForPackageRootResolution ? NestedSetBuilder.stableOrder() : null;
 
     // When getting the dependencies of this hybrid aspect+base target, use the aspect's
     // configuration. The configuration of the aspect will always be a superset of the target's
@@ -283,12 +267,8 @@ public final class AspectFunction implements SkyFunction {
       // Get the configuration targets that trigger this rule's configurable attributes.
       ImmutableMap<Label, ConfigMatchingProvider> configConditions =
           ConfiguredTargetFunction.getConfigConditions(
-              target,
-              env,
-              resolver,
-              originalTargetAndAspectConfiguration,
-              transitivePackagesForPackageRootResolution,
-              transitiveRootCauses);
+              target, env, resolver, originalTargetAndAspectConfiguration,
+              transitivePackages, transitiveRootCauses);
       if (configConditions == null) {
         // Those targets haven't yet been resolved.
         return null;
@@ -326,7 +306,7 @@ public final class AspectFunction implements SkyFunction {
                 toolchainContext,
                 ruleClassProvider,
                 view.getHostConfiguration(originalTargetAndAspectConfiguration.getConfiguration()),
-                transitivePackagesForPackageRootResolution,
+                transitivePackages,
                 transitiveRootCauses);
       } catch (ConfiguredTargetFunctionException e) {
         throw new AspectCreationException(e.getMessage());
@@ -341,7 +321,6 @@ public final class AspectFunction implements SkyFunction {
 
       return createAspect(
           env,
-          view.getActionKeyContext(),
           key,
           aspectPath,
           aspect,
@@ -351,7 +330,7 @@ public final class AspectFunction implements SkyFunction {
           configConditions,
           toolchainContext,
           depValueMap,
-          transitivePackagesForPackageRootResolution);
+          transitivePackages);
     } catch (DependencyEvaluationException e) {
       if (e.getCause() instanceof ConfiguredValueCreationException) {
         ConfiguredValueCreationException cause = (ConfiguredValueCreationException) e.getCause();
@@ -427,7 +406,6 @@ public final class AspectFunction implements SkyFunction {
 
   private SkyValue createAliasAspect(
       Environment env,
-      ActionKeyContext actionKeyContext,
       Target originalTarget,
       Aspect aspect,
       AspectKey originalKey,
@@ -448,13 +426,10 @@ public final class AspectFunction implements SkyFunction {
       return null;
     }
 
-    NestedSet<Package> transitivePackagesForPackageRootResolution =
-        storeTransitivePackagesForPackageRootResolution
-            ? NestedSetBuilder.<Package>stableOrder()
-                .addTransitive(real.getTransitivePackagesForPackageRootResolution())
-                .add(originalTarget.getPackage())
-                .build()
-            : null;
+    NestedSet<Package> transitivePackages = NestedSetBuilder.<Package>stableOrder()
+        .addTransitive(real.getTransitivePackages())
+        .add(originalTarget.getPackage())
+        .build();
 
     return new AspectValue(
         originalKey,
@@ -462,16 +437,14 @@ public final class AspectFunction implements SkyFunction {
         originalTarget.getLabel(),
         originalTarget.getLocation(),
         ConfiguredAspect.forAlias(real.getConfiguredAspect()),
-        actionKeyContext,
-        ImmutableList.of(),
-        transitivePackagesForPackageRootResolution,
+        ImmutableList.<ActionAnalysisMetadata>of(),
+        transitivePackages,
         removeActionsAfterEvaluation.get());
   }
 
   @Nullable
   private AspectValue createAspect(
       Environment env,
-      ActionKeyContext actionKeyContext,
       AspectKey key,
       ImmutableList<Aspect> aspectPath,
       Aspect aspect,
@@ -481,7 +454,7 @@ public final class AspectFunction implements SkyFunction {
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ToolchainContext toolchainContext,
       OrderedSetMultimap<Attribute, ConfiguredTarget> directDeps,
-      @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution)
+      NestedSetBuilder<Package> transitivePackages)
       throws AspectFunctionException, InterruptedException {
 
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
@@ -495,24 +468,19 @@ public final class AspectFunction implements SkyFunction {
 
     ConfiguredAspect configuredAspect;
     if (AspectResolver.aspectMatchesConfiguredTarget(associatedTarget, aspect)) {
-      try {
-        CurrentRuleTracker.beginConfiguredAspect(aspect.getAspectClass());
-        configuredAspect =
-            view.getConfiguredTargetFactory()
-                .createAspect(
-                    analysisEnvironment,
-                    associatedTarget,
-                    aspectPath,
-                    aspectFactory,
-                    aspect,
-                    directDeps,
-                    configConditions,
-                    toolchainContext,
-                    aspectConfiguration,
-                    view.getHostConfiguration(aspectConfiguration));
-      } finally {
-        CurrentRuleTracker.endConfiguredAspect();
-      }
+      configuredAspect =
+          view.getConfiguredTargetFactory()
+              .createAspect(
+                  analysisEnvironment,
+                  associatedTarget,
+                  aspectPath,
+                  aspectFactory,
+                  aspect,
+                  directDeps,
+                  configConditions,
+                  toolchainContext,
+                  aspectConfiguration,
+                  view.getHostConfiguration(aspectConfiguration));
     } else {
       configuredAspect = ConfiguredAspect.forNonapplicableTarget(aspect.getDescriptor());
     }
@@ -539,11 +507,8 @@ public final class AspectFunction implements SkyFunction {
         associatedTarget.getLabel(),
         associatedTarget.getTarget().getLocation(),
         configuredAspect,
-        actionKeyContext,
         ImmutableList.copyOf(analysisEnvironment.getRegisteredActions()),
-        transitivePackagesForPackageRootResolution == null
-            ? null
-            : transitivePackagesForPackageRootResolution.build(),
+        transitivePackages.build(),
         removeActionsAfterEvaluation.get());
   }
 
