@@ -198,13 +198,7 @@ public final class RemoteModule extends BlazeModule {
       DigestUtil digestUtil) {
     Credentials creds;
     try {
-      creds =
-          newCredentials(
-              env.getClientEnv(),
-              env.getRuntime().getFileSystem(),
-              env.getReporter(),
-              authAndTlsOptions,
-              remoteOptions);
+      creds = newCredentials(env, authAndTlsOptions, remoteOptions);
     } catch (IOException e) {
       handleInitFailure(env, e, Code.CREDENTIALS_INIT_FAILURE);
       return;
@@ -403,12 +397,7 @@ public final class RemoteModule extends BlazeModule {
     try {
       callCredentialsProvider =
           GoogleAuthUtils.newCallCredentialsProvider(
-              newCredentials(
-                  env.getClientEnv(),
-                  env.getRuntime().getFileSystem(),
-                  env.getReporter(),
-                  authAndTlsOptions,
-                  remoteOptions));
+              newCredentials(env, authAndTlsOptions, remoteOptions));
     } catch (IOException e) {
       handleInitFailure(env, e, Code.CREDENTIALS_INIT_FAILURE);
       return;
@@ -1017,31 +1006,27 @@ public final class RemoteModule extends BlazeModule {
    *
    * @throws IOException in case the credentials can't be constructed.
    */
-  @VisibleForTesting
-  static Credentials newCredentials(
-      Map<String, String> clientEnv,
-      FileSystem fileSystem,
-      Reporter reporter,
-      AuthAndTLSOptions authAndTlsOptions,
-      RemoteOptions remoteOptions)
+  private static Credentials newCredentials(
+      CommandEnvironment env, AuthAndTLSOptions authAndTlsOptions, RemoteOptions remoteOptions)
       throws IOException {
     Credentials creds = GoogleAuthUtils.newCredentials(authAndTlsOptions);
 
     // Fallback to .netrc if it exists
     if (creds == null) {
       try {
-        creds = newCredentialsFromNetrc(clientEnv, fileSystem);
+        creds = newCredentialsFromNetrc(env.getClientEnv(), env.getRuntime().getFileSystem());
       } catch (IOException e) {
-        reporter.handle(Event.warn(e.getMessage()));
+        env.getReporter().handle(Event.warn(e.getMessage()));
       }
 
       if (creds != null
           && remoteOptions.remoteCache != null
           && Ascii.toLowerCase(remoteOptions.remoteCache).startsWith("http://")) {
-        reporter.handle(
-            Event.warn(
-                "Username and password from .netrc is transmitted in plaintext."
-                    + " Please consider using an HTTPS endpoint."));
+        env.getReporter()
+            .handle(
+                Event.warn(
+                    "Username and password from .netrc is transmitted in plaintext."
+                        + " Please consider using an HTTPS endpoint."));
       }
     }
 
