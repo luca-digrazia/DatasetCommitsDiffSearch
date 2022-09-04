@@ -131,7 +131,12 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     long startTime = System.currentTimeMillis();
     CommandResult result;
     try {
-      result = cmd.execute(outErr.getOutputStream(), outErr.getErrorStream());
+      result = cmd.execute(
+          /* stdin */ new byte[] {},
+          Command.NO_OBSERVER,
+          outErr.getOutputStream(),
+          outErr.getErrorStream(),
+          /* killSubprocessOnInterrupt */ true);
       if (Thread.currentThread().isInterrupted()) {
         throw new InterruptedException();
       }

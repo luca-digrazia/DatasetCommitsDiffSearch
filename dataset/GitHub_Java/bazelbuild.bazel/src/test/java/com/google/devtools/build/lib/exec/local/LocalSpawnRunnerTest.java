@@ -135,11 +135,6 @@ public class LocalSpawnRunnerTest {
 
   private static final class SubprocessInterceptor implements Subprocess.Factory {
     @Override
-    public boolean supportsTimeout() {
-      return true;
-    }
-
-    @Override
     public Subprocess create(SubprocessBuilder params) throws IOException {
       throw new UnsupportedOperationException();
     }
@@ -266,7 +261,7 @@ public class LocalSpawnRunnerTest {
                 "/bin/echo",
                 "Hi!"));
     assertThat(captor.getValue().getEnv()).containsExactly("VARIABLE", "value");
-    assertThat(captor.getValue().getTimeoutMillis()).isEqualTo(0);
+    assertThat(captor.getValue().getTimeoutMillis()).isEqualTo(-1);
 
     assertThat(policy.lockOutputFilesCalled).isTrue();
     assertThat(policy.reportedStatus)

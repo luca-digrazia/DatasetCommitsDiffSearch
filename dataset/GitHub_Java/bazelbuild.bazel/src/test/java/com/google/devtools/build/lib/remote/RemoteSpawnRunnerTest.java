@@ -232,7 +232,7 @@ public class RemoteSpawnRunnerTest {
     }
 
     @Override
-    public void prefetchInputs() throws IOException {
+    public void prefetchInputs(Iterable<ActionInput> inputs) throws IOException {
       throw new UnsupportedOperationException();
     }
 

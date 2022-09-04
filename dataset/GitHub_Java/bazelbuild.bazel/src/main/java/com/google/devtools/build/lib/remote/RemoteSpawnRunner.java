@@ -102,7 +102,6 @@ class RemoteSpawnRunner implements SpawnRunner {
             spawn.getOutputFiles(),
             Digests.computeDigest(command),
             repository.getMerkleDigest(inputRoot),
-            platform,
             policy.getTimeout());
 
     // Look up action cache, and reuse the action output if it is found.
@@ -176,11 +175,10 @@ class RemoteSpawnRunner implements SpawnRunner {
     }
   }
 
-  static Action buildAction(
+  private Action buildAction(
       Collection<? extends ActionInput> outputs,
       Digest command,
       Digest inputRoot,
-      Platform platform,
       Duration timeout) {
     Action.Builder action = Action.newBuilder();
     action.setCommandDigest(command);
@@ -201,13 +199,13 @@ class RemoteSpawnRunner implements SpawnRunner {
     return action.build();
   }
 
-  static Command buildCommand(List<String> arguments, ImmutableMap<String, String> env) {
+  private Command buildCommand(List<String> arguments, ImmutableMap<String, String> environment) {
     Command.Builder command = Command.newBuilder();
     command.addAllArguments(arguments);
     // Sorting the environment pairs by variable name.
-    TreeSet<String> variables = new TreeSet<>(env.keySet());
+    TreeSet<String> variables = new TreeSet<>(environment.keySet());
     for (String var : variables) {
-      command.addEnvironmentVariablesBuilder().setName(var).setValue(env.get(var));
+      command.addEnvironmentVariablesBuilder().setName(var).setValue(environment.get(var));
     }
     return command.build();
   }
@@ -270,22 +268,19 @@ class RemoteSpawnRunner implements SpawnRunner {
         return result;
       }
     }
-    List<Path> outputFiles = listExistingOutputFiles(execRoot, spawn);
-    remoteCache.upload(actionKey, execRoot, outputFiles, policy.getFileOutErr());
-    return result;
-  }
-
-  static List<Path> listExistingOutputFiles(Path execRoot, Spawn spawn) {
     ArrayList<Path> outputFiles = new ArrayList<>();
     for (ActionInput output : spawn.getOutputFiles()) {
-      Path outputPath = execRoot.getRelative(output.getExecPathString());
-      // TODO(ulfjack): Store the actual list of output files in SpawnResult and use that instead
-      // of statting the files here again.
-      if (outputPath.exists()) {
-        outputFiles.add(outputPath);
+      Path outputFile = execRoot.getRelative(output.getExecPathString());
+      // Ignore non-existent files.
+      // TODO(ulfjack): This is not ideal - in general, all spawn strategies should stat the
+      // output files and return a list of existing files. We shouldn't re-stat the files here.
+      if (!outputFile.exists()) {
+        continue;
       }
+      outputFiles.add(outputFile);
     }
-    return outputFiles;
+    remoteCache.upload(actionKey, execRoot, outputFiles, policy.getFileOutErr());
+    return result;
   }
 
   /** Release resources associated with this spawn runner. */

@@ -119,7 +119,7 @@ public class GrpcRemoteExecutionClientTest {
         }
 
         @Override
-        public void prefetchInputs() {
+        public void prefetchInputs(Iterable<ActionInput> inputs) {
           throw new UnsupportedOperationException();
         }
 

@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -124,7 +123,7 @@ public enum TestTimeout {
       return null;
     }
     try {
-      return TestTimeout.valueOf(attr.toUpperCase(Locale.ENGLISH));
+      return TestTimeout.valueOf(attr.toUpperCase());
     } catch (IllegalArgumentException e) {
       return null;
     }
@@ -182,7 +181,7 @@ public enum TestTimeout {
       return null;  // attribute values must be lowercase
     }
     try {
-      return TestTimeout.valueOf(attr.toUpperCase(Locale.ENGLISH));
+      return TestTimeout.valueOf(attr.toUpperCase());
     } catch (IllegalArgumentException e) {
       return null;
     }

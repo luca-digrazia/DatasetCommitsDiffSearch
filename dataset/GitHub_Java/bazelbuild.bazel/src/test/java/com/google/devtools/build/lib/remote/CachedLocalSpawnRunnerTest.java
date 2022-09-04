@@ -87,7 +87,7 @@ public class CachedLocalSpawnRunnerTest {
         }
 
         @Override
-        public void prefetchInputs() {
+        public void prefetchInputs(Iterable<ActionInput> inputs) {
           // CachedLocalSpawnRunner should never prefetch itself, though the nested SpawnRunner may.
           throw new UnsupportedOperationException();
         }

@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
+import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.util.UserUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.time.Duration;
@@ -39,8 +39,6 @@ public class TestPolicy {
   public static final String RUNFILES_DIR = "${RUNFILES_DIR}";
 
   public static final String INHERITED = "${inherited}";
-
-  public static final TestPolicy EMPTY_POLICY = new TestPolicy(ImmutableMap.of());
 
   private final ImmutableMap<String, String> envVariables;
 
