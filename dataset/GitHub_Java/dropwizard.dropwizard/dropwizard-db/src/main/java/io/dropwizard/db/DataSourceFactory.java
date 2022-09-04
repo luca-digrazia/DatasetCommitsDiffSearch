@@ -7,7 +7,7 @@ import io.dropwizard.util.Duration;
 import io.dropwizard.validation.MinDuration;
 import io.dropwizard.validation.ValidationMethod;
 import org.apache.tomcat.jdbc.pool.PoolProperties;
-import javax.validation.constraints.NotEmpty;
+import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.annotation.Nullable;
 import javax.validation.constraints.Max;
@@ -306,9 +306,6 @@ import java.util.concurrent.TimeUnit;
  * </table>
  */
 public class DataSourceFactory implements PooledDataSourceFactory {
-
-    private static final String DEFAULT_VALIDATION_QUERY = "/* Health Check */ SELECT 1";
-
     @SuppressWarnings("UnusedDeclaration")
     public enum TransactionIsolation {
         NONE(Connection.TRANSACTION_NONE),
@@ -396,7 +393,8 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     @MinDuration(value = 0, unit = TimeUnit.MILLISECONDS, inclusive = false)
     private Duration minIdleTime = Duration.minutes(1);
 
-    private Optional<String> validationQuery = Optional.of(DEFAULT_VALIDATION_QUERY);
+    @NotNull
+    private String validationQuery = "/* Health Check */ SELECT 1";
 
     @MinDuration(value = 0, unit = TimeUnit.MILLISECONDS, inclusive = false)
     @Nullable
@@ -510,7 +508,7 @@ public class DataSourceFactory implements PooledDataSourceFactory {
 
     @Override
     @JsonProperty
-    public Optional<String> getValidationQuery() {
+    public String getValidationQuery() {
         return validationQuery;
     }
 
@@ -518,12 +516,12 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     @Deprecated
     @JsonIgnore
     public String getHealthCheckValidationQuery() {
-        return getValidationQuery().orElse(DEFAULT_VALIDATION_QUERY);
+        return getValidationQuery();
     }
 
     @JsonProperty
-    public void setValidationQuery(@Nullable String validationQuery) {
-        this.validationQuery = Optional.ofNullable(validationQuery);
+    public void setValidationQuery(String validationQuery) {
+        this.validationQuery = validationQuery;
     }
 
     @JsonProperty
@@ -904,7 +902,7 @@ public class DataSourceFactory implements PooledDataSourceFactory {
         poolConfig.setRemoveAbandonedTimeout((int) removeAbandonedTimeout.toSeconds());
 
         poolConfig.setTestWhileIdle(checkConnectionWhileIdle);
-        validationQuery.ifPresent(poolConfig::setValidationQuery);
+        poolConfig.setValidationQuery(validationQuery);
         poolConfig.setTestOnBorrow(checkConnectionOnBorrow);
         poolConfig.setTestOnConnect(checkConnectionOnConnect);
         poolConfig.setTestOnReturn(checkConnectionOnReturn);

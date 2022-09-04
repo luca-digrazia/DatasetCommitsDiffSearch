@@ -1,6 +1,5 @@
 package io.dropwizard.lifecycle.setup;
 
-import com.codahale.metrics.InstrumentedThreadFactory;
 import io.dropwizard.lifecycle.ExecutorServiceManager;
 import io.dropwizard.util.Duration;
 
@@ -39,9 +38,8 @@ public class ScheduledExecutorServiceBuilder {
     }
 
     private static ThreadFactory buildThreadFactory(String nameFormat, boolean daemon) {
-        ThreadFactory defaultThreadFactory = Executors.defaultThreadFactory();
         return r -> {
-            final Thread thread = defaultThreadFactory.newThread(r);
+            final Thread thread = Executors.defaultThreadFactory().newThread(r);
             if (nameFormat != null) {
                 thread.setName(String.format(Locale.ROOT, nameFormat, COUNT.incrementAndGet()));
             }
@@ -76,13 +74,10 @@ public class ScheduledExecutorServiceBuilder {
     }
 
     public ScheduledExecutorService build() {
-        final InstrumentedThreadFactory instrumentedThreadFactory = new InstrumentedThreadFactory(threadFactory,
-            environment.getMetricRegistry(), nameFormat);
+        final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(this.poolSize, this.threadFactory, this.handler);
+        executor.setRemoveOnCancelPolicy(this.removeOnCancel);
 
-        final ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(poolSize, instrumentedThreadFactory, handler);
-        executor.setRemoveOnCancelPolicy(removeOnCancel);
-
-        environment.manage(new ExecutorServiceManager(executor, shutdownTime, nameFormat));
+        this.environment.manage(new ExecutorServiceManager(executor, this.shutdownTime, this.nameFormat));
         return executor;
     }
 }
