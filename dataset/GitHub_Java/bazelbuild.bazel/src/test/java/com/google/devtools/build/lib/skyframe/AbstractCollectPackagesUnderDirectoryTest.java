@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -29,15 +28,16 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildFileName;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
-import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestPackageFactoryBuilderFactory;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -55,6 +55,7 @@ import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.Before;
 import org.junit.Test;
@@ -76,7 +77,7 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
 
   @Before
   public void setUp() throws IOException {
-    fileSystem = new InMemoryFileSystem();
+    fileSystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
     workingDir = fileSystem.getPath(getWorkspacePathString());
     workingDir.createDirectoryAndParents();
     root = Root.fromPath(workingDir);
@@ -269,26 +270,26 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
     PathPackageLocator pathPackageLocator =
         PathPackageLocator.createWithoutExistenceCheck(
             directories.getOutputBase(), ImmutableList.of(root), getBuildFileNamesByPriority());
-    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
-    packageCacheOptions.packagePath = ImmutableList.of(getWorkspacePathString());
+    PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
+    packageOptions.packagePath = ImmutableList.of(getWorkspacePathString());
     scratch.file("tools/BUILD");
     scratch.file("tools/empty_prelude.bzl");
     ruleClassProvider =
         new ConfiguredRuleClassProvider.Builder()
             .setRunfilesPrefix("workspace")
             .setPrelude("//tools:empty_prelude.bzl")
+            .useDummyBuiltinsBzl()
             .build();
     SkyframeExecutor skyframeExecutor =
         makeSkyframeExecutorFactory()
             .create(
-                TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
+                TestPackageFactoryBuilderFactory.getInstance()
                     .builder(directories)
                     .build(ruleClassProvider, fileSystem),
                 fileSystem,
                 directories,
                 new ActionKeyContext(),
                 /*workspaceStatusActionFactory=*/ null,
-                ruleClassProvider.getBuildInfoFactories(),
                 /*diffAwarenessFactories=*/ ImmutableList.of(),
                 getExtraSkyFunctions(),
                 /*customDirtinessCheckers=*/ ImmutableList.of(),
@@ -296,7 +297,7 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.absent()),
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()),
             PrecomputedValue.injected(
@@ -304,9 +305,9 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
     skyframeExecutor.sync(
         reporter,
-        packageCacheOptions,
+        packageOptions,
         pathPackageLocator,
-        Options.getDefaults(StarlarkSemanticsOptions.class),
+        Options.getDefaults(BuildLanguageOptions.class),
         UUID.randomUUID(),
         /*clientEnv=*/ ImmutableMap.of(),
         new TimestampGranularityMonitor(BlazeClock.instance()),
@@ -337,7 +338,7 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
             .setNumThreads(1)
-            .setEventHander(new Reporter(new EventBus(), reporter))
+            .setEventHandler(new Reporter(new EventBus(), reporter))
             .build();
     return buildDriver.evaluate(ImmutableList.of(key), evaluationContext);
   }
