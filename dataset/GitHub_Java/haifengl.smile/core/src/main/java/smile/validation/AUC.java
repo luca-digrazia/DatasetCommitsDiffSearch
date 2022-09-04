@@ -54,10 +54,8 @@ public class AUC {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, probability.length));
         }
 
-        // for large sample size, overflow may happen for pos * neg.
-        // switch to double to prevent it.
-        double pos = 0;
-        double neg = 0;
+        int pos = 0;
+        int neg = 0;
 
         for (int i = 0; i < truth.length; i++) {
             if (truth[i] == 0) {
