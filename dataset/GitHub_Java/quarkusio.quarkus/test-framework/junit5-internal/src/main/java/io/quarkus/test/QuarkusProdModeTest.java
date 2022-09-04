@@ -21,11 +21,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.logging.LogManager;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -62,11 +58,8 @@ public class QuarkusProdModeTest
     private static final String DEFAULT_HTTP_PORT = "" + DEFAULT_HTTP_PORT_INT;
     private static final String QUARKUS_HTTP_PORT_PROPERTY = "quarkus.http.port";
 
-    private static final Logger rootLogger;
-
     static {
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
-        rootLogger = LogManager.getLogManager().getLogger("");
     }
 
     private Path outputDir;
@@ -94,7 +87,6 @@ public class QuarkusProdModeTest
     private Path logfilePath;
     private Optional<Field> logfileField = Optional.empty();
     private List<AppArtifact> forcedDependencies = Collections.emptyList();
-    private InMemoryLogHandler inMemoryLogHandler = new InMemoryLogHandler((r) -> false);
 
     public Supplier<JavaArchive> getArchiveProducer() {
         return archiveProducer;
@@ -159,11 +151,6 @@ public class QuarkusProdModeTest
         return this;
     }
 
-    public QuarkusProdModeTest setLogRecordPredicate(Predicate<LogRecord> predicate) {
-        this.inMemoryLogHandler = new InMemoryLogHandler(predicate);
-        return this;
-    }
-
     /**
      * Provides a convenient way to either add additional dependencies to the application (if it doesn't already contain a
      * dependency), or override a version (if the dependency already exists)
@@ -213,8 +200,6 @@ public class QuarkusProdModeTest
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        rootLogger.addHandler(inMemoryLogHandler);
-
         timeoutTask = new TimerTask() {
             @Override
             public void run() {
@@ -308,8 +293,7 @@ public class QuarkusProdModeTest
             builtResultArtifact = result.getJar().getPath();
         }
 
-        prodModeTestResults = new ProdModeTestResults(buildDir, builtResultArtifact, result.getResults(),
-                inMemoryLogHandler.records);
+        prodModeTestResults = new ProdModeTestResults(buildDir, builtResultArtifact, result.getResults());
         return builtResultArtifact;
     }
 
