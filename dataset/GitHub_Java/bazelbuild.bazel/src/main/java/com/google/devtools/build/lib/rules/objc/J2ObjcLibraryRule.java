@@ -20,8 +20,10 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.Builder;
+import com.google.devtools.build.lib.packages.RuleClass.ToolchainTransitionMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 
 /** <code>j2objc_library</code> rule declaration. */
 public class J2ObjcLibraryRule implements RuleDefinition {
@@ -32,13 +34,16 @@ public class J2ObjcLibraryRule implements RuleDefinition {
   }
 
   @Override
-  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(
-            J2ObjcConfiguration.class, ObjcConfiguration.class, AppleConfiguration.class)
+            J2ObjcConfiguration.class,
+            ObjcConfiguration.class,
+            AppleConfiguration.class,
+            CppConfiguration.class)
         /* <!-- #BLAZE_RULE(j2objc_library).ATTRIBUTE(deps) -->
-        A list of <code>j2objc_library</code>, <code>java_library</code>
-        and <code>java_import</code> targets that contain
+        A list of <code>j2objc_library</code>, <code>java_library</code>,
+        <code>java_import</code> and <code>java_proto_library</code> targets that contain
         Java files to be transpiled to Objective-C.
         <p>All <code>java_library</code> and <code>java_import</code> targets that can be reached
         transitively through <code>exports</code>, <code>deps</code> and <code>runtime_deps</code>
@@ -69,8 +74,12 @@ public class J2ObjcLibraryRule implements RuleDefinition {
             attr("deps", LABEL_LIST)
                 .aspect(j2ObjcAspect)
                 .direct_compile_time_input()
-                .allowedRuleClasses("j2objc_library", "java_library", "java_import")
+                .allowedRuleClasses(
+                    "j2objc_library", "java_library", "java_import", "java_proto_library")
                 .allowedFileTypes())
+        .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
+        .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
+        .useToolchainTransition(ToolchainTransitionMode.ENABLED)
         .build();
   }
 
@@ -79,7 +88,33 @@ public class J2ObjcLibraryRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("j2objc_library")
         .factoryClass(J2ObjcLibrary.class)
-        .ancestors(J2ObjcLibraryBaseRule.class)
+        .ancestors(
+            J2ObjcLibraryBaseRule.class,
+            ObjcRuleClasses.CrosstoolRule.class,
+            ObjcRuleClasses.XcrunRule.class)
         .build();
   }
 }
+
+/*<!-- #BLAZE_RULE (NAME = j2objc_library, TYPE = LIBRARY, FAMILY = Objective-C) -->
+
+<p> This rule uses <a href="https://github.com/google/j2objc">J2ObjC</a> to translate Java source
+files to Objective-C, which then can be used used as dependencies of objc_library and objc_binary
+rules. Detailed information about J2ObjC itself can be found at  <a href="http://j2objc.org">the
+J2ObjC site</a>
+</p>
+<p>Custom J2ObjC transpilation flags can be specified using the build flag
+<code>--j2objc_translation_flags</code> in the command line.
+</p>
+<p>Please note that the translated files included in a j2objc_library target will be
+compiled using the default compilation configuration, the same configuration as for the sources of
+an objc_library rule with no compilation options specified in attributes.
+</p>
+<p>Plus, generated code is de-duplicated at target level, not source level. If you have two
+different Java targets that include the same Java source files, you may see a duplicate symbol error
+at link time. The correct way to resolve this issue is to move the shared Java source files into a
+separate common target that can be depended upon.
+</p>
+
+
+<!-- #END_BLAZE_RULE -->*/
