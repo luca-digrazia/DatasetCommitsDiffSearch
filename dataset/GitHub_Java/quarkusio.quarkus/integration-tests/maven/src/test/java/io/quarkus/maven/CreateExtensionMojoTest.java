@@ -1,8 +1,5 @@
 package io.quarkus.maven;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
-
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -16,6 +13,7 @@ import java.util.stream.Collectors;
 
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 
 public class CreateExtensionMojoTest {
@@ -42,7 +40,6 @@ public class CreateExtensionMojoTest {
         mojo.encoding = CreateExtensionMojo.DEFAULT_ENCODING;
         mojo.templatesUriBase = CreateExtensionMojo.DEFAULT_TEMPLATES_URI_BASE;
         mojo.quarkusVersion = CreateExtensionMojo.DEFAULT_QUARKUS_VERSION;
-        mojo.bomEntryVersion = CreateExtensionMojo.DEFAULT_BOM_ENTRY_VERSION;
         mojo.assumeManaged = true;
         mojo.nameSegmentDelimiter = CreateExtensionMojo.DEFAULT_NAME_SEGMENT_DELIMITER;
         return mojo;
@@ -127,7 +124,7 @@ public class CreateExtensionMojoTest {
             expectedFiles.add(relative);
             final Path actualPath = actual.resolve(relative);
             try {
-                assertEquals(new String(Files.readAllBytes(p), StandardCharsets.UTF_8),
+                Assert.assertEquals(new String(Files.readAllBytes(p), StandardCharsets.UTF_8),
                         new String(Files.readAllBytes(actualPath), StandardCharsets.UTF_8));
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -142,22 +139,22 @@ public class CreateExtensionMojoTest {
             }
         });
         if (!unexpectedFiles.isEmpty()) {
-            fail(String.format("Files found under [%s] but not defined as expected under [%s]:%s", actual,
+            Assert.fail(String.format("Files found under [%s] but not defined as expected under [%s]:%s", actual,
                     expected, unexpectedFiles.stream().map(Path::toString).collect(Collectors.joining("\n    "))));
         }
     }
 
     @Test
     void getPackage() throws IOException {
-        assertEquals("org.apache.camel.quarkus.aws.sns.deployment", CreateExtensionMojo
+        Assert.assertEquals("org.apache.camel.quarkus.aws.sns.deployment", CreateExtensionMojo
                 .getJavaPackage("org.apache.camel.quarkus", null, "camel-quarkus-aws-sns-deployment"));
-        assertEquals("org.apache.camel.quarkus.component.aws.sns.deployment", CreateExtensionMojo
+        Assert.assertEquals("org.apache.camel.quarkus.component.aws.sns.deployment", CreateExtensionMojo
                 .getJavaPackage("org.apache.camel.quarkus", "component", "camel-quarkus-aws-sns-deployment"));
     }
 
     @Test
     void toCapCamelCase() throws IOException {
-        assertEquals("FooBarBaz", CreateExtensionMojo.toCapCamelCase("foo-bar-baz"));
+        Assert.assertEquals("FooBarBaz", CreateExtensionMojo.toCapCamelCase("foo-bar-baz"));
     }
 
 }
