@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.FutureTask;
 
 /** Include scanner for swig files. */
 public class SwigIncludeScanner extends LegacyIncludeScanner {
@@ -40,7 +41,7 @@ public class SwigIncludeScanner extends LegacyIncludeScanner {
   public SwigIncludeScanner(
       ExecutorService includePool,
       SpawnIncludeScanner spawnIncludeScanner,
-      ConcurrentMap<Artifact, Collection<Inclusion>> cache,
+      ConcurrentMap<Artifact, FutureTask<Collection<Inclusion>>> cache,
       List<PathFragment> includePaths,
       BlazeDirectories directories,
       ArtifactFactory artifactFactory,

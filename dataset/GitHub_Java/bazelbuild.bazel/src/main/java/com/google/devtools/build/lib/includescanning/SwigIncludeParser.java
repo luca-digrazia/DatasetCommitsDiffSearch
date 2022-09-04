@@ -21,7 +21,7 @@ class SwigIncludeParser extends IncludeParser {
 
   SwigIncludeParser() {
     // There are no preprocessor-macro hints for swig.
-    super(/* hints= */ null);
+    super(/* hints= */ null, /* includesFilesInTree= */ false);
   }
 
   private static int skipParentheses(char[] chars, int pos, int end) {

@@ -271,7 +271,8 @@ public class IncludeScanningModule extends BlazeModule {
                         env.getSkyframeExecutor()
                             .evaluateSkyKeyForExecutionSetup(
                                 env.getReporter(), IncludeHintsFunction.INCLUDE_HINTS_KEY),
-                    env.getSkyframeBuildView().getArtifactFactory())));
+                    env.getSkyframeBuildView().getArtifactFactory()),
+                buildRequest.getOptions(IncludeScanningOptions.class).includesFilesInTree));
       } catch (ExecException e) {
         throw new ExecutorInitException("could not initialize include hints", e);
       }

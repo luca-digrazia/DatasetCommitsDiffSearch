@@ -501,51 +501,66 @@ public class LegacyIncludeScanner implements IncludeScanner {
     Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
 
     IncludeVisitor visitor = new IncludeVisitor(includeScanningHeaderData.getModularHeaders());
+    // Process cmd line includes, if specified.
+    if (mainSource != null && !cmdlineIncludes.isEmpty()) {
+      visitor.processCmdlineIncludes(
+          mainSource,
+          cmdlineIncludes,
+          grepIncludes,
+          includes,
+          includeScanningHeaderData.getPathToLegalOutputArtifact(),
+          actionExecutionMetadata,
+          actionExecutionContext,
+          visitedInclusions);
+      visitor.sync();
+    }
 
-    try {
-      // Process cmd line includes, if specified.
-      if (mainSource != null && !cmdlineIncludes.isEmpty()) {
-        visitor.processCmdlineIncludes(
-            mainSource,
-            cmdlineIncludes,
-            grepIncludes,
-            includes,
-            includeScanningHeaderData.getPathToLegalOutputArtifact(),
-            actionExecutionMetadata,
-            actionExecutionContext,
-            visitedInclusions);
-        visitor.sync();
-      }
+    visitor.processBulkAsync(
+        sources,
+        includes,
+        includeScanningHeaderData.getPathToLegalOutputArtifact(),
+        actionExecutionMetadata,
+        actionExecutionContext,
+        visitedInclusions,
+        grepIncludes);
+    visitor.sync();
 
+    // Process include hints
+    // TODO(ulfjack): Make this code go away. Use the new hinted inclusions instead.
+    Hints hints = parser.getHints();
+    if (hints != null) {
+      // Follow "path" hints.
       visitor.processBulkAsync(
-          sources,
+          pathHints.build(),
           includes,
           includeScanningHeaderData.getPathToLegalOutputArtifact(),
           actionExecutionMetadata,
           actionExecutionContext,
           visitedInclusions,
           grepIncludes);
-      visitor.sync();
-
-      // Process include hints
-      // TODO(ulfjack): Make this code go away. Use the new hinted inclusions instead.
-      Hints hints = parser.getHints();
-      if (hints != null) {
-        // Follow "path" hints.
-        visitor.processBulkAsync(
-            pathHints.build(),
+      // Follow "file" hints for the primary sources.
+      for (Artifact source : sources) {
+        visitor.processFileLevelHintsAsync(
+            hints,
+            source,
             includes,
             includeScanningHeaderData.getPathToLegalOutputArtifact(),
             actionExecutionMetadata,
             actionExecutionContext,
             visitedInclusions,
             grepIncludes);
-        // Follow "file" hints for the primary sources.
-        for (Artifact source : sources) {
+      }
+      visitor.sync();
+
+      // Follow "file" hints for all included headers, transitively.
+      Set<Artifact> frontier = includes;
+      while (!frontier.isEmpty()) {
+        Set<Artifact> adjacent = Sets.newConcurrentHashSet();
+        for (Artifact include : frontier) {
           visitor.processFileLevelHintsAsync(
               hints,
-              source,
-              includes,
+              include,
+              adjacent,
               includeScanningHeaderData.getPathToLegalOutputArtifact(),
               actionExecutionMetadata,
               actionExecutionContext,
@@ -553,36 +568,14 @@ public class LegacyIncludeScanner implements IncludeScanner {
               grepIncludes);
         }
         visitor.sync();
-
-        // Follow "file" hints for all included headers, transitively.
-        Set<Artifact> frontier = includes;
-        while (!frontier.isEmpty()) {
-          Set<Artifact> adjacent = Sets.newConcurrentHashSet();
-          for (Artifact include : frontier) {
-            visitor.processFileLevelHintsAsync(
-                hints,
-                include,
-                adjacent,
-                includeScanningHeaderData.getPathToLegalOutputArtifact(),
-                actionExecutionMetadata,
-                actionExecutionContext,
-                visitedInclusions,
-                grepIncludes);
+        // Keep novel nodes as the next frontier.
+        for (Iterator<Artifact> iter = adjacent.iterator(); iter.hasNext(); ) {
+          if (!includes.add(iter.next())) {
+            iter.remove();
           }
-          visitor.sync();
-          // Keep novel nodes as the next frontier.
-          for (Iterator<Artifact> iter = adjacent.iterator(); iter.hasNext(); ) {
-            if (!includes.add(iter.next())) {
-              iter.remove();
-            }
-          }
-          frontier = adjacent;
         }
+        frontier = adjacent;
       }
-    } catch (IOException | InterruptedException | ExecException | MissingDepException e) {
-      // Careful: Do not leak visitation threads if we have an exception in the initial thread.
-      visitor.sync();
-      throw e;
     }
   }
 

@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -78,22 +77,21 @@ public class SpawnIncludeScanner {
 
   @VisibleForTesting
   Path getIncludesOutput(
-      Artifact src, ArtifactPathResolver resolver, GrepIncludesFileType fileType,
-      boolean placeNextToFile) {
+      Artifact src, GrepIncludesFileType fileType, boolean placeNextToFile) {
     if (placeNextToFile) {
       // If this is an output file, just place the grepped-file next to it. The directory is bound
       // to exist.
-      return resolver.toPath(src)
+      return src.getPath()
           .getParentDirectory()
           .getRelative(src.getFilename() + ".blaze-grepped_includes_" + fileType);
     }
-    return resolver.convertPath(execRoot)
+    return execRoot
         .getChild("blaze-grepped_includes_" + fileType.getFileType())
         .getRelative(src.getExecPath());
   }
 
   private PathFragment execPath(Path path) {
-    return path.asFragment().relativeTo(execRoot.asFragment());
+    return path.relativeTo(execRoot);
   }
 
   /** Returns whether "file" should be parsed using this include scanner. */
@@ -270,8 +268,7 @@ public class SpawnIncludeScanner {
       GrepIncludesFileType fileType,
       boolean placeNextToFile)
       throws IOException, ExecException, InterruptedException {
-    Path output = getIncludesOutput(file, actionExecutionContext.getPathResolver(), fileType,
-        placeNextToFile);
+    Path output = getIncludesOutput(file, fileType, placeNextToFile);
     if (!inMemoryOutput && !placeNextToFile) {
       try {
         Path dir = output.getParentDirectory();
