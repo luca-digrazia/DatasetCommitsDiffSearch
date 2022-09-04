@@ -397,7 +397,12 @@ public abstract class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "java/test",
         "lib",
         // error:
-        getErrorMsgMandatoryProviderMissing("//java/test:not_a_plugin", "JavaPluginInfo"),
+        getErrorMsgMisplacedRules(
+            "plugins",
+            "android_library",
+            "//java/test:lib",
+            "java_library",
+            "//java/test:not_a_plugin"),
         // BUILD file:
         "java_library(",
         "    name = 'not_a_plugin',",
