@@ -54,15 +54,13 @@ public class ChunkedGELFClientManagerThread extends Thread {
 
                     int fiveSecondsAgo = (int) (System.currentTimeMillis()/1000)-5;
 
-
-
                     try {
                         if (message.getFirstChunkArrival() < fiveSecondsAgo) {
-                            this.dropMessage(messageId, "Did not completely arrive in time.");
+                            this.dropMessage(messageId);
                         }
                     } catch (EmptyGELFMessageException e) {
                         // getFirstChunkArrival() did not work because first part did not arrive yet. Drop anyways.
-                        this.dropMessage(messageId, "First chunk did not arrive.");
+                        this.dropMessage(messageId);
                     }
                     i++;
                 }
@@ -77,13 +75,13 @@ public class ChunkedGELFClientManagerThread extends Thread {
     }
 
     /**
-     * Drop a message from the ChunkedGELFClientManager message map. Also causes
+     * Drop a messasge from the ChunkedGELFClientManager message map. Also causes
      * INFO log message
      *
      * @param messageId The message to delete
      */
-    public void dropMessage(String messageId, String reason) {
-        Log.info("Dropping incomplete chunked GELF message <" + messageId + "> (" + reason + ")");
+    public void dropMessage(String messageId) {
+        Log.info("Dropping incomplete chunked GELF message <" + messageId + ">");
         ChunkedGELFClientManager.getInstance().dropMessage(messageId);
     }
 

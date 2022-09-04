@@ -102,7 +102,6 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
             ReceiveHookManager.postProcess(new MessageCounterHook());
         } catch(Exception e) {
             Log.warn("Could not handle GELF client: " + e.toString());
-            e.printStackTrace();
             return false;
         }
 

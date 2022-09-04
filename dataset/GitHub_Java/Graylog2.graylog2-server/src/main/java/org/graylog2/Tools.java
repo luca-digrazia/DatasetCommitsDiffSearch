@@ -23,7 +23,10 @@ package org.graylog2;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.util.zip.DataFormatException;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
 /**
@@ -162,14 +165,6 @@ public final class Tools {
             out.write(buffer, 0, bytesRead);
         }
         return new String(out.toByteArray(), "UTF-8");
-    }
-
-    /**
-     *
-     * @return The current UTC UNIX timestamp.
-     */
-    public static int getUTCTimestamp() {
-       return (int) (System.currentTimeMillis()/1000);
     }
 
 }
