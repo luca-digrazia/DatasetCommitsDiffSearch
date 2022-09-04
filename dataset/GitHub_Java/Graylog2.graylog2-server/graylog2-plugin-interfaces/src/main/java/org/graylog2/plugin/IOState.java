@@ -1,6 +1,6 @@
 /**
  * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+ * Copyright (c) 2012 Graylog, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,12 +24,21 @@ package org.graylog2.plugin;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.eventbus.EventBus;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.plugin.events.inputs.IOStateChangedEvent;
 import org.joda.time.DateTime;
 
+import java.util.Objects;
 import java.util.UUID;
 
 @JsonAutoDetect
 public class IOState<T extends Stoppable> {
+    public interface Factory<T extends Stoppable> {
+        IOState<T> create(T stoppable);
+        IOState<T> create(T stoppable, Type state);
+    }
     public enum Type {
         CREATED,
         INITIALIZED,
@@ -37,36 +46,30 @@ public class IOState<T extends Stoppable> {
         STARTING,
         RUNNING,
         FAILED,
+        STOPPING,
         STOPPED,
         TERMINATED
     }
 
     protected T stoppable;
-    protected final String id;
+    private EventBus eventbus;
     protected Type state;
     protected DateTime startedAt;
     protected String detailedMessage;
 
-    public IOState(T stoppable) {
-        this(stoppable, Type.CREATED);
+    @AssistedInject
+    public IOState(EventBus eventbus, @Assisted T stoppable) {
+        this(eventbus, stoppable, Type.CREATED);
     }
 
-    public IOState(T stoppable, Type state) {
-        this(stoppable, state, UUID.randomUUID().toString());
-    }
-
-    public IOState(T stoppable, String id) {
-        this(stoppable, Type.CREATED, id);
-    }
-
-    public IOState(T stoppable, Type state, String id) {
+    @AssistedInject
+    public IOState(EventBus eventbus, @Assisted T stoppable, @Assisted Type state) {
+        this.eventbus = eventbus;
         this.state = state;
         this.stoppable = stoppable;
-        this.id = id;
-        this.startedAt = Tools.iso8601();
+        this.startedAt = Tools.nowUTC();
     }
 
-    @JsonProperty("message_input")
     public T getStoppable() {
         return stoppable;
     }
@@ -75,17 +78,16 @@ public class IOState<T extends Stoppable> {
         this.stoppable = stoppable;
     }
 
-    public String getId() {
-        return id;
-    }
-
     public Type getState() {
         return state;
     }
 
     public void setState(Type state) {
+        final IOStateChangedEvent<T> evt = IOStateChangedEvent.create(this.state, state, this);
+
         this.state = state;
         this.setDetailedMessage(null);
+        this.eventbus.post(evt);
     }
 
     public DateTime getStartedAt() {
@@ -108,7 +110,6 @@ public class IOState<T extends Stoppable> {
     public String toString() {
         return "InputState{" +
                 "stoppable=" + stoppable +
-                ", id='" + id + '\'' +
                 ", state=" + state +
                 ", startedAt=" + startedAt +
                 ", detailedMessage='" + detailedMessage + '\'' +
@@ -122,16 +123,11 @@ public class IOState<T extends Stoppable> {
 
         IOState that = (IOState) o;
 
-        if (!id.equals(that.id)) return false;
-        if (!stoppable.equals(that.stoppable)) return false;
-
-        return true;
+        return Objects.equals(this.stoppable, that.stoppable);
     }
 
     @Override
     public int hashCode() {
-        int result = stoppable.hashCode();
-        result = 31 * result + id.hashCode();
-        return result;
+        return Objects.hash(this.stoppable);
     }
 }

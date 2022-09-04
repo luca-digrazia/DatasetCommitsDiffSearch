@@ -60,7 +60,7 @@ public class DashboardServiceImplTest {
 
     @Before
     public void setUpService() throws Exception {
-        this.dashboardService = new DashboardServiceImpl(mongoRule.getMongoConnection(), dashboardWidgetCreator);
+        this.dashboardService = new DashboardServiceImpl(mongoRule.getMongoConnection(), metricRegistry, searches, dashboardWidgetCreator);
     }
 
     @Test

@@ -1,31 +1,48 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.rules;
 
-import com.google.common.collect.Sets;
-import org.graylog2.Graylog2BaseTest;
 import org.graylog2.plugin.Message;
-import org.joda.time.DateTime;
-import org.testng.annotations.Test;
+import org.graylog2.plugin.Tools;
+import org.junit.Test;
 
-import java.net.URL;
+import java.net.URI;
+import java.util.Collections;
 
-import static org.testng.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-public class DroolsEngineTest extends Graylog2BaseTest {
+public class DroolsEngineTest {
 
     @Test
     public void runWithoutRules() {
-        final DroolsEngine engine = new DroolsEngine(Sets.<URL>newHashSet());
+        final DroolsEngine engine = new DroolsEngine(Collections.<URI>emptySet());
 
-        final int rulesFired = engine.evaluateInSharedSession(new Message("test message", "test", DateTime.now()));
+        final int rulesFired = engine.evaluateInSharedSession(new Message("test message", "test", Tools.nowUTC()));
 
-        assertEquals(rulesFired, 0, "No rules should have fired");
+        assertEquals("No rules should have fired", rulesFired, 0);
 
         engine.stop();
     }
 
     @Test
     public void addedRuleIsVisibleInSession() {
-        final DroolsEngine engine = new DroolsEngine(Sets.<URL>newHashSet());
+        final DroolsEngine engine = new DroolsEngine(Collections.<URI>emptySet());
 
         String rule1 =
                 "declare Message\n" +
@@ -52,23 +69,23 @@ public class DroolsEngineTest extends Graylog2BaseTest {
                 "end\n";
 
         final boolean valid1 = engine.addRule(rule1);
-        assertTrue(valid1, "Rule should compile without errors");
+        assertTrue("Rule should compile without errors", valid1);
 
         final boolean valid2 = engine.addRule(rule2);
-        assertTrue(valid2, "Rule should compile without errors");
+        assertTrue("Rule should compile without errors", valid2);
 
-        final Message msg = new Message("test message", "test source", DateTime.now());
+        final Message msg = new Message("test message", "test source", Tools.nowUTC());
         final int fired = engine.evaluateInSharedSession(msg);
 
-        assertTrue(msg.getFilterOut(), "msg is filtered out");
-        assertEquals(fired, 2, "both rules should have fired");
+        assertTrue("msg is filtered out", msg.getFilterOut());
+        assertEquals("both rules should have fired", fired, 2);
 
         engine.stop();
     }
 
     @Test
     public void incorrectRuleIsNotApplied() {
-        final DroolsEngine engine = new DroolsEngine(Sets.<URL>newHashSet());
+        final DroolsEngine engine = new DroolsEngine(Collections.<URI>emptySet());
 
         String invalidRule = "rule \"this will not compile\"\n" +
                 "when\n" +
@@ -83,12 +100,12 @@ public class DroolsEngineTest extends Graylog2BaseTest {
                 "end";
 
         boolean deployed = engine.addRule(invalidRule);
-        assertFalse(deployed, "Should not deploy invalid rule");
+        assertFalse("Should not deploy invalid rule", deployed);
 
         deployed = engine.addRule(validRule);
-        assertTrue(deployed, "Subsequent deployment of valid rule works");
+        assertTrue("Subsequent deployment of valid rule works", deployed);
 
-        engine.evaluateInSharedSession(new Message("foo", "source", DateTime.now()));
+        engine.evaluateInSharedSession(new Message("foo", "source", Tools.nowUTC()));
 
         engine.stop();
     }

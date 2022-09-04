@@ -1,38 +1,43 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.alerts;
 
+import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableSet;
 import org.apache.commons.mail.DefaultAuthenticator;
 import org.apache.commons.mail.Email;
+import org.apache.commons.mail.EmailConstants;
 import org.apache.commons.mail.EmailException;
 import org.apache.commons.mail.SimpleEmail;
-import org.graylog2.Configuration;
+import org.graylog2.configuration.EmailConfiguration;
 import org.graylog2.database.NotFoundException;
+import org.graylog2.notifications.Notification;
+import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.system.NodeId;
+import org.graylog2.shared.users.UserService;
 import org.graylog2.streams.StreamRuleService;
-import org.graylog2.users.User;
-import org.graylog2.users.UserService;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,30 +45,37 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.net.URI;
 import java.util.List;
+import java.util.Set;
 
+import static com.google.common.base.Strings.isNullOrEmpty;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class StaticEmailAlertSender implements AlertSender {
 
     private static final Logger LOG = LoggerFactory.getLogger(StaticEmailAlertSender.class);
 
     private final StreamRuleService streamRuleService;
-    protected final Configuration configuration;
+    protected final EmailConfiguration configuration;
     private final UserService userService;
+    private final NotificationService notificationService;
+    private final NodeId nodeId;
+    private Configuration pluginConfig;
 
     @Inject
-    public StaticEmailAlertSender(Configuration configuration,
+    public StaticEmailAlertSender(EmailConfiguration configuration,
                                   StreamRuleService streamRuleService,
-                                  UserService userService) {
+                                  UserService userService,
+                                  NotificationService notificationService,
+                                  NodeId nodeId) {
         this.configuration = configuration;
         this.streamRuleService = streamRuleService;
         this.userService = userService;
+        this.notificationService = notificationService;
+        this.nodeId = nodeId;
     }
 
     @Override
     public void initialize(org.graylog2.plugin.configuration.Configuration configuration) {
+        this.pluginConfig = configuration;
     }
 
     @Override
@@ -73,45 +85,53 @@ public class StaticEmailAlertSender implements AlertSender {
 
     private void sendEmail(String emailAddress, Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) throws TransportConfigurationException, EmailException {
         LOG.debug("Sending mail to " + emailAddress);
-        if(!configuration.isEmailTransportEnabled()) {
-            throw new TransportConfigurationException();
+        if(!configuration.isEnabled()) {
+            throw new TransportConfigurationException("Email transport is not enabled in server configuration file!");
         }
 
-        Email email = new SimpleEmail();
-        email.setHostName(configuration.getEmailTransportHostname());
-        email.setSmtpPort(configuration.getEmailTransportPort());
-        if (configuration.isEmailTransportUseSsl()) {
-            email.setSslSmtpPort(Integer.toString(configuration.getEmailTransportPort()));
+        final Email email = new SimpleEmail();
+        email.setCharset(EmailConstants.UTF_8);
+
+        if (Strings.isNullOrEmpty(configuration.getHostname())) {
+            throw new TransportConfigurationException("No hostname configured for email transport while trying to send alert email!");
+        } else {
+            email.setHostName(configuration.getHostname());
+        }
+        email.setSmtpPort(configuration.getPort());
+        if (configuration.isUseSsl()) {
+            email.setSslSmtpPort(Integer.toString(configuration.getPort()));
         }
 
-        if(configuration.isEmailTransportUseAuth()) {
+        if(configuration.isUseAuth()) {
             email.setAuthenticator(new DefaultAuthenticator(
-                    configuration.getEmailTransportUsername(),
-                    configuration.getEmailTransportPassword()
+                    Strings.nullToEmpty(configuration.getUsername()),
+                    Strings.nullToEmpty(configuration.getPassword())
             ));
         }
 
-        email.setSSLOnConnect(configuration.isEmailTransportUseSsl());
-        email.setStartTLSEnabled(configuration.isEmailTransportUseTls());
-        email.setFrom(configuration.getEmailTransportFromEmail());
-        email.setSubject(buildSubject(stream, checkResult, configuration, backlog));
-
-        StringBuilder body = new StringBuilder();
-        body.append(buildBody(stream, checkResult, backlog));
-        email.setMsg(body.toString());
+        email.setSSLOnConnect(configuration.isUseSsl());
+        email.setStartTLSEnabled(configuration.isUseTls());
+        if (pluginConfig != null && !Strings.isNullOrEmpty(pluginConfig.getString("sender"))) {
+            email.setFrom(pluginConfig.getString("sender"));
+        } else {
+            email.setFrom(configuration.getFromEmail());
+        }
+        email.setSubject(buildSubject(stream, checkResult, backlog));
+        email.setMsg(buildBody(stream, checkResult, backlog));
         email.addTo(emailAddress);
 
         email.send();
     }
 
-    protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, Configuration config, List<Message> backlog) {
+    protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) {
         StringBuilder sb = new StringBuilder();
 
-        if (config.getEmailTransportSubjectPrefix() != null && !config.getEmailTransportSubjectPrefix().isEmpty()) {
-            sb.append(config.getEmailTransportSubjectPrefix()).append(" ");
+        final String subjectPrefix = configuration.getSubjectPrefix();
+        if (!isNullOrEmpty(subjectPrefix)) {
+            sb.append(subjectPrefix).append(" ");
         }
 
-        sb.append("Graylog2 alert for stream: ").append(stream.getTitle());
+        sb.append("Graylog alert for stream: ").append(stream.getTitle());
 
         return sb.toString();
     }
@@ -123,13 +143,11 @@ public class StaticEmailAlertSender implements AlertSender {
 
         sb.append("\n\n");
         sb.append("##########\n");
-        sb.append("Date: ").append(Tools.iso8601().toString()).append("\n");
+        sb.append("Date: ").append(Tools.nowUTC().toString()).append("\n");
         sb.append("Stream ID: ").append(stream.getId()).append("\n");
         sb.append("Stream title: ").append(stream.getTitle()).append("\n");
-        if (configuration.getEmailTransportWebInterfaceUrl() != null)
-            sb.append("Stream URL: ").append(
-                    buildStreamDetailsURL(configuration.getEmailTransportWebInterfaceUrl(),
-                            checkResult, stream));
+        sb.append("Stream URL: ").append(buildStreamDetailsURL(configuration.getWebInterfaceUri(), checkResult, stream)).append("\n");
+
         try {
             sb.append("Stream rules: ").append(streamRuleService.loadForStream(stream)).append("\n");
         } catch (NotFoundException e) {
@@ -147,29 +165,29 @@ public class StaticEmailAlertSender implements AlertSender {
     }
 
     protected String buildStreamDetailsURL(URI baseUri, AlertCondition.CheckResult checkResult, Stream stream) {
-        StringBuilder sb = new StringBuilder();
+        // Return an informational message if the web interface URL hasn't been set
+        if (baseUri == null || isNullOrEmpty(baseUri.getHost())) {
+            return "Please configure 'transport_email_web_interface_url' in your Graylog configuration file.";
+        }
 
         int time = 5;
-        if (checkResult.getTriggeredCondition().getParameters().get("time") != null)
-            time = (int)checkResult.getTriggeredCondition().getParameters().get("time");
+        if (checkResult.getTriggeredCondition().getParameters().get("time") != null) {
+            time = (int) checkResult.getTriggeredCondition().getParameters().get("time");
+        }
 
         DateTime dateAlertEnd = checkResult.getTriggeredAt();
         DateTime dateAlertStart = dateAlertEnd.minusMinutes(time);
         String alertStart = Tools.getISO8601String(dateAlertStart);
         String alertEnd = Tools.getISO8601String(dateAlertEnd);
 
-        sb.append(baseUri).append("/streams/").append(stream.getId()).append("/messages");
-        sb.append("?rangetype=absolute&from=").append(alertStart)
-                .append("&to=").append(alertEnd).append("&q=*\n");
-
-        return sb.toString();
+        return baseUri + "/streams/" + stream.getId() + "/messages?rangetype=absolute&from=" + alertStart + "&to=" + alertEnd + "&q=*";
     }
 
     protected String buildBacklogSummary(List<Message> backlog) {
         if (backlog == null || backlog.isEmpty())
             return "";
 
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         MessageFormatter messageFormatter = new MessageFormatter();
 
         sb.append("\n\nLast ");
@@ -179,7 +197,7 @@ public class StaticEmailAlertSender implements AlertSender {
             sb.append("relevant message:\n");
         sb.append("======================\n\n");
 
-        for (Message message : backlog) {
+        for (final Message message : backlog) {
             sb.append(messageFormatter.formatForMail(message));
             sb.append("\n");
         }
@@ -190,21 +208,27 @@ public class StaticEmailAlertSender implements AlertSender {
 
     @Override
     public void sendEmails(Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) throws TransportConfigurationException, EmailException {
-        if(!configuration.isEmailTransportEnabled()) {
-            throw new TransportConfigurationException();
+        if(!configuration.isEnabled()) {
+            throw new TransportConfigurationException("Email transport is not enabled in server configuration file!");
         }
 
         if (stream.getAlertReceivers() == null || stream.getAlertReceivers().isEmpty()) {
             throw new RuntimeException("Stream [" + stream + "] has no alert receivers.");
         }
 
-        // Send emails to subscribed users.
-        if(stream.getAlertReceivers().get("users") != null) {
-            for (String username : stream.getAlertReceivers().get("users")) {
-                User user = userService.load(username);
+        final ImmutableSet.Builder<String> recipientsBuilder = ImmutableSet.builder();
 
-                if(user != null && user.getEmail() != null && !user.getEmail().isEmpty()) {
-                    sendEmail(user.getEmail(), stream, checkResult, backlog);
+        // Send emails to subscribed users.
+        final List<String> userNames = stream.getAlertReceivers().get("users");
+        if(userNames != null) {
+            for (String username : userNames) {
+                final User user = userService.load(username);
+
+                if(user != null && !isNullOrEmpty(user.getEmail())) {
+                    // LDAP users might have multiple email addresses defined.
+                    // See: https://github.com/Graylog2/graylog2-server/issues/1439
+                    final Iterable<String> addresses = Splitter.on(",").omitEmptyStrings().trimResults().split(user.getEmail());
+                    recipientsBuilder.addAll(addresses);
                 }
             }
         }
@@ -213,9 +237,24 @@ public class StaticEmailAlertSender implements AlertSender {
         if(stream.getAlertReceivers().get("emails") != null) {
             for (String email : stream.getAlertReceivers().get("emails")) {
                 if(!email.isEmpty()) {
-                    sendEmail(email, stream, checkResult, backlog);
+                    recipientsBuilder.add(email);
                 }
             }
+        }
+
+        final Set<String> recipients = recipientsBuilder.build();
+        if (recipients.size() == 0) {
+            final Notification notification = notificationService.buildNow()
+                    .addNode(nodeId.toString())
+                    .addType(Notification.Type.GENERIC)
+                    .addSeverity(Notification.Severity.NORMAL)
+                    .addDetail("title", "Stream \"" + stream.getTitle() + "\" is alerted, but no recipients have been defined!")
+                    .addDetail("description", "To fix this, go to the alerting configuration of the stream and add at least one alert recipient.");
+            notificationService.publishIfFirst(notification);
+        }
+
+        for (String email : recipients) {
+            sendEmail(email, stream, checkResult, backlog);
         }
     }
 }

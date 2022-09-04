@@ -24,8 +24,8 @@ import org.graylog2.indexer.InvalidRangeFormatException;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.searches.Searches;
-import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
-import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
@@ -75,9 +75,9 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
 
         this.decimalFormat = new DecimalFormat("#.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
-        this.time = getNumber(parameters.get("time")).orElse(0).intValue();
+        this.time = Integer.parseInt(String.valueOf(parameters.get("time")));
         this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase(Locale.ENGLISH));
-        this.threshold = getNumber(parameters.get("threshold")).orElse(0.0).doubleValue();
+        this.threshold = Double.parseDouble(String.valueOf(parameters.get("threshold")));
         this.type = CheckType.valueOf(((String) parameters.get("type")).toUpperCase(Locale.ENGLISH));
         this.field = (String) parameters.get("field");
 

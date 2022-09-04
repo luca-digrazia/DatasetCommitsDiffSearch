@@ -1,68 +1,102 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.searches.timeranges;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.google.auto.value.AutoValue;
+import com.google.common.collect.ImmutableMap;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.joda.time.Seconds;
 
-import java.util.HashMap;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class RelativeRange implements TimeRange {
+@AutoValue
+@JsonTypeName(RelativeRange.RELATIVE)
+public abstract class RelativeRange extends TimeRange {
 
-    private final int range;
+    public static final String RELATIVE = "relative";
 
-    public RelativeRange(int range) throws InvalidRangeParametersException {
-        if (range < 0) {
-            throw new InvalidRangeParametersException();
-        }
+    @JsonProperty
+    public abstract String type();
 
-        this.range = range;
+    @JsonProperty
+    public abstract int range();
+
+    public int getRange() {
+        return range();
     }
 
     @Override
-    public Type getType() {
-        return Type.RELATIVE;
+    @JsonIgnore
+    public DateTime getFrom() {
+        // TODO this should be computed once
+        if (range() > 0) {
+            return Tools.nowUTC().minus(Seconds.seconds(range()));
+        }
+        return new DateTime(0, DateTimeZone.UTC);
+    }
+
+    @Override
+    @JsonIgnore
+    public DateTime getTo() {
+        // TODO this should be fixed
+        return Tools.nowUTC();
+    }
+
+    @JsonCreator
+    public static RelativeRange create(@JsonProperty("type") String type, @JsonProperty("range") int range) throws InvalidRangeParametersException {
+        return builder().type(type).checkRange(range).build();
+    }
+
+    public static RelativeRange create(int range) throws InvalidRangeParametersException {
+        return create(RELATIVE, range);
+    }
+
+    public static Builder builder() {
+        return new AutoValue_RelativeRange.Builder();
     }
 
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("type", getType().toString().toLowerCase());
-            put("range", getRange());
-        }};
+        return ImmutableMap.<String, Object>of(
+                "type", RELATIVE,
+                "range", getRange());
     }
 
-    public int getRange() {
-        return range;
-    }
+    @AutoValue.Builder
+    public abstract static class Builder {
+        public abstract RelativeRange build();
 
-    @Override
-    public DateTime getFrom() {
-        if (getRange() > 0) {
-            return Tools.iso8601().minus(Seconds.seconds(getRange()));
+        public abstract Builder type(String type);
+
+        public abstract Builder range(int range);
+
+        // TODO replace with custom build()
+        public Builder checkRange(int range) throws InvalidRangeParametersException {
+            if (range < 0) {
+                throw new InvalidRangeParametersException();
+            }
+            return range(range);
         }
-        return new DateTime(0);
     }
+
 }

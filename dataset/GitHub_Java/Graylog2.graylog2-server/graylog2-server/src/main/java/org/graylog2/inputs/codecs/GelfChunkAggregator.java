@@ -49,7 +49,6 @@ import static java.util.Objects.requireNonNull;
 public class GelfChunkAggregator implements CodecAggregator {
     private static final Logger log = LoggerFactory.getLogger(GelfChunkAggregator.class);
 
-    private static final int MAX_CHUNKS = 128;
     public static final Result VALID_EMPTY_RESULT = new Result(null, true);
     public static final Result INVALID_RESULT = new Result(null, false);
     public static final int VALIDITY_PERIOD = 5000; // millis
@@ -100,7 +99,7 @@ public class GelfChunkAggregator implements CodecAggregator {
                     if (aggregatedBuffer == null) {
                         return VALID_EMPTY_RESULT;
                     }
-                } catch (IllegalArgumentException | IllegalStateException e) {
+                } catch (IllegalArgumentException e) {
                     log.debug("Invalid gelf message chunk, dropping message.", e);
                     return INVALID_RESULT;
                 }
@@ -156,11 +155,6 @@ public class GelfChunkAggregator implements CodecAggregator {
         }
 
         final int chunkWatermark = entry.chunkSlotsWritten.incrementAndGet();
-
-        if (chunkWatermark > MAX_CHUNKS) {
-            getAndCleanupEntry(messageId);
-            throw new IllegalStateException("Maximum number of chunks reached, discarding message");
-        }
 
         if (chunkWatermark == sequenceCount) {
             // message is complete by chunk count, assemble and return it.

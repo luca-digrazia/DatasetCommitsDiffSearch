@@ -18,8 +18,6 @@ package org.graylog2.inputs.codecs.gelf;
 
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
 
 public final class GELFMessageChunk {
 
@@ -29,9 +27,19 @@ public final class GELFMessageChunk {
     public static final int HEADER_PART_SEQNUM_START = 10;
 
     /**
+     * The length of the sequence number
+     */
+    public static final int HEADER_PART_SEQNUM_LENGTH = 1;
+
+    /**
      * The start byte of the sequence count
      */
     public static final int HEADER_PART_SEQCNT_START = 11;
+
+    /**
+     * The length of the sequence count
+     */
+    public static final int HEADER_PART_SEQCNT_LENGTH = 1;
 
     /**
      * The start byte of the message hash
@@ -54,14 +62,14 @@ public final class GELFMessageChunk {
     private int sequenceCount = -1;
     private long arrival = -1L;
 
-    private final ChannelBuffer payload;
+    private final byte[] payload;
     private final MessageInput sourceInput;
 
     public GELFMessageChunk(final byte[] payload, MessageInput sourceInput) {
         if (payload.length < HEADER_TOTAL_LENGTH) {
             throw new IllegalArgumentException("This GELF message chunk is too short. Cannot even contain the required header.");
         }
-        this.payload = ChannelBuffers.wrappedBuffer(payload);
+        this.payload = payload;
         this.sourceInput = sourceInput;
         read();
     }
@@ -110,7 +118,12 @@ public final class GELFMessageChunk {
 
     private String extractId() {
         if (this.id == null) {
-            this.id = ChannelBuffers.hexDump(payload, HEADER_PART_HASH_START, HEADER_PART_HASH_LENGTH);
+            String tmp = "";
+            for (int i = 0; i < HEADER_PART_HASH_LENGTH; i++) {
+                // Make a hex value out of it.
+                tmp = tmp.concat(Integer.toString((payload[i + HEADER_PART_HASH_START] & 0xff) + 0x100, 16).substring(1));
+            }
+            this.id = tmp;
         }
 
         return this.id;
@@ -119,7 +132,7 @@ public final class GELFMessageChunk {
     // lol duplication
     private void extractSequenceNumber() {
         if (this.sequenceNumber == -1) {
-            final int seqNum = payload.getUnsignedByte(HEADER_PART_SEQNUM_START);
+            final int seqNum = this.sliceInteger(HEADER_PART_SEQNUM_START, HEADER_PART_SEQNUM_LENGTH);
             if (seqNum >= 0) {
                 this.sequenceNumber = seqNum;
             } else {
@@ -131,7 +144,7 @@ public final class GELFMessageChunk {
     // lol duplication
     private void extractSequenceCount() {
         if (this.sequenceCount == -1) {
-            final int seqCnt = payload.getUnsignedByte(HEADER_PART_SEQCNT_START);;
+            final int seqCnt = this.sliceInteger(HEADER_PART_SEQCNT_START, HEADER_PART_SEQCNT_LENGTH);
             if (seqCnt >= 0) {
                 this.sequenceCount = seqCnt;
             } else {
@@ -141,13 +154,27 @@ public final class GELFMessageChunk {
     }
 
     private void extractData() {
-        final int length = payload.readableBytes() - HEADER_TOTAL_LENGTH;
-        final byte[] buf = new byte[length];
+        this.data = slice(HEADER_TOTAL_LENGTH); // Slice everything starting at the total header length.
+    }
 
-        // The rest of the payload is data.
-        payload.getBytes(HEADER_TOTAL_LENGTH, buf, 0, length);
+    private int sliceInteger(final int start, final int length) {
+        String tmp = "";
+        for (int i = 0; i < length; i++) {
+            tmp = tmp.concat(Integer.toString(payload[i + start]));
+        }
+        return Integer.parseInt(tmp);
+    }
 
-        this.data = buf;
+    private byte[] slice(final int cutOffAt) {
+        final byte[] tmp = new byte[payload.length - cutOffAt];
+
+        int j = 0;
+        for (int i = cutOffAt; i < payload.length; i++) {
+            tmp[j] = payload[i];
+            j++;
+        }
+
+        return tmp;
     }
 
     @Override
@@ -163,7 +190,7 @@ public final class GELFMessageChunk {
         sb.append("\tArrival: ");
         sb.append(this.arrival);
         sb.append("\tData size: ");
-        sb.append(this.payload.readableBytes());
+        sb.append(this.payload.length);
 
         return sb.toString();
     }

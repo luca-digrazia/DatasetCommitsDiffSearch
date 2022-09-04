@@ -18,19 +18,18 @@ package org.graylog2.security;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import javax.inject.Inject;
 import com.mongodb.BasicDBObject;
-import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
 import com.mongodb.DuplicateKeyException;
 import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.List;
@@ -118,14 +117,5 @@ public class AccessTokenServiceImpl extends PersistedServiceImpl implements Acce
         // make sure we cannot overwrite an existing access token
         collection(AccessTokenImpl.class).createIndex(new BasicDBObject(AccessTokenImpl.TOKEN, 1), new BasicDBObject("unique", true));
         return super.save(accessToken);
-    }
-
-    @Override
-    public int deleteAllForUser(String username) {
-        LOG.debug("Deleting all access tokens of user \"{}\"", username);
-        final DBObject query = BasicDBObjectBuilder.start(AccessTokenImpl.USERNAME, username).get();
-        final int result = destroy(query, AccessTokenImpl.COLLECTION_NAME);
-        LOG.debug("Deleted {} access tokens of user \"{}\"", result, username);
-        return result;
     }
 }

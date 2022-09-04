@@ -112,11 +112,11 @@ public class RawMessage implements Serializable {
         msgBuilder.setPayload(ByteString.copyFrom(payload));
     }
 
-    public void addSourceNode(String sourceInputId, NodeId nodeId) {
+    public void addSourceNode(String sourceInputId, NodeId nodeId, boolean isServer) {
         msgBuilder.addSourceNodesBuilder()
                   .setInputId(sourceInputId)
                   .setId(nodeId.toString())
-                  .setType(JournalMessages.SourceNode.Type.SERVER)
+                  .setType(isServer ? JournalMessages.SourceNode.Type.SERVER : JournalMessages.SourceNode.Type.RADIO)
                   .build();
     }
 

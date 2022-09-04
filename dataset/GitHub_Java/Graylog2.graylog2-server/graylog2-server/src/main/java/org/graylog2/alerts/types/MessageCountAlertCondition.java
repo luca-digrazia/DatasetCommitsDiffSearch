@@ -26,8 +26,8 @@ import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.Sorting;
-import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
-import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.MessageSummary;
 import org.graylog2.plugin.Tools;
@@ -62,9 +62,9 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
         super(stream, id, Type.MESSAGE_COUNT, createdAt, creatorUserId, parameters);
 
         this.searches = searches;
-        this.time = getNumber(parameters.get("time")).orElse(0).intValue();
+        this.time = Integer.parseInt(String.valueOf(parameters.get("time")));
         this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase(Locale.ENGLISH));
-        this.threshold = getNumber(parameters.get("threshold")).orElse(0).intValue();
+        this.threshold = Integer.parseInt(String.valueOf(parameters.get("threshold")));
     }
 
     @Override
