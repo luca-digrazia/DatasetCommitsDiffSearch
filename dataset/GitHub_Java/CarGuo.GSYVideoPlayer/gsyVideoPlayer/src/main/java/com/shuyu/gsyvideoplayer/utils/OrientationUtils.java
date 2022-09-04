@@ -7,7 +7,6 @@ import android.view.OrientationEventListener;
 
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.R;
-import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 
 /**
  * 处理屏幕旋转的的逻辑
@@ -17,7 +16,7 @@ import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 public class OrientationUtils {
 
     private Activity activity;
-    private GSYBaseVideoPlayer gsyVideoPlayer;
+    private GSYVideoPlayer gsyVideoPlayer;
 
     private int screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
     private OrientationEventListener orientationEventListener;
@@ -29,7 +28,7 @@ public class OrientationUtils {
      * @param activity
      * @param gsyVideoPlayer
      */
-    public OrientationUtils(Activity activity, GSYBaseVideoPlayer gsyVideoPlayer) {
+    public OrientationUtils(Activity activity, GSYVideoPlayer gsyVideoPlayer) {
         this.activity = activity;
         this.gsyVideoPlayer = gsyVideoPlayer;
         init();
@@ -154,13 +153,6 @@ public class OrientationUtils {
             orientationEventListener.enable();
         } else {
             orientationEventListener.disable();
-        }
-    }
-
-    public void releaseListener() {
-        if (orientationEventListener != null) {
-            orientationEventListener.disable();
-            orientationEventListener = null;
         }
     }
 
