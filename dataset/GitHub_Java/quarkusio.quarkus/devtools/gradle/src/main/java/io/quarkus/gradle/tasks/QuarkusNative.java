@@ -24,6 +24,9 @@ import io.quarkus.creator.AppCreatorException;
 import io.quarkus.creator.CuratedApplicationCreator;
 import io.quarkus.creator.phase.augment.AugmentTask;
 
+/**
+ * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
+ */
 public class QuarkusNative extends QuarkusTask {
 
     private boolean reportErrorsAtRuntime = false;
@@ -230,7 +233,6 @@ public class QuarkusNative extends QuarkusTask {
         this.dumpProxies = dumpProxies;
     }
 
-    @Optional
     @Input
     public String getNativeImageXmx() {
         return nativeImageXmx;

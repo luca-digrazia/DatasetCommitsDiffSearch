@@ -60,6 +60,9 @@ import io.quarkus.dev.DevModeMain;
 import io.quarkus.gradle.QuarkusPluginExtension;
 import io.quarkus.utilities.JavaBinFinder;
 
+/**
+ * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
+ */
 public class QuarkusDev extends QuarkusTask {
 
     private Set<File> filesIncludedInClasspath = new HashSet<>();
@@ -394,7 +397,7 @@ public class QuarkusDev extends QuarkusTask {
     private void addGradlePluginDeps(StringBuilder classPathManifest, DevModeContext context) {
         Configuration conf = getProject().getBuildscript().getConfigurations().getByName("classpath");
         ResolvedDependency quarkusDep = conf.getResolvedConfiguration().getFirstLevelModuleDependencies().stream()
-                .filter(rd -> "io.quarkus.gradle.plugin".equals(rd.getModuleName()))
+                .filter(rd -> "quarkus-gradle-plugin".equals(rd.getModuleName()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Unable to find quarkus-gradle-plugin dependency"));
 
