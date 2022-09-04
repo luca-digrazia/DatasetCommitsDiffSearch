@@ -80,7 +80,7 @@ public class Searches {
     public static final String AGG_HISTOGRAM = "gl2_histogram";
     public static final String AGG_EXTENDED_STATS = "gl2_extended_stats";
 
-    public enum TermsStatsOrder {
+    public static enum TermsStatsOrder {
         TERM,
         REVERSE_TERM,
         COUNT,
@@ -95,7 +95,7 @@ public class Searches {
         REVERSE_MEAN
     }
 
-    public enum DateHistogramInterval {
+    public static enum DateHistogramInterval {
         YEAR(Period.years(1)),
         QUARTER(Period.months(3)),
         MONTH(Period.months(1)),
