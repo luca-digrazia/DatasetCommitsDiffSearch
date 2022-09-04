@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.outputs;
 
 import org.graylog2.plugin.Message;
@@ -33,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class LoggingOutput implements MessageOutput {
-    private static final Logger LOG = LoggerFactory.getLogger(LoggingOutput.class);
+    private final Logger LOG = LoggerFactory.getLogger(this.getClass());
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private Configuration configuration;
 
