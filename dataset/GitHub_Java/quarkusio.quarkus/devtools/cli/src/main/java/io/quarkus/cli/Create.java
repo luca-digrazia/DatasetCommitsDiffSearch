@@ -6,12 +6,15 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import io.quarkus.cli.core.BaseSubCommand;
+import io.quarkus.cli.core.QuarkusCliVersion;
 import io.quarkus.devtools.commands.CreateProject;
 import io.quarkus.devtools.project.BuildTool;
+import io.quarkus.devtools.project.QuarkusProject;
+import io.quarkus.devtools.project.QuarkusProjectHelper;
 import io.quarkus.devtools.project.codegen.SourceType;
 import picocli.CommandLine;
 
-@CommandLine.Command(name = "create", sortOptions = false, mixinStandardHelpOptions = false, description = "Create a new quarkus project.")
+@CommandLine.Command(name = "create", sortOptions = false, usageHelpAutoWidth = true, mixinStandardHelpOptions = false, description = "Create a new quarkus project.")
 public class Create extends BaseSubCommand implements Callable<Integer> {
 
     @CommandLine.Option(names = { "-g",
@@ -27,16 +30,12 @@ public class Create extends BaseSubCommand implements Callable<Integer> {
     String version = "1.0.0-SNAPSHOT";
 
     @CommandLine.Option(names = { "-0",
-            "--no-code" }, order = 4, description = "Generate an empty Quarkus project.")
-    boolean noCode = false;
+            "--no-examples" }, order = 4, description = "Generate without example code.")
+    boolean noExamples = false;
 
     @CommandLine.Option(names = { "-x",
-            "--example" }, order = 4, description = "Choose a specific example for the generated Quarkus application.")
-    String example;
-
-    @CommandLine.Option(names = { "-c",
-            "--app-config" }, order = 11, description = "Application configs to be set in the application.properties/yml file. (key1=value1,key2=value2)")
-    private String appConfig;
+            "--examples" }, order = 4, description = "Choose which example(s) you want in the generated Quarkus application.")
+    Set<String> examples;
 
     @CommandLine.ArgGroup()
     TargetBuildTool targetBuildTool = new TargetBuildTool();
@@ -109,21 +108,21 @@ public class Create extends BaseSubCommand implements Callable<Integer> {
             }
 
             BuildTool buildTool = BuildTool.MAVEN;
-            if (targetBuildTool.gradle) {
+            if (targetBuildTool.gradle)
                 buildTool = BuildTool.GRADLE;
-            } else if (targetBuildTool.gradleKotlinDsl) {
+            else if (targetBuildTool.gradleKotlinDsl)
                 buildTool = BuildTool.GRADLE_KOTLIN_DSL;
-            }
 
-            boolean status = new CreateProject(QuarkusCliUtils.getQuarkusProject(buildTool, projectRoot.toPath()))
+            final QuarkusProject project = QuarkusProjectHelper.getProject(projectRoot.getAbsoluteFile().toPath(), buildTool,
+                    QuarkusCliVersion.version());
+            boolean status = new CreateProject(project)
                     .groupId(groupId)
                     .artifactId(artifactId)
                     .version(version)
                     .sourceType(sourceType)
-                    .example(example)
+                    .overrideExamples(examples)
                     .extensions(extensions)
-                    .noCode(noCode)
-                    .appConfig(appConfig)
+                    .noExamples(noExamples)
                     .execute().isSuccess();
 
             if (status) {
