@@ -6,7 +6,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import io.quarkus.micrometer.runtime.binder.RequestMetricInfo;
-import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.impl.HttpServerRequestInternal;
 import io.vertx.core.spi.observability.HttpRequest;
 import io.vertx.ext.web.RoutingContext;
@@ -32,9 +31,6 @@ public class HttpRequestMetric extends RequestMetricInfo {
     }
 
     public String getNormalizedUriPath(Map<Pattern, String> matchPatterns, List<Pattern> ignorePatterns) {
-        if (isCORSPreflightRequest()) {
-            return filterIgnored("/cors-preflight", ignorePatterns);
-        }
         return super.getNormalizedUriPath(matchPatterns, ignorePatterns, initialPath);
     }
 
@@ -84,12 +80,5 @@ public class HttpRequestMetric extends RequestMetricInfo {
     public String toString() {
         return "HttpRequestMetric [initialPath=" + initialPath + ", currentRoutePath=" + currentRoutePath
                 + ", templatePath=" + templatePath + ", request=" + request + "]";
-    }
-
-    private boolean isCORSPreflightRequest() {
-        return request.method() == HttpMethod.OPTIONS
-                && request.getHeader("Origin") != null
-                && request.getHeader("Access-Control-Request-Method") != null
-                && request.getHeader("Access-Control-Request-Headers") != null;
     }
 }

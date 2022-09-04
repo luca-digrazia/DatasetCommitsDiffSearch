@@ -2,8 +2,6 @@ package io.quarkus.micrometer.deployment.binder;
 
 import static io.restassured.RestAssured.when;
 
-import java.util.concurrent.CompletionStage;
-
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.ws.rs.GET;
@@ -46,48 +44,28 @@ public class UriTagWithHttpRootTest {
     MeterRegistry registry;
 
     @Test
-    public void testRequestUris() throws Exception {
+    public void testMetricFactoryCreatedMetrics() throws Exception {
         RestAssured.basePath = "/";
 
         // If you invoke requests, http server and client meters should be registered
         // Leading context root (/foo) should be stripped from resulting _server_ tag
 
-        when().get("/foo/vertx/item/123").then().statusCode(200);
-        when().get("/foo/servlet/12345").then().statusCode(200);
-
-        // Server -> Rest client -> Server (templated)
         when().get("/foo/ping/one").then().statusCode(200);
         when().get("/foo/ping/two").then().statusCode(200);
         when().get("/foo/ping/three").then().statusCode(200);
-        when().get("/foo/async-ping/one").then().statusCode(200);
-        when().get("/foo/async-ping/two").then().statusCode(200);
-        when().get("/foo/async-ping/three").then().statusCode(200);
+        when().get("/foo/vertx/item/123").then().statusCode(200);
+        when().get("/foo/servlet/12345").then().statusCode(200);
 
-        Util.waitForMeters(registry.find("http.server.requests").timers(), 5);
-        Util.waitForMeters(registry.find("http.client.requests").timers(), 1);
-
-        System.out.println("Server paths\n" + Util.listMeters(registry, "http.server.requests"));
-        System.out.println("Client paths\n" + Util.listMeters(registry, "http.client.requests"));
-
-        // URIs for server: /vertx/item/{id}, /servlet
-        Assertions.assertEquals(1, registry.find("http.server.requests").tag("uri", "/vertx/item/{id}").timers().size(),
-                Util.foundServerRequests(registry,
-                        "Vert.x Web template path (/vertx/item/:id) should be detected/translated to /vertx/item/{id}."));
-        Assertions.assertEquals(1, registry.find("http.server.requests").tag("uri", "/servlet").timers().size(),
-                Util.foundServerRequests(registry, "Servlet path (/servlet) should be used for servlet"));
-
-        // URIs to trigger REST request: /ping/{message}, /async-ping/{message},
-        // URIs for inbound rest client request: /pong/{message}
+        // URIs for server: /ping/{message}, /pong/{message}, /vertx/item/{id}
         Assertions.assertEquals(1, registry.find("http.server.requests").tag("uri", "/ping/{message}").timers().size(),
-                Util.foundServerRequests(registry, "/ping/{message} should be returned by JAX-RS."));
-        Assertions.assertEquals(1, registry.find("http.server.requests").tag("uri", "/async-ping/{message}").timers().size(),
-                Util.foundServerRequests(registry, "/async-ping/{message} should be returned by JAX-RS."));
+                "/ping/{message} should be returned by JAX-RS. Found:\n"
+                        + Util.listMeters(registry.find("http.server.requests").meters(), "uri"));
         Assertions.assertEquals(1, registry.find("http.server.requests").tag("uri", "/pong/{message}").timers().size(),
-                Util.foundServerRequests(registry, "/pong/{message} should be returned by JAX-RS."));
-
-        // URI for outbound client request: /foo/pong/{message}
-        Assertions.assertEquals(1, registry.find("http.client.requests").tag("uri", "/foo/pong/{message}").timers().size(),
-                Util.foundClientRequests(registry, "/foo/pong/{message} should be returned by Rest client."));
+                "/pong/{message} should be returned by JAX-RS. Found:\n"
+                        + Util.listMeters(registry.find("http.server.requests").meters(), "uri"));
+        Assertions.assertEquals(1, registry.find("http.server.requests").tag("uri", "/vertx/item/{id}").timers().size(),
+                "Vert.x Web template path (/vertx/item/:id) should be detected/translated to /vertx/item/{id}. Found:\n"
+                        + Util.listMeters(registry.find("http.server.requests").meters(), "uri"));
     }
 
     @Path("/")
@@ -100,10 +78,6 @@ public class UriTagWithHttpRootTest {
             @Path("/foo/pong/{message}")
             @GET
             String pingpong(@PathParam("message") String message);
-
-            @GET
-            @Path("/foo/pong/{message}")
-            CompletionStage<String> asyncPingPong(@PathParam("message") String message);
         }
 
         @Inject
@@ -120,12 +94,6 @@ public class UriTagWithHttpRootTest {
         @Path("ping/{message}")
         public String ping(@PathParam("message") String message) {
             return pingRestClient.pingpong(message);
-        }
-
-        @GET
-        @Path("async-ping/{message}")
-        public CompletionStage<String> asyncPing(@PathParam("message") String message) {
-            return pingRestClient.asyncPingPong(message);
         }
     }
 }
