@@ -22,7 +22,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
 
 public class DropwizardResourceConfig extends ScanningResourceConfig {
-    private static final String NEWLINE = String.format("%n");
     private static final Logger LOGGER = LoggerFactory.getLogger(DropwizardResourceConfig.class);
     private String urlPattern;
 
@@ -96,9 +95,8 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
     }
 
     private void logEndpoints() {
-        final StringBuilder msg = new StringBuilder(1024);
-        msg.append("The following paths were found for the configured resources:");
-        msg.append(NEWLINE).append(NEWLINE);
+        final StringBuilder stringBuilder = new StringBuilder(1024).append(
+                "The following paths were found for the configured resources:\n\n");
 
         final ImmutableList.Builder<Class<?>> builder = ImmutableList.builder();
         for (Object o : getSingletons()) {
@@ -141,11 +139,11 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
             }
 
             for (String line : Ordering.natural().sortedCopy(endpoints.build())) {
-                msg.append(line).append(NEWLINE);
+                stringBuilder.append(line).append('\n');
             }
         }
 
-        LOGGER.info(msg.toString());
+        LOGGER.info(stringBuilder.toString());
     }
 
     private MethodList annotatedMethods(Class<?> resource) {
