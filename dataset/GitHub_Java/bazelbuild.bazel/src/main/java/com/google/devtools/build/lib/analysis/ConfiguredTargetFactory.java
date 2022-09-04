@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -23,6 +24,8 @@ import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
@@ -33,7 +36,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.EnvironmentGroup
 import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.PackageGroupConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
@@ -68,12 +70,13 @@ import com.google.devtools.build.lib.skyframe.AspectFunction.AspectFunctionExcep
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -157,6 +160,29 @@ public final class ConfiguredTargetFactory {
     return null;
   }
 
+  /** Returns the output artifact for the given file, or null if Skyframe deps are missing. */
+  private Artifact getOutputArtifact(
+      OutputFile outputFile,
+      BuildConfiguration configuration,
+      boolean isFileset,
+      ArtifactFactory artifactFactory) {
+    Rule rule = outputFile.getAssociatedRule();
+    ArtifactRoot root =
+        rule.hasBinaryOutput()
+            ? configuration.getBinDirectory(rule.getRepository())
+            : configuration.getGenfilesDirectory(rule.getRepository());
+    ArtifactOwner owner = ConfiguredTargetKey.of(rule.getLabel(), configuration);
+    PathFragment rootRelativePath =
+        outputFile.getLabel().getPackageIdentifier().getSourceRoot().getRelative(
+            outputFile.getLabel().getName());
+    Artifact result = isFileset
+        ? artifactFactory.getFilesetArtifact(rootRelativePath, root, owner)
+        : artifactFactory.getDerivedArtifact(rootRelativePath, root, owner);
+    // The associated rule should have created the artifact.
+    Preconditions.checkNotNull(result, "no artifact for %s", rootRelativePath);
+    return result;
+  }
+
   /**
    * Invokes the appropriate constructor to create a {@link ConfiguredTarget} instance.
    *
@@ -205,15 +231,14 @@ public final class ConfiguredTargetFactory {
               config,
               prerequisiteMap.get(DependencyResolver.OUTPUT_FILE_RULE_DEPENDENCY),
               visibility);
+      boolean isFileset = outputFile.getGeneratingRule().getRuleClass().equals("Fileset");
+      Artifact artifact = getOutputArtifact(outputFile, config, isFileset, artifactFactory);
       if (analysisEnvironment.getSkyframeEnv().valuesMissing()) {
         return null;
       }
-      RuleConfiguredTarget rule =
-          (RuleConfiguredTarget)
-              targetContext.findDirectPrerequisite(
-                  outputFile.getGeneratingRule().getLabel(), config);
-      Artifact artifact = rule.getArtifactByOutputLabel(outputFile.getLabel());
-      return new OutputFileConfiguredTarget(targetContext, outputFile, rule, artifact);
+      TransitiveInfoCollection rule = targetContext.findDirectPrerequisite(
+          outputFile.getGeneratingRule().getLabel(), config);
+        return new OutputFileConfiguredTarget(targetContext, outputFile, rule, artifact);
     } else if (target instanceof InputFile) {
       InputFile inputFile = (InputFile) target;
       TargetContext targetContext =
@@ -301,9 +326,7 @@ public final class ConfiguredTargetFactory {
           && !configuration.hasAllFragments(
               configurationFragmentPolicy.getRequiredConfigurationFragments())) {
         if (missingFragmentPolicy == MissingFragmentPolicy.FAIL_ANALYSIS) {
-          ruleContext.ruleError(
-              missingFragmentError(
-                  ruleContext, configurationFragmentPolicy, configuration.checksum()));
+          ruleContext.ruleError(missingFragmentError(ruleContext, configurationFragmentPolicy));
           return null;
         }
         // Otherwise missingFragmentPolicy == MissingFragmentPolicy.CREATE_FAIL_ACTIONS:
@@ -398,9 +421,7 @@ public final class ConfiguredTargetFactory {
   }
 
   private String missingFragmentError(
-      RuleContext ruleContext,
-      ConfigurationFragmentPolicy configurationFragmentPolicy,
-      String configurationId) {
+      RuleContext ruleContext, ConfigurationFragmentPolicy configurationFragmentPolicy) {
     RuleClass ruleClass = ruleContext.getRule().getRuleClassObject();
     Set<Class<?>> missingFragments = new LinkedHashSet<>();
     for (Class<?> fragment : configurationFragmentPolicy.getRequiredConfigurationFragments()) {
@@ -411,10 +432,15 @@ public final class ConfiguredTargetFactory {
     Preconditions.checkState(!missingFragments.isEmpty());
     StringBuilder result = new StringBuilder();
     result.append("all rules of type " + ruleClass.getName() + " require the presence of ");
+    List<String> names = new ArrayList<>();
+    for (Class<?> fragment : missingFragments) {
+      // TODO(bazel-team): Using getSimpleName here is sub-optimal, but we don't have anything
+      // better right now.
+      names.add(fragment.getSimpleName());
+    }
     result.append("all of [");
-    result.append(
-        missingFragments.stream().map(Class::getSimpleName).collect(Collectors.joining(",")));
-    result.append("], but these were all disabled in configuration ").append(configurationId);
+    Joiner.on(",").appendTo(result, names);
+    result.append("], but these were all disabled");
     return result.toString();
   }
 

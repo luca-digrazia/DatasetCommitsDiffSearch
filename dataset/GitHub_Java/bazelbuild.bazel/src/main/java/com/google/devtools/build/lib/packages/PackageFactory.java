@@ -1770,8 +1770,7 @@ public final class PackageFactory {
         }
       }
 
-      if (!ValidationEnvironment.checkBuildSyntax(
-          buildFileAST.getStatements(), eventHandler, pkgEnv)) {
+      if (!ValidationEnvironment.checkBuildSyntax(buildFileAST.getStatements(), eventHandler)) {
         pkgBuilder.setContainsErrors();
       }
 
