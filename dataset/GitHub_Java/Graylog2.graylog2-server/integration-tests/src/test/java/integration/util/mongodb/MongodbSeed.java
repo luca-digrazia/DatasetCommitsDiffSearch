@@ -92,14 +92,10 @@ public class MongodbSeed {
 
         for (Map.Entry<String, List<Document>> collection : collections.entrySet()) {
             final String collectionName = collection.getKey();
-            if (mongoDatabase.getCollection(collectionName) == null) {
-                mongoDatabase.createCollection(collectionName);
-            }
-            final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collectionName);
+            mongoDatabase.createCollection(collectionName);
+            final MongoCollection<Document> mongoCollection = mongoDatabase.getCollection(collection.getKey());
 
-            if (!collection.getValue().isEmpty()) {
-                mongoCollection.insertMany(collection.getValue());
-            }
+            mongoCollection.insertMany(collection.getValue());
         }
     }
 }
