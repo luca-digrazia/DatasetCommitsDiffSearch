@@ -40,9 +40,11 @@ import javax.annotation.Nullable;
  */
 public abstract class BugReport {
 
-  private static final Logger logger = Logger.getLogger(BugReport.class.getName());
+  static final BugReporter REPORTER_INSTANCE = BugReport::sendBugReport;
 
-  static final BugReporter REPORTER_INSTANCE = new DefaultBugReporter();
+  private BugReport() {}
+
+  private static final Logger logger = Logger.getLogger(BugReport.class.getName());
 
   private static BlazeVersionInfo versionInfo = BlazeVersionInfo.instance();
 
@@ -55,8 +57,6 @@ public abstract class BugReport {
 
   private static final boolean SHOULD_NOT_SEND_BUG_REPORT_BECAUSE_IN_TEST =
       IN_TEST && System.getenv("ENABLE_BUG_REPORT_LOGGING_IN_TEST") == null;
-
-  private BugReport() {}
 
   /**
    * This is a narrow interface for {@link BugReport}'s usage of BlazeRuntime. It lives in this
@@ -280,17 +280,5 @@ public abstract class BugReport {
 
     LoggingUtil.logToRemote(Level.SEVERE, preamble + Joiner.on(' ').join(args), exception,
         values);
-  }
-
-  private static class DefaultBugReporter implements BugReporter {
-    @Override
-    public void sendBugReport(Throwable exception) {
-      BugReport.sendBugReport(exception);
-    }
-
-    @Override
-    public void sendBugReport(Throwable exception, List<String> args, String... values) {
-      BugReport.sendBugReport(exception, args, values);
-    }
   }
 }
