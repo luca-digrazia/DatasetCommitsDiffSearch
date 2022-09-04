@@ -67,37 +67,31 @@ public class NodeVisitor {
     visit(node.getY());
   }
 
-  public void visit(CallExpression node) {
+  public void visit(FuncallExpression node) {
     visit(node.getFunction());
     visitAll(node.getArguments());
   }
 
-  public void visit(Identifier node) {}
+  public void visit(@SuppressWarnings("unused") Identifier node) {}
 
   public void visit(Comprehension node) {
     for (Comprehension.Clause clause : node.getClauses()) {
       if (clause instanceof Comprehension.For) {
-        visit((Comprehension.For) clause);
+        Comprehension.For forClause = (Comprehension.For) clause;
+        visit(forClause.getVars());
+        visit(forClause.getIterable());
       } else {
-        visit((Comprehension.If) clause);
+        Comprehension.If ifClause = (Comprehension.If) clause;
+        visit(ifClause.getCondition());
       }
     }
     visit(node.getBody());
   }
 
-  public void visit(Comprehension.For node) {
-    visit(node.getVars());
-    visit(node.getIterable());
-  }
-
-  public void visit(Comprehension.If node) {
-    visit(node.getCondition());
-  }
-
   public void visit(ForStatement node) {
     visit(node.getCollection());
-    visit(node.getVars());
-    visitBlock(node.getBody());
+    visit(node.getLHS());
+    visitBlock(node.getBlock());
   }
 
   public void visit(LoadStatement node) {
@@ -119,6 +113,11 @@ public class NodeVisitor {
     visit(node.getLHS());
   }
 
+  public void visit(AugmentedAssignmentStatement node) {
+    visit(node.getRHS());
+    visit(node.getLHS());
+  }
+
   public void visit(ExpressionStatement node) {
     visit(node.getExpression());
   }
@@ -134,12 +133,12 @@ public class NodeVisitor {
   public void visit(DefStatement node) {
     visit(node.getIdentifier());
     visitAll(node.getParameters());
-    visitBlock(node.getBody());
+    visitBlock(node.getStatements());
   }
 
   public void visit(ReturnStatement node) {
-    if (node.getResult() != null) {
-      visit(node.getResult());
+    if (node.getReturnExpression() != null) {
+      visit(node.getReturnExpression());
     }
   }
 
@@ -173,8 +172,8 @@ public class NodeVisitor {
     if (node.getStart() != null) {
       visit(node.getStart());
     }
-    if (node.getStop() != null) {
-      visit(node.getStop());
+    if (node.getEnd() != null) {
+      visit(node.getEnd());
     }
     if (node.getStep() != null) {
       visit(node.getStep());

@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
@@ -26,13 +25,17 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class NodeVisitorTest {
 
-  private BuildFileAST parse(String... lines) throws IOException {
+  private static StarlarkFile parse(String... lines) throws SyntaxError {
     ParserInput input = ParserInput.fromLines(lines);
-    return BuildFileAST.parse(input, StarlarkThread.FAIL_FAST_HANDLER);
+    StarlarkFile file = StarlarkFile.parse(input);
+    if (!file.ok()) {
+      throw new SyntaxError(file.errors());
+    }
+    return file;
   }
 
   @Test
-  public void everyIdentifierAndParameterIsVisitedInOrder() throws IOException {
+  public void everyIdentifierAndParameterIsVisitedInOrder() throws Exception {
     final List<String> idents = new ArrayList<>();
     final List<String> params = new ArrayList<>();
 
@@ -43,12 +46,12 @@ public final class NodeVisitorTest {
       }
 
       @Override
-      public void visit(Parameter<Expression, Expression> node) {
+      public void visit(Parameter node) {
         params.add(node.toString());
       }
     }
 
-    BuildFileAST file =
+    StarlarkFile file =
         parse(
             "a = b", //
             "def c(p1, p2=4, **p3):",
