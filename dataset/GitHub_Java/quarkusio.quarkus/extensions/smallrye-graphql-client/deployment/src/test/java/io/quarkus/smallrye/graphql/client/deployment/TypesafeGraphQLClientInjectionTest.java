@@ -28,9 +28,6 @@ public class TypesafeGraphQLClientInjectionTest {
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(TestingGraphQLApi.class, TestingGraphQLClientApi.class, Person.class)
                     .addAsResource(new StringAsset("typesafeclient/mp-graphql/url=" + url),
-                            // TODO: adding headers via config is not supported by typesafe client yet
-                            //                            + "\n" +
-                            //                            "typesafeclient/mp-graphql/header/My-Header=My-Value"),
                             "application.properties")
                     .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml"));
 
@@ -43,11 +40,5 @@ public class TypesafeGraphQLClientInjectionTest {
         assertEquals("John", people.get(0).getFirstName());
         assertEquals("Arthur", people.get(1).getFirstName());
     }
-
-    // TODO: adding headers via config is not supported by typesafe client yet
-    //    @Test
-    //    public void checkHeaders() throws ExecutionException, InterruptedException {
-    //        assertEquals("My-Value", client.returnHeader("My-Header"));
-    //    }
 
 }
