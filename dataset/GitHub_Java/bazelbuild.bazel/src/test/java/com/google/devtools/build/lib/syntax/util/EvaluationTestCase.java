@@ -159,24 +159,30 @@ public class EvaluationTestCase {
 
   /** Parses a statement, possibly followed by newlines. */
   protected Statement parseStatement(Parser.ParsingLevel parsingLevel, String... input) {
-    return Parser.parseStatement(makeParserInputSource(input), getEventHandler(), parsingLevel);
+    return Parser.parseStatement(
+        makeParserInputSource(input), getEventHandler(),
+        parsingLevel, Parser.Dialect.SKYLARK);
   }
 
   /** Parses a top-level statement, possibly followed by newlines. */
   protected Statement parseTopLevelStatement(String... input) {
     return Parser.parseStatement(
-        makeParserInputSource(input), getEventHandler(), Parser.ParsingLevel.TOP_LEVEL);
+        makeParserInputSource(input), getEventHandler(),
+        Parser.ParsingLevel.TOP_LEVEL, Parser.Dialect.SKYLARK);
   }
 
   /** Parses a local statement, possibly followed by newlines. */
   protected Statement parseLocalLevelStatement(String... input) {
     return Parser.parseStatement(
-        makeParserInputSource(input), getEventHandler(), Parser.ParsingLevel.LOCAL_LEVEL);
+        makeParserInputSource(input), getEventHandler(),
+        Parser.ParsingLevel.LOCAL_LEVEL, Parser.Dialect.SKYLARK);
   }
 
   /** Parses an expression, possibly followed by newlines. */
   protected Expression parseExpression(String... input) {
-    return Parser.parseExpression(makeParserInputSource(input), getEventHandler());
+    return Parser.parseExpression(
+        makeParserInputSource(input), getEventHandler(),
+        Parser.Dialect.SKYLARK);
   }
 
   public EvaluationTestCase update(String varname, Object value) throws Exception {
@@ -234,10 +240,6 @@ public class EvaluationTestCase {
 
   public Event assertContainsWarning(String expectedMessage) {
     return eventCollectionApparatus.assertContainsWarning(expectedMessage);
-  }
-
-  public Event assertContainsDebug(String expectedMessage) {
-    return eventCollectionApparatus.assertContainsDebug(expectedMessage);
   }
 
   public EvaluationTestCase clearEvents() {
