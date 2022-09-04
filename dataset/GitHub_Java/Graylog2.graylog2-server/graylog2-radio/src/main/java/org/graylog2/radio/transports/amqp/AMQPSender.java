@@ -22,7 +22,6 @@ import com.rabbitmq.client.ConnectionFactory;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.RadioMessage;
 import org.graylog2.radio.Configuration;
-import org.joda.time.Duration;
 import org.msgpack.MessagePack;
 
 import javax.inject.Inject;
@@ -48,7 +47,6 @@ public class AMQPSender {
     private final String exchangeName;
     private final String routingKey;
     private final boolean amqpPersistentMessagesEnabled;
-    private final Duration connectTimeout;
 
     private Connection connection;
     private Channel channel;
@@ -64,20 +62,13 @@ public class AMQPSender {
                       String queueType,
                       String exchangeName,
                       String routingKey,
-                      boolean amqpPersistentMessagesEnabled, 
-                      Duration amqpConnectTimeout) {
+                      boolean amqpPersistentMessagesEnabled) {
         this.queueName = queueName;
         this.queueType = queueType;
         this.exchangeName = exchangeName;
         this.routingKey = routingKey;
         this.amqpPersistentMessagesEnabled = amqpPersistentMessagesEnabled;
-        connectTimeout = amqpConnectTimeout;
         pack = new MessagePack();
-
-        // Use a separate class loader for msgpack to avoid generation of duplicate class names.
-        // The JavaassistTemplateBuilder used by MessagePack uses a sequence number for class naming
-        // and is not thread-safe.
-        pack.setClassLoader(new ClassLoader(Thread.currentThread().getContextClassLoader()) {});
 
         this.hostname = hostname;
         this.port = port;
@@ -97,8 +88,7 @@ public class AMQPSender {
                 configuration.getAmqpQueueType(),
                 configuration.getAmqpExchangeName(),
                 configuration.getAmqpRoutingKey(),
-                configuration.isAmqpPersistentMessagesEnabled(),
-                configuration.getAmqpConnectTimeout());
+                configuration.isAmqpPersistentMessagesEnabled());
     }
 
     public void send(Message msg) throws IOException {
@@ -127,8 +117,6 @@ public class AMQPSender {
             factory.setUsername(username);
             factory.setPassword(password);
         }
-        
-        factory.setConnectionTimeout((int) connectTimeout.getMillis());
 
         connection = factory.newConnection();
         channel = connection.createChannel();
