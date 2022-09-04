@@ -1013,7 +1013,7 @@ public class CppCompileAction extends AbstractAction
         usedModulePaths.add(input.getExecPathString());
       }
     }
-    CcToolchainVariables.Builder variableBuilder = CcToolchainVariables.builder();
+    CcToolchainVariables.Builder variableBuilder = new CcToolchainVariables.Builder();
     variableBuilder.addStringSequenceVariable("module_files", usedModulePaths.build());
     return variableBuilder.build();
   }
