@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.profiler.chart;
 
 import java.io.PrintStream;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * {@link ChartVisitor} that builds HTML from the visited chart and prints it
@@ -79,18 +80,10 @@ public class HtmlChartVisitor implements ChartVisitor {
     heading("Tasks", 2);
     out.println("<p>To get more information about a task point the mouse at one of the bars.</p>");
 
-    out.printf("<div style='position:relative; height: %dpx; margin: %dpx'>\n",
+    out.printf(
+        "<div style='position:relative; height: %dpx; margin: %dpx'>\n",
         chart.getRowCount() * ROW_HEIGHT, H_OFFSET + 10);
   }
-
-  @Override
-  public void endVisit(Chart chart) {
-    printTimeAxis(chart);
-    out.println("</div>");
-
-    heading("Legend", 2);
-    printLegend(chart.getSortedTypes());
-}
 
   @Override
   public void visit(ChartColumn column) {
@@ -103,7 +96,6 @@ public class HtmlChartVisitor implements ChartVisitor {
     String style = chartTypeNameAsCSSClass(column.getType().getName());
     box(left, 0, width, height, style, column.getLabel(), 10);
   }
-
 
   @Override
   public void visit(ChartRow slot) {
@@ -143,9 +135,16 @@ public class HtmlChartVisitor implements ChartVisitor {
     }
   }
 
-  /**
-   * Converts the given value from the bar of the chart to pixels.
-   */
+  @Override
+  public void endVisit(Chart chart) {
+    printTimeAxis(chart);
+    out.println("</div>");
+
+    heading("Legend", 2);
+    printLegend(chart.getSortedTypes());
+  }
+
+  /** Converts the given value from the bar of the chart to pixels. */
   private int scale(long value) {
     return (int) (value / (1000000000L / pixelsPerSecond));
   }
@@ -310,16 +309,15 @@ public class HtmlChartVisitor implements ChartVisitor {
     out.println("<a name='" + name + "'/>");
   }
 
-  /**
-   * Formats the given {@link Color} to a css style color string.
-   */
-  private String formatColor(Color color) {
+  /** Formats the given {@link Color} to a css style color string. */
+  public static String formatColor(Color color) {
     int r = color.getRed();
     int g = color.getGreen();
     int b = color.getBlue();
     int a = color.getAlpha();
 
-    return String.format("rgba(%d,%d,%d,%f)", r, g, b, (a / 255.0));
+    // US Locale is used to ensure a dot as decimal separator
+    return String.format(Locale.US, "rgba(%d,%d,%d,%f)", r, g, b, (a / 255.0));
   }
 
   /**
