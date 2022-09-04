@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput.EmptyActionInput;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
+import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingResult;
@@ -65,6 +66,27 @@ public final class SandboxHelpers {
    * @throws IOException If any files could not be written.
    */
   public static SandboxInputs processInputFiles(
+      Spawn spawn,
+      SpawnExecutionContext context,
+      Path execRoot,
+      boolean expandTreeArtifactsInRunfiles)
+      throws IOException {
+    return processInputFiles(
+        context.getInputMapping(expandTreeArtifactsInRunfiles),
+        spawn,
+        context.getArtifactExpander(),
+        execRoot);
+  }
+
+  /**
+   * Returns the inputs of a Spawn as a map of PathFragments relative to an execRoot to paths in the
+   * host filesystem where the input files can be found.
+   *
+   * <p>Also writes any supported {@link VirtualActionInput}s found.
+   *
+   * @throws IOException If any files could not be written.
+   */
+  private static SandboxInputs processInputFiles(
       Map<PathFragment, ActionInput> inputMap,
       Spawn spawn,
       ArtifactExpander artifactExpander,
@@ -75,7 +97,7 @@ public final class SandboxHelpers {
     // actions that accept TreeArtifacts as inputs generally expect that the empty directory is
     // created. So we add those explicitly here.
     // TODO(ulfjack): Move this code to SpawnInputExpander.
-    for (ActionInput input : spawn.getInputFiles().toList()) {
+    for (ActionInput input : spawn.getInputFiles()) {
       if (input instanceof Artifact && ((Artifact) input).isTreeArtifact()) {
         List<Artifact> containedArtifacts = new ArrayList<>();
         artifactExpander.expand((Artifact) input, containedArtifacts);
