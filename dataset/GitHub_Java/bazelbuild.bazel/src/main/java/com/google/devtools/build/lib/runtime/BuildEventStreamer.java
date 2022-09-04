@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.AbortedEvent;
@@ -45,18 +44,14 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.ProgressEvent;
-import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.TestingCompleteEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.rules.extra.ExtraAction;
-import com.google.devtools.build.lib.util.Pair;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -87,15 +82,11 @@ public class BuildEventStreamer implements EventHandler {
   private Set<BuildEventId> announcedEvents;
   private final Set<BuildEventId> postedEvents = new HashSet<>();
   private final Set<BuildEventId> configurationsPosted = new HashSet<>();
-  private List<Pair<String, String>> bufferedStdoutStderrPairs = new ArrayList<>();
   private final Multimap<BuildEventId, BuildEvent> pendingEvents = HashMultimap.create();
   private int progressCount;
   private final CountingArtifactGroupNamer artifactGroupNamer = new CountingArtifactGroupNamer();
   private OutErrProvider outErrProvider;
   private AbortReason abortReason = AbortReason.UNKNOWN;
-  // Will be set to true if the build was invoked through "bazel test".
-  private boolean isTestCommand;
-
   private static final Logger log = Logger.getLogger(BuildEventStreamer.class.getName());
 
   /**
@@ -170,7 +161,6 @@ public class BuildEventStreamer implements EventHandler {
   private void post(BuildEvent event) {
     BuildEvent linkEvent = null;
     BuildEventId id = event.getEventId();
-    List<BuildEvent> flushEvents = null;
 
     synchronized (this) {
       if (announcedEvents == null) {
@@ -185,14 +175,6 @@ public class BuildEventStreamer implements EventHandler {
         if (reporter != null) {
           reporter.post(new AnnounceBuildEventTransportsEvent(transports));
         }
-
-        if (!bufferedStdoutStderrPairs.isEmpty()) {
-          flushEvents = new ArrayList<>(bufferedStdoutStderrPairs.size());
-          for (Pair<String, String> outErrPair : bufferedStdoutStderrPairs) {
-            flushEvents.add(flushStdoutStderrEvent(outErrPair.getFirst(), outErrPair.getSecond()));
-          }
-        }
-        bufferedStdoutStderrPairs = null;
       } else {
         if (!announcedEvents.contains(id)) {
           String out = null;
@@ -225,14 +207,6 @@ public class BuildEventStreamer implements EventHandler {
         transport.sendBuildEvent(linkEvent, artifactGroupNamer);
       }
       transport.sendBuildEvent(event, artifactGroupNamer);
-    }
-
-    if (flushEvents != null) {
-      for (BuildEvent flushEvent : flushEvents) {
-        for (BuildEventTransport transport : transports) {
-          transport.sendBuildEvent(flushEvent, artifactGroupNamer);
-        }
-      }
     }
   }
 
@@ -346,6 +320,11 @@ public class BuildEventStreamer implements EventHandler {
   public void handle(Event event) {}
 
   @Subscribe
+  public void noBuild(NoBuildEvent event) {
+    close();
+  }
+
+  @Subscribe
   public void buildInterrupted(BuildInterruptedEvent event) {
     abortReason = AbortReason.USER_INTERRUPTED;
   }
@@ -354,17 +333,6 @@ public class BuildEventStreamer implements EventHandler {
   public void buildEvent(BuildEvent event) {
     if (isActionWithoutError(event) || bufferUntilPrerequisitesReceived(event)) {
       return;
-    }
-
-    if (isTestCommand && event instanceof BuildCompleteEvent) {
-      // In case of "bazel test" ignore the BuildCompleteEvent, as it will be followed by a
-      // TestingCompleteEvent that contains the correct exit code.
-      return;
-    }
-
-    if (event instanceof BuildStartingEvent) {
-      BuildRequest buildRequest = ((BuildStartingEvent) event).getRequest();
-      isTestCommand = "test".equals(buildRequest.getCommandName());
     }
 
     if (event instanceof BuildEventWithConfiguration) {
@@ -389,29 +357,13 @@ public class BuildEventStreamer implements EventHandler {
       buildEvent(freedEvent);
     }
 
-    if (event instanceof BuildCompleteEvent
-        || event instanceof TestingCompleteEvent
-        || event instanceof NoBuildRequestFinishedEvent) {
+    if (event instanceof BuildCompleteEvent) {
       buildComplete();
     }
-
-    if (event instanceof NoBuildEvent) {
-      if (!((NoBuildEvent) event).separateFinishedEvent()) {
-        buildComplete();
-      }
-    }
-  }
-
-  private synchronized BuildEvent flushStdoutStderrEvent(String out, String err) {
-    BuildEvent updateEvent = ProgressEvent.progressUpdate(progressCount, out, err);
-    progressCount++;
-    announcedEvents.addAll(updateEvent.getChildrenEvents());
-    postedEvents.add(updateEvent.getEventId());
-    return updateEvent;
   }
 
   void flush() {
-    BuildEvent updateEvent = null;
+    BuildEvent updateEvent;
     synchronized (this) {
       String out = null;
       String err = null;
@@ -419,21 +371,18 @@ public class BuildEventStreamer implements EventHandler {
         out = outErrProvider.getOut();
         err = outErrProvider.getErr();
       }
-      if (announcedEvents != null) {
-        updateEvent = flushStdoutStderrEvent(out, err);
-      } else {
-        bufferedStdoutStderrPairs.add(Pair.of(out, err));
-      }
+      updateEvent = ProgressEvent.progressUpdate(progressCount, out, err);
+      progressCount++;
+      announcedEvents.addAll(updateEvent.getChildrenEvents());
+      postedEvents.add(updateEvent.getEventId());
     }
-    if (updateEvent != null) {
-      for (BuildEventTransport transport : transports) {
-        transport.sendBuildEvent(updateEvent, artifactGroupNamer);
-      }
+    for (BuildEventTransport transport : transports) {
+      transport.sendBuildEvent(updateEvent, artifactGroupNamer);
     }
   }
 
   @VisibleForTesting
-  public ImmutableSet<BuildEventTransport> getTransports() {
+  ImmutableSet<BuildEventTransport> getTransports() {
     return ImmutableSet.copyOf(transports);
   }
 

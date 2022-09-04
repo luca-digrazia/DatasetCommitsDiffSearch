@@ -16,18 +16,17 @@ package com.google.devtools.build.lib.runtime;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Splitter;
-import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.io.OutputStream;
 
 /**
- * {@link OutputStream} suitably synchronized for producer-consumer use cases. The method {@link
- * #readAndReset()} allows to read the bytes accumulated so far and simultaneously truncate
- * precisely the bytes read. Moreover, upon such a reset the amount of memory retained is reset to a
- * small constant. This is a difference with resecpt to the behaviour of the standard classes {@link
- * ByteArrayOutputStream} which only resets the index but keeps the array. This difference matters,
- * as we need to support output peeks without retaining this amount of memory for the rest of the
+ * {@link OutputStream} suitably synchronized for producer-consumer use cases.
+ * The method {@link #readAndReset()} allows to read the bytes accumulated so far
+ * and simultaneously truncate precisely the bytes read. Moreover, upon such a reset
+ * the amount of memory retained is reset to a small constant. This is a difference
+ * with resecpt to the behaviour of the standard classes {@link ByteArrayOutputStream}
+ * which only resets the index but keeps the array. This difference matters, as we need
+ * to support output peeks without retaining this ammount of memory for the rest of the
  * build.
  *
  * <p>This class is expected to be used with the {@link BuildEventStreamer}.
@@ -39,7 +38,7 @@ public class SynchronizedOutputStream extends OutputStream {
   // so the actual size we store in this buffer can be the maximum (not the sum)
   // of this value and the amount of bytes written in a single call to the
   // {@link write(byte[] buffer, int offset, int count)} method.
-  private final int maxBufferedLength;
+  private static final long MAX_BUFFERED_LENGTH = 10 * 1024;
 
   private byte[] buf;
   private long count;
@@ -48,28 +47,31 @@ public class SynchronizedOutputStream extends OutputStream {
   // The event streamer that is supposed to flush stdout/stderr.
   private BuildEventStreamer streamer;
 
-  public SynchronizedOutputStream(int maxBufferedLength) {
+  public SynchronizedOutputStream() {
     buf = new byte[64];
     count = 0;
     discardAll = false;
-    this.maxBufferedLength = maxBufferedLength;
   }
 
   public void registerStreamer(BuildEventStreamer streamer) {
     this.streamer = streamer;
   }
 
+  public synchronized void setDiscardAll() {
+    discardAll = true;
+    count = 0;
+    buf = null;
+  }
+
   /**
-   * Read the contents of the stream and simultaneously clear them. Also, reset the amount of memory
-   * retained to a constant amount.
+   * Read the contents of the stream and simultaneously clear them. Also, reset the amount of
+   * memory retained to a constant amount.
    */
-  public synchronized Iterable<String> readAndReset() {
+  public synchronized String readAndReset() {
     String content = new String(buf, 0, (int) count, UTF_8);
     buf = new byte[64];
     count = 0;
-    return content.isEmpty()
-        ? ImmutableList.of()
-        : Splitter.fixedLength(maxBufferedLength).split(content);
+    return content;
   }
 
   @Override
@@ -98,7 +100,7 @@ public class SynchronizedOutputStream extends OutputStream {
     boolean didWrite = false;
     while (!didWrite) {
       synchronized (this) {
-        if (this.count + (long) count < maxBufferedLength || this.count == 0) {
+        if (this.count + (long) count < MAX_BUFFERED_LENGTH || this.count == 0) {
           if (this.count + (long) count >= (long) buf.length) {
             // We need to increase the buffer; if within the permissible range range for array
             // sizes, we at least double it, otherwise we only increase as far as needed.
@@ -118,7 +120,7 @@ public class SynchronizedOutputStream extends OutputStream {
         } else {
           shouldFlush = true;
         }
-        if (this.count >= maxBufferedLength) {
+        if (this.count >= MAX_BUFFERED_LENGTH) {
           shouldFlush = true;
         }
       }

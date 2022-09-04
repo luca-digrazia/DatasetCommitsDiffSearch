@@ -22,21 +22,42 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.eventbus.Subscribe;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
-
+import java.util.ArrayList;
+import java.util.List;
 
 /** Module responsible for configuring BuildEventStreamer and transports. */
 public class BuildEventStreamerModule extends BlazeModule {
 
   private CommandEnvironment commandEnvironment;
+
+  private static class BuildEventRecorder {
+    private final List<BuildEvent> events = new ArrayList<>();
+
+    @Subscribe
+    public void buildEvent(BuildEvent event) {
+      events.add(event);
+    }
+
+    List<BuildEvent> getEvents() {
+      return events;
+    }
+  }
+
+  private BuildEventRecorder buildEventRecorder;
+  private SynchronizedOutputStream out;
+  private SynchronizedOutputStream err;
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
@@ -44,20 +65,69 @@ public class BuildEventStreamerModule extends BlazeModule {
   }
 
   @Override
-  public void beforeCommand(Command command, CommandEnvironment commandEnvironment)
-      throws AbruptExitException {
+  public void checkEnvironment(CommandEnvironment commandEnvironment) {
     this.commandEnvironment = commandEnvironment;
+    this.buildEventRecorder = new BuildEventRecorder();
+    commandEnvironment.getEventBus().register(buildEventRecorder);
+  }
+
+  @Override
+  public OutErr getOutputListener() {
+    this.out = new SynchronizedOutputStream();
+    this.err = new SynchronizedOutputStream();
+    return OutErr.create(this.out, this.err);
   }
 
   @Override
   public void handleOptions(OptionsProvider optionsProvider) {
     checkState(commandEnvironment != null, "Methods called out of order");
-    Optional<BuildEventStreamer> streamer =
+    Optional<BuildEventStreamer> maybeStreamer =
         tryCreateStreamer(optionsProvider, commandEnvironment.getBlazeModuleEnvironment());
-    if (streamer.isPresent()) {
-      commandEnvironment.getReporter().addHandler(streamer.get());
-      commandEnvironment.getEventBus().register(streamer.get());
+    if (maybeStreamer.isPresent()) {
+      BuildEventStreamer streamer = maybeStreamer.get();
+      commandEnvironment.getReporter().addHandler(streamer);
+      commandEnvironment.getEventBus().register(streamer);
+      for (BuildEvent event : buildEventRecorder.getEvents()) {
+        streamer.buildEvent(event);
+      }
+      final SynchronizedOutputStream theOut = this.out;
+      final SynchronizedOutputStream theErr = this.err;
+      // out and err should be non-null at this point, as getOutputListener is supposed to
+      // be always called before handleOptions. But let's still prefer a stream with no
+      // stdout/stderr over an aborted build.
+      streamer.registerOutErrProvider(
+          new BuildEventStreamer.OutErrProvider() {
+            @Override
+            public String getOut() {
+              if (theOut == null) {
+                return null;
+              }
+              return theOut.readAndReset();
+            }
+
+            @Override
+            public String getErr() {
+              if (theErr == null) {
+                return null;
+              }
+              return theErr.readAndReset();
+            }
+          });
+      if (theErr != null) {
+        theErr.registerStreamer(streamer);
+      }
+      if (theOut != null) {
+        theOut.registerStreamer(streamer);
+      }
+    } else {
+      // If there is no streamer to consume the output, we should not try to accumulate it.
+      this.out.setDiscardAll();
+      this.err.setDiscardAll();
     }
+    commandEnvironment.getEventBus().unregister(buildEventRecorder);
+    this.buildEventRecorder = null;
+    this.out = null;
+    this.err = null;
   }
 
   @VisibleForTesting
@@ -82,7 +152,8 @@ public class BuildEventStreamerModule extends BlazeModule {
       ImmutableSet<BuildEventTransport> buildEventTransports
           = createFromOptions(besOptions, pathConverter);
       if (!buildEventTransports.isEmpty()) {
-        BuildEventStreamer streamer = new BuildEventStreamer(buildEventTransports);
+        BuildEventStreamer streamer = new BuildEventStreamer(buildEventTransports,
+            commandEnvironment != null ? commandEnvironment.getReporter() : null);
         return Optional.of(streamer);
       }
     } catch (IOException e) {
