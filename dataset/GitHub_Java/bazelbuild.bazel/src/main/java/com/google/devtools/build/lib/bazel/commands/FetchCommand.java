@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
+import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
@@ -61,6 +62,7 @@ public final class FetchCommand implements BlazeCommand {
 
   @Override
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+    BlazeRuntime runtime = env.getRuntime();
     if (options.getResidue().isEmpty()) {
       env.getReporter().handle(Event.error(String.format(
           "missing fetch expression. Type '%s help fetch' for syntax and help",
@@ -69,7 +71,7 @@ public final class FetchCommand implements BlazeCommand {
     }
 
     try {
-      env.setupPackageCache(options);
+      env.setupPackageCache(options, runtime.getDefaultsPackageContent());
     } catch (InterruptedException e) {
       env.getReporter().handle(Event.error("fetch interrupted"));
       return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
@@ -101,8 +103,7 @@ public final class FetchCommand implements BlazeCommand {
             false,
             Lists.<String>newArrayList(),
             threadsOption.threads,
-            EnumSet.noneOf(Setting.class),
-            /* useForkJoinPool= */ false);
+            EnumSet.noneOf(Setting.class));
 
     // 1. Parse query:
     QueryExpression expr;
@@ -155,7 +156,7 @@ public final class FetchCommand implements BlazeCommand {
     }
 
     if (queryEvalResult.getSuccess()) {
-      env.getReporter().handle(Event.info("All external dependencies fetched successfully."));
+      env.getReporter().handle(Event.progress("All external dependencies fetched successfully."));
     }
     ExitCode exitCode =
         queryEvalResult.getSuccess() ? ExitCode.SUCCESS : ExitCode.COMMAND_LINE_ERROR;
