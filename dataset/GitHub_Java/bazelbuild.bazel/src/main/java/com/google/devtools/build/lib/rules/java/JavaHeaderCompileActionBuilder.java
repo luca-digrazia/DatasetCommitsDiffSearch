@@ -278,20 +278,13 @@ public class JavaHeaderCompileActionBuilder {
     // The header compiler is either a jar file that needs to be executed using
     // `java -jar <path>`, or an executable that can be run directly.
     if (!headerCompiler.getExecutable().getExtension().equals("jar")) {
-      builder.addRunfilesSupplier(headerCompiler.getRunfilesSupplier());
-      builder.addTransitiveInputs(headerCompiler.getFilesToRun());
-      builder.setExecutable(headerCompiler.getExecutable());
+      builder.setExecutable(headerCompiler);
     } else {
-      builder
-          .addTransitiveInputs(hostJavabase.javaBaseInputsMiddleman())
-          .addInput(headerCompiler.getExecutable());
-      builder.setExecutable(hostJavabase.javaBinaryExecPath());
-      builder
-          .executableArguments()
-          .add("-Xverify:none")
-          .add("-jar")
-          .addExecPath(headerCompiler.getExecutable())
-          .build();
+      builder.addTransitiveInputs(hostJavabase.javaBaseInputsMiddleman());
+      builder.setJarExecutable(
+          hostJavabase.javaBinaryExecPath(),
+          headerCompiler.getExecutable(),
+          javaToolchain.getJvmOptions());
     }
 
     CustomCommandLine.Builder commandLine =

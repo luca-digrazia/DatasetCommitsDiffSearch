@@ -295,7 +295,7 @@ public final class JavaCompileActionBuilder {
     mandatoryInputs.addTransitive(tools);
     JavaCompileAction javaCompileAction =
         new JavaCompileAction(
-            /* compilationType= */ JavaCompileAction.CompilationType.JAVAC,
+            /* mnemonic= */ "Javac",
             /* owner= */ ruleContext.getActionOwner(),
             /* env= */ actionEnvironment,
             /* tools= */ tools,
