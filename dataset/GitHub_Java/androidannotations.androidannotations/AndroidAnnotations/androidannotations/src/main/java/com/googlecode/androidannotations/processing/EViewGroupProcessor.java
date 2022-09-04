@@ -43,13 +43,11 @@ import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
-import com.sun.codemodel.JType;
 
 public class EViewGroupProcessor extends AnnotationHelper implements ElementProcessor {
 
@@ -84,37 +82,31 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 		}
 
 		holder.eBean = codeModel._class(modifiers, generatedBeanQualifiedName, ClassType.CLASS);
-
 		JClass eBeanClass = codeModel.directClass(eBeanQualifiedName);
 
 		holder.eBean._extends(eBeanClass);
-
-		{
-			JClass contextClass = holder.refClass("android.content.Context");
-			holder.contextRef = holder.eBean.field(PRIVATE, contextClass, "context_");
-		}
 		
+		holder.eBean.annotate(SuppressWarnings.class).param("value", "unused");
+		holder.eBean.javadoc().append( //
+				"We use @SuppressWarning here because our java code\n" +
+				"generator doesn't know that there is no need\n" +
+				"to import OnXXXListeners from View as we already\n" +
+				"are in a View. <b>See issue #21.</b>");
+
 		{
 			// init
 			holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
-			holder.init.body().assign((JFieldVar) holder.contextRef, JExpr.invoke("getContext"));
 		}
 		
 		{
 			// afterSetContentView
 			holder.afterSetContentView = holder.eBean.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
 		}
-		
-		JFieldVar mAlreadyInflated_ = holder.eBean.field(PRIVATE, JType.parse(codeModel, "boolean"), "mAlreadyInflated_", JExpr.FALSE);
 
 		// onFinishInflate
 		JMethod onFinishInflate = holder.eBean.method(PUBLIC, codeModel.VOID, "onFinishInflate");
 		onFinishInflate.annotate(Override.class);
 
-		JBlock ifNotInflated = onFinishInflate.body()._if(JExpr.ref("mAlreadyInflated_").not())._then();
-		ifNotInflated.directStatement("// See issue #68 for details.");
-		ifNotInflated.assign(mAlreadyInflated_, JExpr.TRUE);
-		
 		// inflate layout if ID is given on annotation
 		EViewGroup layoutAnnotation = element.getAnnotation(EViewGroup.class);
 		int layoutIdValue = layoutAnnotation.value();
@@ -122,11 +114,12 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 		if (layoutIdValue != Id.DEFAULT_VALUE) {
 			IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
 			contentViewId = rInnerClass.getIdStaticRef(layoutIdValue, holder);
-			ifNotInflated.invoke("inflate").arg(JExpr.invoke("getContext")).arg(contentViewId).arg(JExpr._this());
+
+			onFinishInflate.body().invoke("inflate").arg(JExpr.invoke("getContext")).arg(contentViewId).arg(JExpr._this());
 		}
-		ifNotInflated.invoke(holder.afterSetContentView);
-		
+
 		// finally
+		onFinishInflate.body().invoke(holder.afterSetContentView);
 		onFinishInflate.body().invoke(JExpr._super(), "onFinishInflate");
 
 		copyConstructors(element, holder, onFinishInflate);
@@ -147,6 +140,8 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 				constructors.add((ExecutableElement) e);
 			}
 		}
+		
+		JClass contextClass = holder.refClass("android.content.Context");
 
 		for (ExecutableElement userConstructor : constructors) {
 			JMethod copyConstructor = holder.eBean.constructor(PUBLIC);
@@ -159,7 +154,13 @@ public class EViewGroupProcessor extends AnnotationHelper implements ElementProc
 				superCall.arg(JExpr.ref(paramName));
 			}
 			
+			JFieldVar contextField = holder.eBean.field(PRIVATE, contextClass, "context_");
+			holder.contextRef = contextField;
+			
+			body.assign(contextField, JExpr.invoke("getContext"));
+			
 			body.invoke(holder.init);
+			
 		}
 	}
 
