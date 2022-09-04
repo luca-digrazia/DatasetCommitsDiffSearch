@@ -77,5 +77,4 @@ public @interface ConfigProperties {
 
         public abstract String getName(String name);
     }
-
 }

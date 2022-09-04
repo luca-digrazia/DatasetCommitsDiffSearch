@@ -267,37 +267,26 @@ final class ClassConfigPropertiesUtil {
                  */
                 DotName fieldTypeDotName = fieldType.name();
                 ClassInfo fieldTypeClassInfo = applicationIndex.getClassByName(fieldType.name());
-                ResultHandle mpConfig = methodCreator.getMethodParam(0);
                 if (fieldTypeClassInfo != null) {
-                    if (DotNames.ENUM.equals(fieldTypeClassInfo.superName())) {
-                        // just read the value from MP Config normally
-                        ResultHandle value = methodCreator.invokeInterfaceMethod(
-                                MethodDescriptor.ofMethod(Config.class, "getValue", Object.class, String.class, Class.class),
-                                mpConfig,
-                                methodCreator.load(getFullConfigName(prefixStr, namingStrategy, field)),
-                                methodCreator.loadClass(fieldTypeDotName.toString()));
-
-                        createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, value);
-                    } else {
-                        if (!fieldTypeClassInfo.hasNoArgsConstructor()) {
-                            throw new IllegalArgumentException(
-                                    "Nested configuration class '" + fieldTypeClassInfo
-                                            + "' must contain a no-args constructor ");
-                        }
-
-                        if (!Modifier.isPublic(fieldTypeClassInfo.flags())) {
-                            throw new IllegalArgumentException(
-                                    "Nested configuration class '" + fieldTypeClassInfo + "' must be public ");
-                        }
-
-                        ResultHandle nestedConfigObject = populateConfigObject(classLoader, fieldTypeClassInfo,
-                                getFullConfigName(prefixStr, namingStrategy, field), namingStrategy, failOnMismatchingMember,
-                                methodCreator,
-                                applicationIndex, configProperties);
-                        createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, nestedConfigObject);
+                    if (!fieldTypeClassInfo.hasNoArgsConstructor()) {
+                        throw new IllegalArgumentException(
+                                "Nested configuration class '" + fieldTypeClassInfo + "' must contain a no-args constructor ");
                     }
+
+                    if (!Modifier.isPublic(fieldTypeClassInfo.flags())) {
+                        throw new IllegalArgumentException(
+                                "Nested configuration class '" + fieldTypeClassInfo + "' must be public ");
+                    }
+
+                    ResultHandle nestedConfigObject = populateConfigObject(classLoader, fieldTypeClassInfo,
+                            prefixStr + "." + namingStrategy.getName(field.name()), namingStrategy, failOnMismatchingMember,
+                            methodCreator,
+                            applicationIndex, configProperties);
+                    createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, nestedConfigObject);
+
                 } else {
-                    String fullConfigName = getFullConfigName(prefixStr, namingStrategy, field);
+                    String fullConfigName = prefixStr + "." + namingStrategy.getName(field.name());
+                    ResultHandle config = methodCreator.getMethodParam(0);
                     if (DotNames.OPTIONAL.equals(fieldTypeDotName)) {
                         Type genericType = determineSingleGenericType(field.type(),
                                 field.declaringClass().name());
@@ -307,14 +296,14 @@ final class ClassConfigPropertiesUtil {
                             ResultHandle setterValue = methodCreator.invokeInterfaceMethod(
                                     MethodDescriptor.ofMethod(Config.class, "getOptionalValue", Optional.class, String.class,
                                             Class.class),
-                                    mpConfig, methodCreator.load(fullConfigName),
+                                    config, methodCreator.load(fullConfigName),
                                     methodCreator.loadClass(genericType.name().toString()));
                             createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, setterValue);
                         } else {
                             // convert the String value and populate an Optional with it
                             ReadOptionalResponse readOptionalResponse = createReadOptionalValueAndConvertIfNeeded(
                                     fullConfigName,
-                                    genericType, field.declaringClass().name(), methodCreator, mpConfig);
+                                    genericType, field.declaringClass().name(), methodCreator, config);
                             createWriteValue(readOptionalResponse.getIsPresentTrue(), configObject, field, setter,
                                     useFieldAccess,
                                     readOptionalResponse.getIsPresentTrue().invokeStaticMethod(
@@ -340,7 +329,7 @@ final class ClassConfigPropertiesUtil {
 
                             ReadOptionalResponse readOptionalResponse = createReadOptionalValueAndConvertIfNeeded(
                                     fullConfigName,
-                                    fieldType, field.declaringClass().name(), methodCreator, mpConfig);
+                                    fieldType, field.declaringClass().name(), methodCreator, config);
 
                             // call the setter if the optional contained data
                             createWriteValue(readOptionalResponse.getIsPresentTrue(), configObject, field, setter,
@@ -353,7 +342,7 @@ final class ClassConfigPropertiesUtil {
                              */
                             ResultHandle setterValue = createReadMandatoryValueAndConvertIfNeeded(
                                     fullConfigName, fieldType,
-                                    field.declaringClass().name(), methodCreator, mpConfig);
+                                    field.declaringClass().name(), methodCreator, config);
                             createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, setterValue);
 
                         }
@@ -391,10 +380,6 @@ final class ClassConfigPropertiesUtil {
         }
 
         return configObject;
-    }
-
-    private static String getFullConfigName(String prefixStr, ConfigProperties.NamingStrategy namingStrategy, FieldInfo field) {
-        return prefixStr + "." + namingStrategy.getName(field.name());
     }
 
     private static void createWriteValue(BytecodeCreator bytecodeCreator, ResultHandle configObject, FieldInfo field,
