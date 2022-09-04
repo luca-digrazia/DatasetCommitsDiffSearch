@@ -27,6 +27,7 @@ import com.android.manifmerger.MergingReport.MergedManifestKind;
 import com.android.manifmerger.PlaceholderHandler;
 import com.android.utils.Pair;
 import com.android.utils.StdLogger;
+import com.google.common.base.Function;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -70,13 +71,30 @@ public class AndroidManifestProcessor {
   private static final ImmutableMap<SystemProperty, String> SYSTEM_PROPERTY_NAMES =
       Maps.toMap(
           Arrays.asList(SystemProperty.values()),
-          property -> {
-            if (property == SystemProperty.PACKAGE) {
-              return "applicationId";
-            } else {
-              return property.toCamelCase();
+          new Function<SystemProperty, String>() {
+            @Override
+            public String apply(SystemProperty property) {
+              if (property == SystemProperty.PACKAGE) {
+                return "applicationId";
+              } else {
+                return property.toCamelCase();
+              }
             }
           });
+
+  /** Exception encapsulating the error report of a manifest merge operation. */
+  public static final class MergeErrorException extends Exception {
+    private final MergingReport report;
+
+    private MergeErrorException(MergingReport report) {
+      super(report.getReportString());
+      this.report = report;
+    }
+
+    public MergingReport getMergingReport() {
+      return report;
+    }
+  }
 
   /** Creates a new processor with the appropriate logger. */
   public static AndroidManifestProcessor with(StdLogger stdLogger) {
@@ -200,7 +218,8 @@ public class AndroidManifestProcessor {
       int versionCode,
       String versionName,
       MergedAndroidData primaryData,
-      Path processedManifest) {
+      Path processedManifest)
+      throws IOException {
 
     ManifestMerger2.MergeType mergeType =
         variantType == VariantType.DEFAULT

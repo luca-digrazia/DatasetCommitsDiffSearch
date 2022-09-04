@@ -264,7 +264,7 @@ public class AndroidResourceProcessingAction {
         effectTags = {OptionEffectTag.UNKNOWN},
         help =
             "Variant configuration type for packaging the resources."
-                + " Acceptable values DEFAULT, LIBRARY, ANDROID_TEST, UNIT_TEST")
+                + " Acceptible values DEFAULT, LIBRARY, ANDROID_TEST, UNIT_TEST")
     public VariantType packageType;
 
     @Option(
@@ -362,10 +362,9 @@ public class AndroidResourceProcessingAction {
   public static void main(String[] args) throws Exception {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(
-            new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()),
-            Options.class,
-            AaptConfigOptions.class);
+        OptionsParser.newOptionsParser(Options.class, AaptConfigOptions.class);
+    optionsParser.enableParamsFileSupport(
+        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
     optionsParser.parseAndExitUponError(args);
     aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     options = optionsParser.getOptions(Options.class);
