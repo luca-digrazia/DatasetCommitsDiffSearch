@@ -145,7 +145,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     if (ruleContext.hasErrors()) {
       return;
     }
-    Iterable<CcInfo> ccInfosFromDeps = AnalysisUtils.getProviders(deps, CcInfo.PROVIDER);
     CcCompilationHelper compilationHelper =
         new CcCompilationHelper(
                 ruleContext,
@@ -162,7 +161,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             .addPublicHeaders(common.getHeaders())
             .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext))
             .addCcCompilationContexts(
-                Streams.stream(ccInfosFromDeps)
+                Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
                     .map(CcInfo::getCcCompilationContext)
                     .collect(ImmutableList.toImmutableList()))
             .addCcCompilationContexts(
@@ -444,6 +443,11 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 LibraryToLink.getDynamicLibrariesForRuntime(
                     /* linkingStatically= */ false, libraryToLinks));
 
+    @SuppressWarnings("unchecked")
+    CppDebugFileProvider cppDebugFileProvider =
+        CcCompilationHelper.buildCppDebugFileProvider(
+            compilationInfo.getCcCompilationOutputs(),
+            (List<TransitiveInfoCollection>) ruleContext.getPrerequisites("deps", Mode.TARGET));
     Map<String, NestedSet<Artifact>> currentOutputGroups =
         CcCompilationHelper.buildOutputGroupsForEmittingCompileProviders(
             compilationInfo.getCcCompilationOutputs(),
@@ -455,14 +459,12 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     CcSkylarkApiProvider.maybeAdd(ruleContext, targetBuilder);
     targetBuilder
         .setFilesToBuild(filesToBuild)
+        .addProvider(cppDebugFileProvider)
         .addProvider(ccNativeLibraryProvider)
         .addNativeDeclaredProvider(
             CcInfo.builder()
                 .setCcCompilationContext(compilationInfo.getCcCompilationContext())
                 .setCcLinkingContext(ccLinkingContext)
-                .setCcDebugInfoContext(
-                    CppHelper.mergeCcDebugInfoContexts(
-                        compilationInfo.getCcCompilationOutputs(), ccInfosFromDeps))
                 .build())
         .addOutputGroups(
             CcCommon.mergeOutputGroups(ImmutableList.of(currentOutputGroups, outputGroups.build())))
