@@ -117,6 +117,7 @@ import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.rules.extra.ExtraAction;
 import com.google.devtools.build.lib.rules.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
@@ -671,6 +672,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   // Get a MutableActionGraph for testing purposes.
   protected MutableActionGraph getMutableActionGraph() {
     return mutableActionGraph;
+  }
+
+  protected TransitivePackageLoader makeVisitor() {
+    setUpSkyframe();
+    return skyframeExecutor.pkgLoader();
   }
 
   /**
