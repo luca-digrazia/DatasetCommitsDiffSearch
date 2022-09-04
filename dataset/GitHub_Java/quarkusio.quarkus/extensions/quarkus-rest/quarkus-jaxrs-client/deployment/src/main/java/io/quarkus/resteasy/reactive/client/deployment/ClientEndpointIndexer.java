@@ -20,7 +20,6 @@ import org.jboss.resteasy.reactive.common.model.MethodParameter;
 import org.jboss.resteasy.reactive.common.model.ParameterType;
 import org.jboss.resteasy.reactive.common.model.ResourceMethod;
 import org.jboss.resteasy.reactive.common.model.RestClientInterface;
-import org.jboss.resteasy.reactive.common.processor.AdditionalReaderWriter;
 import org.jboss.resteasy.reactive.common.processor.AdditionalReaders;
 import org.jboss.resteasy.reactive.common.processor.AdditionalWriters;
 import org.jboss.resteasy.reactive.common.processor.EndpointIndexer;
@@ -80,25 +79,32 @@ public class ClientEndpointIndexer extends EndpointIndexer<ClientEndpointIndexer
     }
 
     protected void addWriterForType(AdditionalWriters additionalWriters, Type paramType) {
-        addReaderWriterForType(additionalWriters, paramType);
+        DotName dotName = paramType.name();
+        if (dotName.equals(JSONP_JSON_VALUE)
+                || dotName.equals(JSONP_JSON_NUMBER)
+                || dotName.equals(JSONP_JSON_STRING)) {
+            additionalWriters.add(JsonValueHandler.class, APPLICATION_JSON, javax.json.JsonValue.class);
+        } else if (dotName.equals(JSONP_JSON_ARRAY)) {
+            additionalWriters.add(JsonArrayHandler.class, APPLICATION_JSON, javax.json.JsonArray.class);
+        } else if (dotName.equals(JSONP_JSON_OBJECT)) {
+            additionalWriters.add(JsonObjectHandler.class, APPLICATION_JSON, javax.json.JsonObject.class);
+        } else if (dotName.equals(JSONP_JSON_STRUCTURE)) {
+            additionalWriters.add(JsonStructureHandler.class, APPLICATION_JSON, javax.json.JsonStructure.class);
+        }
     }
 
     protected void addReaderForType(AdditionalReaders additionalReaders, Type paramType) {
-        addReaderWriterForType(additionalReaders, paramType);
-    }
-
-    private void addReaderWriterForType(AdditionalReaderWriter additionalReaderWriter, Type paramType) {
         DotName dotName = paramType.name();
         if (dotName.equals(JSONP_JSON_NUMBER)
                 || dotName.equals(JSONP_JSON_VALUE)
                 || dotName.equals(JSONP_JSON_STRING)) {
-            additionalReaderWriter.add(JsonValueHandler.class, APPLICATION_JSON, javax.json.JsonValue.class);
+            additionalReaders.add(JsonValueHandler.class, APPLICATION_JSON, javax.json.JsonValue.class);
         } else if (dotName.equals(JSONP_JSON_ARRAY)) {
-            additionalReaderWriter.add(JsonArrayHandler.class, APPLICATION_JSON, javax.json.JsonArray.class);
+            additionalReaders.add(JsonArrayHandler.class, APPLICATION_JSON, javax.json.JsonArray.class);
         } else if (dotName.equals(JSONP_JSON_OBJECT)) {
-            additionalReaderWriter.add(JsonObjectHandler.class, APPLICATION_JSON, javax.json.JsonObject.class);
+            additionalReaders.add(JsonObjectHandler.class, APPLICATION_JSON, javax.json.JsonObject.class);
         } else if (dotName.equals(JSONP_JSON_STRUCTURE)) {
-            additionalReaderWriter.add(JsonStructureHandler.class, APPLICATION_JSON, javax.json.JsonStructure.class);
+            additionalReaders.add(JsonStructureHandler.class, APPLICATION_JSON, javax.json.JsonStructure.class);
         }
     }
 

@@ -428,9 +428,10 @@ public class QuarkusRestProcessor {
                     .setSerialisers(serialisers)
                     .setResourceClasses(resourceClasses)
                     .setLocatableResourceClasses(subResourceClasses)
-                    .setParamConverterProviders(converterProviders),
+                    .setParamConverterProviders(converterProviders)
+                    .setApplicationClass(applicationClass),
                     beanContainerBuildItem.getValue(), shutdownContext, vertxConfig, applicationPath,
-                    initClassFactory);
+                    initClassFactory, singletonClasses.isEmpty());
 
             String deploymentPath = sanitizeApplicationPath(applicationPath);
             // Exact match for resources matched to the root path

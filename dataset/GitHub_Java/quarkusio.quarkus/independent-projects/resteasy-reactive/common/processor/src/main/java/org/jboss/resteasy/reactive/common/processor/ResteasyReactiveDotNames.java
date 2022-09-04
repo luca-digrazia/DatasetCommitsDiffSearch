@@ -1,20 +1,16 @@
 package org.jboss.resteasy.reactive.common.processor;
 
-import io.smallrye.common.annotation.Blocking;
-import io.smallrye.common.annotation.NonBlocking;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.core.http.HttpServerResponse;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.time.LocalDate;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.CompletionStage;
@@ -39,7 +35,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.InvocationCallback;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
@@ -73,14 +68,17 @@ import javax.ws.rs.ext.WriterInterceptor;
 import javax.ws.rs.sse.Sse;
 import javax.ws.rs.sse.SseEventSink;
 import org.jboss.jandex.DotName;
-import org.jboss.resteasy.reactive.MultipartForm;
+import org.jboss.resteasy.reactive.Blocking;
+import org.jboss.resteasy.reactive.NonBlocking;
+import org.jboss.resteasy.reactive.RequireCDIRequestScope;
 import org.jboss.resteasy.reactive.RestCookie;
 import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.RestHeader;
 import org.jboss.resteasy.reactive.RestMatrix;
 import org.jboss.resteasy.reactive.RestPath;
 import org.jboss.resteasy.reactive.RestQuery;
-import org.jboss.resteasy.reactive.RestSseElementType;
+import org.jboss.resteasy.reactive.SseElementType;
+import org.jboss.resteasy.reactive.common.core.QuarkusRestContext;
 
 public final class ResteasyReactiveDotNames {
 
@@ -96,10 +94,11 @@ public final class ResteasyReactiveDotNames {
     public static final DotName SSE = DotName.createSimple(Sse.class.getName());
     public static final DotName SSE_EVENT_SINK = DotName.createSimple(SseEventSink.class.getName());
     public static final DotName RESOURCE_INFO = DotName.createSimple(ResourceInfo.class.getName());
-    public static final DotName SERVER_REQUEST_CONTEXT = DotName
-            .createSimple("org.jboss.resteasy.reactive.server.spi.ServerRequestContext");
+    public static final DotName HTTP_SERVER_REQUEST = DotName.createSimple(HttpServerRequest.class.getName());
+    public static final DotName HTTP_SERVER_RESPONSE = DotName.createSimple(HttpServerResponse.class.getName());
+    public static final DotName QUARKUS_REST_CONTEXT = DotName.createSimple(QuarkusRestContext.class.getName());
 
-    public static final DotName REST_SSE_ELEMENT_TYPE = DotName.createSimple(RestSseElementType.class.getName());
+    public static final DotName SSE_ELEMENT_TYPE = DotName.createSimple(SseElementType.class.getName());
     public static final DotName CONSUMES = DotName.createSimple(Consumes.class.getName());
     public static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
     public static final DotName PROVIDER = DotName.createSimple(Provider.class.getName());
@@ -114,7 +113,6 @@ public final class ResteasyReactiveDotNames {
     public static final DotName REST_QUERY_PARAM = DotName.createSimple(RestQuery.class.getName());
     public static final DotName REST_HEADER_PARAM = DotName.createSimple(RestHeader.class.getName());
     public static final DotName REST_FORM_PARAM = DotName.createSimple(RestForm.class.getName());
-    public static final DotName MULTI_PART_FORM_PARAM = DotName.createSimple(MultipartForm.class.getName());
     public static final DotName REST_MATRIX_PARAM = DotName.createSimple(RestMatrix.class.getName());
     public static final DotName REST_COOKIE_PARAM = DotName.createSimple(RestCookie.class.getName());
     public static final DotName GET = DotName.createSimple(javax.ws.rs.GET.class.getName());
@@ -149,23 +147,20 @@ public final class ResteasyReactiveDotNames {
     public static final DotName APPLICATION_SCOPED = DotName.createSimple(ApplicationScoped.class.getName());
     public static final DotName SINGLETON = DotName.createSimple(Singleton.class.getName());
     public static final DotName REQUEST_SCOPED = DotName.createSimple(RequestScoped.class.getName());
-    public static final DotName WEB_APPLICATION_EXCEPTION = DotName.createSimple(WebApplicationException.class.getName());
 
     public static final DotName INVOCATION_CALLBACK = DotName.createSimple(InvocationCallback.class.getName());
 
     public static final DotName BLOCKING = DotName.createSimple(Blocking.class.getName());
     public static final DotName NON_BLOCKING = DotName.createSimple(NonBlocking.class.getName());
+    public static final DotName REQUIRE_CDI_REQUEST_SCOPE = DotName.createSimple(RequireCDIRequestScope.class.getName());
     public static final DotName SUSPENDED = DotName.createSimple(Suspended.class.getName());
     public static final DotName PRE_MATCHING = DotName.createSimple(PreMatching.class.getName());
 
-    public static final DotName COLLECTION = DotName.createSimple(Collection.class.getName());
     public static final DotName LIST = DotName.createSimple(List.class.getName());
     public static final DotName SET = DotName.createSimple(Set.class.getName());
     public static final DotName SORTED_SET = DotName.createSimple(SortedSet.class.getName());
-    public static final DotName MAP = DotName.createSimple(Map.class.getName());
     public static final DotName MULTI_VALUED_MAP = DotName.createSimple(MultivaluedMap.class.getName());
     public static final DotName PATH_SEGMENT = DotName.createSimple(PathSegment.class.getName());
-    public static final DotName LOCAL_DATE = DotName.createSimple(LocalDate.class.getName());
 
     public static final DotName UNI = DotName.createSimple(Uni.class.getName());
     public static final DotName MULTI = DotName.createSimple(Multi.class.getName());
@@ -179,8 +174,6 @@ public final class ResteasyReactiveDotNames {
     public static final DotName CHARACTER = DotName.createSimple(Character.class.getName());
     public static final DotName BIG_DECIMAL = DotName.createSimple(BigDecimal.class.getName());
     public static final DotName BIG_INTEGER = DotName.createSimple(BigInteger.class.getName());
-    public static final DotName VOID = DotName.createSimple(Void.class.getName());
-    public static final DotName OPTIONAL = DotName.createSimple(Optional.class.getName());
 
     public static final DotName PRIMITIVE_INTEGER = DotName.createSimple(int.class.getName());
     public static final DotName PRIMITIVE_LONG = DotName.createSimple(long.class.getName());
@@ -202,6 +195,13 @@ public final class ResteasyReactiveDotNames {
     public static final DotName JSONP_JSON_VALUE = DotName.createSimple(javax.json.JsonValue.class.getName());
     public static final DotName JSONP_JSON_STRING = DotName.createSimple(javax.json.JsonString.class.getName());
 
+    public static final DotName CUSTOM_CONTAINER_REQUEST_FILTER = DotName
+            .createSimple(org.jboss.resteasy.reactive.ContainerRequestFilter.class.getName());
+    public static final DotName CUSTOM_CONTAINER_RESPONSE_FILTER = DotName
+            .createSimple(org.jboss.resteasy.reactive.ContainerResponseFilter.class.getName());
+    public static final DotName EXCEPTION_MAPPER_ANNOTATION = DotName
+            .createSimple(org.jboss.resteasy.reactive.ExceptionMapper.class.getName());
+
     public static final DotName CONTAINER_REQUEST_CONTEXT = DotName.createSimple(ContainerRequestContext.class.getName());
     public static final DotName CONTAINER_RESPONSE_CONTEXT = DotName.createSimple(ContainerResponseContext.class.getName());
 
@@ -211,14 +211,11 @@ public final class ResteasyReactiveDotNames {
     public static final DotName ENCODED = DotName.createSimple(Encoded.class.getName());
 
     public static final DotName QUARKUS_REST_CONTAINER_RESPONSE_FILTER = DotName
-            .createSimple("org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerResponseFilter");
+            .createSimple("org.jboss.resteasy.reactive.server.spi.QuarkusRestContainerResponseFilter");
     public static final DotName QUARKUS_REST_CONTAINER_REQUEST_FILTER = DotName
-            .createSimple("org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerRequestFilter");
+            .createSimple("org.jboss.resteasy.reactive.server.spi.QuarkusRestContainerRequestFilter");
     public static final DotName OBJECT = DotName.createSimple(Object.class.getName());
 
-    // TODO: fix this hack by moving all the logic that handles this annotation to the server processor
-    public static final DotName SERVER_EXCEPTION_MAPPER = DotName
-            .createSimple("org.jboss.resteasy.reactive.server.ServerExceptionMapper");
     // Types ignored for reflection used by the RESTEasy and SmallRye REST client extensions.
     private static final Set<DotName> TYPES_IGNORED_FOR_REFLECTION = new HashSet<>(Arrays.asList(
             // javax.json

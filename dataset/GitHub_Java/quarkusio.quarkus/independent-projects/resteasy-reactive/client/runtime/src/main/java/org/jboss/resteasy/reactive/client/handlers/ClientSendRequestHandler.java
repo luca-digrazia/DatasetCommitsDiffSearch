@@ -7,7 +7,6 @@ import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpClientRequest;
 import io.vertx.core.http.HttpClientResponse;
 import io.vertx.core.http.HttpMethod;
-import io.vertx.core.http.RequestOptions;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
@@ -18,9 +17,9 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Variant;
-import org.jboss.resteasy.reactive.client.impl.AsyncInvokerImpl;
-import org.jboss.resteasy.reactive.client.impl.RestClientRequestContext;
-import org.jboss.resteasy.reactive.client.spi.ClientRestHandler;
+import org.jboss.resteasy.reactive.client.ClientRestHandler;
+import org.jboss.resteasy.reactive.client.QuarkusRestAsyncInvoker;
+import org.jboss.resteasy.reactive.client.RestClientRequestContext;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 
 public class ClientSendRequestHandler implements ClientRestHandler {
@@ -72,7 +71,7 @@ public class ClientSendRequestHandler implements ClientRestHandler {
                 }
             }
         });
-        if (actualEntity == AsyncInvokerImpl.EMPTY_BUFFER) {
+        if (actualEntity == QuarkusRestAsyncInvoker.EMPTY_BUFFER) {
             httpClientRequest.end();
         } else {
             httpClientRequest.end(actualEntity);
@@ -83,15 +82,9 @@ public class ClientSendRequestHandler implements ClientRestHandler {
     public <T> HttpClientRequest createRequest(RestClientRequestContext state) {
         HttpClient httpClient = state.getHttpClient();
         URI uri = state.getUri();
-        boolean isHttps = "https".equals(uri.getScheme());
-        int port = uri.getPort() != -1 ? uri.getPort() : (isHttps ? 443 : 80);
-        HttpClientRequest httpClientRequest = httpClient.request(
-                HttpMethod.valueOf(state.getHttpMethod()),
-                new RequestOptions()
-                        .setHost(uri.getHost())
-                        .setURI(uri.getPath() + (uri.getQuery() == null ? "" : "?" + uri.getQuery()))
-                        .setPort(port)
-                        .setSsl(isHttps));
+        HttpClientRequest httpClientRequest = httpClient.request(HttpMethod.valueOf(state.getHttpMethod()), uri.getPort(),
+                uri.getHost(),
+                uri.getPath() + (uri.getQuery() == null ? "" : "?" + uri.getQuery()));
         state.setHttpClientRequest(httpClientRequest);
         return httpClientRequest;
     }
@@ -99,7 +92,7 @@ public class ClientSendRequestHandler implements ClientRestHandler {
     private <T> Buffer setRequestHeadersAndPrepareBody(HttpClientRequest httpClientRequest, RestClientRequestContext state)
             throws IOException {
         MultivaluedMap<String, String> headerMap = state.getRequestHeaders().asMap();
-        Buffer actualEntity = AsyncInvokerImpl.EMPTY_BUFFER;
+        Buffer actualEntity = QuarkusRestAsyncInvoker.EMPTY_BUFFER;
         Entity<?> entity = state.getEntity();
         if (entity != null) {
             // no need to set the entity.getMediaType, it comes from the variant

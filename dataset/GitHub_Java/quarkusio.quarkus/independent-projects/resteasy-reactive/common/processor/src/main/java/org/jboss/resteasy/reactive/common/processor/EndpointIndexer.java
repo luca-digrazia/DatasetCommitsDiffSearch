@@ -32,15 +32,16 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PRIMITIVE_LONG;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PRODUCES;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.QUERY_PARAM;
+import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REQUIRE_CDI_REQUEST_SCOPE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_COOKIE_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_FORM_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_HEADER_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_MATRIX_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_PATH_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_QUERY_PARAM;
-import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.REST_SSE_ELEMENT_TYPE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.SET;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.SORTED_SET;
+import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.SSE_ELEMENT_TYPE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.STRING;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.SUSPENDED;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.UNI;
@@ -48,7 +49,6 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -59,7 +59,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.core.MediaType;
@@ -85,8 +84,9 @@ import org.jboss.resteasy.reactive.common.model.ResourceClass;
 import org.jboss.resteasy.reactive.common.model.ResourceMethod;
 import org.jboss.resteasy.reactive.common.util.URLUtils;
 import org.jboss.resteasy.reactive.spi.BeanFactory;
+import org.jboss.resteasy.reactive.spi.EndpointInvoker;
 
-public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD>, PARAM extends IndexedParameter<PARAM>, METHOD extends ResourceMethod> {
+public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM>, PARAM extends IndexedParameter<PARAM>> {
 
     protected static final Map<String, String> primitiveTypes;
     private static final Map<DotName, Class<?>> supportedReaderJavaTypes;
@@ -103,11 +103,13 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             ResteasyReactiveDotNames.SSE,
             ResteasyReactiveDotNames.SSE_EVENT_SINK,
             // extras
-            ResteasyReactiveDotNames.SERVER_REQUEST_CONTEXT,
-            DotName.createSimple("org.jboss.resteasy.reactive.server.SimpleResourceInfo"), //TODO: fixme
-            ResteasyReactiveDotNames.RESOURCE_INFO)));
+            ResteasyReactiveDotNames.QUARKUS_REST_CONTEXT,
+            DotName.createSimple("org.jboss.resteasy.reactive.server.spi.SimplifiedResourceInfo"), //TODO: fixme
+            ResteasyReactiveDotNames.RESOURCE_INFO,
+            ResteasyReactiveDotNames.HTTP_SERVER_REQUEST,
+            ResteasyReactiveDotNames.HTTP_SERVER_RESPONSE)));
 
-    protected static final Logger log = Logger.getLogger(EndpointIndexer.class);
+    protected static final Logger log = Logger.getLogger(EndpointInvoker.class);
     private static final String[] PRODUCES_PLAIN_TEXT_NEGOTIATED = new String[] { MediaType.TEXT_PLAIN, MediaType.WILDCARD };
     private static final String[] PRODUCES_PLAIN_TEXT = new String[] { MediaType.TEXT_PLAIN };
 
@@ -150,6 +152,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
     }
 
     protected final IndexView index;
+    protected final EndpointInvokerFactory endpointInvokerFactory;
     private final Map<String, String> existingConverters;
     private final Map<DotName, String> scannedResourcePaths;
     private final ResteasyReactiveConfig config;
@@ -161,10 +164,10 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
     private final boolean defaultBlocking;
     private final Map<DotName, Map<String, String>> classLevelExceptionMappers;
     private final Function<String, BeanFactory<Object>> factoryCreator;
-    private final Consumer<Map.Entry<MethodInfo, ResourceMethod>> resourceMethodCallback;
 
-    protected EndpointIndexer(Builder<T, ?, METHOD> builder) {
+    protected EndpointIndexer(Builder<T, ?> builder) {
         this.index = builder.index;
+        this.endpointInvokerFactory = builder.endpointInvokerFactory;
         this.existingConverters = builder.existingConverters;
         this.scannedResourcePaths = builder.scannedResourcePaths;
         this.config = builder.config;
@@ -176,7 +179,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         this.defaultBlocking = builder.defaultBlocking;
         this.classLevelExceptionMappers = builder.classLevelExceptionMappers;
         this.factoryCreator = builder.factoryCreator;
-        this.resourceMethodCallback = builder.resourceMethodCallback;
     }
 
     public ResourceClass createEndpoints(ClassInfo classInfo) {
@@ -231,8 +233,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         }
     }
 
-    protected abstract METHOD createResourceMethod();
-
     protected List<ResourceMethod> createEndpoints(ClassInfo currentClassInfo,
             ClassInfo actualEndpointInfo, Set<String> seenMethods,
             Set<String> pathParameters) {
@@ -240,7 +240,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         String[] classProduces = extractProducesConsumesValues(currentClassInfo.classAnnotation(PRODUCES));
         String[] classConsumes = extractProducesConsumesValues(currentClassInfo.classAnnotation(CONSUMES));
         String classSseElementType = null;
-        AnnotationInstance classSseElementTypeAnnotation = currentClassInfo.classAnnotation(REST_SSE_ELEMENT_TYPE);
+        AnnotationInstance classSseElementTypeAnnotation = currentClassInfo.classAnnotation(SSE_ELEMENT_TYPE);
         if (classSseElementTypeAnnotation != null) {
             classSseElementType = classSseElementTypeAnnotation.value().asString();
         }
@@ -407,7 +407,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             produces = applyDefaultProduces(produces, nonAsyncReturnType);
 
             String sseElementType = classSseElementType;
-            AnnotationInstance sseElementTypeAnnotation = info.annotation(REST_SSE_ELEMENT_TYPE);
+            AnnotationInstance sseElementTypeAnnotation = info.annotation(SSE_ELEMENT_TYPE);
             if (sseElementTypeAnnotation != null) {
                 sseElementType = sseElementTypeAnnotation.value().asString();
             }
@@ -422,7 +422,18 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                     blocking = true;
                 }
             }
-            ResourceMethod method = createResourceMethod()
+            boolean cdiRequestScopeRequired = true;
+            AnnotationInstance cdiRequestScopeRequiredAnnotation = getInheritableAnnotation(info, REQUIRE_CDI_REQUEST_SCOPE);
+            if (cdiRequestScopeRequiredAnnotation != null) {
+                AnnotationValue value = cdiRequestScopeRequiredAnnotation.value();
+                if (value != null) {
+                    cdiRequestScopeRequired = value.asBoolean();
+                } else {
+                    cdiRequestScopeRequired = true;
+                }
+            }
+
+            ResourceMethod method = new ResourceMethod()
                     .setHttpMethod(httpMethod == null ? null : httpAnnotationToMethod.get(httpMethod))
                     .setPath(methodPath)
                     .setConsumes(consumes)
@@ -434,6 +445,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                     .setSse(sse)
                     .setSseElementType(sseElementType)
                     .setFormParamRequired(formParamRequired)
+                    .setCDIRequestScopeRequired(cdiRequestScopeRequired)
                     .setParameters(methodParameters)
                     .setSimpleReturnType(toClassName(info.returnType(), currentClassInfo, actualEndpointInfo, index))
                     // FIXME: resolved arguments ?
@@ -473,18 +485,12 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                             }
                         }
                     }));
-            handleAdditionalMethodProcessing((METHOD) method, currentClassInfo, info);
-            if (resourceMethodCallback != null) {
-                resourceMethodCallback.accept(new AbstractMap.SimpleEntry<>(info, method));
-            }
+
+            method.setInvoker(endpointInvokerFactory.create(method, currentClassInfo, info));
             return method;
         } catch (Exception e) {
             throw new RuntimeException("Failed to process method " + info.declaringClass().name() + "#" + info.toString(), e);
         }
-    }
-
-    protected void handleAdditionalMethodProcessing(METHOD method, ClassInfo currentClassInfo, MethodInfo info) {
-
     }
 
     protected abstract InjectableBean scanInjectableBean(ClassInfo currentClassInfo,
@@ -860,7 +866,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             PARAM builder, String elementType) {
     }
 
-    protected boolean isContextType(ClassType klass) {
+    private boolean isContextType(ClassType klass) {
         return CONTEXT_TYPES.contains(klass.name());
     }
 
@@ -879,8 +885,9 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         return NameBindingUtil.nameBindingNames(index, methodInfo, forClass);
     }
 
-    public static abstract class Builder<T extends EndpointIndexer<T, ?, METHOD>, B extends Builder<T, B, METHOD>, METHOD extends ResourceMethod> {
+    public static abstract class Builder<T extends EndpointIndexer<T, ?>, B extends Builder<T, B>> {
         private Function<String, BeanFactory<Object>> factoryCreator;
+        private EndpointInvokerFactory endpointInvokerFactory;
         private boolean defaultBlocking;
         private IndexView index;
         private Map<String, String> existingConverters;
@@ -892,7 +899,11 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         private AdditionalWriters additionalWriters;
         private boolean hasRuntimeConverters;
         private Map<DotName, Map<String, String>> classLevelExceptionMappers;
-        private Consumer<Map.Entry<MethodInfo, ResourceMethod>> resourceMethodCallback;
+
+        public B setEndpointInvokerFactory(EndpointInvokerFactory endpointInvokerFactory) {
+            this.endpointInvokerFactory = endpointInvokerFactory;
+            return (B) this;
+        }
 
         public B setDefaultBlocking(boolean defaultBlocking) {
             this.defaultBlocking = defaultBlocking;
@@ -951,11 +962,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
 
         public B setClassLevelExceptionMappers(Map<DotName, Map<String, String>> classLevelExceptionMappers) {
             this.classLevelExceptionMappers = classLevelExceptionMappers;
-            return (B) this;
-        }
-
-        public B setResourceMethodCallback(Consumer<Map.Entry<MethodInfo, ResourceMethod>> resourceMethodCallback) {
-            this.resourceMethodCallback = resourceMethodCallback;
             return (B) this;
         }
 
