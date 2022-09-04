@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.GlobList;
@@ -77,47 +78,42 @@ import javax.annotation.concurrent.Immutable;
  * Instances of RuleClass encapsulate the set of attributes of a given "class" of rule, such as
  * <code>cc_binary</code>.
  *
- * <p>This is an instance of the "meta-class" pattern for Rules: we achieve using <i>values</i> what
- * subclasses achieve using <i>types</i>. (The "Design Patterns" book doesn't include this pattern,
- * so think of it as something like a cross between a Flyweight and a State pattern. Like Flyweight,
- * we avoid repeatedly storing data that belongs to many instances. Like State, we delegate from
- * Rule to RuleClass for the specific behavior of that rule (though unlike state, a Rule object
- * never changes its RuleClass). This avoids the need to declare one Java class per class of Rule,
- * yet achieves the same behavior.)
+ * <p>This is an instance of the "meta-class" pattern for Rules: we achieve using <i>values</i>
+ * what subclasses achieve using <i>types</i>.  (The "Design Patterns" book doesn't include this
+ * pattern, so think of it as something like a cross between a Flyweight and a State pattern. Like
+ * Flyweight, we avoid repeatedly storing data that belongs to many instances. Like State, we
+ * delegate from Rule to RuleClass for the specific behavior of that rule (though unlike state, a
+ * Rule object never changes its RuleClass).  This avoids the need to declare one Java class per
+ * class of Rule, yet achieves the same behavior.)
  *
  * <p>The use of a metaclass also allows us to compute a mapping from Attributes to small integers
- * and share this between all rules of the same metaclass. This means we can save the attribute
+ * and share this between all rules of the same metaclass.  This means we can save the attribute
  * dictionary for each rule instance using an array, which is much more compact than a hashtable.
  *
  * <p>Rule classes whose names start with "$" are considered "abstract"; since they are not valid
  * identifiers, they cannot be named in the build language. However, they are useful for grouping
  * related attributes which are inherited.
  *
- * <p>The exact values in this class are important. In particular:
- *
+ * <p>The exact values in this class are important.  In particular:
  * <ul>
- *   <li>Changing an attribute from MANDATORY to OPTIONAL creates the potential for null-pointer
- *       exceptions in code that expects a value.
- *   <li>Attributes whose names are preceded by a "$" or a ":" are "hidden", and cannot be redefined
- *       in a BUILD file. They are a useful way of adding a special dependency. By convention,
- *       attributes starting with "$" are implicit dependencies, and those starting with a ":" are
- *       late-bound implicit dependencies, i.e. dependencies that can only be resolved when the
- *       configuration is known.
- *   <li>Attributes should not be introduced into the hierarchy higher then necessary.
- *   <li>The 'deps' and 'data' attributes are treated specially by the code that builds the runfiles
- *       tree. All targets appearing in these attributes appears beneath the ".runfiles" tree; in
- *       addition, "deps" may have rule-specific semantics.
+ * <li>Changing an attribute from MANDATORY to OPTIONAL creates the potential for null-pointer
+ *     exceptions in code that expects a value.
+ * <li>Attributes whose names are preceded by a "$" or a ":" are "hidden", and cannot be redefined
+ *     in a BUILD file.  They are a useful way of adding a special dependency. By convention,
+ *     attributes starting with "$" are implicit dependencies, and those starting with a ":" are
+ *     late-bound implicit dependencies, i.e. dependencies that can only be resolved when the
+ *     configuration is known.
+ * <li>Attributes should not be introduced into the hierarchy higher then necessary.
+ * <li>The 'deps' and 'data' attributes are treated specially by the code that builds the runfiles
+ *     tree.  All targets appearing in these attributes appears beneath the ".runfiles" tree; in
+ *     addition, "deps" may have rule-specific semantics.
  * </ul>
  */
 // Non-final only for mocking in tests. Do not subclass!
 @Immutable
-@AutoCodec
 public class RuleClass {
-  @AutoCodec
   static final Function<? super Rule, Map<String, Label>> NO_EXTERNAL_BINDINGS =
       Functions.<Map<String, Label>>constant(ImmutableMap.<String, Label>of());
-
-  @AutoCodec
   static final Function<? super Rule, Set<String>> NO_OPTION_REFERENCE =
       Functions.<Set<String>>constant(ImmutableSet.<String>of());
 
@@ -549,14 +545,13 @@ public class RuleClass {
       }
     }
 
-    /** A RuleTransitionFactory which always returns the same transition. */
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec
-    static final class FixedTransitionFactory implements RuleTransitionFactory {
+    /**
+     * A RuleTransitionFactory which always returns the same transition.
+     */
+    private static final class FixedTransitionFactory implements RuleTransitionFactory {
       private final ConfigurationTransition transition;
 
-      @AutoCodec.VisibleForSerialization
-      FixedTransitionFactory(ConfigurationTransition transition) {
+      private FixedTransitionFactory(ConfigurationTransition transition) {
         this.transition = transition;
       }
 
@@ -592,6 +587,7 @@ public class RuleClass {
     private boolean isConfigMatcher = false;
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
     private RuleTransitionFactory transitionFactory;
+    private RuleTransitionFactory outgoingTransitionFactory;
     private ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory = null;
     private PredicateWithMessage<Rule> validityPredicate =
         PredicatesWithMessage.<Rule>alwaysTrue();
@@ -602,9 +598,7 @@ public class RuleClass {
         NO_EXTERNAL_BINDINGS;
     private Function<? super Rule, ? extends Set<String>> optionReferenceFunction =
         NO_OPTION_REFERENCE;
-    /** This field and the next are null iff the rule is native. */
-    @Nullable private Label ruleDefinitionEnvironmentLabel;
-
+    @Nullable private Environment ruleDefinitionEnvironment = null;
     @Nullable private String ruleDefinitionEnvironmentHashCode = null;
     private ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
         new ConfigurationFragmentPolicy.Builder();
@@ -688,6 +682,8 @@ public class RuleClass {
       Preconditions.checkArgument(this.name.isEmpty() || this.name.equals(name));
       type.checkName(name);
       type.checkAttributes(attributes);
+      boolean skylarkExecutable =
+          skylark && (type == RuleClassType.NORMAL || type == RuleClassType.TEST);
       Preconditions.checkState(
           (type == RuleClassType.ABSTRACT)
               == (configuredTargetFactory == null && configuredTargetFunction == null),
@@ -697,10 +693,8 @@ public class RuleClass {
           configuredTargetFactory,
           configuredTargetFunction);
       if (!workspaceOnly) {
-        if (skylark) {
-          assertSkylarkRuleClassHasImplementationFunction();
-          assertSkylarkRuleClassHasEnvironmentLabel();
-        }
+        Preconditions.checkState(skylarkExecutable == (configuredTargetFunction != null));
+        Preconditions.checkState(skylarkExecutable == (ruleDefinitionEnvironment != null));
         Preconditions.checkState(externalBindingsFunction == NO_EXTERNAL_BINDINGS);
       }
       if (type == RuleClassType.PLACEHOLDER) {
@@ -711,6 +705,7 @@ public class RuleClass {
           key,
           type,
           skylark,
+          skylarkExecutable,
           skylarkTestable,
           documented,
           publicByDefault,
@@ -720,6 +715,7 @@ public class RuleClass {
           implicitOutputsFunction,
           isConfigMatcher,
           transitionFactory,
+          outgoingTransitionFactory,
           configuredTargetFactory,
           validityPredicate,
           preferredDependencyPredicate,
@@ -727,33 +723,13 @@ public class RuleClass {
           configuredTargetFunction,
           externalBindingsFunction,
           optionReferenceFunction,
-          ruleDefinitionEnvironmentLabel,
+          ruleDefinitionEnvironment,
           ruleDefinitionEnvironmentHashCode,
           configurationFragmentPolicy.build(),
           supportsConstraintChecking,
           requiredToolchains,
           supportsPlatforms,
-          attributes.values());
-    }
-
-    private void assertSkylarkRuleClassHasImplementationFunction() {
-      Preconditions.checkState(
-          (type == RuleClassType.NORMAL || type == RuleClassType.TEST)
-              == (configuredTargetFunction != null),
-          "%s %s",
-          type,
-          configuredTargetFunction);
-    }
-
-    private void assertSkylarkRuleClassHasEnvironmentLabel() {
-      Preconditions.checkState(
-          (type == RuleClassType.NORMAL
-                  || type == RuleClassType.TEST
-                  || type == RuleClassType.PLACEHOLDER)
-              == (ruleDefinitionEnvironmentLabel != null),
-          "Concrete Skylark rule classes can't have null labels: %s %s",
-          ruleDefinitionEnvironmentLabel,
-          type);
+          attributes.values().toArray(new Attribute[0]));
     }
 
     /**
@@ -927,6 +903,22 @@ public class RuleClass {
       return this;
     }
 
+    /**
+     * Applies the given transition factory to all deps of this rule class.
+     *
+     * <p>This means that for each dep, the factory can examine the dep's {@link Rule} to
+     * determine the right transition for that dep.
+     */
+    public Builder depsCfg(RuleTransitionFactory outgoingTransitionFactory) {
+      Preconditions.checkState(type != RuleClassType.ABSTRACT,
+          "Setting not inherited property (configureDeps) of abstract rule class '%s'", name);
+      Preconditions.checkState(this.outgoingTransitionFactory == null,
+          "Property configureDeps has already been set");
+      Preconditions.checkNotNull(outgoingTransitionFactory);
+      this.outgoingTransitionFactory = outgoingTransitionFactory;
+      return this;
+    }
+
     public Builder factory(ConfiguredTargetFactory<?, ?, ?> factory) {
       this.configuredTargetFactory = factory;
       return this;
@@ -1053,9 +1045,18 @@ public class RuleClass {
       return this;
     }
 
-    /** Sets the rule definition environment label and hash code. Meant for Skylark usage. */
-    public Builder setRuleDefinitionEnvironmentLabelAndHashCode(Label label, String hashCode) {
-      this.ruleDefinitionEnvironmentLabel = Preconditions.checkNotNull(label, this.name);
+    /** Sets the rule definition environment. Meant for Skylark usage. */
+    public Builder setRuleDefinitionEnvironment(Environment env) {
+      this.ruleDefinitionEnvironment = Preconditions.checkNotNull(env, this.name);
+      this.ruleDefinitionEnvironmentHashCode =
+          this.ruleDefinitionEnvironment.getTransitiveContentHashCode();
+      return this;
+    }
+
+    /** Sets the rule definition environment hash code for deserialized rule classes. */
+    Builder setRuleDefinitionEnvironmentHashCode(String hashCode) {
+      Preconditions.checkState(ruleDefinitionEnvironment == null, ruleDefinitionEnvironment);
+      Preconditions.checkState(type == RuleClassType.PLACEHOLDER, type);
       this.ruleDefinitionEnvironmentHashCode = Preconditions.checkNotNull(hashCode, this.name);
       return this;
     }
@@ -1192,6 +1193,7 @@ public class RuleClass {
 
   private final RuleClassType type;
   private final boolean isSkylark;
+  private final boolean skylarkExecutable;
   private final boolean skylarkTestable;
   private final boolean documented;
   private final boolean publicByDefault;
@@ -1227,6 +1229,11 @@ public class RuleClass {
    */
   private final RuleTransitionFactory transitionFactory;
 
+  /**
+   * A factory which will produce custom configuration transitions for each dep of this rule.
+   */
+  private final RuleTransitionFactory outgoingTransitionFactory;
+
   /** The factory that creates configured targets from this rule. */
   private final ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory;
 
@@ -1261,11 +1268,10 @@ public class RuleClass {
   private final Function<? super Rule, ? extends Set<String>> optionReferenceFunction;
 
   /**
-   * The Skylark rule definition environment's label and hash code of this RuleClass. Null for non
-   * Skylark executable RuleClasses.
+   * The Skylark rule definition environment of this RuleClass.
+   * Null for non Skylark executable RuleClasses.
    */
-  @Nullable private final Label ruleDefinitionEnvironmentLabel;
-
+  @Nullable private final Environment ruleDefinitionEnvironment;
   @Nullable private final String ruleDefinitionEnvironmentHashCode;
 
   /**
@@ -1309,6 +1315,7 @@ public class RuleClass {
       String key,
       RuleClassType type,
       boolean isSkylark,
+      boolean skylarkExecutable,
       boolean skylarkTestable,
       boolean documented,
       boolean publicByDefault,
@@ -1318,6 +1325,7 @@ public class RuleClass {
       ImplicitOutputsFunction implicitOutputsFunction,
       boolean isConfigMatcher,
       RuleTransitionFactory transitionFactory,
+      RuleTransitionFactory outgoingRuleTransitionFactory,
       ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory,
       PredicateWithMessage<Rule> validityPredicate,
       Predicate<String> preferredDependencyPredicate,
@@ -1325,18 +1333,19 @@ public class RuleClass {
       @Nullable BaseFunction configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
       Function<? super Rule, ? extends Set<String>> optionReferenceFunction,
-      @Nullable Label ruleDefinitionEnvironmentLabel,
+      @Nullable Environment ruleDefinitionEnvironment,
       String ruleDefinitionEnvironmentHashCode,
       ConfigurationFragmentPolicy configurationFragmentPolicy,
       boolean supportsConstraintChecking,
       Set<Label> requiredToolchains,
       boolean supportsPlatforms,
-      Collection<Attribute> attributes) {
+      Attribute... attributes) {
     this.name = name;
     this.key = key;
     this.type = type;
     this.isSkylark = isSkylark;
     this.targetKind = name + Rule.targetKindSuffix();
+    this.skylarkExecutable = skylarkExecutable;
     this.skylarkTestable = skylarkTestable;
     this.documented = documented;
     this.publicByDefault = publicByDefault;
@@ -1344,6 +1353,7 @@ public class RuleClass {
     this.implicitOutputsFunction = implicitOutputsFunction;
     this.isConfigMatcher = isConfigMatcher;
     this.transitionFactory = transitionFactory;
+    this.outgoingTransitionFactory = outgoingRuleTransitionFactory;
     this.configuredTargetFactory = configuredTargetFactory;
     this.validityPredicate = validityPredicate;
     this.preferredDependencyPredicate = preferredDependencyPredicate;
@@ -1351,7 +1361,7 @@ public class RuleClass {
     this.configuredTargetFunction = configuredTargetFunction;
     this.externalBindingsFunction = externalBindingsFunction;
     this.optionReferenceFunction = optionReferenceFunction;
-    this.ruleDefinitionEnvironmentLabel = ruleDefinitionEnvironmentLabel;
+    this.ruleDefinitionEnvironment = ruleDefinitionEnvironment;
     this.ruleDefinitionEnvironmentHashCode = ruleDefinitionEnvironmentHashCode;
     validateNoClashInPublicNames(attributes);
     this.attributes = ImmutableList.copyOf(attributes);
@@ -1364,7 +1374,7 @@ public class RuleClass {
 
     // Create the index and collect non-configurable attributes.
     int index = 0;
-    attributeIndex = new HashMap<>(attributes.size());
+    attributeIndex = new HashMap<>(attributes.length);
     ImmutableList.Builder<String> nonConfigurableAttributesBuilder = ImmutableList.builder();
     for (Attribute attribute : attributes) {
       attributeIndex.put(attribute.getName(), index++);
@@ -1375,7 +1385,7 @@ public class RuleClass {
     this.nonConfigurableAttributes = nonConfigurableAttributesBuilder.build();
   }
 
-  private void validateNoClashInPublicNames(Iterable<Attribute> attributes) {
+  private void validateNoClashInPublicNames(Attribute[] attributes) {
     Map<String, Attribute> publicToPrivateNames = new HashMap<>();
     for (Attribute attribute : attributes) {
       String publicName = attribute.getPublicName();
@@ -1413,6 +1423,10 @@ public class RuleClass {
 
   public RuleTransitionFactory getTransitionFactory() {
     return transitionFactory;
+  }
+
+  public RuleTransitionFactory getOutgoingTransitionFactory() {
+    return outgoingTransitionFactory;
   }
 
   @SuppressWarnings("unchecked")
@@ -2132,17 +2146,19 @@ public class RuleClass {
   }
 
   /**
-   * For Skylark rule classes, returns this RuleClass's rule definition environment's label, which
-   * is never null. Is null for native rules' RuleClass objects.
+   * Returns this RuleClass's rule definition environment. Is null for native rules' RuleClass
+   * objects and deserialized Skylark rules. Deserialized rules do provide a hash code encapsulating
+   * their behavior, available at {@link #getRuleDefinitionEnvironmentHashCode}.
    */
   @Nullable
-  public Label getRuleDefinitionEnvironmentLabel() {
-    return ruleDefinitionEnvironmentLabel;
+  public Environment getRuleDefinitionEnvironment() {
+    return ruleDefinitionEnvironment;
   }
 
   /**
-   * Returns the hash code for the RuleClass's rule definition environment. Will be null for native
-   * rules' RuleClass objects.
+   * Returns the hash code for the RuleClass's rule definition environment. In deserialization,
+   * this RuleClass may not actually contain its environment, in which case the hash code is all
+   * that is available. Will be null for native rules' RuleClass objects.
    */
   @Nullable
   public String getRuleDefinitionEnvironmentHashCode() {
@@ -2152,6 +2168,14 @@ public class RuleClass {
   /** Returns true if this RuleClass is a Skylark-defined RuleClass. */
   public boolean isSkylark() {
     return isSkylark;
+  }
+
+  /**
+   * Returns true if this RuleClass is an executable Skylark RuleClass (i.e. it is
+   * Skylark and Normal or Test RuleClass).
+   */
+  public boolean isSkylarkExecutable() {
+    return skylarkExecutable;
   }
 
   /**

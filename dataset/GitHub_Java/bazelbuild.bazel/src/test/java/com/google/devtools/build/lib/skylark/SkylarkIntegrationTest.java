@@ -263,10 +263,10 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertThat(myTarget.get("has_key2")).isEqualTo(Boolean.FALSE);
     assertThat((SkylarkList) myTarget.get("all_keys"))
         .containsExactly(
-            OutputGroupInfo.HIDDEN_TOP_LEVEL,
-            OutputGroupInfo.COMPILATION_PREREQUISITES,
-            OutputGroupInfo.FILES_TO_COMPILE,
-            OutputGroupInfo.TEMP_FILES);
+            "_hidden_top_level" + INTERNAL_SUFFIX,
+            "compilation_prerequisites" + INTERNAL_SUFFIX,
+            "files_to_compile" + INTERNAL_SUFFIX,
+            "temp_files" + INTERNAL_SUFFIX);
   }
 
   @Test
@@ -359,8 +359,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "str",
         "\t\tstr.index(1)"
             + System.lineSeparator()
-            + "expected value of type 'string' for parameter 'sub', "
-            + "in method call index(int) of 'string'");
+            + "argument 'sub' has type 'int', but should be 'string'\n"
+            + "in call to builtin method string.index(sub, start, end)");
   }
 
   @Test
