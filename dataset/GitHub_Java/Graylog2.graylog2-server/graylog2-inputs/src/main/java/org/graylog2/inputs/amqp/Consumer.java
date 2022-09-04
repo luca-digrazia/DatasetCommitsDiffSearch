@@ -47,7 +47,6 @@ public class Consumer {
 
     private final String hostname;
     private final int port;
-    private final String virtualHost;
     private final String username;
     private final String password;
     private final int prefetchCount;
@@ -55,8 +54,6 @@ public class Consumer {
     private final String queue;
     private final String exchange;
     private final String routingKey;
-
-    private boolean stopped = false;
 
     private Connection connection;
     private Channel channel;
@@ -68,12 +65,11 @@ public class Consumer {
     private AtomicLong lastSecBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesReadTmp = new AtomicLong(0);
 
-    public Consumer(String hostname, int port, String virtualHost, String username, String password,
+    public Consumer(String hostname, int port, String username, String password,
                     int prefetchCount, String queue, String exchange, String routingKey,
                     InputHost graylogServer, MessageInput sourceInput) {
         this.hostname = hostname;
         this.port = port;
-        this.virtualHost = virtualHost;
         this.username = username;
         this.password = password;
         this.prefetchCount = prefetchCount;
@@ -145,8 +141,6 @@ public class Consumer {
         factory.setHost(hostname);
         factory.setPort(port);
 
-        factory.setVirtualHost(virtualHost);
-
         // Authenticate?
         if(username != null && !username.isEmpty() && password != null && !password.isEmpty()) {
             factory.setUsername(username);
@@ -165,7 +159,7 @@ public class Consumer {
         connection.addShutdownListener(new ShutdownListener() {
             @Override
             public void shutdownCompleted(ShutdownSignalException cause) {
-                while (!stopped) {
+                while (true) {
                     try {
                         LOG.error("AMQP connection lost! Trying reconnect in 1 second.");
 
@@ -190,8 +184,6 @@ public class Consumer {
 
 
     public void stop() throws IOException {
-        this.stopped = true; // Disables reconnector.
-
         if (channel != null && channel.isOpen()) {
             channel.close();
         }
