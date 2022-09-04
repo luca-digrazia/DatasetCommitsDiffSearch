@@ -155,10 +155,6 @@ public final class ResourceApk {
     return primaryAssets;
   }
 
-  public ProcessedAndroidManifest getProcessedManifest() {
-    return manifest;
-  }
-
   public Artifact getManifest() {
     return manifest.getManifest();
   }
@@ -223,7 +219,7 @@ public final class ResourceApk {
    */
   AndroidResourcesInfo toResourceInfo(Label label) {
     if (validatedResources == null) {
-      return resourceDeps.toInfo(label, manifest, rTxt, resourceJavaClassJar);
+      return resourceDeps.toInfo(label, manifest, rTxt);
     }
     return resourceDeps.toInfo(validatedResources);
   }
