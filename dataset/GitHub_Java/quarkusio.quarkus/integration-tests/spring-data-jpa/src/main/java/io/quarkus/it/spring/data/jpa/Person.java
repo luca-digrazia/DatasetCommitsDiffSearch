@@ -28,7 +28,7 @@ public class Person {
     @Id
     @SequenceGenerator(name = "personSeqGen", sequenceName = "personSeq", initialValue = 100, allocationSize = 1)
     @GeneratedValue(generator = "personSeqGen")
-    private long id;
+    private Long id;
 
     @JsonbProperty(nillable = true)
     private String name;
@@ -56,7 +56,7 @@ public class Person {
     public Person() {
     }
 
-    public long getId() {
+    public Long getId() {
         return id;
     }
 
