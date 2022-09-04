@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Parses options that the {@link JavaLibraryBuildRequest} needs to construct a build request from
@@ -72,7 +71,6 @@ public final class OptionsParser {
   private final List<String> processorNames = new ArrayList<>();
 
   private String outputJar;
-  private @Nullable String nativeHeaderOutput;
 
   private String classDir;
   private String tempDir;
@@ -106,8 +104,18 @@ public final class OptionsParser {
     for (String arg = argQueue.pollFirst(); arg != null; arg = argQueue.pollFirst()) {
       switch (arg) {
         case "--javacopts":
-          readJavacopts(javacOpts, argQueue);
+          // Collect additional arguments to javac.
+          // Assumes that javac options do not start with "--".
+          // otherwise we have to do something like adding a "--"
+          // terminator to the passed arguments.
+          collectFlagArguments(javacOpts, argQueue, "--");
           sourcePathFromJavacOpts();
+          if (!argQueue.isEmpty() && argQueue.peekFirst().equals("--")) {
+            // Support --javacopts terminated with "--", in preparation for requiring javacopts
+            // to be terminated with "--", in preparation for supporting --javacopts that start
+            // with "--".
+            argQueue.removeFirst();
+          }
           break;
         case "--direct_dependency":
           {
@@ -175,9 +183,6 @@ public final class OptionsParser {
           break;
         case "--output":
           outputJar = getArgument(argQueue, arg);
-          break;
-        case "--native_header_output":
-          nativeHeaderOutput = getArgument(argQueue, arg);
           break;
         case "--classdir":
           classDir = getArgument(argQueue, arg);
@@ -289,21 +294,6 @@ public final class OptionsParser {
       }
       output.add(arg);
     }
-  }
-
-  /**
-   * Returns a list of javacopts. Reads options until a terminating {@code "--"} is reached, to
-   * support parsing javacopts that start with {@code --} (e.g. --release).
-   */
-  private static void readJavacopts(List<String> javacopts, Deque<String> argumentDeque) {
-    while (!argumentDeque.isEmpty()) {
-      String arg = argumentDeque.pollFirst();
-      if (arg.equals("--")) {
-        return;
-      }
-      javacopts.add(arg);
-    }
-    throw new IllegalArgumentException("javacopts should be terminated by `--`");
   }
 
   private static final Splitter CLASSPATH_SPLITTER =
@@ -427,11 +417,6 @@ public final class OptionsParser {
 
   public String getOutputJar() {
     return outputJar;
-  }
-
-  @Nullable
-  public String getNativeHeaderOutput() {
-    return nativeHeaderOutput;
   }
 
   public String getClassDir() {
