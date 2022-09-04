@@ -31,19 +31,19 @@ public class DispatchedThreadTest {
 
     @Test
     public void check() {
-        RestAssured.when().get("/q/health/live").then()
+        RestAssured.when().get("/health/live").then()
                 .body("status", is("UP"),
                         "checks.status", contains("UP"),
                         "checks.name", contains("my-liveness-check"),
-                        "checks.data.thread[0]", stringContainsInOrder("executor-thread"),
+                        "checks.data.thread[0]", stringContainsInOrder("worker"),
                         "checks.data.thread[0]", not(stringContainsInOrder("loop")),
                         "checks.data.request[0]", is(true));
 
-        RestAssured.when().get("/q/health/ready").then()
+        RestAssured.when().get("/health/ready").then()
                 .body("status", is("UP"),
                         "checks.status", contains("UP"),
                         "checks.name", contains("my-readiness-check"),
-                        "checks.data.thread[0]", stringContainsInOrder("executor-thread"),
+                        "checks.data.thread[0]", stringContainsInOrder("worker"),
                         "checks.data.thread[0]", not(stringContainsInOrder("loop")),
                         "checks.data.request[0]", is(true));
     }
