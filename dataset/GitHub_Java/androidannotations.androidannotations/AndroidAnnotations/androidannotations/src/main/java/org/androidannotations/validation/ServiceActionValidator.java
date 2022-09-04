@@ -17,39 +17,37 @@ package org.androidannotations.validation;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 
-import org.androidannotations.annotations.EIntentService;
-import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.annotations.ServiceAction;
 import org.androidannotations.helper.TargetAnnotationHelper;
 import org.androidannotations.helper.ValidatorHelper;
 import org.androidannotations.model.AnnotationElements;
 
-public class EIntentServiceValidator implements ElementValidator {
+public class ServiceActionValidator implements ElementValidator {
 
-	private final ValidatorHelper validatorHelper;
-	private final AndroidManifest androidManifest;
+	private ValidatorHelper validatorHelper;
 
-	public EIntentServiceValidator(ProcessingEnvironment processingEnv, AndroidManifest androidManifest) {
-		this.androidManifest = androidManifest;
+	public ServiceActionValidator(ProcessingEnvironment processingEnv) {
 		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
 		validatorHelper = new ValidatorHelper(annotationHelper);
 	}
 
 	@Override
 	public String getTarget() {
-		return EIntentService.class.getName();
+		return ServiceAction.class.getName();
 	}
 
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
-
 		IsValid valid = new IsValid();
 
-		validatorHelper.extendsIntentService(element, valid);
+		validatorHelper.enclosingElementHasEIntentService(element, validatedElements, valid);
 
-		validatorHelper.isNotFinal(element, valid);
+		ExecutableElement executableElement = (ExecutableElement) element;
+		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		validatorHelper.componentRegistered(element, androidManifest, valid);
+		validatorHelper.isNotPrivate(element, valid);
 
 		return valid.isValid();
 	}
