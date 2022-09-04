@@ -16,10 +16,11 @@
  */
 package org.graylog2.outputs;
 
+import com.google.common.collect.ImmutableMap;
 import org.graylog2.gelfclient.GelfMessage;
-import org.graylog2.gelfclient.GelfMessageLevel;
 import org.graylog2.gelfclient.transport.GelfTransport;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -39,7 +40,12 @@ public class GelfOutputTest {
         final GelfTransport transport = mock(GelfTransport.class);
         final Message message = mock(Message.class);
         final GelfMessage gelfMessage = new GelfMessage("Test");
-        final GelfOutput gelfOutput = Mockito.spy(new GelfOutput(transport));
+        final Configuration configuration = new Configuration(ImmutableMap.<String, Object>of(
+                "hostname", "localhost",
+                "protocol", "tcp",
+                "port", 12201));
+
+        final GelfOutput gelfOutput = Mockito.spy(new GelfOutput(configuration, transport));
         doReturn(gelfMessage).when(gelfOutput).toGELFMessage(message);
 
         gelfOutput.write(message);
@@ -60,7 +66,11 @@ public class GelfOutputTest {
     @Test
     public void testToGELFMessageTimestamp() throws Exception {
         final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
+        final Configuration configuration = new Configuration(ImmutableMap.<String, Object>of(
+                "hostname", "localhost",
+                "protocol", "tcp",
+                "port", 12201));
+        final GelfOutput gelfOutput = new GelfOutput(configuration, transport);
         final DateTime now = DateTime.now(DateTimeZone.UTC);
         final Message message = new Message("Test", "Source", now);
 
@@ -72,7 +82,11 @@ public class GelfOutputTest {
     @Test
     public void testToGELFMessageFullMessage() throws Exception {
         final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
+        final Configuration configuration = new Configuration(ImmutableMap.<String, Object>of(
+                "hostname", "localhost",
+                "protocol", "tcp",
+                "port", 12201));
+        final GelfOutput gelfOutput = new GelfOutput(configuration, transport);
         final DateTime now = DateTime.now(DateTimeZone.UTC);
         final Message message = new Message("Test", "Source", now);
         message.addField(Message.FIELD_FULL_MESSAGE, "Full Message");
@@ -80,96 +94,5 @@ public class GelfOutputTest {
         final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
 
         assertEquals("Full Message", gelfMessage.getFullMessage());
-    }
-
-    @Test
-    public void testToGELFMessageWithValidNumericLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", 6);
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.INFO, gelfMessage.getLevel());
-    }
-
-    @Test
-    public void testToGELFMessageWithInvalidNumericLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", -1L);
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.ALERT, gelfMessage.getLevel());
-    }
-
-    @Test
-    public void testToGELFMessageWithValidStringLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", "6");
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.INFO, gelfMessage.getLevel());
-    }
-
-    @Test
-    public void testToGELFMessageWithInvalidStringLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", "BOOM");
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.ALERT, gelfMessage.getLevel());
-    }
-
-    @Test
-    public void testToGELFMessageWithInvalidNumericStringLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", "-1");
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.ALERT, gelfMessage.getLevel());
-    }
-
-    @Test
-    public void testToGELFMessageWithInvalidTypeLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", new Object());
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.ALERT, gelfMessage.getLevel());
-    }
-
-    @Test
-    public void testToGELFMessageWithNullLevel() throws Exception {
-        final GelfTransport transport = mock(GelfTransport.class);
-        final GelfOutput gelfOutput = new GelfOutput(transport);
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final Message message = new Message("Test", "Source", now);
-        message.addField("level", null);
-
-        final GelfMessage gelfMessage = gelfOutput.toGELFMessage(message);
-
-        assertEquals(GelfMessageLevel.ALERT, gelfMessage.getLevel());
     }
 }
