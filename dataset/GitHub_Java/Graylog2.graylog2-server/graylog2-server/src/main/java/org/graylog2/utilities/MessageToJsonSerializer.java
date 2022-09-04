@@ -171,7 +171,7 @@ public class MessageToJsonSerializer {
                                 if (input != null) {
                                     try {
                                         // TODO This might create lots of MessageInput instances. Can we avoid this?
-                                        return inputService.buildMessageInput(input);
+                                        return inputService.getMessageInput(input);
                                     } catch (NoSuchInputTypeException e) {
                                         return null;
                                     }
