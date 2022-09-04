@@ -227,7 +227,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     LinkingMode linkingMode = getLinkStaticness(ruleContext, cppConfiguration);
-    FdoProvider fdoProvider = common.getFdoProvider();
+    FdoSupportProvider fdoSupport = common.getFdoSupport();
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(
             ruleContext,
@@ -243,7 +243,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     CcCompilationHelper compilationHelper =
         new CcCompilationHelper(
-                ruleContext, semantics, featureConfiguration, ccToolchain, fdoProvider)
+                ruleContext, semantics, featureConfiguration, ccToolchain, fdoSupport)
             .fromCommon(common, /* additionalCopts= */ ImmutableList.of())
             .addPrivateHeaders(common.getPrivateHeaders())
             .addSources(common.getSources())
@@ -279,7 +279,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                   semantics,
                   featureConfiguration,
                   ccToolchain,
-                  fdoProvider,
+                  fdoSupport,
                   ruleContext.getConfiguration())
               .fromCommon(common)
               .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
@@ -300,7 +300,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ruleContext,
             ccToolchain,
             featureConfiguration,
-            fdoProvider,
+            fdoSupport,
             common,
             precompiledFiles,
             ccCompilationOutputs,
@@ -554,7 +554,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext context,
       CcToolchainProvider toolchain,
       FeatureConfiguration featureConfiguration,
-      FdoProvider fdoProvider,
+      FdoSupportProvider fdoSupport,
       CcCommon common,
       PrecompiledFiles precompiledFiles,
       CcCompilationOutputs compilationOutputs,
@@ -568,7 +568,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       throws InterruptedException {
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(
-                context, binary, toolchain, fdoProvider, featureConfiguration, cppSemantics)
+                context, binary, toolchain, fdoSupport, featureConfiguration, cppSemantics)
             .setCrosstoolInputs(toolchain.getLink())
             .addNonCodeInputs(compilationPrerequisites);
 
