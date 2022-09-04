@@ -1,7 +1,5 @@
 package io.quarkus.it.amazon.lambda;
 
-import java.util.HashMap;
-
 import javax.ws.rs.core.MediaType;
 
 import org.apache.commons.codec.binary.Base64;
@@ -10,9 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPEvent;
-import com.amazonaws.services.lambda.runtime.events.APIGatewayV2HTTPResponse;
-
+import io.quarkus.amazon.lambda.http.model.AwsProxyRequest;
+import io.quarkus.amazon.lambda.http.model.AwsProxyRequestContext;
+import io.quarkus.amazon.lambda.http.model.AwsProxyResponse;
+import io.quarkus.amazon.lambda.http.model.Headers;
 import io.quarkus.amazon.lambda.test.LambdaClient;
 import io.quarkus.test.junit.QuarkusTest;
 
@@ -21,12 +20,10 @@ public class AmazonLambdaSimpleTestCase {
 
     @Test
     public void testContext() throws Exception {
-        APIGatewayV2HTTPEvent request = new APIGatewayV2HTTPEvent();
-        request.setRawPath("/hello/context");
-        request.setRequestContext(new APIGatewayV2HTTPEvent.RequestContext());
-        request.getRequestContext().setHttp(new APIGatewayV2HTTPEvent.RequestContext.Http());
-        request.getRequestContext().getHttp().setMethod("GET");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyRequest request = new AwsProxyRequest();
+        request.setHttpMethod("GET");
+        request.setPath("/hello/context");
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 204);
     }
 
@@ -40,40 +37,38 @@ public class AmazonLambdaSimpleTestCase {
     @Test
     public void testSwaggerUi() throws Exception {
         // this tests the FileRegion support in the handler
-        APIGatewayV2HTTPEvent request = request("/q/swagger-ui/");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyRequest request = request("/swagger-ui/");
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 200);
-        Assertions.assertTrue(body(out).contains("OpenAPI UI"));
+        Assertions.assertTrue(body(out).contains("Swagger UI"));
 
     }
 
-    private String body(APIGatewayV2HTTPResponse response) {
-        if (!response.getIsBase64Encoded())
+    private String body(AwsProxyResponse response) {
+        if (!response.isBase64Encoded())
             return response.getBody();
         return new String(Base64.decodeBase64(response.getBody()));
     }
 
     private void testGetText(String path) {
-        APIGatewayV2HTTPEvent request = request(path);
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyRequest request = request(path);
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 200);
         Assertions.assertEquals(body(out), "hello");
-        Assertions.assertTrue(out.getHeaders().get("Content-Type").startsWith("text/plain"));
+        Assertions.assertTrue(out.getMultiValueHeaders().getFirst("Content-Type").startsWith("text/plain"));
     }
 
-    private APIGatewayV2HTTPEvent request(String path) {
-        APIGatewayV2HTTPEvent request = new APIGatewayV2HTTPEvent();
-        request.setRawPath(path);
-        request.setRequestContext(new APIGatewayV2HTTPEvent.RequestContext());
-        request.getRequestContext().setHttp(new APIGatewayV2HTTPEvent.RequestContext.Http());
-        request.getRequestContext().getHttp().setMethod("GET");
+    private AwsProxyRequest request(String path) {
+        AwsProxyRequest request = new AwsProxyRequest();
+        request.setHttpMethod("GET");
+        request.setPath(path);
         return request;
     }
 
     @Test
     public void test404() throws Exception {
-        APIGatewayV2HTTPEvent request = request("/nowhere");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyRequest request = request("/nowhere");
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 404);
     }
 
@@ -85,32 +80,33 @@ public class AmazonLambdaSimpleTestCase {
     }
 
     private void testPostText(String path) {
-        APIGatewayV2HTTPEvent request = request(path);
-        request.getRequestContext().getHttp().setMethod("POST");
-        request.setHeaders(new HashMap<>());
-        request.getHeaders().put("Content-Type", "text/plain");
+        AwsProxyRequest request = new AwsProxyRequest();
+        request.setHttpMethod("POST");
+        request.setMultiValueHeaders(new Headers());
+        request.getMultiValueHeaders().add("Content-Type", "text/plain");
+        request.setPath(path);
         request.setBody("Bill");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 200);
         Assertions.assertEquals(body(out), "hello Bill");
-        Assertions.assertTrue(out.getHeaders().get("Content-Type").startsWith("text/plain"));
+        Assertions.assertTrue(out.getMultiValueHeaders().getFirst("Content-Type").startsWith("text/plain"));
     }
 
     @Test
     public void testPostBinary() throws Exception {
+        AwsProxyRequest request = new AwsProxyRequest();
         byte[] bytes = { 0, 1, 2, 3 };
         String body = Base64.encodeBase64String(bytes);
-        APIGatewayV2HTTPEvent request = request("/hello");
-        request.getRequestContext().getHttp().setMethod("POST");
-        request.setHeaders(new HashMap<>());
-        request.getHeaders().put("Content-Type", MediaType.APPLICATION_OCTET_STREAM);
+        request.setHttpMethod("POST");
+        request.setMultiValueHeaders(new Headers());
+        request.getMultiValueHeaders().add("Content-Type", MediaType.APPLICATION_OCTET_STREAM);
+        request.setPath("/hello");
         request.setBody(body);
         request.setIsBase64Encoded(true);
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 200);
-        Assertions.assertEquals(out.getHeaders().get("Content-Type"),
-                MediaType.APPLICATION_OCTET_STREAM);
-        Assertions.assertTrue(out.getIsBase64Encoded());
+        Assertions.assertEquals(out.getMultiValueHeaders().getFirst("Content-Type"), MediaType.APPLICATION_OCTET_STREAM);
+        Assertions.assertTrue(out.isBase64Encoded());
         byte[] rtn = Base64.decodeBase64(out.getBody());
         Assertions.assertEquals(rtn[0], 4);
         Assertions.assertEquals(rtn[1], 5);
@@ -120,9 +116,11 @@ public class AmazonLambdaSimpleTestCase {
 
     @Test
     public void testPostEmpty() throws Exception {
-        APIGatewayV2HTTPEvent request = request("/hello/empty");
-        request.getRequestContext().getHttp().setMethod("POST");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyRequest request = new AwsProxyRequest();
+        request.setHttpMethod("POST");
+        request.setMultiValueHeaders(new Headers());
+        request.setPath("/hello/empty");
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 204);
 
     }
@@ -130,21 +128,25 @@ public class AmazonLambdaSimpleTestCase {
     @ParameterizedTest
     @ValueSource(strings = { "/funqy", "/funqyAsync" })
     public void testFunqy(String path) {
-        APIGatewayV2HTTPEvent request = request(path);
-        request.getRequestContext().getHttp().setMethod("POST");
-        request.setHeaders(new HashMap<>());
-        request.getHeaders().put("Content-Type", MediaType.APPLICATION_JSON);
+        AwsProxyRequest request = new AwsProxyRequest();
+        request.setHttpMethod("POST");
+        request.setMultiValueHeaders(new Headers());
+        request.getMultiValueHeaders().add("Content-Type", "application/json");
+        request.setPath(path);
         request.setBody("\"Bill\"");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 200);
         Assertions.assertEquals(body(out), "\"Make it funqy Bill\"");
-        Assertions.assertTrue(out.getHeaders().get("Content-Type").startsWith("application/json"));
+        Assertions.assertTrue(out.getMultiValueHeaders().getFirst("Content-Type").startsWith("application/json"));
     }
 
     @Test
     public void testProxyRequestContext() throws Exception {
-        APIGatewayV2HTTPEvent request = request("/hello/proxyRequestContext");
-        APIGatewayV2HTTPResponse out = LambdaClient.invoke(APIGatewayV2HTTPResponse.class, request);
+        AwsProxyRequest request = new AwsProxyRequest();
+        request.setRequestContext(new AwsProxyRequestContext());
+        request.setHttpMethod("GET");
+        request.setPath("/hello/proxyRequestContext");
+        AwsProxyResponse out = LambdaClient.invoke(AwsProxyResponse.class, request);
         Assertions.assertEquals(out.getStatusCode(), 204);
     }
 
