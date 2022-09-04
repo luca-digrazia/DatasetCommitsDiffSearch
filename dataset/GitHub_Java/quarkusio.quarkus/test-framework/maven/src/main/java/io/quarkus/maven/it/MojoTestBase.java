@@ -47,11 +47,11 @@ public class MojoTestBase {
         if (tc.isDirectory()) {
             boolean delete = tc.delete();
             Logger.getLogger(MojoTestBase.class.getName())
-                    .log(Level.FINE, "test-classes deleted? %s", delete);
+                    .log(Level.FINE, "test-classes deleted? " + delete);
         }
         boolean mkdirs = tc.mkdirs();
         Logger.getLogger(MojoTestBase.class.getName())
-                .log(Level.FINE, "test-classes created? %s", mkdirs);
+                .log(Level.FINE, "test-classes created? " + mkdirs);
         return tc;
     }
 
@@ -68,7 +68,7 @@ public class MojoTestBase {
         if (!tc.isDirectory()) {
             boolean mkdirs = tc.mkdirs();
             Logger.getLogger(MojoTestBase.class.getName())
-                    .log(Level.FINE, "test-classes created? %s", mkdirs);
+                    .log(Level.FINE, "test-classes created? " + mkdirs);
         }
 
         File in = new File(tc, name);
