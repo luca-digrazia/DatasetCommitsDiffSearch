@@ -246,16 +246,6 @@ class Desugar {
     public boolean desugarTryWithResourcesOmitRuntimeClasses;
 
     @Option(
-        name = "generate_base_classes_for_default_methods",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "If desugaring default methods, generate abstract base classes for them. "
-                + "This reduces default method stubs in hand-written subclasses.")
-    public boolean generateBaseClassesForDefaultMethods;
-
-    @Option(
       name = "copy_bridges_from_classpath",
       defaultValue = "false",
       category = "misc",
@@ -343,15 +333,12 @@ class Desugar {
   private final Set<String> visitedExceptionTypes = new HashSet<>();
   /** The counter to record the times of try-with-resources desugaring is invoked. */
   private final AtomicInteger numOfTryWithResourcesInvoked = new AtomicInteger();
-  /** The counter to record the times of UnsignedLongs desugaring is invoked. */
-  private final AtomicInteger numOfUnsignedLongsInvoked = new AtomicInteger();
 
   private final boolean outputJava7;
   private final boolean allowDefaultMethods;
   private final boolean allowTryWithResources;
   private final boolean allowCallsToObjectsNonNull;
   private final boolean allowCallsToLongCompare;
-  private final boolean allowCallsToLongUnsigned;
   /** An instance of Desugar is expected to be used ONLY ONCE */
   private boolean used;
 
@@ -366,7 +353,6 @@ class Desugar {
         !options.desugarTryWithResourcesIfNeeded || options.minSdkVersion >= 19;
     this.allowCallsToObjectsNonNull = options.minSdkVersion >= 19;
     this.allowCallsToLongCompare = options.minSdkVersion >= 19 && !options.alwaysRewriteLongCompare;
-    this.allowCallsToLongUnsigned = options.minSdkVersion >= 26;
     this.used = false;
   }
 
@@ -469,12 +455,7 @@ class Desugar {
           bridgeMethodReader);
 
       desugarAndWriteGeneratedClasses(
-          outputFileProvider,
-          loader,
-          classpathReader,
-          depsCollector,
-          bootclasspathReader,
-          coreLibrarySupport);
+          outputFileProvider, loader, bootclasspathReader, coreLibrarySupport);
 
       copyRuntimeClasses(outputFileProvider, coreLibrarySupport);
 
@@ -534,27 +515,12 @@ class Desugar {
           });
     }
 
-    // 2. See if we rewrote Long.unsigned* methods
-    if (numOfUnsignedLongsInvoked.get() > 0) {
-      try (InputStream stream =
-          Desugar.class
-              .getClassLoader()
-              .getResourceAsStream(
-                  "com/google/devtools/build/android/desugar/runtime/UnsignedLongs.class")) {
-        outputFileProvider.write(
-            "com/google/devtools/build/android/desugar/runtime/UnsignedLongs.class",
-            ByteStreams.toByteArray(stream));
-      } catch (IOException e) {
-        throw new IOError(e);
-      }
-    }
-
-    // 3. See if we need to copy try-with-resources runtime library
+    // 2. See if we need to copy try-with-resources runtime library
     if (allowTryWithResources || options.desugarTryWithResourcesOmitRuntimeClasses) {
       // try-with-resources statements are okay in the output jar.
       return;
     }
-    if (numOfTryWithResourcesInvoked.get() <= 0) {
+    if (this.numOfTryWithResourcesInvoked.get() <= 0) {
       // the try-with-resources desugaring pass does nothing, so no need to copy these class files.
       return;
     }
@@ -711,8 +677,6 @@ class Desugar {
   private void desugarAndWriteGeneratedClasses(
       OutputFileProvider outputFileProvider,
       ClassLoader loader,
-      @Nullable ClassReaderFactory classpathReader,
-      DependencyCollector depsCollector,
       ClassReaderFactory bootclasspathReader,
       @Nullable CoreLibrarySupport coreLibrarySupport)
       throws IOException {
@@ -752,27 +716,11 @@ class Desugar {
         // the inliner again
         visitor = new ObjectsRequireNonNullMethodRewriter(visitor, rewriter);
       }
-      if (!allowCallsToLongUnsigned) {
-        visitor = new LongUnsignedMethodRewriter(visitor, rewriter, numOfUnsignedLongsInvoked);
-      }
       if (!allowCallsToLongCompare) {
         visitor = new LongCompareMethodRewriter(visitor, rewriter);
       }
 
       visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null, bootclasspathReader);
-      if (options.generateBaseClassesForDefaultMethods) {
-        // Use DefaultMethodClassFixer to make generated base classes extend other base classes if
-        // possible and add any stubs from extended interfaces
-        visitor =
-            new DefaultMethodClassFixer(
-                visitor,
-                /*useGeneratedBaseClasses=*/ true,
-                classpathReader,
-                depsCollector,
-                coreLibrarySupport,
-                bootclasspathReader,
-                loader);
-      }
       generated.getValue().accept(visitor);
       checkState(
           (options.coreLibrary && coreLibrarySupport != null)
@@ -821,9 +769,6 @@ class Desugar {
       // the inliner again
       visitor = new ObjectsRequireNonNullMethodRewriter(visitor, rewriter);
     }
-    if (!allowCallsToLongUnsigned) {
-      visitor = new LongUnsignedMethodRewriter(visitor, rewriter, numOfUnsignedLongsInvoked);
-    }
     if (!allowCallsToLongCompare) {
       visitor = new LongCompareMethodRewriter(visitor, rewriter);
     }
@@ -834,7 +779,6 @@ class Desugar {
         visitor =
             new DefaultMethodClassFixer(
                 visitor,
-                options.generateBaseClassesForDefaultMethods,
                 classpathReader,
                 depsCollector,
                 coreLibrarySupport,
@@ -843,7 +787,6 @@ class Desugar {
         visitor =
             new InterfaceDesugaring(
                 visitor,
-                options.generateBaseClassesForDefaultMethods,
                 interfaceCache,
                 depsCollector,
                 coreLibrarySupport,
@@ -908,9 +851,6 @@ class Desugar {
     if (!allowCallsToObjectsNonNull) {
       visitor = new ObjectsRequireNonNullMethodRewriter(visitor, rewriter);
     }
-    if (!allowCallsToLongUnsigned) {
-      visitor = new LongUnsignedMethodRewriter(visitor, rewriter, numOfUnsignedLongsInvoked);
-    }
     if (!allowCallsToLongCompare) {
       visitor = new LongCompareMethodRewriter(visitor, rewriter);
     }
@@ -921,7 +861,6 @@ class Desugar {
           visitor =
               new DefaultMethodClassFixer(
                   visitor,
-                  options.generateBaseClassesForDefaultMethods,
                   classpathReader,
                   depsCollector,
                   coreLibrarySupport,
@@ -930,7 +869,6 @@ class Desugar {
           visitor =
               new InterfaceDesugaring(
                   visitor,
-                  options.generateBaseClassesForDefaultMethods,
                   interfaceCache,
                   depsCollector,
                   coreLibrarySupport,
