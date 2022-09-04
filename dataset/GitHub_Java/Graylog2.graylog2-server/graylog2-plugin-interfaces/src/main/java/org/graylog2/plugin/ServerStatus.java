@@ -43,10 +43,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ServerStatus {
     private static final Logger LOG = LoggerFactory.getLogger(ServerStatus.class);
 
-    public MessageDetailRecordingStrategy getDetailedMessageRecordingStrategy() {
-        return messageDetailRecordingStrategy;
-    }
-
     public enum Capability {
         SERVER,
         RADIO,
@@ -59,7 +55,6 @@ public class ServerStatus {
     private final NodeId nodeId;
     private final DateTime startedAt;
     private final Set<Capability> capabilitySet;
-    private MessageDetailRecordingStrategy messageDetailRecordingStrategy = MessageDetailRecordingStrategy.NEVER;
 
     private final AtomicBoolean isProcessing = new AtomicBoolean(false);
     private final AtomicBoolean processingPauseLocked = new AtomicBoolean(false);
@@ -73,9 +68,6 @@ public class ServerStatus {
         this.nodeId = new NodeId(configuration.getNodeIdFile());
         this.startedAt = Tools.iso8601();
         this.capabilitySet = Sets.newHashSet(capabilities); // copy, because we support adding more capabilities later
-        this.messageDetailRecordingStrategy = configuration.isMessageRecordingsEnabled()
-                ? MessageDetailRecordingStrategy.ALWAYS
-                : MessageDetailRecordingStrategy.NEVER;
     }
 
     public NodeId getNodeId() {
@@ -221,22 +213,6 @@ public class ServerStatus {
             addCapability(Capability.LOCALMODE);
         } else {
             removeCapability(Capability.LOCALMODE);
-        }
-    }
-
-    public enum MessageDetailRecordingStrategy {
-        NEVER,
-        ALWAYS;
-
-        public boolean shouldRecord(final Message message) {
-            switch (this) {
-                case NEVER:
-                    return false;
-                case ALWAYS:
-                    return true;
-                default:
-                    return false;
-            }
         }
     }
 }
