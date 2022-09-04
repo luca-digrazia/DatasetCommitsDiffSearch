@@ -54,8 +54,6 @@ public class CreateCli extends BaseCreateCommand {
             output.debug("Creating a new project with initial parameters: %s", this);
             output.throwIfUnmatchedArguments(spec.commandLine());
 
-            extensions.add("picocli"); // make sure picocli is selected.
-
             createProject.setSingleProjectGAV(gav);
             createProject.setTestOutputDirectory(output.getTestDirectory());
             createProject.projectRoot(); // verify project directories early
@@ -69,11 +67,14 @@ public class CreateCli extends BaseCreateCommand {
                     output, propertiesOptions.properties);
 
             boolean success = true;
+
+            // TODO: default extension (picocli)
+
             if (runMode.isDryRun()) {
                 createProject.dryRun(buildTool, invocation, output);
-            } else if (BuildTool.JBANG.equals(buildTool)) {
+            } else if (buildTool == null) { // buildless / JBang
                 success = new CreateJBangProjectCommandHandler().execute(invocation).isSuccess();
-            } else {
+            } else { // maven or gradle
                 success = new CreateProjectCommandHandler().execute(invocation).isSuccess();
             }
             return success ? CommandLine.ExitCode.OK : CommandLine.ExitCode.SOFTWARE;
