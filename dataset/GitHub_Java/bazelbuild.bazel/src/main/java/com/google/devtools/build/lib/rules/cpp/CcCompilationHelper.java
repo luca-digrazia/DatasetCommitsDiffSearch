@@ -1022,7 +1022,7 @@ public final class CcCompilationHelper {
     mergeToolchainDependentCcCompilationContext(ccToolchain, ccCompilationContextBuilder);
 
     // But defines come after those inherited from deps.
-    ccCompilationContextBuilder.addDefines(defines);
+    ccCompilationContextBuilder.addDefines(NestedSetBuilder.wrap(Order.LINK_ORDER, defines));
 
     ccCompilationContextBuilder.addNonTransitiveDefines(localDefines);
 
