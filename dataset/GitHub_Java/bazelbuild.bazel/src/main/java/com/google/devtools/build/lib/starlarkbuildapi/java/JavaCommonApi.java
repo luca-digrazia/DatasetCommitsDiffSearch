@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.core.TransitiveInfoCollectionApi;
 import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.Param;
@@ -128,10 +127,7 @@ public interface JavaCommonApi<
             name = "exports",
             positional = false,
             named = true,
-            allowedTypes = {
-              @ParamType(type = Sequence.class, generic1 = JavaInfoApi.class),
-              @ParamType(type = Sequence.class, generic1 = TransitiveInfoCollectionApi.class),
-            },
+            allowedTypes = {@ParamType(type = Sequence.class, generic1 = JavaInfoApi.class)},
             defaultValue = "[]",
             doc = "A list of exports. Optional."),
         @Param(

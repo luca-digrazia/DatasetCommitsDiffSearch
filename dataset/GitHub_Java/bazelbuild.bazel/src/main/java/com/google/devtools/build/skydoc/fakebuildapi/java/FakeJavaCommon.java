@@ -59,7 +59,6 @@ public class FakeJavaCommon
       Sequence<?> exports,
       Sequence<?> plugins,
       Sequence<?> exportedPlugins,
-      Sequence<?> nativeLibraries,
       Sequence<?> annotationProcessorAdditionalInputs,
       Sequence<?> annotationProcessorAdditionalOutputs,
       String strictDepsMode,
