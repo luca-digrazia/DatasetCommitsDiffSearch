@@ -37,9 +37,6 @@ public interface BooleanVector extends BaseVector<Boolean, Integer, IntStream> {
     @Override
     boolean[] array();
 
-    @Override
-    BooleanVector get(int... index);
-
     /**
      * Returns the value at position i.
      */
