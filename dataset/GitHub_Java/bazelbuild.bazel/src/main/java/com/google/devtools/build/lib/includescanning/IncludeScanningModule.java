@@ -304,7 +304,6 @@ public class IncludeScanningModule extends BlazeModule {
               spawnScannerSupplier,
               env.getExecRoot());
 
-      spawnScannerSupplier.get().setOutputService(env.getOutputService());
       spawnScannerSupplier.get().setInMemoryOutput(options.inMemoryIncludesFiles);
     }
   }
