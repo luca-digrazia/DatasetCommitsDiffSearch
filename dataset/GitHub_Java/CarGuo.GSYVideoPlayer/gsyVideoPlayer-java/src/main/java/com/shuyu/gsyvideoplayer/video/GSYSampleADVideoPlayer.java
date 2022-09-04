@@ -3,10 +3,10 @@ package com.shuyu.gsyvideoplayer.video;
 import android.content.Context;
 import android.graphics.Color;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.model.GSYVideoModel;
@@ -20,7 +20,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 广告播放
+ * 只支持每个片头广告播放的类
+ * 其实就是根据实体，判断播放列表中哪个是广告，哪个不是，从而处理不同的UI显示效果
  * Created by guoshuyu on 2018/1/26.
  */
 
@@ -29,6 +30,8 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
     protected View mJumpAd;
 
     protected ViewGroup mWidgetContainer;
+
+    protected TextView mADTime;
 
     protected boolean isAdModel = false;
 
@@ -50,13 +53,16 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
     protected void init(Context context) {
         super.init(context);
         mJumpAd = findViewById(R.id.jump_ad);
+        mADTime = (TextView) findViewById(R.id.ad_time);
         mWidgetContainer = (ViewGroup) findViewById(R.id.widget_container);
-        mJumpAd.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                playNext();
-            }
-        });
+        if (mJumpAd != null) {
+            mJumpAd.setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    playNext();
+                }
+            });
+        }
 
     }
 
@@ -70,7 +76,7 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
      *
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
-     * @param position
+     * @param position      需要播放的位置
      * @return
      */
     @Override
@@ -83,7 +89,7 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
      *
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
-     * @param position
+     * @param position      需要播放的位置
      * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
      * @return
      */
@@ -97,7 +103,7 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
      *
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
-     * @param position
+     * @param position      需要播放的位置
      * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
      * @param mapHeadData   http header
      * @return
@@ -112,15 +118,23 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
      *
      * @param url           播放url
      * @param cacheWithPlay 是否边播边缓存
-     * @param position
+     * @param position      需要播放的位置
      * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
      * @param mapHeadData   http header
-     * @param changeState
+     * @param changeState   切换的时候释放surface
      * @return
      */
     @Override
     protected boolean setUp(List<GSYVideoModel> url, boolean cacheWithPlay, int position, File cachePath, Map<String, String> mapHeadData, boolean changeState) {
-        initSetupModel(url.get(position));
+        GSYVideoModel gsyVideoModel = url.get(position);
+        if (gsyVideoModel instanceof GSYADVideoModel) {
+            GSYADVideoModel gsyadVideoModel = (GSYADVideoModel) gsyVideoModel;
+            if (gsyadVideoModel.isSkip() && position < (url.size() - 1)) {
+                return setUp(url, cacheWithPlay, position + 1, cachePath, mapHeadData, changeState);
+            }
+            isAdModel = (gsyadVideoModel.getType() == GSYADVideoModel.TYPE_AD);
+        }
+        changeAdUIState();
         return super.setUp(url, cacheWithPlay, position, cachePath, mapHeadData, changeState);
     }
 
@@ -133,14 +147,16 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
 
     @Override
     protected void updateStartImage() {
-        if (mStartButton instanceof ImageView) {
-            ImageView imageView = (ImageView) mStartButton;
-            if (mCurrentState == CURRENT_STATE_PLAYING) {
-                imageView.setImageResource(R.drawable.video_click_pause_selector);
-            } else if (mCurrentState == CURRENT_STATE_ERROR) {
-                imageView.setImageResource(R.drawable.video_click_play_selector);
-            } else {
-                imageView.setImageResource(R.drawable.video_click_play_selector);
+        if (mStartButton != null) {
+            if (mStartButton instanceof ImageView) {
+                ImageView imageView = (ImageView) mStartButton;
+                if (mCurrentState == CURRENT_STATE_PLAYING) {
+                    imageView.setImageResource(R.drawable.video_click_pause_selector);
+                } else if (mCurrentState == CURRENT_STATE_ERROR) {
+                    imageView.setImageResource(R.drawable.video_click_play_selector);
+                } else {
+                    imageView.setImageResource(R.drawable.video_click_play_selector);
+                }
             }
         }
     }
@@ -199,6 +215,24 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
 
 
     @Override
+    protected void hideAllWidget() {
+        if (isFirstPrepared && isAdModel) {
+            return;
+        }
+        super.hideAllWidget();
+    }
+
+    @Override
+    protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime, boolean forceChange) {
+        super.setProgressAndTime(progress, secProgress, currentTime, totalTime, forceChange);
+        if (mADTime != null && currentTime > 0) {
+            int totalSeconds = totalTime / 1000;
+            int currentSeconds = currentTime / 1000;
+            mADTime.setText("" + (totalSeconds - currentSeconds));
+        }
+    }
+
+    @Override
     protected void cloneParams(GSYBaseVideoPlayer from, GSYBaseVideoPlayer to) {
         super.cloneParams(from, to);
         GSYSampleADVideoPlayer sf = (GSYSampleADVideoPlayer) from;
@@ -208,31 +242,34 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
         st.changeAdUIState();
     }
 
-    /**
-     * 针对每个播放数据源的类型，设置状态
-     *
-     * @param gsyVideoModel
-     */
-    protected void initSetupModel(GSYVideoModel gsyVideoModel) {
-        if (gsyVideoModel instanceof GSYADVideoModel) {
-            GSYADVideoModel gsyadVideoModel = (GSYADVideoModel) gsyVideoModel;
-            isAdModel = (gsyadVideoModel.getType() == GSYADVideoModel.TYPE_AD);
-        }
-        changeAdUIState();
-    }
 
     /**
      * 根据是否广告url修改ui显示状态
      */
     protected void changeAdUIState() {
-        mJumpAd.setVisibility((isFirstPrepared && isAdModel) ? VISIBLE : GONE);
-        mWidgetContainer.setVisibility((isFirstPrepared && isAdModel) ? GONE : VISIBLE);
-        int color = (isFirstPrepared && isAdModel) ? Color.TRANSPARENT : getContext().getResources().getColor(R.color.bottom_container_bg);
-        mBottomContainer.setBackgroundColor(color);
-        mCurrentTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
-        mTotalTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
-        mProgressBar.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
-        mProgressBar.setEnabled(!(isFirstPrepared && isAdModel));
+        if (mJumpAd != null) {
+            mJumpAd.setVisibility((isFirstPrepared && isAdModel) ? VISIBLE : GONE);
+        }
+        if (mADTime != null) {
+            mADTime.setVisibility((isFirstPrepared && isAdModel) ? VISIBLE : GONE);
+        }
+        if (mWidgetContainer != null) {
+            mWidgetContainer.setVisibility((isFirstPrepared && isAdModel) ? GONE : VISIBLE);
+        }
+        if (mBottomContainer != null) {
+            int color = (isFirstPrepared && isAdModel) ? Color.TRANSPARENT : getContext().getResources().getColor(R.color.bottom_container_bg);
+            mBottomContainer.setBackgroundColor(color);
+        }
+        if (mCurrentTimeTextView != null) {
+            mCurrentTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
+        }
+        if (mTotalTimeTextView != null) {
+            mTotalTimeTextView.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
+        }
+        if (mProgressBar != null) {
+            mProgressBar.setVisibility((isFirstPrepared && isAdModel) ? INVISIBLE : VISIBLE);
+            mProgressBar.setEnabled(!(isFirstPrepared && isAdModel));
+        }
     }
 
 
@@ -278,24 +315,61 @@ public class GSYSampleADVideoPlayer extends ListGSYVideoPlayer {
     }
 
     public static class GSYADVideoModel extends GSYVideoModel {
-
+        /**
+         * 正常
+         */
         public static int TYPE_NORMAL = 0;
 
+        /**
+         * 广告
+         */
         public static int TYPE_AD = 1;
 
+        /**
+         * 类型
+         */
         private int mType = TYPE_NORMAL;
 
+        /**
+         * 是否跳过
+         */
+        private boolean isSkip;
+
+        /**
+         * @param url   播放url
+         * @param title 标题
+         * @param type  类型 广告还是正常类型
+         */
         public GSYADVideoModel(String url, String title, int type) {
+            this(url, title, type, false);
+        }
+
+        /**
+         * @param url    播放url
+         * @param title  标题
+         * @param type   类型 广告还是正常类型
+         * @param isSkip 是否跳过
+         */
+        public GSYADVideoModel(String url, String title, int type, boolean isSkip) {
             super(url, title);
-            mType = type;
+            this.mType = type;
+            this.isSkip = isSkip;
         }
 
         public int getType() {
             return mType;
         }
 
-        public void setmType(int type) {
+        public void setType(int type) {
             this.mType = type;
+        }
+
+        public boolean isSkip() {
+            return isSkip;
+        }
+
+        public void setSkip(boolean skip) {
+            isSkip = skip;
         }
     }
 }

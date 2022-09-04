@@ -9,16 +9,12 @@ import android.view.Window;
 import android.widget.ImageView;
 import android.widget.TextView;
 
-import com.danikula.videocache.HttpProxyCacheServer;
 import com.shuyu.gsyvideoplayer.GSYVideoADManager;
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoViewBridge;
 
-import java.io.File;
-
-import tv.danmaku.ijk.media.player.IjkLibLoader;
 
 /**
  * Created by guoshuyu on 2018/2/1.
@@ -66,14 +62,9 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
         return R.layout.video_layout_ad;
     }
 
-
-    @Override
-    public void setIjkLibLoader(IjkLibLoader libLoader) {
-        GSYVideoADManager.setIjkLibLoader(libLoader);
-    }
-
     @Override
     public GSYVideoViewBridge getGSYVideoManager() {
+        GSYVideoADManager.instance().initContext(getContext().getApplicationContext());
         return GSYVideoADManager.instance();
     }
 
@@ -86,12 +77,6 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     protected void releaseVideos() {
         GSYVideoADManager.releaseAllVideos();
     }
-
-    @Override
-    protected HttpProxyCacheServer getProxy(Context context, File file) {
-        return GSYVideoADManager.getProxy(context, file);
-    }
-
 
     @Override
     protected int getFullId() {
@@ -111,16 +96,27 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     }
 
     @Override
+    public void onClick(View v) {
+        if (v.getId() == R.id.start) {
+            if (mCurrentState == CURRENT_STATE_ERROR) {
+                clickStartIcon();
+            }
+        } else {
+            super.onClick(v);
+        }
+    }
+
+    @Override
     protected void updateStartImage() {
         if (mStartButton != null) {
             if (mStartButton instanceof ImageView) {
                 ImageView imageView = (ImageView) mStartButton;
                 if (mCurrentState == CURRENT_STATE_PLAYING) {
-                    imageView.setImageResource(R.drawable.video_click_pause_selector);
+                    imageView.setImageResource(R.drawable.empty_drawable);
                 } else if (mCurrentState == CURRENT_STATE_ERROR) {
-                    imageView.setImageResource(R.drawable.video_click_play_selector);
+                    imageView.setImageResource(R.drawable.video_click_error_selector);
                 } else {
-                    imageView.setImageResource(R.drawable.video_click_play_selector);
+                    imageView.setImageResource(R.drawable.empty_drawable);
                 }
             }
         }
@@ -184,8 +180,8 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     }
 
     @Override
-    protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime) {
-        super.setProgressAndTime(progress, secProgress, currentTime, totalTime);
+    protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime, boolean forceChange) {
+        super.setProgressAndTime(progress, secProgress, currentTime, totalTime, forceChange);
         if (mADTime != null && currentTime > 0) {
             int totalSeconds = totalTime / 1000;
             int currentSeconds = currentTime / 1000;
@@ -202,6 +198,13 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
         st.changeAdUIState();
     }
 
+    @Override
+    public void release() {
+        super.release();
+        if (mADTime != null) {
+            mADTime.setVisibility(GONE);
+        }
+    }
 
     /**
      * 根据是否广告url修改ui显示状态
@@ -230,7 +233,7 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     }
 
     /**
-     * 移除没用的
+     * 移除广告播放的全屏
      */
     public void removeFullWindowViewOnly() {
         ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(getContext())).findViewById(Window.ID_ANDROID_CONTENT);
@@ -241,6 +244,7 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
                 vp.removeView(viewGroup);
             }
         }
+        mIfCurrentIsFullscreen = false;
     }
 
 }
