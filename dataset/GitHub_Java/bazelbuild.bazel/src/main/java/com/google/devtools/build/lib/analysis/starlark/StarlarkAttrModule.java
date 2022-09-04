@@ -41,7 +41,7 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.packages.Type.LabelClass;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.StarlarkAttrModuleApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StarlarkAttrModuleApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -85,7 +85,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
           ImmutableList.copyOf(Sequence.cast(fileTypesObj, String.class, "allow_files argument"));
       builder.allowedFileTypes(FileType.of(arg));
     } else {
-      throw new EvalException(attr + " should be a boolean or a string list");
+      throw new EvalException(null, attr + " should be a boolean or a string list");
     }
   }
 
@@ -164,6 +164,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
       builder.setPropertyFlag("EXECUTABLE");
       if (!containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
         throw new EvalException(
+            null,
             "cfg parameter is mandatory when executable=True is provided. Please see "
                 + "https://www.bazel.build/versions/master/docs/skylark/rules.html#configurations "
                 + "for more details.");
@@ -172,7 +173,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
 
     if (containsNonNoneKey(arguments, ALLOW_FILES_ARG)
         && containsNonNoneKey(arguments, ALLOW_SINGLE_FILE_ARG)) {
-      throw new EvalException("Cannot specify both allow_files and allow_single_file");
+      throw new EvalException(null, "Cannot specify both allow_files and allow_single_file");
     }
 
     if (containsNonNoneKey(arguments, ALLOW_FILES_ARG)) {
@@ -220,7 +221,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
               || trans instanceof StarlarkDefinedConfigTransition;
       if (isSplit && defaultValue instanceof StarlarkLateBoundDefault) {
         throw new EvalException(
-            "late-bound attributes must not have a split configuration transition");
+            null, "late-bound attributes must not have a split configuration transition");
       }
       if (trans.equals("host")) {
         builder.cfg(HostTransition.createFactory());
@@ -240,6 +241,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
         } else {
           if (!thread.getSemantics().experimentalStarlarkConfigTransitions()) {
             throw new EvalException(
+                null,
                 "Starlark-defined transitions on rule attributes is experimental and disabled by "
                     + "default. This API is in development and subject to change at any time. Use "
                     + "--experimental_starlark_config_transitions to use this experimental API.");
@@ -249,7 +251,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
         builder.cfg(new StarlarkAttributeTransitionProvider(starlarkDefinedTransition));
       } else if (!trans.equals("target")) {
         // TODO(b/121134880): update error message when starlark build configurations is ready.
-        throw new EvalException("cfg must be either 'host' or 'target'.");
+        throw new EvalException(null, "cfg must be either 'host' or 'target'.");
       }
     }
 
@@ -312,7 +314,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
         Provider constructor = (Provider) obj;
         if (!constructor.isExported()) {
           throw new EvalException(
-              "Providers should be top-level values in extension files that define them.");
+              null, "Providers should be top-level values in extension files that define them.");
         }
         result.add(StarlarkProviderIdentifier.forKey(constructor.getKey()));
       }
@@ -331,11 +333,12 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
     for (Object o : starlarkList) {
       if (!(o instanceof Sequence)) {
         throw new EvalException(
-            String.format(errorMsg, PROVIDERS_ARG, "an element of type " + Starlark.type(o)));
+            null, String.format(errorMsg, PROVIDERS_ARG, "an element of type " + Starlark.type(o)));
       }
       for (Object value : (Sequence) o) {
         if (!isProvider(value)) {
           throw new EvalException(
+              null,
               String.format(
                   errorMsg, argumentName, "list with an element of type " + Starlark.type(value)));
         }
@@ -351,7 +354,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
     try {
       return new Descriptor(name, createAttributeFactory(type, null, kwargs, thread));
     } catch (ConversionException e) {
-      throw new EvalException(e.getMessage());
+      throw new EvalException(null, e.getMessage());
     }
   }
 
@@ -385,7 +388,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
               .nonconfigurable(whyNotConfigurableReason)
               .buildPartial());
     } catch (ConversionException e) {
-      throw new EvalException(e.getMessage());
+      throw new EvalException(null, e.getMessage());
     }
   }
 
@@ -442,32 +445,36 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
       StarlarkThread thread)
       throws EvalException {
     BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("attr.label");
-    ImmutableAttributeFactory attribute =
-        createAttributeFactory(
-            BuildType.LABEL,
-            doc,
-            optionMap(
-                DEFAULT_ARG,
-                defaultValue,
-                EXECUTABLE_ARG,
-                executable,
-                ALLOW_FILES_ARG,
-                allowFiles,
-                ALLOW_SINGLE_FILE_ARG,
-                allowSingleFile,
-                MANDATORY_ARG,
-                mandatory,
-                PROVIDERS_ARG,
-                providers,
-                ALLOW_RULES_ARG,
-                allowRules,
-                CONFIGURATION_ARG,
-                cfg,
-                ASPECTS_ARG,
-                aspects),
-            thread,
-            "label");
-    return new Descriptor("label", attribute);
+    try {
+      ImmutableAttributeFactory attribute =
+          createAttributeFactory(
+              BuildType.LABEL,
+              doc,
+              optionMap(
+                  DEFAULT_ARG,
+                  defaultValue,
+                  EXECUTABLE_ARG,
+                  executable,
+                  ALLOW_FILES_ARG,
+                  allowFiles,
+                  ALLOW_SINGLE_FILE_ARG,
+                  allowSingleFile,
+                  MANDATORY_ARG,
+                  mandatory,
+                  PROVIDERS_ARG,
+                  providers,
+                  ALLOW_RULES_ARG,
+                  allowRules,
+                  CONFIGURATION_ARG,
+                  cfg,
+                  ASPECTS_ARG,
+                  aspects),
+              thread,
+              "label");
+      return new Descriptor("label", attribute);
+    } catch (EvalException e) {
+      throw new EvalException(null, e.getMessage(), e);
+    }
   }
 
   @Override
@@ -549,9 +556,13 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
             cfg,
             ASPECTS_ARG,
             aspects);
-    ImmutableAttributeFactory attribute =
-        createAttributeFactory(BuildType.LABEL_LIST, doc, kwargs, thread, "label_list");
-    return new Descriptor("label_list", attribute);
+    try {
+      ImmutableAttributeFactory attribute =
+          createAttributeFactory(BuildType.LABEL_LIST, doc, kwargs, thread, "label_list");
+      return new Descriptor("label_list", attribute);
+    } catch (EvalException e) {
+      throw new EvalException(null, e.getMessage(), e);
+    }
   }
 
   @Override
@@ -589,10 +600,18 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
             cfg,
             ASPECTS_ARG,
             aspects);
-    ImmutableAttributeFactory attribute =
-        createAttributeFactory(
-            BuildType.LABEL_KEYED_STRING_DICT, doc, kwargs, thread, "label_keyed_string_dict");
-    return new Descriptor("label_keyed_string_dict", attribute);
+    try {
+      ImmutableAttributeFactory attribute =
+          createAttributeFactory(
+              BuildType.LABEL_KEYED_STRING_DICT,
+              doc,
+              kwargs,
+              thread,
+              "label_keyed_string_dict");
+      return new Descriptor("label_keyed_string_dict", attribute);
+    } catch (EvalException e) {
+      throw new EvalException(null, e.getMessage(), e);
+    }
   }
 
   @Override

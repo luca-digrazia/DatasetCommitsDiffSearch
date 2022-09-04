@@ -17,15 +17,15 @@ package com.google.devtools.build.lib.packages;
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import net.starlark.java.eval.Module;
+import com.google.devtools.build.lib.syntax.Module;
 
 /**
  * BazelModuleContext records Bazel-specific information associated with a .bzl {@link
- * net.starlark.java.eval.Module}.
+ * com.google.devtools.build.lib.syntax.Module}.
  */
 @AutoValue
 public abstract class BazelModuleContext {
-  /** Label associated with the Starlark {@link net.starlark.java.eval.Module}. */
+  /** Label associated with the Starlark {@link com.google.devtools.build.lib.syntax.Module}. */
   public abstract Label label();
 
   /** Returns the name of the module's .bzl file, as provided to the parser. */
@@ -33,24 +33,24 @@ public abstract class BazelModuleContext {
 
   /**
    * Maps the load string for each load statement in this .bzl file (in source order) to the module
-   * it loads. It thus records the complete load DAG (not including {@code @_builtins} .bzl files).
+   * it loads. It thus records the complete load DAG.
    */
   public abstract ImmutableMap<String, Module> loads();
 
   /**
-   * Transitive digest of the .bzl file of the {@link net.starlark.java.eval.Module} itself and all
-   * files it transitively loads.
+   * Transitive digest of the .bzl file of the {@link com.google.devtools.build.lib.syntax.Module}
+   * itself and all files it transitively loads.
    */
   @SuppressWarnings({"AutoValueImmutableFields", "mutable"})
   @AutoValue.CopyAnnotations
   public abstract byte[] bzlTransitiveDigest();
 
   /**
-   * Returns a label for a {@link net.starlark.java.eval.Module}.
+   * Returns a label for a {@link com.google.devtools.build.lib.syntax.Module}.
    *
    * <p>This is a user-facing value and we rely on this string to be a valid label for the {@link
-   * net.starlark.java.eval.Module} (and that only). Please see the documentation of {@link
-   * net.starlark.java.eval.Module#setClientData(Object)} for more details.
+   * com.google.devtools.build.lib.syntax.Module} (and that only). Please see the documentation of
+   * {@link com.google.devtools.build.lib.syntax.Module#setClientData(Object)} for more details.
    */
   @Override
   public final String toString() {

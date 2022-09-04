@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
-import com.google.devtools.build.lib.starlarkbuildapi.WorkspaceGlobalsApi;
+import com.google.devtools.build.lib.skylarkbuildapi.WorkspaceGlobalsApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Module;
@@ -49,8 +49,8 @@ import javax.annotation.Nullable;
 /** A collection of global Starlark build API functions that apply to WORKSPACE files. */
 public class WorkspaceGlobals implements WorkspaceGlobalsApi {
 
-  // Must start with a letter and can contain letters, numbers, underscores and hyphens.
-  private static final Pattern LEGAL_WORKSPACE_NAME = Pattern.compile("^\\p{Alpha}[\\w-]*$");
+  // Must start with a letter and can contain letters, numbers, and underscores
+  private static final Pattern LEGAL_WORKSPACE_NAME = Pattern.compile("^\\p{Alpha}\\w*$");
 
   private final boolean allowOverride;
   private final RuleFactory ruleFactory;

@@ -341,6 +341,11 @@ public class PackageFunction implements SkyFunction {
     }
 
     Package pkg = workspace.getPackage();
+    Event.replayEventsOn(env.getListener(), pkg.getEvents());
+    for (Postable post : pkg.getPosts()) {
+      env.getListener().post(post);
+    }
+
     if (packageFactory != null) {
       try {
         packageFactory.afterDoneLoadingPackage(
@@ -622,11 +627,11 @@ public class PackageFunction implements SkyFunction {
   }
 
   /**
-   * Fetch the Starlark loads for this BUILD file, in source order. If any of them haven't been
-   * computed yet, returns null.
+   * Fetch the Starlark loads for this BUILD file. If any of them haven't been computed yet, returns
+   * null.
    */
   @Nullable
-  static ImmutableMap<String, Module> fetchLoadsFromBuildFile(
+  static BzlLoadResult fetchLoadsFromBuildFile(
       RootedPath buildFilePath,
       PackageIdentifier packageId,
       ImmutableMap<RepositoryName, RepositoryName> repoMapping,
@@ -687,12 +692,15 @@ public class PackageFunction implements SkyFunction {
 
     // Process the loaded modules.
     Map<String, Module> loadedModules = Maps.newLinkedHashMapWithExpectedSize(loads.size());
+    ImmutableList.Builder<StarlarkFileDependency> fileDependencies = ImmutableList.builder();
     for (int i = 0; i < loads.size(); i++) {
       String loadString = loads.get(i).first;
       BzlLoadValue v = bzlLoads.get(i);
       loadedModules.put(loadString, v.getModule()); // dups ok
+      fileDependencies.add(v.getDependency());
     }
-    return ImmutableMap.copyOf(loadedModules);
+    return new BzlLoadResult(
+        ImmutableMap.copyOf(loadedModules), transitiveClosureOfLabels(fileDependencies.build()));
   }
 
   /**
@@ -775,6 +783,22 @@ public class PackageFunction implements SkyFunction {
     ImmutableMap<String, Integer> loadToChunkMap = workspaceFileValue.getLoadToChunkMap();
     String loadString = loadLabel.toString();
     return loadToChunkMap.getOrDefault(loadString, workspaceChunk);
+  }
+
+  private static ImmutableList<Label> transitiveClosureOfLabels(
+      ImmutableList<StarlarkFileDependency> immediateDeps) {
+    Set<Label> transitiveClosure = Sets.newHashSet();
+    transitiveClosureOfLabels(immediateDeps, transitiveClosure);
+    return ImmutableList.copyOf(transitiveClosure);
+  }
+
+  private static void transitiveClosureOfLabels(
+      ImmutableList<StarlarkFileDependency> immediateDeps, Set<Label> transitiveClosure) {
+    for (StarlarkFileDependency dep : immediateDeps) {
+      if (transitiveClosure.add(dep.getLabel())) {
+        transitiveClosureOfLabels(dep.getDependencies(), transitiveClosure);
+      }
+    }
   }
 
   @Nullable
@@ -1238,9 +1262,9 @@ public class PackageFunction implements SkyFunction {
         file = StarlarkFile.parseWithPrelude(input, preludeStatements, options);
         fileSyntaxCache.put(packageId, file);
       }
-      ImmutableMap<String, Module> loadedModules;
+      BzlLoadResult loadResult;
       try {
-        loadedModules =
+        loadResult =
             fetchLoadsFromBuildFile(
                 buildFilePath,
                 packageId,
@@ -1255,7 +1279,7 @@ public class PackageFunction implements SkyFunction {
         fileSyntaxCache.invalidate(packageId);
         throw e;
       }
-      if (loadedModules == null) {
+      if (loadResult == null) {
         return null;
       }
       // From here on, either of the following must happen:
@@ -1276,7 +1300,8 @@ public class PackageFunction implements SkyFunction {
               packageId,
               buildFilePath,
               file,
-              loadedModules,
+              loadResult.loadedModules,
+              loadResult.fileDependencies,
               defaultVisibility,
               starlarkSemantics,
               globberWithSkyframeGlobDeps);
@@ -1478,6 +1503,20 @@ public class PackageFunction implements SkyFunction {
                 .setPackageLoading(PackageLoading.newBuilder().setCode(packageLoadingCode).build())
                 .build());
       }
+    }
+  }
+
+  /** A simple value class to store the result of the Starlark loads. */
+  // TODO(adonovan): make private. Provide accessor for sole use in WorkspaceFileFunction.
+  // Then eliminate once fileDependencies is gone.
+  static final class BzlLoadResult {
+    final ImmutableMap<String, Module> loadedModules;
+    final ImmutableList<Label> fileDependencies;
+
+    private BzlLoadResult(
+        ImmutableMap<String, Module> loadedModules, ImmutableList<Label> fileDependencies) {
+      this.loadedModules = loadedModules;
+      this.fileDependencies = fileDependencies;
     }
   }
 }

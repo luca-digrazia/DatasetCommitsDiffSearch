@@ -19,7 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
@@ -433,6 +432,7 @@ public final class PackageFactory {
       RootedPath buildFile,
       StarlarkFile file,
       ImmutableMap<String, Module> loadedModules,
+      ImmutableList<Label> starlarkFileDependencies,
       RuleVisibility defaultVisibility,
       StarlarkSemantics starlarkSemantics,
       Globber globber)
@@ -449,6 +449,7 @@ public final class PackageFactory {
           defaultVisibility,
           starlarkSemantics,
           loadedModules,
+          starlarkFileDependencies,
           repositoryMapping);
     } catch (InterruptedException e) {
       globber.onInterrupt();
@@ -533,24 +534,23 @@ public final class PackageFactory {
             .restrictStringEscapes(semantics.incompatibleRestrictStringEscapes())
             .build();
     StarlarkFile file = StarlarkFile.parse(input, options);
-    Package.Builder packageBuilder =
+    Package result =
         createPackageFromAst(
-            externalPkg.getWorkspaceName(),
-            /*repositoryMapping=*/ ImmutableMap.of(),
-            packageId,
-            buildFile,
-            file,
-            /*loadedModules=*/ ImmutableMap.<String, Module>of(),
-            /*defaultVisibility=*/ ConstantRuleVisibility.PUBLIC,
-            semantics,
-            globber);
-    Package result = packageBuilder.build();
-
-    for (Postable post : packageBuilder.getPosts()) {
+                externalPkg.getWorkspaceName(),
+                /*repositoryMapping=*/ ImmutableMap.of(),
+                packageId,
+                buildFile,
+                file,
+                /*loadedModules=*/ ImmutableMap.<String, Module>of(),
+                /*starlarkFileDependencies=*/ ImmutableList.<Label>of(),
+                /*defaultVisibility=*/ ConstantRuleVisibility.PUBLIC,
+                semantics,
+                globber)
+            .build();
+    for (Postable post : result.getPosts()) {
       eventHandler.post(post);
     }
-    Event.replayEventsOn(eventHandler, packageBuilder.getEvents());
-
+    Event.replayEventsOn(eventHandler, result.getEvents());
     return result;
   }
 
@@ -719,6 +719,7 @@ public final class PackageFactory {
       RuleVisibility defaultVisibility,
       StarlarkSemantics semantics,
       ImmutableMap<String, Module> loadedModules,
+      ImmutableList<Label> starlarkFileDependencies,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws InterruptedException {
     Package.Builder pkgBuilder =
@@ -734,9 +735,9 @@ public final class PackageFactory {
             // Let's give the BUILD file a chance to set default_visibility once,
             // by resetting the PackageBuilder.defaultVisibilitySet flag.
             .setDefaultVisibilitySet(false)
-            // TODO(adonovan): opt: don't precompute this value, which is rarely needed
-            // and can be derived from Package.loads (if available) on demand.
-            .setStarlarkFileDependencies(transitiveClosureOfLabels(loadedModules))
+            // TODO(adonovan): opt: compute starlarkFileDependencies by visiting loadedModules DAG,
+            // and simplify callers of evaluateBuildFile up to BzlLoadValue.
+            .setStarlarkFileDependencies(starlarkFileDependencies)
             .setWorkspaceName(workspaceName)
             .setThirdPartyLicenceExistencePolicy(
                 ruleClassProvider.getThirdPartyLicenseExistencePolicy());
@@ -757,23 +758,6 @@ public final class PackageFactory {
     pkgBuilder.addPosts(eventHandler.getPosts());
     pkgBuilder.addEvents(eventHandler.getEvents());
     return pkgBuilder;
-  }
-
-  private static ImmutableList<Label> transitiveClosureOfLabels(
-      ImmutableMap<String, Module> loads) {
-    Set<Label> set = Sets.newLinkedHashSet();
-    transitiveClosureOfLabelsRec(set, loads);
-    return ImmutableList.copyOf(set);
-  }
-
-  private static void transitiveClosureOfLabelsRec(
-      Set<Label> set, ImmutableMap<String, Module> loads) {
-    for (Module m : loads.values()) {
-      BazelModuleContext ctx = BazelModuleContext.of(m);
-      if (set.add(ctx.label())) {
-        transitiveClosureOfLabelsRec(set, ctx.loads());
-      }
-    }
   }
 
   // Validates and executes a parsed BUILD file, returning true on success,
