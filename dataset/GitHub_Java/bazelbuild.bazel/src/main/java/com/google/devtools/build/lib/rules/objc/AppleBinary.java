@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
@@ -159,10 +160,12 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     ApplePlatform platform = appleConfiguration.getMultiArchPlatform(platformType);
     ImmutableListMultimap<String, TransitiveInfoCollection> cpuToDepsCollectionMap =
-        MultiArchBinarySupport.transformMap(ruleContext.getPrerequisitesByConfiguration("deps"));
+        MultiArchBinarySupport.transformMap(
+            ruleContext.getPrerequisitesByConfiguration("deps", TransitionMode.SPLIT));
     ImmutableListMultimap<String, ConfiguredTargetAndData> cpuToCTATDepsCollectionMap =
         MultiArchBinarySupport.transformMap(
-            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration("deps"));
+            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration(
+                "deps", TransitionMode.SPLIT));
 
     ImmutableMap<BuildConfiguration, CcToolchainProvider> childConfigurationsAndToolchains =
         MultiArchBinarySupport.getChildConfigurationsAndToolchains(ruleContext);
@@ -200,7 +203,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             platform);
 
     ImmutableListMultimap<BuildConfiguration, OutputGroupInfo> buildConfigToOutputGroupInfoMap =
-        ruleContext.getPrerequisitesByConfiguration("deps", OutputGroupInfo.STARLARK_CONSTRUCTOR);
+        ruleContext.getPrerequisitesByConfiguration(
+            "deps", TransitionMode.SPLIT, OutputGroupInfo.STARLARK_CONSTRUCTOR);
     NestedSetBuilder<Artifact> headerTokens = NestedSetBuilder.stableOrder();
     for (Map.Entry<BuildConfiguration, OutputGroupInfo> entry :
         buildConfigToOutputGroupInfoMap.entries()) {
@@ -295,6 +299,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
           AppleExecutableBinaryInfo executableProvider =
               ruleContext.getPrerequisite(
                   BUNDLE_LOADER_ATTR_NAME,
+                  TransitionMode.TARGET,
                   AppleExecutableBinaryInfo.STARLARK_CONSTRUCTOR);
           extraLinkArgs.add(
               "-bundle_loader", executableProvider.getAppleExecutableBinary().getExecPathString());
@@ -313,8 +318,8 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
   private static ImmutableList<TransitiveInfoCollection> getDylibProviderTargets(
       RuleContext ruleContext) {
     return ImmutableList.<TransitiveInfoCollection>builder()
-        .addAll(ruleContext.getPrerequisites(DYLIBS_ATTR_NAME))
-        .addAll(ruleContext.getPrerequisites(BUNDLE_LOADER_ATTR_NAME))
+        .addAll(ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, TransitionMode.TARGET))
+        .addAll(ruleContext.getPrerequisites(BUNDLE_LOADER_ATTR_NAME, TransitionMode.TARGET))
         .build();
   }
 
@@ -322,6 +327,7 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     AppleExecutableBinaryInfo executableProvider =
         ruleContext.getPrerequisite(
             BUNDLE_LOADER_ATTR_NAME,
+            TransitionMode.TARGET,
             AppleExecutableBinaryInfo.STARLARK_CONSTRUCTOR);
     if (executableProvider != null) {
       return ImmutableSet.<Artifact>of(executableProvider.getAppleExecutableBinary());

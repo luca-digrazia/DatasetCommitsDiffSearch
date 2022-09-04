@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration.Configuratio
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.objc.AppleBinary.BinaryType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -53,7 +54,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import net.starlark.java.eval.Dict;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -1874,12 +1874,10 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         scratchConfiguredTarget(
             "foo",
             "x",
-            "apple_binary(name = 'x', platform_type = 'macos', deps = [':y', ':z'])",
-            "cc_library(name = 'y', hdrs = ['y.h'])",
-            "objc_library(name = 'z', hdrs = ['z.h'])");
+            "apple_binary(name = 'x', platform_type = 'macos', deps = [':y'])",
+            "cc_library(name = 'y', hdrs = ['y.h'])");
     String validation = ActionsTestUtil.baseNamesOf(getOutputGroup(x, OutputGroupInfo.VALIDATION));
     assertThat(validation).contains("y.h.processed");
-    assertThat(validation).contains("z.h.processed");
   }
 
   protected RuleType getRuleType() {

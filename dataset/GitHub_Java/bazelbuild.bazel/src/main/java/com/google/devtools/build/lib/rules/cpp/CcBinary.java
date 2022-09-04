@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
@@ -44,6 +43,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -63,7 +63,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
@@ -73,6 +72,10 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Tuple;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -85,10 +88,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.Tuple;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
 
 /**
  * A ConfiguredTarget for <code>cc_binary</code> rules.
@@ -137,7 +137,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       doc =
           "Provider that signals that rules that use launchers can use this target as "
               + "the launcher.",
-      category = DocCategory.TOP_LEVEL_TYPE)
+      category = StarlarkDocumentationCategory.TOP_LEVEL_TYPE)
   public static class CcLauncherInfo extends NativeInfo {
     private static final String RESTRICTION_ERROR_MESSAGE =
         "This provider is restricted to native.java_binary, native.py_binary and native.java_test. "
@@ -206,7 +206,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     builder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
     // TODO(plf): Why do we need .so files produced by cc_library in data dependencies of cc_binary?
     // This can probably be removed safely.
-    for (TransitiveInfoCollection transitiveInfoCollection : ruleContext.getPrerequisites("data")) {
+    for (TransitiveInfoCollection transitiveInfoCollection :
+        ruleContext.getPrerequisites("data", TransitionMode.DONT_CHECK)) {
       builder.merge(
           CppHelper.runfilesFunction(ruleContext, /* linkingStatically= */ true)
               .apply(transitiveInfoCollection));
@@ -259,7 +260,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       if (!ruleContext
           .getAnalysisEnvironment()
           .getStarlarkSemantics()
-          .getBool(BuildLanguageOptions.EXPERIMENTAL_CC_SHARED_LIBRARY)) {
+          .experimentalCcSharedLibrary()) {
         ruleContext.ruleError(
             "The attribute 'dynamic_deps' can only be used with the flag"
                 + " --experimental_cc_shared_library.");
@@ -332,7 +333,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
     ImmutableList<TransitiveInfoCollection> deps =
         ImmutableList.<TransitiveInfoCollection>builder()
-            .addAll(ruleContext.getPrerequisites("deps"))
+            .addAll(ruleContext.getPrerequisites("deps", TransitionMode.TARGET))
             .add(CppHelper.mallocForTarget(ruleContext))
             .build();
 
@@ -362,7 +363,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
             .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext))
             .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext));
-    CompilationInfo compilationInfo = compilationHelper.compile(ruleContext::ruleError);
+    CompilationInfo compilationInfo = compilationHelper.compile();
     CcCompilationContext ccCompilationContext = compilationInfo.getCcCompilationContext();
     CcCompilationOutputs precompiledFileObjects =
         CcCompilationOutputs.builder()
@@ -1050,7 +1051,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   private static CcLinkingContext collectCcLinkingContext(RuleContext context) {
     ImmutableList.Builder<CcInfo> ccInfoListBuilder = ImmutableList.builder();
 
-    ccInfoListBuilder.addAll(context.getPrerequisites("deps", CcInfo.PROVIDER));
+    ccInfoListBuilder.addAll(
+        context.getPrerequisites("deps", TransitionMode.TARGET, CcInfo.PROVIDER));
     if (!isLinkShared(context)) {
       CcInfo ccInfo = CppHelper.mallocForTarget(context).get(CcInfo.PROVIDER);
       if (ccInfo != null) {
@@ -1094,8 +1096,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             featureConfiguration,
             ruleContext,
             /* generateHeaderTokensGroup= */ false,
-            /* addSelfHeaderTokens= */ false,
-            /* generateHiddenTopLevelGroup= */ false);
+            /* addSelfHeaderTokens= */ false);
 
     builder
         .setFilesToBuild(filesToBuild)
@@ -1116,7 +1117,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     NestedSetBuilder<LibraryToLink> builder = NestedSetBuilder.linkOrder();
     builder.addAll(libraries);
     for (CcNativeLibraryProvider dep :
-        ruleContext.getPrerequisites("deps", CcNativeLibraryProvider.class)) {
+        ruleContext.getPrerequisites(
+            "deps", TransitionMode.TARGET, CcNativeLibraryProvider.class)) {
       builder.addTransitive(dep.getTransitiveCcNativeLibraries());
     }
     return builder.build();
@@ -1169,7 +1171,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ImmutableList.builder();
     ImmutableList.Builder<CcSharedLibraryInfo> transitiveMergedCcSharedLibraryInfos =
         ImmutableList.builder();
-    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("dynamic_deps")) {
+    for (TransitiveInfoCollection dep :
+        ruleContext.getPrerequisites("dynamic_deps", TransitionMode.TARGET)) {
       StructImpl ccSharedLibraryInfo = cppSemantics.getCcSharedLibraryInfo(dep);
       if (ccSharedLibraryInfo == null) {
         ruleContext.ruleError(
@@ -1327,7 +1330,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     List<CcLinkingContext.LinkerInput> linkerInputs = new ArrayList<>();
 
     linkerInputs.addAll(ccLinkingContext.getLinkerInputs().toList());
-    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps")) {
+    for (TransitiveInfoCollection dep :
+        ruleContext.getPrerequisites("deps", TransitionMode.TARGET)) {
       graphStructureAspectNodes.add(dep.getProvider(GraphNodeInfo.class));
     }
     graphStructureAspectNodes.add(
@@ -1388,7 +1392,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   private static ImmutableList<CcLinkingContext.LinkerInput> getPreloadedDepsFromDynamicDeps(
       RuleContext ruleContext, CppSemantics cppSemantics) {
     ImmutableList.Builder<CcInfo> ccInfos = ImmutableList.builder();
-    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("dynamic_deps")) {
+    for (TransitiveInfoCollection dep :
+        ruleContext.getPrerequisites("dynamic_deps", TransitionMode.TARGET)) {
       StructImpl ccSharedLibraryInfo = cppSemantics.getCcSharedLibraryInfo(dep);
       try {
         Object preloadedDepsField = ccSharedLibraryInfo.getValue("preloaded_deps");
