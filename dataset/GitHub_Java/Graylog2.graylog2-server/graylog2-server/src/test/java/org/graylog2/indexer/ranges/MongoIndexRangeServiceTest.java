@@ -24,8 +24,8 @@ import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.assertj.jodatime.api.Assertions;
 import org.bson.types.ObjectId;
 import org.elasticsearch.ElasticsearchTimeoutException;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.index.IndexNotFoundException;
-import org.graylog2.audit.NullAuditEventSender;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.database.NotFoundException;
@@ -33,8 +33,7 @@ import org.graylog2.indexer.esplugin.IndicesClosedEvent;
 import org.graylog2.indexer.esplugin.IndicesDeletedEvent;
 import org.graylog2.indexer.esplugin.IndicesReopenedEvent;
 import org.graylog2.indexer.indices.Indices;
-import org.graylog2.indexer.searches.IndexRangeStats;
-import org.graylog2.plugin.system.NodeId;
+import org.graylog2.indexer.searches.TimestampStats;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -42,9 +41,9 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.Set;
@@ -52,17 +51,15 @@ import java.util.SortedSet;
 
 import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class MongoIndexRangeServiceTest {
     @ClassRule
     public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
 
     @Rule
     public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
     private final ObjectMapper objectMapper = new ObjectMapperProvider().get();
     private final MongoJackObjectMapperProvider objectMapperProvider = new MongoJackObjectMapperProvider(objectMapper);
@@ -75,7 +72,7 @@ public class MongoIndexRangeServiceTest {
     @Before
     public void setUp() throws Exception {
         localEventBus = new EventBus("local-event-bus");
-        indexRangeService = new MongoIndexRangeService(mongoRule.getMongoConnection(), objectMapperProvider, indices, new NullAuditEventSender(), mock(NodeId.class), localEventBus);
+        indexRangeService = new MongoIndexRangeService(mongoRule.getMongoConnection(), objectMapperProvider, indices, localEventBus);
     }
 
     @Test
@@ -162,7 +159,7 @@ public class MongoIndexRangeServiceTest {
         final String index = "graylog";
         final DateTime min = new DateTime(2015, 1, 1, 1, 0, DateTimeZone.UTC);
         final DateTime max = new DateTime(2015, 1, 1, 5, 0, DateTimeZone.UTC);
-        when(indices.indexRangeStatsOfIndex(index)).thenReturn(IndexRangeStats.create(min, max));
+        when(indices.timestampStatsOfIndex(index)).thenReturn(TimestampStats.create(min, max));
 
         final IndexRange indexRange = indexRangeService.calculateRange(index);
 
@@ -184,7 +181,7 @@ public class MongoIndexRangeServiceTest {
     @UsingDataSet(locations = "MongoIndexRangeServiceTest-EmptyCollection.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testCalculateRangeWithEmptyIndex() throws Exception {
         final String index = "graylog";
-        when(indices.indexRangeStatsOfIndex(index)).thenReturn(IndexRangeStats.EMPTY);
+        when(indices.timestampStatsOfIndex(index)).thenReturn(TimestampStats.EMPTY);
 
         final IndexRange range = indexRangeService.calculateRange(index);
 
@@ -196,7 +193,7 @@ public class MongoIndexRangeServiceTest {
 
     @Test(expected = IndexNotFoundException.class)
     public void testCalculateRangeWithNonExistingIndex() throws Exception {
-        when(indices.indexRangeStatsOfIndex("does-not-exist")).thenThrow(new IndexNotFoundException("does-not-exist"));
+        when(indices.timestampStatsOfIndex("does-not-exist")).thenThrow(new IndexNotFoundException("does-not-exist"));
         indexRangeService.calculateRange("does-not-exist");
     }
 
@@ -265,7 +262,7 @@ public class MongoIndexRangeServiceTest {
     public void testHandleIndexReopening() throws Exception {
         final DateTime begin = new DateTime(2016, 1, 1, 0, 0, DateTimeZone.UTC);
         final DateTime end = new DateTime(2016, 1, 15, 0, 0, DateTimeZone.UTC);
-        when(indices.indexRangeStatsOfIndex("graylog_3")).thenReturn(IndexRangeStats.create(begin, end));
+        when(indices.timestampStatsOfIndex("graylog_3")).thenReturn(TimestampStats.create(begin, end));
 
         localEventBus.post(IndicesReopenedEvent.create(Collections.singleton("graylog_3")));
 
