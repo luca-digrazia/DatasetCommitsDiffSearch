@@ -68,7 +68,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     protected int mScreenHeight;
 
     //缓存进度
-    protected int mBuffterPoint;
+    protected int mBufferPoint;
 
     //备份缓存前的播放状态
     protected int mBackUpPlayingBufferState = -1;
@@ -104,7 +104,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     protected boolean mSoundTouch = false;
 
     //是否需要显示暂停锁定效果
-    protected boolean mShowPauseCover = true;
+    protected boolean mShowPauseCover = false;
 
     //是否准备完成前调用了暂停
     protected boolean mPauseBeforePrepared = false;
@@ -177,15 +177,17 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         if (mCurrentState == CURRENT_STATE_PAUSE && mFullPauseBitmap != null
                 && !mFullPauseBitmap.isRecycled() && mShowPauseCover
                 && mSurface != null && mSurface.isValid()) {
-            try {
-                RectF rectF = new RectF(0, 0, mTextureView.getWidth(), mTextureView.getHeight());
-                Canvas canvas = mSurface.lockCanvas(new Rect(0, 0, mTextureView.getWidth(), mTextureView.getHeight()));
-                if (canvas != null) {
-                    canvas.drawBitmap(mFullPauseBitmap, null, rectF, null);
-                    mSurface.unlockCanvasAndPost(canvas);
+            if (getGSYVideoManager().isSurfaceSupportLockCanvas()) {
+                try {
+                    RectF rectF = new RectF(0, 0, mTextureView.getWidth(), mTextureView.getHeight());
+                    Canvas canvas = mSurface.lockCanvas(new Rect(0, 0, mTextureView.getWidth(), mTextureView.getHeight()));
+                    if (canvas != null) {
+                        canvas.drawBitmap(mFullPauseBitmap, null, rectF, null);
+                        mSurface.unlockCanvasAndPost(canvas);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
             }
         }
 
@@ -337,60 +339,31 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         public void onAudioFocusChange(int focusChange) {
             switch (focusChange) {
                 case AudioManager.AUDIOFOCUS_GAIN:
-                    onGankAudio();
                     break;
                 case AudioManager.AUDIOFOCUS_LOSS:
-                    onLossAudio();
+                    post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (mReleaseWhenLossAudio) {
+                                releaseVideos();
+                            } else {
+                                onVideoPause();
+                            }
+                        }
+                    });
                     break;
                 case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                    onLossTransientAudio();
+                    try {
+                        onVideoPause();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                     break;
                 case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
-                    onLossTransientCanDuck();
                     break;
             }
         }
     };
-
-    /**
-     * 获得了Audio Focus
-     */
-    protected void onGankAudio() {
-    }
-
-    /**
-     * 失去了Audio Focus，并将会持续很长的时间
-     */
-    protected void onLossAudio() {
-        this.post(new Runnable() {
-            public void run() {
-                if (GSYVideoView.this.mReleaseWhenLossAudio) {
-                    GSYVideoView.this.releaseVideos();
-                } else {
-                    GSYVideoView.this.onVideoPause();
-                }
-
-            }
-        });
-    }
-
-    /**
-     * 暂时失去Audio Focus，并会很快再次获得
-     */
-    protected void onLossTransientAudio() {
-        try {
-            this.onVideoPause();
-        } catch (Exception var2) {
-            var2.printStackTrace();
-        }
-
-    }
-
-    /**
-     * 暂时失去AudioFocus，但是可以继续播放，不过要在降低音量
-     */
-    protected void onLossTransientCanDuck() {
-    }
 
 
     /**
@@ -974,7 +947,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      * 缓冲进度/缓存进度
      */
     public int getBuffterPoint() {
-        return mBuffterPoint;
+        return mBufferPoint;
     }
 
     /**
@@ -1042,7 +1015,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      */
     public void setSpeedPlaying(float speed, boolean soundTouch) {
         setSpeed(speed, soundTouch);
-        getGSYVideoManager().setSpeedPlaying(speed, soundTouch);
+        getGSYVideoManager().setSpeedPlaying( speed,  soundTouch);
     }
 
     public boolean isShowPauseCover() {
@@ -1065,7 +1038,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
      */
     public void seekTo(long position) {
         try {
-            if (getGSYVideoManager() != null && position > 0) {
+            if (getGSYVideoManager()!= null && position > 0) {
                 getGSYVideoManager().seekTo(position);
             }
         } catch (Exception e) {
@@ -1105,7 +1078,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
     /**
      * 单独设置mapHeader
-     *
      * @param headData
      */
     public void setMapHeadData(Map<String, String> headData) {
