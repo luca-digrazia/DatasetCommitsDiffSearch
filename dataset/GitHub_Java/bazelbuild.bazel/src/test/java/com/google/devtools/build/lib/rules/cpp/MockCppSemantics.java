@@ -52,11 +52,6 @@ public final class MockCppSemantics implements CppSemantics {
   }
 
   @Override
-  public HeadersCheckingMode determineStarlarkHeadersCheckingMode(CppConfiguration cppConfig) {
-    return HeadersCheckingMode.LOOSE;
-  }
-
-  @Override
   public boolean needsDotdInputPruning() {
     return true;
   }

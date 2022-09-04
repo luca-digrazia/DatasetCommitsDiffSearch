@@ -57,6 +57,7 @@ public class CppCompileActionBuilder {
   private Artifact outputFile;
   private Artifact dwoFile;
   private Artifact ltoIndexingFile;
+  @Nullable private PathFragment tempOutputFile;
   private Artifact dotdFile;
   private Artifact gcnoFile;
   private CcCompilationContext ccCompilationContext = CcCompilationContext.EMPTY;
@@ -116,6 +117,7 @@ public class CppCompileActionBuilder {
     this.outputFile = other.outputFile;
     this.dwoFile = other.dwoFile;
     this.ltoIndexingFile = other.ltoIndexingFile;
+    this.tempOutputFile = other.tempOutputFile;
     this.dotdFile = other.dotdFile;
     this.gcnoFile = other.gcnoFile;
     this.ccCompilationContext = other.ccCompilationContext;
@@ -135,6 +137,11 @@ public class CppCompileActionBuilder {
     this.actionName = other.actionName;
     this.grepIncludes = other.grepIncludes;
     this.builtinIncludeDirectories = other.builtinIncludeDirectories;
+  }
+
+  @Nullable
+  public PathFragment getTempOutputFile() {
+    return tempOutputFile;
   }
 
   public CppCompileActionBuilder setSourceFile(Artifact sourceFile) {
@@ -266,38 +273,67 @@ public class CppCompileActionBuilder {
 
     // Copying the collections is needed to make the builder reusable.
     CppCompileAction action;
-
-    action =
-        new CppCompileAction(
-            owner,
-            featureConfiguration,
-            variables,
-            sourceFile,
-            cppConfiguration,
-            shareable,
-            shouldScanIncludes,
-            shouldPruneModules(),
-            usePic,
-            useHeaderModules,
-            realMandatoryInputs,
-            buildInputsForInvalidation(),
-            getBuiltinIncludeFiles(),
-            prunableHeaders,
-            outputFile,
-            dotdFile,
-            gcnoFile,
-            dwoFile,
-            ltoIndexingFile,
-            env,
-            ccCompilationContext,
-            coptsFilter,
-            ImmutableList.copyOf(additionalIncludeScanningRoots),
-            actionClassId,
-            ImmutableMap.copyOf(executionInfo),
-            getActionName(),
-            cppSemantics,
-            builtinIncludeDirectories,
-            grepIncludes);
+    boolean fake = tempOutputFile != null;
+    if (fake) {
+      action =
+          new FakeCppCompileAction(
+              owner,
+              featureConfiguration,
+              variables,
+              sourceFile,
+              cppConfiguration,
+              shareable,
+              shouldScanIncludes,
+              shouldPruneModules(),
+              usePic,
+              useHeaderModules,
+              realMandatoryInputs,
+              buildInputsForInvalidation(),
+              getBuiltinIncludeFiles(),
+              prunableHeaders,
+              outputFile,
+              tempOutputFile,
+              dotdFile,
+              env,
+              ccCompilationContext,
+              coptsFilter,
+              cppSemantics,
+              builtinIncludeDirectories,
+              ImmutableMap.copyOf(executionInfo),
+              grepIncludes);
+    } else {
+      action =
+          new CppCompileAction(
+              owner,
+              featureConfiguration,
+              variables,
+              sourceFile,
+              cppConfiguration,
+              shareable,
+              shouldScanIncludes,
+              shouldPruneModules(),
+              usePic,
+              useHeaderModules,
+              realMandatoryInputs,
+              buildInputsForInvalidation(),
+              getBuiltinIncludeFiles(),
+              prunableHeaders,
+              outputFile,
+              dotdFile,
+              gcnoFile,
+              dwoFile,
+              ltoIndexingFile,
+              env,
+              ccCompilationContext,
+              coptsFilter,
+              ImmutableList.copyOf(additionalIncludeScanningRoots),
+              actionClassId,
+              ImmutableMap.copyOf(executionInfo),
+              getActionName(),
+              cppSemantics,
+              builtinIncludeDirectories,
+              grepIncludes);
+    }
     return action;
   }
 
@@ -476,6 +512,20 @@ public class CppCompileActionBuilder {
     return outputFile;
   }
 
+  /**
+   * The temp output file is not an artifact, since it does not appear in the outputs of the
+   * action.
+   *
+   * <p>This is theoretically a problem if that file already existed before, since then Blaze
+   * does not delete it before executing the rule, but 1. that only applies for local
+   * execution which does not happen very often and 2. it is only a problem if the compiler is
+   * affected by the presence of this file, which it should not be.
+   */
+  public CppCompileActionBuilder setTempOutputFile(PathFragment tempOutputFile) {
+    this.tempOutputFile = tempOutputFile;
+    return this;
+  }
+
   public Artifact getDotdFile() {
     return this.dotdFile;
   }
@@ -543,7 +593,11 @@ public class CppCompileActionBuilder {
   }
 
   public PathFragment getRealOutputFilePath() {
-    return getOutputFile().getExecPath();
+    if (getTempOutputFile() != null) {
+      return getTempOutputFile();
+    } else {
+      return getOutputFile().getExecPath();
+    }
   }
 
   /**
