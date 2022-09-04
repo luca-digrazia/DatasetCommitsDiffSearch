@@ -111,7 +111,7 @@ public abstract class EComponentHolder extends BaseGeneratedClassHolder {
 		return databaseHelperRef;
 	}
 
-	protected JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
+	private JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
 		JClass databaseHelperClass = refClass(databaseHelperTypeMirror.toString());
 		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + ModelConstants.GENERATION_SUFFIX;
 		JFieldVar databaseHelperRef = generatedClass.field(PRIVATE, databaseHelperClass, fieldName);

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,6 +22,7 @@ import javax.lang.model.element.ExecutableElement;
 import org.androidannotations.annotations.WakeLock;
 import org.androidannotations.annotations.WakeLock.Flag;
 import org.androidannotations.annotations.WakeLock.Level;
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
@@ -36,6 +37,8 @@ import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JVar;
 
 public class WakeLockHandler extends BaseAnnotationHandler<EComponentHolder> {
+
+	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public WakeLockHandler(ProcessingEnvironment processingEnvironment) {
 		super(WakeLock.class, processingEnvironment);
@@ -89,8 +92,8 @@ public class WakeLockHandler extends BaseAnnotationHandler<EComponentHolder> {
 		tryBlock.body().add(previousMethodBody);
 
 		JBlock finallyBlock = tryBlock._finally();
-		JConditional ifStatement = finallyBlock._if(wakeLock.ne(JExpr._null()));
-		ifStatement._then().add(wakeLock.invoke("release"));
+		JConditional _if = finallyBlock._if(wakeLock.ne(JExpr._null()));
+		_if._then().add(wakeLock.invoke("release"));
 	}
 
 	private String extractTag(Element element) {
