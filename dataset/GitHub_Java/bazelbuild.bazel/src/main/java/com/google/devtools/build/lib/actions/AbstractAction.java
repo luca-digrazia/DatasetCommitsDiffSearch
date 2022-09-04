@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
-import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
@@ -450,11 +449,6 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public boolean shouldReportPathPrefixConflict(ActionAnalysisMetadata action) {
-    return this != action;
-  }
-
-  @Override
   public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
       throws CommandLineExpansionException {
     ActionOwner owner = getOwner();
@@ -533,12 +527,6 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
 
   @Override
   public SkylarkList<String> getSkylarkArgv() throws EvalException {
-    return null;
-  }
-
-  @Override
-  public SkylarkList<CommandLineArgsApi> getStarlarkArgs() throws EvalException {
-    // Not all action types support returning Args.
     return null;
   }
 
