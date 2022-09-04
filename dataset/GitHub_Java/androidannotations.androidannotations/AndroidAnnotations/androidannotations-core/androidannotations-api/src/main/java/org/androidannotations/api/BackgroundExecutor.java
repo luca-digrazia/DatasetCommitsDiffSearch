@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 
 public final class BackgroundExecutor {
@@ -93,7 +95,7 @@ public final class BackgroundExecutor {
 	 *             if the current executor set by {@link #setExecutor(Executor)}
 	 *             does not support scheduling
 	 */
-	private static Future<?> directExecute(Runnable runnable, int delay) {
+	private static Future<?> directExecute(Runnable runnable, long delay) {
 		Future<?> future = null;
 		if (delay > 0) {
 			/* no serial, but a delay: schedule the task */
@@ -128,15 +130,13 @@ public final class BackgroundExecutor {
 	 *             executor)
 	 */
 	public static synchronized void execute(Task task) {
-		Future<?> future = null;
-		if (task.serial == null || !hasSerialRunning(task.serial)) {
-			task.executionAsked = true;
-			future = directExecute(task, task.remainingDelay);
-		}
 		if (task.id != null || task.serial != null) {
 			/* keep task */
-			task.future = future;
 			TASKS.add(task);
+		}
+		if (task.serial == null || !hasSerialRunning(task.serial)) {
+			task.executionAsked = true;
+			task.future = directExecute(task, task.remainingDelay);
 		}
 	}
 
@@ -158,7 +158,7 @@ public final class BackgroundExecutor {
 	 *             {@link #setExecutor(Executor)} has been called with such an
 	 *             executor)
 	 */
-	public static void execute(final Runnable runnable, String id, int delay, String serial) {
+	public static void execute(final Runnable runnable, String id, long delay, String serial) {
 		execute(new Task(id, delay, serial) {
 			@Override
 			public void execute() {
@@ -180,7 +180,7 @@ public final class BackgroundExecutor {
 	 *             {@link #setExecutor(Executor)} has been called with such an
 	 *             executor)
 	 */
-	public static void execute(Runnable runnable, int delay) {
+	public static void execute(Runnable runnable, long delay) {
 		directExecute(runnable, delay);
 	}
 
@@ -198,7 +198,7 @@ public final class BackgroundExecutor {
 	 * Execute a task after all tasks added with the same non-null
 	 * <code>serial</code> (if any) have completed execution.
 	 * 
-	 * Equivalent to {@link #execute(Runnable, String, int, String)
+	 * Equivalent to {@link #execute(Runnable, String, long, String)
 	 * execute(runnable, id, 0, serial)}.
 	 * 
 	 * @param runnable
@@ -360,7 +360,7 @@ public final class BackgroundExecutor {
 	public static abstract class Task implements Runnable {
 
 		private String id;
-		private int remainingDelay;
+		private long remainingDelay;
 		private long targetTimeMillis; /* since epoch */
 		private String serial;
 		private boolean executionAsked;
@@ -380,13 +380,13 @@ public final class BackgroundExecutor {
 		 */
 		private AtomicBoolean managed = new AtomicBoolean();
 
-		public Task(String id, int delay, String serial) {
+		public Task(String id, long delay, String serial) {
 			if (!"".equals(id)) {
 				this.id = id;
 			}
 			if (delay > 0) {
 				remainingDelay = delay;
-				targetTimeMillis = System.currentTimeMillis() + delay;
+				targetTimeMillis = SystemClock.elapsedRealtime() + delay;
 			}
 			if (!"".equals(serial)) {
 				this.serial = serial;
@@ -426,7 +426,7 @@ public final class BackgroundExecutor {
 					if (next != null) {
 						if (next.remainingDelay != 0) {
 							/* the delay may not have elapsed yet */
-							next.remainingDelay = Math.max(0, (int) (targetTimeMillis - System.currentTimeMillis()));
+							next.remainingDelay = Math.max(0L, next.targetTimeMillis - SystemClock.elapsedRealtime());
 						}
 						/* a task having the same serial was queued, execute it */
 						BackgroundExecutor.execute(next);
