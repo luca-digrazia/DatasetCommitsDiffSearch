@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
@@ -162,7 +161,7 @@ public class RemoteActionInputFetcherTest {
     // arrange
     Path p = execRoot.getRelative(artifactRoot.getExecPath()).getRelative("file1");
     FileSystemUtils.writeContent(p, StandardCharsets.UTF_8, "hello world");
-    Artifact a = ActionsTestUtil.createArtifact(artifactRoot, p);
+    Artifact a = new Artifact(p, artifactRoot);
     FileArtifactValue f = FileArtifactValue.create(a);
     MetadataProvider metadataProvider = new StaticMetadataProvider(ImmutableMap.of(a, f));
     AbstractRemoteActionCache remoteCache =
@@ -197,7 +196,6 @@ public class RemoteActionInputFetcherTest {
         .isEqualTo("hello world");
     assertThat(a1.getPath().isExecutable()).isTrue();
     assertThat(a1.getPath().isReadable()).isTrue();
-    assertThat(a1.getPath().isWritable()).isTrue();
   }
 
   private Artifact createRemoteArtifact(
@@ -206,7 +204,7 @@ public class RemoteActionInputFetcherTest {
       Map<ActionInput, FileArtifactValue> metadata,
       Map<Digest, ByteString> cacheEntries) {
     Path p = artifactRoot.getRoot().getRelative(pathFragment);
-    Artifact a = ActionsTestUtil.createArtifact(artifactRoot, p);
+    Artifact a = new Artifact(p, artifactRoot);
     byte[] b = contents.getBytes(StandardCharsets.UTF_8);
     HashCode h = HASH_FUNCTION.getHashFunction().hashBytes(b);
     FileArtifactValue f =
