@@ -242,15 +242,6 @@ public final class Environment implements Freezable {
       bindings.put(varname, value);
     }
 
-    /**
-     * TODO(laurentlb): Remove this method when possible. It should probably not
-     * be part of the public interface.
-     */
-    void remove(Environment env, String varname) throws MutabilityException {
-      Mutability.checkMutable(this, env);
-      bindings.remove(varname);
-    }
-
     @Override
     public String toString() {
       return String.format("<Frame%s>", mutability());
@@ -698,21 +689,13 @@ public final class Environment implements Freezable {
       // End users don't have access to setupDynamic, and it is an implementation error
       // if we encounter a mutability exception.
       throw new AssertionError(
-          String.format(
-              "Trying to bind dynamic variable '%s' in frozen environment %s", varname, this),
+          Printer.format(
+              "Trying to bind dynamic variable '%s' in frozen environment %r", varname, this),
           e);
     }
     return this;
   }
 
-  /** Remove variable from local bindings. */
-  void removeLocalBinding(String varname) {
-    try {
-      currentFrame().remove(this, varname);
-    } catch (MutabilityException e) {
-      throw new AssertionError(e);
-    }
-  }
 
   /**
    * Modifies a binding in the current Frame of this Environment, as would an
@@ -942,8 +925,7 @@ public final class Environment implements Freezable {
 
 
   /**
-   * The fail fast handler, which throws an {@link IllegalArgumentException} whenever an error or
-   * warning occurs.
+   * The fail fast handler, which throws a AssertionError whenever an error or warning occurs.
    */
   public static final EventHandler FAIL_FAST_HANDLER = new EventHandler() {
       @Override

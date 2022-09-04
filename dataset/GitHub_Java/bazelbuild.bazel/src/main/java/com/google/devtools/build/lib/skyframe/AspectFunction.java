@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAsp
 import com.google.devtools.build.lib.analysis.MergedConfiguredTarget;
 import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
-import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -55,7 +54,6 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.Configure
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.DependencyEvaluationException;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.BuildViewProvider;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
-import com.google.devtools.build.lib.skyframe.ToolchainUtil.ToolchainContextException;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -120,15 +118,9 @@ public final class AspectFunction implements SkyFunction {
 
       Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension().getBindings()
           .get(skylarkValueName);
-      if (skylarkValue == null) {
-        throw new ConversionException(
-            String.format(
-                "%s is not exported from %s", skylarkValueName, extensionLabel.toString()));
-      }
       if (!(skylarkValue instanceof SkylarkAspect)) {
         throw new ConversionException(
-            String.format(
-                "%s from %s is not an aspect", skylarkValueName, extensionLabel.toString()));
+            skylarkValueName + " from " + extensionLabel.toString() + " is not an aspect");
       }
       return (SkylarkAspect) skylarkValue;
     } catch (SkylarkImportFailedException | ConversionException e) {
@@ -272,35 +264,18 @@ public final class AspectFunction implements SkyFunction {
         return null;
       }
 
-      // Determine what toolchains are needed by this target.
-      ToolchainContext toolchainContext;
-      try {
-        ImmutableList<Label> requiredToolchains = aspect.getDefinition().getRequiredToolchains();
-        toolchainContext =
-            ToolchainUtil.createToolchainContext(
-                env, requiredToolchains, key.getAspectConfiguration());
-      } catch (ToolchainContextException e) {
-        // TODO(katre): better error handling
-        throw new AspectCreationException(e.getMessage());
-      }
-      if (env.valuesMissing()) {
-        return null;
-      }
-
       OrderedSetMultimap<Attribute, ConfiguredTarget> depValueMap;
       try {
-        depValueMap =
-            ConfiguredTargetFunction.computeDependencies(
-                env,
-                resolver,
-                originalTargetAndAspectConfiguration,
-                aspectPath,
-                configConditions,
-                toolchainContext,
-                ruleClassProvider,
-                view.getHostConfiguration(originalTargetAndAspectConfiguration.getConfiguration()),
-                transitivePackages,
-                transitiveRootCauses);
+        depValueMap = ConfiguredTargetFunction.computeDependencies(
+            env,
+            resolver,
+            originalTargetAndAspectConfiguration,
+            aspectPath,
+            configConditions,
+            ruleClassProvider,
+            view.getHostConfiguration(originalTargetAndAspectConfiguration.getConfiguration()),
+            transitivePackages,
+            transitiveRootCauses);
       } catch (ConfiguredTargetFunctionException e) {
         throw new AspectCreationException(e.getMessage());
       }
@@ -321,7 +296,6 @@ public final class AspectFunction implements SkyFunction {
           associatedTarget,
           key.getAspectConfiguration(),
           configConditions,
-          toolchainContext,
           depValueMap,
           transitivePackages);
     } catch (DependencyEvaluationException e) {
@@ -445,7 +419,6 @@ public final class AspectFunction implements SkyFunction {
       ConfiguredTarget associatedTarget,
       BuildConfiguration aspectConfiguration,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      ToolchainContext toolchainContext,
       OrderedSetMultimap<Attribute, ConfiguredTarget> directDeps,
       NestedSetBuilder<Package> transitivePackages)
       throws AspectFunctionException, InterruptedException {
@@ -461,19 +434,16 @@ public final class AspectFunction implements SkyFunction {
 
     ConfiguredAspect configuredAspect;
     if (ConfiguredTargetFunction.aspectMatchesConfiguredTarget(associatedTarget, aspect)) {
-      configuredAspect =
-          view.getConfiguredTargetFactory()
-              .createAspect(
-                  analysisEnvironment,
-                  associatedTarget,
-                  aspectPath,
-                  aspectFactory,
-                  aspect,
-                  directDeps,
-                  configConditions,
-                  toolchainContext,
-                  aspectConfiguration,
-                  view.getHostConfiguration(aspectConfiguration));
+      configuredAspect = view.getConfiguredTargetFactory().createAspect(
+          analysisEnvironment,
+          associatedTarget,
+          aspectPath,
+          aspectFactory,
+          aspect,
+          directDeps,
+          configConditions,
+          aspectConfiguration,
+          view.getHostConfiguration(aspectConfiguration));
     } else {
       configuredAspect = ConfiguredAspect.forNonapplicableTarget(aspect.getDescriptor());
     }
