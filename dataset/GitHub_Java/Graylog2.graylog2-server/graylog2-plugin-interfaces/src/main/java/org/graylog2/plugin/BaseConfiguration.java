@@ -72,9 +72,6 @@ public abstract class BaseConfiguration {
     @Parameter(value = "rest_enable_tls")
     private boolean restEnableTls = false;
 
-    @Parameter(value = "rest_thread_pool_size")
-    private int restThreadPoolSize = 16;
-
     @Parameter(value = "rest_tls_cert_file")
     private File restTlsCertFile;
 
@@ -184,10 +181,6 @@ public abstract class BaseConfiguration {
 
     public boolean isRestEnableTls() {
         return restEnableTls;
-    }
-
-    public int getRestThreadPoolSize() {
-        return restThreadPoolSize;
     }
 
     public File getRestTlsCertFile() {
