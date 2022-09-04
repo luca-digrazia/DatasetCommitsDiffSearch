@@ -5,6 +5,7 @@ import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.BIG_DECIM
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.BIG_INTEGER;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.BLOCKING;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.BOOLEAN;
+import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.BYTE_ARRAY_DOT_NAME;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.CHARACTER;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.CONSUMES;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.CONTEXT;
@@ -14,6 +15,7 @@ import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.DOUBLE;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.FLOAT;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.FORM_PARAM;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.HEADER_PARAM;
+import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.INPUT_STREAM;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.INTEGER;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.JSONP_JSON_ARRAY;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.JSONP_JSON_NUMBER;
@@ -43,7 +45,10 @@ import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.STRING;
 import static io.quarkus.rest.deployment.framework.QuarkusRestDotNames.SUSPENDED;
 import static javax.ws.rs.core.MediaType.APPLICATION_FORM_URLENCODED;
 import static javax.ws.rs.core.MediaType.APPLICATION_JSON;
+import static javax.ws.rs.core.MediaType.TEXT_PLAIN;
+import static javax.ws.rs.core.MediaType.WILDCARD;
 
+import java.io.InputStream;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -53,7 +58,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -61,6 +65,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
+import javax.ws.rs.RuntimeType;
 import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.sse.SseEventSink;
@@ -92,10 +97,8 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.rest.runtime.QuarkusRestConfig;
 import io.quarkus.rest.runtime.QuarkusRestRecorder;
-import io.quarkus.rest.runtime.core.QuarkusRestDeployment;
 import io.quarkus.rest.runtime.core.parameters.converters.GeneratedParameterConverter;
 import io.quarkus.rest.runtime.core.parameters.converters.ListConverter;
-import io.quarkus.rest.runtime.core.parameters.converters.NoopParameterConverter;
 import io.quarkus.rest.runtime.core.parameters.converters.ParameterConverter;
 import io.quarkus.rest.runtime.core.parameters.converters.ParameterConverterSupplier;
 import io.quarkus.rest.runtime.core.parameters.converters.PathSegmentParamConverter;
@@ -109,7 +112,11 @@ import io.quarkus.rest.runtime.model.ParameterType;
 import io.quarkus.rest.runtime.model.ResourceClass;
 import io.quarkus.rest.runtime.model.ResourceMethod;
 import io.quarkus.rest.runtime.model.RestClientInterface;
+import io.quarkus.rest.runtime.providers.serialisers.ByteArrayMessageBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.ClientDefaultTextPlainBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.FormUrlEncodedProvider;
+import io.quarkus.rest.runtime.providers.serialisers.InputStreamMessageBodyHandler;
+import io.quarkus.rest.runtime.providers.serialisers.ServerDefaultTextPlainBodyHandler;
 import io.quarkus.rest.runtime.providers.serialisers.jsonp.JsonArrayHandler;
 import io.quarkus.rest.runtime.providers.serialisers.jsonp.JsonObjectHandler;
 import io.quarkus.rest.runtime.providers.serialisers.jsonp.JsonStructureHandler;
@@ -178,8 +185,6 @@ public class EndpointIndexer {
     private final Map<DotName, String> httpAnnotationToMethod;
     private final Map<String, InjectableBean> injectableBeans;
     private final AdditionalWriters additionalWriters;
-    private final MethodCreator initConverters;
-    private final boolean hasRuntimeConverters;
 
     EndpointIndexer(Builder builder) {
         this.index = builder.index;
@@ -194,8 +199,6 @@ public class EndpointIndexer {
         this.httpAnnotationToMethod = builder.httpAnnotationToMethod;
         this.injectableBeans = builder.injectableBeans;
         this.additionalWriters = builder.additionalWriters;
-        this.initConverters = builder.initConverters;
-        this.hasRuntimeConverters = builder.hasRuntimeConverters;
     }
 
     public ResourceClass createEndpoints(ClassInfo classInfo) {
@@ -204,7 +207,7 @@ public class EndpointIndexer {
             List<ResourceMethod> methods = createEndpoints(classInfo, classInfo, new HashSet<>(),
                     generatedClassBuildItemBuildProducer, bytecodeTransformerBuildItemBuildProducer,
                     recorder, existingConverters, config, additionalReaders,
-                    additionalWriters, injectableBeans, httpAnnotationToMethod, initConverters, hasRuntimeConverters);
+                    additionalWriters, injectableBeans, httpAnnotationToMethod);
             ResourceClass clazz = new ResourceClass();
             clazz.getMethods().addAll(methods);
             clazz.setClassName(classInfo.name().toString());
@@ -223,7 +226,7 @@ public class EndpointIndexer {
             InjectableBean injectableBean = scanInjectableBean(classInfo, classInfo,
                     generatedClassBuildItemBuildProducer,
                     bytecodeTransformerBuildItemBuildProducer, existingConverters,
-                    additionalReaders, injectableBeans, initConverters, hasRuntimeConverters);
+                    additionalReaders, injectableBeans);
 
             // at this point we've scanned the class and its bean infos, which can have form params
             if (injectableBean.isFormParamRequired()) {
@@ -255,9 +258,7 @@ public class EndpointIndexer {
             BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformerBuildProducer,
             Map<String, String> existingConverters,
             AdditionalReaders additionalReaders,
-            Map<String, InjectableBean> injectableBeans,
-            MethodCreator initConverters,
-            boolean hasRuntimeConverters) {
+            Map<String, InjectableBean> injectableBeans) {
 
         // do not scan a bean twice
         String currentTypeName = currentClassInfo.name().toString();
@@ -268,9 +269,7 @@ public class EndpointIndexer {
         currentInjectableBean = new BeanParamInfo();
         injectableBeans.put(currentTypeName, currentInjectableBean);
 
-        // LinkedHashMap the TCK expects that fields annotated with @BeanParam are handled last
-        Map<FieldInfo, ParameterExtractor> fieldExtractors = new LinkedHashMap<>();
-        Map<FieldInfo, ParameterExtractor> beanParamFields = new LinkedHashMap<>();
+        Map<FieldInfo, ParameterExtractor> fieldExtractors = new HashMap<>();
         for (FieldInfo field : currentClassInfo.fields()) {
             Map<DotName, AnnotationInstance> annotations = new HashMap<>();
             for (AnnotationInstance i : field.annotations()) {
@@ -278,26 +277,19 @@ public class EndpointIndexer {
             }
             ParameterExtractor extractor = new ParameterExtractor(currentClassInfo, actualEndpointInfo,
                     generatedClassBuildItemBuildProducer, existingConverters, additionalReaders, false, false,
-                    annotations, field.type(), field.toString(), true, hasRuntimeConverters);
+                    annotations, field.type(), field.toString(), true);
             ParameterExtractor result = extractor.invoke();
-            if ((result.getType() != null) && (result.getType() != ParameterType.BEAN)) {
+            if (result.getType() != null) {
                 //BODY means no annotation, so for fields not injectable
                 fieldExtractors.put(field, extractor);
             }
-            if (result.getConverter() != null) {
-                initConverters.invokeStaticMethod(MethodDescriptor.ofMethod(currentTypeName,
-                        ClassInjectorTransformer.INIT_CONVERTER_METHOD_NAME + field.name(),
-                        void.class, QuarkusRestDeployment.class),
-                        initConverters.getMethodParam(0));
-            }
             if (result.getType() == ParameterType.BEAN) {
-                beanParamFields.put(field, extractor);
                 // transform the bean param
                 // FIXME: pretty sure this doesn't work with generics
                 ClassInfo beanParamClassInfo = index.getClassByName(field.type().name());
                 InjectableBean injectableBean = scanInjectableBean(beanParamClassInfo, actualEndpointInfo,
                         generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
-                        existingConverters, additionalReaders, injectableBeans, initConverters, hasRuntimeConverters);
+                        existingConverters, additionalReaders, injectableBeans);
                 // inherit form param requirement from field
                 if (injectableBean.isFormParamRequired()) {
                     currentInjectableBean.setFormParamRequired(true);
@@ -307,8 +299,6 @@ public class EndpointIndexer {
                 currentInjectableBean.setFormParamRequired(true);
             }
         }
-        // the TCK expects that fields annotated with @BeanParam are handled last
-        fieldExtractors.putAll(beanParamFields);
 
         DotName superClassName = currentClassInfo.superName();
         boolean superTypeIsInjectable = false;
@@ -318,7 +308,7 @@ public class EndpointIndexer {
                 InjectableBean superInjectableBean = scanInjectableBean(superClass, actualEndpointInfo,
                         generatedClassBuildItemBuildProducer,
                         bytecodeTransformerBuildProducer,
-                        existingConverters, additionalReaders, injectableBeans, initConverters, hasRuntimeConverters);
+                        existingConverters, additionalReaders, injectableBeans);
                 superTypeIsInjectable = superInjectableBean.isInjectionRequired();
                 // inherit form param requirement from supertype
                 if (superInjectableBean.isFormParamRequired()) {
@@ -342,7 +332,7 @@ public class EndpointIndexer {
             List<ResourceMethod> methods = createEndpoints(classInfo, classInfo, new HashSet<>(),
                     generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
                     recorder, existingConverters, config, additionalReaders,
-                    additionalWriters, injectableBeans, httpAnnotationToMethod, initConverters, hasRuntimeConverters);
+                    additionalWriters, injectableBeans, httpAnnotationToMethod);
             RestClientInterface clazz = new RestClientInterface();
             clazz.getMethods().addAll(methods);
             clazz.setClassName(classInfo.name().toString());
@@ -371,7 +361,7 @@ public class EndpointIndexer {
             QuarkusRestRecorder recorder,
             Map<String, String> existingConverters, QuarkusRestConfig config, AdditionalReaders additionalReaders,
             AdditionalWriters additionalWriters, Map<String, InjectableBean> injectableBeans,
-            Map<DotName, String> httpAnnotationToMethod, MethodCreator initConverters, boolean hasRuntimeConverters) {
+            Map<DotName, String> httpAnnotationToMethod) {
         List<ResourceMethod> ret = new ArrayList<>();
         String[] classProduces = extractProducesConsumesValues(currentClassInfo.classAnnotation(PRODUCES));
         String[] classConsumes = extractProducesConsumesValues(currentClassInfo.classAnnotation(CONSUMES));
@@ -382,9 +372,6 @@ public class EndpointIndexer {
             if (foundMethods != null) {
                 for (AnnotationInstance annotation : foundMethods) {
                     MethodInfo info = annotation.target().asMethod();
-                    if (!hasProperModifiers(info)) {
-                        continue;
-                    }
                     String descriptor = methodDescriptor(info);
                     if (seenMethods.contains(descriptor)) {
                         continue;
@@ -402,8 +389,7 @@ public class EndpointIndexer {
                             generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
                             recorder, classProduces, classConsumes, classNameBindings, httpMethod, info, methodPath,
                             existingConverters,
-                            config, additionalReaders, additionalWriters, httpAnnotationToMethod, injectableBeans,
-                            initConverters, hasRuntimeConverters);
+                            config, additionalReaders, additionalWriters, httpAnnotationToMethod, injectableBeans);
 
                     ret.add(method);
                 }
@@ -415,9 +401,6 @@ public class EndpointIndexer {
             for (AnnotationInstance annotation : foundMethods) {
                 if (annotation.target().kind() == AnnotationTarget.Kind.METHOD) {
                     MethodInfo info = annotation.target().asMethod();
-                    if (!hasProperModifiers(info)) {
-                        continue;
-                    }
                     String descriptor = methodDescriptor(info);
                     if (seenMethods.contains(descriptor)) {
                         continue;
@@ -433,7 +416,7 @@ public class EndpointIndexer {
                             generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
                             recorder, classProduces, classConsumes, classNameBindings, null, info, methodPath,
                             existingConverters, config, additionalReaders, additionalWriters, httpAnnotationToMethod,
-                            injectableBeans, initConverters, hasRuntimeConverters);
+                            injectableBeans);
                     ret.add(method);
                 }
             }
@@ -446,7 +429,7 @@ public class EndpointIndexer {
                 ret.addAll(createEndpoints(superClass, actualEndpointInfo, seenMethods,
                         generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
                         recorder, existingConverters, config, additionalReaders,
-                        additionalWriters, injectableBeans, httpAnnotationToMethod, initConverters, hasRuntimeConverters));
+                        additionalWriters, injectableBeans, httpAnnotationToMethod));
             }
         }
         List<DotName> interfaces = currentClassInfo.interfaceNames();
@@ -456,24 +439,10 @@ public class EndpointIndexer {
                 ret.addAll(createEndpoints(superClass, actualEndpointInfo, seenMethods,
                         generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
                         recorder, existingConverters, config, additionalReaders,
-                        additionalWriters, injectableBeans, httpAnnotationToMethod, initConverters, hasRuntimeConverters));
+                        additionalWriters, injectableBeans, httpAnnotationToMethod));
             }
         }
         return ret;
-    }
-
-    private boolean hasProperModifiers(MethodInfo info) {
-        if ((info.flags() & Modifier.PUBLIC) == 0) {
-            log.warn("Method '" + info.name() + " of Resource class '" + info.declaringClass().name()
-                    + "' it not public and will therefore be ignored");
-            return false;
-        }
-        if ((info.flags() & Modifier.STATIC) != 0) {
-            log.warn("Method '" + info.name() + " of Resource class '" + info.declaringClass().name()
-                    + "' it static and will therefore be ignored");
-            return false;
-        }
-        return true;
     }
 
     private ResourceMethod createResourceMethod(ClassInfo currentClassInfo, ClassInfo actualEndpointInfo,
@@ -484,7 +453,7 @@ public class EndpointIndexer {
             String methodPath, Map<String, String> existingConverters, QuarkusRestConfig config,
             AdditionalReaders additionalReaders, AdditionalWriters additionalWriters,
             Map<DotName, String> httpAnnotationToMethod,
-            Map<String, InjectableBean> injectableBeans, MethodCreator initConverters, boolean hasRuntimeConverters) {
+            Map<String, InjectableBean> injectableBeans) {
         try {
             Map<DotName, AnnotationInstance>[] parameterAnnotations = new Map[info.parameters().size()];
             MethodParameter[] methodParameters = new MethodParameter[info.parameters()
@@ -509,7 +478,7 @@ public class EndpointIndexer {
 
                 ParameterExtractor parameterExtractor = new ParameterExtractor(currentClassInfo, actualEndpointInfo,
                         generatedClassBuildItemBuildProducer, existingConverters, additionalReaders, suspended, sse,
-                        anns, paramType, errorLocation, false, hasRuntimeConverters).invoke();
+                        anns, paramType, errorLocation, false).invoke();
                 suspended |= parameterExtractor.isSuspended();
                 sse |= parameterExtractor.isSse();
                 String name = parameterExtractor.getName();
@@ -531,7 +500,7 @@ public class EndpointIndexer {
                     InjectableBean injectableBean = scanInjectableBean(beanParamClassInfo,
                             actualEndpointInfo,
                             generatedClassBuildItemBuildProducer, bytecodeTransformerBuildProducer,
-                            existingConverters, additionalReaders, injectableBeans, initConverters, hasRuntimeConverters);
+                            existingConverters, additionalReaders, injectableBeans);
                     if (injectableBean.isFormParamRequired()) {
                         formParamRequired = true;
                     }
@@ -658,7 +627,11 @@ public class EndpointIndexer {
 
     private static void addReaderForType(AdditionalReaders additionalReaders, Type paramType) {
         DotName dotName = paramType.name();
-        if (dotName.equals(JSONP_JSON_NUMBER)
+        if (dotName.equals(BYTE_ARRAY_DOT_NAME)) {
+            additionalReaders.add(ByteArrayMessageBodyHandler.class, WILDCARD, byte[].class);
+        } else if (dotName.equals(INPUT_STREAM)) {
+            additionalReaders.add(InputStreamMessageBodyHandler.class, WILDCARD, InputStream.class);
+        } else if (dotName.equals(JSONP_JSON_NUMBER)
                 || dotName.equals(JSONP_JSON_VALUE)
                 || dotName.equals(JSONP_JSON_STRING)) {
             additionalReaders.add(JsonValueHandler.class, APPLICATION_JSON, javax.json.JsonValue.class);
@@ -668,6 +641,11 @@ public class EndpointIndexer {
             additionalReaders.add(JsonObjectHandler.class, APPLICATION_JSON, javax.json.JsonObject.class);
         } else if (dotName.equals(JSONP_JSON_STRUCTURE)) {
             additionalReaders.add(JsonStructureHandler.class, APPLICATION_JSON, javax.json.JsonStructure.class);
+        } else if (SUPPORTED_TEXT_PLAIN_READER_TYPES.contains(dotName)) {
+            additionalReaders.add(ServerDefaultTextPlainBodyHandler.class, TEXT_PLAIN, getSupportedReaderJavaClass(paramType),
+                    RuntimeType.SERVER);
+            additionalReaders.add(ClientDefaultTextPlainBodyHandler.class, TEXT_PLAIN, getSupportedReaderJavaClass(paramType),
+                    RuntimeType.CLIENT);
         }
     }
 
@@ -693,12 +671,11 @@ public class EndpointIndexer {
         return nameBindingNames(instanceDotNames(classInfo.classAnnotations()));
     }
 
-    private Set<String> nameBindingNames(MethodInfo methodInfo, Set<String> forClass) {
+    private Set<String> nameBindingNames(MethodInfo methodInfo, Set<String> defaultValue) {
         Set<String> fromMethod = nameBindingNames(instanceDotNames(methodInfo.annotations()));
         if (fromMethod.isEmpty()) {
-            return forClass;
+            return defaultValue;
         }
-        fromMethod.addAll(forClass);
         return fromMethod;
     }
 
@@ -855,13 +832,11 @@ public class EndpointIndexer {
         private boolean single;
         private ParameterConverterSupplier converter;
         private final boolean field;
-        private boolean hasRuntimeConverters;
 
         public ParameterExtractor(ClassInfo currentClassInfo, ClassInfo actualEndpointInfo,
                 BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
                 Map<String, String> existingConverters, AdditionalReaders additionalReaders, boolean suspended, boolean sse,
-                Map<DotName, AnnotationInstance> anns, Type paramType, String errorLocation, boolean field,
-                boolean hasRuntimeConverters) {
+                Map<DotName, AnnotationInstance> anns, Type paramType, String errorLocation, boolean field) {
             this.currentClassInfo = currentClassInfo;
             this.actualEndpointInfo = actualEndpointInfo;
             this.generatedClassBuildItemBuildProducer = generatedClassBuildItemBuildProducer;
@@ -873,7 +848,6 @@ public class EndpointIndexer {
             this.paramType = paramType;
             this.errorLocation = errorLocation;
             this.field = field;
-            this.hasRuntimeConverters = hasRuntimeConverters;
         }
 
         public boolean isObtainedAsCollection() {
@@ -994,19 +968,19 @@ public class EndpointIndexer {
                     single = false;
                     elementType = toClassName(pt.arguments().get(0), currentClassInfo, actualEndpointInfo, index);
                     converter = extractConverter(elementType, index, generatedClassBuildItemBuildProducer,
-                            existingEndpoints, errorLocation, hasRuntimeConverters);
+                            existingEndpoints, errorLocation);
                     converter = new ListConverter.ListSupplier(converter);
                 } else if (pt.name().equals(SET)) {
                     single = false;
                     elementType = toClassName(pt.arguments().get(0), currentClassInfo, actualEndpointInfo, index);
                     converter = extractConverter(elementType, index, generatedClassBuildItemBuildProducer,
-                            existingEndpoints, errorLocation, hasRuntimeConverters);
+                            existingEndpoints, errorLocation);
                     converter = new SetConverter.SetSupplier(converter);
                 } else if (pt.name().equals(SORTED_SET)) {
                     single = false;
                     elementType = toClassName(pt.arguments().get(0), currentClassInfo, actualEndpointInfo, index);
                     converter = extractConverter(elementType, index, generatedClassBuildItemBuildProducer,
-                            existingEndpoints, errorLocation, hasRuntimeConverters);
+                            existingEndpoints, errorLocation);
                     converter = new SortedSetConverter.SortedSetSupplier(converter);
                 } else if ((pt.name().equals(MULTI_VALUED_MAP)) && (type == ParameterType.BODY)) {
                     elementType = pt.name().toString();
@@ -1031,7 +1005,7 @@ public class EndpointIndexer {
                 if (type != ParameterType.CONTEXT && type != ParameterType.BEAN && type != ParameterType.BODY
                         && type != ParameterType.ASYNC_RESPONSE) {
                     converter = extractConverter(elementType, index, generatedClassBuildItemBuildProducer,
-                            existingEndpoints, errorLocation, hasRuntimeConverters);
+                            existingEndpoints, errorLocation);
                 }
                 if (type == ParameterType.CONTEXT && elementType.equals(SseEventSink.class.getName())) {
                     sse = true;
@@ -1045,33 +1019,20 @@ public class EndpointIndexer {
 
         private ParameterConverterSupplier extractConverter(String elementType, IndexView indexView,
                 BuildProducer<GeneratedClassBuildItem> generatedClassBuildItemBuildProducer,
-                Map<String, String> existingConverters, String errorLocation, boolean hasRuntimeConverters) {
+                Map<String, String> existingConverters, String errorLocation) {
             if (elementType.equals(String.class.getName())) {
-                if (hasRuntimeConverters)
-                    return new RuntimeResolvedConverter.Supplier().setDelegate(new NoopParameterConverter.Supplier());
-                // String needs no conversion
                 return null;
             } else if (existingConverters.containsKey(elementType)) {
-                String className = existingConverters.get(elementType);
-                ParameterConverterSupplier delegate;
-                if (className == null)
-                    delegate = null;
-                else
-                    delegate = new GeneratedParameterConverter().setClassName(className);
-                if (hasRuntimeConverters)
-                    return new RuntimeResolvedConverter.Supplier().setDelegate(delegate);
-                if (delegate == null)
-                    throw new RuntimeException("Failed to find converter for " + elementType);
-                return delegate;
+                return new GeneratedParameterConverter().setClassName(existingConverters.get(elementType));
             }
-
             MethodDescriptor fromString = null;
             MethodDescriptor valueOf = null;
             MethodInfo stringCtor = null;
-            String primitiveWrapperType = primitiveTypes.get(elementType);
+            String prim = primitiveTypes.get(elementType);
             String prefix = "";
-            if (primitiveWrapperType != null) {
-                valueOf = MethodDescriptor.ofMethod(primitiveWrapperType, "valueOf", primitiveWrapperType, String.class);
+            if (prim != null) {
+                elementType = prim;
+                valueOf = MethodDescriptor.ofMethod(elementType, "valueOf", elementType, String.class);
                 prefix = "io.quarkus.generated.";
             } else {
                 ClassInfo type = indexView.getClassByName(DotName.createSimple(elementType));
@@ -1098,37 +1059,30 @@ public class EndpointIndexer {
                 }
             }
 
-            String baseName;
-            ParameterConverterSupplier delegate;
-            if (stringCtor != null || valueOf != null || fromString != null) {
-                baseName = prefix + elementType + "$quarkusrestparamConverter$";
-                try (ClassCreator classCreator = new ClassCreator(
-                        new GeneratedClassGizmoAdaptor(generatedClassBuildItemBuildProducer, true), baseName, null,
-                        Object.class.getName(), ParameterConverter.class.getName())) {
-                    MethodCreator mc = classCreator.getMethodCreator("convert", Object.class, Object.class);
-                    if (stringCtor != null) {
-                        ResultHandle ret = mc.newInstance(stringCtor, mc.getMethodParam(0));
-                        mc.returnValue(ret);
-                    } else if (valueOf != null) {
-                        ResultHandle ret = mc.invokeStaticMethod(valueOf, mc.getMethodParam(0));
-                        mc.returnValue(ret);
-                    } else if (fromString != null) {
-                        ResultHandle ret = mc.invokeStaticMethod(fromString, mc.getMethodParam(0));
-                        mc.returnValue(ret);
+            String baseName = prefix + elementType + "$quarkusrestparamConverter$";
+            try (ClassCreator classCreator = new ClassCreator(
+                    new GeneratedClassGizmoAdaptor(generatedClassBuildItemBuildProducer, true), baseName, null,
+                    Object.class.getName(), ParameterConverter.class.getName())) {
+                MethodCreator mc = classCreator.getMethodCreator("convert", Object.class, Object.class);
+                if (stringCtor != null) {
+                    ResultHandle ret = mc.newInstance(stringCtor, mc.getMethodParam(0));
+                    mc.returnValue(ret);
+                } else if (valueOf != null) {
+                    ResultHandle ret = mc.invokeStaticMethod(valueOf, mc.getMethodParam(0));
+                    mc.returnValue(ret);
+                } else if (fromString != null) {
+                    ResultHandle ret = mc.invokeStaticMethod(fromString, mc.getMethodParam(0));
+                    mc.returnValue(ret);
+                } else {
+                    if (paramType.kind() == Type.Kind.TYPE_VARIABLE) {
+                        throw new RuntimeException("Cannot create converter for " + paramType + " at " + errorLocation);
                     }
+                    //now look for param converter
+                    return new RuntimeResolvedConverter.Supplier();
                 }
-                delegate = new GeneratedParameterConverter().setClassName(baseName);
-            } else {
-                // let's not try this again
-                baseName = null;
-                delegate = null;
             }
             existingConverters.put(elementType, baseName);
-            if (hasRuntimeConverters)
-                return new RuntimeResolvedConverter.Supplier().setDelegate(delegate);
-            if (delegate == null)
-                throw new RuntimeException("Failed to find converter for " + elementType);
-            return delegate;
+            return new GeneratedParameterConverter().setClassName(baseName);
         }
 
     }
@@ -1146,13 +1100,6 @@ public class EndpointIndexer {
         private Map<DotName, String> httpAnnotationToMethod;
         private Map<String, InjectableBean> injectableBeans;
         private AdditionalWriters additionalWriters;
-        private MethodCreator initConverters;
-        private boolean hasRuntimeConverters;
-
-        public Builder setHasRuntimeConverters(boolean hasRuntimeConverters) {
-            this.hasRuntimeConverters = hasRuntimeConverters;
-            return this;
-        }
 
         public Builder setIndex(IndexView index) {
             this.index = index;
@@ -1213,11 +1160,6 @@ public class EndpointIndexer {
 
         public Builder setAdditionalWriters(AdditionalWriters additionalWriters) {
             this.additionalWriters = additionalWriters;
-            return this;
-        }
-
-        public Builder setInitConverters(MethodCreator initConverters) {
-            this.initConverters = initConverters;
             return this;
         }
 
