@@ -120,7 +120,6 @@ public class GraphiteReporterFactory extends BaseReporterFactory {
                 .convertDurationsTo(getDurationUnit())
                 .convertRatesTo(getRateUnit())
                 .filter(getFilter())
-                .prefixedWith(getPrefix())
-                .disabledMetricAttributes(getDisabledAttributes());
+                .prefixedWith(getPrefix());
     }
 }
