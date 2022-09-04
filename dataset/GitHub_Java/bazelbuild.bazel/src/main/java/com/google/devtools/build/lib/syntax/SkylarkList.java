@@ -19,7 +19,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.SkylarkMutable.MutableCollection;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -183,8 +182,8 @@ public abstract class SkylarkList<E> extends MutableCollection<E>
 
   // Other methods
   @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.printList(getContentsUnsafe(), isTuple());
+  public void write(Appendable buffer, char quotationMark) {
+    Printer.printList(buffer, getContentsUnsafe(), isTuple(), quotationMark);
   }
 
   // Note that the following two functions slightly violate the Java List protocol,
@@ -237,7 +236,7 @@ public abstract class SkylarkList<E> extends MutableCollection<E>
       return ((SkylarkList<?>) obj).getContents(type, description);
     }
     throw new EvalException(null,
-        String.format("Illegal argument: %s is not of expected type list or NoneType",
+        Printer.format("Illegal argument: %s is not of expected type list or NoneType",
             description == null ? Printer.repr(obj) : String.format("'%s'", description)));
   }
 
