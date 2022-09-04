@@ -696,7 +696,8 @@ public class BuildConfiguration {
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      deprecationWarning = "This flag is a no-op and skyframe-native-filesets is always true."
+      deprecationWarning = "Skyframe-native filesets are now the default, and legacy "
+              + "implementation will be removed soon."
     )
     public boolean skyframeNativeFileset;
 
@@ -963,6 +964,9 @@ public class BuildConfiguration {
 
       // === Licenses ===
       host.checkLicenses = checkLicenses;
+
+      // === Fileset ===
+      host.skyframeNativeFileset = skyframeNativeFileset;
 
       // === Pass on C++ compiler features.
       host.defaultFeatures = ImmutableList.copyOf(defaultFeatures);
@@ -1741,7 +1745,7 @@ public class BuildConfiguration {
   }
 
   public boolean getSkyframeNativeFileset() {
-    return true;
+    return options.skyframeNativeFileset;
   }
 
   /**
