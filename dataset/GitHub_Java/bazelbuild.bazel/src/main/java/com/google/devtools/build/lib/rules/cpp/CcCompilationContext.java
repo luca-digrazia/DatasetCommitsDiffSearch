@@ -209,12 +209,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         }
       }
     }
-    for (Artifact a : headerInfo.modularHeaders) {
-      modularHeaders.remove(a);
-    }
-    for (Artifact a : headerInfo.textualHeaders) {
-      modularHeaders.remove(a);
-    }
+    modularHeaders.removeAll(headerInfo.modularHeaders);
+    modularHeaders.removeAll(headerInfo.textualHeaders);
     return new IncludeScanningHeaderData(
         Collections.unmodifiableMap(pathToLegalOutputArtifact),
         Collections.unmodifiableSet(modularHeaders));

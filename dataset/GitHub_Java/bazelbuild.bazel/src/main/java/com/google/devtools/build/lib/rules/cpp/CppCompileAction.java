@@ -917,7 +917,6 @@ public class CppCompileAction extends AbstractAction
     HashSet<Artifact> result = new HashSet<>();
     addNonSources(result, mandatoryInputs);
     addNonSources(result, additionalPrunableHeaders);
-    addNonSources(result, inputsForInvalidation);
     addNonSources(result, getDeclaredIncludeSrcs());
     addNonSources(result, ccCompilationContext.getTransitiveModules(usePic));
     Artifact artifact = getSourceFile();
