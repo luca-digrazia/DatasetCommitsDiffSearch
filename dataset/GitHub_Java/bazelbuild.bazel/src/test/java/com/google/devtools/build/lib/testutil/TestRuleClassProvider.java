@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.lang.reflect.Method;
@@ -49,7 +50,6 @@ import java.util.Map;
  */
 public class TestRuleClassProvider {
   private static ConfiguredRuleClassProvider ruleProvider = null;
-  private static ConfiguredRuleClassProvider ruleProviderWithClearedSuffix = null;
 
   /**
    * Adds all the rule classes supported internally within the build tool to the given builder.
@@ -68,34 +68,19 @@ public class TestRuleClassProvider {
     }
   }
 
-  private static ConfiguredRuleClassProvider createRuleClassProvider(boolean clearSuffix) {
-    ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
-    addStandardRules(builder);
-    builder.addRuleDefinition(new TestingDummyRule());
-    builder.addRuleDefinition(new MockToolchainRule());
-    if (clearSuffix) {
-      builder.clearWorkspaceFileSuffixForTesting();
-    }
-    return builder.build();
-  }
-
-  /** Return a rule class provider. */
-  public static ConfiguredRuleClassProvider getRuleClassProvider(boolean clearSuffix) {
-    if (clearSuffix) {
-      if (ruleProviderWithClearedSuffix == null) {
-        ruleProviderWithClearedSuffix = createRuleClassProvider(true);
-      }
-      return ruleProviderWithClearedSuffix;
-    }
+  /**
+   * Return a rule class provider.
+   */
+  public static ConfiguredRuleClassProvider getRuleClassProvider() {
     if (ruleProvider == null) {
-      ruleProvider = createRuleClassProvider(false);
+      ConfiguredRuleClassProvider.Builder builder =
+          new ConfiguredRuleClassProvider.Builder();
+      addStandardRules(builder);
+      builder.addRuleDefinition(new TestingDummyRule());
+      builder.addRuleDefinition(new MockToolchainRule());
+      ruleProvider = builder.build();
     }
     return ruleProvider;
-  }
-
-  /** Return a rule class provider. */
-  public static ConfiguredRuleClassProvider getRuleClassProvider() {
-    return getRuleClassProvider(false);
   }
 
   /**
@@ -103,7 +88,7 @@ public class TestRuleClassProvider {
    */
   public static final class TestingDummyRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .setUndocumented()
           .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
@@ -146,7 +131,7 @@ public class TestRuleClassProvider {
    */
   public static final class MakeVariableTesterRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
           .advertiseProvider(TemplateVariableInfo.class)
           .add(attr("variables", Type.STRING_DICT))

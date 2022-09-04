@@ -25,11 +25,11 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
+import com.google.devtools.build.lib.analysis.ToolchainContext.ResolvedToolchainProviders;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options.MakeVariableSource;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import java.util.TreeMap;
 
@@ -79,11 +79,10 @@ public class ToolchainType implements RuleConfiguredTargetFactory {
         && ruleContext
             .getFragment(PlatformConfiguration.class)
             .isToolchainTypeEnabled(ruleContext.getLabel())) {
-      ToolchainInfo toolchainInfo =
-          ruleContext.getToolchainContext().forToolchainType(ruleContext.getLabel());
-      if (toolchainInfo != null) {
-        toolchainInfo.addGlobalMakeVariables(fragmentBuilder);
-      }
+      ResolvedToolchainProviders providers =
+          (ResolvedToolchainProviders)
+              ruleContext.getToolchainContext().getResolvedToolchainProviders();
+      providers.getForToolchainType(ruleContext.getLabel()).addGlobalMakeVariables(fragmentBuilder);
     } else {
       Class<? extends BuildConfiguration.Fragment> fragmentClass =
           fragmentMap.get(ruleContext.getLabel());
