@@ -26,15 +26,14 @@ import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.apache.shiro.session.UnknownSessionException;
 import org.apache.shiro.subject.Subject;
 import org.apache.shiro.util.ThreadContext;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.ApiParam;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.ShiroSecurityContext;
 import org.graylog2.users.User;
 import org.graylog2.users.UserService;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +67,7 @@ public class SessionsResource extends RestResource {
     @POST
     @ApiOperation(value = "Create a new session", notes = "This request creates a new session for a user or reactivates an existing session: the equivalent of logging in.")
     public Session newSession(@Context ContainerRequestContext requestContext,
-            @ApiParam(name = "Login request", value = "Username and credentials", required = true) SessionCreateRequest createRequest) {
+            @ApiParam(title = "Login request", description = "Username and credentials", required = true) SessionCreateRequest createRequest) {
         final Session result = new Session();
         final SecurityContext securityContext = requestContext.getSecurityContext();
         if (!(securityContext instanceof ShiroSecurityContext)) {
@@ -110,7 +109,7 @@ public class SessionsResource extends RestResource {
             id = session.getId();
             result.sessionId = id.toString();
             // TODO is this even used by anyone yet?
-            result.validUntil = new DateTime(session.getLastAccessTime(), DateTimeZone.UTC).plus(session.getTimeout()).toDate();
+            result.validUntil = new DateTime(session.getLastAccessTime()).plus(session.getTimeout()).toDate();
             return result;
         }
         throw new NotAuthorizedException("Invalid username or password", "Basic realm=\"Graylog2 Server session\"");
@@ -120,7 +119,7 @@ public class SessionsResource extends RestResource {
     @ApiOperation(value = "Terminate an existing session", notes = "Destroys the session with the given ID: the equivalent of logging out.")
     @Path("/{sessionId}")
     @RequiresAuthentication
-    public Response terminateSession(@ApiParam(name = "sessionId", required = true) @PathParam("sessionId") String sessionId) {
+    public Response terminateSession(@ApiParam(title = "sessionId", required = true) @PathParam("sessionId") String sessionId) {
         final Subject subject = getSubject();
         securityManager.logout(subject);
 

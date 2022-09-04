@@ -17,12 +17,12 @@
 package org.graylog2.rest.resources.system;
 
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.Version;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 
 import javax.inject.Inject;
@@ -69,15 +69,18 @@ public class PluginResource extends RestResource {
     @GET
     @Timed
     @ApiOperation(value = "List all installed plugins on this node.")
-    public Map<String, Object> list() {
-        final List<PluginMetaDataValue> pluginMetaDataValues = Lists.newArrayList();
+    public String list() {
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("total", pluginMetaDataSet.size());
+
+        List<PluginMetaDataValue> pluginMetaDataValues = Lists.newArrayList();
 
         for (PluginMetaData pluginMetaData : pluginMetaDataSet) {
             pluginMetaDataValues.add(new PluginMetaDataValue(pluginMetaData));
         }
 
-        return ImmutableMap.of(
-                "plugins", pluginMetaDataValues,
-                "total", pluginMetaDataValues.size());
+        result.put("plugins", pluginMetaDataValues);
+
+        return json(result);
     }
 }

@@ -24,7 +24,6 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
 
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -41,7 +40,6 @@ public class NaturalDateParser {
         final List<DateGroup> groups = parser.parse(string);
         if (!groups.isEmpty()) {
             final List<Date> dates = groups.get(0).getDates();
-            Collections.sort(dates);
 
             if (dates.size() >= 1) {
                 from = dates.get(0);
