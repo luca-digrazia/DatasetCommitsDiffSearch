@@ -14,33 +14,25 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
-import static com.google.common.collect.ImmutableListMultimap.flatteningToImmutableListMultimap;
-import static com.google.common.collect.ImmutableListMultimap.toImmutableListMultimap;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static java.util.stream.Collectors.joining;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ListMultimap;
-import com.google.common.collect.Streams;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintCollectionApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
-import java.util.Collection;
 import java.util.Map;
 import java.util.function.Function;
 import javax.annotation.Nullable;
@@ -83,9 +75,9 @@ public abstract class ConstraintCollection
     }
 
     /** Returns the completed {@link ConstraintCollection} instance. */
-    public ConstraintCollection build() throws DuplicateConstraintException {
+    public ConstraintCollection build() {
       ImmutableList<ConstraintValueInfo> constraintValues = this.constraintValues.build();
-      validateConstraints(constraintValues);
+      // TODO(https://github.com/bazelbuild/bazel/issues/7548): validate duplicated constraints.
       return new AutoValue_ConstraintCollection(
           this.parent,
           constraintValues.stream()
@@ -102,8 +94,7 @@ public abstract class ConstraintCollection
   @VisibleForSerialization
   static ConstraintCollection create(
       @Nullable ConstraintCollection parent,
-      ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints)
-      throws DuplicateConstraintException {
+      ImmutableMap<ConstraintSettingInfo, ConstraintValueInfo> constraints) {
     return builder().parent(parent).addConstraints(constraints).build();
   }
 
@@ -221,7 +212,7 @@ public abstract class ConstraintCollection
   }
 
   @Override
-  public Object getIndex(Object key, Location loc, StarlarkContext context) throws EvalException {
+  public Object getIndex(Object key, Location loc) throws EvalException {
     ConstraintSettingInfo constraint = convertKey(key, loc);
     return get(constraint);
   }
@@ -270,65 +261,5 @@ public abstract class ConstraintCollection
     // Add the actual constraints.
     fp.addInt(constraints().size());
     constraints().values().forEach(constraintValue -> constraintValue.addTo(fp));
-  }
-
-  public static void validateConstraints(Iterable<ConstraintValueInfo> constraintValues)
-      throws DuplicateConstraintException {
-    // Collect the constraints by the settings.
-    ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo> constraints =
-        Streams.stream(constraintValues)
-            .collect(
-                toImmutableListMultimap(ConstraintValueInfo::constraint, Functions.identity()));
-
-    // Find settings with duplicate values.
-    ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicates =
-        constraints.asMap().entrySet().stream()
-            .filter(e -> e.getValue().size() > 1)
-            .collect(
-                flatteningToImmutableListMultimap(Map.Entry::getKey, e -> e.getValue().stream()));
-
-    if (!duplicates.isEmpty()) {
-      throw new DuplicateConstraintException(duplicates);
-    }
-  }
-
-  /**
-   * Exception class used when more than one {@link ConstraintValueInfo} for the same {@link
-   * ConstraintSettingInfo} is added to a {@link Builder}.
-   */
-  public static class DuplicateConstraintException extends Exception {
-    private final ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo>
-        duplicateConstraints;
-
-    DuplicateConstraintException(
-        ListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicateConstraints) {
-      super(formatError(duplicateConstraints));
-      this.duplicateConstraints = ImmutableListMultimap.copyOf(duplicateConstraints);
-    }
-
-    public ImmutableListMultimap<ConstraintSettingInfo, ConstraintValueInfo>
-        duplicateConstraints() {
-      return duplicateConstraints;
-    }
-
-    public static String formatError(
-        ListMultimap<ConstraintSettingInfo, ConstraintValueInfo> duplicateConstraints) {
-      return String.format(
-          "Duplicate constraint values detected: %s",
-          duplicateConstraints.asMap().entrySet().stream()
-              .map(DuplicateConstraintException::describeSingleDuplicateConstraintSetting)
-              .collect(joining(", ")));
-    }
-
-    private static String describeSingleDuplicateConstraintSetting(
-        Map.Entry<ConstraintSettingInfo, Collection<ConstraintValueInfo>> duplicate) {
-      return String.format(
-          "constraint_setting %s has [%s]",
-          duplicate.getKey().label(),
-          duplicate.getValue().stream()
-              .map(ConstraintValueInfo::label)
-              .map(Label::toString)
-              .collect(joining(", ")));
-    }
   }
 }

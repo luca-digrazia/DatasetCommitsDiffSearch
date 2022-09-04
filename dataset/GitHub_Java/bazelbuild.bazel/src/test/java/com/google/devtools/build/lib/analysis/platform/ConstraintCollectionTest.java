@@ -27,7 +27,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ConstraintCollectionTest extends BuildViewTestCase {
   @Test
-  public void testSetArithmetic() throws Exception {
+  public void testSetArithmetic() {
     ConstraintSettingInfo setting1 =
         ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s1"));
     ConstraintValueInfo value1 =
@@ -54,7 +54,7 @@ public class ConstraintCollectionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testSetArithmetic_withDefaultValues() throws Exception {
+  public void testSetArithmetic_withDefaultValues() {
     ConstraintSettingInfo setting =
         ConstraintSettingInfo.create(
             Label.parseAbsoluteUnchecked("//foo:s"), Label.parseAbsoluteUnchecked("//foo:value1"));
@@ -78,7 +78,7 @@ public class ConstraintCollectionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testDiff() throws Exception {
+  public void testDiff() {
     ConstraintSettingInfo setting1 =
         ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//foo:s1"));
     ConstraintValueInfo value1 =
@@ -95,7 +95,6 @@ public class ConstraintCollectionTest extends BuildViewTestCase {
     ConstraintCollection collection2 =
         ConstraintCollection.builder().addConstraints(value1, value2b).build();
     assertThat(collection1.diff(collection2)).containsExactly(setting2);
-    assertThat(collection1.diff(collection2))
-        .containsAtLeastElementsIn(collection2.diff(collection1));
+    assertThat(collection1.diff(collection2)).containsAllIn(collection2.diff(collection1));
   }
 }
