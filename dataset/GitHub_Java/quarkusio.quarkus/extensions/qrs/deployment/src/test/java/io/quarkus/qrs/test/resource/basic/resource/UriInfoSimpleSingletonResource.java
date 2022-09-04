@@ -12,10 +12,9 @@ import javax.ws.rs.core.UriInfo;
 import java.net.URI;
 
 
-
 @Path("/")
-public class UriInfoSimpleResource {
-   private static Logger logger = Logger.getLogger(UriInfoSimpleResource.class);
+public class UriInfoSimpleSingletonResource {
+   private static Logger logger = Logger.getLogger(UriInfoSimpleSingletonResource.class);
 
    @Context
    UriInfo myInfo;
@@ -26,14 +25,13 @@ public class UriInfoSimpleResource {
       logger.info("abs query: " + abs);
       URI base = null;
       if (abs == null) {
-         base = PortProviderUtil.createURI("/", UriInfoSimpleResource.class.getSimpleName());
+         base = PortProviderUtil.createURI("/", UriInfoSimpleSingletonResource.class.getSimpleName());
       } else {
-         base = PortProviderUtil.createURI("/" + abs + "/", UriInfoSimpleResource.class.getSimpleName());
+         base = PortProviderUtil.createURI("/" + abs + "/", UriInfoSimpleSingletonResource.class.getSimpleName());
       }
 
       logger.info("BASE URI: " + info.getBaseUri());
       logger.info("Request URI: " + info.getRequestUri());
-      logger.info("Absolute URI: " + info.getAbsolutePath());
       Assert.assertEquals(base.getPath(), info.getBaseUri().getPath());
       Assert.assertEquals("/simple", info.getPath());
       return "CONTENT";
@@ -45,9 +43,9 @@ public class UriInfoSimpleResource {
       logger.info("abs query: " + abs);
       URI base = null;
       if (abs == null) {
-         base = PortProviderUtil.createURI("/", UriInfoSimpleResource.class.getSimpleName());
+         base = PortProviderUtil.createURI("/", UriInfoSimpleSingletonResource.class.getSimpleName());
       } else {
-         base = PortProviderUtil.createURI("/" + abs + "/", UriInfoSimpleResource.class.getSimpleName());
+         base = PortProviderUtil.createURI("/" + abs + "/", UriInfoSimpleSingletonResource.class.getSimpleName());
       }
 
       logger.info("BASE URI: " + myInfo.getBaseUri());

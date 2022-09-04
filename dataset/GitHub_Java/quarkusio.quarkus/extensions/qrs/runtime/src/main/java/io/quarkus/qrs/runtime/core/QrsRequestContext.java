@@ -1,7 +1,6 @@
 package io.quarkus.qrs.runtime.core;
 
 import java.io.Closeable;
-import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Collection;
@@ -32,8 +31,9 @@ import io.quarkus.qrs.runtime.jaxrs.QrsUriInfo;
 import io.quarkus.qrs.runtime.mapping.RuntimeResource;
 import io.quarkus.qrs.runtime.mapping.URITemplate;
 import io.quarkus.qrs.runtime.spi.BeanFactory;
-import io.quarkus.qrs.runtime.util.EmptyInputStream;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Handler;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 
@@ -87,18 +87,12 @@ public class QrsRequestContext implements Runnable, Closeable {
     private EntityWriter entityWriter;
     private QrsContainerRequestContext containerRequestContext;
     private String method;
-    private String path;
     private String remaining;
     private MediaType producesMediaType;
     private MediaType consumesMediaType;
 
     private Annotation[] annotations;
     private Type genericReturnType;
-
-    /**
-     * The input stream, if an entity is present.
-     */
-    private InputStream inputStream = EmptyInputStream.INSTANCE;
 
     /**
      * used for {@link UriInfo#getMatchedURIs()}
@@ -116,6 +110,12 @@ public class QrsRequestContext implements Runnable, Closeable {
         this.target = target;
         this.handlers = target.getHandlerChain();
         this.parameters = new Object[target.getParameterTypes().length];
+        context.addEndHandler(new Handler<AsyncResult<Void>>() {
+            @Override
+            public void handle(AsyncResult<Void> event) {
+                close();
+            }
+        });
     }
 
     public QrsRequestContext(QrsDeployment deployment, RoutingContext context, ManagedContext requestContext,
@@ -126,6 +126,12 @@ public class QrsRequestContext implements Runnable, Closeable {
         this.currentVertxRequest = currentVertxRequest;
         this.handlers = handlerChain;
         this.parameters = EMPTY_ARRAY;
+        context.addEndHandler(new Handler<AsyncResult<Void>>() {
+            @Override
+            public void handle(AsyncResult<Void> event) {
+                close();
+            }
+        });
     }
 
     public QrsDeployment getDeployment() {
@@ -217,13 +223,11 @@ public class QrsRequestContext implements Runnable, Closeable {
             }
         } catch (Throwable t) {
             handleException(t);
-            close();
         } finally {
             running = false;
             if (activationRequired) {
                 if (position == handlers.length) {
                     requestContext.terminate();
-                    close();
                 } else {
                     currentRequestScope = requestContext.getState();
                     requestContext.deactivate();
@@ -500,18 +504,6 @@ public class QrsRequestContext implements Runnable, Closeable {
         return remaining;
     }
 
-    public String getPath() {
-        if (path == null) {
-            return context.normalisedPath();
-        }
-        return path;
-    }
-
-    public QrsRequestContext setPath(String path) {
-        this.path = path;
-        return this;
-    }
-
     public MediaType getProducesMediaType() {
         return producesMediaType;
     }
@@ -617,12 +609,4 @@ public class QrsRequestContext implements Runnable, Closeable {
         return matchedURIs;
     }
 
-    public InputStream getInputStream() {
-        return inputStream;
-    }
-
-    public QrsRequestContext setInputStream(InputStream inputStream) {
-        this.inputStream = inputStream;
-        return this;
-    }
 }

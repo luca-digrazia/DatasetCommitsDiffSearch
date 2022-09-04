@@ -2,7 +2,6 @@ package io.quarkus.qrs.runtime;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,7 +40,6 @@ import io.quarkus.qrs.runtime.core.serialization.FixedEntityWriterArray;
 import io.quarkus.qrs.runtime.handlers.BlockingHandler;
 import io.quarkus.qrs.runtime.handlers.ClassRoutingHandler;
 import io.quarkus.qrs.runtime.handlers.CompletionStageResponseHandler;
-import io.quarkus.qrs.runtime.handlers.InputHandler;
 import io.quarkus.qrs.runtime.handlers.InstanceHandler;
 import io.quarkus.qrs.runtime.handlers.InvocationHandler;
 import io.quarkus.qrs.runtime.handlers.MediaTypeMapper;
@@ -73,7 +71,6 @@ import io.quarkus.qrs.runtime.model.ResourceResponseInterceptor;
 import io.quarkus.qrs.runtime.model.ResourceWriter;
 import io.quarkus.qrs.runtime.spi.BeanFactory;
 import io.quarkus.qrs.runtime.spi.EndpointInvoker;
-import io.quarkus.qrs.runtime.util.ServerMediaType;
 import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
@@ -87,12 +84,6 @@ public class QrsRecorder {
     private static final Logger log = Logger.getLogger(QrsRecorder.class);
 
     private static final Map<String, Class<?>> primitiveTypes;
-    public static final Supplier<Executor> EXECUTOR_SUPPLIER = new Supplier<Executor>() {
-        @Override
-        public Executor get() {
-            return ExecutorRecorder.getCurrent();
-        }
-    };
 
     private static volatile QrsDeployment currentDeployment;
 
@@ -136,7 +127,7 @@ public class QrsRecorder {
             ExceptionMapping exceptionMapping,
             Serialisers serialisers,
             List<ResourceClass> resourceClasses, List<ResourceClass> locatableResourceClasses,
-            ShutdownContext shutdownContext, QrsConfig qrsConfig) {
+            ShutdownContext shutdownContext) {
         DynamicEntityWriter dynamicEntityWriter = new DynamicEntityWriter(serialisers);
         //pre matching interceptors are run first
         List<ResourceRequestInterceptor> requestInterceptors = interceptors.getRequestInterceptors();
@@ -156,8 +147,7 @@ public class QrsRecorder {
             Map<String, TreeMap<URITemplate, List<RequestMapper.RequestPath<RuntimeResource>>>> templates = new HashMap<>();
             URITemplate classPathTemplate = clazz.getPath() == null ? null : new URITemplate(clazz.getPath(), true);
             for (ResourceMethod method : clazz.getMethods()) {
-                RuntimeResource runtimeResource = buildResourceMethod(serialisers, qrsConfig, requestInterceptors,
-                        responseInterceptors,
+                RuntimeResource runtimeResource = buildResourceMethod(serialisers, requestInterceptors, responseInterceptors,
                         resourceResponseInterceptorHandler, requestInterceptorsHandler, clazz, resourceLocatorHandler, method,
                         true, classPathTemplate, dynamicEntityWriter);
 
@@ -173,8 +163,7 @@ public class QrsRecorder {
             int maxMethodTemplateNameCount = 0;
             Map<String, TreeMap<URITemplate, List<RequestMapper.RequestPath<RuntimeResource>>>> perClassMappers = new HashMap<>();
             for (ResourceMethod method : clazz.getMethods()) {
-                RuntimeResource runtimeResource = buildResourceMethod(serialisers, qrsConfig, requestInterceptors,
-                        responseInterceptors,
+                RuntimeResource runtimeResource = buildResourceMethod(serialisers, requestInterceptors, responseInterceptors,
                         resourceResponseInterceptorHandler, requestInterceptorsHandler, clazz, resourceLocatorHandler, method,
                         false, classTemplate, dynamicEntityWriter);
 
@@ -264,7 +253,6 @@ public class QrsRecorder {
     }
 
     public RuntimeResource buildResourceMethod(Serialisers serialisers,
-            QrsConfig qrsConfig,
             List<ResourceRequestInterceptor> requestInterceptors,
             List<ResourceResponseInterceptor> responseInterceptors,
             ResourceResponseInterceptorHandler resourceResponseInterceptorHandler,
@@ -298,7 +286,6 @@ public class QrsRecorder {
                 handlers.add(new ReadBodyHandler());
                 break;
             } else if (param.parameterType == ParameterType.BODY) {
-                handlers.add(new InputHandler(qrsConfig.inputBufferSize.asLongValue(), EXECUTOR_SUPPLIER));
                 handlers.add(new RequestDeserializeHandler(loadClass(param.type), consumesMediaType, serialisers));
             }
         }
@@ -336,7 +323,12 @@ public class QrsRecorder {
                     param.converter == null ? null : param.converter.get()));
         }
         if (method.isBlocking()) {
-            handlers.add(new BlockingHandler(EXECUTOR_SUPPLIER));
+            handlers.add(new BlockingHandler(new Supplier<Executor>() {
+                @Override
+                public Executor get() {
+                    return ExecutorRecorder.getCurrent();
+                }
+            }));
         }
         handlers.add(new InvocationHandler(invoker));
 
@@ -347,7 +339,6 @@ public class QrsRecorder {
         // FIXME: those two should not be in sequence unless we intend to support CompletionStage<Uni<String>>
         handlers.add(new CompletionStageResponseHandler());
         handlers.add(new UniResponseHandler());
-        ServerMediaType serverMediaType = null;
         if (method.getHttpMethod() == null) {
             //this is a resource locator method
             handlers.add(resourceLocatorHandler);
@@ -356,13 +347,12 @@ public class QrsRecorder {
             //we can't do this for all cases, but we can do it for the most common ones
             //in practice this should work for the majority of endpoints
             if (method.getProduces() != null && method.getProduces().length > 0) {
-                serverMediaType = new ServerMediaType(method.getProduces(), StandardCharsets.UTF_8.name());
                 //the method can only produce a single content type, which is the most common case
                 if (method.getProduces().length == 1) {
                     MediaType mediaType = MediaType.valueOf(method.getProduces()[0]);
                     //its a wildcard type, makes it hard to determine statically
                     if (mediaType.isWildcardType() || mediaType.isWildcardSubtype()) {
-                        handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                        handlers.add(new VariableProducesHandler(Collections.singletonList(mediaType), serialisers));
                     } else {
                         List<ResourceWriter> buildTimeWriters = serialisers.findBuildTimeWriters(rawNonAsyncReturnType,
                                 method.getProduces());
@@ -375,7 +365,7 @@ public class QrsRecorder {
                             //we could not find any writers that can write a response to this endpoint
                             log.warn("Cannot find any combination of response writers for the method " + clazz.getClassName()
                                     + "#" + method.getName() + "(" + Arrays.toString(method.getParameters()) + ")");
-                            handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                            handlers.add(new VariableProducesHandler(Collections.singletonList(mediaType), serialisers));
                         } else if (buildTimeWriters.size() == 1) {
                             //only a single handler that can handle the response
                             //this is a very common case
@@ -394,7 +384,12 @@ public class QrsRecorder {
                 } else {
                     //there are multiple possibilities
                     //we could optimise this more in future
-                    handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
+                    List<MediaType> mediaTypes = new ArrayList<>();
+                    for (String i : method.getProduces()) {
+                        MediaType mt = MediaType.valueOf(i);
+                        mediaTypes.add(mt);
+                    }
+                    handlers.add(new VariableProducesHandler(mediaTypes, serialisers));
                 }
             }
         }
@@ -408,8 +403,7 @@ public class QrsRecorder {
 
         Class<Object> resourceClass = loadClass(clazz.getClassName());
         return new RuntimeResource(method.getHttpMethod(), methodPathTemplate,
-                classPathTemplate,
-                method.getProduces() == null ? null : serverMediaType,
+                classPathTemplate, method.getProduces() == null ? null : MediaType.valueOf(method.getProduces()[0]),
                 consumesMediaType, invoker,
                 clazz.getFactory(), handlers.toArray(new RestHandler[0]), method.getName(), parameterTypes,
                 nonAsyncReturnType, method.isBlocking(), resourceClass,

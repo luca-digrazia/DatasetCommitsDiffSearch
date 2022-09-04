@@ -74,6 +74,7 @@ public class MediaTypeMapper implements RestHandler {
         } else {
             String accept = requestContext.getContext().request().headers().get(HttpHeaders.ACCEPT);
             List<MediaType> desired = MediaTypeHelper.parseHeader(accept);
+
             MediaType produces = MediaTypeHelper.getBestMatch(desired, selected.producesTypes);
             selectedResource = selected.resources.get(produces);
             if (selectedResource == null) {
