@@ -24,21 +24,17 @@ import com.tencent.angel.ml.matrix.MatrixMeta;
 import com.tencent.angel.ml.matrix.PartitionMeta;
 import com.tencent.angel.model.*;
 import com.tencent.angel.model.io.IOExecutors;
-import com.tencent.angel.model.output.format.MatrixFilesMeta;
-import com.tencent.angel.model.output.format.ModelFilesConstent;
 import com.tencent.angel.ps.ParameterServerId;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Model load manager
@@ -121,7 +117,7 @@ public class AMModelLoader {
     }
   }
 
-  public int load(ModelLoadContext loadContext) throws IOException {
+  public int load(ModelLoadContext loadContext) {
     try {
       lock.lock();
       if (isLoading()) {
@@ -237,7 +233,7 @@ public class AMModelLoader {
 
       receivedSubResult++;
       subResults.put(psId, subResult);
-      if (receivedSubResult >= subResults.size()) {
+      if (receivedSubResult > subResults.size()) {
         ModelLoadResult result = results.get(subResult.getRequestId());
         if (canCombine()) {
           result.setState(LoadState.SUCCESS);
@@ -286,13 +282,12 @@ public class AMModelLoader {
   }
 
   private Map<ParameterServerId, PSMatricesLoadContext> split(int requestId,
-    ModelLoadContext loadContext) throws IOException {
+    ModelLoadContext loadContext) {
     List<MatrixLoadContext> matricesContext = loadContext.getMatricesContext();
     Map<ParameterServerId, List<PSMatrixLoadContext>> psIdToContextsMap = new HashMap<>();
     int size = matricesContext.size();
     for (int i = 0; i < size; i++) {
-      Map<ParameterServerId, PSMatrixLoadContext> psIdToContextMap =
-        split(matricesContext.get(i), loadContext);
+      Map<ParameterServerId, PSMatrixLoadContext> psIdToContextMap = split(matricesContext.get(i));
       for (Map.Entry<ParameterServerId, PSMatrixLoadContext> matrixEntry : psIdToContextMap
         .entrySet()) {
         List<PSMatrixLoadContext> contexts = psIdToContextsMap.get(matrixEntry.getKey());
@@ -309,30 +304,13 @@ public class AMModelLoader {
     for (Map.Entry<ParameterServerId, List<PSMatrixLoadContext>> modelEntry : psIdToContextsMap
       .entrySet()) {
       ret.put(modelEntry.getKey(),
-        new PSMatricesLoadContext(requestId, subRequestId++, modelEntry.getValue()));
+        new PSMatricesLoadContext(requestId, subRequestId++, loadContext.getLoadPath(),
+          modelEntry.getValue()));
     }
     return ret;
   }
 
-  private Map<ParameterServerId, PSMatrixLoadContext> split(MatrixLoadContext matrixLoadContext,
-    ModelLoadContext modelLoadContext) throws IOException {
-    Path matrixPath = new Path(modelLoadContext.getLoadPath(), matrixLoadContext.getMatrixName());
-    Path metaFilePath = new Path(matrixPath, ModelFilesConstent.modelMetaFileName);
-    MatrixFilesMeta matrixFilesMeta = new MatrixFilesMeta();
-    FileSystem fs = metaFilePath.getFileSystem(context.getConf());
-    if (fs.exists(metaFilePath)) {
-      FSDataInputStream input = fs.open(metaFilePath);
-      try {
-        matrixFilesMeta.read(input);
-      } catch (Throwable e) {
-        throw new IOException("Read matrix meta failed ", e);
-      } finally {
-        input.close();
-      }
-    } else {
-      throw new IOException("Can not find meta file " + metaFilePath);
-    }
-
+  private Map<ParameterServerId, PSMatrixLoadContext> split(MatrixLoadContext matrixLoadContext) {
     AMMatrixMetaManager matrixMetaManager = context.getMatrixMetaManager();
     MatrixMeta meta = matrixMetaManager.getMatrix(matrixLoadContext.getMatrixName());
     if (meta == null) {
@@ -365,7 +343,7 @@ public class AMModelLoader {
         }
       });
       PSMatrixLoadContext psMatrixLoadContext =
-        new PSMatrixLoadContext(matrixId, matrixPath.toString(), partIds, matrixFilesMeta.getFormatClassName());
+        new PSMatrixLoadContext(matrixId, null, partIds);
       ret.put(entry.getKey(), psMatrixLoadContext);
     }
     return ret;
