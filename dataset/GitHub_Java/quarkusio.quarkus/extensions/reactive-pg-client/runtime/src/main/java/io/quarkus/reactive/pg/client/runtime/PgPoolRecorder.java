@@ -11,8 +11,6 @@ import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOpt
 
 import java.util.Map;
 
-import org.jboss.logging.Logger;
-
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.credentials.CredentialsProvider;
 import io.quarkus.credentials.runtime.CredentialsProviderFinder;
@@ -32,8 +30,6 @@ import io.vertx.sqlclient.PoolOptions;
 @Recorder
 @SuppressWarnings("deprecation")
 public class PgPoolRecorder {
-
-    private static final Logger log = Logger.getLogger(PgPoolRecorder.class);
 
     public RuntimeValue<PgPool> configurePgPool(RuntimeValue<Vertx> vertx, BeanContainer container,
             DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
@@ -125,12 +121,8 @@ public class PgPoolRecorder {
         }
 
         if (dataSourceReactivePostgreSQLConfig.cachePreparedStatements.isPresent()) {
-            log.warn("cache-prepared-statements is not specific to a database kind, configure it at the parent level");
             pgConnectOptions.setCachePreparedStatements(dataSourceReactivePostgreSQLConfig.cachePreparedStatements.get());
-        } else {
-            pgConnectOptions.setCachePreparedStatements(dataSourceReactiveRuntimeConfig.cachePreparedStatements);
         }
-
         if (dataSourceReactivePostgreSQLConfig.pipeliningLimit.isPresent()) {
             pgConnectOptions.setPipeliningLimit(dataSourceReactivePostgreSQLConfig.pipeliningLimit.getAsInt());
         }
@@ -139,15 +131,13 @@ public class PgPoolRecorder {
             pgConnectOptions.setSslMode(dataSourceReactivePostgreSQLConfig.sslMode.get());
         }
 
-        pgConnectOptions.setTrustAll(dataSourceReactiveRuntimeConfig.trustAll);
+        configurePemTrustOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.trustCertificatePem);
+        configureJksTrustOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.trustCertificateJks);
+        configurePfxTrustOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.trustCertificatePfx);
 
-        configurePemTrustOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePem);
-        configureJksTrustOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificateJks);
-        configurePfxTrustOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.trustCertificatePfx);
-
-        configurePemKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem);
-        configureJksKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks);
-        configurePfxKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx);
+        configurePemKeyCertOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.keyCertificatePem);
+        configureJksKeyCertOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.keyCertificateJks);
+        configurePfxKeyCertOptions(pgConnectOptions, dataSourceReactivePostgreSQLConfig.keyCertificatePfx);
 
         return pgConnectOptions;
     }
