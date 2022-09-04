@@ -1,10 +1,6 @@
 package io.quarkus.smallrye.reactivemessaging.deployment;
 
-import static io.quarkus.smallrye.reactivemessaging.deployment.DotNames.ACKNOWLEDGMENT;
-import static io.quarkus.smallrye.reactivemessaging.deployment.DotNames.BROADCAST;
-import static io.quarkus.smallrye.reactivemessaging.deployment.DotNames.INCOMING;
-import static io.quarkus.smallrye.reactivemessaging.deployment.DotNames.MERGE;
-import static io.quarkus.smallrye.reactivemessaging.deployment.DotNames.OUTGOING;
+import static io.quarkus.smallrye.reactivemessaging.deployment.DotNames.*;
 
 import java.util.List;
 
@@ -29,8 +25,9 @@ final class QuarkusMediatorConfigurationUtil {
     }
 
     static QuarkusMediatorConfiguration create(MethodInfo methodInfo, BeanInfo bean,
-            String generatedInvokerName, RecorderContext recorderContext, ClassLoader cl) {
+            String generatedInvokerName, RecorderContext recorderContext) {
 
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
         Class<?> returnTypeClass = load(methodInfo.returnType().name().toString(), cl);
         Class[] parameterTypeClasses = new Class[methodInfo.parameters().size()];
         for (int i = 0; i < methodInfo.parameters().size(); i++) {

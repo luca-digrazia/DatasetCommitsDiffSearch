@@ -1,9 +1,6 @@
 package io.quarkus.smallrye.reactivemessaging.runtime;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.List;
 
 import javax.enterprise.inject.spi.Bean;
 
@@ -27,7 +24,7 @@ public class QuarkusMediatorConfiguration implements MediatorConfiguration {
 
     private Shape shape;
 
-    private List<String> incomings = new ArrayList<>();
+    private String incoming;
 
     private String outgoing;
 
@@ -44,14 +41,6 @@ public class QuarkusMediatorConfiguration implements MediatorConfiguration {
     private Merge.Mode merge;
 
     private Class<? extends Invoker> invokerClass;
-
-    private boolean blocking;
-
-    private boolean blockingExecutionOrdered;
-
-    private String workerPoolName;
-
-    private Type ingestedPayload;
 
     public String getBeanId() {
         return beanId;
@@ -106,12 +95,12 @@ public class QuarkusMediatorConfiguration implements MediatorConfiguration {
     }
 
     @Override
-    public List<String> getIncoming() {
-        return incomings;
+    public String getIncoming() {
+        return incoming;
     }
 
-    public void setIncomings(List<String> incomings) {
-        this.incomings = incomings;
+    public void setIncoming(String incoming) {
+        this.incoming = incoming;
     }
 
     @Override
@@ -197,15 +186,6 @@ public class QuarkusMediatorConfiguration implements MediatorConfiguration {
         return invokerClass;
     }
 
-    @Override
-    public Type getIngestedPayloadType() {
-        return ingestedPayload;
-    }
-
-    public void setIngestedPayloadType(Type ingestedPayload) {
-        this.ingestedPayload = ingestedPayload;
-    }
-
     public void setInvokerClass(Class<? extends Invoker> invokerClass) {
         this.invokerClass = invokerClass;
     }
@@ -227,32 +207,5 @@ public class QuarkusMediatorConfiguration implements MediatorConfiguration {
         } else {
             return broadcastValue;
         }
-    }
-
-    @Override
-    public boolean isBlocking() {
-        return blocking;
-    }
-
-    @Override
-    public String getWorkerPoolName() {
-        return workerPoolName;
-    }
-
-    @Override
-    public boolean isBlockingExecutionOrdered() {
-        return blockingExecutionOrdered;
-    }
-
-    public void setBlocking(boolean blocking) {
-        this.blocking = blocking;
-    }
-
-    public void setBlockingExecutionOrdered(boolean blockingExecutionOrdered) {
-        this.blockingExecutionOrdered = blockingExecutionOrdered;
-    }
-
-    public void setWorkerPoolName(String workerPoolName) {
-        this.workerPoolName = workerPoolName;
     }
 }
