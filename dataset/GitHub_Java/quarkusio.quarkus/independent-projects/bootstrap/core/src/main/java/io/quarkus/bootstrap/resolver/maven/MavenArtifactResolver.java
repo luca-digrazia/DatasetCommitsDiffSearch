@@ -58,7 +58,6 @@ public class MavenArtifactResolver {
     public static class Builder {
 
         private Path repoHome;
-        private boolean reTryFailedResolutionsAgainstDefaultLocalRepo;
         private RepositorySystem repoSystem;
         private RepositorySystemSession repoSession;
         private List<RemoteRepository> remoteRepos = null;
@@ -66,23 +65,6 @@ public class MavenArtifactResolver {
         private LocalWorkspace workspace;
 
         private Builder() {
-        }
-
-        /**
-         * In case custom local repository location is configured using {@link #setRepoHome(Path)},
-         * this method can be used to enable artifact resolutions that failed for the configured
-         * custom local repository to be re-tried against the default user local repository before
-         * failing.
-         * <p>NOTE: the default behavior is <b>not</b> to use the default user local repository as the fallback one.
-         *
-         * @param value  true if the failed resolution requests should be re-tried against the default
-         * user local repo before failing
-         *
-         * @return  this builder instance
-         */
-        public Builder setReTryFailedResolutionsAgainstDefaultLocalRepo(boolean value) {
-            this.reTryFailedResolutionsAgainstDefaultLocalRepo = value;
-            return this;
         }
 
         public Builder setRepoHome(Path home) {
@@ -142,19 +124,15 @@ public class MavenArtifactResolver {
             newSession.setOffline(builder.offline);
         }
 
-        MavenLocalRepositoryManager lrm = null;
-        if (builder.repoHome != null) {
-            if (builder.reTryFailedResolutionsAgainstDefaultLocalRepo) {
-                lrm = new MavenLocalRepositoryManager(
-                        repoSystem.newLocalRepositoryManager(newSession, new LocalRepository(builder.repoHome.toString())),
-                        Paths.get(MavenRepoInitializer.getLocalRepo(MavenRepoInitializer.getSettings())));
-                newSession.setLocalRepositoryManager(lrm);
-            } else {
-                newSession.setLocalRepositoryManager(
-                        repoSystem.newLocalRepositoryManager(newSession, new LocalRepository(builder.repoHome.toString())));
-            }
+        if(builder.repoHome != null) {
+            final MavenLocalRepositoryManager appCreatorLocalRepoManager = new MavenLocalRepositoryManager(
+                    repoSystem.newLocalRepositoryManager(newSession, new LocalRepository(builder.repoHome.toString())),
+                    Paths.get(MavenRepoInitializer.getLocalRepo(MavenRepoInitializer.getSettings())));
+            newSession.setLocalRepositoryManager(appCreatorLocalRepoManager);
+            localRepoManager = appCreatorLocalRepoManager;
+        } else {
+            localRepoManager = null;
         }
-        localRepoManager = lrm;
 
         if(newSession.getCache() == null) {
             newSession.setCache(new DefaultRepositoryCache());
