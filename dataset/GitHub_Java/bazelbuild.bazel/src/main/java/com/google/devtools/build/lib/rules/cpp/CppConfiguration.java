@@ -222,6 +222,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final boolean convertLipoToThinLto;
   private final PathFragment crosstoolTopPathFragment;
 
+  private final boolean usePicForBinaries;
+
   private final Path fdoZip;
 
   // TODO(bazel-team): All these labels (except for ccCompilerRuleLabel) can be removed once the
@@ -289,6 +291,9 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
         (cppOptions.stripBinaries == StripMode.ALWAYS
             || (cppOptions.stripBinaries == StripMode.SOMETIMES
                 && compilationMode == CompilationMode.FASTBUILD));
+
+    this.usePicForBinaries =
+        cppToolchainInfo.toolchainNeedsPic() && compilationMode != CompilationMode.OPT;
 
     ListMultimap<CompilationMode, String> cFlags = ArrayListMultimap.create();
     ListMultimap<CompilationMode, String> cxxFlags = ArrayListMultimap.create();
@@ -530,15 +535,42 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns whether the toolchain supports "Fission" C++ builds, i.e. builds where compilation
-   * partitions object code and debug symbols into separate output files.
-   *
-   * <p>Deprecated: Use {@link CcToolchainProvider#supportsFission()}
+   * Returns whether the toolchain supports the --start-lib/--end-lib options.
    */
-  // TODO(b/64384912): Refactor out of reportInvalidOptions() and remove
-  @Deprecated
+  public boolean supportsStartEndLib() {
+    return cppToolchainInfo.supportsStartEndLib();
+  }
+
+  /**
+   * Returns whether this toolchain supports interface shared objects.
+   *
+   * <p>Should be true if this toolchain generates ELF objects.
+   */
+  public boolean supportsInterfaceSharedObjects() {
+    return cppToolchainInfo.supportsInterfaceSharedObjects();
+  }
+
+  /**
+   * Returns whether the toolchain supports "Fission" C++ builds, i.e. builds
+   * where compilation partitions object code and debug symbols into separate
+   * output files.
+   */
   public boolean supportsFission() {
     return cppToolchainInfo.supportsFission();
+  }
+
+  /**
+   * Returns whether binaries must be compiled with position independent code.
+   */
+  public boolean usePicForBinaries() {
+    return usePicForBinaries;
+  }
+
+  /**
+   * Returns the type of archives being used.
+   */
+  public Link.ArchiveType archiveType() {
+    return useStartEndLib() ? Link.ArchiveType.START_END_LIB : Link.ArchiveType.REGULAR;
   }
 
   @SkylarkCallable(
@@ -1007,25 +1039,19 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return cppOptions.processHeadersInDependencies;
   }
 
-  /** Returns true if --fission contains the current compilation mode. */
-  public boolean fissionIsActiveForCurrentCompilationMode() {
-    return cppOptions.fissionModes.contains(compilationMode);
-  }
-
   /**
    * Returns true if Fission is specified for this build and supported by the crosstool.
-   *
-   * <p>Deprecated: Use {@link CppHelper#useFission(CppConfiguration, CcToolchainProvider)}
    */
-  // TODO(b/64384912): Remove usage in java_binary and configurationEnabledFeatures()
-  @Deprecated
   public boolean useFission() {
     return cppOptions.fissionModes.contains(compilationMode) && supportsFission();
   }
 
-  /** Returns true if --build_test_dwp is set on this build. */
-  public boolean buildTestDwpIsActivated() {
-    return cppOptions.buildTestDwp;
+  /**
+   * Returns true if Fission is enabled for this build and the user requested automatic building
+   * of .dwp files for C++ test targets.
+   */
+  public boolean shouldBuildTestDwp() {
+    return useFission() && cppOptions.buildTestDwp;
   }
 
   /**
@@ -1038,13 +1064,34 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return cppOptions.forcePic;
   }
 
-  /** Returns true if --start_end_lib is set on this build. */
-  public boolean startEndLibIsRequested() {
-    return cppOptions.useStartEndLib;
+  public boolean useStartEndLib() {
+    return cppOptions.useStartEndLib && supportsStartEndLib();
+  }
+
+  /**
+   * Returns true if interface shared objects should be used.
+   */
+  public boolean useInterfaceSharedObjects() {
+    return supportsInterfaceSharedObjects() && cppOptions.useInterfaceSharedObjects;
   }
 
   public boolean forceIgnoreDashStatic() {
     return cppOptions.forceIgnoreDashStatic;
+  }
+
+  /**
+   * Returns true if shared libraries must be compiled with position independent code
+   * on this platform or in this configuration.
+   */
+  public boolean needsPic() {
+    return forcePic() || cppToolchainInfo.toolchainNeedsPic();
+  }
+
+  /**
+   * Returns true iff we should use ".pic.o" files when linking executables.
+   */
+  public boolean usePicObjectsForBinaries() {
+    return forcePic() || usePicForBinaries();
   }
 
   public boolean legacyWholeArchive() {

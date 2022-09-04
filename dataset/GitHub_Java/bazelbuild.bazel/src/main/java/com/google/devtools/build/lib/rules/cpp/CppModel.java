@@ -443,7 +443,7 @@ public final class CppModel {
    * @return whether this target needs to generate pic actions.
    */
   private boolean getGeneratePicActions() {
-    return CppHelper.usePic(ruleContext, ccToolchain, false);
+    return CppHelper.usePic(ruleContext, false);
   }
 
   /**
@@ -451,9 +451,8 @@ public final class CppModel {
    */
   private boolean getGenerateNoPicActions() {
     return
-    // If we always need pic for everything, then don't bother to create a no-pic action.
-    (!CppHelper.usePic(ruleContext, ccToolchain, true)
-            || !CppHelper.usePic(ruleContext, ccToolchain, false))
+        // If we always need pic for everything, then don't bother to create a no-pic action.
+        (!CppHelper.usePic(ruleContext, true) || !CppHelper.usePic(ruleContext, false))
         // onlySingleOutput guarantees that the code is only ever linked into a dynamic library - so
         // we don't need a no-pic action even if linking into a binary would require it.
         && !((onlySingleOutput && getGeneratePicActions()));
@@ -744,8 +743,7 @@ public final class CppModel {
                 // The source action does not generate dwo when it has bitcode
                 // output (since it isn't generating a native object with debug
                 // info). In that case the LtoBackendAction will generate the dwo.
-                /* generateDwo= */ CppHelper.useFission(cppConfiguration, ccToolchain)
-                    && !bitcodeOutput,
+                /* generateDwo= */ cppConfiguration.useFission() && !bitcodeOutput,
                 isGenerateDotdFile(sourceArtifact),
                 source.getBuildVariables());
             break;
@@ -846,7 +844,7 @@ public final class CppModel {
             ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName, configuration)
             : null;
 
-    boolean generateDwo = CppHelper.useFission(cppConfiguration, ccToolchain);
+    boolean generateDwo = cppConfiguration.useFission();
     Artifact dwoFile = generateDwo ? getDwoFile(builder.getOutputFile()) : null;
     // TODO(tejohnson): Add support for ThinLTO if needed.
     boolean bitcodeOutput =
@@ -1322,9 +1320,8 @@ public final class CppModel {
     }
 
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
-    boolean usePicForBinaries = CppHelper.usePic(ruleContext, ccToolchain, /* forBinary= */ true);
-    boolean usePicForSharedLibs =
-        CppHelper.usePic(ruleContext, ccToolchain, /* forBinary= */ false);
+    boolean usePicForBinaries = CppHelper.usePic(ruleContext, /* forBinary= */ true);
+    boolean usePicForSharedLibs = CppHelper.usePic(ruleContext, /* forBinary= */ false);
 
     // Create static library (.a). The linkType only reflects whether the library is alwayslink or
     // not. The PIC-ness is determined by whether we need to use PIC or not. There are three cases
@@ -1414,8 +1411,7 @@ public final class CppModel {
 
     List<String> sonameLinkopts = ImmutableList.of();
     Artifact soInterface = null;
-    if (CppHelper.useInterfaceSharedObjects(cppConfiguration, ccToolchain)
-        && allowInterfaceSharedObjects) {
+    if (cppConfiguration.useInterfaceSharedObjects() && allowInterfaceSharedObjects) {
       soInterface =
           CppHelper.getLinuxLinkedArtifact(
               ruleContext,

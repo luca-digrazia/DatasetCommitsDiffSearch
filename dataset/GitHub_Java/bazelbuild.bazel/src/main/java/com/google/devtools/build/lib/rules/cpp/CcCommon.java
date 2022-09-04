@@ -141,7 +141,8 @@ public final class CcCommon {
       result = ImmutableList.of();
     }
 
-    if (ApplePlatform.isApplePlatform(ccToolchain.getTargetCpu()) && result.contains("-static")) {
+    if (ApplePlatform.isApplePlatform(cppConfiguration.getTargetCpu())
+        && result.contains("-static")) {
       ruleContext.attributeError(
           "linkopts", "Apple builds do not support statically linked binaries");
     }
