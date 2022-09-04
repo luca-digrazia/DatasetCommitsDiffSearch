@@ -117,10 +117,8 @@ public abstract class DiskJournalCache implements InputCache, OutputCache {
             return;
         }
         try {
-            final byte[] bytes = serializer.serializeToBytes(message);
-
             synchronized (modificationLock) {
-                if (queue.offer(bytes)) {
+                if (queue.offer(serializer.serializeToBytes(message))) {
                     counter.incrementAndGet();
                 }
             }
