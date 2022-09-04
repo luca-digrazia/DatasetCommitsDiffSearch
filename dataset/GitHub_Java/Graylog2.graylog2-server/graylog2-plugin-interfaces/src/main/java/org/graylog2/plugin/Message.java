@@ -30,7 +30,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.net.InetAddresses;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -104,10 +104,11 @@ public class Message {
 
     private final Map<String, Object> fields = Maps.newHashMap();
     private List<Stream> streams = Lists.newArrayList();
-    private String sourceInputId;
+    private MessageInput sourceInput;
 
     // Used for drools to filter out messages.
     private boolean filterOut = false;
+    private InetAddress inetAddress;
     /**
      * The offset the message originally had in the journal it was read from. This will be MIN_VALUE if no journal
      * was involved.
@@ -215,10 +216,6 @@ public class Message {
 
     public String getSource() {
         return getFieldAs(String.class, FIELD_SOURCE);
-    }
-
-    public void setSource(final String source) {
-        fields.put(FIELD_SOURCE, source);
     }
 
     public void addField(final String key, final Object value) {
@@ -344,29 +341,21 @@ public class Message {
         return this.filterOut;
     }
 
-    public void setSourceInputId(String sourceInputId) {
-        this.sourceInputId = sourceInputId;
+    public MessageInput getSourceInput() {
+        return sourceInput;
     }
 
-    public String getSourceInputId() {
-        return sourceInputId;
+    public void setSourceInput(final MessageInput input) {
+        this.sourceInput = input;
     }
 
     // drools seems to need the "get" prefix
     public boolean getIsSourceInetAddress() {
-        return fields.containsKey("gl2_remote_ip");
+        return inetAddress != null;
     }
 
     public InetAddress getInetAddress() {
-        if (!fields.containsKey("gl2_remote_ip")) {
-            return null;
-        }
-        final String ipAddr = (String) fields.get("gl2_remote_ip");
-        try {
-            return InetAddresses.forString(ipAddr);
-        } catch (IllegalArgumentException ignored) {
-            return null;
-        }
+        return inetAddress;
     }
 
     public void setJournalOffset(long journalOffset) {

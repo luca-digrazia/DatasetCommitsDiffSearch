@@ -16,15 +16,17 @@
  */
 package org.graylog2.bootstrap.commands.journal;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
+import com.google.inject.AbstractModule;
 import com.google.inject.Key;
 import com.google.inject.Module;
 import com.google.inject.TypeLiteral;
 import io.airlift.airline.Arguments;
 import io.airlift.airline.Command;
-import org.graylog2.bindings.ServerObjectMapperModule;
+import org.graylog2.bindings.providers.ServerObjectMapperProvider;
 import org.graylog2.inputs.codecs.CodecsModule;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.inputs.codecs.Codec;
@@ -50,7 +52,12 @@ public class JournalDecode extends AbstractJournalCommand {
     protected List<Module> getCommandBindings() {
         final ArrayList<Module> modules = Lists.newArrayList(super.getCommandBindings());
         modules.add(new CodecsModule());
-        modules.add(new ServerObjectMapperModule());
+        modules.add(new AbstractModule() {
+            @Override
+            protected void configure() {
+                bind(ObjectMapper.class).toProvider(ServerObjectMapperProvider.class);
+            }
+        });
         return modules;
     }
 
