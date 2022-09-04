@@ -1,6 +1,6 @@
 package io.quarkus.test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.ByteArrayInputStream;
@@ -8,9 +8,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.FileVisitResult;
@@ -32,6 +31,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import javax.enterprise.inject.Instance;
+import javax.enterprise.inject.spi.CDI;
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.Asset;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
@@ -42,20 +44,20 @@ import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.InvocationInterceptor;
-import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.TestInstanceFactory;
+import org.junit.jupiter.api.extension.TestInstanceFactoryContext;
 import org.junit.jupiter.api.extension.TestInstantiationException;
 
-import io.quarkus.bootstrap.app.CuratedApplication;
-import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildException;
 import io.quarkus.builder.BuildStep;
 import io.quarkus.builder.item.BuildItem;
-import io.quarkus.runner.bootstrap.AugmentActionImpl;
+import io.quarkus.deployment.proxy.ProxyConfiguration;
+import io.quarkus.deployment.proxy.ProxyFactory;
+import io.quarkus.runner.RuntimeRunner;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.RestAssuredURLManager;
@@ -66,8 +68,7 @@ import io.quarkus.test.common.http.TestHTTPResourceManager;
  * A test extension for testing Quarkus internals, not intended for end user consumption
  */
 public class QuarkusUnitTest
-        implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback,
-        InvocationInterceptor {
+        implements BeforeAllCallback, AfterAllCallback, TestInstanceFactory, BeforeEachCallback, AfterEachCallback {
 
     static {
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
@@ -75,40 +76,25 @@ public class QuarkusUnitTest
 
     boolean started = false;
 
+    private RuntimeRunner runtimeRunner;
     private Path deploymentDir;
     private Consumer<Throwable> assertException;
     private Supplier<JavaArchive> archiveProducer;
     private List<Consumer<BuildChainBuilder>> buildChainCustomizers = new ArrayList<>();
     private Runnable afterUndeployListener;
     private String logFileName;
-
     private static final Timer timeoutTimer = new Timer("Test thread dump timer");
     private volatile TimerTask timeoutTask;
     private Properties customApplicationProperties;
     private Runnable beforeAllCustomizer;
     private Runnable afterAllCustomizer;
-    private CuratedApplication curatedApplication;
-    private RunningQuarkusApplication runningQuarkusApplication;
-    private ClassLoader originalClassLoader;
 
-    private boolean useSecureConnection;
-
-    private Class<?> actualTestClass;
-    private Object actualTestInstance;
+    private final RestAssuredURLManager restAssuredURLManager;
 
     public QuarkusUnitTest setExpectedException(Class<? extends Throwable> expectedException) {
         return assertException(t -> {
-            Throwable i = t;
-            boolean found = false;
-            while (i != null) {
-                if (i.getClass().getName().equals(expectedException.getName())) {
-                    found = true;
-                    break;
-                }
-                i = i.getCause();
-            }
-
-            assertTrue(found, "Build failed with wrong exception, expected " + expectedException + " but got " + t);
+            assertEquals(expectedException,
+                    t.getClass(), "Build failed with wrong exception");
         });
     }
 
@@ -121,7 +107,7 @@ public class QuarkusUnitTest
     }
 
     private QuarkusUnitTest(boolean useSecureConnection) {
-        this.useSecureConnection = useSecureConnection;
+        this.restAssuredURLManager = new RestAssuredURLManager(useSecureConnection);
     }
 
     public QuarkusUnitTest assertException(Consumer<Throwable> assertException) {
@@ -161,14 +147,37 @@ public class QuarkusUnitTest
         return this;
     }
 
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public Object createTestInstance(TestInstanceFactoryContext factoryContext, ExtensionContext extensionContext)
+            throws TestInstantiationException {
+        try {
+            Class testClass = extensionContext.getRequiredTestClass();
+
+            ExtensionContext.Store store = extensionContext.getStore(ExtensionContext.Namespace.GLOBAL);
+            Object actualTestInstance = store.get(testClass.getName());
+            if (actualTestInstance != null) { //happens if a deployment exception is expected
+                TestHTTPResourceManager.inject(actualTestInstance);
+            }
+            ProxyFactory<?> proxyFactory = (ProxyFactory<?>) store.get(proxyFactoryKey(testClass));
+            return proxyFactory.newInstance(new InvocationHandler() {
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                    if (assertException != null) {
+                        return null;
+                    }
+                    Method realMethod = actualTestInstance.getClass().getMethod(method.getName(), method.getParameterTypes());
+                    return realMethod.invoke(actualTestInstance, args);
+                }
+            });
+        } catch (Exception e) {
+            throw new TestInstantiationException("Unable to create test proxy", e);
+        }
+    }
+
     private void exportArchive(Path deploymentDir, Class<?> testClass) {
         try {
             JavaArchive archive = getArchiveProducerOrDefault();
-            Class<?> c = testClass;
-            while (c != Object.class) {
-                archive.addClass(c);
-                c = c.getSuperclass();
-            }
+            archive.addClass(testClass);
             if (customApplicationProperties != null) {
                 archive.add(new PropertiesAsset(customApplicationProperties), "application.properties");
             }
@@ -205,92 +214,10 @@ public class QuarkusUnitTest
     }
 
     @Override
-    public void interceptBeforeAllMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        runExtensionMethod(invocationContext);
-        invocation.skip();
-    }
-
-    @Override
-    public void interceptBeforeEachMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        runExtensionMethod(invocationContext);
-        invocation.skip();
-    }
-
-    @Override
-    public void interceptAfterEachMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        if (assertException == null) {
-            runExtensionMethod(invocationContext);
-            invocation.skip();
-        } else {
-            invocation.proceed();
-        }
-    }
-
-    @Override
-    public void interceptAfterAllMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        if (assertException == null) {
-            runExtensionMethod(invocationContext);
-        }
-        invocation.skip();
-    }
-
-    @Override
-    public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        if (assertException == null) {
-            runExtensionMethod(invocationContext);
-        }
-        invocation.skip();
-    }
-
-    @Override
-    public void interceptTestTemplateMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        if (assertException == null) {
-            runExtensionMethod(invocationContext);
-        }
-        invocation.skip();
-    }
-
-    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext) {
-        Method newMethod = null;
-        Class<?> c = actualTestClass;
-        while (c != Object.class) {
-            try {
-                newMethod = c.getDeclaredMethod(invocationContext.getExecutable().getName(),
-                        invocationContext.getExecutable().getParameterTypes());
-                break;
-            } catch (NoSuchMethodException e) {
-                //ignore
-            }
-            c = c.getSuperclass();
-        }
-        if (newMethod == null) {
-            throw new RuntimeException("Could not find method " + invocationContext.getExecutable() + " on test class");
-        }
-        try {
-            newMethod.setAccessible(true);
-            newMethod.invoke(actualTestInstance, invocationContext.getArguments().toArray());
-        } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof RuntimeException) {
-                throw (RuntimeException) e.getCause();
-            }
-            throw new RuntimeException(e.getCause());
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
         if (beforeAllCustomizer != null) {
             beforeAllCustomizer.run();
         }
-        originalClassLoader = Thread.currentThread().getContextClassLoader();
         timeoutTask = new TimerTask() {
             @Override
             public void run() {
@@ -325,6 +252,15 @@ public class QuarkusUnitTest
         }
 
         Class<?> testClass = extensionContext.getRequiredTestClass();
+
+        if (store.get(proxyFactoryKey(testClass)) == null) {
+            ProxyFactory<?> factory = new ProxyFactory<>(new ProxyConfiguration<>()
+                    .setAnchorClass(testClass)
+                    .setProxyNameSuffix("$$QuarkusUnitTestProxy")
+                    .setClassLoader(new DefineClassVisibleClassLoader(testClass.getClassLoader()))
+                    .setSuperClass((Class<Object>) testClass));
+            store.put(proxyFactoryKey(testClass), factory);
+        }
 
         try {
             deploymentDir = Files.createTempDirectory("quarkus-unit-test");
@@ -361,49 +297,46 @@ public class QuarkusUnitTest
 
             final Path testLocation = PathTestHelper.getTestClassesLocation(testClass);
 
-            try {
-                curatedApplication = QuarkusBootstrap.builder(deploymentDir)
-                        .setMode(QuarkusBootstrap.Mode.TEST)
-                        .addExcludedPath(testLocation)
-                        .setProjectRoot(testLocation)
-                        .build().bootstrap();
+            runtimeRunner = RuntimeRunner.builder()
+                    .setLaunchMode(LaunchMode.TEST)
+                    .setClassLoader(testClass.getClassLoader())
+                    .setTarget(deploymentDir)
+                    .excludeFromIndexing(testLocation)
+                    .setFrameworkClassesPath(testLocation)
+                    .addChainCustomizers(customizers)
+                    .build();
 
-                runningQuarkusApplication = new AugmentActionImpl(curatedApplication, customizers)
-                        .createInitialRuntimeApplication()
-                        .run(new String[0]);
-                //we restore the CL at the end of the test
-                Thread.currentThread().setContextClassLoader(runningQuarkusApplication.getClassLoader());
+            try {
+                runtimeRunner.run();
                 if (assertException != null) {
                     fail("The build was expected to fail");
                 }
                 started = true;
-                System.setProperty("test.url", TestHTTPResourceManager.getUri(runningQuarkusApplication));
+                System.setProperty("test.url", TestHTTPResourceManager.getUri());
+                Instance<?> factory;
                 try {
-                    actualTestClass = Class.forName(testClass.getName(), true,
-                            Thread.currentThread().getContextClassLoader());
-                    actualTestInstance = runningQuarkusApplication.instance(actualTestClass);
-                    Class<?> resM = runningQuarkusApplication.getClassLoader()
-                            .loadClass(TestHTTPResourceManager.class.getName());
-                    resM.getDeclaredMethod("inject", Object.class).invoke(null, actualTestInstance);
+                    factory = CDI.current()
+                            .select(Class.forName(testClass.getName(), true, Thread.currentThread().getContextClassLoader()));
                 } catch (Exception e) {
                     throw new TestInstantiationException("Failed to create test instance", e);
                 }
 
-                extensionContext.getStore(ExtensionContext.Namespace.GLOBAL).put(testClass.getName(), actualTestInstance);
+                Object actualTest = factory.get();
+                extensionContext.getStore(ExtensionContext.Namespace.GLOBAL).put(testClass.getName(), actualTest);
             } catch (Throwable e) {
                 started = false;
                 if (assertException != null) {
                     if (e instanceof RuntimeException) {
                         Throwable cause = e.getCause();
                         if (cause != null && cause instanceof BuildException) {
-                            assertException.accept(unwrapException(cause.getCause()));
+                            assertException.accept(cause.getCause());
                         } else if (cause != null) {
-                            assertException.accept(unwrapException(cause));
+                            assertException.accept(cause);
                         } else {
-                            assertException.accept(e);
+                            fail("Unable to unwrap the build exception from: " + e);
                         }
                     } else {
-                        assertException.accept(e);
+                        fail("Unable to unwrap the build exception from: " + e);
                     }
                 } else {
                     throw e;
@@ -414,32 +347,20 @@ public class QuarkusUnitTest
         }
     }
 
-    private Throwable unwrapException(Throwable cause) {
-        //TODO: huge hack
-        try {
-            Class<?> localVer = QuarkusUnitTest.class.getClassLoader().loadClass(cause.getClass().getName());
-            if (localVer != cause.getClass()) {
-                Constructor<?> ctor = localVer.getConstructor(String.class, Throwable.class);
-                return (Throwable) ctor.newInstance(cause.getMessage(), cause.getCause());
-            }
-        } catch (Exception e) {
-            //failed to unwrap
-        }
-        return cause;
+    private String proxyFactoryKey(Class<?> testClass) {
+        return testClass + "proxyFactory";
     }
 
     @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
         try {
-            if (runningQuarkusApplication != null) {
-                runningQuarkusApplication.close();
+            if (runtimeRunner != null) {
+                runtimeRunner.close();
             }
             if (afterUndeployListener != null) {
                 afterUndeployListener.run();
             }
-            curatedApplication.close();
         } finally {
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
             timeoutTask.cancel();
             timeoutTask = null;
             if (deploymentDir != null) {
@@ -480,12 +401,11 @@ public class QuarkusUnitTest
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
-        if (runningQuarkusApplication != null) {
-            //this kinda sucks, but everything is isolated, so we need to hook into everything via reflection
-            runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
-                    .getDeclaredMethod("clearURL")
-                    .invoke(null);
+        if (assertException != null) {
+            // Build failed as expected - test methods are not invoked
+            return;
         }
+        restAssuredURLManager.clearURL();
     }
 
     @Override
@@ -494,10 +414,7 @@ public class QuarkusUnitTest
             // Build failed as expected - test methods are not invoked
             return;
         }
-        if (runningQuarkusApplication != null) {
-            runningQuarkusApplication.getClassLoader().loadClass(RestAssuredURLManager.class.getName())
-                    .getDeclaredMethod("setURL", boolean.class).invoke(null, useSecureConnection);
-        } else {
+        if (!started) {
             Optional<Class<?>> testClass = context.getTestClass();
             if (testClass.isPresent()) {
                 Field extensionField = Arrays.stream(testClass.get().getDeclaredFields()).filter(
@@ -511,6 +428,7 @@ public class QuarkusUnitTest
             }
             throw new IllegalStateException("Test application not started for an unknown reason");
         }
+        restAssuredURLManager.setURL();
     }
 
     public Runnable getAfterUndeployListener() {
