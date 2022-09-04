@@ -68,7 +68,6 @@ import com.googlecode.androidannotations.annotations.sharedpreferences.SharedPre
 import com.googlecode.androidannotations.api.sharedpreferences.SharedPreferencesHelper;
 import com.googlecode.androidannotations.model.AndroidSystemServices;
 import com.googlecode.androidannotations.model.AnnotationElements;
-import com.googlecode.androidannotations.processing.InstanceStateProcessor;
 import com.googlecode.androidannotations.validation.IsValid;
 
 public class ValidatorHelper {
@@ -336,29 +335,10 @@ public class ValidatorHelper {
 
 	public void typeHasAnnotation(Class<? extends Annotation> annotation, Element element, IsValid valid) {
 		TypeMirror elementType = element.asType();
-		typeHasAnnotation(annotation, elementType, element, valid);
-	}
-
-	public void typeHasAnnotation(Class<? extends Annotation> annotation, TypeMirror elementType, Element reportingElement, IsValid valid) {
 		Element typeElement = annotationHelper.getTypeUtils().asElement(elementType);
 		if (!elementHasAnnotationSafe(annotation, typeElement)) {
 			valid.invalidate();
-			annotationHelper.printAnnotationError(reportingElement, "%s can only be used on an element annotated with " + TargetAnnotationHelper.annotationName(annotation));
-		}
-	}
-
-	public void typeOrTargetValueHasAnnotation(Class<? extends Annotation> annotation, Element element, IsValid valid) {
-		DeclaredType targetAnnotationClassValue = annotationHelper.extractAnnotationClassValue(element);
-
-		if (targetAnnotationClassValue != null) {
-			typeHasAnnotation(annotation, targetAnnotationClassValue, element, valid);
-
-			if (!annotationHelper.getTypeUtils().isAssignable( targetAnnotationClassValue, element.asType())) {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "The value of %s must be assignable into the annotated field");
-			}
-		} else {
-			typeHasAnnotation(annotation, element, valid);
+			annotationHelper.printAnnotationError(element, "%s can only be used on an element annotated with " + TargetAnnotationHelper.annotationName(annotation));
 		}
 	}
 
@@ -933,45 +913,7 @@ public class ValidatorHelper {
 
 	}
 
-	public void canBeSavedAsInstanceState(Element element, IsValid isValid) {
-		String typeString = element.asType().toString();
-
-		if (!isKnowInstanceStateType(typeString)) {
-			TypeElement elementType = annotationHelper.typeElementFromQualifiedName(typeString);
-
-			if (elementType == null) {
-				elementType = getArrayEnclosingType(typeString);
-				if (elementType == null) {
-					annotationHelper.printAnnotationError(element, "Unrecognized type. Please let your attribute be primitive or implement Serializable or Parcelable");
-					isValid.invalidate();
-				}
-			}
-
-			if (elementType != null) {
-				TypeElement parcelableType = annotationHelper.typeElementFromQualifiedName("android.os.Parcelable");
-				TypeElement serializableType = annotationHelper.typeElementFromQualifiedName("java.io.Serializable");
-				if (!annotationHelper.isSubtype(elementType, parcelableType) && !annotationHelper.isSubtype(elementType, serializableType)) {
-					annotationHelper.printAnnotationError(element, "Unrecognized type. Please let your attribute be primitive or implement Serializable or Parcelable");
-					isValid.invalidate();
-				}
-			}
-		}
-	}
-
-	private TypeElement getArrayEnclosingType(String typeString) {
-		typeString = typeString.replace("[]", "");
-		return annotationHelper.typeElementFromQualifiedName(typeString);
-	}
-
-	private boolean isKnowInstanceStateType(String type) {
-		return InstanceStateProcessor.methodSuffixNameByTypeName.containsKey(type);
-	}
-
 	public void componentRegistered(Element element, AndroidManifest androidManifest, IsValid valid) {
-		componentRegistered(element, androidManifest, true, valid);
-	}
-
-	public void componentRegistered(Element element, AndroidManifest androidManifest, boolean printWarning, IsValid valid) {
 		TypeElement typeElement = (TypeElement) element;
 
 		if (typeElement.getModifiers().contains(Modifier.ABSTRACT)) {
@@ -989,9 +931,7 @@ public class ValidatorHelper {
 				valid.invalidate();
 				annotationHelper.printAnnotationError(element, "The AndroidManifest.xml file contains the original component, and not the AndroidAnnotations generated component. Please register " + generatedSimpleName + " instead of " + simpleName);
 			} else {
-				if (printWarning) {
-					annotationHelper.printAnnotationWarning(element, "The component " + generatedSimpleName + " is not registered in the AndroidManifest.xml file.");
-				}
+				annotationHelper.printAnnotationWarning(element, "The component " + generatedSimpleName + " is not registered in the AndroidManifest.xml file.");
 			}
 		}
 
