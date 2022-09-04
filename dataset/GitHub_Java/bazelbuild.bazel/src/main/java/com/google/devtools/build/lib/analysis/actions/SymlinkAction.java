@@ -179,9 +179,4 @@ public class SymlinkAction extends AbstractAction {
   protected String getRawProgressMessage() {
     return progressMessage;
   }
-
-  @Override
-  public boolean mayInsensitivelyPropagateInputs() {
-    return true;
-  }
 }
