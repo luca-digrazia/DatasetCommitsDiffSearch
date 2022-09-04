@@ -21,7 +21,6 @@ import java.io.StringWriter;
 import java.util.Set;
 
 import javax.annotation.processing.Messager;
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
@@ -32,7 +31,7 @@ import javax.tools.Diagnostic;
 import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.BeforeCreate;
 import com.googlecode.androidannotations.annotations.Click;
-import com.googlecode.androidannotations.annotations.EActivity;
+import com.googlecode.androidannotations.annotations.Enhance;
 import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.ItemClick;
 import com.googlecode.androidannotations.annotations.ItemLongClick;
@@ -62,8 +61,6 @@ import com.googlecode.androidannotations.annotations.res.StringRes;
 import com.googlecode.androidannotations.annotations.res.TextArrayRes;
 import com.googlecode.androidannotations.annotations.res.TextRes;
 import com.googlecode.androidannotations.generation.CodeModelGenerator;
-import com.googlecode.androidannotations.helper.AndroidManifest;
-import com.googlecode.androidannotations.helper.AndroidManifestFinder;
 import com.googlecode.androidannotations.model.AndroidRes;
 import com.googlecode.androidannotations.model.AndroidSystemServices;
 import com.googlecode.androidannotations.model.AnnotationElements;
@@ -73,7 +70,7 @@ import com.googlecode.androidannotations.model.ModelExtractor;
 import com.googlecode.androidannotations.processing.BackgroundProcessor;
 import com.googlecode.androidannotations.processing.BeforeCreateProcessor;
 import com.googlecode.androidannotations.processing.ClickProcessor;
-import com.googlecode.androidannotations.processing.EActivityProcessor;
+import com.googlecode.androidannotations.processing.EnhanceProcessor;
 import com.googlecode.androidannotations.processing.ExtraProcessor;
 import com.googlecode.androidannotations.processing.ItemClickProcessor;
 import com.googlecode.androidannotations.processing.ItemLongClickProcessor;
@@ -91,12 +88,13 @@ import com.googlecode.androidannotations.processing.ViewByIdProcessor;
 import com.googlecode.androidannotations.processor.AnnotatedAbstractProcessor;
 import com.googlecode.androidannotations.processor.SupportedAnnotationClasses;
 import com.googlecode.androidannotations.rclass.AndroidRClassFinder;
+import com.googlecode.androidannotations.rclass.CompiledRClassFinder;
 import com.googlecode.androidannotations.rclass.CoumpoundRClass;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.ProjectRClassFinder;
+import com.googlecode.androidannotations.rclass.RClassFinder;
 import com.googlecode.androidannotations.validation.BeforeCreateValidator;
 import com.googlecode.androidannotations.validation.ClickValidator;
-import com.googlecode.androidannotations.validation.EActivityValidator;
+import com.googlecode.androidannotations.validation.EnhanceValidator;
 import com.googlecode.androidannotations.validation.ExtraValidator;
 import com.googlecode.androidannotations.validation.ItemClickValidator;
 import com.googlecode.androidannotations.validation.ItemLongClickValidator;
@@ -112,7 +110,7 @@ import com.googlecode.androidannotations.validation.TransactionalValidator;
 import com.googlecode.androidannotations.validation.ViewByIdValidator;
 import com.sun.codemodel.JCodeModel;
 
-@SupportedAnnotationClasses({ EActivity.class, //
+@SupportedAnnotationClasses({ Enhance.class, //
 		BeforeCreate.class, //
 		RoboGuice.class, //
 		ViewById.class, //
@@ -146,57 +144,31 @@ import com.sun.codemodel.JCodeModel;
 		StringArrayRes.class })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
-	
-	@Override
-	public synchronized void init(ProcessingEnvironment processingEnv) {
-		super.init(processingEnv);
-		
-		Messager messager = processingEnv.getMessager();
-		messager.printMessage(Diagnostic.Kind.NOTE, "Starting AndroidAnnotations compile time annotation processing");
-	}
-
-	/**
-	 * We do not need multiple round processing, since the generated classes do
-	 * not need to be processed.
-	 */
-	private boolean alreadyProcessed = false;
 
 	@Override
 	public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+		Messager messager = processingEnv.getMessager();
+		messager.printMessage(Diagnostic.Kind.NOTE, "AndroidAnnotations compile time annotation processing");
 		try {
 			processThrowing(annotations, roundEnv);
 		} catch (Exception e) {
 			handleException(annotations, roundEnv, e);
 		}
-		return true;
+		return false;
 	}
 
 	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws IOException {
-
-		if (roundEnv.processingOver() || annotations.size() == 0 || alreadyProcessed) {
-			return;
-		} else {
-			alreadyProcessed = true;
-		}
-		
 		AnnotationElementsHolder extractedModel = extractAnnotations(annotations, roundEnv);
 
-		AndroidManifest androidManifest = extractAndroidManifest();
-
-		IRClass rClass = findRClasses(androidManifest);
+		IRClass rClass = findAndroidRClass(extractedModel);
 
 		AndroidSystemServices androidSystemServices = new AndroidSystemServices();
 
-		AnnotationElements validatedModel = validateAnnotations(extractedModel, rClass, androidSystemServices, androidManifest);
+		AnnotationElements validatedModel = validateAnnotations(extractedModel, rClass, androidSystemServices);
 
-		JCodeModel codeModel = processAnnotations(validatedModel, rClass, androidSystemServices, androidManifest);
+		JCodeModel codeModel = processAnnotations(validatedModel, rClass, androidSystemServices);
 
 		generateSources(codeModel);
-	}
-
-	private AndroidManifest extractAndroidManifest() {
-		AndroidManifestFinder finder = new AndroidManifestFinder(processingEnv);
-		return finder.extractAndroidManifest();
 	}
 
 	private AnnotationElementsHolder extractAnnotations(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
@@ -205,9 +177,9 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		return extractedModel;
 	}
 
-	private IRClass findRClasses(AndroidManifest androidManifest) throws IOException {
-		ProjectRClassFinder rClassFinder = new ProjectRClassFinder(processingEnv);
-		IRClass rClass = rClassFinder.find(androidManifest);
+	private IRClass findAndroidRClass(AnnotationElementsHolder extractedModel) throws IOException {
+		RClassFinder rClassFinder = new CompiledRClassFinder(processingEnv);
+		IRClass rClass = rClassFinder.find(extractedModel);
 
 		AndroidRClassFinder androidRClassFinder = new AndroidRClassFinder(processingEnv);
 
@@ -216,18 +188,18 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		return new CoumpoundRClass(rClass, androidRClass);
 	}
 
-	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
+	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, IRClass rClass, AndroidSystemServices androidSystemServices) {
 		if (rClass != null) {
-			ModelValidator modelValidator = buildModelValidator(rClass, androidSystemServices, androidManifest);
+			ModelValidator modelValidator = buildModelValidator(rClass, androidSystemServices);
 			return modelValidator.validate(extractedModel);
 		} else {
 			return EmptyAnnotationElements.INSTANCE;
 		}
 	}
 
-	private ModelValidator buildModelValidator(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
+	private ModelValidator buildModelValidator(IRClass rClass, AndroidSystemServices androidSystemServices) {
 		ModelValidator modelValidator = new ModelValidator();
-		modelValidator.register(new EActivityValidator(processingEnv, rClass, androidManifest));
+		modelValidator.register(new EnhanceValidator(processingEnv, rClass));
 		modelValidator.register(new RoboGuiceValidator(processingEnv));
 		modelValidator.register(new ViewByIdValidator(processingEnv, rClass));
 		modelValidator.register(new ClickValidator(processingEnv, rClass));
@@ -250,14 +222,14 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		return modelValidator;
 	}
 
-	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
-		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices, androidManifest);
+	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices) {
+		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices);
 		return modelProcessor.process(validatedModel);
 	}
 
-	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
+	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices) {
 		ModelProcessor modelProcessor = new ModelProcessor();
-		modelProcessor.register(new EActivityProcessor(processingEnv, rClass));
+		modelProcessor.register(new EnhanceProcessor(processingEnv, rClass));
 		modelProcessor.register(new RoboGuiceProcessor());
 		modelProcessor.register(new ViewByIdProcessor(rClass));
 		modelProcessor.register(new ClickProcessor(rClass));
@@ -271,7 +243,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		}
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new UiThreadDelayedProcessor());
-		modelProcessor.register(new BackgroundProcessor(androidManifest));
+		modelProcessor.register(new BackgroundProcessor());
 		modelProcessor.register(new TransactionalProcessor());
 		modelProcessor.register(new ExtraProcessor());
 		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
