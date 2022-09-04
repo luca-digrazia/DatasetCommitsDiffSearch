@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
@@ -67,7 +66,6 @@ import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.LogHandlerQuerier;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
@@ -127,7 +125,7 @@ import javax.annotation.Nullable;
  *
  * <p>The parts specific to the current command are stored in {@link CommandEnvironment}.
  */
-public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
+public final class BlazeRuntime {
   private static final Pattern suppressFromLog =
       Pattern.compile("--client_env=([^=]*(?:auth|pass|cookie)[^=]*)=", Pattern.CASE_INSENSITIVE);
 
@@ -157,6 +155,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final ProjectFile.Provider projectFileProvider;
   private final QueryRuntimeHelper.Factory queryRuntimeHelperFactory;
   @Nullable private final InvocationPolicy moduleInvocationPolicy;
+  private final String defaultsPackageContent;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final String productName;
   private final BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap;
@@ -210,6 +209,8 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     this.queryOutputFormatters = queryOutputFormatters;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
 
+    this.defaultsPackageContent =
+        ruleClassProvider.getDefaultsPackageContent(getModuleInvocationPolicy());
     CommandNameCache.CommandNameCacheInstance.INSTANCE.setCommandNameCache(
         new CommandNameCacheImpl(getCommandMap()));
     this.productName = productName;
@@ -580,30 +581,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     return finalCommandResult;
   }
 
-  /**
-   * Returns the path to the Blaze server INFO log.
-   *
-   * @return the path to the log or empty if the log is not yet open
-   * @throws IOException if the log location cannot be determined
-   */
-  public Optional<Path> getServerLogPath() throws IOException {
-    LogHandlerQuerier logHandlerQuerier;
-    try {
-      logHandlerQuerier = LogHandlerQuerier.getConfiguredInstance();
-    } catch (IllegalStateException e) {
-      throw new IOException("Could not find a querier for server log location", e);
-    }
-
-    Optional<java.nio.file.Path> loggerFilePath;
-    try {
-      loggerFilePath = logHandlerQuerier.getLoggerFilePath(logger);
-    } catch (IllegalArgumentException e) {
-      throw new IOException("Could not query server log location", e);
-    }
-
-    return loggerFilePath.map((p) -> fileSystem.getPath(p.toString()));
-  }
-
   // Make sure we keep a strong reference to this logger, so that the
   // configuration isn't lost when the gc kicks in.
   private static Logger templateLogger = Logger.getLogger("com.google.devtools.build");
@@ -669,6 +646,22 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     for (BlazeModule module : blazeModules) {
       module.blazeShutdownOnCrash();
     }
+  }
+
+  /**
+   * Returns the defaults package for the default settings. Should only be called by commands that
+   * do <i>not</i> process {@link BuildOptions}, since build options can alter the contents of the
+   * defaults package, which will not be reflected here.
+   */
+  public String getDefaultsPackageContent() {
+    return defaultsPackageContent;
+  }
+
+  /**
+   * Returns the defaults package for the given options taken from an optionsProvider.
+   */
+  public String getDefaultsPackageContent(OptionsProvider optionsProvider) {
+    return ruleClassProvider.getDefaultsPackageContent(optionsProvider);
   }
 
   /**
