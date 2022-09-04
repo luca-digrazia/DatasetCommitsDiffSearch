@@ -4,7 +4,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.EventBusOptions;
-import io.vertx.core.file.FileSystemOptions;
 import io.vertx.core.http.ClientAuth;
 import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.PemKeyCertOptions;
@@ -79,9 +78,7 @@ public class VertxProducer {
         setEventBusOptions(options);
         initializeClusterOptions(options);
 
-        options.setFileSystemOptions(new FileSystemOptions()
-                .setFileCachingEnabled(conf.fileResolverCachingEnabled)
-                .setClassPathResolvingEnabled(conf.classpathResolvingEnabled));
+        options.setFileResolverCachingEnabled(conf.fileResolverCachingEnabled);
         options.setWorkerPoolSize(conf.workerPoolSize);
         options.setBlockedThreadCheckInterval(conf.warningExceptionTime);
         options.setInternalBlockingPoolSize(conf.internalBlockingPoolSize);
