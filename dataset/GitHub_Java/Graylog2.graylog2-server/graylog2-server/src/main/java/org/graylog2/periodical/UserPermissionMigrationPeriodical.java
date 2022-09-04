@@ -24,7 +24,7 @@ import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.periodical.Periodical;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.shared.security.Permissions;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.users.RoleService;
 import org.slf4j.Logger;
@@ -45,28 +45,22 @@ public class UserPermissionMigrationPeriodical extends Periodical {
 
     private final UserService userService;
     private final RoleService roleService;
+    private final Permissions permissions;
     private final ClusterConfigService clusterConfigService;
 
     @Inject
     public UserPermissionMigrationPeriodical(final UserService userService,
                                              final RoleService roleService,
+                                             final Permissions permissions,
                                              final ClusterConfigService clusterConfigService) {
         this.userService = userService;
         this.roleService = roleService;
+        this.permissions = permissions;
         this.clusterConfigService = clusterConfigService;
     }
 
     @Override
     public void doRun() {
-
-        final UserPermissionMigrationState migrationState =
-                clusterConfigService.getOrDefault(UserPermissionMigrationState.class,
-                                                  UserPermissionMigrationState.create(false));
-        if (migrationState.migrationDone()) {
-            log.debug("User permission migration already done, not running migration again.");
-            return;
-        }
-
         final List<User> users = userService.loadAll();
         final String adminRoleId = roleService.getAdminRoleObjectId();
         final String readerRoleId = roleService.getReaderRoleObjectId();
@@ -89,7 +83,7 @@ public class UserPermissionMigrationPeriodical extends Periodical {
                 fixedRoleIds.add(adminRoleId);
             }
 
-            final Set<String> basePermissions = RestPermissions.readerPermissions(user.getName());
+            final Set<String> basePermissions = permissions.readerPermissions(user.getName());
             final boolean hasCompleteReaderSet = permissionSet.containsAll(basePermissions);
 
             // only migrate the user if it looks like a pre-1.2 user:
@@ -114,7 +108,7 @@ public class UserPermissionMigrationPeriodical extends Periodical {
                                     }
                                 }));
             // add the minimal permission set back to the user
-            fixedPermissions.addAll(RestPermissions.userSelfEditPermissions(user.getName()));
+            fixedPermissions.addAll(permissions.userSelfEditPermissions(user.getName()));
             fixedPermissions.addAll(dashboardStreamPermissions);
 
             log.info("Migrating permissions to roles for user {} from permissions {} and roles {} to new permissions {} and roles {}",
@@ -155,7 +149,11 @@ public class UserPermissionMigrationPeriodical extends Periodical {
 
     @Override
     public boolean startOnThisNode() {
-        return true;
+        final UserPermissionMigrationState migrationState =
+                clusterConfigService.getOrDefault(UserPermissionMigrationState.class,
+                                                  UserPermissionMigrationState.create(false));
+        // don't run again if the cluster config says we've already migrated the users
+        return !migrationState.migrationDone();
     }
 
     @Override

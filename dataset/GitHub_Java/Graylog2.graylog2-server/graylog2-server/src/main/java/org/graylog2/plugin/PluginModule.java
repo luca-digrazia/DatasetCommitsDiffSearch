@@ -96,11 +96,8 @@ public abstract class PluginModule extends Graylog2Module {
     }
 
     protected void addRestResource(Class<? extends PluginRestResource> restResourceClass) {
-        MapBinder<String, Class<? extends PluginRestResource>> pluginRestResourceMapBinder =
-                MapBinder.newMapBinder(binder(), new TypeLiteral<String>() {},
-                                       new TypeLiteral<Class<? extends PluginRestResource>>() {})
-                        .permitDuplicates();
-        pluginRestResourceMapBinder.addBinding(this.getClass().getPackage().getName()).toInstance(restResourceClass);
+        MapBinder<String, PluginRestResource> pluginRestResourceMapBinder = MapBinder.newMapBinder(binder(), String.class, PluginRestResource.class).permitDuplicates();
+        pluginRestResourceMapBinder.addBinding(this.getClass().getPackage().getName()).to(restResourceClass);
     }
 
     protected void addConfigBeans() {
@@ -140,13 +137,8 @@ public abstract class PluginModule extends Graylog2Module {
         return Multibinder.newSetBinder(binder(), MessageProcessor.class);
     }
 
-    protected Multibinder<MessageProcessor.Descriptor> processorDescriptorBinder() {
-        return Multibinder.newSetBinder(binder(), MessageProcessor.Descriptor.class);
-    }
-
-    protected void addMessageProcessor(Class<? extends MessageProcessor> processorClass, Class<? extends MessageProcessor.Descriptor> descriptorClass) {
+    protected void addMessageProcessor(Class<? extends MessageProcessor> processorClass) {
         processorBinder().addBinding().to(processorClass);
-        processorDescriptorBinder().addBinding().to(descriptorClass);
     }
 
     protected <T extends WidgetStrategy> void addWidgetStrategy(Class<T> widgetStrategyClass, Class<? extends WidgetStrategy.Factory<T>> factory) {

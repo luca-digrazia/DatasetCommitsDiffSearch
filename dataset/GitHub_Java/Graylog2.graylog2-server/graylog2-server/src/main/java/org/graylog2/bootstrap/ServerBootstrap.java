@@ -75,16 +75,6 @@ public abstract class ServerBootstrap extends CmdLineTool {
     }
 
     @Override
-    protected void beforeStart() {
-        super.beforeStart();
-
-        // Do not use a PID file if the user requested not to
-        if (!isNoPidFile()) {
-            savePidFile(getPidFile());
-        }
-    }
-
-    @Override
     protected void startCommand() {
         final OS os = OS.getOs();
 
@@ -93,6 +83,11 @@ public abstract class ServerBootstrap extends CmdLineTool {
         LOG.info("Deployment: {}", configuration.getInstallationSource());
         LOG.info("OS: {}", os.getPlatformName());
         LOG.info("Arch: {}", os.getArch());
+
+        // Do not use a PID file if the user requested not to
+        if (!isNoPidFile()) {
+            savePidFile(getPidFile());
+        }
 
         final ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
         serverStatus.initialize();

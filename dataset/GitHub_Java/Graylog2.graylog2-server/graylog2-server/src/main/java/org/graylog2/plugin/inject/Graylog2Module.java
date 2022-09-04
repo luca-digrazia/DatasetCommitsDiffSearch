@@ -23,16 +23,8 @@ import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.MapBinder;
 import com.google.inject.multibindings.Multibinder;
-import com.google.inject.multibindings.OptionalBinder;
 import com.google.inject.name.Names;
-import org.apache.shiro.realm.AuthenticatingRealm;
-import org.graylog2.audit.AuditEventSender;
-import org.graylog2.audit.AuditEventType;
-import org.graylog2.audit.PluginAuditEventTypes;
-import org.graylog2.audit.formatter.AuditEventFormatter;
-import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
-import org.graylog2.plugin.decorators.SearchResponseDecorator;
 import org.graylog2.plugin.indexer.retention.RetentionStrategy;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 import org.graylog2.plugin.inputs.MessageInput;
@@ -287,30 +279,6 @@ public abstract class Graylog2Module extends AbstractModule {
         classMultibinder.addBinding().to(permissionsClass);
     }
 
-    protected Multibinder<PluginAuditEventTypes> auditEventTypesBinder() {
-        return Multibinder.newSetBinder(binder(), PluginAuditEventTypes.class);
-    }
-
-    protected void installAuditEventTypes(Multibinder<PluginAuditEventTypes> classMultibinder,
-                                          Class<? extends PluginAuditEventTypes> auditEventTypesClass) {
-        classMultibinder.addBinding().to(auditEventTypesClass);
-    }
-
-    protected MapBinder<AuditEventType, AuditEventFormatter> auditEventFormatterMapBinder() {
-        return MapBinder.newMapBinder(binder(), AuditEventType.class, AuditEventFormatter.class);
-    }
-
-    protected void installAuditEventFormatter(MapBinder<AuditEventType, AuditEventFormatter> auditEventFormatterMapBinder,
-                                              AuditEventType auditEventType,
-                                              Class<? extends AuditEventFormatter> auditEventFormatter) {
-        auditEventFormatterMapBinder.addBinding(auditEventType).to(auditEventFormatter);
-    }
-
-    protected OptionalBinder<AuditEventSender> auditEventSenderBinder() {
-        return OptionalBinder.newOptionalBinder(binder(), AuditEventSender.class);
-    }
-
-
     @Nonnull
     protected Multibinder<Class<? extends DynamicFeature>> jerseyDynamicFeatureBinder() {
         return Multibinder.newSetBinder(binder(), new DynamicFeatureType());
@@ -337,40 +305,6 @@ public abstract class Graylog2Module extends AbstractModule {
 
     protected MapBinder<String, PasswordAlgorithm> passwordAlgorithmBinder() {
         return MapBinder.newMapBinder(binder(), String.class, PasswordAlgorithm.class);
-    }
-
-    protected MapBinder<String, AuthenticatingRealm> authenticationRealmBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, AuthenticatingRealm.class);
-    }
-
-    protected MapBinder<String, SearchResponseDecorator.Factory> searchResponseDecoratorBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, SearchResponseDecorator.Factory.class);
-    }
-
-    protected void installSearchResponseDecorator(MapBinder<String, SearchResponseDecorator.Factory> searchResponseDecoratorBinder,
-                                           Class<? extends SearchResponseDecorator> searchResponseDecoratorClass,
-                                           Class<? extends SearchResponseDecorator.Factory> searchResponseDecoratorFactoryClass) {
-        install(new FactoryModuleBuilder().implement(SearchResponseDecorator.class, searchResponseDecoratorClass).build(searchResponseDecoratorFactoryClass));
-        searchResponseDecoratorBinder.addBinding(searchResponseDecoratorClass.getCanonicalName()).to(searchResponseDecoratorFactoryClass);
-    }
-
-    protected MapBinder<String, AlertCondition.Factory> alertConditionBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, AlertCondition.Factory.class);
-    }
-
-    protected void installAlertCondition(MapBinder<String, AlertCondition.Factory> alertConditionBinder,
-                                         Class<? extends AlertCondition> alertConditionClass,
-                                         Class<? extends AlertCondition.Factory> alertConditionFactoryClass) {
-        install(new FactoryModuleBuilder().implement(AlertCondition.class, alertConditionClass).build(alertConditionFactoryClass));
-        alertConditionBinder.addBinding(alertConditionClass.getCanonicalName()).to(alertConditionFactoryClass);
-    }
-
-    protected void installAlertConditionWithCustomName(MapBinder<String, AlertCondition.Factory> alertConditionBinder,
-                                                       String identifier,
-                                                       Class<? extends AlertCondition> alertConditionClass,
-                                                       Class<? extends AlertCondition.Factory> alertConditionFactoryClass) {
-        install(new FactoryModuleBuilder().implement(AlertCondition.class, alertConditionClass).build(alertConditionFactoryClass));
-        alertConditionBinder.addBinding(identifier).to(alertConditionFactoryClass);
     }
 
     private static class DynamicFeatureType extends TypeLiteral<Class<? extends DynamicFeature>> {}

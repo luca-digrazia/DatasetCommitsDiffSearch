@@ -46,7 +46,6 @@ public abstract class PipelineSource {
     public abstract String id();
 
     @JsonProperty
-    @Nullable
     public abstract String title();
 
     @JsonProperty
