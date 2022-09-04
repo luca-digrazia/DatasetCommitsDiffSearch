@@ -1061,7 +1061,8 @@ public class BuildView {
         ImmutableSet.copyOf(
             getDirectPrerequisiteDependenciesForTesting(
                     eventHandler, ct, configurations, /*toolchainContext=*/ null)
-                .values()));
+                .values()),
+        false);
   }
 
   @VisibleForTesting
@@ -1176,7 +1177,7 @@ public class BuildView {
 
     ImmutableMultimap<Dependency, ConfiguredTarget> cts = skyframeExecutor.getConfiguredTargetMap(
         eventHandler,
-        target.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()));
+        target.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()), false);
 
     OrderedSetMultimap<Attribute, ConfiguredTarget> result = OrderedSetMultimap.create();
     for (Map.Entry<Attribute, Dependency> entry : depNodeNames.entries()) {

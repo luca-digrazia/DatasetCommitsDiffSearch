@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -114,8 +113,8 @@ public class PostConfiguredTargetFunction implements SkyFunction {
               configConditions,
               /*toolchainContext=*/ null);
       if (ct.getConfiguration() != null) {
-        deps = ConfigurationResolver.resolveConfigurations(env, ctgValue, deps, hostConfiguration,
-            ruleClassProvider);
+        deps = ConfiguredTargetFunction.getDynamicConfigurations(env, ctgValue, deps,
+            hostConfiguration, ruleClassProvider);
       }
     } catch (EvalException | ConfiguredTargetFunction.DependencyEvaluationException
         | InvalidConfigurationException | InconsistentAspectOrderException e) {
