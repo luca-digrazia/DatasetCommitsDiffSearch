@@ -94,7 +94,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
       // method call will return a list of interface fields to access in the <clinit> to trigger
       // the initialization of these interfaces.
       ImmutableList<String> companionsToTriggerInterfaceClinit =
-          collectOrderedCompanionsToTriggerInterfaceClinit(directInterfaces);
+          computeOrderedCompanionsToTriggerInterfaceClinit(directInterfaces);
       if (!companionsToTriggerInterfaceClinit.isEmpty()) {
         if (clInitMethodNode == null) {
           clInitMethodNode = new MethodNode(Opcodes.ACC_STATIC, "<clinit>", "()V", null, null);
@@ -264,18 +264,18 @@ public class DefaultMethodClassFixer extends ClassVisitor {
    * initialization, which is consistent with the JVM behavior. For example, "class A implements I1,
    * I2", the returned list would be [I1$$CC, I2$$CC], not [I2$$CC, I1$$CC].
    */
-  private ImmutableList<String> collectOrderedCompanionsToTriggerInterfaceClinit(
+  private ImmutableList<String> computeOrderedCompanionsToTriggerInterfaceClinit(
       ImmutableList<String> interfaces) {
     ImmutableList.Builder<String> companionCollector = ImmutableList.builder();
     HashSet<String> visitedInterfaces = new HashSet<>();
     for (String anInterface : interfaces) {
-      collectOrderedCompanionsToTriggerInterfaceClinit(
+      computeOrderedCompanionsToTriggerInterfaceClinit(
           anInterface, visitedInterfaces, companionCollector);
     }
     return companionCollector.build();
   }
 
-  private void collectOrderedCompanionsToTriggerInterfaceClinit(
+  private void computeOrderedCompanionsToTriggerInterfaceClinit(
       String anInterface,
       HashSet<String> visitedInterfaces,
       ImmutableList.Builder<String> companionCollector) {
@@ -289,7 +289,7 @@ public class DefaultMethodClassFixer extends ClassVisitor {
     String[] parentInterfaces = bytecode.getInterfaces();
     if (parentInterfaces != null && parentInterfaces.length > 0) {
       for (String parentInterface : parentInterfaces) {
-        collectOrderedCompanionsToTriggerInterfaceClinit(
+        computeOrderedCompanionsToTriggerInterfaceClinit(
             parentInterface, visitedInterfaces, companionCollector);
       }
     }

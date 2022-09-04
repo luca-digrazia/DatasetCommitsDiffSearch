@@ -116,11 +116,11 @@ class InterfaceDesugaring extends ClassVisitor {
   public MethodVisitor visitMethod(
       int access, String name, String desc, String signature, String[] exceptions) {
     MethodVisitor result;
-    if (isInterface() && isStaticInitializer(name)) {
+    if (isStaticInitializer(name)) {
       result =
           new InterfaceFieldWriteCollector(
               super.visitMethod(access, name, desc, signature, exceptions));
-    } else if (isInterface()
+    } else if (BitFlags.isSet(accessFlags, Opcodes.ACC_INTERFACE)
         && BitFlags.noneSet(access, Opcodes.ACC_ABSTRACT | Opcodes.ACC_BRIDGE)) {
       checkArgument(BitFlags.noneSet(access, Opcodes.ACC_NATIVE), "Forbidden per JLS ch 9.4");
 
@@ -177,10 +177,6 @@ class InterfaceDesugaring extends ClassVisitor {
         : null;
   }
 
-  private boolean isInterface() {
-    return BitFlags.isSet(accessFlags, Opcodes.ACC_INTERFACE);
-  }
-
   private static boolean isStaticInitializer(String methodName) {
     return "<clinit>".equals(methodName);
   }
@@ -220,7 +216,7 @@ class InterfaceDesugaring extends ClassVisitor {
 
   private ClassVisitor companion() {
     if (companion == null) {
-      checkState(isInterface());
+      checkState(BitFlags.isSet(accessFlags, Opcodes.ACC_INTERFACE));
       String companionName = getCompanionClassName(internalName);
 
       companion = store.add(companionName);
