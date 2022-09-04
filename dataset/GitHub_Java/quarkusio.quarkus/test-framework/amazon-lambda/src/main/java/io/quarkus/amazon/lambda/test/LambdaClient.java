@@ -1,14 +1,12 @@
 package io.quarkus.amazon.lambda.test;
 
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.time.Duration;
-import java.util.AbstractMap;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkus.arc.Arc;
@@ -47,111 +45,7 @@ public class LambdaClient {
 
     }
 
-    public static void invoke(InputStream inputStream, OutputStream outputStream) {
-        if (problem != null) {
-            throw new RuntimeException(problem);
-        }
-        try {
-            String id = "aws-request-" + REQUEST_ID_GENERATOR.incrementAndGet();
-            CompletableFuture<String> result = new CompletableFuture<>();
-            REQUESTS.put(id, result);
-            StringBuilder requestBody = new StringBuilder();
-            int i = 0;
-            while ((i = inputStream.read()) != -1) {
-                requestBody.append((char) i);
-            }
-            REQUEST_QUEUE.add(new Map.Entry<String, String>() {
-
-                @Override
-                public String getKey() {
-                    return id;
-                }
-
-                @Override
-                public String getValue() {
-                    return requestBody.toString();
-                }
-
-                @Override
-                public String setValue(String value) {
-                    return null;
-                }
-            });
-            String output = result.get();
-            outputStream.write(output.getBytes());
-        } catch (Exception e) {
-            if (e instanceof ExecutionException) {
-                Throwable ex = e.getCause();
-                if (ex instanceof RuntimeException) {
-                    throw (RuntimeException) ex;
-                }
-                throw new RuntimeException(ex);
-            }
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Marshalls input and output as JSON using Jackson
-     *
-     * @param returnType
-     * @param input
-     * @param <T>
-     * @return
-     */
     public static <T> T invoke(Class<T> returnType, Object input) {
-        return invoke(returnType, input, Duration.ofNanos(Long.MAX_VALUE));
-    }
-
-    public static <T> T invoke(Class<T> returnType, Object input, Duration timeout) {
-        try {
-            return invokeAsync(returnType, input).get(timeout.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (ExecutionException e) {
-            Throwable ex = e.getCause();
-            if (ex instanceof RuntimeException) {
-                throw (RuntimeException) ex;
-            }
-            throw new RuntimeException(ex);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static <T> CompletableFuture<T> invokeAsync(Class<T> returnType, Object input) {
-        if (problem != null) {
-            CompletableFuture<T> failed = new CompletableFuture<>();
-            failed.completeExceptionally(problem);
-            return failed;
-        }
-        final ObjectMapper mapper = getObjectMapper();
-        final String id = "aws-request-" + REQUEST_ID_GENERATOR.incrementAndGet();
-        final String requestBody;
-        final CompletableFuture<String> result = new CompletableFuture<>();
-        REQUESTS.put(id, result);
-        try {
-            requestBody = mapper.writeValueAsString(input);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-        REQUEST_QUEUE.add(new AbstractMap.SimpleImmutableEntry(id, requestBody));
-        return result.thenApply(s -> {
-            try {
-                return mapper.readerFor(returnType).readValue(s);
-            } catch (JsonProcessingException e) {
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    /**
-     * Takes a json string as input. Unmarshalls return value using Jackson.
-     *
-     * @param returnType
-     * @param json
-     * @param <T>
-     * @return
-     */
-    public static <T> T invokeJson(Class<T> returnType, String json) {
         if (problem != null) {
             throw new RuntimeException(problem);
         }
@@ -160,6 +54,7 @@ public class LambdaClient {
             String id = "aws-request-" + REQUEST_ID_GENERATOR.incrementAndGet();
             CompletableFuture<String> result = new CompletableFuture<>();
             REQUESTS.put(id, result);
+            String requestBody = mapper.writeValueAsString(input);
             REQUEST_QUEUE.add(new Map.Entry<String, String>() {
 
                 @Override
@@ -169,7 +64,7 @@ public class LambdaClient {
 
                 @Override
                 public String getValue() {
-                    return json;
+                    return requestBody;
                 }
 
                 @Override
