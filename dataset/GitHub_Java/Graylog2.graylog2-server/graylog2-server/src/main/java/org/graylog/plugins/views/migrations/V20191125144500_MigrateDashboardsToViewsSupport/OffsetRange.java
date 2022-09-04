@@ -13,7 +13,7 @@ public abstract class OffsetRange extends TimeRange {
 
     @JsonProperty
     @Override
-    public abstract String type();
+    abstract String type();
 
     @JsonProperty
     public abstract String source();
