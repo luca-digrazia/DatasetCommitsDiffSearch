@@ -14,16 +14,12 @@
 package com.google.devtools.build.docgen;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.docgen.starlark.StarlarkBuiltinDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkConstructorMethodDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkJavaMethodDoc;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
-import com.google.devtools.build.lib.util.Classpath;
-import com.google.devtools.build.lib.util.Classpath.ClassPathException;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.TreeMap;
@@ -50,26 +46,11 @@ final class StarlarkDocumentationCollector {
     return TopLevelModule.class.getAnnotation(StarlarkBuiltin.class);
   }
 
-  private static ImmutableMap<String, StarlarkBuiltinDoc> all;
-
-  /** Applies {@link #collectModules} to all Bazel and Starlark classes. */
-  static synchronized ImmutableMap<String, StarlarkBuiltinDoc> getAllModules()
-      throws ClassPathException {
-    if (all == null) {
-      all =
-          collectModules(
-              Iterables.concat(
-                  Classpath.findClasses("com/google/devtools/build"), // Bazel
-                  Classpath.findClasses("net/starlark/java"))); // Starlark
-    }
-    return all;
-  }
-
   /**
    * Collects the documentation for all Starlark modules comprised of the given classes and returns
-   * a map from the name of each Starlark module to its documentation.
+   * a map that maps Starlark module name to the module documentation.
    */
-  static ImmutableMap<String, StarlarkBuiltinDoc> collectModules(Iterable<Class<?>> classes) {
+  public static Map<String, StarlarkBuiltinDoc> collectModules(Iterable<Class<?>> classes) {
     // Force class loading of com.google.devtools.build.lib.syntax.Starlark before we do any of our
     // own processing. Otherwise, we're in trouble since com.google.devtools.build.lib.syntax.Dict
     // happens to be the first class on our classpath that we proccess via #collectModuleMethods,
@@ -112,7 +93,7 @@ final class StarlarkDocumentationCollector {
       }
     }
 
-    return ImmutableMap.copyOf(modules);
+    return modules;
   }
 
   /**

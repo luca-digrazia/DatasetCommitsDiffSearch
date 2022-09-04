@@ -24,6 +24,11 @@ import com.google.devtools.build.docgen.starlark.StarlarkBuiltinDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkConstructorMethodDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkMethodDoc;
 import com.google.devtools.build.docgen.starlark.StarlarkParamDoc;
+import com.google.devtools.build.lib.syntax.BuiltinCallable;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.BufferedOutputStream;
 import java.io.FileOutputStream;
@@ -38,11 +43,6 @@ import java.util.function.Function;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkInterfaceUtils;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.BuiltinCallable;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkCallable;
-import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /** The main class for the Starlark documentation generator. */
 public class ApiExporter {
@@ -279,7 +279,7 @@ public class ApiExporter {
   private static void printUsage(OptionsParser parser) {
     System.err.println(
         "Usage: api_exporter_bin -n product_name -p rule_class_provider (-i input_dir)+\n"
-            + "   -f outputFile [-b denylist] [-h]\n\n"
+            + "   -f outputFile [-b blacklist] [-h]\n\n"
             + "Exports all Starlark builtins to a file including the embedded native rules.\n"
             + "The product name (-n), rule class provider (-p), output file (-f) and at least \n"
             + " one input_dir (-i) must be specified.\n");
@@ -310,7 +310,7 @@ public class ApiExporter {
     try {
       SymbolFamilies symbols =
           new SymbolFamilies(
-              options.productName, options.provider, options.inputDirs, options.denylist);
+              options.productName, options.provider, options.inputDirs, options.blacklist);
       Builtins.Builder builtins = Builtins.newBuilder();
 
       appendTypes(builtins, symbols.getTypes(), symbols.getNativeRules());
