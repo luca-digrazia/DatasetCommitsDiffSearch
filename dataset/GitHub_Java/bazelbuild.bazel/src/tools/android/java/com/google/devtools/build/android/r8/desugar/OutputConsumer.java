@@ -14,8 +14,6 @@
 package com.google.devtools.build.android.r8.desugar;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.devtools.build.android.r8.desugar.OutputConsumer.Flags.EXCLUDE_PATH_ENTRIES;
-import static com.google.devtools.build.android.r8.desugar.OutputConsumer.Flags.INCLUDE_PATH_ENTRIES;
 import static org.objectweb.asm.Opcodes.ACC_BRIDGE;
 import static org.objectweb.asm.Opcodes.ACC_INTERFACE;
 import static org.objectweb.asm.Opcodes.ASM7;
@@ -64,12 +62,6 @@ import org.objectweb.asm.MethodVisitor;
  */
 public class OutputConsumer implements ClassFileConsumer {
 
-  /** Flags to control what goes into the output */
-  public enum Flags {
-    INCLUDE_PATH_ENTRIES,
-    EXCLUDE_PATH_ENTRIES
-  }
-
   public boolean finished() {
     return finish;
   }
@@ -100,22 +92,14 @@ public class OutputConsumer implements ClassFileConsumer {
   private final Origin origin;
   private final DependencyCollector dependencyCollector;
   private final Path input;
-  private final Flags flags;
-
   private final NavigableSet<ClassFileData> classFiles = new TreeSet<>();
   private boolean finish = true;
 
   public OutputConsumer(Path archive, DependencyCollector dependencyCollector, Path input) {
-    this(archive, dependencyCollector, input, INCLUDE_PATH_ENTRIES);
-  }
-
-  public OutputConsumer(
-      Path archive, DependencyCollector dependencyCollector, Path input, Flags flags) {
     this.archive = archive;
     this.origin = new PathOrigin(archive);
     this.dependencyCollector = dependencyCollector;
     this.input = input;
-    this.flags = flags;
   }
 
   @Override
@@ -150,8 +134,7 @@ public class OutputConsumer implements ClassFileConsumer {
           out,
           entryName ->
               ("module-info.class".equals(entryName) || entryName.startsWith("META-INF/versions/"))
-                  || ArchiveProgramResourceProvider.includeClassFileEntries(entryName)
-                  || (entryName.endsWith("/") && flags == EXCLUDE_PATH_ENTRIES),
+                  || ArchiveProgramResourceProvider.includeClassFileEntries(entryName),
           name -> {
             final String metainfServicesPrefix = "META-INF/services/";
             if (name.startsWith(metainfServicesPrefix)) {
