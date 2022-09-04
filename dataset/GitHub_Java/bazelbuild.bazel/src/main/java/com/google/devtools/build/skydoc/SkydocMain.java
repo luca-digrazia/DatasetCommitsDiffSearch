@@ -194,6 +194,7 @@ public class SkydocMain {
             .build();
     parser.parseAndExitUponError(args);
     StarlarkSemanticsOptions semanticsOptions = parser.getOptions(StarlarkSemanticsOptions.class);
+    semanticsOptions.incompatibleDisableDeprecatedAttrParams = false;
     semanticsOptions.incompatibleNewActionsApi = false;
     SkydocOptions skydocOptions = parser.getOptions(SkydocOptions.class);
 

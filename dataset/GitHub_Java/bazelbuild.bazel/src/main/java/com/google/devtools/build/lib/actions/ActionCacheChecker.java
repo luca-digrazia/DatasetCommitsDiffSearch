@@ -337,9 +337,7 @@ public class ActionCacheChecker {
       reportChanged(handler, action);
       actionCache.accountMiss(MissReason.DIFFERENT_FILES);
       return true;
-    } else if (!entry
-        .getActionKey()
-        .equals(action.getKey(actionKeyContext, /*artifactExpander=*/ null))) {
+    } else if (!entry.getActionKey().equals(action.getKey(actionKeyContext))) {
       reportCommand(handler, action);
       actionCache.accountMiss(MissReason.DIFFERENT_ACTION_KEY);
       return true;
@@ -398,9 +396,7 @@ public class ActionCacheChecker {
         computeUsedEnv(action, clientEnv, remoteDefaultPlatformProperties);
     ActionCache.Entry entry =
         new ActionCache.Entry(
-            action.getKey(actionKeyContext, /*artifactExpander=*/ null),
-            usedEnvironment,
-            action.discoversInputs());
+            action.getKey(actionKeyContext), usedEnvironment, action.discoversInputs());
     for (Artifact output : action.getOutputs()) {
       // Remove old records from the cache if they used different key.
       String execPath = output.getExecPathString();
@@ -468,12 +464,12 @@ public class ActionCacheChecker {
       }
     }
 
-    ImmutableList.Builder<Artifact> inputArtifactsBuilder = ImmutableList.builder();
+    List<Artifact> inputArtifacts = new ArrayList<>();
     List<PathFragment> unresolvedPaths = new ArrayList<>();
     for (PathFragment execPath : inputExecPaths) {
       Artifact artifact = allowedDerivedInputsMap.get(execPath);
       if (artifact != null) {
-        inputArtifactsBuilder.add(artifact);
+        inputArtifacts.add(artifact);
       } else {
         // Remember this execPath, we will try to resolve it as a source artifact.
         unresolvedPaths.add(execPath);
@@ -495,10 +491,10 @@ public class ActionCacheChecker {
       // ignore such paths because dependency checker would identify changes in inputs (ignored path
       // was used before) and will force action execution.
       if (artifact != null) {
-        inputArtifactsBuilder.add(artifact);
+        inputArtifacts.add(artifact);
       }
     }
-    return inputArtifactsBuilder.build();
+    return inputArtifacts;
   }
 
   /**

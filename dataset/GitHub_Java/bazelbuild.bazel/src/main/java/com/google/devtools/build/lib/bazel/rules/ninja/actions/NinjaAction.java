@@ -37,7 +37,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.rules.cpp.CppIncludeExtractionContext;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
@@ -148,7 +148,7 @@ public class NinjaAction extends SpawnAction implements ActionCacheAwareAction {
     boolean siblingRepositoryLayout =
         actionExecutionContext
             .getOptions()
-            .getOptions(BuildLanguageOptions.class)
+            .getOptions(StarlarkSemanticsOptions.class)
             .experimentalSiblingRepositoryLayout;
 
     CppIncludeExtractionContext scanningContext =
@@ -160,7 +160,7 @@ public class NinjaAction extends SpawnAction implements ActionCacheAwareAction {
           new DependencySet(execRoot).read(actionExecutionContext.getInputPath(depFile));
       NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
       for (Path inputPath : depSet.getDependencies()) {
-        PathFragment execRelativePath;
+        PathFragment execRelativePath = null;
 
         // This branch needed in case the depfile contains an absolute path to a source file.
         if (sourceRoot.contains(inputPath)) {
@@ -229,11 +229,6 @@ public class NinjaAction extends SpawnAction implements ActionCacheAwareAction {
             .build();
     updateInputs(inputs);
     return inputs;
-  }
-
-  @Override
-  protected NestedSet<Artifact> getOriginalInputs() {
-    return originalInputs;
   }
 
   private static FailureDetail createFailureDetail(String message, Code detailedCode) {
