@@ -4,29 +4,16 @@ import ch.qos.logback.classic.Level;
 import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.Version;
 import org.codehaus.jackson.map.*;
-import org.codehaus.jackson.map.annotate.JsonCachable;
 import org.codehaus.jackson.type.JavaType;
 
 import java.io.IOException;
 
 class LogbackModule extends Module {
-    @JsonCachable
     private static class LevelDeserializer extends JsonDeserializer<Level> {
         @Override
         public Level deserialize(JsonParser jp,
                                  DeserializationContext ctxt) throws IOException {
-
-            final String text = jp.getText();
-
-            if ("false".equalsIgnoreCase(text)) {
-                return Level.OFF;
-            }
-
-            if ("true".equalsIgnoreCase(text)) {
-                return Level.ALL;
-            }
-
-            return Level.toLevel(text, Level.INFO);
+            return Level.toLevel(jp.getText());
         }
     }
 
