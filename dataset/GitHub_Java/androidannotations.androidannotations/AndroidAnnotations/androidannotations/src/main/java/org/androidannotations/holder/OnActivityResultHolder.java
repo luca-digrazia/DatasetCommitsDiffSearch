@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,25 +15,41 @@
  */
 package org.androidannotations.holder;
 
-import com.sun.codemodel.*;
-import org.androidannotations.process.ProcessHolder;
-
-import java.util.HashMap;
-
 import static com.sun.codemodel.JExpr._super;
 
-public class OnActivityResultHolder {
+import java.util.HashMap;
+import java.util.Map;
 
-	private EComponentHolder holder;
+import org.androidannotations.process.ProcessHolder;
+
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCase;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JSwitch;
+import com.sun.codemodel.JVar;
+
+public class OnActivityResultHolder extends GeneratedClassHolderDecorator<EComponentHolder> {
+
+	private JMethod method;
 	private JBlock afterSuperBlock;
 	private JSwitch zwitch;
 	private JVar requestCodeParam;
 	private JVar dataParam;
 	private JVar resultCodeParam;
-	private HashMap<Integer, JBlock> caseBlocks = new HashMap<Integer, JBlock>();
+	private Map<Integer, JBlock> caseBlocks = new HashMap<Integer, JBlock>();
 
 	public OnActivityResultHolder(EComponentHolder holder) {
-		this.holder = holder;
+		super(holder);
+	}
+
+	public JMethod getMethod() {
+		if (method == null) {
+			setOnActivityResult();
+		}
+		return method;
 	}
 
 	public JVar getRequestCodeParam() {
@@ -92,14 +108,14 @@ public class OnActivityResultHolder {
 	}
 
 	private void setOnActivityResult() {
-		JMethod method = holder.getGeneratedClass().method(JMod.PUBLIC, codeModel().VOID, "onActivityResult");
+		method = holder.getGeneratedClass().method(JMod.PUBLIC, codeModel().VOID, "onActivityResult");
 		method.annotate(Override.class);
 		requestCodeParam = method.param(codeModel().INT, "requestCode");
 		resultCodeParam = method.param(codeModel().INT, "resultCode");
 		dataParam = method.param(classes().INTENT, "data");
 		JBlock body = method.body();
 		body.invoke(_super(), method).arg(requestCodeParam).arg(resultCodeParam).arg(dataParam);
-		afterSuperBlock =  body.block();
+		afterSuperBlock = body.block();
 	}
 
 	private JCodeModel codeModel() {
