@@ -269,7 +269,6 @@ public final class ConfiguredTargetFactory {
       return SkylarkRuleConfiguredTargetBuilder.buildRule(
           ruleContext,
           rule.getRuleClassObject().getConfiguredTargetFunction(),
-          env.getSkylarkSemantics(),
           ruleClassProvider.getRegisteredSkylarkProviders());
     } else {
       RuleClass.ConfiguredTargetFactory<ConfiguredTarget, RuleContext> factory =
@@ -388,7 +387,8 @@ public final class ConfiguredTargetFactory {
     }
 
     for (SkylarkProviderIdentifier providerId : advertisedProviders.getSkylarkProviders()) {
-      if (configuredAspect.getProvider(providerId) == null) {
+      SkylarkProviders skylarkProviders = configuredAspect.getProvider(SkylarkProviders.class);
+      if (skylarkProviders == null || skylarkProviders.get(providerId) == null) {
         eventHandler.handle(Event.error(
             target.getLocation(),
             String.format(
