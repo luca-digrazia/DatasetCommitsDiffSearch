@@ -316,6 +316,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             .setFileSystem(fileSystem)
             .setDirectories(directories)
             .setActionKeyContext(actionKeyContext)
+            .setDefaultBuildOptions(
+                DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
             .setWorkspaceStatusActionFactory(workspaceStatusActionFactory)
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
             .setManagedDirectoriesKnowledge(getManagedDirectoriesKnowledge())
@@ -336,9 +338,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         packageOptions,
         buildLanguageOptions,
         UUID.randomUUID(),
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
         tsgm);
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
+    skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     useConfiguration();
     setUpSkyframe();
     this.actionLogBufferPathGenerator =
@@ -409,7 +411,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected Iterable<EnvironmentExtension> getEnvironmentExtensions() {
-    return ImmutableList.of();
+    return ImmutableList.<EnvironmentExtension>of();
   }
 
   protected StarlarkSemantics getStarlarkSemantics() {
@@ -450,7 +452,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     optionsParser.setStarlarkOptions(starlarkOptions);
 
     BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
-    return skyframeExecutor.createConfigurations(reporter, buildOptions, ImmutableSet.of(), false);
+    return skyframeExecutor.createConfigurations(
+        reporter, buildOptions, ImmutableSet.<String>of(), false);
   }
 
   protected Target getTarget(String label)
@@ -556,6 +559,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * Invalidates all existing packages. Optionally invalidates configurations too.
    *
    * <p>Tests should invalidate both unless they have specific reason not to.
+   *
+   * @throws InterruptedException
    */
   protected void invalidatePackages(boolean alsoConfigs) throws InterruptedException {
     skyframeExecutor.invalidateFilesUnderPathForTesting(
@@ -600,6 +605,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param starlarkOptions map of Starlark-defined options where the keys are option names (in the
    *     form of label-like strings) and the values are option values
    * @param args native option name/pair descriptions in command line form (e.g. "--cpu=k8")
+   * @throws IllegalArgumentException
    */
   protected void useConfiguration(ImmutableMap<String, Object> starlarkOptions, String... args)
       throws Exception {
@@ -618,10 +624,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Creates BuildView using current hostConfig/targetConfig values. Ensures that hostConfig is
-   * either identical to the targetConfig or has 'host' short name.
+   * Creates BuildView using current hostConfig/targetConfig values.
+   * Ensures that hostConfig is either identical to the targetConfig or has
+   * 'host' short name.
    */
-  protected final void createBuildView() {
+  protected final void createBuildView() throws Exception {
     Preconditions.checkNotNull(masterConfig);
     Preconditions.checkState(getHostConfiguration().equals(getTargetConfiguration())
         || getHostConfiguration().isHostConfiguration(),
@@ -657,6 +664,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             return null;
           }
         },
+        /*isSystemEnv=*/ true,
         /*extendedSanityChecks=*/ false,
         /*allowAnalysisFailures=*/ false,
         reporter,
@@ -672,7 +680,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected final Collection<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget target)
       throws TransitionException, InvalidConfigurationException, InconsistentAspectOrderException,
-          Failure {
+          Failure, InterruptedException {
     return view.getDirectPrerequisitesForTesting(reporter, target, masterConfig);
   }
 
@@ -695,6 +703,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         view.getConfiguredTargetAndDataDirectPrerequisitesForTesting(
             reporter,
             ctad.getConfiguredTarget(),
+            ctad.getConfiguredTarget().getConfigurationKey(),
             masterConfig)) {
       if (candidate.getConfiguredTarget().getLabel().equals(candidateLabel)) {
         return candidate;
@@ -724,10 +733,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * comparison.
    *
    * <p>Generally, this means they share the same checksum, which is computed by iterating over all
-   * the individual @Option annotated values contained within the {@link FragmentOptions} classes
+   * the individual @Option annotated values contained within the {@link FragmentOption} classes
    * contained within the {@link BuildOptions} inside the given configurations.
    */
-  protected static void assertConfigurationsEqual(
+  protected void assertConfigurationsEqual(
       BuildConfiguration config1,
       BuildConfiguration config2,
       Set<Class<? extends FragmentOptions>> excludeFragmentOptions) {
@@ -738,9 +747,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         .isEqualTo(trimConfiguration(config1.cloneOptions(), excludeFragmentOptions));
   }
 
-  protected static void assertConfigurationsEqual(
-      BuildConfiguration config1, BuildConfiguration config2) {
-    assertConfigurationsEqual(config1, config2, /*excludeFragmentOptions=*/ ImmutableSet.of());
+  protected void assertConfigurationsEqual(BuildConfiguration config1, BuildConfiguration config2) {
+    assertConfigurationsEqual(config1, config2, ImmutableSet.of());
   }
 
   /**
@@ -1053,19 +1061,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Returns the Artifact for the specified label, configured for the "build" (aka "target")
-   * configuration.
-   */
-  protected Artifact getArtifact(String label) throws LabelSyntaxException {
-    ConfiguredTarget target = getConfiguredTarget(label, targetConfig);
-    if (target instanceof FileConfiguredTarget) {
-      return ((FileConfiguredTarget) target).getArtifact();
-    } else {
-      return getFilesToBuild(target).getSingleton();
-    }
-  }
-
-  /**
    * Returns the ConfiguredTarget for the specified label, configured for the "host" configuration.
    */
   protected ConfiguredTarget getHostConfiguredTarget(String label) throws LabelSyntaxException {
@@ -1104,9 +1099,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param ruleName the name of the rule.
    * @param lines the text of the rule.
    * @return the configured target instance for the created rule.
+   * @throws IOException
+   * @throws Exception
    */
   protected ConfiguredTarget scratchConfiguredTarget(
-      String packageName, String ruleName, String... lines) throws Exception {
+      String packageName, String ruleName, String... lines) throws IOException, Exception {
     return scratchConfiguredTarget(packageName, ruleName, targetConfig, lines);
   }
 
@@ -1118,10 +1115,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param config the configuration to use to construct the configured rule.
    * @param lines the text of the rule.
    * @return the configured target instance for the created rule.
+   * @throws IOException
+   * @throws Exception
    */
   protected ConfiguredTarget scratchConfiguredTarget(
       String packageName, String ruleName, BuildConfiguration config, String... lines)
-      throws Exception {
+      throws IOException, Exception {
     ConfiguredTargetAndData ctad =
         scratchConfiguredTargetAndData(packageName, ruleName, config, lines);
     return ctad == null ? null : ctad.getConfiguredTarget();
@@ -1134,6 +1133,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param rulename the name of the rule.
    * @param lines the text of the rule.
    * @return the configured tatarget and target instance for the created rule.
+   * @throws Exception
    */
   protected ConfiguredTargetAndData scratchConfiguredTargetAndData(
       String packageName, String rulename, String... lines) throws Exception {
@@ -1148,6 +1148,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param config the configuration to use to construct the configured rule.
    * @param lines the text of the rule.
    * @return the ConfiguredTargetAndData instance for the created rule.
+   * @throws IOException
+   * @throws Exception
    */
   protected ConfiguredTargetAndData scratchConfiguredTargetAndData(
       String packageName, String ruleName, BuildConfiguration config, String... lines)
@@ -1163,6 +1165,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param ruleName the name of the rule.
    * @param lines the text of the rule.
    * @return the rule instance for the created rule.
+   * @throws IOException
+   * @throws Exception
    */
   protected Rule scratchRule(String packageName, String ruleName, String... lines)
       throws Exception {
@@ -1423,7 +1427,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /** Returns the input {@link Artifact}s to the given {@link Action} with the given exec paths. */
-  protected static List<Artifact> getInputs(Action owner, Collection<String> execPaths) {
+  protected List<Artifact> getInputs(Action owner, Collection<String> execPaths) {
     Set<String> expectedPaths = new HashSet<>(execPaths);
     List<Artifact> result = new ArrayList<>();
     for (Artifact output : owner.getInputs().toList()) {
@@ -1645,14 +1649,26 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected Action getGeneratingActionForLabel(String label) throws Exception {
-    return getGeneratingAction(getArtifact(label));
+    return getGeneratingAction(getFileConfiguredTarget(label).getArtifact());
   }
 
-  protected static String fileName(Artifact artifact) {
+  /**
+   * Strips the C++-contributed prefix out of an output path when tests are run with trimmed
+   * configurations. e.g. turns "bazel-out/gcc-X-glibc-Y-k8-fastbuild/ to "bazel-out/fastbuild/".
+   *
+   * <p>This should be used for targets use configurations with C++ fragments.
+   */
+  protected String stripCppPrefixForTrimmedConfigs(String outputPath) {
+    return targetConfig.trimConfigurations()
+        ? AnalysisTestUtil.OUTPUT_PATH_CPP_PREFIX_PATTERN.matcher(outputPath).replaceFirst("")
+        : outputPath;
+  }
+
+  protected String fileName(Artifact artifact) {
     return artifact.getExecPathString();
   }
 
-  protected static String fileName(FileConfiguredTarget target) {
+  protected String fileName(FileConfiguredTarget target) {
     return fileName(target.getArtifact());
   }
 
@@ -1706,9 +1722,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         "'" + packageName + ":a.foo' does not produce any " + descriptionPlural);
   }
 
-  protected void assertSrcsValidity(
-      String ruleType, String targetName, boolean expectedError, String... expectedMessages)
-      throws Exception {
+  protected void assertSrcsValidity(String ruleType, String targetName, boolean expectedError,
+      String... expectedMessages) throws Exception{
     ConfiguredTarget target = getConfiguredTarget(targetName);
     if (expectedError) {
       assertThat(view.hasErrors(target)).isTrue();
@@ -1742,10 +1757,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         .build();
   }
 
-  protected static ImmutableList<String> actionInputsToPaths(
-      NestedSet<? extends ActionInput> actionInputs) {
+  protected static List<String> actionInputsToPaths(NestedSet<? extends ActionInput> actionInputs) {
     return ImmutableList.copyOf(
-        Lists.transform(actionInputs.toList(), ActionInput::getExecPathString));
+        Iterables.transform(
+            actionInputs.toList(), (actionInput) -> actionInput.getExecPathString()));
   }
 
   /**
@@ -1759,19 +1774,20 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Utility method for asserting that a list contains the elements of a sublist. This is useful for
-   * checking that a list of arguments contains a particular set of arguments.
+   * Utility method for asserting that a list contains the elements of a
+   * sublist. This is useful for checking that a list of arguments contains a
+   * particular set of arguments.
    */
-  protected static void assertContainsSublist(List<String> list, List<String> sublist) {
+  protected void assertContainsSublist(List<String> list, List<String> sublist) {
     assertContainsSublist(null, list, sublist);
   }
 
   /**
-   * Utility method for asserting that a list contains the elements of a sublist. This is useful for
-   * checking that a list of arguments contains a particular set of arguments.
+   * Utility method for asserting that a list contains the elements of a
+   * sublist. This is useful for checking that a list of arguments contains a
+   * particular set of arguments.
    */
-  protected static void assertContainsSublist(
-      String message, List<String> list, List<String> sublist) {
+  protected void assertContainsSublist(String message, List<String> list, List<String> sublist) {
     if (Collections.indexOfSubList(list, sublist) == -1) {
       fail((message == null ? "" : (message + ' '))
           + "expected: <" + list + "> to contain sublist: <" + sublist + ">");
@@ -1779,10 +1795,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected void assertContainsSelfEdgeEvent(String label) {
-    assertContainsEvent(Pattern.compile(label + " \\([a-f0-9]+\\) \\[self-edge]"));
+    assertContainsEvent(Pattern.compile(label + " \\([a-f0-9]+\\) \\[self-edge\\]"));
   }
 
-  protected static NestedSet<Artifact> collectRunfiles(ConfiguredTarget target) {
+  protected NestedSet<Artifact> collectRunfiles(ConfiguredTarget target) {
     RunfilesProvider runfilesProvider = target.getProvider(RunfilesProvider.class);
     if (runfilesProvider != null) {
       return runfilesProvider.getDefaultRunfiles().getAllArtifacts();
@@ -1791,7 +1807,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
   }
 
-  protected static NestedSet<Artifact> getFilesToBuild(TransitiveInfoCollection target) {
+  protected NestedSet<Artifact> getFilesToBuild(TransitiveInfoCollection target) {
     return target.getProvider(FileProvider.class).getFilesToBuild();
   }
 
@@ -1835,16 +1851,15 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return ImmutableList.copyOf(result);
   }
 
-  protected static NestedSet<Artifact> getOutputGroup(
+  protected NestedSet<Artifact> getOutputGroup(
       TransitiveInfoCollection target, String outputGroup) {
     OutputGroupInfo provider = OutputGroupInfo.get(target);
     return provider == null
-        ? NestedSetBuilder.emptySet(Order.STABLE_ORDER)
+        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
         : provider.getOutputGroup(outputGroup);
   }
 
-  protected static NestedSet<Artifact.DerivedArtifact> getExtraActionArtifacts(
-      ConfiguredTarget target) {
+  protected NestedSet<Artifact.DerivedArtifact> getExtraActionArtifacts(ConfiguredTarget target) {
     return target.getProvider(ExtraActionArtifactsProvider.class).getExtraActionArtifacts();
   }
 
@@ -1852,15 +1867,15 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getConfiguredTarget(label).getProvider(FilesToRunProvider.class).getExecutable();
   }
 
-  protected static Artifact getExecutable(TransitiveInfoCollection target) {
+  protected Artifact getExecutable(TransitiveInfoCollection target) {
     return target.getProvider(FilesToRunProvider.class).getExecutable();
   }
 
-  protected static NestedSet<Artifact> getFilesToRun(TransitiveInfoCollection target) {
+  protected NestedSet<Artifact> getFilesToRun(TransitiveInfoCollection target) {
     return target.getProvider(FilesToRunProvider.class).getFilesToRun();
   }
 
-  protected NestedSet<Artifact> getFilesToRun(Label label) {
+  protected NestedSet<Artifact> getFilesToRun(Label label) throws Exception {
     return getConfiguredTarget(label, targetConfig)
         .getProvider(FilesToRunProvider.class).getFilesToRun();
   }
@@ -1873,7 +1888,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getConfiguredTarget(label).getProvider(FilesToRunProvider.class).getRunfilesSupport();
   }
 
-  protected static RunfilesSupport getRunfilesSupport(TransitiveInfoCollection target) {
+  protected RunfilesSupport getRunfilesSupport(TransitiveInfoCollection target) {
     return target.getProvider(FilesToRunProvider.class).getRunfilesSupport();
   }
 
@@ -1969,7 +1984,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       boolean doAnalysis,
       EventBus eventBus) throws Exception {
     return update(
-        targets, ImmutableList.of(), keepGoing, loadingPhaseThreads, doAnalysis, eventBus);
+        targets, ImmutableList.<String>of(), keepGoing, loadingPhaseThreads, doAnalysis, eventBus);
   }
 
   protected AnalysisResult update(
@@ -2043,53 +2058,51 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return result;
   }
 
-  protected static String getErrorMsgNoGoodFiles(
-      String attrName, String ruleType, String ruleName, String depRuleName) {
+  protected String getErrorMsgNoGoodFiles(String attrName, String ruleType, String ruleName,
+      String depRuleName) {
     return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": '"
         + depRuleName + "' does not produce any " + ruleType + " " + attrName + " files";
   }
 
-  protected static String getErrorMsgMisplacedFiles(
-      String attrName, String ruleType, String ruleName, String fileName) {
+  protected String getErrorMsgMisplacedFiles(String attrName, String ruleType, String ruleName,
+      String fileName) {
     return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": source file '"
         + fileName + "' is misplaced here";
   }
 
-  protected static String getErrorNonExistingTarget(
-      String attrName, String ruleType, String ruleName, String targetName) {
+  protected String getErrorNonExistingTarget(String attrName, String ruleType, String ruleName,
+      String targetName) {
     return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": target '"
         + targetName + "' does not exist";
   }
 
-  protected static String getErrorNonExistingRule(
-      String attrName, String ruleType, String ruleName, String targetName) {
+  protected String getErrorNonExistingRule(String attrName, String ruleType, String ruleName,
+      String targetName) {
     return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": rule '"
         + targetName + "' does not exist";
   }
 
-  protected static String getErrorMsgMisplacedRules(
-      String attrName, String ruleType, String ruleName, String depRuleType, String depRuleName) {
+  protected String getErrorMsgMisplacedRules(String attrName, String ruleType, String ruleName,
+      String depRuleType, String depRuleName) {
     return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": "
         + depRuleType + " rule '" + depRuleName + "' is misplaced here";
   }
 
-  protected static String getErrorMsgNonEmptyList(
-      String attrName, String ruleType, String ruleName) {
+  protected String getErrorMsgNonEmptyList(String attrName, String ruleType, String ruleName) {
     return "in " + attrName + " attribute of " + ruleType + " rule " + ruleName + ": attribute "
         + "must be non empty";
   }
 
-  protected static String getErrorMsgMandatoryMissing(String attrName, String ruleType) {
+  protected String getErrorMsgMandatoryMissing(String attrName, String ruleType) {
     return "missing value for mandatory attribute '" + attrName + "' in '" + ruleType + "' rule";
   }
 
-  protected static String getErrorMsgWrongAttributeValue(String value, String... expected) {
+  protected String getErrorMsgWrongAttributeValue(String value, String... expected) {
     return String.format("has to be one of %s instead of '%s'",
         StringUtil.joinEnglishList(ImmutableSet.copyOf(expected), "or", "'"), value);
   }
 
-  protected static String getErrorMsgMandatoryProviderMissing(
-      String offendingRule, String providerName) {
+  protected String getErrorMsgMandatoryProviderMissing(String offendingRule, String providerName) {
     return String.format("'%s' does not have mandatory providers: '%s'",
         offendingRule, providerName);
   }
@@ -2109,7 +2122,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       String packageName, String... lines) throws Exception {
     eventCollector.clear();
     reporter.removeHandler(failFastHandler);
-    scratch.file(packageName + "/BUILD", lines);
+    scratch.file("" + packageName + "/BUILD", lines);
     return getPackageManager()
         .getPackage(reporter, PackageIdentifier.createInMainRepo(packageName));
   }
@@ -2180,7 +2193,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public ImmutableMap<String, Object> getStarlarkDefinedBuiltins() {
+    public ImmutableMap<String, Object> getStarlarkDefinedBuiltins() throws InterruptedException {
       throw new UnsupportedOperationException();
     }
 
@@ -2414,7 +2427,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   /** Creates instances of {@link ActionExecutionContext} consistent with test case. */
   public class ActionExecutionContextBuilder {
     private MetadataProvider actionInputFileCache = null;
-    private final TreeMap<String, String> clientEnv = new TreeMap<>();
+    private TreeMap<String, String> clientEnv = new TreeMap<>();
     private ArtifactExpander artifactExpander = null;
     private Executor executor = new DummyExecutor(fileSystem, getExecRoot());
 
