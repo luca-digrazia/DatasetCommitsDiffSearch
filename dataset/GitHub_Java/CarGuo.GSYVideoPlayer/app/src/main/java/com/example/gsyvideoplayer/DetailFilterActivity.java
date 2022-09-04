@@ -1,7 +1,6 @@
 package com.example.gsyvideoplayer;
 
 import android.graphics.Color;
-import android.opengl.Matrix;
 import android.os.Bundle;
 import android.support.v4.widget.NestedScrollView;
 import android.view.View;
@@ -46,9 +45,6 @@ import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
-import java.util.Timer;
-import java.util.TimerTask;
-
 import butterknife.BindView;
 import butterknife.ButterKnife;
 
@@ -75,10 +71,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
     @BindView(R.id.jump)
     Button jump;
 
-    @BindView(R.id.change_anima)
-    Button anima;
-
-
     private int type = 0;
 
     private int backupRendType;
@@ -86,14 +78,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
     private float deep = 0.8f;
 
     private String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
-
-    private Timer timer = new Timer();
-
-    private TaskLocal mTimerTask;
-
-    private int percentage = 1;
-
-    private int percentageType = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,19 +118,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
                 //startActivity(new Intent(DetailControlActivity.this, MainActivity.class));
             }
         });
-
-        anima.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                cancelTask();
-                mTimerTask = new TaskLocal();
-                timer.schedule(mTimerTask, 0, 50);
-                percentageType++;
-                if (percentageType > 4) {
-                    percentageType = 1;
-                }
-            }
-        });
     }
 
     @Override
@@ -181,40 +152,6 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
     protected void onDestroy() {
         super.onDestroy();
         GSYVideoType.setRenderType(backupRendType);
-        cancelTask();
-    }
-
-    private void cancelTask() {
-        if (mTimerTask != null) {
-            mTimerTask.cancel();
-            mTimerTask = null;
-        }
-    }
-
-    private class TaskLocal extends TimerTask {
-        @Override
-        public void run() {
-            float[] transform = new float[16];
-            switch (percentageType) {
-                case 1:
-                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 1.0f, 0, 0.0f);
-                    break;
-                case 2:
-                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 0.0f, 1.0f, 0.0f);
-                    break;
-                case 3:
-                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 0.0f, 0, 1.0f);
-                    break;
-                case 4:
-                    Matrix.setRotateM(transform, 0, 360, 0.0f, 0, 1.0f);
-                    break;
-            }
-            detailPlayer.setMatrixGL(transform);
-            percentage++;
-            if (percentage > 100) {
-                percentage = 1;
-            }
-        }
     }
 
     private void loadCover(ImageView imageView, String url) {
