@@ -43,6 +43,8 @@ import com.cronutils.model.definition.CronDefinition;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.parser.CronParser;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
@@ -77,8 +79,7 @@ public class QuartzScheduler implements Scheduler {
     }
 
     public QuartzScheduler(SchedulerContext context, QuartzSupport quartzSupport, Config config,
-            SchedulerRuntimeConfig schedulerRuntimeConfig, Event<SkippedExecution> skippedExecutionEvent, Instance<Job> jobs,
-            Instance<UserTransaction> userTransation) {
+            SchedulerRuntimeConfig schedulerRuntimeConfig, Event<SkippedExecution> skippedExecutionEvent, Instance<Job> jobs) {
         enabled = schedulerRuntimeConfig.enabled;
         if (!enabled) {
             LOGGER.info("Quartz scheduler is disabled by config property and will not be started");
@@ -91,10 +92,10 @@ public class QuartzScheduler implements Scheduler {
             Map<String, ScheduledInvoker> invokers = new HashMap<>();
             UserTransaction transaction = null;
 
-            try {
+            try (InstanceHandle<UserTransaction> handle = Arc.container().instance(UserTransaction.class)) {
                 boolean manageTx = quartzSupport.getBuildTimeConfig().storeType.isNonManagedTxJobStore();
-                if (manageTx && userTransation.isResolvable()) {
-                    transaction = userTransation.get();
+                if (manageTx && handle.isAvailable()) {
+                    transaction = handle.get();
                 }
                 Properties props = getSchedulerConfigurationProperties(quartzSupport);
 
