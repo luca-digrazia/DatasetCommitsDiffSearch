@@ -1,54 +1,97 @@
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
+ *
+ * This file is part of Graylog2.
+ *
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package org.graylog2;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.log4j.Logger;
 import org.graylog2.blacklists.BlacklistCache;
+import org.graylog2.buffers.OutputBuffer;
+import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.filters.MessageFilter;
 import org.graylog2.forwarders.forwarders.LogglyForwarder;
-import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.EmbeddedElasticSearchClient;
-import org.graylog2.messagehandlers.amqp.AMQPBroker;
-import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
-import org.graylog2.messagehandlers.amqp.AMQPSubscriberThread;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
-import org.graylog2.messagehandlers.gelf.GELFMainThread;
-import org.graylog2.messagehandlers.syslog.SyslogServerThread;
-import org.graylog2.messagequeue.MessageQueue;
-import org.graylog2.messagequeue.MessageQueueFlusher;
-import org.graylog2.periodical.BulkIndexerThread;
-import org.graylog2.periodical.ChunkedGELFClientManagerThread;
-import org.graylog2.periodical.HostCounterCacheWriterThread;
-import org.graylog2.periodical.MessageCountWriterThread;
-import org.graylog2.periodical.MessageRetentionThread;
-import org.graylog2.periodical.ServerValueWriterThread;
+import org.graylog2.initializers.Initializer;
+import org.graylog2.inputs.MessageInput;
+import org.graylog2.inputs.gelf.GELFChunkManager;
+import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
+
+import com.google.common.collect.Lists;
+import org.graylog2.activities.Activity;
+import org.graylog2.activities.ActivityWriter;
+import org.graylog2.communicator.Communicator;
+import org.graylog2.communicator.methods.CommunicatorMethod;
+import org.graylog2.database.HostCounterCache;
+import org.graylog2.indexer.Deflector;
 
 public class GraylogServer implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(GraylogServer.class);
 
-    private final MongoConnection mongoConnection;
-    private final MongoBridge mongoBridge;
-    private final Configuration configuration;
-    private RulesEngine drools;
+    private MongoConnection mongoConnection;
+    private MongoBridge mongoBridge;
+    private Configuration configuration;
+    private RulesEngine rulesEngine;
+    private ServerValue serverValues;
+    private GELFChunkManager gelfChunkManager;
 
-    private static final int SCHEDULED_THREADS_POOL_SIZE = 7;
+    private static final int SCHEDULED_THREADS_POOL_SIZE = 15;
     private ScheduledExecutorService scheduler;
 
-    static final String GRAYLOG2_VERSION = "0.9.7-dev";
+    public static final String GRAYLOG2_VERSION = "0.9.7-dev";
 
-    private final Indexer indexer;
+    public static final String MASTER_COUNTER_NAME = "master";
+    
+    private int lastReceivedMessageTimestamp = 0;
 
-    private final ServerValue serverValue;
+    private EmbeddedElasticSearchClient indexer;
 
-    public GraylogServer(Configuration configuration) {
+    private HostCounterCache hostCounterCache;
+
+    private MessageCounterManager messageCounterManager;
+
+    private List<Initializer> initializers = Lists.newArrayList();
+    private List<MessageInput> inputs = Lists.newArrayList();
+    private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
+    private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
+    private List<Class<? extends CommunicatorMethod>> communicatorMethods = Lists.newArrayList();
+    
+    private ProcessBuffer processBuffer;
+    private OutputBuffer outputBuffer;
+    
+    private Deflector deflector;
+    
+    private ActivityWriter activityWriter;
+    
+    private Communicator communicator;
+    
+    private String serverId;
+
+    public void initialize(Configuration configuration) {
+        serverId = Tools.generateServerId();
+        
         this.configuration = configuration; // TODO use dependency injection
 
         mongoConnection = new MongoConnection();    // TODO use dependency injection
@@ -61,39 +104,90 @@ public class GraylogServer implements Runnable {
         mongoConnection.setMaxConnections(configuration.getMongoMaxConnections());
         mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
         mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
-        mongoConnection.setMessagesCollectionSize(configuration.getMessagesCollectionSize());
 
         mongoBridge = new MongoBridge();
         mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
+        mongoConnection.connect();
+        
+        communicator = new Communicator(this);
+        
+        activityWriter = new ActivityWriter(mongoBridge, communicator);
+        
+        messageCounterManager = new MessageCounterManager();
+        messageCounterManager.register(MASTER_COUNTER_NAME);
+
+        hostCounterCache = new HostCounterCache();
+
+        processBuffer = new ProcessBuffer(this);
+        processBuffer.initialize();
+
+        outputBuffer = new OutputBuffer(this);
+        outputBuffer.initialize();
+
+        gelfChunkManager = new GELFChunkManager(this);
 
         indexer = new EmbeddedElasticSearchClient(this);
+        serverValues = new ServerValue(this);
+                
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                activityWriter.write(new Activity("Shutting down.", GraylogServer.class));
+            }
+        });
+    }
+    
+    public void registerInitializer(Initializer initializer) {
+        if (initializer.masterOnly() && !this.isMaster()) {
+            LOG.info("Not registering initializer " + initializer.getClass().getSimpleName()
+                    + " because it is marked as master only.");
+            return;
+        }
+        
+            
+        this.initializers.add(initializer);
+    }
 
-        serverValue = new ServerValue(this);
+    public void registerInput(MessageInput input) {
+        this.inputs.add(input);
+    }
+
+    public <T extends MessageFilter> void registerFilter(Class<T> klazz) {
+        this.filters.add(klazz);
+    }
+
+    public <T extends MessageOutput> void registerOutput(Class<T> klazz) {
+        this.outputs.add(klazz);
+    }
+
+    public <T extends CommunicatorMethod> void registerCommunicatorMethod(Class<T> klazz) {
+        this.communicatorMethods.add(klazz);
     }
 
     @Override
     public void run() {
 
         // initiate the mongodb connection, this might fail but it will retry to establish the connection
-        mongoConnection.connect();
+        gelfChunkManager.start();
         BlacklistCache.initialize(this);
         StreamCache.initialize(this);
-
-        try {
-            if (indexer.indexExists()) {
-                LOG.info("Index exists. Not creating it.");
+        
+        // Set up deflector.
+        LOG.info("Setting up deflector.");
+        deflector = new Deflector(this);
+        deflector.setUp();
+        
+        // Set up recent index.
+        if (indexer.indexExists(EmbeddedElasticSearchClient.RECENT_INDEX_NAME)) {
+            LOG.info("Recent index exists. Not creating it.");
+        } else {
+            LOG.info("Recent index does not exist! Trying to create it ...");
+            if (indexer.createRecentIndex()) {
+                LOG.info("Successfully created recent index.");
             } else {
-                LOG.info("Index does not exist! Trying to create it ...");
-                if (indexer.createIndex()) {
-                    LOG.info("Successfully created index.");
-                } else {
-                    LOG.fatal("Could not create Index. Terminating.");
-                    System.exit(1);
-                }
+                LOG.fatal("Could not create recent index. Terminating.");
+                System.exit(1);
             }
-        } catch (IOException e) {
-            LOG.fatal("IOException while trying to check Index. Make sure that your ElasticSearch server is running.", e);
-            System.exit(1);
         }
 
         // Statically set timeout for LogglyForwarder.
@@ -102,170 +196,25 @@ public class GraylogServer implements Runnable {
 
         scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE);
 
-        initializeRulesEngine(configuration.getDroolsRulesFile());
-        initializeSyslogServer(configuration.getSyslogProtocol(), configuration.getSyslogListenPort(), configuration.getSyslogListenAddress());
-        initializeHostCounterCache(scheduler);
-
-        // Start message counter thread.
-        initializeMessageCounters(scheduler);
-
-        // Inizialize message queue.
-        initializeMessageQueue(scheduler, configuration);
-
-        // Write initial ServerValue information.
-        writeInitialServerValues(configuration);
-
-        // Start GELF threads
-        if (configuration.isUseGELF()) {
-            initializeGELFThreads(configuration.getGelfListenAddress(), configuration.getGelfListenPort(), scheduler);
+        // Call all registered initializers.
+        for (Initializer initializer : this.initializers) {
+            initializer.initialize();
+            LOG.debug("Initialized: " + initializer.getClass().getSimpleName());
         }
 
-        // Initialize AMQP Broker if enabled
-        if (configuration.isAmqpEnabled()) {
-            initializeAMQP(configuration);
+        // Call all registered inputs.
+        for (MessageInput input : this.inputs) {
+            input.initialize(this.configuration, this);
+            LOG.debug("Initialized input: " + input.getName());
         }
 
-        // Start server value writer thread. (writes for example msg throughout and pings)
-        initializeServerValueWriter(scheduler);
-
-        // Start thread that automatically removes messages older than retention time.
-        if (configuration.performRetention()) {
-            initializeMessageRetentionThread(scheduler);
-        } else {
-            LOG.info("Not initializing retention time cleanup thread because --no-retention was passed.");
-        }
-
-        // Add a shutdown hook that tries to flush the message queue.
-        Runtime.getRuntime().addShutdownHook(new MessageQueueFlusher(this));
-
+        activityWriter.write(new Activity("Started up.", GraylogServer.class));
         LOG.info("Graylog2 up and running.");
 
         while (true) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                /* ignore */
-            }
+            try { Thread.sleep(1000); } catch (InterruptedException e) { /* lol, i don't care */ }
         }
 
-    }
-
-    private void initializeHostCounterCache(ScheduledExecutorService scheduler) {
-
-        scheduler.scheduleAtFixedRate(new HostCounterCacheWriterThread(this), HostCounterCacheWriterThread.INITIAL_DELAY, HostCounterCacheWriterThread.PERIOD, TimeUnit.SECONDS);
-
-        LOG.info("Host count cache is up.");
-    }
-
-    private void initializeMessageQueue(ScheduledExecutorService scheduler, Configuration configuration) {
-        // Set the maximum size if it was configured to something else than 0 (= UNLIMITED)
-        if (configuration.getMessageQueueMaximumSize() != MessageQueue.SIZE_LIMIT_UNLIMITED) {
-            MessageQueue.getInstance().setMaximumSize(configuration.getMessageQueueMaximumSize());
-        }
-
-        scheduler.scheduleAtFixedRate(new BulkIndexerThread(this, configuration), BulkIndexerThread.INITIAL_DELAY, configuration.getMessageQueuePollFrequency(), TimeUnit.SECONDS);
-
-        LOG.info("Message queue initialized .");
-    }
-
-    private void initializeMessageCounters(ScheduledExecutorService scheduler) {
-
-        scheduler.scheduleAtFixedRate(new MessageCountWriterThread(this), MessageCountWriterThread.INITIAL_DELAY, MessageCountWriterThread.PERIOD, TimeUnit.SECONDS);
-
-        LOG.info("Message counters initialized.");
-    }
-
-    private void initializeServerValueWriter(ScheduledExecutorService scheduler) {
-
-        scheduler.scheduleAtFixedRate(new ServerValueWriterThread(this), ServerValueWriterThread.INITIAL_DELAY, ServerValueWriterThread.PERIOD, TimeUnit.SECONDS);
-
-        LOG.info("Server value writer up.");
-    }
-
-    private void initializeMessageRetentionThread(ScheduledExecutorService scheduler) {
-        // Schedule first run. This is NOT at fixed rate. Thread will itself schedule next run with current frequency setting from database.
-        scheduler.schedule(new MessageRetentionThread(this),0,TimeUnit.SECONDS);
-
-        LOG.info("Retention time management active.");
-    }
-
-    private void initializeGELFThreads(String gelfAddress, int gelfPort, ScheduledExecutorService scheduler) {
-        GELFMainThread gelfThread = new GELFMainThread(this, new InetSocketAddress(gelfAddress, gelfPort));
-        gelfThread.start();
-
-        scheduler.scheduleAtFixedRate(new ChunkedGELFClientManagerThread(ChunkedGELFClientManager.getInstance()), ChunkedGELFClientManagerThread.INITIAL_DELAY, ChunkedGELFClientManagerThread.PERIOD, TimeUnit.SECONDS);
-
-        LOG.info("GELF threads started");
-    }
-
-    private void initializeSyslogServer(String syslogProtocol, int syslogPort, String syslogHost) {
-
-        // Start the Syslog thread that accepts syslog packages.
-        SyslogServerThread syslogServerThread = new SyslogServerThread(this, syslogProtocol, syslogPort, syslogHost);
-        syslogServerThread.start();
-
-        // Check if the thread started up completely.
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-        }
-        if (syslogServerThread.getCoreThread().isAlive()) {
-            LOG.info("Syslog server thread is up.");
-        } else {
-            LOG.fatal("Could not start syslog server core thread. Do you have permissions to listen on port " + syslogPort + "?");
-            System.exit(1);
-        }
-    }
-
-    private void initializeRulesEngine(String rulesFilePath) {
-        try {
-            if (rulesFilePath != null && !rulesFilePath.isEmpty()) {
-                drools = new RulesEngine();
-                drools.addRules(rulesFilePath);
-                LOG.info("Using rules: " + rulesFilePath);
-            } else {
-                LOG.info("Not using rules");
-            }
-        } catch (Exception e) {
-            LOG.fatal("Could not load rules engine: " + e.getMessage(), e);
-            System.exit(1);
-        }
-    }
-
-    private void initializeAMQP(Configuration configuration) {
-
-        // Connect to AMQP broker.
-        AMQPBroker amqpBroker = new AMQPBroker(
-                configuration.getAmqpHost(),
-                configuration.getAmqpPort(),
-                configuration.getAmqpUsername(),
-                configuration.getAmqpPassword(),
-                configuration.getAmqpVirtualhost()
-        );
-
-        List<AMQPSubscribedQueue> amqpQueues = configuration.getAmqpSubscribedQueues();
-
-        if (amqpQueues != null) {
-            // Start AMQP subscriber thread for each queue to listen on.
-            for (AMQPSubscribedQueue queue : amqpQueues) {
-                AMQPSubscriberThread amqpThread = new AMQPSubscriberThread(this, queue, amqpBroker);
-                amqpThread.start();
-            }
-
-            LOG.info("AMQP threads started. (" + amqpQueues.size() + " queues)");
-        }
-    }
-
-    public void writeInitialServerValues(Configuration configuration) {
-        serverValue.setStartupTime(Tools.getUTCTimestamp());
-        serverValue.setPID(Integer.parseInt(Tools.getPID()));
-        serverValue.setJREInfo(Tools.getSystemInformation());
-        serverValue.setGraylog2Version(GRAYLOG2_VERSION);
-        serverValue.setAvailableProcessors(HostSystem.getAvailableProcessors());
-        serverValue.setLocalHostname(Tools.getLocalHostname());
-        serverValue.writeMessageQueueMaximumSize(configuration.getMessageQueueMaximumSize());
-        serverValue.writeMessageQueueBatchSize(configuration.getMessageQueueBatchSize());
-        serverValue.writeMessageQueuePollFrequency(configuration.getMessageQueuePollFrequency());
     }
 
     public MongoConnection getMongoConnection() {
@@ -284,16 +233,76 @@ public class GraylogServer implements Runnable {
         return configuration;
     }
 
-    public RulesEngine getDrools() {
-        return drools;
+    public void setRulesEngine(RulesEngine engine) {
+        rulesEngine = engine;
     }
 
-    public Indexer getIndexer() {
+    public RulesEngine getRulesEngine() {
+        return rulesEngine;
+    }
+
+    public EmbeddedElasticSearchClient getIndexer() {
         return indexer;
     }
 
-    public ServerValue getServerValue() {
-        return serverValue;
+    public ServerValue getServerValues() {
+        return serverValues;
+    }
+
+    public GELFChunkManager getGELFChunkManager() {
+        return this.gelfChunkManager;
+    }
+
+    public ProcessBuffer getProcessBuffer() {
+        return this.processBuffer;
+    }
+
+    public OutputBuffer getOutputBuffer() {
+        return this.outputBuffer;
+    }
+
+    public List<Class<? extends MessageFilter>> getFilters() {
+        return this.filters;
+    }
+
+    public List<Class<? extends MessageOutput>> getOutputs() {
+        return this.outputs;
+    }
+
+    public List<Class<? extends CommunicatorMethod>> getCommunicatorMethods() {
+        return this.communicatorMethods;
+    }
+    
+    public MessageCounterManager getMessageCounterManager() {
+        return this.messageCounterManager;
+    }
+
+    public HostCounterCache getHostCounterCache() {
+        return this.hostCounterCache;
+    }
+    
+    public Deflector getDeflector() {
+        return this.deflector;
+    }
+    
+    public ActivityWriter getActivityWriter() {
+        return this.activityWriter;
+    }
+    
+    public int getLastReceivedMessageTimestamp() {
+        return this.lastReceivedMessageTimestamp;
+    }
+    
+    public void setLastReceivedMessageTimestamp(int t) {
+        this.lastReceivedMessageTimestamp = t;
+    }
+    
+    public boolean isMaster() {
+        return this.configuration.isMaster();
+    }
+    
+    public String getServerId() {
+        return this.serverId;
     }
 
 }

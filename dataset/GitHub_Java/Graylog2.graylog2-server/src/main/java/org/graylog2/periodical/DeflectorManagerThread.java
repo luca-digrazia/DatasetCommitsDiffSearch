@@ -19,29 +19,28 @@
  */
 package org.graylog2.periodical;
 
+import java.util.Map;
+import org.apache.log4j.Logger;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.activities.Activity;
+import org.graylog2.indexer.DeflectorInformation;
 import org.graylog2.indexer.EmbeddedElasticSearchClient;
 import org.graylog2.indexer.NoTargetIndexException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class DeflectorManagerThread implements Runnable { // public class Klimperkiste
     
-    private static final Logger LOG = LoggerFactory.getLogger(DeflectorManagerThread.class);
+    private static final Logger LOG = Logger.getLogger(DeflectorManagerThread.class);
     
     public static final int INITIAL_DELAY = 0;
     public static final int PERIOD = 60;
     
-    private final Core graylogServer;
+    private final GraylogServer graylogServer;
     
-    public DeflectorManagerThread(Core graylogServer) {
+    public DeflectorManagerThread(GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
     }
 
@@ -51,14 +50,14 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
         try {
             point();
         } catch (Exception e) {
-            LOG.error("Couldn't point deflector to a new index", e);
+            LOG.error(e);
         }
         
         // Delete outdated, empty indices.
         try {
             deleteEmptyIndices();
         } catch (Exception e) {
-            LOG.error("Couldn't delete outdated or empty indices", e);
+            LOG.error(e);
         }
     }
     
@@ -76,18 +75,14 @@ public class DeflectorManagerThread implements Runnable { // public class Klimpe
         }
         
         if (messageCountInTarget > graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()) {
-            LOG.info("Number of messages in <{}> ({}) is higher than the limit ({}). Pointing deflector to new index now!",
-                    new Object[] {
-                            currentTarget, messageCountInTarget,
-                            graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
-                    });
+            LOG.info("Number of messages in <" + currentTarget + "> (" + messageCountInTarget + ") is higher "
+                    + "than the limit. (" + graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex() + ") "
+                    + "Poiting deflector to new index now!");
             graylogServer.getDeflector().cycle();
         } else {
-            LOG.debug("Number of messages in <{}> ({}) is lower than the limit ({}). Not doing anything.",
-                    new Object[] {
-                            currentTarget,messageCountInTarget,
-                            graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex()
-                    });
+            LOG.debug("Number of messages in <" + currentTarget + "> (" + messageCountInTarget + ") is lower "
+                    + "than the limit. (" + graylogServer.getConfiguration().getElasticSearchMaxDocsPerIndex() + ") "
+                    + "Not doing anything.");
         }
     }
     

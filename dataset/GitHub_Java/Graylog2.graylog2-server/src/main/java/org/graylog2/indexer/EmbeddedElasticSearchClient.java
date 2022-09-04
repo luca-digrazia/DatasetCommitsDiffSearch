@@ -22,6 +22,7 @@ import org.elasticsearch.action.admin.indices.alias.IndicesAliasesResponse;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.exists.IndicesExistsResponse;
 import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
@@ -32,7 +33,6 @@ import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.deletebyquery.DeleteByQueryRequestBuilder;
 import org.elasticsearch.action.deletebyquery.DeleteByQueryResponse;
-import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.client.Client;
@@ -191,14 +191,6 @@ public class EmbeddedElasticSearchClient {
         
         return index.getTotal().docs().count();
     }
-    
-    public boolean index(final LogMessage msg) {
-        String source = JSONValue.toJSONString(msg.toElasticSearchObject());
-        final String id = UUID.randomBase64UUID();
-        client.index(buildIndexRequest(Deflector.DEFLECTOR_NAME, source, id, 0).request()).actionGet();
-        client.index(buildIndexRequest(RECENT_INDEX_NAME, source, id, server.getConfiguration().getRecentIndexTtlMinutes()).request()).actionGet();
-        return true;
-    }
 
     public boolean bulkIndex(final List<LogMessage> messages) {
         if (messages.isEmpty()) {
@@ -243,6 +235,10 @@ public class EmbeddedElasticSearchClient {
         cal.setTimeInMillis(System.currentTimeMillis());
 
         return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS", cal); // ramtamtam
+    }
+    
+    public void deleteIndex(String indexName) {
+        client.admin().indices().delete(new DeleteIndexRequest(indexName)).actionGet();
     }
     
     private IndexRequestBuilder buildIndexRequest(String index, String source, String id, int ttlMinutes) {

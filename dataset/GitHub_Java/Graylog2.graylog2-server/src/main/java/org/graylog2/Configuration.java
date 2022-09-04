@@ -215,10 +215,6 @@ public class Configuration {
         return isMaster;
     }
     
-    public void setIsMaster(boolean is) {
-        isMaster = is;
-    }
-    
     public int getSyslogListenPort() {
         return syslogListenPort;
     }

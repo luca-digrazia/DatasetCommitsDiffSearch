@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.log4j.Logger;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
-import org.graylog2.Core;
+import org.graylog2.GraylogServer;
 import org.graylog2.activities.Activity;
 
 /**
@@ -46,9 +46,9 @@ public class Deflector {
     
     public static final String DEFLECTOR_NAME = "graylog2_deflector";
     
-    Core server;
+    GraylogServer server;
     
-    public Deflector(Core server) {
+    public Deflector(GraylogServer server) {
         this.server = server;
     }
     
@@ -107,20 +107,18 @@ public class Deflector {
         
         // Point to deflector to new index.
         LOG.info("Pointing deflector to new target index....");
-
-        Activity activity = new Activity(Deflector.class);
         if (oldTargetNumber == -1) {
             // Only poiting, not cycling.
             pointTo(newTarget);
-            activity.setMessage("Cycled deflector from <none> to <" + newTarget + ">");
         } else {
             // Re-poiting from existing old index to the new one.
             pointTo(newTarget, oldTarget);
-            activity.setMessage("Cycled deflector from <" + oldTarget + "> to <" + newTarget + ">");
         }
         LOG.info("Done!");
-
-        server.getActivityWriter().write(activity);
+        server.getActivityWriter().write(new Activity(
+                    "Cycled deflector from <" + oldTarget + "> to <" + newTarget + ">",
+                    Deflector.class
+                ));
     }
     
     public int getCurrentTargetNumber() throws NoTargetIndexException {
