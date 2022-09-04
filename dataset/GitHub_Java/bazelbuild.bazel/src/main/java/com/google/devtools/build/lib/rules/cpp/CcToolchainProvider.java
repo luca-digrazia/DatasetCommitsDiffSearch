@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.Pair;
@@ -47,14 +46,13 @@ import javax.annotation.Nullable;
 /** Information about a C++ compiler used by the <code>cc_*</code> rules. */
 @SkylarkModule(name = "CcToolchainInfo", doc = "Information about the C++ compiler being used.")
 @Immutable
-@AutoCodec
 public final class CcToolchainProvider extends ToolchainInfo {
   public static final String SKYLARK_NAME = "CcToolchainInfo";
 
   /** An empty toolchain to be returned in the error case (instead of null). */
   public static final CcToolchainProvider EMPTY_TOOLCHAIN_IS_ERROR =
       new CcToolchainProvider(
-          /* values= */ ImmutableMap.of(),
+          /* skylarkToolchain= */ ImmutableMap.of(),
           /* cppConfiguration= */ null,
           /* toolchainInfo= */ null,
           /* crosstoolTopPathFragment= */ null,
@@ -120,7 +118,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
   private final FdoMode fdoMode;
 
   public CcToolchainProvider(
-      ImmutableMap<String, Object> values,
+      ImmutableMap<String, Object> skylarkToolchain,
       @Nullable CppConfiguration cppConfiguration,
       CppToolchainInfo toolchainInfo,
       PathFragment crosstoolTopPathFragment,
@@ -152,7 +150,7 @@ public final class CcToolchainProvider extends ToolchainInfo {
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot,
       FdoMode fdoMode) {
-    super(values, Location.BUILTIN);
+    super(skylarkToolchain, Location.BUILTIN);
     this.cppConfiguration = cppConfiguration;
     this.toolchainInfo = toolchainInfo;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
