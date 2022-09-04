@@ -18,7 +18,8 @@ package org.graylog2.radio.buffers.processors;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.inject.Inject;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.radio.Configuration;
@@ -36,6 +37,14 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class RadioProcessBufferProcessor extends ProcessBufferProcessor {
+    public interface Factory {
+        public RadioProcessBufferProcessor create(
+                AtomicInteger processBufferWatermark,
+                @Assisted("ordinal") final long ordinal,
+                @Assisted("numberOfConsumers") final long numberOfConsumers
+        );
+    }
+
     private static final Logger LOG = LoggerFactory.getLogger(RadioProcessBufferProcessor.class);
     private static final AtomicInteger errorCount = new AtomicInteger(0);
     private final ThroughputStats throughputStats;
@@ -44,13 +53,16 @@ public class RadioProcessBufferProcessor extends ProcessBufferProcessor {
     private final int radioTransportMaxErrors;
     private final Meter erroredMessages;
 
-    @Inject
+    @AssistedInject
     public RadioProcessBufferProcessor(MetricRegistry metricRegistry,
                                        ThroughputStats throughputStats,
                                        RadioTransport radioTransport,
                                        ServerStatus serverStatus,
-                                       Configuration configuration) {
-        super(metricRegistry);
+                                       Configuration configuration,
+                                       @Assisted AtomicInteger processBufferWatermark,
+                                       @Assisted("ordinal") final long ordinal,
+                                       @Assisted("numberOfConsumers") final long numberOfConsumers) {
+        super(metricRegistry, processBufferWatermark, ordinal, numberOfConsumers);
         this.throughputStats = throughputStats;
         this.radioTransport = radioTransport;
         this.serverStatus = serverStatus;
