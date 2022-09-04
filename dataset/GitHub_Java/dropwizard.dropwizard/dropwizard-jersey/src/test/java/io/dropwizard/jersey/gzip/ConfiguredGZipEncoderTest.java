@@ -10,6 +10,7 @@ import java.util.zip.GZIPOutputStream;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.ClientRequestContext;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.ext.InterceptorContext;
 import javax.ws.rs.ext.WriterInterceptorContext;
 
 import javax.ws.rs.core.HttpHeaders;
