@@ -1,13 +1,5 @@
 package io.quarkus.cli.commands;
 
-import io.quarkus.cli.commands.file.BuildFile;
-import io.quarkus.cli.commands.file.MavenBuildFile;
-import io.quarkus.cli.commands.legacy.LegacyQuarkusCommandInvocation;
-import io.quarkus.cli.commands.writer.ProjectWriter;
-import io.quarkus.dependencies.Extension;
-import io.quarkus.generators.BuildTool;
-import io.quarkus.platform.tools.ToolsConstants;
-import io.quarkus.platform.tools.ToolsUtils;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -17,11 +9,16 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
-public class AddExtensions implements QuarkusCommand {
+import org.apache.maven.model.Dependency;
 
-    public static final String NAME = "add-extensions";
-    public static final String EXTENSIONS = ToolsUtils.dotJoin(ToolsConstants.QUARKUS, NAME, "extensions");
-    public static final String OUTCOME_UPDATED = ToolsUtils.dotJoin(ToolsConstants.QUARKUS, NAME, "outcome", "updated");
+import io.quarkus.cli.commands.file.BuildFile;
+import io.quarkus.cli.commands.file.MavenBuildFile;
+import io.quarkus.cli.commands.writer.ProjectWriter;
+import io.quarkus.dependencies.Extension;
+import io.quarkus.generators.BuildTool;
+import io.quarkus.maven.utilities.MojoUtils;
+
+public class AddExtensions {
 
     private BuildFile buildFile;
     private final static Printer PRINTER = new Printer();
@@ -114,7 +111,7 @@ public class AddExtensions implements QuarkusCommand {
     private static boolean matchLabels(Pattern pattern, List<String> labels) {
         boolean matches = false;
         // if any label match it's ok
-        for (String label : labels) {
+        for(String label : labels) {
             matches = matches || pattern.matcher(label.toLowerCase()).matches();
         }
         return matches;
@@ -187,76 +184,59 @@ public class AddExtensions implements QuarkusCommand {
     }
 
     public AddExtensionResult addExtensions(final Set<String> extensions) throws IOException {
-        final QuarkusCommandOutcome outcome;
-        try {
-            outcome = execute(new LegacyQuarkusCommandInvocation().setValue(EXTENSIONS, extensions));
-        } catch (QuarkusCommandException e) {
-            throw new IOException("Failed to list extensions", e);
-        }
-        return new AddExtensionResult(outcome.getValue(OUTCOME_UPDATED, false), outcome.isSuccess());
-
-    }
-
-    @Override
-    public QuarkusCommandOutcome execute(QuarkusCommandInvocation invocation) throws QuarkusCommandException {
-
-        final Set<String> extensions = invocation.getValue(EXTENSIONS, Collections.emptySet());
-        if (extensions.isEmpty()) {
-            return QuarkusCommandOutcome.success().setValue(OUTCOME_UPDATED, false);
+        if (extensions == null || extensions.isEmpty()) {
+            return new AddExtensionResult(false, true);
         }
 
         boolean updated = false;
         boolean success = true;
+        List<Dependency> dependenciesFromBom = getDependenciesFromBom();
 
-        final List<Extension> registry = invocation.getPlatformDescriptor().getExtensions();
+        List<Extension> registry = MojoUtils.loadExtensions();
 
-        try {
-            for (String query : extensions) {
+        for (String query : extensions) {
 
-                if (query.contains(":")) {
-                    // GAV case.
-                    updated = buildFile.addExtensionAsGAV(query) || updated;
-                } else {
-                    SelectionResult result = select(query, registry, false);
-                    if (!result.matches()) {
-                        StringBuilder sb = new StringBuilder();
-                        // We have 3 cases, we can still have a single candidate, but the match is on label
-                        // or we have several candidates, or none
-                        Set<Extension> candidates = result.getExtensions();
-                        if (candidates.isEmpty()) {
-                            // No matches at all.
-                            PRINTER.nok(" Cannot find a dependency matching '" + query + "', maybe a typo?");
-                            success = false;
-                        } else {
-                            sb.append(Printer.NOK).append(" Multiple extensions matching '").append(query).append("'");
-                            result.getExtensions()
-                                    .forEach(extension -> sb.append(System.lineSeparator()).append("     * ")
-                                            .append(extension.managementKey()));
-                            sb.append(System.lineSeparator())
-                                    .append("     Be more specific e.g using the exact name or the full GAV.");
-                            PRINTER.print(sb.toString());
-                            success = false;
-                        }
-                    } else { // Matches.
-                        for (Extension extension : result) {
-                            // Don't set success to false even if the dependency is not added; as it's should be idempotent.
-                            updated = buildFile.addDependency(invocation.getPlatformDescriptor(), extension) || updated;
-                        }
+            if (query.contains(":")) {
+                // GAV case.
+                updated = buildFile.addExtensionAsGAV(query) || updated;
+            } else {
+                SelectionResult result = select(query, registry, false);
+                if (!result.matches()) {
+                    StringBuilder sb = new StringBuilder();
+                    // We have 3 cases, we can still have a single candidate, but the match is on label
+                    // or we have several candidates, or none
+                    Set<Extension> candidates = result.getExtensions();
+                    if (candidates.isEmpty()) {
+                        // No matches at all.
+                        PRINTER.nok(" Cannot find a dependency matching '" + query + "', maybe a typo?");
+                        success = false;
+                    } else {
+                        sb.append(Printer.NOK).append(" Multiple extensions matching '").append(query).append("'");
+                        result.getExtensions()
+                                .forEach(extension -> sb.append(System.lineSeparator()).append("     * ")
+                                        .append(extension.managementKey()));
+                        sb.append(System.lineSeparator())
+                                .append("     Be more specific e.g using the exact name or the full GAV.");
+                        PRINTER.print(sb.toString());
+                        success = false;
+                    }
+                } else { // Matches.
+                    for (Extension extension : result) {
+                        // Don't set success to false even if the dependency is not added; as it's should be idempotent.
+                        updated = buildFile.addDependency(dependenciesFromBom, extension) || updated;
                     }
                 }
             }
-        } catch (IOException e) {
-            throw new QuarkusCommandException("Failed to add extensions", e);
         }
 
         if (updated) {
-            try {
-                buildFile.close();
-            } catch (IOException e) {
-                throw new QuarkusCommandException("Failed to update the project", e);
-            }
+            buildFile.close();
         }
 
-        return new QuarkusCommandOutcome(success).setValue(OUTCOME_UPDATED, updated);
+        return new AddExtensionResult(updated, success);
+    }
+
+    private List<Dependency> getDependenciesFromBom() {
+        return MojoUtils.getPlatformDescriptor().getManagedDependencies();
     }
 }
