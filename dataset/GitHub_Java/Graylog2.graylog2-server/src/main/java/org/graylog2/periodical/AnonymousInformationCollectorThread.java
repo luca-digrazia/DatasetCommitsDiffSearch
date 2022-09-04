@@ -19,8 +19,7 @@
  */
 package org.graylog2.periodical;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.SystemSettingAccessor;
 import org.graylog2.systeminformation.AnonymousInformationCollector;
@@ -31,7 +30,7 @@ import org.graylog2.systeminformation.Sender;
  */
 public class AnonymousInformationCollectorThread implements Runnable {
     
-    private static final Logger LOG = LoggerFactory.getLogger(AnonymousInformationCollectorThread.class);
+    private static final Logger LOG = Logger.getLogger(AnonymousInformationCollectorThread.class);
 
     public static final int INITIAL_DELAY = 15;
     public static final int PERIOD = 3600; // Run every hour.

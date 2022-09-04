@@ -122,7 +122,7 @@ public class Core implements GraylogServer {
         mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
         mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
 
-        mongoBridge = new MongoBridge(this);
+        mongoBridge = new MongoBridge();
         mongoBridge.setConnection(mongoConnection); // TODO use dependency injection
         mongoConnection.connect();
         

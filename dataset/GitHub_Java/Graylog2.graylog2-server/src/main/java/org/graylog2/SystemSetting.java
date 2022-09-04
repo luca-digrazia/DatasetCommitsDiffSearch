@@ -19,11 +19,9 @@
  */
 package org.graylog2;
 
-import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
-import java.util.List;
 
 /**
  *  @author Lennart Koopmann <lennart@socketfeed.com>
@@ -54,16 +52,6 @@ public class SystemSetting {
         }
         
         return false;
-    }
-    
-    public BasicDBList getList(String key) {
-        DBCollection coll = getCollection();
-        DBObject query = new BasicDBObject();
-        query.put("key", key);
-
-        DBObject result = coll.findOne(query);
-
-        return (BasicDBList) result.get("value");
     }
 
     private DBCollection getCollection() {

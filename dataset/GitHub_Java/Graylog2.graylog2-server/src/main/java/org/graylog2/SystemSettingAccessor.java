@@ -19,10 +19,6 @@
  */
 package org.graylog2;
 
-import com.google.common.collect.Sets;
-import com.mongodb.BasicDBList;
-import java.util.Set;
-
 /**
  *  @author Lennart Koopmann <lennart@socketfeed.com>
  */
@@ -31,7 +27,6 @@ public class SystemSettingAccessor {
     private Core server;
     
     private final static String KEY_ALLOW_USAGE_STATS = "allow_usage_stats";
-    private final static String KEY_FORCED_ALARM_CALLBACKS = "forced_alarm_callbacks";
     
     public SystemSettingAccessor(Core server) {
         this.server = server;
@@ -42,19 +37,4 @@ public class SystemSettingAccessor {
         return s.getBoolean(KEY_ALLOW_USAGE_STATS);
     }
     
-    public Set<String> getForcedAlarmCallbacks() {
-        Set<String> callbacks = Sets.newHashSet();
-        SystemSetting s = new SystemSetting(server);
-        BasicDBList objs = s.getList(KEY_FORCED_ALARM_CALLBACKS);
-        
-        for (Object obj : objs) {
-            String typeclass = (String) obj;
-            if (typeclass != null && !typeclass.isEmpty()) {
-                callbacks.add(typeclass);
-            }
-        }
-        
-        return callbacks;
-    }
-
 }

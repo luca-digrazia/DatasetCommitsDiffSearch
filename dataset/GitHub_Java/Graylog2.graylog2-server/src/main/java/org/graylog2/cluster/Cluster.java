@@ -20,12 +20,10 @@
 package org.graylog2.cluster;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import java.util.List;
-import java.util.Set;
 import org.graylog2.Core;
 import org.graylog2.Tools;
 
@@ -42,69 +40,20 @@ public class Cluster {
         this.localServer = server;
     }
 
-    public List<Node> getActiveNodes() {
-        List<Node> nodes = Lists.newArrayList();
-        
-        // Now construct a Node from every node_id.
-        for (String nodeId : getActiveNodeIds()) {
-            Node node = new Node();
-            node.setId(nodeId);
-            node.setIsMaster(getBooleanNodeAttribute(nodeId, "is_master"));
-
-            nodes.add(node);
-        }
- 
-        return nodes;
-    }
-    
-    public Set<String> getActiveNodeIds() {
+    public List<String> getNodes() {
         DBCollection coll = localServer.getMongoConnection().getDatabase().getCollection("server_values");
-
-        Set<String> nodeIds = Sets.newHashSet();
+        
+        List<String> nodes = Lists.newArrayList();
         
         BasicDBObject query = new BasicDBObject();
         query.put("type", "ping");
         query.put("value", new BasicDBObject("$gte", Tools.getUTCTimestamp()-PING_TIMEOUT));
         
         for (DBObject obj : coll.find(query)) {
-            nodeIds.add((String) obj.get("server_id"));
+            nodes.add((String) obj.get("server_id"));
         }
         
-        return nodeIds;
-    }
-    
-    public int getActiveNodeCount() {
-        return getActiveNodeIds().size();
-    }
-    
-    public int masterCountExcept(String exceptNode) {
-        int masters = 0;
-        for (Node node : getActiveNodes()) {
-            if (node.isMaster() && !node.getId().equals(exceptNode)) {
-                masters++;
-            }
-        }
-        
-        return masters;
-    }
+        return nodes;
+    }    
 
-    private boolean getBooleanNodeAttribute(String nodeId, String key) {
-        DBCollection coll = localServer.getMongoConnection().getDatabase().getCollection("server_values");
-
-        BasicDBObject q = new BasicDBObject();
-        q.put("type", key);
-        q.put("server_id", nodeId);
-        
-        DBObject result = coll.findOne(q);
-        if (result == null) {
-            return false;
-        }
-        
-        if (result.get("value").equals(true)) {
-            return true;
-        }
-        
-        return false;
-    }
-    
 }

@@ -78,7 +78,7 @@ public class CommandLineArguments {
     }
     
     public boolean isLocal() {
-        return local;
+        return true;
     }
 
     public void setDebug(boolean debug) {
