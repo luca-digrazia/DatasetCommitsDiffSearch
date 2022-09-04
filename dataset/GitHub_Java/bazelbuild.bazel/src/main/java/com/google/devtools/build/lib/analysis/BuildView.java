@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStatistics;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
@@ -469,6 +468,8 @@ public class BuildView {
 
     ArtifactsToOwnerLabels.Builder artifactsToOwnerLabelsBuilder =
         new ArtifactsToOwnerLabels.Builder();
+    Set<ConfiguredTarget> parallelTests = new HashSet<>();
+    Set<ConfiguredTarget> exclusiveTests = new HashSet<>();
 
     // build-info and build-changelist.
     Collection<Artifact> buildInfoArtifacts =
@@ -503,12 +504,14 @@ public class BuildView {
       }
     }
 
-    // Tests.
-    Pair<ImmutableSet<ConfiguredTarget>, ImmutableSet<ConfiguredTarget>> testsPair =
-        collectTests(
-            topLevelOptions, allTargetsToTest, skyframeExecutor.getPackageManager(), eventHandler);
-    ImmutableSet<ConfiguredTarget> parallelTests = testsPair.first;
-    ImmutableSet<ConfiguredTarget> exclusiveTests = testsPair.second;
+    // Tests. This must come last, so that the exclusive tests are scheduled after everything else.
+    scheduleTestsIfRequested(
+        parallelTests,
+        exclusiveTests,
+        topLevelOptions,
+        allTargetsToTest,
+        skyframeExecutor,
+        eventHandler);
 
     String error =
         createErrorMessage(loadingResult, skyframeAnalysisResult, topLevelTargetsWithConfigs);
@@ -548,8 +551,8 @@ public class BuildView {
         error,
         actionGraph,
         artifactsToOwnerLabelsBuilder.build(),
-        parallelTests,
-        exclusiveTests,
+        ImmutableSet.copyOf(parallelTests),
+        ImmutableSet.copyOf(exclusiveTests),
         topLevelOptions,
         skyframeAnalysisResult.getPackageRoots(),
         loadingResult.getWorkspaceName(),
@@ -669,7 +672,7 @@ public class BuildView {
    * Returns a list of artifacts from 'provider' that were registered by an aspect from
    * 'aspectClasses'. All artifacts in 'provider' are considered - both direct and transitive.
    */
-  private static ImmutableList<Artifact> filterTransitiveExtraActions(
+  private ImmutableList<Artifact> filterTransitiveExtraActions(
       ExtraActionArtifactsProvider provider, Set<AspectClass> aspectClasses) {
     ImmutableList.Builder<Artifact> artifacts = ImmutableList.builder();
     // Add to 'artifacts' all extra-actions which were registered by aspects which 'topLevel'
@@ -686,38 +689,58 @@ public class BuildView {
     return artifacts.build();
   }
 
-  private static Pair<ImmutableSet<ConfiguredTarget>, ImmutableSet<ConfiguredTarget>> collectTests(
+  private static void scheduleTestsIfRequested(
+      Collection<ConfiguredTarget> targetsToTest,
+      Collection<ConfiguredTarget> targetsToTestExclusive,
       TopLevelArtifactContext topLevelOptions,
-      @Nullable Iterable<ConfiguredTarget> allTestTargets,
-      PackageManager packageManager,
+      Collection<ConfiguredTarget> allTestTargets,
+      SkyframeExecutor skyframeExecutor,
       ExtendedEventHandler eventHandler)
       throws InterruptedException {
     Set<String> outputGroups = topLevelOptions.outputGroups();
     if (!outputGroups.contains(OutputGroupInfo.FILES_TO_COMPILE)
         && !outputGroups.contains(OutputGroupInfo.COMPILATION_PREREQUISITES)
         && allTestTargets != null) {
-      final boolean isExclusive = topLevelOptions.runTestsExclusively();
-      ImmutableSet.Builder<ConfiguredTarget> targetsToTest = ImmutableSet.builder();
-      ImmutableSet.Builder<ConfiguredTarget> targetsToTestExclusive = ImmutableSet.builder();
-      for (ConfiguredTarget configuredTarget : allTestTargets) {
-        Target target = null;
-        try {
-          target = packageManager.getTarget(eventHandler, configuredTarget.getLabel());
-        } catch (NoSuchTargetException | NoSuchPackageException e) {
-          eventHandler.handle(Event.error("Failed to get target when scheduling tests"));
-          continue;
-        }
-        if (target instanceof Rule) {
-          if (isExclusive || TargetUtils.isExclusiveTestRule((Rule) target)) {
-            targetsToTestExclusive.add(configuredTarget);
-          } else {
-            targetsToTest.add(configuredTarget);
-          }
-        }
+      scheduleTests(
+          targetsToTest,
+          targetsToTestExclusive,
+          allTestTargets,
+          topLevelOptions.runTestsExclusively(),
+          skyframeExecutor,
+          eventHandler);
+    }
+  }
+
+  /**
+   * Returns set of artifacts representing test results, writing into targetsToTest and
+   * targetsToTestExclusive.
+   */
+  private static void scheduleTests(
+      Collection<ConfiguredTarget> targetsToTest,
+      Collection<ConfiguredTarget> targetsToTestExclusive,
+      Collection<ConfiguredTarget> allTestTargets,
+      boolean isExclusive,
+      SkyframeExecutor skyframeExecutor,
+      ExtendedEventHandler eventHandler)
+      throws InterruptedException {
+    for (ConfiguredTarget configuredTarget : allTestTargets) {
+      Target target = null;
+      try {
+        target =
+            skyframeExecutor
+                .getPackageManager()
+                .getTarget(eventHandler, configuredTarget.getLabel());
+      } catch (NoSuchTargetException | NoSuchPackageException e) {
+        eventHandler.handle(Event.error("Failed to get target when scheduling tests"));
+        continue;
       }
-      return Pair.of(targetsToTest.build(), targetsToTestExclusive.build());
-    } else {
-      return Pair.of(ImmutableSet.of(), ImmutableSet.of());
+      if (target instanceof Rule) {
+        boolean exclusive = isExclusive || TargetUtils.isExclusiveTestRule((Rule) target);
+        Collection<ConfiguredTarget> testCollection = exclusive
+            ? targetsToTestExclusive
+            : targetsToTest;
+        testCollection.add(configuredTarget);
+      }
     }
   }
 

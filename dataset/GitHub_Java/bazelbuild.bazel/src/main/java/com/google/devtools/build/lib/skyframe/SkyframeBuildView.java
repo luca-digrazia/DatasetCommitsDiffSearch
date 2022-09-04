@@ -368,7 +368,7 @@ public final class SkyframeBuildView {
    */
   public SkyframeAnalysisResult configureTargets(
       ExtendedEventHandler eventHandler,
-      List<ConfiguredTargetKey> ctKeys,
+      List<ConfiguredTargetKey> values,
       List<AspectValueKey> aspectKeys,
       Supplier<Map<BuildConfigurationValue.Key, BuildConfiguration>> configurationLookupSupplier,
       EventBus eventBus,
@@ -380,48 +380,15 @@ public final class SkyframeBuildView {
     try (SilentCloseable c = Profiler.instance().profile("skyframeExecutor.configureTargets")) {
       result =
           skyframeExecutor.configureTargets(
-              eventHandler, ctKeys, aspectKeys, keepGoing, numThreads);
+              eventHandler, values, aspectKeys, keepGoing, numThreads);
     } finally {
       enableAnalysis(false);
     }
-
-    Collection<AspectValue> aspects = Lists.newArrayListWithCapacity(aspectKeys.size());
-    Root singleSourceRoot = skyframeExecutor.getForcedSingleSourceRootIfNoExecrootSymlinkCreation();
-    NestedSetBuilder<Package> packages =
-        singleSourceRoot == null ? NestedSetBuilder.stableOrder() : null;
-    for (AspectValueKey aspectKey : aspectKeys) {
-      AspectValue value = (AspectValue) result.get(aspectKey);
-      if (value == null) {
-        // Skip aspects that couldn't be applied to targets.
-        continue;
-      }
-      aspects.add(value);
-      if (packages != null) {
-        packages.addTransitive(value.getTransitivePackagesForPackageRootResolution());
-      }
-    }
-
-    Collection<ConfiguredTarget> cts = Lists.newArrayListWithCapacity(ctKeys.size());
-    for (ConfiguredTargetKey value : ctKeys) {
-      ConfiguredTargetValue ctValue = (ConfiguredTargetValue) result.get(value);
-      if (ctValue == null) {
-        continue;
-      }
-      cts.add(ctValue.getConfiguredTarget());
-      if (packages != null) {
-        packages.addTransitive(ctValue.getTransitivePackagesForPackageRootResolution());
-      }
-    }
-    PackageRoots packageRoots =
-        singleSourceRoot == null
-            ? new MapAsPackageRoots(collectPackageRoots(packages.build().toList()))
-            : new PackageRootsNoSymlinkCreation(singleSourceRoot);
-
     try (SilentCloseable c =
         Profiler.instance().profile("skyframeExecutor.findArtifactConflicts")) {
       ImmutableSet<SkyKey> newKeys =
-          ImmutableSet.<SkyKey>builderWithExpectedSize(ctKeys.size() + aspectKeys.size())
-              .addAll(ctKeys)
+          ImmutableSet.<SkyKey>builderWithExpectedSize(values.size() + aspectKeys.size())
+              .addAll(values)
               .addAll(aspectKeys)
               .build();
       if (someConfiguredTargetEvaluated
@@ -434,19 +401,54 @@ public final class SkyframeBuildView {
         // some way -- either we analyzed a new target or we invalidated an old one or are building
         // targets together that haven't been built before.
         skyframeActionExecutor.findAndStoreArtifactConflicts(
-            skyframeExecutor.getActionLookupValuesInBuild(ctKeys, aspectKeys));
+            skyframeExecutor.getActionLookupValuesInBuild(values, aspectKeys));
         someConfiguredTargetEvaluated = false;
       }
     }
     ImmutableMap<ActionAnalysisMetadata, ConflictException> badActions =
         skyframeActionExecutor.badActions();
+
+    Collection<AspectValue> goodAspects = Lists.newArrayListWithCapacity(values.size());
+    Root singleSourceRoot = skyframeExecutor.getForcedSingleSourceRootIfNoExecrootSymlinkCreation();
+    NestedSetBuilder<Package> packages =
+        singleSourceRoot == null ? NestedSetBuilder.stableOrder() : null;
+    for (AspectValueKey aspectKey : aspectKeys) {
+      AspectValue value = (AspectValue) result.get(aspectKey);
+      if (value == null) {
+        // Skip aspects that couldn't be applied to targets.
+        continue;
+      }
+      goodAspects.add(value);
+      if (packages != null) {
+        packages.addTransitive(value.getTransitivePackagesForPackageRootResolution());
+      }
+    }
+
+    // Filter out all CTs that have a bad action and convert to a list of configured targets. This
+    // code ensures that the resulting list of configured targets has the same order as the incoming
+    // list of values, i.e., that the order is deterministic.
+    Collection<ConfiguredTarget> goodCts = Lists.newArrayListWithCapacity(values.size());
+    for (ConfiguredTargetKey value : values) {
+      ConfiguredTargetValue ctValue = (ConfiguredTargetValue) result.get(value);
+      if (ctValue == null) {
+        continue;
+      }
+      goodCts.add(ctValue.getConfiguredTarget());
+      if (packages != null) {
+        packages.addTransitive(ctValue.getTransitivePackagesForPackageRootResolution());
+      }
+    }
+    PackageRoots packageRoots =
+        singleSourceRoot == null
+            ? new MapAsPackageRoots(collectPackageRoots(packages.build().toList()))
+            : new PackageRootsNoSymlinkCreation(singleSourceRoot);
+
     if (!result.hasError() && badActions.isEmpty()) {
       return new SkyframeAnalysisResult(
-          /*hasLoadingError=*/ false,
-          /*hasAnalysisError=*/ false,
-          ImmutableList.copyOf(cts),
+          /*hasLoadingError=*/false, /*hasAnalysisError=*/false,
+          ImmutableList.copyOf(goodCts),
           result.getWalkableGraph(),
-          ImmutableList.copyOf(aspects),
+          ImmutableList.copyOf(goodAspects),
           packageRoots);
     }
 
@@ -494,14 +496,14 @@ public final class SkyframeBuildView {
       // In order to determine the set of configured targets transitively error free from action
       // conflict issues, we run a post-processing update() that uses the bad action map.
       EvaluationResult<PostConfiguredTargetValue> actionConflictResult =
-          skyframeExecutor.postConfigureTargets(eventHandler, ctKeys, keepGoing, badActions);
+          skyframeExecutor.postConfigureTargets(eventHandler, values, keepGoing, badActions);
 
-      cts = Lists.newArrayListWithCapacity(ctKeys.size());
-      for (ConfiguredTargetKey value : ctKeys) {
+      goodCts = Lists.newArrayListWithCapacity(values.size());
+      for (ConfiguredTargetKey value : values) {
         PostConfiguredTargetValue postCt =
             actionConflictResult.get(PostConfiguredTargetValue.key(value));
         if (postCt != null) {
-          cts.add(postCt.getCt());
+          goodCts.add(postCt.getCt());
         }
       }
     }
@@ -509,9 +511,9 @@ public final class SkyframeBuildView {
     return new SkyframeAnalysisResult(
         errors.first,
         result.hasError() || !badActions.isEmpty(),
-        ImmutableList.copyOf(cts),
+        ImmutableList.copyOf(goodCts),
         result.getWalkableGraph(),
-        ImmutableList.copyOf(aspects),
+        ImmutableList.copyOf(goodAspects),
         packageRoots);
   }
 
