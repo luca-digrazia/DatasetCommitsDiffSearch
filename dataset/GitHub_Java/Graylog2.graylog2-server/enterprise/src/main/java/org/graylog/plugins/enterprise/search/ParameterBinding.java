@@ -5,27 +5,20 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
-import java.util.Collections;
-import java.util.Set;
-
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.PROPERTY,
-        property = Filter.TYPE_FIELD,
+        property = ParameterBinding.TYPE_FIELD,
         visible = true,
-        defaultImpl = Filter.Fallback.class)
+        defaultImpl = ParameterBinding.Fallback.class)
 @JsonAutoDetect
-public interface Filter {
+public interface ParameterBinding {
     String TYPE_FIELD = "type";
 
     @JsonProperty(TYPE_FIELD)
     String type();
 
-    @JsonProperty("filters")
-    Set<Filter> filters();
-
-    @JsonAutoDetect
-    class Fallback implements Filter {
+    class Fallback implements ParameterBinding {
         @JsonProperty
         private String type;
 
@@ -34,14 +27,9 @@ public interface Filter {
             return type;
         }
 
-        @Override
-        public Set<Filter> filters() {
-            return Collections.emptySet();
-        }
-
         @JsonAnySetter
         public void setType(String key, Object value) {
-            // we ignore all the other values, we only want to be able to deserialize unknown filters
+            // we ignore all the other values, we only want to be able to deserialize unknown parameter bindings
         }
     }
 }

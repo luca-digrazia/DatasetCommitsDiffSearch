@@ -18,7 +18,6 @@ public abstract class QueryResult {
     @JsonProperty
     public abstract QueryJob queryJob();
 
-    @JsonProperty
     public abstract Map<String, SearchType.Result> results();
 
     public static Builder builder() {

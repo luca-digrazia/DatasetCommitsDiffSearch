@@ -9,7 +9,6 @@ import com.google.auto.value.AutoValue;
 import org.graylog.plugins.enterprise.search.engine.BackendQuery;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.mongojack.Id;
-import org.mongojack.ObjectId;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -23,7 +22,6 @@ import java.util.stream.Collectors;
 public abstract class Query {
 
     @Id
-    @ObjectId
     @Nullable
     @JsonProperty
     public abstract String id();
@@ -67,13 +65,7 @@ public abstract class Query {
         final List<SearchType> searchTypes = searchTypes();
         if (searchTypes != null) {
             return this.toBuilder().searchTypes(searchTypes.stream()
-                    .map(searchType -> {
-                        if (searchType.id() == null) {
-                            return searchType.withId(new UUID().toString());
-                        } else {
-                            return searchType;
-                        }
-                    })
+                    .map(searchType -> searchType.withId(new UUID().toString()))
                     .collect(Collectors.toList())).build();
         }
         return this;

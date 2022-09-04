@@ -7,12 +7,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 import javax.annotation.Nullable;
 
-/**
- * A search type represents parts of a query that generates a {@see Result result}.
- *
- * Plain queries only select a set of data but by themselves do not return any specific parts from it.
- * Typical search types are aggregations across fields, a list of messages and other metadata.
- */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.PROPERTY,
@@ -63,11 +57,6 @@ public interface SearchType {
         }
     }
 
-    /**
-     * Each search type should declare an implementation of its result conforming to this interface.
-     *
-     * The frontend components then make use of the structured data to display it.
-     */
     interface Result {
         @JsonProperty("id")
         String id();
