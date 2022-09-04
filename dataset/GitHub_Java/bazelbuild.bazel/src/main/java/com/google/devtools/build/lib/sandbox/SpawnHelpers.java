@@ -145,7 +145,9 @@ public final class SpawnHelpers {
     for (Map.Entry<PathFragment, Map<PathFragment, Artifact>> rootAndMappings :
         rootsAndMappings.entrySet()) {
       PathFragment root = rootAndMappings.getKey();
-      Preconditions.checkState(!root.isAbsolute());
+      if (root.isAbsolute()) {
+        root = root.relativeTo(execRoot.asFragment());
+      }
       for (Map.Entry<PathFragment, Artifact> mapping : rootAndMappings.getValue().entrySet()) {
         Artifact sourceArtifact = mapping.getValue();
         Path source =
