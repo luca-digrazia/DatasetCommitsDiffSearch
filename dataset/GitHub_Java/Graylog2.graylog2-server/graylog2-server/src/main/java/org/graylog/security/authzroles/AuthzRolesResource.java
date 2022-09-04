@@ -53,7 +53,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
@@ -182,17 +181,14 @@ public class AuthzRolesResource extends RestResource {
             throw new BadRequestException("Invalid argument in search query: " + e.getMessage());
         }
 
-        final User user = Optional.ofNullable(userService.load(username))
-                .orElseThrow(() -> new NotFoundException("Couldn't find user: " + username));
-
-        final PaginatedList<AuthzRoleDTO> result = authzRolesService.findPaginatedByIds(
-                searchQuery, page, perPage,sort, order, user.getRoleIds());
+        final PaginatedList<AuthzRoleDTO> result = authzRolesService.findPaginatedForUser(
+                searchQuery, page, perPage,sort, order, username);
         return PaginatedResponse.create("roles", result, query);
     }
 
     @PUT
     @Produces(MediaType.APPLICATION_JSON)
-    @ApiOperation("Add user to role")
+    @ApiOperation("Add a user to a role")
     @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_UPDATE)
     @Path("{roleId}/assignee/{username}")
     public void addUser(
@@ -202,7 +198,7 @@ public class AuthzRolesResource extends RestResource {
     }
 
     @DELETE
-    @ApiOperation("Remove user from role")
+    @ApiOperation("Remove a member to a team")
     @Path("{roleId}/assignee/{username}")
     @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_DELETE)
     public void removeUser(
