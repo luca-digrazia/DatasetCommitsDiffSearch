@@ -40,8 +40,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
-import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.List;
@@ -51,7 +49,6 @@ import java.util.Set;
 /** Support utility for creating multi-arch Apple binaries. */
 public class MultiArchBinarySupport {
   private final RuleContext ruleContext;
-  private final CppSemantics cppSemantics;
 
   /**
    * Returns all child configurations for this multi-arch target, mapped to the toolchains that they
@@ -113,9 +110,8 @@ public class MultiArchBinarySupport {
   }
 
   /** @param ruleContext the current rule context */
-  public MultiArchBinarySupport(RuleContext ruleContext, CppSemantics cppSemantics) {
+  public MultiArchBinarySupport(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
-    this.cppSemantics = cppSemantics;
   }
 
   /**
@@ -180,7 +176,8 @@ public class MultiArchBinarySupport {
               .build();
 
       CompilationSupport compilationSupport =
-          new CompilationSupport.Builder(ruleContext, cppSemantics)
+          new CompilationSupport.Builder()
+              .setRuleContext(ruleContext)
               .setConfig(dependencySpecificConfiguration.config())
               .setToolchainProvider(dependencySpecificConfiguration.toolchain())
               .setOutputGroupCollector(outputMapCollector)
@@ -238,7 +235,6 @@ public class MultiArchBinarySupport {
         ProtobufSupport protoSupport =
             new ProtobufSupport(
                     ruleContext,
-                    ObjcCppSemantics.INSTANCE,
                     childToolchainConfig,
                     protosToAvoid,
                     depProtoProviders,
