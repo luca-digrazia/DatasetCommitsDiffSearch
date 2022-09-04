@@ -91,11 +91,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     }
 
     @Override
-    public Input create(Map<String, Object> fields) {
-        return new InputImpl(fields);
-    }
-
-    @Override
     public Input find(String id) throws NotFoundException {
         final DBObject o = get(org.graylog2.inputs.InputImpl.class, id);
         if (o == null) {

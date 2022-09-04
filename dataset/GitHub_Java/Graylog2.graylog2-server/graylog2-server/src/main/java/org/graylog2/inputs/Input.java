@@ -34,6 +34,8 @@ public interface Input extends Persisted {
 
     String getCreatorUserId();
 
+    String getInputId();
+
     Boolean isGlobal();
 
     String getContentPack();
