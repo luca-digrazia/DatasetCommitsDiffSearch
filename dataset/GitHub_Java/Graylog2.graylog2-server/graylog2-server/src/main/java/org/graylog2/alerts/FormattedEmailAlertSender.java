@@ -35,7 +35,6 @@ import java.util.Map;
 
 public class FormattedEmailAlertSender extends StaticEmailAlertSender implements AlertSender {
     public static final String bodyTemplate = "##########\n" +
-            "Alert Description: ${check_result.resultDescription}\n" +
             "Date: ${check_result.triggeredAt}\n" +
             "Stream ID: ${stream.id}\n" +
             "Stream title: ${stream.title}\n" +
@@ -74,7 +73,7 @@ public class FormattedEmailAlertSender extends StaticEmailAlertSender implements
     protected String buildSubject(Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) {
         final String template;
         if (pluginConfig == null || pluginConfig.getString("subject") == null) {
-            template = "Graylog alert for stream: ${stream.title}: ${check_result.resultDescription}";
+            template = "Graylog alert for stream: ${stream.title}";
         } else {
             template = pluginConfig.getString("subject");
         }
