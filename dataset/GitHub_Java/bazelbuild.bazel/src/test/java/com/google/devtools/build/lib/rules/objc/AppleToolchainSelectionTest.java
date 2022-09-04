@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -32,6 +33,11 @@ import org.junit.runners.JUnit4;
 /** Test case for the use of the OSX crosstool. */
 @RunWith(JUnit4.class)
 public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
+
+  @Override
+  protected void useConfiguration(String... args) throws Exception {
+   useConfiguration(ObjcCrosstoolMode.LIBRARY, args);
+  }
 
   @Test
   public void testToolchainSelectionDefault() throws Exception {
@@ -60,6 +66,7 @@ public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
 
   @Test
   public void testToolchainSelectionCcDepDefault() throws Exception {
+    useConfiguration("--experimental_disable_jvm");
     ScratchAttributeWriter
         .fromLabelString(this, "cc_library", "//b:lib")
         .setList("srcs", "b.cc")
@@ -72,7 +79,7 @@ public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
     String x8664Bin =
         configurationBin("x86_64", ConfigurationDistinguisher.APPLEBIN_IOS, null) + "a/bin_bin";
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), x8664Bin);
-    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(binArtifact);
+    CommandAction linkAction = getGeneratingSpawnAction(binArtifact);
     CppLinkAction ccArchiveAction =
         (CppLinkAction)
             getGeneratingAction(getFirstArtifactEndingWith(linkAction.getInputs(), "liblib.a"));
@@ -95,7 +102,7 @@ public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
     String armv7Bin =
         configurationBin("armv7", ConfigurationDistinguisher.APPLEBIN_IOS, null) + "a/bin_bin";
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), armv7Bin);
-    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(binArtifact);
+    CommandAction linkAction = getGeneratingSpawnAction(binArtifact);
     CppLinkAction ccArchiveAction =
         (CppLinkAction)
             getGeneratingAction(getFirstArtifactEndingWith(linkAction.getInputs(), "liblib.a"));
@@ -106,7 +113,9 @@ public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
 
   @Test
   public void testToolchainSelectionMultiArchIos() throws Exception {
-    useConfiguration("--ios_multi_cpus=armv7,arm64");
+    useConfiguration(
+        "--experimental_disable_jvm",
+        "--ios_multi_cpus=armv7,arm64");
     ScratchAttributeWriter
         .fromLabelString(this, "cc_library", "//b:lib")
         .setList("srcs", "a.cc")
@@ -121,7 +130,7 @@ public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
         configurationBin("arm64", ConfigurationDistinguisher.APPLEBIN_IOS, null)
         + "a/bin_bin";
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), armv64Bin);
-    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(binArtifact);
+    CommandAction linkAction = getGeneratingSpawnAction(binArtifact);
     CppLinkAction objcLibArchiveAction = (CppLinkAction) getGeneratingAction(
         getFirstArtifactEndingWith(linkAction.getInputs(), "liblib.a"));
     assertThat(Joiner.on(" ").join(objcLibArchiveAction.getArguments())).contains("ios_arm64");
@@ -130,6 +139,7 @@ public class AppleToolchainSelectionTest extends ObjcRuleTestCase {
   @Test
   public void testToolchainSelectionMultiArchWatchos() throws Exception {
     useConfiguration(
+        "--experimental_disable_jvm",
         "--ios_multi_cpus=armv7,arm64",
         "--watchos_cpus=armv7k");
     ScratchAttributeWriter
