@@ -17,9 +17,9 @@
 package org.graylog.plugins.pipelineprocessor.rest;
 
 import com.google.common.eventbus.EventBus;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.db.RuleDao;
 import org.graylog.plugins.pipelineprocessor.db.RuleService;
@@ -78,7 +78,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
     public RuleSource createFromParser(@ApiParam(name = "rule", required = true) @NotNull RuleSource ruleSource) throws ParseException {
         final Rule rule;
         try {
-            rule = pipelineRuleParser.parseRule(ruleSource.id(), ruleSource.source(), false);
+            rule = pipelineRuleParser.parseRule(ruleSource.source(), false);
         } catch (ParseException e) {
             throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
         }
@@ -103,7 +103,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
         final Rule rule;
         try {
             // be silent about parse errors here, many requests will result in invalid syntax
-            rule = pipelineRuleParser.parseRule(ruleSource.id(), ruleSource.source(), true);
+            rule = pipelineRuleParser.parseRule(ruleSource.source(), true);
         } catch (ParseException e) {
             throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
         }
@@ -152,7 +152,7 @@ public class RuleResource extends RestResource implements PluginRestResource {
         final RuleDao ruleDao = ruleService.load(id);
         final Rule rule;
         try {
-            rule = pipelineRuleParser.parseRule(id, update.source(), false);
+            rule = pipelineRuleParser.parseRule(update.source(), false);
         } catch (ParseException e) {
             throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
         }

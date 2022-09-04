@@ -363,8 +363,8 @@ public class PipelineInterpreter implements MessageProcessor {
     }
 
     @Subscribe
-    public void handlePipelineConnectionChanges(PipelineConnectionsChangedEvent event) {
-        log.debug("Pipeline stream connection changed: {}", event);
+    public void handlePipelineConnectionChanges(PipelineConnections connection) {
+        log.debug("Pipeline stream connection changed: {}", connection);
         scheduler.schedule((Runnable) this::reload, 0, TimeUnit.SECONDS);
     }
 
