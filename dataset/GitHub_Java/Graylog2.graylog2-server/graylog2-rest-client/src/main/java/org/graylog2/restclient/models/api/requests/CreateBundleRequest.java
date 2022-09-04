@@ -16,8 +16,6 @@
  */
 package org.graylog2.restclient.models.api.requests;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.graylog2.restclient.models.bundles.Dashboard;
 import org.graylog2.restclient.models.bundles.GrokPattern;
 import org.graylog2.restclient.models.bundles.Input;
@@ -26,22 +24,14 @@ import org.graylog2.restclient.models.bundles.Stream;
 
 import java.util.List;
 
-@JsonAutoDetect
 public class CreateBundleRequest extends ApiRequest {
-    @JsonProperty("name")
+    public String id;
     public String name;
-    @JsonProperty("description")
     public String description;
-    @JsonProperty("category")
     public String category;
-    @JsonProperty("inputs")
     public List<Input> inputs;
-    @JsonProperty("streams")
     public List<Stream> streams;
-    @JsonProperty("outputs")
     public List<Output> outputs;
-    @JsonProperty("dashboards")
     public List<Dashboard> dashboards;
-    @JsonProperty("grok_patterns")
     public List<GrokPattern> grokPatterns;
 }
