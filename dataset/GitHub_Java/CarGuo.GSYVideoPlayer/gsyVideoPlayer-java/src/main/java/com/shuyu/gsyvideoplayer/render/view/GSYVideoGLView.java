@@ -127,6 +127,7 @@ public class GSYVideoGLView extends GLSurfaceView {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        Debuger.printfError("ffff", "fFF " + mMode);
         if (mMode == MODE_RENDER_SIZE) {
             super.onMeasure(widthMeasureSpec, heightMeasureSpec);
             measureHelper.prepareMeasure(widthMeasureSpec, heightMeasureSpec, (int) getRotation());
