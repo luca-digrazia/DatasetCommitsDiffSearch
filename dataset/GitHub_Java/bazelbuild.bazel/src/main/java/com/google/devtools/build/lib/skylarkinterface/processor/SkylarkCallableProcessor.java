@@ -14,11 +14,8 @@
 
 package com.google.devtools.build.lib.skylarkinterface.processor;
 
-import com.google.common.collect.LinkedHashMultimap;
-import com.google.common.collect.SetMultimap;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -70,11 +67,7 @@ import javax.tools.Diagnostic;
 public final class SkylarkCallableProcessor extends AbstractProcessor {
   private Messager messager;
 
-  // A set containing the names of all classes which have a method with @SkylarkCallable.selfCall.
   private Set<String> classesWithSelfcall;
-  // A multimap where keys are class names, and values are the callable method names identified in
-  // that class (where "method name" is @SkylarkCallable.name").
-  private SetMultimap<String, String> processedClassMethods;
 
   private static final String SKYLARK_LIST = "com.google.devtools.build.lib.syntax.SkylarkList<?>";
   private static final String SKYLARK_DICT =
@@ -95,7 +88,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     super.init(processingEnv);
     messager = processingEnv.getMessager();
     classesWithSelfcall = new HashSet<>();
-    processedClassMethods = LinkedHashMultimap.create();
   }
 
   @Override
@@ -119,39 +111,12 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
         verifyNumberOfParameters(methodElement, annotation);
         verifyExtraInterpreterParams(methodElement, annotation);
         verifyIfSelfCall(methodElement, annotation);
-        verifyFlagToggles(methodElement, annotation);
-        verifyNoNameConflict(methodElement, annotation);
       } catch (SkylarkCallableProcessorException exception) {
         error(exception.methodElement, exception.errorMessage);
       }
     }
 
     return true;
-  }
-
-  private void verifyNoNameConflict(ExecutableElement methodElement, SkylarkCallable annotation)
-      throws SkylarkCallableProcessorException {
-    boolean methodNameIsUniqueForClass =
-        processedClassMethods.put(
-            methodElement.getEnclosingElement().asType().toString(),
-            annotation.name());
-    if (!methodNameIsUniqueForClass) {
-      throw new SkylarkCallableProcessorException(
-          methodElement,
-          String.format("Containing class has more than one method with name '%s' defined.",
-              annotation.name()));
-    }
-  }
-
-  private void verifyFlagToggles(ExecutableElement methodElement, SkylarkCallable annotation)
-      throws SkylarkCallableProcessorException {
-    if (annotation.enableOnlyWithFlag() != FlagIdentifier.NONE
-        && annotation.disableWithFlag() != FlagIdentifier.NONE) {
-      throw new SkylarkCallableProcessorException(
-          methodElement,
-          "Only one of @SkylarkCallable.enablingFlag and @SkylarkCallable.disablingFlag may be "
-              + "specified.");
-    }
   }
 
   private void verifyNameNotEmpty(ExecutableElement methodElement, SkylarkCallable annotation)
