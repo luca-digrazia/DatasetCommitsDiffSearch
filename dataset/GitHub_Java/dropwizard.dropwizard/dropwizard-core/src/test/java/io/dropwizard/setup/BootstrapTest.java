@@ -8,10 +8,14 @@ import io.dropwizard.configuration.FileConfigurationSourceProvider;
 
 import org.junit.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 
 public class BootstrapTest {
     private final Application<Configuration> application = new Application<Configuration>() {
+        @Override
+        public void initialize(Bootstrap<Configuration> bootstrap) {
+        }
+
         @Override
         public void run(Configuration configuration, Environment environment) throws Exception {
         }
