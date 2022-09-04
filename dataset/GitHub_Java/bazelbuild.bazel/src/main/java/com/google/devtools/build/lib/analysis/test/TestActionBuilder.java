@@ -336,33 +336,30 @@ public final class TestActionBuilder {
     ImmutableList.Builder<Artifact> coverageArtifacts = ImmutableList.builder();
     ImmutableList.Builder<ActionInput> testOutputs = ImmutableList.builder();
 
-    // Use 1-based indices for user friendliness.
-    for (int shard = 0; shard < shardRuns; shard++) {
-      String shardDir = shardRuns > 1 ? String.format("shard_%d_of_%d", shard + 1, shards) : null;
-      for (int run = 0; run < runsPerTest; run++) {
-        PathFragment dir;
-        if (runsPerTest > 1) {
-          String runDir = String.format("run_%d_of_%d", run + 1, runsPerTest);
-          if (shardDir == null) {
-            dir = targetName.getRelative(runDir);
-          } else {
-            dir = targetName.getRelative(shardDir + "_" + runDir);
-          }
-        } else if (shardDir == null) {
-          dir = targetName;
+    for (int run = 0; run < runsPerTest; run++) {
+      // Use a 1-based index for user friendliness.
+      String testRunDir =
+          runsPerTest > 1 ? String.format("run_%d_of_%d", run + 1, runsPerTest) : "";
+      for (int shard = 0; shard < shardRuns; shard++) {
+        String shardRunDir =
+            (shardRuns > 1 ? String.format("shard_%d_of_%d", shard + 1, shards) : "");
+        if (testRunDir.isEmpty()) {
+          shardRunDir = shardRunDir.isEmpty() ? "" : shardRunDir + PathFragment.SEPARATOR_CHAR;
         } else {
-          dir = targetName.getRelative(shardDir);
+          testRunDir += PathFragment.SEPARATOR_CHAR;
+          shardRunDir = shardRunDir.isEmpty() ? testRunDir : shardRunDir + "_" + testRunDir;
         }
-
         Artifact.DerivedArtifact testLog =
-            ruleContext.getPackageRelativeArtifact(dir.getRelative("test.log"), root);
+            ruleContext.getPackageRelativeArtifact(
+                targetName.getRelative(shardRunDir + "test.log"), root);
         Artifact.DerivedArtifact cacheStatus =
-            ruleContext.getPackageRelativeArtifact(dir.getRelative("test.cache_status"), root);
+            ruleContext.getPackageRelativeArtifact(
+                targetName.getRelative(shardRunDir + "test.cache_status"), root);
 
         Artifact.DerivedArtifact coverageArtifact = null;
         if (collectCodeCoverage) {
-          coverageArtifact =
-              ruleContext.getPackageRelativeArtifact(dir.getRelative("coverage.dat"), root);
+          coverageArtifact = ruleContext.getPackageRelativeArtifact(
+              targetName.getRelative(shardRunDir + "coverage.dat"), root);
           coverageArtifacts.add(coverageArtifact);
         }
 

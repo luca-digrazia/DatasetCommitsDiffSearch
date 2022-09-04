@@ -126,10 +126,7 @@ public class AggregatingTestListener {
   public void testEvent(TestResult result) {
     ActionOwner testOwner = result.getTestAction().getOwner();
     ConfiguredTargetKey configuredTargetKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(testOwner.getLabel())
-            .setConfiguration(result.getTestAction().getConfiguration())
-            .build();
+        ConfiguredTargetKey.of(testOwner.getLabel(), result.getTestAction().getConfiguration());
     aggregators.get(configuredTargetKey).testEvent(result);
   }
 
@@ -216,10 +213,11 @@ public class AggregatingTestListener {
       TestSummary summary;
       if (isAlias(testTarget)) {
         ConfiguredTargetKey actualKey =
-            ConfiguredTargetKey.builder()
-                .setLabel(testTarget.getLabel())
-                .setConfigurationKey(testTarget.getConfigurationKey())
-                .build();
+            ConfiguredTargetKey.of(
+                // A test is never in the host configuration.
+                testTarget.getLabel(),
+                testTarget.getConfigurationKey(),
+                /*isHostConfiguration=*/ false);
         TestResultAggregator aggregator = aggregators.get(actualKey);
         TestSummary.Builder summaryBuilder = TestSummary.newBuilder();
         summaryBuilder.mergeFrom(aggregator.aggregateAndReportSummary(skipTargetsOnFailure));
@@ -265,9 +263,10 @@ public class AggregatingTestListener {
 
   private static ConfiguredTargetKey asKey(ConfiguredTarget target) {
     Preconditions.checkArgument(!isAlias(target));
-    return ConfiguredTargetKey.builder()
-        .setLabel(AliasProvider.getDependencyLabel(target))
-        .setConfigurationKey(target.getConfigurationKey())
-        .build();
+    return ConfiguredTargetKey.of(
+        // A test is never in the host configuration.
+        AliasProvider.getDependencyLabel(target),
+        target.getConfigurationKey(),
+        /*isHostConfiguration=*/ false);
   }
 }
