@@ -44,9 +44,6 @@ import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
@@ -140,12 +137,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
     } catch (InterruptedIOException e) {
       throw new InterruptedException(e.getMessage());
     } catch (IOException e) {
-      throw new EnvironmentalExecException(
-          e,
-          FailureDetail.newBuilder()
-              .setMessage("Exec failed due to IOException")
-              .setSpawn(FailureDetails.Spawn.newBuilder().setCode(Code.EXEC_IO_EXCEPTION))
-              .build());
+      throw new EnvironmentalExecException(e);
     } catch (SpawnExecException e) {
       ex = e;
       spawnResult = e.getSpawnResult();
@@ -158,7 +150,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
         spawnLogContext.logSpawn(
             spawn,
             actionExecutionContext.getMetadataProvider(),
-            context.getInputMapping(),
+            context.getInputMapping(true),
             context.getTimeout(),
             spawnResult);
       } catch (IOException e) {
@@ -179,7 +171,8 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
           !Strings.isNullOrEmpty(resultMessage)
               ? resultMessage
               : CommandFailureUtils.describeCommandFailure(
-                  actionExecutionContext.getVerboseFailures(),
+                  actionExecutionContext.showVerboseFailures(
+                      spawn.getResourceOwner().getOwner().getLabel()),
                   spawn.getArguments(),
                   spawn.getEnvironment(),
                   cwd,
@@ -221,7 +214,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
       if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
         actionExecutionContext
             .getActionInputPrefetcher()
-            .prefetchFiles(getInputMapping().values(), getMetadataProvider());
+            .prefetchFiles(getInputMapping(true).values(), getMetadataProvider());
       }
     }
 
@@ -273,7 +266,8 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
     }
 
     @Override
-    public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
+    public SortedMap<PathFragment, ActionInput> getInputMapping(
+        boolean expandTreeArtifactsInRunfiles) throws IOException {
       if (lazyInputMapping == null) {
         try (SilentCloseable c =
             Profiler.instance().profile("AbstractSpawnStrategy.getInputMapping")) {
@@ -281,7 +275,8 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnStrategy {
               spawnInputExpander.getInputMapping(
                   spawn,
                   actionExecutionContext.getArtifactExpander(),
-                  actionExecutionContext.getMetadataProvider());
+                  actionExecutionContext.getMetadataProvider(),
+                  expandTreeArtifactsInRunfiles);
         }
       }
       return lazyInputMapping;
