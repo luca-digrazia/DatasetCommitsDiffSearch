@@ -20,6 +20,7 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.loader.BatchFetchStyle;
+import org.hibernate.tool.hbm2ddl.MultipleLinesSqlCommandExtractor;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
@@ -127,16 +128,12 @@ public final class HibernateReactiveProcessor {
         }
 
         // we only support the default pool for now
-        Optional<String> dbKindOptional = dataSourcesBuildTimeConfig.defaultDataSource.dbKind;
-        if (dbKindOptional.isPresent()) {
-            final String dbKind = dbKindOptional.get();
-            ParsedPersistenceXmlDescriptor reactivePU = generateReactivePersistenceUnit(resourceProducer,
-                    systemPropertyProducer,
-                    dbKind, applicationArchivesBuildItem, launchMode.getLaunchMode());
+        Optional<String> dbKind = dataSourcesBuildTimeConfig.defaultDataSource.dbKind;
 
-            persistenceUnitDescriptorProducer.produce(new PersistenceUnitDescriptorBuildItem(reactivePU, true));
-        }
+        ParsedPersistenceXmlDescriptor reactivePU = generateReactivePersistenceUnit(resourceProducer, systemPropertyProducer,
+                dbKind, applicationArchivesBuildItem, launchMode.getLaunchMode());
 
+        persistenceUnitDescriptorProducer.produce(new PersistenceUnitDescriptorBuildItem(reactivePU));
     }
 
     /**
@@ -150,7 +147,7 @@ public final class HibernateReactiveProcessor {
     private ParsedPersistenceXmlDescriptor generateReactivePersistenceUnit(
             BuildProducer<NativeImageResourceBuildItem> resourceProducer,
             BuildProducer<SystemPropertyBuildItem> systemProperty,
-            String dbKind,
+            Optional<String> dbKind,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchMode launchMode) {
 
@@ -244,6 +241,9 @@ public final class HibernateReactiveProcessor {
                 // enlist resource if present
                 resourceProducer.produce(new NativeImageResourceBuildItem(importFile.get()));
                 desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES, importFile.get());
+                desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES_SQL_EXTRACTOR,
+                        MultipleLinesSqlCommandExtractor.class.getName());
+
             } else if (hibernateConfig.sqlLoadScript.isPresent()) {
                 //raise exception if explicit file is not present (i.e. not the default)
                 throw new ConfigurationError(
