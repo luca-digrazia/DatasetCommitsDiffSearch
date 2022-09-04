@@ -23,6 +23,7 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -358,7 +359,10 @@ public class BuildViewTest extends BuildViewTestBase {
     Iterable<Dependency> targets =
         getView()
             .getDirectPrerequisiteDependenciesForTesting(
-                reporter, top, getBuildConfigurationCollection(), /*toolchainContext=*/ null)
+                reporter,
+                top,
+                getBuildConfigurationCollection(),
+                /*toolchainLabels=*/ ImmutableSet.of())
             .values();
 
     Dependency innerDependency =
