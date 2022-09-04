@@ -23,7 +23,6 @@ import org.graylog2.shared.users.Role;
 import javax.annotation.Nullable;
 import javax.persistence.Id;
 import javax.validation.constraints.NotNull;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 
@@ -47,7 +46,7 @@ public class RoleImpl implements Role {
 
     @JsonProperty
     public String nameLower() {
-        return name.toLowerCase(Locale.ENGLISH);
+        return name.toLowerCase();
     }
 
     @JsonProperty
