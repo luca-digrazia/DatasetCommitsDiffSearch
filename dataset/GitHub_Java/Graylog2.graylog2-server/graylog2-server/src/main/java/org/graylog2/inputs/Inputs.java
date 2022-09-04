@@ -56,7 +56,7 @@ public class Inputs {
     private Map<String, String> availableInputs;
 
     private ExecutorService executor = Executors.newCachedThreadPool(
-            new ThreadFactoryBuilder().setNameFormat("inputs-%d").build()
+            new ThreadFactoryBuilder().setNameFormat("systemjob-executor-%d").build()
     );
 
     public Inputs(Core core) {
@@ -83,8 +83,6 @@ public class Inputs {
 
                     // Clean up.
                     cleanInput(input);
-                } catch(Exception e) {
-                    LOG.error("Error in input <{}>", input.getId(), e);
                 }
             }
         });
@@ -157,15 +155,14 @@ public class Inputs {
                 }
             } catch (NoSuchInputTypeException e) {
                 LOG.warn("Cannot launch persisted input. No such type [{}].", io.getType());
-                continue;
+                throw new WebApplicationException(e, Response.Status.NOT_FOUND);
             } catch (ConfigurationException e) {
-                LOG.error("Missing or invalid input plugin configuration.", e);
-                continue;
+                LOG.error("Missing or invalid input configuration.", e);
+                throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
             }
 
             launch(input, io.getInputId());
         }
     }
-
 
 }

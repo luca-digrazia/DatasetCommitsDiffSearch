@@ -46,8 +46,7 @@ public class Notification extends Persisted {
     public static final String COLLECTION = "notifications";
 
     public enum Type {
-        DEFLECTOR_EXISTS_AS_INDEX,
-        MULTI_MASTER
+        DEFLECTOR_EXISTS_AS_INDEX
     }
 
     public enum Severity {
@@ -107,12 +106,7 @@ public class Notification extends Persisted {
         List<Notification> notifications = Lists.newArrayList();
 
         for(DBObject obj : query(new BasicDBObject(), new BasicDBObject("timestamp", -1), core, COLLECTION)) {
-            try {
-                notifications.add(new Notification((ObjectId) obj.get("_id"), core, obj.toMap()));
-            } catch(IllegalArgumentException e) {
-                LOG.warn("There is a notification type we can't handle: [" + obj.get("type") + "]");
-                continue;
-            }
+            notifications.add(new Notification((ObjectId) obj.get("_id"), core, obj.toMap()));
         }
 
         return notifications;

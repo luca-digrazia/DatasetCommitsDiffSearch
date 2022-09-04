@@ -26,9 +26,7 @@ import org.elasticsearch.common.UUID;
 import org.graylog2.ConfigurationException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
-import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
-import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.CreateExtractorRequest;
@@ -94,8 +92,7 @@ public class ExtractorsResource extends RestResource {
                     cer.sourceField,
                     cer.targetField,
                     cer.extractorConfig,
-                    cer.creatorUserId,
-                    loadConverters(cer.converters)
+                    cer.creatorUserId
             );
         } catch (ExtractorFactory.NoSuchExtractorException e) {
             LOG.error("No such extractor type.", e);
@@ -206,20 +203,6 @@ public class ExtractorsResource extends RestResource {
         map.put("creator_user_id", extractor.getCreatorUserId());
 
         return map;
-    }
-
-    private List<Converter> loadConverters(Map<String, Map<String, Object>> requestConverters) {
-        List<Converter> converters = Lists.newArrayList();
-
-        for (Map.Entry<String, Map<String, Object>> c : requestConverters.entrySet()) {
-            try {
-                converters.add(ConverterFactory.factory(Converter.Type.valueOf(c.getKey().toUpperCase()), c.getValue()));
-            } catch (ConverterFactory.NoSuchConverterException e) {
-                LOG.warn("No such converter [{}]. Skipping.", c.getKey(), e);
-            }
-        }
-
-        return converters;
     }
 
 }

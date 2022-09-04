@@ -23,7 +23,6 @@ import com.google.common.collect.Maps;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
-import org.eclipse.jdt.core.compiler.CharOperation;
 import org.graylog2.Core;
 import org.graylog2.database.Persisted;
 import org.graylog2.database.ValidationException;
@@ -43,13 +42,9 @@ public class Node extends Persisted {
 
     private static final Logger LOG = LoggerFactory.getLogger(Node.class);
 
-    public static final int PING_TIMEOUT = 2;
+    public static final int PING_TIMEOUT = 7; // <3
     private static final String COLLECTION = "nodes";
-
-    public enum Type {
-        SERVER,
-        RADIO
-    }
+    private Object shortNodeId;
 
     protected Node(Core core, Map<String, Object> fields) {
         super(core, fields);
@@ -59,27 +54,12 @@ public class Node extends Persisted {
         super(core, id, fields);
     }
 
-    public static void registerServer(Core core, boolean isMaster, URI restTransportUri) {
+    public static void register(Core core, boolean isMaster, URI restListenUri) {
         Map<String, Object> fields = Maps.newHashMap();
         fields.put("last_seen", Tools.getUTCTimestamp());
         fields.put("node_id", core.getNodeId());
-        fields.put("type", Type.SERVER.toString());
         fields.put("is_master", isMaster);
-        fields.put("transport_address", restTransportUri.toString());
-
-        try {
-            new Node(core, fields).save();
-        } catch (ValidationException e) {
-            throw new RuntimeException("Validation failed.", e);
-        }
-    }
-
-    public static void registerRadio(Core core, String nodeId, String restTransportUri) {
-        Map<String, Object> fields = Maps.newHashMap();
-        fields.put("last_seen", Tools.getUTCTimestamp());
-        fields.put("node_id", nodeId);
-        fields.put("type", Type.RADIO.toString());
-        fields.put("transport_address", restTransportUri);
+        fields.put("transport_address", restListenUri.toString());
 
         try {
             new Node(core, fields).save();
@@ -109,12 +89,11 @@ public class Node extends Persisted {
         return new Node(core, (ObjectId) o.get("_id"), o.toMap());
     }
 
-    public static Map<String, Node> allActive(Core core, Type type) {
+    public static Map<String, Node> allActive(Core core) {
         Map<String, Node> nodes = Maps.newHashMap();
 
         BasicDBObject query = new BasicDBObject();
         query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp()-PING_TIMEOUT));
-        query.put("type", type.toString());
 
         for(DBObject obj : query(query, core, COLLECTION)) {
             Node node = new Node(core, (ObjectId) obj.get("_id"), obj.toMap());
@@ -135,7 +114,6 @@ public class Node extends Persisted {
 
     public boolean isOnlyMaster() {
         BasicDBObject query = new BasicDBObject();
-        query.put("type", Type.SERVER.toString());
         query.put("last_seen", new BasicDBObject("$gte", Tools.getUTCTimestamp()-PING_TIMEOUT));
         query.put("node_id", new BasicDBObject("$ne", core.getNodeId()));
         query.put("is_master", true);
@@ -143,25 +121,13 @@ public class Node extends Persisted {
         return query(query, COLLECTION).size() == 0;
     }
 
-    /**
-     * Mark this node as alive and probably update some settings that may have changed since last server boot.
-     *
-     * @param isMaster
-     * @param restTransportAddress
-     */
-    public void markAsAlive(boolean isMaster, String restTransportAddress) {
+    public void alive() {
         fields.put("last_seen", Tools.getUTCTimestamp());
-        fields.put("is_master", isMaster);
-        fields.put("transport_address", restTransportAddress);
         try {
             save();
         } catch (ValidationException e) {
             throw new RuntimeException("Validation failed.", e);
         }
-    }
-
-    public void markAsAlive(boolean isMaster, URI restTransportAddress) {
-        markAsAlive(isMaster, restTransportAddress.toString());
     }
 
     public String getNodeId() {
@@ -192,14 +158,6 @@ public class Node extends Persisted {
 
     public String getShortNodeId() {
         return getNodeId().split("-")[0];
-    }
-
-    public Type getType() {
-        if (!fields.containsKey("type")) {
-            return Type.SERVER;
-        }
-
-        return Type.valueOf(fields.get("type").toString().toUpperCase());
     }
 
     @Override

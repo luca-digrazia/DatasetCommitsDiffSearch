@@ -20,7 +20,6 @@
 package org.graylog2.indexer.ranges;
 
 import com.beust.jcommander.internal.Maps;
-import com.google.common.collect.Lists;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
@@ -31,7 +30,6 @@ import org.graylog2.database.validators.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -62,19 +60,6 @@ public class IndexRange extends Persisted {
         return new IndexRange((ObjectId) dbo.get("_id"), core, dbo.toMap());
     }
 
-    public static List<IndexRange> getFrom(Core core, int timestamp) {
-        List<IndexRange> ranges = Lists.newArrayList();
-
-        BasicDBObject query = new BasicDBObject();
-        query.put("start", new BasicDBObject("$gte", timestamp));
-
-        for (DBObject dbo : query(query, core, COLLECTION)) {
-            ranges.add(new IndexRange((ObjectId) dbo.get("_id"), core, dbo.toMap()));
-        }
-
-        return ranges;
-    }
-
     public static void destroy(Core server, String index) {
         IndexRange range = IndexRange.get(index, server);
         range.destroy();
@@ -82,10 +67,6 @@ public class IndexRange extends Persisted {
         String x = "Removed range meta-information of [" + index + "]";
         LOG.info(x);
         server.getActivityWriter().write(new Activity(x, IndexRange.class));
-    }
-
-    public String getIndexName() {
-        return (String) fields.get("index");
     }
 
     @Override

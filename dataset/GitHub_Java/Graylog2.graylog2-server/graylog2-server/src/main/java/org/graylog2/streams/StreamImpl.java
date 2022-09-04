@@ -20,7 +20,10 @@
 
 package org.graylog2.streams;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
@@ -126,14 +129,7 @@ public class StreamImpl extends Persisted implements Stream {
         // TODO: PUT REGEX MATCHERS AT THE END
         // TODO: CONVERT TO INTS AS GOOD AS POSSIBLE IN CACHE
 
-        List<StreamRule> streamRules;
-        try {
-            streamRules = StreamRuleImpl.findAllForStream(this.getId(), core);
-        } catch (NotFoundException e) {
-            streamRules = new ArrayList<StreamRule>();
-        }
-
-        return streamRules;
+		return null;
 	}
 
 	@Override
@@ -186,15 +182,11 @@ public class StreamImpl extends Persisted implements Stream {
 		Map<String, Object> result = Maps.newHashMap(fields);
 		result.remove("_id");
 		result.put("id", ((ObjectId) fields.get("_id")).toStringMongod());
-
-        List<Map<String, Object>> streamRules = Lists.newArrayList();
-
-        for (StreamRule streamRule : this.getStreamRules()) {
-            streamRules.add(((StreamRuleImpl) streamRule).asMap());
-        }
-
-        result.put("rules", streamRules);
-
+		
+		if (!result.containsKey("rules")) {
+			result.put("rules", Maps.newHashMap());
+		}
+		
 		return result;
 	}
 
@@ -211,11 +203,4 @@ public class StreamImpl extends Persisted implements Stream {
         return Maps.newHashMap();
     }
 
-    @Override
-    public void destroy() {
-        for (StreamRule streamRule : getStreamRules()) {
-            ((StreamRuleImpl) streamRule).destroy();
-        }
-        super.destroy();
-    }
 }

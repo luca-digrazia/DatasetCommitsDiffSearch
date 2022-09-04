@@ -25,7 +25,6 @@ import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
 import org.graylog2.database.Persisted;
-import org.graylog2.database.ValidationException;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.Validator;
 import org.slf4j.Logger;
@@ -56,29 +55,6 @@ public class User extends Persisted {
         super(core, id, fields);
     }
 
-    public static User load(String username, Core core) {
-        // special case for the locally defined user, we don't store that in MongoDB.
-        if (core.getConfiguration().getRootUsername().equals(username)) {
-            return new LocalAdminUser(core);
-        }
-
-        DBObject query = new BasicDBObject();
-        query.put(USERNAME, username);
-
-        List<DBObject> result = query(query, core, COLLECTION);
-
-        if (result == null)     { return null; }
-        if (result.size() == 0) { return null; }
-
-        if (result.size() > 1) {
-            throw new RuntimeException("There was more than one matching user. This should never happen.");
-        }
-        final DBObject userObject = result.get(0);
-
-        final Object userId = userObject.get("_id");
-        return new User((ObjectId) userId, userObject.toMap(), core);
-    }
-
     public static boolean exists(String username, String passwordHash, Core core) {
         DBObject query = new BasicDBObject();
         query.put(USERNAME, username);
@@ -103,8 +79,6 @@ public class User extends Persisted {
         return false;
     }
 
-    // TODO remove this and use a proper salted digest, this is not secure at all
-    @Deprecated
     public static String saltPass(String password, String salt) {
         if (password == null || password.isEmpty()) {
             throw new RuntimeException("No password given.");
@@ -115,10 +89,6 @@ public class User extends Persisted {
         }
 
         return password + salt;
-    }
-
-    public boolean isReadOnly() {
-        return false;
     }
 
     @Override
@@ -142,38 +112,5 @@ public class User extends Persisted {
     @Override
     protected Map<String, Validator> getEmbeddedValidations(String key) {
         return Maps.newHashMap();
-    }
-
-    public String getFullName() {
-        return fields.get(FULL_NAME).toString();
-    }
-
-    public String getName() {
-        return fields.get(USERNAME).toString();
-    }
-
-    private static class LocalAdminUser extends User {
-        LocalAdminUser(Core core) {
-            super(null, Maps.<String, Object>newHashMap(), core);
-        }
-
-        @Override
-        public String getFullName() {
-            return "Administrator";
-        }
-
-        @Override
-        public String getName() {
-            return core.getConfiguration().getRootUsername();
-        }
-
-        public boolean isReadOnly() {
-            return true;
-        }
-
-        @Override
-        public ObjectId save() throws ValidationException {
-            throw new IllegalStateException("Cannot modify local root user, this is a bug.");
-        }
     }
 }
