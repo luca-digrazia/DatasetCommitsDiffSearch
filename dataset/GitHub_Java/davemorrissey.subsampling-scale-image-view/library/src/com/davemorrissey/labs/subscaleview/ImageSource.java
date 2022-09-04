@@ -9,7 +9,7 @@ import android.net.Uri;
  * use of a bitmap, asset, resource, external file or any other URI.
  *
  * When you are using a preview image, you must set the dimensions of the full size image on the
- * ImageSource object for the full size image using the {@link #dimensions(int, int)} method.
+ * ImageSource object for the full size image using the {@link #withDimensions(int, int)} method.
  */
 public final class ImageSource {
 
@@ -23,16 +23,14 @@ public final class ImageSource {
     private int sWidth;
     private int sHeight;
     private Rect sRegion;
-    private boolean cached;
 
-    private ImageSource(Bitmap bitmap, boolean cached) {
+    private ImageSource(Bitmap bitmap) {
         this.bitmap = bitmap;
         this.uri = null;
         this.resource = null;
         this.tile = false;
         this.sWidth = bitmap.getWidth();
         this.sHeight = bitmap.getHeight();
-        this.cached = cached;
     }
 
     private ImageSource(Uri uri) {
@@ -105,20 +103,7 @@ public final class ImageSource {
         if (bitmap == null) {
             throw new NullPointerException("Bitmap must not be null");
         }
-        return new ImageSource(bitmap, false);
-    }
-
-    /**
-     * Provide a loaded and cached bitmap for display. This bitmap will not be recycled when it is no
-     * longer needed. Use this method if you loaded the bitmap with an image loader such as Picasso
-     * or Volley.
-     * @param bitmap bitmap to be displayed.
-     */
-    public static ImageSource cachedBitmap(Bitmap bitmap) {
-        if (bitmap == null) {
-            throw new NullPointerException("Bitmap must not be null");
-        }
-        return new ImageSource(bitmap, true);
+        return new ImageSource(bitmap);
     }
 
     /**
@@ -126,8 +111,8 @@ public final class ImageSource {
      * and tiling cannot be disabled when displaying a region of the source image.
      * @return this instance for chaining.
      */
-    public ImageSource tilingEnabled() {
-        return tiling(true);
+    public ImageSource withTilingEnabled() {
+        return withTiling(true);
     }
 
     /**
@@ -135,8 +120,8 @@ public final class ImageSource {
      * and tiling cannot be disabled when displaying a region of the source image.
      * @return this instance for chaining.
      */
-    public ImageSource tilingDisabled() {
-        return tiling(false);
+    public ImageSource withTilingDisabled() {
+        return withTiling(false);
     }
 
     /**
@@ -144,7 +129,7 @@ public final class ImageSource {
      * and tiling cannot be disabled when displaying a region of the source image.
      * @return this instance for chaining.
      */
-    public ImageSource tiling(boolean tile) {
+    public ImageSource withTiling(boolean tile) {
         this.tile = tile;
         return this;
     }
@@ -154,7 +139,7 @@ public final class ImageSource {
      * you are using one.
      * @return this instance for chaining.
      */
-    public ImageSource region(Rect sRegion) {
+    public ImageSource withRegion(Rect sRegion) {
         this.sRegion = sRegion;
         setInvariants();
         return this;
@@ -166,7 +151,7 @@ public final class ImageSource {
      * the image dimensions. Note if the declared dimensions are found to be incorrect, the view will reset.
      * @return this instance for chaining.
      */
-    public ImageSource dimensions(int sWidth, int sHeight) {
+    public ImageSource withDimensions(int sWidth, int sHeight) {
         if (bitmap == null) {
             this.sWidth = sWidth;
             this.sHeight = sHeight;
@@ -209,9 +194,5 @@ public final class ImageSource {
 
     protected final Rect getSRegion() {
         return sRegion;
-    }
-
-    protected final boolean isCached() {
-        return cached;
     }
 }
