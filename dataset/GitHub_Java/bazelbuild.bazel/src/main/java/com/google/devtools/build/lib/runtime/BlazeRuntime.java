@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.PackageLoadingListener;
 import com.google.devtools.build.lib.packages.PackageValidator;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.MemoryProfiler;
@@ -69,10 +68,6 @@ import com.google.devtools.build.lib.runtime.commands.InfoItem;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.server.CommandProtos.EnvironmentVariable;
 import com.google.devtools.build.lib.server.CommandProtos.ExecRequest;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Filesystem;
-import com.google.devtools.build.lib.server.FailureDetails.GrpcServer;
-import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
 import com.google.devtools.build.lib.server.RPCServer;
 import com.google.devtools.build.lib.server.signal.InterruptSignalHandler;
 import com.google.devtools.build.lib.shell.JavaSubprocessFactory;
@@ -80,18 +75,15 @@ import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.shell.SubprocessFactory;
 import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.CustomFailureDetailPublisher;
 import com.google.devtools.build.lib.util.DebugLoggerConfigurator;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.ProcessUtils;
-import com.google.devtools.build.lib.util.TestType;
 import com.google.devtools.build.lib.util.ThreadUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionNotSetException;
@@ -169,7 +161,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final ImmutableList<QueryFunction> queryFunctions;
   private final ImmutableList<OutputFormatter> queryOutputFormatters;
 
-  private final AtomicReference<DetailedExitCode> storedExitCode = new AtomicReference<>();
+  private final AtomicReference<ExitCode> storedExitCode = new AtomicReference<>();
 
   // We pass this through here to make it available to the MasterLogWriter.
   private final OptionsParsingResult startupOptionsProvider;
@@ -556,11 +548,14 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
             .handle(Event.error("Error while creating memory profile file: " + e.getMessage()));
       }
     }
+
+    // Initialize exit code to dummy value for afterCommand.
+    storedExitCode.set(ExitCode.RESERVED);
   }
 
   @Override
   public void cleanUpForCrash(DetailedExitCode exitCode) {
-    if (declareExitCode(exitCode)) {
+    if (declareExitCode(exitCode.getExitCode())) {
       // Only try to publish events if we won the exit code race. Otherwise someone else is already
       // exiting for us.
       EventBus eventBus = workspace.getSkyframeExecutor().getEventBus();
@@ -586,20 +581,20 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     shutDownModulesOnCrash();
   }
 
-  private boolean declareExitCode(DetailedExitCode detailedExitCode) {
-    return storedExitCode.compareAndSet(null, detailedExitCode);
+  private boolean declareExitCode(ExitCode exitCode) {
+    return storedExitCode.compareAndSet(ExitCode.RESERVED, exitCode);
   }
 
   /**
    * Posts the {@link CommandCompleteEvent}, so that listeners can tidy up. Called by {@link
    * #afterCommand}, and by BugReport when crashing from an exception in an async thread.
    *
-   * <p>Returns null if {@code exitCode} was registered as the exit code, and the {@link
-   * DetailedExitCode} to use if another thread already registered an exit code.
+   * <p>Returns null if {@code exitCode} was registered as the exit code, and the {@link ExitCode}
+   * to use if another thread already registered an exit code.
    */
   @Nullable
-  private DetailedExitCode notifyCommandComplete(DetailedExitCode exitCode) {
-    if (!declareExitCode(exitCode)) {
+  private ExitCode notifyCommandComplete(DetailedExitCode exitCode) {
+    if (!declareExitCode(exitCode.getExitCode())) {
       // This command has already been called, presumably because there is a race between the main
       // thread and a worker thread that crashed. Don't try to arbitrate the dispute. If the main
       // thread won the race (unlikely, but possible), this may be incorrectly logged as a success.
@@ -626,7 +621,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
         env.getReporter().handle(Event.error(e.getMessage()));
         // It's not ideal but we can only return one exit code, so we just pick the code of the
         // last exception.
-        afterCommandResult = BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
+        afterCommandResult = BlazeCommandResult.exitCode(e.getExitCode());
       }
     }
 
@@ -647,11 +642,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     try {
       workspace.getSkyframeExecutor().notifyCommandComplete(env.getReporter());
     } catch (InterruptedException e) {
-      logger.atInfo().withCause(e).log("Interrupted in afterCommand");
-      afterCommandResult =
-          BlazeCommandResult.detailedExitCode(
-              InterruptedFailureDetails.detailedExitCode(
-                  "executor completion interrupted", Code.EXECUTOR_COMPLETION));
+      afterCommandResult = BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
       Thread.currentThread().interrupt();
     }
 
@@ -661,10 +652,10 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     } else {
       finalCommandResult = commandResult;
     }
-    DetailedExitCode otherThreadWonExitCode =
+    ExitCode otherThreadWonExitCode =
         notifyCommandComplete(finalCommandResult.getDetailedExitCode());
     if (otherThreadWonExitCode != null) {
-      finalCommandResult = BlazeCommandResult.detailedExitCode(otherThreadWonExitCode);
+      finalCommandResult = BlazeCommandResult.exitCode(otherThreadWonExitCode);
     }
     env.getBlazeWorkspace().clearEventBus();
 
@@ -684,7 +675,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     env.getReporter().clearEventBus();
     actionKeyContext.clear();
     DebugLoggerConfigurator.flushServerLog();
-    storedExitCode.set(null);
     return finalCommandResult;
   }
 
@@ -771,7 +761,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     } catch (RuntimeException | Error e) { // A definite bug...
       BugReport.printBug(OutErr.SYSTEM_OUT_ERR, e, /* oomMessage = */ null);
       BugReport.sendBugReport(e, Arrays.asList(args));
-      CustomFailureDetailPublisher.maybeWriteFailureDetailFile(CrashFailureDetails.forThrowable(e));
       System.exit(ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode());
       throw e; // Shouldn't get here.
     }
@@ -1054,15 +1043,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
                 startupOptions.idleServerTasks);
       } catch (ReflectiveOperationException | IllegalArgumentException e) {
         throw new AbruptExitException(
-            DetailedExitCode.of(
-                ExitCode.BLAZE_INTERNAL_ERROR,
-                FailureDetail.newBuilder()
-                    .setMessage("gRPC server not compiled in")
-                    .setGrpcServer(
-                        GrpcServer.newBuilder()
-                            .setCode(GrpcServer.Code.GRPC_SERVER_NOT_COMPILED_IN))
-                    .build()),
-            e);
+            "gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR, e);
       }
 
       // Register the signal handler.
@@ -1082,13 +1063,12 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     } catch (OptionsParsingException e) {
       outErr.printErrLn(e.getMessage());
       return ExitCode.COMMAND_LINE_ERROR.getNumericExitCode();
+    } catch (IOException e) {
+      outErr.printErrLn("I/O Error: " + e.getMessage());
+      return ExitCode.BUILD_FAILURE.getNumericExitCode();
     } catch (AbruptExitException e) {
       outErr.printErrLn(e.getMessage());
       e.printStackTrace(new PrintStream(outErr.getErrorStream(), true));
-      FailureDetail failureDetail = e.getDetailedExitCode().getFailureDetail();
-      if (failureDetail != null) {
-        CustomFailureDetailPublisher.maybeWriteFailureDetailFile(failureDetail);
-      }
       return e.getExitCode().getNumericExitCode();
     } finally {
       if (sigintHandler != null) {
@@ -1167,21 +1147,11 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       Iterable<BlazeModule> blazeModules, List<String> args, Runnable abruptShutdownHandler)
       throws AbruptExitException, OptionsParsingException {
     OptionsParsingResult options = parseStartupOptions(blazeModules, args);
-    BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
-
-    // Set up the failure detail path first, so that it can communicate problems with other flags
-    // and module initialization.
-    PathFragment failureDetailOut = startupOptions.failureDetailOut;
-    if (failureDetailOut == null || !failureDetailOut.isAbsolute()) { // (includes "" default case)
-      throw new IllegalArgumentException(
-          "Bad --failure_detail_out option specified: '" + failureDetailOut + "'");
-    }
-    CustomFailureDetailPublisher.setFailureDetailFilePath(failureDetailOut.getPathString());
-
     for (BlazeModule module : blazeModules) {
       module.globalInit(options);
     }
 
+    BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
     String productName = startupOptions.productName.toLowerCase(Locale.US);
 
     PathFragment workspaceDirectory = startupOptions.workspaceDirectory;
@@ -1189,11 +1159,20 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     PathFragment outputUserRoot = startupOptions.outputUserRoot;
     PathFragment installBase = startupOptions.installBase;
     PathFragment outputBase = startupOptions.outputBase;
+    PathFragment failureDetailOut = startupOptions.failureDetailOut;
 
     maybeForceJNIByGettingPid(installBase); // Must be before first use of JNI.
 
     // From the point of view of the Java program --install_base, --output_base, --output_user_root,
     // and --failure_detail_out are mandatory options, despite the comment in their declarations.
+
+    // Set up the failure detail path first, so that it can communicate problems with the other
+    // flags.
+    if (failureDetailOut == null || !failureDetailOut.isAbsolute()) { // (includes "" default case)
+      throw new IllegalArgumentException(
+          "Bad --failure_detail_out option specified: '" + failureDetailOut + "'");
+    }
+    CustomFailureDetailPublisher.setFailureDetailFilePath(failureDetailOut.getPathString());
 
     if (installBase == null || !installBase.isAbsolute()) { // (includes "" default case)
       throw new IllegalArgumentException(
@@ -1225,11 +1204,8 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
         fs = defaultFileSystemImplementation(startupOptions);
       }
     } catch (DefaultHashFunctionNotSetException e) {
-      throw createFilesystemExitException(
-          "No module set the default hash function.",
-          ExitCode.BLAZE_INTERNAL_ERROR,
-          Filesystem.Code.DEFAULT_DIGEST_HASH_FUNCTION_NOT_SET,
-          e);
+      throw new AbruptExitException(
+          "No module set the default hash function.", ExitCode.BLAZE_INTERNAL_ERROR, e);
     }
 
     SubscriberExceptionHandler currentHandlerValue = null;
@@ -1296,7 +1272,8 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
             .setAbruptShutdownHandler(abruptShutdownHandler)
             .setEventBusExceptionHandler(subscriberExceptionHandler);
 
-    if (TestType.isInTest() && System.getenv("NO_CRASH_ON_LOGGING_IN_TEST") == null) {
+    if (System.getenv("TEST_TMPDIR") != null
+        && System.getenv("NO_CRASH_ON_LOGGING_IN_TEST") == null) {
       LoggingUtil.installRemoteLogger(getTestCrashLogger());
     }
 
@@ -1316,27 +1293,13 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     try {
       binTools = BinTools.forProduction(directories);
     } catch (IOException e) {
-      throw createFilesystemExitException(
+      throw new AbruptExitException(
           "Cannot enumerate embedded binaries: " + e.getMessage(),
-          ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
-          Filesystem.Code.EMBEDDED_BINARIES_ENUMERATION_FAILURE,
-          e);
+          ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
     }
     // Keep this line last in this method, so that all other initialization is available to it.
     runtime.initWorkspace(directories, binTools);
     return runtime;
-  }
-
-  private static AbruptExitException createFilesystemExitException(
-      String message, ExitCode exitCode, Filesystem.Code detailedCode, Exception e) {
-    return new AbruptExitException(
-        DetailedExitCode.of(
-            exitCode,
-            FailureDetail.newBuilder()
-                .setMessage(message)
-                .setFilesystem(Filesystem.newBuilder().setCode(detailedCode))
-                .build()),
-        e);
   }
 
   private static String maybeGetPidString() {
@@ -1516,7 +1479,8 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
 
       Package.Builder.Helper packageBuilderHelper = null;
       for (BlazeModule module : blazeModules) {
-        Package.Builder.Helper candidateHelper = module.getPackageBuilderHelper();
+        Package.Builder.Helper candidateHelper =
+            module.getPackageBuilderHelper(ruleClassProvider, fileSystem);
         if (candidateHelper != null) {
           Preconditions.checkState(
               packageBuilderHelper == null,
@@ -1534,9 +1498,7 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
               serverBuilder.getEnvironmentExtensions(),
               BlazeVersionInfo.instance().getVersion(),
               packageBuilderHelper,
-              getPackageValidator(blazeModules),
-              getPackageLoadingListener(
-                  blazeModules, packageBuilderHelper, ruleClassProvider, fileSystem));
+              getPackageValidator(blazeModules));
 
       ProjectFile.Provider projectFileProvider = null;
       for (BlazeModule module : blazeModules) {
@@ -1660,20 +1622,5 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
           packageValidators.size() <= 1, "more than one module defined a PackageValidator");
       return Iterables.getFirst(packageValidators, PackageValidator.NOOP_VALIDATOR);
     }
-  }
-
-  private static PackageLoadingListener getPackageLoadingListener(
-      List<BlazeModule> blazeModules,
-      Package.Builder.Helper packageBuilderHelper,
-      ConfiguredRuleClassProvider ruleClassProvider,
-      FileSystem fs) {
-    ImmutableList<PackageLoadingListener> listeners =
-        blazeModules.stream()
-            .map(
-                module ->
-                    module.getPackageLoadingListener(packageBuilderHelper, ruleClassProvider, fs))
-            .filter(validator -> validator != null)
-            .collect(toImmutableList());
-    return PackageLoadingListener.create(listeners);
   }
 }
