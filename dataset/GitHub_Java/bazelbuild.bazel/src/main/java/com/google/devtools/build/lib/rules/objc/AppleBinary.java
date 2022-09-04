@@ -44,7 +44,7 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
-import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsInfo.OutputType;
+import com.google.devtools.build.lib.rules.objc.AppleDebugOutputsProvider.OutputType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.MultiArchBinarySupport.DependencySpecificConfiguration;
 import java.util.Map;
@@ -187,22 +187,22 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     switch (getBinaryType(ruleContext)) {
       case EXECUTABLE:
         binaryInfoProvider =
-            new AppleExecutableBinaryInfo(outputArtifact, objcProvider);
+            new AppleExecutableBinaryProvider(outputArtifact, objcProvider);
         break;
       case DYLIB:
         binaryInfoProvider =
-            new AppleDylibBinaryInfo(outputArtifact, objcProvider);
+            new AppleDylibBinaryProvider(outputArtifact, objcProvider);
         break;
       case LOADABLE_BUNDLE:
         binaryInfoProvider =
-            new AppleLoadableBundleBinaryInfo(outputArtifact, objcProvider);
+            new AppleLoadableBundleBinaryProvider(outputArtifact, objcProvider);
         break;
       default:
         ruleContext.ruleError("Unhandled binary type " + getBinaryType(ruleContext));
         throw new RuleErrorException();
     }
 
-    AppleDebugOutputsInfo.Builder builder = AppleDebugOutputsInfo.Builder.create();
+    AppleDebugOutputsProvider.Builder builder = AppleDebugOutputsProvider.Builder.create();
 
     for (DependencySpecificConfiguration dependencySpecificConfiguration :
         dependencySpecificConfigurations) {
@@ -252,10 +252,10 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         extraLinkArgs.add("-bundle");
         extraLinkArgs.add("-Xlinker", "-rpath", "-Xlinker", "@loader_path/Frameworks");
         if (didProvideBundleLoader) {
-          AppleExecutableBinaryInfo executableProvider =
+          AppleExecutableBinaryProvider executableProvider =
               ruleContext.getPrerequisite(
                   BUNDLE_LOADER_ATTR_NAME, Mode.TARGET,
-                  AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
+                  AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
           extraLinkArgs.add(
               "-bundle_loader", executableProvider.getAppleExecutableBinary().getExecPathString());
         }
@@ -279,10 +279,10 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
   }
 
   private static Iterable<Artifact> getExtraLinkInputs(RuleContext ruleContext) {
-    AppleExecutableBinaryInfo executableProvider =
+    AppleExecutableBinaryProvider executableProvider =
         ruleContext.getPrerequisite(
             BUNDLE_LOADER_ATTR_NAME, Mode.TARGET,
-            AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
+            AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
     if (executableProvider != null) {
       return ImmutableSet.<Artifact>of(executableProvider.getAppleExecutableBinary());
     }
@@ -305,19 +305,19 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     switch (getBinaryType(ruleContext)) {
       case EXECUTABLE:
-        AppleExecutableBinaryInfo executableProvider =
-            (AppleExecutableBinaryInfo) nativeInfo;
+        AppleExecutableBinaryProvider executableProvider =
+            (AppleExecutableBinaryProvider) nativeInfo;
         objcProvider = executableProvider.getDepsObjcProvider();
         outputArtifact = executableProvider.getAppleExecutableBinary();
         break;
       case DYLIB:
-        AppleDylibBinaryInfo dylibProvider = (AppleDylibBinaryInfo) nativeInfo;
+        AppleDylibBinaryProvider dylibProvider = (AppleDylibBinaryProvider) nativeInfo;
         objcProvider = dylibProvider.getDepsObjcProvider();
         outputArtifact = dylibProvider.getAppleDylibBinary();
         break;
       case LOADABLE_BUNDLE:
-        AppleLoadableBundleBinaryInfo loadableBundleProvider =
-            (AppleLoadableBundleBinaryInfo) nativeInfo;
+        AppleLoadableBundleBinaryProvider loadableBundleProvider =
+            (AppleLoadableBundleBinaryProvider) nativeInfo;
         objcProvider = loadableBundleProvider.getDepsObjcProvider();
         outputArtifact = loadableBundleProvider.getAppleLoadableBundleBinary();
         break;
@@ -352,11 +352,11 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
    */
   public static class AppleBinaryOutput {
     private final NativeInfo binaryInfoProvider;
-    private final AppleDebugOutputsInfo debugOutputsProvider;
+    private final AppleDebugOutputsProvider debugOutputsProvider;
     private final Map<String, NestedSet<Artifact>> outputGroups;
 
     private AppleBinaryOutput(NativeInfo binaryInfoProvider,
-        AppleDebugOutputsInfo debugOutputsProvider,
+        AppleDebugOutputsProvider debugOutputsProvider,
         Map<String, NestedSet<Artifact>> outputGroups) {
       this.binaryInfoProvider = binaryInfoProvider;
       this.debugOutputsProvider = debugOutputsProvider;
@@ -365,18 +365,18 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
 
     /**
      * Returns a {@link NativeInfo} possessing information about the linked binary. Depending
-     * on the type of binary, this may be either a {@link AppleExecutableBinaryInfo}, a
-     * {@link AppleDylibBinaryInfo}, or a {@link AppleLoadableBundleBinaryInfo}.
+     * on the type of binary, this may be either a {@link AppleExecutableBinaryProvider}, a
+     * {@link AppleDylibBinaryProvider}, or a {@link AppleLoadableBundleBinaryProvider}.
      */
     public NativeInfo getBinaryInfoProvider() {
       return binaryInfoProvider;
     }
 
     /**
-     * Returns a {@link AppleDebugOutputsInfo} containing debug information about the linked
+     * Returns a {@link AppleDebugOutputsProvider} containing debug information about the linked
      * binary.
      */
-    public AppleDebugOutputsInfo getDebugOutputsProvider() {
+    public AppleDebugOutputsProvider getDebugOutputsProvider() {
       return debugOutputsProvider;
     }
 

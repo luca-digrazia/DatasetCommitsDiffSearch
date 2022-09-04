@@ -1397,8 +1397,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         "    srcs = ['a.m'],",
         ")");
     ConfiguredTarget binTarget = getConfiguredTarget("//bin:bin");
-    AppleExecutableBinaryInfo executableBinaryProvider =
-        binTarget.get(AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
+    AppleExecutableBinaryProvider executableBinaryProvider =
+        binTarget.get(AppleExecutableBinaryProvider.SKYLARK_CONSTRUCTOR);
     assertThat(executableBinaryProvider).isNotNull();
 
     CommandAction testLinkAction = linkAction("//test:test");
@@ -1460,7 +1460,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCustomModuleMap() throws Exception {
-    checkCustomModuleMapNotPropagatedByTargetUnderTest(getRuleType());
+    checkCustomModuleMap(getRuleType());
   }
 
   @Test
