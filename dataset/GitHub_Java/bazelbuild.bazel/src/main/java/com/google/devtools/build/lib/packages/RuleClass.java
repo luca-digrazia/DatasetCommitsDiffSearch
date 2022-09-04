@@ -2093,6 +2093,7 @@ public class RuleClass {
     }
     checkForValidSizeAndTimeoutValues(rule, eventHandler);
     rule.checkValidityPredicate(eventHandler);
+    rule.checkForNullLabels();
     return rule;
   }
 
