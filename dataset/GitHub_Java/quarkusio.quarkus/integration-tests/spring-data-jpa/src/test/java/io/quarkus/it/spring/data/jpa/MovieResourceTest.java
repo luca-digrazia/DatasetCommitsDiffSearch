@@ -236,11 +236,4 @@ public class MovieResourceTest {
                 .statusCode(200)
                 .body(is("1"));
     }
-
-    @Test
-    void getTitle() {
-        when().get("/movie/titles/rating/PG-13").then()
-                .statusCode(200)
-                .body(containsString("Godzilla"));
-    }
 }

@@ -137,6 +137,7 @@ public class MovieResource {
     @Produces("application/json")
     public Optional<MovieRepository.MovieRating> optionalTitleRating(@PathParam("title") String title) {
         Optional result = movieRepository.findOptionalRatingByTitle(title);
+        System.out.println(result);
         return result;
     }
 
@@ -157,12 +158,4 @@ public class MovieResource {
         movie.setDuration(1000);
         return movieRepository.save(movie);
     }
-
-    @GET
-    @Path("/titles/rating/{rating}")
-    @Produces("application/json")
-    public List<MovieRepository.MovieProjection> getTitlesByRating(@PathParam("rating") String rating) {
-        return movieRepository.findTitleAndRatingByRating(rating);
-    }
-
 }

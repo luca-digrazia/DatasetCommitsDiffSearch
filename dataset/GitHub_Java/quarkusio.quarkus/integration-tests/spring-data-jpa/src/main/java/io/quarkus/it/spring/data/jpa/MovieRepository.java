@@ -68,9 +68,6 @@ public interface MovieRepository extends CrudRepository<Movie, Long> {
     @Query("SELECT title, rating FROM Movie WHERE title = ?1")
     MovieRating findRatingByTitle(String title);
 
-    // issue 13050
-    List<MovieProjection> findTitleAndRatingByRating(String rating);
-
     interface MovieCountByRating {
         String getRating();
 
@@ -82,11 +79,4 @@ public interface MovieRepository extends CrudRepository<Movie, Long> {
 
         String getRating();
     }
-
-    interface MovieProjection {
-        String getTitle();
-
-        String getRating();
-    }
-
 }
