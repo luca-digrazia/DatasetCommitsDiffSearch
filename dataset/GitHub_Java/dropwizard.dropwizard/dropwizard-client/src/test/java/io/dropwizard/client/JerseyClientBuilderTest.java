@@ -64,7 +64,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.never;
 
 public class JerseyClientBuilderTest {
     private final JerseyClientBuilder builder = new JerseyClientBuilder(new MetricRegistry());
@@ -162,7 +161,7 @@ public class JerseyClientBuilderTest {
         for (Object o : client.getConfiguration().getInstances()) {
             if (o instanceof DropwizardExecutorProvider) {
                 final DropwizardExecutorProvider provider = (DropwizardExecutorProvider) o;
-                assertThat(provider.getExecutorService()).isSameAs(executorService);
+                assertThat(provider.getRequestingExecutor()).isSameAs(executorService);
             }
         }
 
@@ -174,7 +173,7 @@ public class JerseyClientBuilderTest {
         for (Object o : client.getConfiguration().getInstances()) {
             if (o instanceof DropwizardExecutorProvider) {
                 final DropwizardExecutorProvider provider = (DropwizardExecutorProvider) o;
-                assertThat(provider.getExecutorService()).isSameAs(executorService);
+                assertThat(provider.getRequestingExecutor()).isSameAs(executorService);
             }
         }
 
@@ -191,7 +190,6 @@ public class JerseyClientBuilderTest {
                 .iterator().hasNext()).isTrue();
         assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
                 .iterator().hasNext()).isTrue();
-        verify(apacheHttpClientBuilder, never()).disableContentCompression(true);
     }
 
     @Test
@@ -206,7 +204,6 @@ public class JerseyClientBuilderTest {
                 .iterator().hasNext()).isFalse();
         assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
                 .iterator().hasNext()).isFalse();
-        verify(apacheHttpClientBuilder).disableContentCompression(true);
     }
 
     @Test
