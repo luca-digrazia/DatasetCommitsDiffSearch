@@ -305,7 +305,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   private ExitFunction bazelExitFunction(
       EventHandler commandLineReporter, ModuleEnvironment moduleEnvironment, String besResultsUrl) {
-    return (String message, Throwable cause) -> {
+    return (String message, Exception cause) -> {
       if (cause == null) {
         commandLineReporter.handle(Event.info("Build Event Protocol upload finished successfully"));
         if (besResultsUrl != null) {
