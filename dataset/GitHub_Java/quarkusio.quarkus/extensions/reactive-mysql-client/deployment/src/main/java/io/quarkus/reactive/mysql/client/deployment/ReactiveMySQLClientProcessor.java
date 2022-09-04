@@ -20,7 +20,6 @@ import io.quarkus.reactive.mysql.client.runtime.MySQLPoolProducer;
 import io.quarkus.reactive.mysql.client.runtime.MySQLPoolRecorder;
 import io.quarkus.vertx.deployment.VertxBuildItem;
 
-@SuppressWarnings("deprecation")
 class ReactiveMySQLClientProcessor {
 
     @BuildStep

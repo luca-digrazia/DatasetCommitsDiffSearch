@@ -15,7 +15,6 @@ import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.sqlclient.PoolOptions;
 
 @Recorder
-@SuppressWarnings("deprecation")
 public class MySQLPoolRecorder {
 
     public RuntimeValue<MySQLPool> configureMySQLPool(RuntimeValue<Vertx> vertx, BeanContainer container,

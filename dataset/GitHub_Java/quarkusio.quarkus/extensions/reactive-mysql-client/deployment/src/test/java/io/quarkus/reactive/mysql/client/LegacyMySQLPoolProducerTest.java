@@ -54,7 +54,7 @@ public class LegacyMySQLPoolProducerTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            mysqlClient.query("SELECT 1").execute(ar -> {
+            mysqlClient.query("SELECT 1", ar -> {
                 cf.complete(null);
             });
             return cf;
@@ -68,7 +68,7 @@ public class LegacyMySQLPoolProducerTest {
         io.vertx.mutiny.mysqlclient.MySQLPool mysqlClient;
 
         public CompletionStage<Void> verify() {
-            return mysqlClient.query("SELECT 1").execute()
+            return mysqlClient.query("SELECT 1")
                     .onItem().ignore().andContinueWithNull()
                     .onFailure().recoverWithItem((Void) null)
                     .subscribeAsCompletionStage();
@@ -82,7 +82,7 @@ public class LegacyMySQLPoolProducerTest {
         io.vertx.axle.mysqlclient.MySQLPool mysqlClient;
 
         public CompletionStage<Void> verify() {
-            return mysqlClient.query("SELECT 1").execute()
+            return mysqlClient.query("SELECT 1")
                     .<Void> thenApply(rs -> null)
                     .exceptionally(t -> null);
         }
@@ -96,7 +96,7 @@ public class LegacyMySQLPoolProducerTest {
 
         public CompletionStage<Void> verify() {
             CompletableFuture<Void> cf = new CompletableFuture<>();
-            mysqlClient.query("SELECT 1").rxExecute()
+            mysqlClient.rxQuery("SELECT 1")
                     .ignoreElement()
                     .onErrorComplete()
                     .subscribe(() -> cf.complete(null));

@@ -15,7 +15,6 @@ import io.vertx.pgclient.PgPool;
 import io.vertx.sqlclient.PoolOptions;
 
 @Recorder
-@SuppressWarnings("deprecation")
 public class PgPoolRecorder {
 
     public RuntimeValue<PgPool> configurePgPool(RuntimeValue<Vertx> vertx, BeanContainer container,
