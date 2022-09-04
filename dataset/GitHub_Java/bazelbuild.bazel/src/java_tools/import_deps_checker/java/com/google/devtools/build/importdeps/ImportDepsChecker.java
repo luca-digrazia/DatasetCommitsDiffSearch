@@ -55,13 +55,7 @@ public final class ImportDepsChecker implements Closeable {
       ImmutableSet<Path> inputJars,
       boolean checkMissingMembers)
       throws IOException {
-    this.classCache =
-        new ClassCache(
-            bootclasspath,
-            directClasspath,
-            classpath,
-            inputJars,
-            /*populateMembers=*/ checkMissingMembers);
+    this.classCache = new ClassCache(bootclasspath, directClasspath, classpath, inputJars);
     this.resultCollector = new ResultCollector(checkMissingMembers);
     this.inputJars = inputJars;
   }
@@ -272,9 +266,8 @@ public final class ImportDepsChecker implements Closeable {
         .collect(ImmutableList.toImmutableList());
   }
 
-  private static final Attributes.Name TARGET_LABEL = new Attributes.Name("Target-Label");
-  private static final Attributes.Name INJECTING_RULE_KIND =
-      new Attributes.Name("Injecting-Rule-Kind");
+  static final Attributes.Name TARGET_LABEL = new Attributes.Name("Target-Label");
+  static final Attributes.Name INJECTING_RULE_KIND = new Attributes.Name("Injecting-Rule-Kind");
 
   @Nullable
   private static String extractLabel(Path jarPath) {
