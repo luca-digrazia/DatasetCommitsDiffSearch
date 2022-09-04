@@ -19,7 +19,6 @@ package org.graylog2.initializers;
 import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.AbstractIdleService;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.slf4j.Logger;
@@ -27,9 +26,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -51,15 +48,10 @@ public class OutputSetupService extends AbstractIdleService {
             public void terminated(State from) {
                 OutputSetupService.this.shutDownRunningOutputs();
             }
-        }, executorService(metricRegistry));
-    }
-
-    private ExecutorService executorService(MetricRegistry metricRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("output-setup-service-%d").build();
-        return new InstrumentedExecutorService(
-                Executors.newSingleThreadExecutor(threadFactory),
-                metricRegistry,
-                name(this.getClass(), "executor-service"));
+        }, new InstrumentedExecutorService(
+                Executors.newSingleThreadExecutor(),
+                metricRegistry, name(this.getClass(),
+                "executor-service")));
     }
 
     private void shutDownRunningOutputs() {

@@ -16,6 +16,8 @@
  */
 package org.graylog2.streams;
 
+import com.codahale.metrics.InstrumentedExecutorService;
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.name.Named;
 import org.graylog2.plugin.Message;
@@ -33,6 +35,8 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * Routes a {@link org.graylog2.plugin.Message} to its streams.
  */
@@ -42,16 +46,19 @@ public class StreamRouter {
     private static final long ENGINE_UPDATE_INTERVAL = 1L;
 
     protected final StreamService streamService;
+    private final MetricRegistry metricRegistry;
     private final ServerStatus serverStatus;
 
     private final AtomicReference<StreamRouterEngine> routerEngine = new AtomicReference<>(null);
 
     @Inject
     public StreamRouter(StreamService streamService,
+                        MetricRegistry metricRegistry,
                         ServerStatus serverStatus,
                         StreamRouterEngine.Factory routerEngineFactory,
                         @Named("daemonScheduler") ScheduledExecutorService scheduler) {
         this.streamService = streamService;
+        this.metricRegistry = metricRegistry;
         this.serverStatus = serverStatus;
 
         final StreamRouterEngineUpdater streamRouterEngineUpdater = new StreamRouterEngineUpdater(routerEngine, routerEngineFactory, streamService, executorService());
@@ -64,7 +71,10 @@ public class StreamRouter {
                 .setNameFormat("stream-router-%d")
                 .setDaemon(true)
                 .build();
-        return Executors.newCachedThreadPool(threadFactory);
+        return new InstrumentedExecutorService(
+                Executors.newCachedThreadPool(threadFactory),
+                metricRegistry,
+                name(this.getClass(), "executor-service"));
     }
 
     public List<Stream> route(final Message msg) {

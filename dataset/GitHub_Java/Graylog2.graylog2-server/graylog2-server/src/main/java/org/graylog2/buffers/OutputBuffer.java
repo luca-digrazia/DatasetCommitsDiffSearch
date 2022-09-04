@@ -20,16 +20,13 @@ import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Provider;
-import com.google.inject.name.Named;
-import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.graylog2.Configuration;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.MessageEvent;
-import org.graylog2.shared.buffers.LoggingExceptionHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,41 +42,23 @@ import static com.codahale.metrics.MetricRegistry.name;
 public class OutputBuffer extends Buffer {
     private static final Logger LOG = LoggerFactory.getLogger(OutputBuffer.class);
 
+    private final ExecutorService executor;
+
+    private final Configuration configuration;
+
     private final Meter incomingMessages;
 
+    private final OutputBufferProcessor.Factory outputBufferProcessorFactory;
+
     @Inject
-    public OutputBuffer(MetricRegistry metricRegistry,
-                        Provider<OutputBufferProcessor> processorProvider,
-                        @Named("outputbuffer_processors") int processorCount,
-                        @Named("ring_size") int ringSize,
-                        @Named("processor_wait_strategy") String waitStrategyName) {
-        final ExecutorService executor = executorService(metricRegistry);
-        this.ringBufferSize = ringSize;
+    public OutputBuffer(OutputBufferProcessor.Factory outputBufferProcessorFactory,
+                        MetricRegistry metricRegistry,
+                        Configuration configuration) {
+        this.outputBufferProcessorFactory = outputBufferProcessorFactory;
+        this.configuration = configuration;
+        this.executor = executorService(metricRegistry);
 
         incomingMessages = metricRegistry.meter(name(OutputBuffer.class, "incomingMessages"));
-
-        final WaitStrategy waitStrategy = getWaitStrategy(waitStrategyName, "processor_wait_strategy");
-        final Disruptor<MessageEvent> disruptor = new Disruptor<>(
-                MessageEvent.EVENT_FACTORY,
-                this.ringBufferSize,
-                executor,
-                ProducerType.MULTI,
-                waitStrategy
-        );
-        disruptor.handleExceptionsWith(new LoggingExceptionHandler(LOG));
-
-        LOG.info("Initialized OutputBuffer with ring size <{}> and wait strategy <{}>.",
-                 ringBufferSize, waitStrategy.getClass().getSimpleName());
-
-        final OutputBufferProcessor[] processors = new OutputBufferProcessor[processorCount];
-
-        for (int i = 0; i < processorCount; i++) {
-            processors[i] = processorProvider.get();
-        }
-
-        disruptor.handleEventsWithWorkerPool(processors);
-
-        ringBuffer = disruptor.start();
     }
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
@@ -90,6 +69,32 @@ public class OutputBuffer extends Buffer {
                 name(this.getClass(), "executor-service"));
     }
 
+    public void initialize() {
+        Disruptor<MessageEvent> disruptor = new Disruptor<>(
+                MessageEvent.EVENT_FACTORY,
+                configuration.getRingSize(),
+                executor,
+                ProducerType.MULTI,
+                configuration.getProcessorWaitStrategy()
+        );
+
+        LOG.info("Initialized OutputBuffer with ring size <{}> "
+                        + "and wait strategy <{}>.", configuration.getRingSize(),
+                configuration.getProcessorWaitStrategy().getClass().getSimpleName());
+
+        int outputBufferProcessorCount = configuration.getOutputBufferProcessors();
+
+        OutputBufferProcessor[] processors = new OutputBufferProcessor[outputBufferProcessorCount];
+
+        for (int i = 0; i < outputBufferProcessorCount; i++) {
+            processors[i] = outputBufferProcessorFactory.create(i, outputBufferProcessorCount);
+        }
+
+        disruptor.handleEventsWith(processors);
+
+        ringBuffer = disruptor.start();
+    }
+
     public void insertBlocking(Message message) {
         insert(message);
     }
@@ -98,5 +103,4 @@ public class OutputBuffer extends Buffer {
     protected void afterInsert(int n) {
         incomingMessages.mark(n);
     }
-
 }

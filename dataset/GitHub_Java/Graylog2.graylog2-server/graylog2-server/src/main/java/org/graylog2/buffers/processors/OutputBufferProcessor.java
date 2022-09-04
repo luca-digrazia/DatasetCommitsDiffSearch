@@ -22,12 +22,12 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.common.util.concurrent.Uninterruptibles;
-import com.google.inject.Inject;
-import com.lmax.disruptor.WorkHandler;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
+import com.lmax.disruptor.EventHandler;
 import org.graylog2.Configuration;
 import org.graylog2.outputs.CachedOutputRouter;
-import org.graylog2.outputs.DefaultMessageOutput;
+import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.outputs.OutputRouter;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
@@ -40,7 +40,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -48,13 +47,18 @@ import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-public class OutputBufferProcessor implements WorkHandler<MessageEvent> {
+public class OutputBufferProcessor implements EventHandler<MessageEvent> {
+    public interface Factory {
+        public OutputBufferProcessor create(@Assisted("ordinal") final long ordinal,
+                                            @Assisted("numberOfConsumers") final long numberOfCOnsumers);
+    }
 
     private static final Logger LOG = LoggerFactory.getLogger(OutputBufferProcessor.class);
 
     private final ExecutorService executor;
 
     private final Configuration configuration;
+    private final OutputRegistry outputRegistry;
     private final ThroughputStats throughputStats;
     private final ServerStatus serverStatus;
 
@@ -65,22 +69,27 @@ public class OutputBufferProcessor implements WorkHandler<MessageEvent> {
     private final Timer processTime;
 
     private final OutputRouter outputRouter;
-    private final MessageOutput defaultMessageOutput;
+    private final long ordinal;
+    private final long numberOfConsumers;
 
-    @Inject
+    @AssistedInject
     public OutputBufferProcessor(Configuration configuration,
                                  MetricRegistry metricRegistry,
+                                 OutputRegistry outputRegistry,
                                  ThroughputStats throughputStats,
                                  ServerStatus serverStatus,
                                  CachedOutputRouter outputRouter,
-                                 @DefaultMessageOutput MessageOutput defaultMessageOutput) {
+                                 @Assisted("ordinal") final long ordinal,
+                                 @Assisted("numberOfConsumers") final long numberOfConsumers) {
         this.configuration = configuration;
+        this.outputRegistry = outputRegistry;
         this.throughputStats = throughputStats;
         this.serverStatus = serverStatus;
         this.outputRouter = outputRouter;
-        this.defaultMessageOutput = defaultMessageOutput;
+        this.ordinal = ordinal;
+        this.numberOfConsumers = numberOfConsumers;
 
-        final String nameFormat = "outputbuffer-processor-executor-%d";
+        final String nameFormat = "outputbuffer-processor-" + ordinal + "-executor-%d";
         final int corePoolSize = configuration.getOutputBufferProcessorThreadsCorePoolSize();
         final int maxPoolSize = configuration.getOutputBufferProcessorThreadsMaxPoolSize();
         final int keepAliveTime = configuration.getOutputBufferProcessorKeepAliveTime();
@@ -101,42 +110,21 @@ public class OutputBufferProcessor implements WorkHandler<MessageEvent> {
                 name(this.getClass(), "executor-service"));
     }
 
-    /**
-     * Each message will be written to one or more outputs.
-     * <p>
-     * The default output is always being used for every message, but optionally the message can be routed to additional
-     * outputs, currently based on the stream outputs that are configured in the system.
-     * </p>
-     * <p>
-     * The stream outputs are time limited so one bad output does not impact throughput too much. Essentially this means
-     * that the work of writing to the outputs is performed, but the writer threads will not wait forever for stream
-     * outputs to finish their work. <b>This might lead to increased memory usage!</b>
-     * </p>
-     * <p>
-     * The default output, however, is allowed to block and is not subject to time limiting. This is important because it
-     * can exert back pressure on the processing pipeline this way, making sure we don't run into excessive heap usage.
-     * </p>
-     * @param event the message to write to outputs
-     * @throws Exception
-     */
     @Override
-    public void onEvent(MessageEvent event) throws Exception {
+    public void onEvent(MessageEvent event, long sequence, boolean endOfBatch) throws Exception {
+        // Because Trisha said so. (http://code.google.com/p/disruptor/wiki/FrequentlyAskedQuestions)
+        if ((sequence % numberOfConsumers) != ordinal) {
+            return;
+        }
+
         incomingMessages.mark();
 
         final Message msg = event.getMessage();
-        if (msg == null) {
-            LOG.debug("Skipping null message.");
-            return;
-        }
         LOG.debug("Processing message <{}> from OutputBuffer.", msg.getId());
 
         final Set<MessageOutput> messageOutputs = outputRouter.getOutputsForMessage(msg);
         msg.recordCounter(serverStatus, "matched-outputs", messageOutputs.size());
-
-        // minus one, because the default output does not count against the time limited outputs, and is always included
-        final CountDownLatch streamOutputsDoneSignal = new CountDownLatch(messageOutputs.size() - 1);
-
-        Future<?> defaultOutputCompletion = null;
+        final CountDownLatch doneSignal = new CountDownLatch(messageOutputs.size());
         for (final MessageOutput output : messageOutputs) {
             if (output == null) {
                 LOG.error("Got null output!");
@@ -148,53 +136,33 @@ public class OutputBufferProcessor implements WorkHandler<MessageEvent> {
                 }
                 continue;
             }
-
-            final boolean isDefaultOutput = defaultMessageOutput.equals(output);
-
             try {
                 LOG.debug("Writing message to [{}].", output.getClass());
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("Message id for [{}]: <{}>", output.getClass(), msg.getId());
                 }
-                final Future<?> future = executor.submit(new Runnable() {
+                executor.submit(new Runnable() {
                     @Override
                     public void run() {
-                        try (Timer.Context ignored = processTime.time()) {
+                        try (Timer.Context context = processTime.time()) {
                             output.write(msg);
                         } catch (Exception e) {
                             LOG.error("Error in output [" + output.getClass() + "].", e);
                         } finally {
-                            // do not touch the latch if this is the default output!
-                            // we use the returned future to block on its completion.
-                            if (!isDefaultOutput) {
-                                streamOutputsDoneSignal.countDown();
-                            }
+                            doneSignal.countDown();
                         }
                     }
                 });
-                if (isDefaultOutput) {
-                    // save the future so we can wait for its completion below, this implements the blocking behavior
-                    defaultOutputCompletion = future;
-                }
 
             } catch (Exception e) {
                 LOG.error("Could not write message batch to output [" + output.getClass() + "].", e);
-                streamOutputsDoneSignal.countDown();
+                doneSignal.countDown();
             }
         }
 
-        // Wait until all writer threads for stream outputs have finished or timeout is reached.
-        if (!streamOutputsDoneSignal.await(configuration.getOutputModuleTimeout(), TimeUnit.MILLISECONDS)) {
-            LOG.warn("Timeout reached. Not waiting any longer for stream output writer threads to complete.");
-        }
-
-        // now block until the default output has finished. most batching outputs will already been done because their
-        // fast path is really fast (usually an insert into a queue), but the slow flush path might block for a long time
-        // this exerts the back pressure to the system
-        if (defaultOutputCompletion != null) {
-            Uninterruptibles.getUninterruptibly(defaultOutputCompletion);
-        } else {
-            LOG.error("The default output future was null, this is a bug!");
+        // Wait until all writer threads have finished or timeout is reached.
+        if (!doneSignal.await(configuration.getOutputModuleTimeout(), TimeUnit.MILLISECONDS)) {
+            LOG.warn("Timeout reached. Not waiting any longer for writer threads to complete.");
         }
 
         if (msg.hasRecordings()) {

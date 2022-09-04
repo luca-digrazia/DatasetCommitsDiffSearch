@@ -21,8 +21,6 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Provider;
-import com.google.inject.name.Named;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -52,6 +50,7 @@ public class ProcessBuffer extends Buffer {
     public static String SOURCE_INPUT_ATTR_NAME;
     public static String SOURCE_NODE_ATTR_NAME;
 
+    private final DecodingProcessor.Factory decodingProcessorFactory;
     private final ExecutorService executor;
 
     private final Meter incomingMessages;
@@ -61,13 +60,9 @@ public class ProcessBuffer extends Buffer {
     @Inject
     public ProcessBuffer(MetricRegistry metricRegistry,
                          ServerStatus serverStatus,
-                         DecodingProcessor.Factory decodingProcessorFactory,
-                         Provider<ProcessBufferProcessor> bufferProcessorFactory,
-                         @Named("processbuffer_processors") int processorCount,
-                         @Named("ring_size") int ringSize,
-                         @Named("processor_wait_strategy") String waitStrategyName) {
+                         DecodingProcessor.Factory decodingProcessorFactory) {
         this.serverStatus = serverStatus;
-        this.ringBufferSize = ringSize;
+        this.decodingProcessorFactory = decodingProcessorFactory;
 
         this.executor = executorService(metricRegistry);
         this.incomingMessages = metricRegistry.meter(name(ProcessBuffer.class, "incomingMessages"));
@@ -82,30 +77,6 @@ public class ProcessBuffer extends Buffer {
             SOURCE_INPUT_ATTR_NAME = "gl2_source_input";
             SOURCE_NODE_ATTR_NAME = "gl2_source_node";
         }
-
-        final WaitStrategy waitStrategy = getWaitStrategy(waitStrategyName, "processor_wait_strategy");
-        final Disruptor<MessageEvent> disruptor = new Disruptor<>(
-                MessageEvent.EVENT_FACTORY,
-                ringBufferSize,
-                executor,
-                ProducerType.MULTI,
-                waitStrategy
-        );
-        disruptor.handleExceptionsWith(new LoggingExceptionHandler(LOG));
-
-        LOG.info("Initialized ProcessBuffer with ring size <{}> "
-                         + "and wait strategy <{}>.", ringBufferSize,
-                 waitStrategy.getClass().getSimpleName());
-
-        final ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processorCount];
-        for (int i = 0; i < processorCount; i++) {
-            processors[i] = bufferProcessorFactory.get();
-        }
-        disruptor
-                .handleEventsWith(decodingProcessorFactory.create(decodeTime, parseTime))
-                .thenHandleEventsWithWorkerPool(processors);
-
-        ringBuffer = disruptor.start();
     }
 
     private ExecutorService executorService(MetricRegistry metricRegistry) {
@@ -114,6 +85,27 @@ public class ProcessBuffer extends Buffer {
                 Executors.newCachedThreadPool(threadFactory),
                 metricRegistry,
                 name(this.getClass(), "executor-service"));
+    }
+
+    public void initialize(ProcessBufferProcessor[] processors,
+                           int ringBufferSize,
+                           WaitStrategy waitStrategy) {
+        this.ringBufferSize = ringBufferSize;
+        Disruptor<MessageEvent> disruptor = new Disruptor<>(
+                MessageEvent.EVENT_FACTORY,
+                ringBufferSize,
+                executor,
+                ProducerType.MULTI,
+                waitStrategy
+        );
+
+        LOG.info("Initialized ProcessBuffer with ring size <{}> "
+                        + "and wait strategy <{}>.", ringBufferSize,
+                waitStrategy.getClass().getSimpleName());
+
+        disruptor.handleEventsWith(decodingProcessorFactory.create(decodeTime, parseTime)).then(processors);
+
+        ringBuffer = disruptor.start();
     }
 
     public void insertBlocking(@Nonnull RawMessage rawMessage) {
