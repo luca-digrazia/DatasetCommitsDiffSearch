@@ -16,7 +16,6 @@
  */
 package org.graylog2.alerts;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.mongodb.DBCollection;
 import org.graylog2.alerts.Alert.AlertState;
@@ -26,7 +25,6 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.models.streams.alerts.requests.CreateConditionRequest;
@@ -90,8 +88,8 @@ public class AlertServiceImpl implements AlertService {
         return loadRecentOfStreams(ImmutableList.of(streamId), since, limit);
     }
 
-    @VisibleForTesting
-    int resolvedSecondsAgo(String streamId, String conditionId) {
+    @Override
+    public int triggeredSecondsAgo(String streamId, String conditionId) {
         final Optional<Alert> lastTriggeredAlert = getLastTriggeredAlert(streamId, conditionId);
         if (!lastTriggeredAlert.isPresent()) {
             return -1;
@@ -99,10 +97,7 @@ public class AlertServiceImpl implements AlertService {
 
         final Alert mostRecentAlert = lastTriggeredAlert.get();
 
-        if (!isResolved(mostRecentAlert)) {
-            return -1;
-        }
-        return Seconds.secondsBetween(mostRecentAlert.getResolvedAt(), Tools.nowUTC()).getSeconds();
+        return Seconds.secondsBetween(mostRecentAlert.getTriggeredAt(), Tools.nowUTC()).getSeconds();
     }
 
     @Override
@@ -150,7 +145,7 @@ public class AlertServiceImpl implements AlertService {
     }
 
     @Override
-    public AlertCondition fromPersisted(Map<String, Object> fields, Stream stream) throws ConfigurationException {
+    public AlertCondition fromPersisted(Map<String, Object> fields, Stream stream) {
         final String type = (String)fields.get("type");
 
         return this.alertConditionFactory.createAlertCondition(type,
@@ -163,7 +158,7 @@ public class AlertServiceImpl implements AlertService {
     }
 
     @Override
-    public AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream, String userId) throws ConfigurationException {
+    public AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream, String userId) {
         final String type = ccr.type();
         checkArgument(type != null, "Missing alert condition type");
 
@@ -171,7 +166,7 @@ public class AlertServiceImpl implements AlertService {
     }
 
     @Override
-    public AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr) throws ConfigurationException {
+    public AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr) {
         final Map<String, Object> parameters = new HashMap<>();
         parameters.putAll(alertCondition.getParameters());
         parameters.putAll(ccr.parameters());
@@ -189,7 +184,7 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public boolean inGracePeriod(AlertCondition alertCondition) {
-        int lastAlertSecondsAgo = resolvedSecondsAgo(alertCondition.getStream().getId(), alertCondition.getId());
+        int lastAlertSecondsAgo = triggeredSecondsAgo(alertCondition.getStream().getId(), alertCondition.getId());
 
         if (lastAlertSecondsAgo == -1 || alertCondition.getGrace() == 0) {
             return false;
