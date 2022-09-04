@@ -21,10 +21,8 @@ import static com.google.devtools.build.lib.rules.apple.AppleBitcodeConverter.IN
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.ABSOLUTE_INCLUDES_PATH_FORMAT;
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.BOTH_MODULE_NAME_AND_MODULE_MAP_SPECIFIED;
 import static com.google.devtools.build.lib.rules.objc.CompilationSupport.FILE_IN_SRCS_AND_HDRS_WARNING_FORMAT;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.CC_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
@@ -919,7 +917,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         .setList("deps", "//objc:lib_dep")
         .write();
     ObjcProvider objcProvider = providerForTarget("//objc2:lib");
-    assertThat(objcProvider.get(CC_LIBRARY).toList()).isEmpty();
+    assertThat(objcProvider.getTransitiveCcLibraries().toList()).isEmpty();
   }
 
   @Test
@@ -1407,7 +1405,7 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
 
     Iterable<String> linkerInputArtifacts =
         Iterables.transform(
-            objcProvider.get(CC_LIBRARY).toList(),
+            objcProvider.getTransitiveCcLibraries().toList(),
             (library) -> removeConfigFragment(library.getStaticLibrary().getExecPathString()));
 
     assertThat(linkerInputArtifacts)
@@ -1438,8 +1436,8 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     Set<SdkFramework> baseFrameworks = ImmutableSet.of(new SdkFramework("foo"));
     Set<SdkFramework> dependerFrameworks =
         ImmutableSet.of(new SdkFramework("foo"), new SdkFramework("bar"));
-    assertThat(baseProvider.get(SDK_FRAMEWORK).toList()).containsExactlyElementsIn(baseFrameworks);
-    assertThat(dependerProvider.get(SDK_FRAMEWORK).toList())
+    assertThat(baseProvider.getFrameworks().toList()).containsExactlyElementsIn(baseFrameworks);
+    assertThat(dependerProvider.getFrameworks().toList())
         .containsExactlyElementsIn(dependerFrameworks);
 
     // Make sure that the archive action does not actually include the frameworks. This is needed
