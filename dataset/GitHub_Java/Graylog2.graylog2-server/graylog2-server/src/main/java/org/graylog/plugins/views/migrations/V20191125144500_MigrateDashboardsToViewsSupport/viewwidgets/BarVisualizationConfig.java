@@ -19,32 +19,31 @@ package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsTo
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
-import javax.annotation.Nullable;
-import java.util.Optional;
-
 @AutoValue
-public abstract class AutoInterval implements Interval {
-    public static final String type = "auto";
-    private static final String FIELD_SCALING = "scaling";
+public abstract class BarVisualizationConfig implements VisualizationConfig {
+    public static final String NAME = "bar";
+    private static final String FIELD_BAR_MODE = "barmode";
+
+    public enum BarMode {
+        stack,
+        overlay,
+        group,
+        relative
+    };
 
     @JsonProperty
-    public abstract String type();
+    public abstract BarMode barmode();
 
-    @JsonProperty(FIELD_SCALING)
-    public abstract Optional<Double> scaling();
-
-    static Builder builder() { return new AutoValue_AutoInterval.Builder().type(type); };
-
-    public static AutoInterval create() {
-        return AutoInterval.builder().build();
+    public static Builder builder() {
+        return new AutoValue_BarVisualizationConfig.Builder();
     }
 
     @AutoValue.Builder
     public abstract static class Builder {
-        public abstract Builder type(String type);
-        public abstract Builder scaling(@Nullable Double scaling);
 
-        public abstract AutoInterval build();
+        @JsonProperty(FIELD_BAR_MODE)
+        public abstract Builder barmode(BarMode barMode);
+
+        public abstract BarVisualizationConfig build();
     }
 }
-
