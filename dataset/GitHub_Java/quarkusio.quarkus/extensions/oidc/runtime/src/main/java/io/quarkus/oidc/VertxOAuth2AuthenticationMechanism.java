@@ -9,7 +9,8 @@ import io.quarkus.security.credential.TokenCredential;
 import io.quarkus.security.identity.IdentityProviderManager;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.request.TokenAuthenticationRequest;
-import io.quarkus.vertx.http.runtime.security.HTTPAuthenticationMechanism;
+import io.quarkus.vertx.http.runtime.security.ChallengeData;
+import io.quarkus.vertx.http.runtime.security.HttpAuthenticationMechanism;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonObject;
@@ -17,22 +18,12 @@ import io.vertx.ext.auth.oauth2.OAuth2Auth;
 import io.vertx.ext.web.RoutingContext;
 
 @ApplicationScoped
-public class VertxOAuth2AuthenticationMechanism implements HTTPAuthenticationMechanism {
+public class VertxOAuth2AuthenticationMechanism implements HttpAuthenticationMechanism {
 
     private static final String BEARER = "Bearer";
 
     private volatile String authServerURI;
     private volatile OAuth2Auth auth;
-    private volatile OidcConfig config;
-
-    public OidcConfig getConfig() {
-        return config;
-    }
-
-    public VertxOAuth2AuthenticationMechanism setConfig(OidcConfig config) {
-        this.config = config;
-        return this;
-    }
 
     public String getAuthServerURI() {
         return authServerURI;
@@ -75,14 +66,16 @@ public class VertxOAuth2AuthenticationMechanism implements HTTPAuthenticationMec
         }
 
         String token = authorization.substring(idx + 1);
-        return identityProviderManager.authenticate(new TokenAuthenticationRequest(new TokenCredential(token, "oauth2")));
+        return identityProviderManager.authenticate(new TokenAuthenticationRequest(new TokenCredential(token, BEARER)));
     }
 
     @Override
-    public CompletionStage<Boolean> sendChallenge(RoutingContext context) {
-        context.response().setStatusCode(302);
-        context.response().headers().set(HttpHeaders.LOCATION, authURI(authServerURI));
-        return CompletableFuture.completedFuture(true);
+    public CompletionStage<ChallengeData> getChallenge(RoutingContext context) {
+        ChallengeData result = new ChallengeData(
+                302,
+                HttpHeaders.LOCATION,
+                authURI(authServerURI));
+        return CompletableFuture.completedFuture(result);
     }
 
     private String authURI(String redirectURL) {
