@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
-import com.google.devtools.build.lib.skyframe.TreeArtifactValue;
 import javax.annotation.Nullable;
 
 /**
@@ -24,14 +22,6 @@ import javax.annotation.Nullable;
  */
 public interface ActionInputMapSink {
 
-  /**
-   * Adds an input if it is not present and returns true iff a new entry was added.
-   *
-   * <p>Does not handle tree artifacts, please use {@link #putTreeArtifact} for those.
-   */
+  /** Returns true if an entry was added, false if the map already contains {@code input}. */
   boolean put(ActionInput input, FileArtifactValue metadata, @Nullable Artifact depOwner);
-
-  /** Adds a tree artifact entry with given value. */
-  void putTreeArtifact(
-      SpecialArtifact tree, TreeArtifactValue treeArtifactValue, @Nullable Artifact depOwner);
 }
