@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -159,6 +158,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             "proguard_apply_dictionary",
             "'proguard_apply_dictionary' can only be used when 'proguard_specs' is also set");
       }
+    }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("shrink_resources")
+        && dataContext.throwOnShrinkResources()) {
+      ruleContext.throwWithAttributeError("shrink_resources", "This attribute is not supported");
     }
 
     if (AndroidCommon.getAndroidConfig(ruleContext).desugarJava8Libs()
@@ -1453,7 +1456,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(
         new ParameterFileWriteAction(
             ruleContext.getActionOwner(),
-            NestedSetBuilder.create(Order.STABLE_ORDER, inputTree),
+            ImmutableList.of(inputTree),
             paramFile,
             args,
             ParameterFile.ParameterFileType.SHELL_QUOTED,
