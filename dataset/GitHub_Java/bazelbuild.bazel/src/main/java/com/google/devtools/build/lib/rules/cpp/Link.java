@@ -46,16 +46,15 @@ public abstract class Link {
   public static final FileTypeSet ONLY_INTERFACE_LIBRARY_FILETYPES =
       FileTypeSet.of(CppFileTypes.INTERFACE_SHARED_LIBRARY);
 
-  public static final FileTypeSet ARCHIVE_LIBRARY_FILETYPES =
-      FileTypeSet.of(
-          CppFileTypes.ARCHIVE,
-          CppFileTypes.PIC_ARCHIVE,
-          CppFileTypes.ALWAYS_LINK_LIBRARY,
-          CppFileTypes.ALWAYS_LINK_PIC_LIBRARY,
-          CppFileTypes.RUST_RLIB);
+  public static final FileTypeSet ARCHIVE_LIBRARY_FILETYPES = FileTypeSet.of(
+      CppFileTypes.ARCHIVE,
+      CppFileTypes.PIC_ARCHIVE,
+      CppFileTypes.ALWAYS_LINK_LIBRARY,
+      CppFileTypes.ALWAYS_LINK_PIC_LIBRARY);
 
-  public static final FileTypeSet ARCHIVE_FILETYPES =
-      FileTypeSet.of(CppFileTypes.ARCHIVE, CppFileTypes.PIC_ARCHIVE, CppFileTypes.RUST_RLIB);
+  public static final FileTypeSet ARCHIVE_FILETYPES = FileTypeSet.of(
+      CppFileTypes.ARCHIVE,
+      CppFileTypes.PIC_ARCHIVE);
 
   public static final FileTypeSet LINK_LIBRARY_FILETYPES = FileTypeSet.of(
       CppFileTypes.ALWAYS_LINK_LIBRARY,
@@ -65,6 +64,14 @@ public abstract class Link {
   public static final FileTypeSet OBJECT_FILETYPES =
       FileTypeSet.of(
           CppFileTypes.OBJECT_FILE, CppFileTypes.PIC_OBJECT_FILE, CppFileTypes.CLIF_OUTPUT_PROTO);
+
+  /**
+   * Prefix that is prepended to command line entries that refer to the output
+   * of cc_fake_binary compile actions. This is a bad hack to signal to the code
+   * in {@code CppLinkAction#executeFake(Executor, FileOutErr)} that it needs
+   * special handling.
+   */
+  public static final String FAKE_OBJECT_PREFIX = "fake:";
 
   /**
    * Whether a particular link target requires PIC code.
@@ -238,18 +245,13 @@ public abstract class Link {
     public String getActionName() {
       return actionName;
     }
-
-    /** Returns true iff this link type is executable. */
+    
+    /** Returns true iff this link type is executable */
     public boolean isExecutable() {
       return (executable == Executable.EXECUTABLE);
     }
 
-    /** Returns true iff this link type is a transitive dynamic library. */
-    public boolean isTransitiveDynamicLibrary() {
-      return this == DYNAMIC_LIBRARY;
-    }
-
-    /** Returns true iff this link type is a dynamic library or transitive dynamic library. */
+    /** Returns true iff this link type is a dynamic library or transitive dynamic library */
     public boolean isDynamicLibrary() {
       return this == NODEPS_DYNAMIC_LIBRARY || this == DYNAMIC_LIBRARY;
     }

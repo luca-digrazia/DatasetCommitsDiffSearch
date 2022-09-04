@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
@@ -845,7 +846,13 @@ public class CcModule
       SkylarkList<Object> makeVariables,
       Object builtinSysroot,
       Object ccTargetOs)
-      throws EvalException {
+      throws InvalidConfigurationException, EvalException {
+
+    CppConfiguration config =
+        skylarkRuleContext.getConfiguration().getFragment(CppConfiguration.class);
+    if (!config.enableCcToolchainConfigInfoFromSkylark()) {
+      throw new InvalidConfigurationException("Creating a CcToolchainConfigInfo is not enabled.");
+    }
 
     CToolchain.Builder cToolchain = CToolchain.newBuilder();
 
@@ -1082,7 +1089,8 @@ public class CcModule
 
   /** Creates a {@link Feature} from a {@link SkylarkInfo}. */
   @VisibleForTesting
-  static Feature featureFromSkylark(SkylarkInfo featureStruct) throws EvalException {
+  static Feature featureFromSkylark(SkylarkInfo featureStruct)
+      throws InvalidConfigurationException, EvalException {
     checkRightProviderType(featureStruct, "feature");
     String name = getFieldFromSkylarkProvider(featureStruct, "name", String.class);
     Boolean enabled = getFieldFromSkylarkProvider(featureStruct, "enabled", Boolean.class);
@@ -1220,7 +1228,8 @@ public class CcModule
 
   /** Creates an {@link EnvEntry} from a {@link SkylarkInfo}. */
   @VisibleForTesting
-  static EnvEntry envEntryFromSkylark(SkylarkInfo envEntryStruct) throws EvalException {
+  static EnvEntry envEntryFromSkylark(SkylarkInfo envEntryStruct)
+      throws InvalidConfigurationException, EvalException {
     checkRightProviderType(envEntryStruct, "env_entry");
     String key = getFieldFromSkylarkProvider(envEntryStruct, "key", String.class);
     String value = getFieldFromSkylarkProvider(envEntryStruct, "value", String.class);
@@ -1252,7 +1261,8 @@ public class CcModule
 
   /** Creates an {@link EnvSet} from a {@link SkylarkInfo}. */
   @VisibleForTesting
-  static EnvSet envSetFromSkylark(SkylarkInfo envSetStruct) throws EvalException {
+  static EnvSet envSetFromSkylark(SkylarkInfo envSetStruct)
+      throws InvalidConfigurationException, EvalException {
     checkRightProviderType(envSetStruct, "env_set");
     ImmutableSet<String> actions = getStringSetFromSkylarkProviderField(envSetStruct, "actions");
     if (actions.isEmpty()) {
@@ -1277,7 +1287,8 @@ public class CcModule
 
   /** Creates a {@link FlagGroup} from a {@link SkylarkInfo}. */
   @VisibleForTesting
-  static FlagGroup flagGroupFromSkylark(SkylarkInfo flagGroupStruct) throws EvalException {
+  static FlagGroup flagGroupFromSkylark(SkylarkInfo flagGroupStruct)
+      throws InvalidConfigurationException, EvalException {
     checkRightProviderType(flagGroupStruct, "flag_group");
 
     ImmutableList.Builder<Expandable> expandableBuilder = ImmutableList.builder();
@@ -1331,7 +1342,7 @@ public class CcModule
   /** Creates a {@link FlagSet} from a {@link SkylarkInfo}. */
   @VisibleForTesting
   static FlagSet flagSetFromSkylark(SkylarkInfo flagSetStruct, String actionName)
-      throws EvalException {
+      throws InvalidConfigurationException, EvalException {
     checkRightProviderType(flagSetStruct, "flag_set");
     ImmutableSet<String> actions = getStringSetFromSkylarkProviderField(flagSetStruct, "actions");
     // if we are creating a flag set for an action_config, we need to propagate the name of the
@@ -1389,7 +1400,8 @@ public class CcModule
 
   /** Creates an {@link ActionConfig} from a {@link SkylarkInfo}. */
   @VisibleForTesting
-  static ActionConfig actionConfigFromSkylark(SkylarkInfo actionConfigStruct) throws EvalException {
+  static ActionConfig actionConfigFromSkylark(SkylarkInfo actionConfigStruct)
+      throws InvalidConfigurationException, EvalException {
     checkRightProviderType(actionConfigStruct, "action_config");
     String actionName =
         getFieldFromSkylarkProvider(actionConfigStruct, "action_name", String.class);
