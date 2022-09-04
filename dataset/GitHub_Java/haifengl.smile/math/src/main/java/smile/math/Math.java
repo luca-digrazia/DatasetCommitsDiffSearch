@@ -18,13 +18,12 @@ package smile.math;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
-
-import smile.math.matrix.EigenValueDecomposition;
-import smile.math.matrix.IMatrix;
-import smile.math.matrix.LUDecomposition;
-import smile.math.matrix.Matrix;
-import smile.math.matrix.QRDecomposition;
-import smile.math.matrix.SingularValueDecomposition;
+import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ForkJoinPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.sort.QuickSelect;
 import smile.sort.QuickSort;
 import smile.sort.SortUtils;
@@ -40,10 +39,8 @@ import smile.sort.SortUtils;
  * L<sub>2</sub> norm, L<sub>&infin;</sub> norm, normalize, unitize, cor, Spearman
  * correlation, Kendall correlation, distance, dot product, histogram, vector
  * (element-wise) copy, equal, plus, minus, times, and divide.
- * <li> matrix functions: min, max, rowmean, sum, L<sub>1</sub> norm,
- * L<sub>2</sub> norm, L<sub>&infin;</sub> norm, rank, det, trace, transpose,
- * inverse, SVD and eigen decomposition, linear systems (dense or tridiagonal)
- * and least square, matrix copy, equal, plus, minus and times.
+ * <li> matrix functions: min, max, rowSums, colSums, rowMeans, colMeans, transpose,
+ * cov, cor, matrix copy, equals.
  * <li> random functions: random, randomInt, and permutate.
  * <li> Find the root of a univariate function with or without derivative.
  * </uL>
@@ -51,6 +48,7 @@ import smile.sort.SortUtils;
  * @author Haifeng Li
  */
 public class Math {
+    private static final Logger logger = LoggerFactory.getLogger(Math.class);
 
     /**
      * The base of the natural logarithms.
@@ -81,7 +79,7 @@ public class Math {
      * <li> 2 if floating-point addition rounds in the ieee style
      * <li> 3 if floating-point addition chops, and there is partial underflow
      * <li> 4 if floating-point addition rounds, but not in the ieee style, and there is partial underflow
-     * <li> 5 if floating-point addition rounds in the ieee style, and there is partial underflow
+     * <li> 5 if floating-point addition rounds in the IEEEE style, and there is partial underflow
      * </ul>
      */
     public static int ROUND_STYLE = 2;
@@ -96,9 +94,37 @@ public class Math {
      */
     public static int NEGEP = -53;
     /**
+     * True when we create the first random number generator.
+     */
+    private static boolean firstRNG = true;
+    /**
      * High quality random number generator.
      */
-    private static smile.math.Random random = new smile.math.Random();
+    private static ThreadLocal<smile.math.Random> random = new ThreadLocal<smile.math.Random>() {
+        protected synchronized smile.math.Random initialValue() {
+            if (firstRNG) {
+                // For the first RNG, we use the default seed so that we can
+                // get repeatable results for random algorithms.
+                // Note that this may or may not be the main thread.
+                firstRNG = false;
+                return new smile.math.Random();
+            } else {
+                // Make sure other threads not to use the same seed.
+                // This is very important for some algorithms such as random forest.
+                // Otherwise, all trees of random forest are same except the main thread one.
+
+                java.security.SecureRandom sr = new java.security.SecureRandom();
+                byte[] bytes = sr.generateSeed(Long.BYTES);
+                long seed = 0;
+                for (int i = 0; i < Long.BYTES; i++) {
+                    seed <<= 8;
+                    seed |= (bytes[i] & 0xFF);
+                }
+
+                return new smile.math.Random(seed);
+            }
+        }
+    };
 
     /**
      * Dynamically determines the machine parameters of the floating-point arithmetic.
@@ -704,6 +730,13 @@ public class Math {
     }
 
     /**
+     * Initialize the random generator with a seed.
+     */
+    public static void setSeed(long seed) {
+        random.get().setSeed(seed);
+    }
+
+    /**
      * Given a set of n probabilities, generate a random number in [0, n).
      * @param prob probabilities of size n. The prob argument can be used to
      * give a vector of weights for obtaining the elements of the vector being
@@ -781,77 +814,57 @@ public class Math {
     }
 
     /**
-     * Generate a random number in [0, 1). This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator. 
+     * Generate a random number in [0, 1).
      */
-    public static synchronized double random() {
-        return random.nextDouble();
+    public static double random() {
+        return random.get().nextDouble();
     }
 
     /**
-     * Generate n random numbers in [0, 1). This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Generate n random numbers in [0, 1).
      */
-    public static synchronized double[] random(int n) {
+    public static double[] random(int n) {
         double[] x = new double[n];
-        random.nextDoubles(x);
+        random.get().nextDoubles(x);
         return x;
     }
 
     /**
-     * Generate a uniform random number in the range [lo, hi). This method is
-     * properly synchronized to allow correct use by more than one thread.
-     * However, if many threads need to generate pseudorandom numbers at a
-     * great rate, it may reduce contention for each thread to have its own
-     * pseudorandom-number generator.
+     * Generate a uniform random number in the range [lo, hi).
      * @param lo lower limit of range
      * @param hi upper limit of range
      * @return a uniform random real in the range [lo, hi)
      */
-    public static synchronized double random(double lo, double hi) {
-        return random.nextDouble(lo, hi);
+    public static double random(double lo, double hi) {
+        return random.get().nextDouble(lo, hi);
     }
 
     /**
-     * Generate n uniform random numbers in the range [lo, hi). This method is
-     * properly synchronized to allow correct use by more than one thread.
-     * However, if many threads need to generate pseudorandom numbers at a
-     * great rate, it may reduce contention for each thread to have its own
-     * pseudorandom-number generator.
+     * Generate n uniform random numbers in the range [lo, hi).
      * @param n size of the array
      * @param lo lower limit of range
      * @param hi upper limit of range
      * @return a uniform random real in the range [lo, hi)
      */
-    public static synchronized double[] random(double lo, double hi, int n) {
+    public static double[] random(double lo, double hi, int n) {
         double[] x = new double[n];
-        random.nextDoubles(x, lo, hi);
+        random.get().nextDoubles(x, lo, hi);
         return x;
     }
 
     /**
-     * Returns a random integer in [0, n). This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Returns a random integer in [0, n).
      */
-    public static synchronized int randomInt(int n) {
-        return random.nextInt(n);
+    public static int randomInt(int n) {
+        return random.get().nextInt(n);
     }
 
     /**
-     * Returns a random integer in [lo, hi). This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Returns a random integer in [lo, hi).
      */
-    public static synchronized int randomInt(int lo, int hi) {
+    public static int randomInt(int lo, int hi) {
         int w = hi - lo;
-        return lo + random.nextInt(w);
+        return lo + random.get().nextInt(w);
     }
 
     /**
@@ -859,47 +872,143 @@ public class Math {
      * sampling without replacement.
      */
     public static int[] permutate(int n) {
-        return random.permutate(n);
+        return random.get().permutate(n);
     }
     
     /**
-     * Generates a permutation of given array. This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Generates a permutation of given array.
      */
     public static void permutate(int[] x) {
-        random.permutate(x);
+        random.get().permutate(x);
     }
 
     /**
-     * Generates a permutation of given array. This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Generates a permutation of given array.
      */
     public static void permutate(float[] x) {
-        random.permutate(x);
+        random.get().permutate(x);
     }
 
     /**
-     * Generates a permutation of given array. This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Generates a permutation of given array.
      */
     public static void permutate(double[] x) {
-        random.permutate(x);
+        random.get().permutate(x);
     }
 
     /**
-     * Generates a permutation of given array. This method is properly synchronized
-     * to allow correct use by more than one thread. However, if many threads
-     * need to generate pseudorandom numbers at a great rate, it may reduce
-     * contention for each thread to have its own pseudorandom-number generator.
+     * Generates a permutation of given array.
      */
     public static void permutate(Object[] x) {
-        random.permutate(x);
+        random.get().permutate(x);
+    }
+
+    /** Combines the arguments to form a vector. */
+    public static int[] c(int... x) {
+        return x;
+    }
+
+    /** Combines the arguments to form a vector. */
+    public static float[] c(float... x) {
+        return x;
+    }
+
+    /** Combines the arguments to form a vector. */
+    public static double[] c(double... x) {
+        return x;
+    }
+
+    /** Combines the arguments to form a vector. */
+    public static String[] c(String... x) {
+        return x;
+    }
+
+    /** Merges multiple vectors into one. */
+    public static int[] c(int[]... list) {
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+        int[] y = new int[n];
+        int pos = 0;
+        for (int[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
+        }
+        return y;
+    }
+
+    /** Merges multiple vectors into one. */
+    public static float[] c(float[]... list) {
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+        float[] y = new float[n];
+        int pos = 0;
+        for (float[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
+        }
+        return y;
+    }
+
+    /** Merges multiple vectors into one. */
+    public static double[] c(double[]... list) {
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+        double[] y = new double[n];
+        int pos = 0;
+        for (double[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
+        }
+        return y;
+    }
+
+    /** Concatenates multiple vectors into one array of strings. */
+    public static String[] c(String[]... list) {
+        int n = Arrays.stream(list).mapToInt(x -> x.length).sum();
+        String[] y = new String[n];
+        int pos = 0;
+        for (String[] x: list) {
+            System.arraycopy(x, 0, y, pos, x.length);
+            pos += x.length;
+        }
+        return y;
+    }
+
+    /** Take a sequence of vector arguments and combine by columns. */
+    public static int[] cbind(int[]... x) {
+        return c(x);
+    }
+
+    /** Take a sequence of vector arguments and combine by columns. */
+    public static float[] cbind(float[]... x) {
+        return c(x);
+    }
+
+    /** Take a sequence of vector arguments and combine by columns. */
+    public static double[] cbind(double[]... x) {
+        return c(x);
+    }
+
+    /** Take a sequence of vector arguments and combine by columns. */
+    public static String[] cbind(String[]... x) {
+        return c(x);
+    }
+
+    /** Take a sequence of vector arguments and combine by rows. */
+    public static int[][] rbind(int[]... x) {
+        return x;
+    }
+
+    /** Take a sequence of vector arguments and combine by rows. */
+    public static float[][] rbind(float[]... x) {
+        return x;
+    }
+
+    /** Take a sequence of vector arguments and combine by rows. */
+    public static double[][] rbind(double[]... x) {
+        return x;
+    }
+
+    /** Take a sequence of vector arguments and combine by rows. */
+    public static String[][] rbind(String[]... x) {
+        return x;
     }
 
     /**
@@ -976,67 +1085,67 @@ public class Math {
      */
     public static boolean contains(double[][] polygon, double x, double y) {
         if (polygon.length <= 2) {
-	    return false;
-	}
-        
-	int hits = 0;
+            return false;
+        }
+
+        int hits = 0;
 
         int n = polygon.length;
-	double lastx = polygon[n - 1][0];
-	double lasty = polygon[n - 1][1];
-	double curx, cury;
+        double lastx = polygon[n - 1][0];
+        double lasty = polygon[n - 1][1];
+        double curx, cury;
 
-	// Walk the edges of the polygon
-	for (int i = 0; i < n; lastx = curx, lasty = cury, i++) {
-	    curx = polygon[i][0];
-	    cury = polygon[i][1];
+        // Walk the edges of the polygon
+        for (int i = 0; i < n; lastx = curx, lasty = cury, i++) {
+            curx = polygon[i][0];
+            cury = polygon[i][1];
 
-	    if (cury == lasty) {
-		continue;
-	    }
+            if (cury == lasty) {
+                continue;
+            }
 
-	    double leftx;
-	    if (curx < lastx) {
-		if (x >= lastx) {
-		    continue;
-		}
-		leftx = curx;
-	    } else {
-		if (x >= curx) {
-		    continue;
-		}
-		leftx = lastx;
-	    }
+            double leftx;
+            if (curx < lastx) {
+                if (x >= lastx) {
+                    continue;
+                }
+                leftx = curx;
+            } else {
+                if (x >= curx) {
+                    continue;
+                }
+                leftx = lastx;
+            }
 
-	    double test1, test2;
-	    if (cury < lasty) {
-		if (y < cury || y >= lasty) {
-		    continue;
-		}
-		if (x < leftx) {
-		    hits++;
-		    continue;
-		}
-		test1 = x - curx;
-		test2 = y - cury;
-	    } else {
-		if (y < lasty || y >= cury) {
-		    continue;
-		}
-		if (x < leftx) {
-		    hits++;
-		    continue;
-		}
-		test1 = x - lastx;
-		test2 = y - lasty;
-	    }
+            double test1, test2;
+            if (cury < lasty) {
+                if (y < cury || y >= lasty) {
+                    continue;
+                }
+                if (x < leftx) {
+                    hits++;
+                    continue;
+                }
+                test1 = x - curx;
+                test2 = y - cury;
+            } else {
+                if (y < lasty || y >= cury) {
+                    continue;
+                }
+                if (x < leftx) {
+                    hits++;
+                    continue;
+                }
+                test1 = x - lastx;
+                test2 = y - lasty;
+            }
 
-	    if (test1 < (test2 / (lasty - cury) * (lastx - curx))) {
-		hits++;
-	    }
-	}
+            if (test1 < (test2 / (lasty - cury) * (lastx - curx))) {
+                hits++;
+            }
+        }
 
-	return ((hits & 1) != 0);
+        return ((hits & 1) != 0);
     }
 
     /**
@@ -1128,7 +1237,7 @@ public class Math {
     /**
      * Returns the minimum value of an array.
      */
-    public static int min(int... x) {
+    public static int min(int[] x) {
         int m = x[0];
 
         for (int n : x) {
@@ -1143,7 +1252,7 @@ public class Math {
     /**
      * Returns the minimum value of an array.
      */
-    public static float min(float... x) {
+    public static float min(float[] x) {
         float m = Float.POSITIVE_INFINITY;
 
         for (float n : x) {
@@ -1158,7 +1267,7 @@ public class Math {
     /**
      * Returns the minimum value of an array.
      */
-    public static double min(double... x) {
+    public static double min(double[] x) {
         double m = Double.POSITIVE_INFINITY;
 
         for (double n : x) {
@@ -1173,7 +1282,7 @@ public class Math {
     /**
      * Returns the index of minimum value of an array.
      */
-    public static int whichMin(int... x) {
+    public static int whichMin(int[] x) {
         int m = x[0];
         int which = 0;
 
@@ -1190,7 +1299,7 @@ public class Math {
     /**
      * Returns the index of minimum value of an array.
      */
-    public static int whichMin(float... x) {
+    public static int whichMin(float[] x) {
         float m = Float.POSITIVE_INFINITY;
         int which = 0;
 
@@ -1207,7 +1316,7 @@ public class Math {
     /**
      * Returns the index of minimum value of an array.
      */
-    public static int whichMin(double... x) {
+    public static int whichMin(double[] x) {
         double m = Double.POSITIVE_INFINITY;
         int which = 0;
 
@@ -1224,7 +1333,7 @@ public class Math {
     /**
      * Returns the maximum value of an array.
      */
-    public static int max(int... x) {
+    public static int max(int[] x) {
         int m = x[0];
 
         for (int n : x) {
@@ -1239,7 +1348,7 @@ public class Math {
     /**
      * Returns the maximum value of an array.
      */
-    public static float max(float... x) {
+    public static float max(float[] x) {
         float m = Float.NEGATIVE_INFINITY;
 
         for (float n : x) {
@@ -1254,7 +1363,7 @@ public class Math {
     /**
      * Returns the maximum value of an array.
      */
-    public static double max(double... x) {
+    public static double max(double[] x) {
         double m = Double.NEGATIVE_INFINITY;
 
         for (double n : x) {
@@ -1269,7 +1378,7 @@ public class Math {
     /**
      * Returns the index of maximum value of an array.
      */
-    public static int whichMax(int... x) {
+    public static int whichMax(int[] x) {
         int m = x[0];
         int which = 0;
 
@@ -1286,7 +1395,7 @@ public class Math {
     /**
      * Returns the index of maximum value of an array.
      */
-    public static int whichMax(float... x) {
+    public static int whichMax(float[] x) {
         float m = Float.NEGATIVE_INFINITY;
         int which = 0;
 
@@ -1303,7 +1412,7 @@ public class Math {
     /**
      * Returns the index of maximum value of an array.
      */
-    public static int whichMax(double... x) {
+    public static int whichMax(double[] x) {
         double m = Double.NEGATIVE_INFINITY;
         int which = 0;
 
@@ -1386,6 +1495,23 @@ public class Math {
     }
 
     /**
+     * Returns the matrix transpose.
+     */
+    public static double[][] transpose(double[][] A) {
+        int m = A.length;
+        int n = A[0].length;
+
+        double[][] matrix = new double[n][m];
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                matrix[j][i] = A[i][j];
+            }
+        }
+
+        return matrix;
+    }
+
+    /**
      * Returns the row minimum for a matrix.
      */
     public static double[] rowMin(double[][] data) {
@@ -1414,7 +1540,7 @@ public class Math {
     /**
      * Returns the row sums for a matrix.
      */
-    public static double[] rowSum(double[][] data) {
+    public static double[] rowSums(double[][] data) {
         double[] x = new double[data.length];
 
         for (int i = 0; i < x.length; i++) {
@@ -1427,7 +1553,7 @@ public class Math {
     /**
      * Returns the row means for a matrix.
      */
-    public static double[] rowMean(double[][] data) {
+    public static double[] rowMeans(double[][] data) {
         double[] x = new double[data.length];
 
         for (int i = 0; i < x.length; i++) {
@@ -1440,7 +1566,7 @@ public class Math {
     /**
      * Returns the row standard deviations for a matrix.
      */
-    public static double[] rowSd(double[][] data) {
+    public static double[] rowSds(double[][] data) {
         double[] x = new double[data.length];
 
         for (int i = 0; i < x.length; i++) {
@@ -1493,7 +1619,7 @@ public class Math {
     /**
      * Returns the column sums for a matrix.
      */
-    public static double[] colSum(double[][] data) {
+    public static double[] colSums(double[][] data) {
         double[] x = data[0].clone();
 
         for (int i = 1; i < data.length; i++) {
@@ -1506,9 +1632,9 @@ public class Math {
     }
 
     /**
-     * Returns the column sums for a matrix.
+     * Returns the column means for a matrix.
      */
-    public static double[] colMean(double[][] data) {
+    public static double[] colMeans(double[][] data) {
         double[] x = data[0].clone();
 
         for (int i = 1; i < data.length; i++) {
@@ -1525,7 +1651,7 @@ public class Math {
     /**
      * Returns the column deviations for a matrix.
      */
-    public static double[] colSd(double[][] data) {
+    public static double[] colSds(double[][] data) {
         if (data.length < 2) {
             throw new IllegalArgumentException("Array length is less than 2.");
         }
@@ -1937,6 +2063,79 @@ public class Math {
      */
     public static double distance(SparseArray x, SparseArray y) {
         return Math.sqrt(squaredDistance(x, y));
+    }
+
+    private static class PdistTask implements Callable<Void> {
+        double[][] x;
+        double[][] dist;
+        int nprocs;
+        int pid;
+        boolean half;
+        boolean squared;
+
+        PdistTask(double[][] x, double[][] dist, int nprocs, int pid, boolean squared, boolean half) {
+            this.x = x;
+            this.dist = dist;
+            this.nprocs = nprocs;
+            this.pid = pid;
+            this.squared = squared;
+            this.half = half;
+        }
+
+        @Override
+        public Void call() {
+            int n = x.length;
+            for (int i = pid; i < n; i += nprocs) {
+                for (int j = 0; j < i; j++) {
+                    double d = squared ? squaredDistance(x[i], x[j]) : distance(x[i], x[j]);
+                    dist[i][j] = d;
+                    if (!half) dist[j][i] = d;
+                }
+            }
+            return null;
+        }
+    }
+    /**
+     * Pairwise distance between pairs of objects.
+     * @param x Rows of x correspond to observations, and columns correspond to variables.
+     * @return a full pairwise distance matrix.
+     */
+    public static double[][] pdist(double[][] x) {
+        int n = x.length;
+
+        double[][] dist = new double[n][n];
+        pdist(x, dist, false, false);
+
+        return dist;
+    }
+
+    /**
+     * Pairwise distance between pairs of objects.
+     * @param x Rows of x correspond to observations, and columns correspond to variables.
+     * @param squared If true, compute the squared Euclidean distance.
+     * @param half If true, only the lower half of dist will be referenced.
+     * @param dist The distance matrix.
+     */
+    public static void pdist(double[][] x, double[][] dist, boolean squared, boolean half) {
+        int n = x.length;
+
+        if (n < 100) {
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < i; j++) {
+                    double d = distance(x[i], x[j]);
+                    dist[i][j] = d;
+                    dist[j][i] = d;
+                }
+            }
+        } else {
+            int nprocs = Runtime.getRuntime().availableProcessors();
+            List<PdistTask> tasks = new ArrayList<>();
+            for (int i = 0; i < nprocs; i++) {
+                PdistTask task = new PdistTask(x, dist, nprocs, i, squared, half);
+                tasks.add(task);
+            }
+            ForkJoinPool.commonPool().invokeAll(tasks);
+        }
     }
 
     /**
@@ -2428,7 +2627,7 @@ public class Math {
      * Returns the sample covariance matrix.
      */
     public static double[][] cov(double[][] data) {
-        return cov(data, Math.colMean(data));
+        return cov(data, Math.colMeans(data));
     }
 
     /**
@@ -2529,7 +2728,7 @@ public class Math {
      * Returns the sample correlation matrix.
      */
     public static double[][] cor(double[][] data) {
-        return cor(data, Math.colMean(data));
+        return cor(data, Math.colMeans(data));
     }
 
     /**
@@ -2873,79 +3072,15 @@ public class Math {
     }
 
     /**
-     * L1 matrix norm. Maximum column sum.
+     * Standardizes an array to mean 0 and variance 1.
      */
-    public static double norm1(double[][] x) {
-        int m = x.length;
-        int n = x[0].length;
-
-        double f = 0.0;
-        for (int j = 0; j < n; j++) {
-            double s = 0.0;
-            for (int i = 0; i < m; i++) {
-                s += Math.abs(x[i][j]);
-            }
-            f = Math.max(f, s);
-        }
-
-        return f;
-    }
-
-    /**
-     * L2 matrix norm. Maximum singular value.
-     */
-    public static double norm2(double[][] x) {
-        return SingularValueDecomposition.decompose(x).norm();
-    }
-
-    /**
-     * L2 matrix norm. Maximum singular value.
-     */
-    public static double norm(double[][] x) {
-        return norm2(x);
-    }
-
-    /**
-     * Infinity matrix norm. Maximum row sum.
-     */
-    public static double normInf(double[][] x) {
-        int m = x.length;
-
-        double f = 0.0;
-        for (int i = 0; i < m; i++) {
-            double s = norm1(x[i]);
-            f = Math.max(f, s);
-        }
-
-        return f;
-    }
-
-    /**
-     * Frobenius matrix norm. Sqrt of sum of squares of all elements.
-     */
-    public static double normFro(double[][] x) {
-        int m = x.length;
-        int n = x[0].length;
-
-        double f = 0.0;
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                f = Math.hypot(f, x[i][j]);
-            }
-        }
-
-        return f;
-    }
-
-    /**
-     * Normalizes an array to mean 0 and variance 1.
-     */
-    public static void normalize(double[] x) {
+    public static void standardize(double[] x) {
         double mu = mean(x);
         double sigma = sd(x);
 
-        if (sigma <= 0) {
-            throw new IllegalArgumentException("array has variance of 0.");
+        if (isZero(sigma)) {
+            logger.warn("array has variance of 0.");
+            return;
         }
 
         for (int i = 0; i < x.length; i++) {
@@ -2954,29 +3089,104 @@ public class Math {
     }
 
     /**
-     * Normalizes each column of a matrix to mean 0 and variance 1.
+     * Scales each column of a matrix to range [0, 1].
      */
-    public static void normalize(double[][] x) {
+    public static void scale(double[][] x) {
+        scale(x, 0.0, 1.0);
+    }
+
+    /**
+     * Scales each column of a matrix to range [lo, hi].
+     * @param lo lower limit of range
+     * @param hi upper limit of range
+     */
+    public static void scale(double[][] x, double lo, double hi) {
         int n = x.length;
         int p = x[0].length;
 
+        double[] min = colMin(x);
+        double[] max = colMax(x);
+
         for (int j = 0; j < p; j++) {
-            double mu = 0.0;
-            double sd = 0.0;
-            for (int i = 0; i < n; i++) {
-                mu += x[i][j];
-                sd += x[i][j] * x[i][j];
+            double scale = max[j] - min[j];
+            if (!Math.isZero(scale)) {
+                for (int i = 0; i < n; i++) {
+                    x[i][j] = (x[i][j] - min[j]) / scale;
+                }
+            } else {
+                for (int i = 0; i < n; i++) {
+                    x[i][j] = 0.5;
+                }
             }
+        }
+    }
 
-            sd = Math.sqrt(sd / (n-1) - (mu / n) * (mu / (n-1)));
-            mu /= n;
+    /**
+     * Standardizes each column of a matrix to 0 mean and unit variance.
+     */
+    public static void standardize(double[][] x) {
+        int n = x.length;
+        int p = x[0].length;
 
-            if (sd <= 0) {
-                throw new IllegalArgumentException(String.format("Column %d has variance of 0.", j));
+        double[] center = colMeans(x);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < p; j++) {
+                x[i][j] = x[i][j] - center[j];
             }
+        }
 
+        double[] scale = new double[p];
+        for (int j = 0; j < p; j++) {
             for (int i = 0; i < n; i++) {
-                x[i][j] = (x[i][j] - mu) / sd;
+                scale[j] += Math.sqr(x[i][j]);
+            }
+            scale[j] = Math.sqrt(scale[j] / (n-1));
+
+            if (!Math.isZero(scale[j])) {
+                for (int i = 0; i < n; i++) {
+                    x[i][j] /= scale[j];
+                }
+            }
+        }
+    }
+
+    /**
+     * Unitizes each column of a matrix to unit length (L_2 norm).
+     */
+    public static void normalize(double[][] x) {
+        normalize(x, false);
+    }
+
+    /**
+     * Unitizes each column of a matrix to unit length (L_2 norm).
+     * @param centerizing If true, centerize each column to 0 mean.
+     */
+    public static void normalize(double[][] x, boolean centerizing) {
+        int n = x.length;
+        int p = x[0].length;
+
+        if (centerizing) {
+            double[] center = colMeans(x);
+            for (int i = 0; i < n; i++) {
+                for (int j = 0; j < p; j++) {
+                    x[i][j] = x[i][j] - center[j];
+                }
+            }
+        }
+
+        double[] scale = new double[p];
+        for (int j = 0; j < p; j++) {
+            for (int i = 0; i < n; i++) {
+                scale[j] += Math.sqr(x[i][j]);
+            }
+            scale[j] = Math.sqrt(scale[j]);
+        }
+
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < p; j++) {
+                if (!Math.isZero(scale[j])) {
+                    x[i][j] /= scale[j];
+                }
             }
         }
     }
@@ -3286,6 +3496,26 @@ public class Math {
         return true;
     }
 
+    /** Tests if a floating number is zero. */
+    public static boolean isZero(float x) {
+        return isZero(x, EPSILON);
+    }
+
+    /** Tests if a floating number is zero with given epsilon. */
+    public static boolean isZero(float x, float epsilon) {
+        return abs(x) < epsilon;
+    }
+
+    /** Tests if a floating number is zero. */
+    public static boolean isZero(double x) {
+        return isZero(x, EPSILON);
+    }
+
+    /** Tests if a floating number is zero with given epsilon. */
+    public static boolean isZero(double x, double epsilon) {
+        return abs(x) < epsilon;
+    }
+
     /**
      * Check if x element-wisely equals y.
      */
@@ -3522,19 +3752,6 @@ public class Math {
     }
 
     /**
-     * Element-wise sum of two matrices y = x + y.
-     */
-    public static void plus(double[][] y, double[][] x) {
-        if (x.length != y.length || x[0].length != y[0].length) {
-            throw new IllegalArgumentException(String.format("Matrices have different rows: %d x %d vs %d x %d", x.length, x[0].length, y.length, y[0].length));
-        }
-
-        for (int i = 0; i < x.length; i++) {
-            plus(y[i], x[i]);
-        }
-    }
-
-    /**
      * Element-wise subtraction of two arrays y = y - x.
      * @param y minuend matrix
      * @param x subtrahend matrix
@@ -3546,21 +3763,6 @@ public class Math {
 
         for (int i = 0; i < x.length; i++) {
             y[i] -= x[i];
-        }
-    }
-
-    /**
-     * Element-wise subtraction of two matrices y = y - x.
-     * @param y minuend matrix
-     * @param x subtrahend matrix
-     */
-    public static void minus(double[][] y, double[][] x) {
-        if (x.length != y.length || x[0].length != y[0].length) {
-            throw new IllegalArgumentException(String.format("Matrices have different rows: %d x %d vs %d x %d", x.length, x[0].length, y.length, y[0].length));
-        }
-
-        for (int i = 0; i < x.length; i++) {
-            minus(y[i], x[i]);
         }
     }
 
@@ -3585,7 +3787,7 @@ public class Math {
     /**
      * Update an array by adding a multiple of another array y = a * x + y.
      */
-    public static void axpy(double a, double[] x, double[] y) {
+    public static double[] axpy(double a, double[] x, double[] y) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("Arrays have different length: x[%d], y[%d]", x.length, y.length));
         }
@@ -3593,398 +3795,8 @@ public class Math {
         for (int i = 0; i < x.length; i++) {
             y[i] += a * x[i];
         }
-    }
 
-    /**
-     * Product of a matrix and a vector y = A * x according to the rules of linear algebra.
-     * Number of columns in A must equal number of elements in x.
-     */
-    public static void ax(double[][] A, double[] x, double[] y) {
-        if (A[0].length != x.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match for matrix multiplication: %dx%d vs %dx1", A.length, A[0].length, x.length));
-        }
-
-        if (A.length != y.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match"));
-        }
-
-        Arrays.fill(y, 0.0);
-        for (int i = 0; i < y.length; i++) {
-            for (int k = 0; k < A[i].length; k++) {
-                y[i] += A[i][k] * x[k];
-            }
-        }
-    }
-
-    /**
-     * Product of a matrix and a vector y = A * x + y according to the rules of linear algebra.
-     * Number of columns in A must equal number of elements in x.
-     */
-    public static void axpy(double[][] A, double[] x, double[] y) {
-        if (A[0].length != x.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match for matrix multiplication: %dx%d vs %dx1", A.length, A[0].length, x.length));
-        }
-
-        if (A.length != y.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match"));
-        }
-
-        for (int i = 0; i < y.length; i++) {
-            for (int k = 0; k < A[i].length; k++) {
-                y[i] += A[i][k] * x[k];
-            }
-        }
-    }
-
-    /**
-     * Product of a matrix and a vector y = A * x + b * y according to the rules of linear algebra.
-     * Number of columns in A must equal number of elements in x.
-     */
-    public static void axpy(double[][] A, double[] x, double[] y, double b) {
-        if (A[0].length != x.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match for matrix multiplication: %dx%d vs %dx1", A.length, A[0].length, x.length));
-        }
-
-        if (A.length != y.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match"));
-        }
-
-        for (int i = 0; i < y.length; i++) {
-            y[i] *= b;
-            for (int k = 0; k < A[i].length; k++) {
-                y[i] += A[i][k] * x[k];
-            }
-        }
-    }
-
-    /**
-     * Product of a matrix and a vector y = A<sup>T</sup> * x according to the rules of linear algebra.
-     * Number of elements in x must equal number of rows in A.
-     */
-    public static void atx(double[][] A, double[] x, double[] y) {
-        if (A.length != x.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match for matrix multiplication: %d x %d vs 1 x %d", A.length, A[0].length, x.length));
-        }
-
-        if (A[0].length != y.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match"));
-        }
-
-        Arrays.fill(y, 0.0);
-        for (int i = 0; i < y.length; i++) {
-            for (int k = 0; k < x.length; k++) {
-                y[i] += x[k] * A[k][i];
-            }
-        }
-    }
-
-    /**
-     * Product of a matrix and a vector y = A<sup>T</sup> * x + y according to the rules of linear algebra.
-     * Number of elements in x must equal number of rows in A.
-     */
-    public static void atxpy(double[][] A, double[] x, double[] y) {
-        if (A.length != x.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match for matrix multiplication: 1 x %d vs %d x %d", x.length, A.length, A[0].length));
-        }
-
-        if (A[0].length != y.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match"));
-        }
-
-        for (int i = 0; i < y.length; i++) {
-            for (int k = 0; k < x.length; k++) {
-                y[i] += x[k] * A[k][i];
-            }
-        }
-    }
-
-    /**
-     * Product of a matrix and a vector y = A<sup>T</sup> * x + b * y according to the rules of linear algebra.
-     * Number of elements in x must equal number of rows in A.
-     */
-    public static void atxpy(double[][] A, double[] x, double[] y, double b) {
-        if (A.length != x.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match for matrix multiplication: 1 x %d vs %d x %d", x.length, A.length, A[0].length));
-        }
-
-        if (A[0].length != y.length) {
-            throw new IllegalArgumentException(String.format("Array dimensions do not match"));
-        }
-
-        for (int i = 0; i < y.length; i++) {
-            y[i] *= b;
-            for (int k = 0; k < x.length; k++) {
-                y[i] += x[k] * A[k][i];
-            }
-        }
-    }
-
-    /**
-     * Returns x' * A * x.
-     */
-    public static double xax(double[][] A, double[] x) {
-        if (A.length != A[0].length) {
-            throw new IllegalArgumentException("The matrix is not square");
-        }
-
-        if (A.length != x.length) {
-            throw new IllegalArgumentException(String.format("x' * A * x: 1 x %d vs %d x %d", x.length, A.length, A[0].length));
-        }
-
-        int n = A.length;
-        double s = 0.0;
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                s += A[i][j] * x[i] * x[j];
-            }
-        }
-
-        return s;
-    }
-
-    /**
-     * Matrix multiplication A * A' according to the rules of linear algebra.
-     */
-    public static double[][] aatmm(double[][] A) {
-        int m = A.length;
-        int n = A[0].length;
-        double[][] C = new double[m][m];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < m; j++) {
-                for (int k = 0; k < n; k++) {
-                    C[i][j] += A[i][k] * A[j][k];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    /**
-     * Matrix multiplication C = A * A' according to the rules of linear algebra.
-     */
-    public static void aatmm(double[][] A, double[][] C) {
-        int m = A.length;
-        int n = A[0].length;
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < m; j++) {
-                for (int k = 0; k < n; k++) {
-                    C[i][j] += A[i][k] * A[j][k];
-                }
-            }
-        }
-    }
-
-    /**
-     * Matrix multiplication A' * A according to the rules of linear algebra.
-     */
-    public static double[][] atamm(double[][] A) {
-        int m = A.length;
-        int n = A[0].length;
-
-        double[][] C = new double[n][n];
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < m; k++) {
-                    C[i][j] += A[k][i] * A[k][j];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    /**
-     * Matrix multiplication C = A' * A according to the rules of linear algebra.
-     */
-    public static void atamm(double[][] A, double[][] C) {
-        int m = A.length;
-        int n = A[0].length;
-
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < m; k++) {
-                    C[i][j] += A[k][i] * A[k][j];
-                }
-            }
-        }
-    }
-
-    /**
-     * Matrix multiplication A * B according to the rules of linear algebra.
-     */
-    public static double[][] abmm(double[][] A, double[][] B) {
-        if (A[0].length != B.length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A.length;
-        int n = B[0].length;
-        int l = B.length;
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[i][k] * B[k][j];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    /**
-     * Matrix multiplication C = A * B according to the rules of linear algebra.
-     */
-    public static void abmm(double[][] A, double[][] B, double[][] C) {
-        if (A[0].length != B.length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A.length;
-        int n = B[0].length;
-        int l = B.length;
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[i][k] * B[k][j];
-                }
-            }
-        }
-    }
-
-    /**
-     * Matrix multiplication A' * B according to the rules of linear algebra.
-     */
-    public static double[][] atbmm(double[][] A, double[][] B) {
-        if (A.length != B.length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A' * B: %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A[0].length;
-        int n = B[0].length;
-        int l = B.length;
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[k][i] * B[k][j];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    /**
-     * Matrix multiplication C = A' * B according to the rules of linear algebra.
-     */
-    public static void atbmm(double[][] A, double[][] B, double[][] C) {
-        if (A.length != B.length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A' * B: %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A[0].length;
-        int n = B[0].length;
-        int l = B.length;
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[k][i] * B[k][j];
-                }
-            }
-        }
-    }
-
-    /**
-     * Matrix multiplication A * B' according to the rules of linear algebra.
-     */
-    public static double[][] abtmm(double[][] A, double[][] B) {
-        if (A[0].length != B[0].length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B': %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A.length;
-        int n = B.length;
-        int l = B[0].length;
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[i][k] * B[j][k];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    /**
-     * Matrix multiplication C = A * B' according to the rules of linear algebra.
-     */
-    public static void abtmm(double[][] A, double[][] B, double[][] C) {
-        if (A[0].length != B[0].length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B': %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A.length;
-        int n = B.length;
-        int l = B[0].length;
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[i][k] * B[j][k];
-                }
-            }
-        }
-    }
-
-    /**
-     * Matrix multiplication A' * B' according to the rules of linear algebra.
-     */
-    public static double[][] atbtmm(double[][] A, double[][] B) {
-        if (A.length != B[0].length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A' * B': %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A[0].length;
-        int n = B.length;
-        int l = A.length;
-        double[][] C = new double[m][n];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[k][i] * B[j][k];
-                }
-            }
-        }
-
-        return C;
-    }
-
-    /**
-     * Matrix multiplication C = A' * B' according to the rules of linear algebra.
-     */
-    public static void atbtmm(double[][] A, double[][] B, double[][] C) {
-        if (A.length != B[0].length) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A' * B': %d x %d vs %d x %d", A.length, A[0].length, B.length, B[0].length));
-        }
-
-        int m = A[0].length;
-        int n = B.length;
-        int l = A.length;
-
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                for (int k = 0; k < l; k++) {
-                    C[i][j] += A[k][i] * B[j][k];
-                }
-            }
-        }
+        return y;
     }
 
     /**
@@ -4002,28 +3814,12 @@ public class Math {
     }
 
     /**
-     * Raise each element of a matrix to a scalar power.
-     * @param x matrix
-     * @param n exponent
-     * @return x<sup>n</sup>
-     */
-    public static double[][] pow(double[][] x, double n) {
-        double[][] array = new double[x.length][x[0].length];
-        for (int i = 0; i < x.length; i++) {
-            for (int j = 0; j < x[i].length; j++) {
-                array[i][j] = Math.pow(x[i][j], n);
-            }
-        }
-        return array;
-    }
-
-    /**
      * Find unique elements of vector.
      * @param x an integer array.
      * @return the same values as in x but with no repetitions.
      */
     public static int[] unique(int[] x) {
-        HashSet<Integer> hash = new HashSet<Integer>();
+        HashSet<Integer> hash = new HashSet<>();
         for (int i = 0; i < x.length; i++) {
             hash.add(x[i]);
         }
@@ -4044,7 +3840,7 @@ public class Math {
      * @return the same values as in x but with no repetitions.
      */
     public static String[] unique(String[] x) {
-        HashSet<String> hash = new HashSet<String>(Arrays.asList(x));
+        HashSet<String> hash = new HashSet<>(Arrays.asList(x));
 
         String[] y = new String[hash.size()];
 
@@ -4080,244 +3876,6 @@ public class Math {
         }
         
         return index;
-    }
-    
-    /**
-     * Returns a square identity matrix of size n.
-     * @return     An n-by-n matrix with ones on the diagonal and zeros elsewhere.
-     */
-    public static double[][] eye(int n) {
-        double[][] x = new double[n][n];
-        for (int i = 0; i < n; i++) {
-            x[i][i] = 1.0;
-        }
-        return x;
-    }
-
-    /**
-     * Returns an identity matrix of size m by n.
-     * @param m    the number of rows.
-     * @param n    the number of columns.
-     * @return     an m-by-n matrix with ones on the diagonal and zeros elsewhere.
-     */
-    public static double[][] eye(int m, int n) {
-        double[][] x = new double[m][n];
-        int k = Math.min(m, n);
-        for (int i = 0; i < k; i++) {
-            x[i][i] = 1.0;
-        }
-        return x;
-    }
-
-    /**
-     * Returns the matrix trace. The sum of the diagonal elements.
-     */
-    public static double trace(double[][] A) {
-        int n = Math.min(A.length, A[0].length);
-
-        double t = 0.0;
-        for (int i = 0; i < n; i++) {
-            t += A[i][i];
-        }
-
-        return t;
-    }
-
-    /**
-     * Returns the matrix transpose.
-     */
-    public static double[][] transpose(double[][] A) {
-        int m = A.length;
-        int n = A[0].length;
-
-        double[][] matrix = new double[n][m];
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                matrix[j][i] = A[i][j];
-            }
-        }
-
-        return matrix;
-    }
-
-    /**
-     * Returns the matrix inverse or pseudo inverse.
-     * @return  matrix inverse if A is square, pseudo inverse otherwise.
-     */
-    public static double[][] inverse(double[][] A) {
-        double[][] inv = eye(A[0].length, A.length);
-
-        if (A.length == A[0].length) {
-            LUDecomposition lu = new LUDecomposition(A, false);
-            lu.solve(inv);
-        } else {
-            QRDecomposition qr = new QRDecomposition(A, false);
-            qr.solve(inv);
-        }
-
-        return inv;
-    }
-
-    /**
-     * Returns the matrix determinant
-     */
-    public static double det(double[][] A) {
-        if (A.length != A[0].length) {
-            throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", A.length, A[0].length));
-        }
-
-        LUDecomposition lu = new LUDecomposition(A, false);
-        return lu.det();
-    }
-
-    /**
-     * Returns the matrix rank. Note that the input matrix will be altered.
-     * @return  Effective numerical rank.
-     */
-    public static int rank(double[][] A) {
-        return SingularValueDecomposition.decompose(A).rank();
-    }
-
-    /**
-     * Returns the largest eigen pair of matrix with the power iteration
-     * under the assumptions A has an eigenvalue that is strictly greater
-     * in magnitude than its other its other eigenvalues and the starting
-     * vector has a nonzero component in the direction of an eigenvector
-     * associated with the dominant eigenvalue.
-     * @param v on input, it is the non-zero initial guess of the eigen vector.
-     * On output, it is the eigen vector corresponding largest eigen value.
-     * @return the largest eigen value.
-     */
-    public static double eigen(double[][] A, double[] v) {
-        return EigenValueDecomposition.eigen(new Matrix(A), v);
-    }
-
-    /**
-     * Returns the largest eigen pair of matrix with the power iteration
-     * under the assumptions A has an eigenvalue that is strictly greater
-     * in magnitude than its other its other eigenvalues and the starting
-     * vector has a nonzero component in the direction of an eigenvector
-     * associated with the dominant eigenvalue.
-     * @param v on input, it is the non-zero initial guess of the eigen vector.
-     * On output, it is the eigen vector corresponding largest eigen value.
-     * @param tol the desired convergence tolerance.
-     * @return the largest eigen value.
-     */
-    public static double eigen(double[][] A, double[] v, double tol) {
-        return EigenValueDecomposition.eigen(new Matrix(A), v, tol);
-    }
-
-    /**
-     * Returns the largest eigen pair of matrix with the power iteration
-     * under the assumptions A has an eigenvalue that is strictly greater
-     * in magnitude than its other its other eigenvalues and the starting
-     * vector has a nonzero component in the direction of an eigenvector
-     * associated with the dominant eigenvalue.
-     * @param v on input, it is the non-zero initial guess of the eigen vector.
-     * On output, it is the eigen vector corresponding largest eigen value.
-     * @return the largest eigen value.
-     */
-    public static double eigen(IMatrix A, double[] v) {
-        return EigenValueDecomposition.eigen(A, v);
-    }
-
-    /**
-     * Returns the largest eigen pair of matrix with the power iteration
-     * under the assumptions A has an eigenvalue that is strictly greater
-     * in magnitude than its other its other eigenvalues and the starting
-     * vector has a nonzero component in the direction of an eigenvector
-     * associated with the dominant eigenvalue.
-     * @param v on input, it is the non-zero initial guess of the eigen vector.
-     * On output, it is the eigen vector corresponding largest eigen value.
-     * @param tol the desired convergence tolerance.
-     * @return the largest eigen value.
-     */
-    public static double eigen(IMatrix A, double[] v, double tol) {
-        return EigenValueDecomposition.eigen(A, v, tol);
-    }
-
-    /**
-     * Find k largest approximate eigen pairs of a symmetric matrix by an
-     * iterative Lanczos algorithm.
-     */
-    public static EigenValueDecomposition eigen(double[][] A, int k) {
-        return EigenValueDecomposition.decompose(new Matrix(A), k);
-    }
-
-    /**
-     * Returns the eigen value decomposition of a square matrix. Note that the input
-     * matrix will be altered during decomposition.
-     * @param A    square matrix which will be altered after decomposition.
-     */
-    public static EigenValueDecomposition eigen(double[][] A) {
-        return EigenValueDecomposition.decompose(A);
-    }
-
-    /**
-     * Returns the eigen value decomposition of a square matrix. Note that the input
-     * matrix will be altered during decomposition.
-     * @param A    square matrix which will be altered after decomposition.
-     * @param symmetric true if the matrix is assumed to be symmetric.
-     */
-    public static EigenValueDecomposition eigen(double[][] A, boolean symmetric) {
-        return EigenValueDecomposition.decompose(A, symmetric);
-    }
-
-    /**
-     * Returns the eigen value decomposition of a square matrix. Note that the input
-     * matrix will be altered during decomposition.
-     * @param A    square matrix which will be altered after decomposition.
-     * @param symmetric true if the matrix is assumed to be symmetric.
-     * @param onlyValues true if only compute eigenvalues; the default is to compute eigenvectors also.
-     */
-    public static EigenValueDecomposition eigen(double[][] A, boolean symmetric, boolean onlyValues) {
-        return EigenValueDecomposition.decompose(A, symmetric, onlyValues);
-    }
-
-    /**
-     * Returns the singular value decomposition. Note that the input matrix
-     * will be altered after decomposition.
-     */
-    public static SingularValueDecomposition svd(double[][] A) {
-        return SingularValueDecomposition.decompose(A);
-    }
-
-    /**
-     * Solve A*x = b (exact solution if A is square, least squares
-     * solution otherwise), which means the LU or QR decomposition will take
-     * place in A and the results will be stored in b.
-     * @return the solution, which is actually the vector b in case of exact solution.
-     */
-    public static double[] solve(double[][] A, double[] b) {
-        if (A.length == A[0].length) {
-            LUDecomposition lu = new LUDecomposition(A, true);
-            lu.solve(b);
-            return b;
-        } else {
-            double[] x = new double[A[0].length];
-            QRDecomposition qr = new QRDecomposition(A, false);
-            qr.solve(b, x);
-            return x;
-        }
-    }
-
-    /**
-     * Solve A*X = B (exact solution if A is square, least squares
-     * solution otherwise), which means the LU or QR decomposition will take
-     * place in A and the results will be stored in B.
-     * @return the solution, which is actually the matrix B in case of exact solution.
-     */
-    public static double[][] solve(double[][] A, double[][] B) {
-        if (A.length == A[0].length) {
-            LUDecomposition lu = new LUDecomposition(A, true);
-            lu.solve(B);
-            return B;
-        } else {
-            double[][] X = new double[A[0].length][B[0].length];
-            QRDecomposition qr = new QRDecomposition(A, false);
-            qr.solve(B, X);
-            return X;
-        }
     }
 
     /**
@@ -4365,278 +3923,6 @@ public class Math {
         }
 
         return u;
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, double[] b, double[] x) {
-        return solve(A, A, b, x);
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param Ap the preconditioned matrix of A.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, IMatrix Ap, double[] b, double[] x) {
-        return solve(A, Ap, b, x, 1E-10);
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @param tol the desired convergence tolerance.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, double[] b, double[] x, double tol) {
-        return solve(A, A, b, x, tol);
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param Ap the preconditioned matrix of A.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @param tol the desired convergence tolerance.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, IMatrix Ap, double[] b, double[] x, double tol) {
-        return solve(A, Ap, b, x, tol, 1);
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @param itol specify which convergence test is applied. If itol = 1,
-     * iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
-     * If itol = 2, the stop criterion is
-     * |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b| is less than tolerance.
-     * If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
-     * tolerance. The setting of tol = 4 is same as tol = 3 except that the
-     * L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
-     * @param tol the desired convergence tolerance.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, double[] b, double[] x, double tol, int itol) {
-        return solve(A, A, b, x, tol, itol);
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param Ap the preconditioned matrix of A.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @param itol specify which convergence test is applied. If itol = 1,
-     * iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
-     * If itol = 2, the stop criterion is
-     * |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b| is less than tolerance.
-     * If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
-     * tolerance. The setting of tol = 4 is same as tol = 3 except that the
-     * L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
-     * @param tol the desired convergence tolerance.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, IMatrix Ap, double[] b, double[] x, double tol, int itol) {
-        return solve(A, Ap, b, x, tol, itol, 2 * Math.max(A.nrows(), A.ncols()));
-    }
-
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * This method can be called repeatedly, with maxIter &lt; n, to monitor how
-     * error decreases.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @param itol specify which convergence test is applied. If itol = 1,
-     * iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
-     * If itol = 2, the stop criterion is
-     * |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b| is less than tolerance.
-     * If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
-     * tolerance. The setting of tol = 4 is same as tol = 3 except that the
-     * L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
-     * @param tol the desired convergence tolerance.
-     * @param maxIter the maximum number of allowed iterations.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, double[] b, double[] x, double tol, int itol, int maxIter) {
-        return solve(A, A, b, x, tol, itol, maxIter);
-    }
-    
-    /**
-     * Solves A * x = b by iterative biconjugate gradient method.
-     * This method can be called repeatedly, with maxIter &lt; n, to monitor how
-     * error decreases.
-     * @param A the matrix supporting matrix vector multiplication operation.
-     * @param Ap the preconditioned matrix of A.
-     * @param b the right hand side of linear equations.
-     * @param x on input, x should be set to an initial guess of the solution
-     * (or all zeros). On output, x is reset to the improved solution.
-     * @param itol specify which convergence test is applied. If itol = 1,
-     * iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
-     * If itol = 2, the stop criterion is
-     * |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b| is less than tolerance.
-     * If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
-     * tolerance. The setting of tol = 4 is same as tol = 3 except that the
-     * L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
-     * @param tol the desired convergence tolerance.
-     * @param maxIter the maximum number of allowed iterations.
-     * @return the estimated error.
-     */
-    public static double solve(IMatrix A, IMatrix Ap, double[] b, double[] x, double tol, int itol, int maxIter) {
-        if (tol <= 0.0) {
-            throw new IllegalArgumentException("Invalid tolerance: " + tol);            
-        }
-        
-        if (maxIter <= 0) {
-            throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);            
-        }
-        
-        if (itol < 1 || itol > 4) {
-            throw new IllegalArgumentException(String.format("Illegal itol: %d", itol));
-        }
-
-        double err = 0.0;
-        double ak, akden, bk, bkden = 1.0, bknum, bnrm, dxnrm, xnrm, zm1nrm, znrm = 0.0;
-        int j, n = b.length;
-
-        double[] p = new double[n];
-        double[] pp = new double[n];
-        double[] r = new double[n];
-        double[] rr = new double[n];
-        double[] z = new double[n];
-        double[] zz = new double[n];
-
-        A.ax(x, r);
-        for (j = 0; j < n; j++) {
-            r[j] = b[j] - r[j];
-            rr[j] = r[j];
-        }
-
-        if (itol == 1) {
-            bnrm = snorm(b, itol);
-            Ap.asolve(r, z);
-        } else if (itol == 2) {
-            Ap.asolve(b, z);
-            bnrm = snorm(z, itol);
-            Ap.asolve(r, z);
-        } else if (itol == 3 || itol == 4) {
-            Ap.asolve(b, z);
-            bnrm = snorm(z, itol);
-            Ap.asolve(r, z);
-            znrm = snorm(z, itol);
-        } else {
-            throw new IllegalArgumentException(String.format("Illegal itol: %d", itol));
-        }
-
-        for (int iter = 1; iter <= maxIter; iter++) {
-            Ap.asolve(rr, zz);
-            for (bknum = 0.0, j = 0; j < n; j++) {
-                bknum += z[j] * rr[j];
-            }
-            if (iter == 1) {
-                for (j = 0; j < n; j++) {
-                    p[j] = z[j];
-                    pp[j] = zz[j];
-                }
-            } else {
-                bk = bknum / bkden;
-                for (j = 0; j < n; j++) {
-                    p[j] = bk * p[j] + z[j];
-                    pp[j] = bk * pp[j] + zz[j];
-                }
-            }
-            bkden = bknum;
-            A.ax(p, z);
-            for (akden = 0.0, j = 0; j < n; j++) {
-                akden += z[j] * pp[j];
-            }
-            ak = bknum / akden;
-            A.atx(pp, zz);
-            for (j = 0; j < n; j++) {
-                x[j] += ak * p[j];
-                r[j] -= ak * z[j];
-                rr[j] -= ak * zz[j];
-            }
-            Ap.asolve(r, z);
-            if (itol == 1) {
-                err = snorm(r, itol) / bnrm;
-            } else if (itol == 2) {
-                err = snorm(z, itol) / bnrm;
-            } else if (itol == 3 || itol == 4) {
-                zm1nrm = znrm;
-                znrm = snorm(z, itol);
-                if (Math.abs(zm1nrm - znrm) > EPSILON * znrm) {
-                    dxnrm = Math.abs(ak) * snorm(p, itol);
-                    err = znrm / Math.abs(zm1nrm - znrm) * dxnrm;
-                } else {
-                    err = znrm / bnrm;
-                    continue;
-                }
-                xnrm = snorm(x, itol);
-                if (err <= 0.5 * xnrm) {
-                    err /= xnrm;
-                } else {
-                    err = znrm / bnrm;
-                    continue;
-                }
-            }
-
-            if (iter % 10 == 0) {
-                System.out.format("BCG: the error after %3d iterations: %.5g\n", iter, err);
-            }
-
-            if (err <= tol) {
-                System.out.format("BCG: the error after %3d iterations: %.5g\n", iter, err);
-                break;
-            }
-        }
-
-        return err;
-    }
-
-    /**
-     * Compute L2 or L-infinity norms for a vector x, as signaled by itol.
-     */
-    private static double snorm(double[] x, int itol) {
-        int n = x.length;
-
-        if (itol <= 3) {
-            double ans = 0.0;
-            for (int i = 0; i < n; i++) {
-                ans += x[i] * x[i];
-            }
-            return Math.sqrt(ans);
-        } else {
-            int isamax = 0;
-            for (int i = 0; i < n; i++) {
-                if (Math.abs(x[i]) > Math.abs(x[isamax])) {
-                    isamax = i;
-                }
-            }
-
-            return Math.abs(x[isamax]);
-        }
     }
 
     /**
@@ -4701,11 +3987,11 @@ public class Math {
             xm = 0.5 * (c - b);
 
             if (iter % 10 == 0) {
-                System.out.format("Brent: the root after %3d iterations: %.5g, error = %.5g\n", iter, b, xm);
+                logger.info(String.format("Brent: the root after %3d iterations: %.5g, error = %.5g", iter, b, xm));
             }
 
             if (abs(xm) <= tol || fb == 0.0) {
-                System.out.format("Brent: the root after %3d iterations: %.5g, error = %.5g\n", iter, b, xm);
+                logger.info(String.format("Brent: the root after %3d iterations: %.5g, error = %.5g", iter, b, xm));
                 return b;
             }
 
@@ -4750,7 +4036,7 @@ public class Math {
             fb = func.f(b);
         }
 
-        System.err.println("Brent's method exceeded the maximum number of iterations.");
+        logger.error("Brent's method exceeded the maximum number of iterations.");
         return b;
     }
 
@@ -4820,7 +4106,7 @@ public class Math {
                 dx = 0.5 * (xh - xl);
                 rts = xl + dx;
                 if (xl == rts) {
-                    System.out.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g\n", iter, rts, dx);
+                    logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
                     return rts;
                 }
             } else {
@@ -4829,17 +4115,17 @@ public class Math {
                 double temp = rts;
                 rts -= dx;
                 if (temp == rts) {
-                    System.out.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g\n", iter, rts, dx);
+                    logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
                     return rts;
                 }
             }
 
             if (iter % 10 == 0) {
-                System.out.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g\n", iter, rts, dx);
+                logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
             }
 
             if (abs(dx) < tol) {
-                System.out.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g\n", iter, rts, dx);
+                logger.info(String.format("Newton-Raphson: the root after %3d iterations: %.5g, error = %.5g", iter, rts, dx));
                 return rts;
             }
 
@@ -4852,7 +4138,7 @@ public class Math {
             }
         }
 
-        System.err.println("Newton-Raphson method exceeded the maximum number of iterations.");
+        logger.error("Newton-Raphson method exceeded the maximum number of iterations.");
         return rts;
     }
 
@@ -5109,7 +4395,7 @@ public class Math {
         // Current function value.
         double f = func.f(x, g);
 
-        System.out.format("L-BFGS: initial function value: %.5g\n", f);
+        logger.info(String.format("L-BFGS: initial function value: %.5g", f));
 
         double sum = 0.0;
         // Initial line search direction.
@@ -5142,7 +4428,7 @@ public class Math {
             }
 
             if (test < TOLX) {
-                System.out.format("L-BFGS: the function value after %3d iterations: %.5g\n", iter, f);
+                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
                 return f;
             }
 
@@ -5158,12 +4444,12 @@ public class Math {
             }
 
             if (test < gtol) {
-                System.out.format("L-BFGS: the function value after %3d iterations: %.5g\n", iter, f);
+                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
                 return f;
             }
 
             if (iter % 10 == 0) {
-                System.out.format("L-BFGS: the function value after %3d iterations: %.5g\n", iter, f);
+                logger.info(String.format("L-BFGS: the function value after %3d iterations: %.5g", iter, f));
             }
 
             double ys = dot(y[k], s[k]);
@@ -5268,7 +4554,7 @@ public class Math {
         // Calculate starting function value and gradient and initialize the
         // inverse Hessian to the unit matrix.
         double f = func.f(x, g);
-        System.out.format("BFGS: initial function value: %.5g\n", f);
+        logger.info(String.format("BFGS: initial function value: %.5g", f));
 
         double sum = 0.0;
         for (int i = 0; i < n; i++) {
@@ -5285,7 +4571,7 @@ public class Math {
             f = linesearch(func, x, f, g, xi, xnew, stpmax);
 
             if (iter % 10 == 0) {
-                System.out.format("BFGS: the function value after %3d iterations: %.5g\n", iter, f);
+                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
             }
 
             // update the line direction and current point.
@@ -5304,7 +4590,7 @@ public class Math {
             }
 
             if (test < TOLX) {
-                System.out.format("BFGS: the function value after %3d iterations: %.5g\n", iter, f);
+                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
                 return f;
             }
             
@@ -5323,7 +4609,7 @@ public class Math {
             }
 
             if (test < gtol) {
-                System.out.format("BFGS: the function value after %3d iterations: %.5g\n", iter, f);
+                logger.info(String.format("BFGS: the function value after %3d iterations: %.5g", iter, f));
                 return f;
             }
 
