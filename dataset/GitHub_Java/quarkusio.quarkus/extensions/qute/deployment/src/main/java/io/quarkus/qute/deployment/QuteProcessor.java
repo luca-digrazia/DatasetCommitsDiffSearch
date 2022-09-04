@@ -93,7 +93,6 @@ import io.quarkus.qute.TemplateInstance;
 import io.quarkus.qute.TemplateLocator;
 import io.quarkus.qute.UserTagSectionHelper;
 import io.quarkus.qute.Variant;
-import io.quarkus.qute.api.CheckedTemplate;
 import io.quarkus.qute.api.ResourcePath;
 import io.quarkus.qute.deployment.TemplatesAnalysisBuildItem.TemplateAnalysis;
 import io.quarkus.qute.deployment.TypeCheckExcludeBuildItem.TypeCheck;
@@ -129,41 +128,34 @@ public class QuteProcessor {
     void processTemplateErrors(TemplatesAnalysisBuildItem analysis, List<IncorrectExpressionBuildItem> incorrectExpressions,
             BuildProducer<ServiceStartBuildItem> serviceStart) {
 
-        List<TemplateException> errors = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
 
         for (IncorrectExpressionBuildItem incorrectExpression : incorrectExpressions) {
             if (incorrectExpression.reason != null) {
-                errors.add(new TemplateException(incorrectExpression.origin, String.format(
-                        "Incorrect expression found: {%s}\n\t- %s\n\t- at %s:%s",
+                errors.add(String.format(
+                        "Incorrect expression: %s\n\t- %s\n\t- found in template [%s] on line %s",
                         incorrectExpression.expression, incorrectExpression.reason,
-                        findTemplatePath(analysis, incorrectExpression.origin.getTemplateGeneratedId()),
-                        incorrectExpression.origin.getLine())));
+                        findTemplatePath(analysis, incorrectExpression.templateId), incorrectExpression.line));
             } else if (incorrectExpression.clazz != null) {
-                errors.add(new TemplateException(incorrectExpression.origin, String.format(
-                        "Incorrect expression found: {%s}\n\t- property/method [%s] not found on class [%s] nor handled by an extension method\n\t- at %s:%s",
+                errors.add(String.format(
+                        "Incorrect expression: %s\n\t- property/method [%s] not found on class [%s] nor handled by an extension method\n\t- found in template [%s] on line %s",
                         incorrectExpression.expression, incorrectExpression.property, incorrectExpression.clazz,
-                        findTemplatePath(analysis, incorrectExpression.origin.getTemplateGeneratedId()),
-                        incorrectExpression.origin.getLine())));
+                        findTemplatePath(analysis, incorrectExpression.templateId), incorrectExpression.line));
             } else {
-                errors.add(new TemplateException(incorrectExpression.origin, String.format(
-                        "Incorrect expression found: {%s}\n\t- @Named bean not found for [%s]\n\t- at %s:%s",
+                errors.add(String.format(
+                        "Incorrect expression %s\n\t @Named bean not found for [%s]\n\t- found in template [%s] on line %s",
                         incorrectExpression.expression, incorrectExpression.property,
-                        findTemplatePath(analysis, incorrectExpression.origin.getTemplateGeneratedId()),
-                        incorrectExpression.origin.getLine())));
+                        findTemplatePath(analysis, incorrectExpression.templateId), incorrectExpression.line));
             }
         }
 
         if (!errors.isEmpty()) {
             StringBuilder message = new StringBuilder("Found template problems (").append(errors.size()).append("):");
             int idx = 1;
-            for (TemplateException error : errors) {
-                message.append("\n").append("[").append(idx++).append("] ").append(error.getMessage());
+            for (String errorMessage : errors) {
+                message.append("\n").append("[").append(idx++).append("] ").append(errorMessage);
             }
-            TemplateException exception = new TemplateException(message.toString());
-            for (TemplateException error : errors) {
-                exception.addSuppressed(error);
-            }
-            throw exception;
+            throw new TemplateException(message.toString());
         }
     }
 
@@ -206,9 +198,6 @@ public class QuteProcessor {
             supportedAdaptors = strbuf.append(" are supported").toString();
         }
 
-        // template path -> checked template method
-        Map<String, MethodInfo> checkedTemplateMethods = new HashMap<>();
-
         for (AnnotationInstance annotation : index.getIndex().getAnnotations(Names.CHECKED_TEMPLATE)) {
             if (annotation.target().kind() != Kind.CLASS)
                 continue;
@@ -234,26 +223,14 @@ public class QuteProcessor {
                         throw new TemplateException("Incompatible checked template return type: " + methodInfo.returnType()
                                 + " only " + supportedAdaptors);
                 }
-
-                StringBuilder templatePathBuilder = new StringBuilder();
-                AnnotationValue basePathValue = annotation.value("basePath");
-                if (basePathValue != null && !basePathValue.asString().equals(CheckedTemplate.DEFAULTED)) {
-                    templatePathBuilder.append(basePathValue.asString());
-                } else if (classInfo.enclosingClass() != null) {
+                String methodName = methodInfo.name();
+                String templatePath;
+                if (classInfo.enclosingClass() != null) {
                     ClassInfo enclosingClass = index.getIndex().getClassByName(classInfo.enclosingClass());
-                    templatePathBuilder.append(enclosingClass.simpleName());
-                }
-                if (templatePathBuilder.length() > 0 && templatePathBuilder.charAt(templatePathBuilder.length() - 1) != '/') {
-                    templatePathBuilder.append('/');
-                }
-                String templatePath = templatePathBuilder.append(methodInfo.name()).toString();
-                MethodInfo checkedTemplateMethod = checkedTemplateMethods.putIfAbsent(templatePath, methodInfo);
-                if (checkedTemplateMethod != null) {
-                    throw new TemplateException(
-                            String.format(
-                                    "Multiple checked template methods exist for the template path %s:\n\t- %s: %s\n\t- %s: %s",
-                                    templatePath, methodInfo.declaringClass().name(), methodInfo,
-                                    checkedTemplateMethod.declaringClass().name(), checkedTemplateMethod));
+                    String className = enclosingClass.simpleName();
+                    templatePath = className + "/" + methodName;
+                } else {
+                    templatePath = methodName;
                 }
                 checkTemplatePath(templatePath, templatePaths, classInfo, methodInfo);
 
@@ -302,7 +279,7 @@ public class QuteProcessor {
 
     @BuildStep
     TemplatesAnalysisBuildItem analyzeTemplates(List<TemplatePathBuildItem> templatePaths,
-            List<CheckedTemplateBuildItem> checkedTemplates, List<MessageBundleMethodBuildItem> messageBundleMethods) {
+            List<CheckedTemplateBuildItem> dynamicTemplates, List<MessageBundleMethodBuildItem> messageBundleMethods) {
         long start = System.currentTimeMillis();
         List<TemplateAnalysis> analysis = new ArrayList<>();
 
@@ -366,10 +343,10 @@ public class QuteProcessor {
             @Override
             public void beforeParsing(ParserHelper parserHelper, String id) {
                 if (id != null) {
-                    for (CheckedTemplateBuildItem checkedTemplate : checkedTemplates) {
+                    for (CheckedTemplateBuildItem dynamicTemplate : dynamicTemplates) {
                         // FIXME: check for dot/extension?
-                        if (id.startsWith(checkedTemplate.templateId)) {
-                            for (Entry<String, String> entry : checkedTemplate.bindings.entrySet()) {
+                        if (id.startsWith(dynamicTemplate.templateId)) {
+                            for (Entry<String, String> entry : dynamicTemplate.bindings.entrySet()) {
                                 parserHelper.addParameter(entry.getKey(), entry.getValue());
                             }
                         }
@@ -551,7 +528,8 @@ public class QuteProcessor {
                 if (member == null) {
                     // No member found - incorrect expression
                     incorrectExpressions.produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
-                            info.value, match.clazz.toString(), expression.getOrigin()));
+                            info.value, match.clazz.toString(), expression.getOrigin().getLine(),
+                            expression.getOrigin().getTemplateGeneratedId()));
                     match.clear();
                     break;
                 } else {
@@ -701,7 +679,8 @@ public class QuteProcessor {
                 if (firstPart.isVirtualMethod()) {
                     incorrectExpressions.produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
                             "The inject: namespace must be followed by a bean name",
-                            expression.getOrigin()));
+                            expression.getOrigin().getLine(),
+                            expression.getOrigin().getTemplateGeneratedId()));
                     continue;
                 }
                 String beanName = firstPart.getName();
@@ -717,7 +696,8 @@ public class QuteProcessor {
                 } else {
                     // User is injecting a non-existing bean
                     incorrectExpressions.produce(new IncorrectExpressionBuildItem(expression.toOriginalString(),
-                            beanName, null, expression.getOrigin()));
+                            beanName, null, expression.getOrigin().getLine(),
+                            expression.getOrigin().getTemplateGeneratedId()));
                 }
             }
 
@@ -908,7 +888,7 @@ public class QuteProcessor {
                     // For "@ResourcePath("github/pulls") Template pulls" we try to match "github/pulls"
                     if (filePaths.stream().noneMatch(path -> path.endsWith(name))) {
                         validationErrors.produce(new ValidationErrorBuildItem(
-                                new TemplateException("No template found for " + injectionPoint.getTargetInfo())));
+                                new IllegalStateException("No template found for " + injectionPoint.getTargetInfo())));
                     }
                 }
             }
@@ -1085,7 +1065,7 @@ public class QuteProcessor {
             match.type = matchType;
             match.clazz = index.getClassByName(match.type.name());
         } else {
-            throw new TemplateException(expression.getOrigin(), String.format(
+            throw new IllegalStateException(String.format(
                     "Unsupported iterable type found in [%s]\n\t- matching type: %s \n\t- found in template [%s] on line %s",
                     expression.toOriginalString(),
                     match.type, expression.getOrigin().getTemplateId(), expression.getOrigin().getLine()));
