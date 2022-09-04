@@ -406,7 +406,6 @@ public class JavaToolchainProvider extends NativeInfo
     return javaSemantics;
   }
 
-  @Override
   public JavaRuntimeInfo getJavaRuntime() {
     return javaRuntime;
   }
