@@ -73,12 +73,12 @@ public class GSYExoVideoManager extends GSYVideoBaseManager {
         return new GSYExoPlayerManager();
     }
 
-    public void prepare(List<String> urls, Map<String, String> mapHeadData, boolean loop, float speed, boolean cache) {
+    public void prepare(List<String> urls, Map<String, String> mapHeadData, boolean loop, float speed) {
         if (urls.size() == 0) return;
         Message msg = new Message();
         msg.what = HANDLER_PREPARE;
         mMapHeadData = mapHeadData;
-        msg.obj = new GSYExoModel(urls, mapHeadData, loop, speed, cache);
+        msg.obj = new GSYExoModel(urls, mapHeadData, loop, speed);
         sendMessage(msg);
         if (needTimeOutOther) {
             startTimeOutBuffer();
