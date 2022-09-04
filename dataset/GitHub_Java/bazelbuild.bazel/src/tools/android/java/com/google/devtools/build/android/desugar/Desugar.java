@@ -31,7 +31,6 @@ import com.google.common.io.Closer;
 import com.google.common.io.Resources;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
-import com.google.devtools.build.android.desugar.covariantreturn.NioBufferRefConverter;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter.UnprefixingClassWriter;
 import com.google.devtools.build.android.desugar.io.FileContentProvider;
@@ -40,6 +39,8 @@ import com.google.devtools.build.android.desugar.io.IndexedInputs;
 import com.google.devtools.build.android.desugar.io.InputFileProvider;
 import com.google.devtools.build.android.desugar.io.OutputFileProvider;
 import com.google.devtools.build.android.desugar.io.ThrowingClassLoader;
+import com.google.devtools.build.android.desugar.langmodel.ClassAttributeRecord;
+import com.google.devtools.build.android.desugar.langmodel.ClassMemberRecord;
 import com.google.devtools.build.android.desugar.langmodel.ClassMemberUseCounter;
 import com.google.devtools.build.android.desugar.nest.NestAnalyzer;
 import com.google.devtools.build.android.desugar.nest.NestDesugaring;
@@ -653,10 +654,12 @@ public class Desugar {
       ClassVsInterface interfaceCache,
       ImmutableSet.Builder<String> interfaceLambdaMethodCollector)
       throws IOException {
-
+    ClassMemberRecord classMemberRecord = ClassMemberRecord.create();
+    ClassAttributeRecord classAttributeRecord = ClassAttributeRecord.create();
     ImmutableList<FileContentProvider<? extends InputStream>> inputFileContents =
         inputFiles.toInputFileStreams();
-    NestDigest nestDigest = NestAnalyzer.analyzeNests(inputFileContents);
+    NestDigest nestDigest =
+        NestAnalyzer.analyzeNests(inputFileContents, classMemberRecord, classAttributeRecord);
     // Apply core library type name remapping to the digest instance produced by the nest analyzer,
     // since the analysis-oriented nest analyzer visits core library classes without name remapping
     // as those transformation-oriented visitors.
@@ -1065,8 +1068,6 @@ public class Desugar {
       visitor = new IndyStringConcatDesugaring(classMemberUseCounter, visitor);
     }
 
-    visitor = NioBufferRefConverter.create(visitor, rewriter.getPrefixer());
-
     return visitor;
   }
 
@@ -1138,7 +1139,6 @@ public class Desugar {
     return 0;
   }
 
-  @SuppressWarnings("CatchAndPrintStackTrace")
   static void verifyLambdaDumpDirectoryRegistered(Path dumpDirectory) throws IOException {
     try {
       Class<?> klass = Class.forName("java.lang.invoke.InnerClassLambdaMetafactory");
@@ -1158,7 +1158,7 @@ public class Desugar {
     } catch (ReflectiveOperationException e) {
       // We do not want to crash Desugar, if we cannot load or access these classes or fields.
       // We aim to provide better diagnostics. If we cannot, just let it go.
-      e.printStackTrace(System.err);
+      e.printStackTrace(System.err); // To silence error-prone's complaint.
     }
   }
 
