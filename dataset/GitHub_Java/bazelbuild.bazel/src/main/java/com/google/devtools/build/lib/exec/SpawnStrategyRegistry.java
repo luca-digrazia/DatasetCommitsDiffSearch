@@ -300,12 +300,6 @@ public final class SpawnStrategyRegistry
     SpawnStrategyRegistry.Builder setDefaultStrategies(List<String> defaultStrategies);
 
     /**
-     * Reset the default strategies (see {@link #setDefaultStrategies}) to the reverse of the order
-     * they were registered in.
-     */
-    SpawnStrategyRegistry.Builder resetDefaultStrategies();
-
-    /**
      * Sets the strategy names to use in the remote branch of dynamic execution for a given action
      * mnemonic.
      *
@@ -377,6 +371,7 @@ public final class SpawnStrategyRegistry
     private final HashMap<String, List<String>> mnemonicToRemoteIdentifiers = new HashMap<>();
     private final HashMap<String, List<String>> mnemonicToLocalIdentifiers = new HashMap<>();
     private boolean legacyFilterIterationOrder = false;
+    private boolean useRegistrationOrderForDefault = true;
     @Nullable private String remoteLocalFallbackStrategyIdentifier;
 
     /**
@@ -453,21 +448,8 @@ public final class SpawnStrategyRegistry
      */
     @Override
     public Builder setDefaultStrategies(List<String> defaultStrategies) {
-      // Ensure there are actual strategies and the contents are not empty.
-      Preconditions.checkArgument(!defaultStrategies.isEmpty());
-      Preconditions.checkArgument(
-          defaultStrategies.stream().anyMatch(strategy -> !"".equals(strategy)));
       this.explicitDefaultStrategies = ImmutableList.copyOf(defaultStrategies);
-      return this;
-    }
-
-    /**
-     * Reset the default strategies (see {@link #setDefaultStrategies}) to the reverse of the order
-     * they were registered in.
-     */
-    @Override
-    public Builder resetDefaultStrategies() {
-      this.explicitDefaultStrategies = ImmutableList.of();
+      useRegistrationOrderForDefault = false;
       return this;
     }
 
@@ -575,8 +557,7 @@ public final class SpawnStrategyRegistry
       }
 
       ImmutableList<? extends SpawnStrategy> defaultStrategies;
-      if (explicitDefaultStrategies.isEmpty()) {
-        // Use the strategies as registered, in reverse order.
+      if (useRegistrationOrderForDefault) {
         defaultStrategies = ImmutableList.copyOf(Lists.reverse(strategiesInRegistrationOrder));
       } else {
         defaultStrategies = toStrategies(explicitDefaultStrategies, "default strategies");
