@@ -21,13 +21,14 @@ import android.content.Context;
  * @since 1.0
  */
 public class LitePalApplication extends Application {
+
 	/**
 	 * Global application context.
 	 */
 	private static Context mContext;
 
 	/**
-	 * Construct of LitePalApplication. Initialize context.
+	 * Construct of LitePalApplication. Initialize application context.
 	 */
 	public LitePalApplication() {
 		mContext = this;
@@ -44,6 +45,12 @@ public class LitePalApplication extends Application {
 			throw new GlobalException(GlobalException.APPLICATION_CONTEXT_IS_NULL);
 		}
 		return mContext;
+	}
+
+	@Override
+	public void onLowMemory() {
+		super.onLowMemory();
+		mContext = getApplicationContext();
 	}
 
 }
