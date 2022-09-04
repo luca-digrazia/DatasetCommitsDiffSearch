@@ -1,50 +1,56 @@
 package org.graylog.plugins.cef.parser;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 public class CEFParser {
-    private static final Logger LOG = LoggerFactory.getLogger(CEFParser.class);
 
-    private static final Pattern PATTERN = Pattern.compile("^\\s*CEF:(?<version>\\d+?)(?<!\\\\)\\|(?<deviceVendor>.+?)(?<!\\\\)\\|(?<deviceProduct>.+?)(?<!\\\\)\\|(?<deviceVersion>.+?)(?<!\\\\)\\|(?<deviceEventClassId>.+?)(?<!\\\\)\\|(?<name>.+?)(?<!\\\\)\\|(?<severity>.+?)(?<!\\\\)\\|(?<fields>.+?)(?:$|msg=(?<message>.+))", Pattern.DOTALL);
-    private static final Pattern EXTENSIONS_PATTERN = Pattern.compile("(?<key>\\w+)=(?<value>.*?(?=\\s*\\w+=|\\s*$))");
-    private static final String LABEL_SUFFIX = "Label";
+    /*
+     * TODO:
+     *   - benchmark regex
+     */
 
-    private final boolean useFullNames;
+    private static final Pattern HEADER_PATTERN = Pattern.compile("^<\\d+>([a-zA-Z]{3}\\s+\\d{1,2} \\d{1,2}:\\d{1,2}:\\d{1,2}) CEF:(\\d+?)\\|(.+?)\\|(.+?)\\|(.+?)\\|(.+?)\\|(.+?)\\|(.+?)\\|(.+?)(?:$|(msg=.+))", Pattern.DOTALL);
+    private static final DateTimeFormatter TIMESTAMP_PATTERN = DateTimeFormat.forPattern("MMM dd HH:mm:ss");
 
-    public CEFParser(boolean useFullNames) {
-        this.useFullNames = useFullNames;
+    private static final CEFFieldsParser FIELDS_PARSER = new CEFFieldsParser();
+
+    private final DateTimeZone timezone;
+
+    public CEFParser(DateTimeZone timezone) {
+        this.timezone = timezone;
     }
 
-    public CEFMessage.Builder parse(String x) throws ParserException {
-        final Matcher m = PATTERN.matcher(x);
+    public CEFMessage parse(String x) throws ParserException {
+        Matcher m = HEADER_PATTERN.matcher(x);
 
-        if (m.find()) {
+        if(m.find()) {
+            DateTime timestamp = DateTime.parse(m.group(1).replaceAll("\\s+", " "), TIMESTAMP_PATTERN)
+                    .withYear(DateTime.now(timezone).getYear())
+                    .withZoneRetainFields(timezone);
+
             // Build the message with all CEF headers.
-            final CEFMessage.Builder builder = CEFMessage.builder();
-            builder.version(Integer.valueOf(m.group("version")));
-            builder.deviceVendor(sanitizeHeaderField(m.group("deviceVendor")));
-            builder.deviceProduct(sanitizeHeaderField(m.group("deviceProduct")));
-            builder.deviceVersion(sanitizeHeaderField(m.group("deviceVersion")));
-            builder.deviceEventClassId(sanitizeHeaderField(m.group("deviceEventClassId")));
-            builder.name(sanitizeHeaderField(m.group("name")));
-            builder.severity(CEFMessage.Severity.parse(m.group("severity")));
+            CEFMessage.Builder builder = CEFMessage.builder();
+            builder.timestamp(timestamp);
+            builder.version(Integer.valueOf(m.group(2)));
+            builder.deviceVendor(m.group(3));
+            builder.deviceProduct(m.group(4));
+            builder.deviceVersion(m.group(5));
+            builder.deviceEventClassId(m.group(6));
+            builder.name(m.group(7));
+            builder.severity(Integer.valueOf(m.group(8)));
 
             // Parse and add all CEF fields.
-            final String fieldsString = m.group("fields");
+            String fieldsString = m.group(9);
             if (fieldsString == null || fieldsString.isEmpty()) {
                 throw new ParserException("No CEF payload found. Skipping this message.");
             } else {
-                builder.fields(parseExtensions(fieldsString));
+                builder.fields(FIELDS_PARSER.parse(fieldsString));
             }
 
             /*
@@ -54,76 +60,24 @@ public class CEFParser {
              *
              * Optional. Not all message have this and we'e ok with that fact. /shrug
              */
-            final String message = m.group("message");
-            if (!isNullOrEmpty(message)) {
-                builder.message(sanitizeFieldValue(message));
-            }
-
-            return builder;
-        }
-
-        throw new ParserException("CEF pattern did not match. Skipping this message.");
-    }
-
-    @VisibleForTesting
-    Map<String, Object> parseExtensions(String x) {
-        final Matcher m = EXTENSIONS_PATTERN.matcher(x);
-
-        // Parse out all fields into a map.
-        final Map<String, String> allFields = new HashMap<>();
-        while (m.find()) {
-            if (m.groupCount() == 2) {
-                allFields.put(m.group("key"), sanitizeFieldValue(m.group("value")));
+            if(m.group(10) != null && !m.group(10).isEmpty()) {
+                // This message has a msg field.
+                builder.message(m.group(10).substring(4)); // cut off 'msg=' part instead of going crazy with regex capture group.
             } else {
-                LOG.debug("Skipping field with unexpected group count: " + m.toString());
+                builder.message(null);
             }
+            return builder.build();
+        } else {
+            throw new ParserException("This message was not recognized as CEF and could not be parsed.");
+        }
+    }
+
+    private class ParserException extends Exception {
+
+        public ParserException(String msg) {
+            super(msg);
         }
 
-        // Build a final set of fields.
-        final ImmutableMap.Builder<String, Object> resultBuilder = new ImmutableMap.Builder<>();
-        for (Map.Entry<String, String> field : allFields.entrySet()) {
-            final String key = field.getKey();
-
-            // Skip "labels"
-            if (key.endsWith(LABEL_SUFFIX)) {
-                continue;
-            }
-
-            final CEFMapping fieldMapping = CEFMapping.forKeyName(key);
-            if (fieldMapping != null) {
-                try {
-                    resultBuilder.put(getLabel(fieldMapping, allFields), fieldMapping.convert(field.getValue()));
-                } catch (Exception e) {
-                    LOG.warn("Could not transform CEF field [{}] according to standard. Skipping.", key, e);
-                }
-            } else {
-                resultBuilder.put(getLabel(key, allFields), field.getValue());
-            }
-        }
-
-        return resultBuilder.build();
     }
 
-    private String sanitizeHeaderField(String headerField) {
-        return headerField
-                .replace("\\\\", "\\")
-                .replace("\\|", "|");
-    }
-
-    private String sanitizeFieldValue(String value) {
-        return sanitizeHeaderField(value)
-                .replace("\\r", "\r")
-                .replace("\\n", "\n")
-                .replace("\\=", "=");
-    }
-
-    private String getLabel(CEFMapping mapping, Map<String, String> fields) {
-        final String labelName = mapping.getKeyName() + LABEL_SUFFIX;
-        return fields.getOrDefault(labelName, useFullNames ? mapping.getFullName() : mapping.getKeyName());
-    }
-
-    private String getLabel(String valueName, Map<String, String> fields) {
-        final String labelName = valueName + LABEL_SUFFIX;
-        return fields.getOrDefault(labelName, valueName);
-    }
 }
