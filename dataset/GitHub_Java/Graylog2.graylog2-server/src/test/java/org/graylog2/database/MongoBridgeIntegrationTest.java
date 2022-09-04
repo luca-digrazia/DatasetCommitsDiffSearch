@@ -48,8 +48,7 @@ public class MongoBridgeIntegrationTest {
             "localhost",
             "graylog2test",
             Integer.valueOf(27017),
-            "false",
-            null
+            "false"
         );
 
         // TODO: Truncate messages collection.

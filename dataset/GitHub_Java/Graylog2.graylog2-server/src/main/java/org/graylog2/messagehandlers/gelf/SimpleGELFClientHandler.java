@@ -91,6 +91,7 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
             // Connect to database.
             MongoBridge m = new MongoBridge();
 
+
             // Log if we are in debug mode.
             Log.info("Got GELF message: " + message.toString());
 
