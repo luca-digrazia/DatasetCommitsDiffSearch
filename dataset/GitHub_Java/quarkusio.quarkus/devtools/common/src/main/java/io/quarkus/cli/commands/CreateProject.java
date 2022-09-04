@@ -1,5 +1,29 @@
 package io.quarkus.cli.commands;
 
+import static io.quarkus.maven.utilities.MojoUtils.QUARKUS_VERSION_PROPERTY;
+import static io.quarkus.maven.utilities.MojoUtils.configuration;
+import static io.quarkus.maven.utilities.MojoUtils.getBomArtifactId;
+import static io.quarkus.maven.utilities.MojoUtils.getPluginArtifactId;
+import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
+import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
+import static io.quarkus.maven.utilities.MojoUtils.plugin;
+import static io.quarkus.templates.QuarkusTemplate.ADDITIONAL_GITIGNORE_ENTRIES;
+import static io.quarkus.templates.QuarkusTemplate.CLASS_NAME;
+import static io.quarkus.templates.QuarkusTemplate.PACKAGE_NAME;
+import static io.quarkus.templates.QuarkusTemplate.PROJECT_ARTIFACT_ID;
+import static io.quarkus.templates.QuarkusTemplate.PROJECT_GROUP_ID;
+import static io.quarkus.templates.QuarkusTemplate.PROJECT_VERSION;
+import static io.quarkus.templates.QuarkusTemplate.QUARKUS_VERSION;
+import static io.quarkus.templates.QuarkusTemplate.SOURCE_TYPE;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 import org.apache.maven.model.Activation;
 import org.apache.maven.model.ActivationProperty;
@@ -12,35 +36,33 @@ import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.PluginManagement;
 import org.apache.maven.model.Profile;
-import io.quarkus.BasicRest;
+
+import io.quarkus.cli.commands.writer.ProjectWriter;
 import io.quarkus.maven.utilities.MojoUtils;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-
-import static io.quarkus.QuarkusTemplate.*;
-import static io.quarkus.maven.utilities.MojoUtils.*;
-import static io.quarkus.maven.utilities.MojoUtils.configuration;
-import static io.quarkus.maven.utilities.MojoUtils.plugin;
+import io.quarkus.maven.utilities.MojoUtils.Element;
+import io.quarkus.templates.BuildTool;
+import io.quarkus.templates.SourceType;
+import io.quarkus.templates.TemplateRegistry;
+import io.quarkus.templates.rest.BasicRest;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
  */
 public class CreateProject {
 
-    private File root;
+    private static final String POM_PATH = "pom.xml";
+    private ProjectWriter writer;
     private String groupId;
     private String artifactId;
     private String version = getPluginVersion();
+    private SourceType sourceType = SourceType.JAVA;
+    private BuildTool buildTool = BuildTool.MAVEN;
+    private String className;
 
     private Model model;
 
-    public CreateProject(final File file) {
-        root = file;
+    public CreateProject(final ProjectWriter writer) {
+        this.writer = writer;
     }
 
     public CreateProject groupId(String groupId) {
@@ -58,41 +80,61 @@ public class CreateProject {
         return this;
     }
 
+    public CreateProject sourceType(SourceType sourceType) {
+        this.sourceType = sourceType;
+        return this;
+    }
+
+    public CreateProject className(String className) {
+        this.className = className;
+        return this;
+    }
+
+    public CreateProject buildTool(BuildTool buildTool) {
+        this.buildTool = buildTool;
+        return this;
+    }
+
     public Model getModel() {
         return model;
     }
 
     public boolean doCreateProject(final Map<String, Object> context) throws IOException {
-        if (root.exists() && !root.isDirectory()) {
-            System.out.println("Project root needs to either not exist or be a directory");
+        if (!writer.init()) {
             return false;
-        } else if (!root.exists()) {
-            boolean mkdirStatus = root.mkdirs();
-            if (!mkdirStatus) {
-                System.out.println("Failed to create root directory");
-                return false;
-            }
         }
-
-        System.out.println("Creating a new project in " + root.getAbsolutePath());
 
         MojoUtils.getAllProperties().forEach((k, v) -> context.put(k.replace("-", "_"), v));
 
         context.put(PROJECT_GROUP_ID, groupId);
         context.put(PROJECT_ARTIFACT_ID, artifactId);
         context.put(PROJECT_VERSION, version);
-        context.put(SHAMROCK_VERSION, getPluginVersion());
+        context.put(QUARKUS_VERSION, getPluginVersion());
+        context.put(SOURCE_TYPE, sourceType);
+        context.put(ADDITIONAL_GITIGNORE_ENTRIES, buildTool.getGitIgnoreEntries());
 
-        new BasicRest()
-            .generate(root, context);
+        if (className != null) {
+            className = sourceType.stripExtensionFrom(className);
+            int idx = className.lastIndexOf('.');
+            if (idx >= 0) {
+                final String packageName = className.substring(0, idx);
+                className = className.substring(idx + 1);
+                context.put(PACKAGE_NAME, packageName);
+            }
+            context.put(CLASS_NAME, className);
+        }
 
-        final File pom = new File(root + "/pom.xml");
-        model = MojoUtils.readPom(pom);
+        TemplateRegistry.createTemplateWith(BasicRest.TEMPLATE_NAME).generate(writer, context);
+
+        final byte[] pom = writer.getContent(POM_PATH);
+        model = MojoUtils.readPom(new ByteArrayInputStream(pom));
         addVersionProperty(model);
         addBom(model);
         addMainPluginConfig(model);
         addNativeProfile(model);
-        MojoUtils.write(model, pom);
+        ByteArrayOutputStream pomOutputStream = new ByteArrayOutputStream();
+        MojoUtils.write(model, pomOutputStream);
+        writer.write(POM_PATH, pomOutputStream.toString("UTF-8"));
 
         return true;
     }
@@ -105,16 +147,15 @@ public class CreateProject {
             model.setDependencyManagement(dm);
         } else {
             hasBom = dm.getDependencies().stream()
-                       .anyMatch(d ->
-                                     d.getGroupId().equals(getPluginGroupId()) &&
-                                     d.getArtifactId().equals(getBomArtifactId()));
+                    .anyMatch(d -> d.getGroupId().equals(getPluginGroupId()) &&
+                            d.getArtifactId().equals(getBomArtifactId()));
         }
 
         if (!hasBom) {
             Dependency bom = new Dependency();
             bom.setGroupId(getPluginGroupId());
             bom.setArtifactId(getBomArtifactId());
-            bom.setVersion(SHAMROCK_VERSION_PROPERTY);
+            bom.setVersion(QUARKUS_VERSION_PROPERTY);
             bom.setType("pom");
             bom.setScope("import");
 
@@ -129,7 +170,7 @@ public class CreateProject {
             exec.addGoal("native-image");
             exec.setConfiguration(configuration(new Element("enableHttpUrlHandler", "true")));
 
-            Plugin plg = plugin(getPluginGroupId(), getPluginArtifactId(), SHAMROCK_VERSION_PROPERTY);
+            Plugin plg = plugin(getPluginGroupId(), getPluginArtifactId(), QUARKUS_VERSION_PROPERTY);
             plg.addExecution(exec);
 
             BuildBase buildBase = new BuildBase();
@@ -151,7 +192,8 @@ public class CreateProject {
 
     private void addMainPluginConfig(Model model) {
         if (!hasPlugin(model)) {
-            Plugin plugin = plugin(getPluginGroupId(), getPluginArtifactId(), SHAMROCK_VERSION_PROPERTY);
+            Build build = createBuildSectionIfRequired(model);
+            Plugin plugin = plugin(getPluginGroupId(), getPluginArtifactId(), QUARKUS_VERSION_PROPERTY);
             if (isParentPom(model)) {
                 addPluginManagementSection(model, plugin);
                 //strip the quarkusVersion off
@@ -160,33 +202,31 @@ public class CreateProject {
             PluginExecution pluginExec = new PluginExecution();
             pluginExec.addGoal("build");
             plugin.addExecution(pluginExec);
-            Build build = createBuildSectionIfRequired(model);
             build.getPlugins().add(plugin);
         }
     }
 
     private boolean hasPlugin(final Model model) {
         List<Plugin> plugins = null;
-        if(isParentPom(model)) {
-            final PluginManagement management = model.getBuild().getPluginManagement();
-            if(management != null) {
-                plugins = management.getPlugins();
-            }
-        } else {
-            final Build build = model.getBuild();
-            if(build != null) {
+        final Build build = model.getBuild();
+        if (build != null) {
+            if (isParentPom(model)) {
+                final PluginManagement management = build.getPluginManagement();
+                if (management != null) {
+                    plugins = management.getPlugins();
+                }
+            } else {
                 plugins = build.getPlugins();
             }
         }
-        return plugins != null && model.getBuild().getPlugins()
-                    .stream()
-                    .anyMatch(p ->
-                         p.getGroupId().equalsIgnoreCase(getPluginGroupId()) &&
-                         p.getArtifactId().equalsIgnoreCase(getPluginArtifactId()));
+        return plugins != null && build.getPlugins()
+                .stream()
+                .anyMatch(p -> p.getGroupId().equalsIgnoreCase(getPluginGroupId()) &&
+                        p.getArtifactId().equalsIgnoreCase(getPluginArtifactId()));
     }
 
     private void addPluginManagementSection(Model model, Plugin plugin) {
-        if (model.getBuild().getPluginManagement() != null) {
+        if (model.getBuild() != null && model.getBuild().getPluginManagement() != null) {
             if (model.getBuild().getPluginManagement().getPlugins() == null) {
                 model.getBuild().getPluginManagement().setPlugins(new ArrayList<>());
             }
@@ -217,5 +257,11 @@ public class CreateProject {
 
     private boolean isParentPom(Model model) {
         return "pom".equals(model.getPackaging());
+    }
+
+    public static SourceType determineSourceType(Set<String> extensions) {
+        return extensions.stream().anyMatch(e -> e.toLowerCase().contains("kotlin"))
+                ? SourceType.KOTLIN
+                : SourceType.JAVA;
     }
 }
