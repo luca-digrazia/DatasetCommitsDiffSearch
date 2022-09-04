@@ -403,7 +403,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     /**
      * 暂停状态
      */
-    @Override
     public void onVideoPause() {
         if (GSYVideoManager.instance().getMediaPlayer().isPlaying()) {
             setStateAndUi(CURRENT_STATE_PAUSE);
@@ -417,7 +416,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     /**
      * 恢复暂停状态
      */
-    @Override
     public void onVideoResume() {
         mPauseTime = 0;
         if (mCurrentState == CURRENT_STATE_PAUSE) {
@@ -1182,11 +1180,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      * 再打开已经缓存的本地文件，网络速度才会回0.因为是播放本地文件了
      */
     public long getNetSpeed() {
-        if (GSYVideoManager.instance().getMediaPlayer() != null) {
-            return GSYVideoManager.instance().getMediaPlayer().getTcpSpeed();
-        } else {
-            return -1;
-        }
+        return GSYVideoManager.instance().getMediaPlayer().getTcpSpeed();
 
     }
 
@@ -1196,7 +1190,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      * 再打开已经缓存的本地文件，网络速度才会回0.因为是播放本地文件了
      */
     public String getNetSpeedText() {
-        long speed = getNetSpeed();
+        long speed = GSYVideoManager.instance().getMediaPlayer().getTcpSpeed();
         return getTextSpeed(speed);
     }
 

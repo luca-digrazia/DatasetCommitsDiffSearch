@@ -11,6 +11,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.SeekBar;
@@ -62,15 +63,11 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     private boolean mShowFullAnimation = true;//是否使用全屏动画效果
 
-    protected boolean mNeedShowWifiTip = true; //是否需要显示流量提示
-
     protected int[] mListItemRect;//当前item框的屏幕位置
 
     protected int[] mListItemSize;//当前item的大小
 
     protected int mCurrentState = -1; //当前的播放状态
-
-    protected int mRotate = 0; //针对某些视频的旋转信息做了旋转处理
 
     private int mSystemUiVisibility;
 
@@ -85,8 +82,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     protected boolean mLooping = false;//循环
 
     protected boolean mHadPlay = false;//是否播放过
-
-    protected boolean mCacheFile = false; //是否是缓存的文件
 
     protected Context mContext;
 
@@ -309,9 +304,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
                 resolveFullVideoShow(context, gsyVideoPlayer);
             }
             gsyVideoPlayer.mHadPlay = mHadPlay;
-            gsyVideoPlayer.mCacheFile = mCacheFile;
             gsyVideoPlayer.mFullPauseBitmap = mFullPauseBitmap;
-            gsyVideoPlayer.mNeedShowWifiTip = mNeedShowWifiTip;
             gsyVideoPlayer.setUp(mUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -404,12 +397,8 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     private void pauseFullCoverLogic() {
         if (mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE && mTextureView != null
                 && (mFullPauseBitmap == null || mFullPauseBitmap.isRecycled())) {
-            try {
-                mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
-            } catch (Exception e) {
-                e.printStackTrace();
-                mFullPauseBitmap = null;
-            }
+            Point point = CommonUtil.getPauseBitmapSize(getWidth(), getHeight());
+            mFullPauseBitmap = mTextureView.getBitmap(point.x, point.y);
         }
     }
 
@@ -425,13 +414,9 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
                     && !gsyVideoPlayer.mFullPauseBitmap.isRecycled()) {
                 mFullPauseBitmap = gsyVideoPlayer.mFullPauseBitmap;
             } else {
+                Point point = CommonUtil.getPauseBitmapSize(getWidth(), getHeight());
                 //不在了说明已经播放过，还是暂停的话，我们拿回来就好
-                try {
-                    mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    mFullPauseBitmap = null;
-                }
+                mFullPauseBitmap = gsyVideoPlayer.mTextureView.getBitmap(point.x, point.y);
             }
         }
     }
@@ -664,16 +649,5 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      */
     public void setHideKey(boolean hideKey) {
         this.mHideKey = hideKey;
-    }
-
-    public boolean isNeedShowWifiTip() {
-        return mNeedShowWifiTip;
-    }
-
-    /**
-     * 是否需要显示流量提示,默认true
-     */
-    public void setNeedShowWifiTip(boolean needShowWifiTip) {
-        this.mNeedShowWifiTip = needShowWifiTip;
     }
 }
