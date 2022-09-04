@@ -52,8 +52,7 @@ public class DeserializationContextTest {
     when(codedInputStream.readSInt32()).thenReturn(1);
     DeserializationContext deserializationContext =
         new DeserializationContext(registry, ImmutableMap.of());
-    assertThat((Object) deserializationContext.deserialize(codedInputStream))
-        .isSameInstanceAs(constant);
+    assertThat((Object) deserializationContext.deserialize(codedInputStream)).isSameAs(constant);
     Mockito.verify(codedInputStream).readSInt32();
     Mockito.verify(registry).maybeGetConstantByTag(1);
   }
@@ -71,8 +70,7 @@ public class DeserializationContextTest {
     Object returnValue = new Object();
     when(codecDescriptor.deserialize(deserializationContext, codedInputStream))
         .thenReturn(returnValue);
-    assertThat((Object) deserializationContext.deserialize(codedInputStream))
-        .isSameInstanceAs(returnValue);
+    assertThat((Object) deserializationContext.deserialize(codedInputStream)).isSameAs(returnValue);
     Mockito.verify(codedInputStream).readSInt32();
     Mockito.verify(registry).getCodecDescriptorByTag(1);
     Mockito.verify(codecDescriptor).deserialize(deserializationContext, codedInputStream);

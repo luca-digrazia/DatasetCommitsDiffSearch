@@ -18,6 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.Memoizer.Serializer;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs.MemoizationPermission;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException.NoCodecException;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
@@ -33,21 +34,26 @@ import javax.annotation.Nullable;
 public class SerializationContext {
   private final ObjectCodecRegistry registry;
   private final ImmutableMap<Class<?>, Object> dependencies;
+  private final MemoizationPermission memoizationPermission;
   @Nullable private final Memoizer.Serializer serializer;
 
   private SerializationContext(
       ObjectCodecRegistry registry,
       ImmutableMap<Class<?>, Object> dependencies,
+      MemoizationPermission memoizationPermission,
       @Nullable Serializer serializer) {
     this.registry = registry;
     this.dependencies = dependencies;
     this.serializer = serializer;
+    this.memoizationPermission = memoizationPermission;
+    Preconditions.checkState(
+        serializer == null || memoizationPermission == MemoizationPermission.ALLOWED);
   }
 
   @VisibleForTesting
   public SerializationContext(
       ObjectCodecRegistry registry, ImmutableMap<Class<?>, Object> dependencies) {
-    this(registry, dependencies, /*serializer=*/ null);
+    this(registry, dependencies, MemoizationPermission.ALLOWED, /*serializer=*/ null);
   }
 
   @VisibleForTesting
@@ -55,26 +61,12 @@ public class SerializationContext {
     this(AutoRegistry.get(), dependencies);
   }
 
-  // TODO(shahan): consider making codedOut a member of this class.
-  public void serialize(Object object, CodedOutputStream codedOut)
-      throws IOException, SerializationException {
-    ObjectCodecRegistry.CodecDescriptor descriptor =
-        recordAndGetDescriptorIfNotConstantOrNull(object, codedOut);
-    if (descriptor != null) {
-      if (serializer == null) {
-        descriptor.serialize(this, object, codedOut);
-      } else {
-        @SuppressWarnings("unchecked")
-        ObjectCodec<Object> castCodec = (ObjectCodec<Object>) descriptor.getCodec();
-        serializer.serialize(this, object, castCodec, codedOut);
-      }
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  public <T> T getDependency(Class<T> type) {
-    Preconditions.checkNotNull(type);
-    return (T) dependencies.get(type);
+  SerializationContext disableMemoization() {
+    Preconditions.checkState(
+        memoizationPermission == MemoizationPermission.ALLOWED, "memoization already disabled");
+    Preconditions.checkState(serializer == null, "serializer already present");
+    return new SerializationContext(
+        registry, dependencies, MemoizationPermission.DISABLED, serializer);
   }
 
   /**
@@ -86,16 +78,16 @@ public class SerializationContext {
    *
    * <p>This method is idempotent: calling it on an already memoizing context will return the same
    * context.
-   *
-   * <p><em>This is public for testing and {@link
-   * com.google.devtools.build.lib.packages.PackageSerializer} only.</em>
    */
   @CheckReturnValue
   public SerializationContext getMemoizingContext() {
+    Preconditions.checkState(
+        memoizationPermission == MemoizationPermission.ALLOWED, "memoization disabled");
     if (serializer != null) {
       return this;
     }
-    return new SerializationContext(this.registry, this.dependencies, new Memoizer.Serializer());
+    return new SerializationContext(
+        this.registry, this.dependencies, memoizationPermission, new Memoizer.Serializer());
   }
 
   private boolean writeNullOrConstant(@Nullable Object object, CodedOutputStream codedOut)
@@ -121,5 +113,27 @@ public class SerializationContext {
     ObjectCodecRegistry.CodecDescriptor descriptor = registry.getCodecDescriptor(object.getClass());
     codedOut.writeSInt32NoTag(descriptor.getTag());
     return descriptor;
+  }
+
+  // TODO(shahan): consider making codedOut a member of this class.
+  public void serialize(Object object, CodedOutputStream codedOut)
+      throws IOException, SerializationException {
+    ObjectCodecRegistry.CodecDescriptor descriptor =
+        recordAndGetDescriptorIfNotConstantOrNull(object, codedOut);
+    if (descriptor != null) {
+      if (serializer == null) {
+        descriptor.serialize(this, object, codedOut);
+      } else {
+        @SuppressWarnings("unchecked")
+        ObjectCodec<Object> castCodec = (ObjectCodec<Object>) descriptor.getCodec();
+        serializer.serialize(this, object, castCodec, codedOut);
+      }
+    }
+    }
+
+  @SuppressWarnings("unchecked")
+  public <T> T getDependency(Class<T> type) {
+    Preconditions.checkNotNull(type);
+    return (T) dependencies.get(type);
   }
 }

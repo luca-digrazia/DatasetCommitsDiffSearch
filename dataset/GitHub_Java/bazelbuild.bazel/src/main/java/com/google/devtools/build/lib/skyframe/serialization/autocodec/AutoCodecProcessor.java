@@ -202,7 +202,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
   private TypeSpec.Builder buildClassWithAutoValueBuilderStrategy(
       TypeElement encodedType, boolean startMemoizing) {
     TypeElement builderType = findBuilderType(encodedType);
-    List<ExecutableElement> getters = findGettersFromType(encodedType, builderType);
+    List<ExecutableElement> getters = findGettersFromType(encodedType);
     ExecutableElement builderCreationMethod = findBuilderCreationMethod(encodedType, builderType);
     ExecutableElement buildMethod = findBuildMethod(encodedType, builderType);
     TypeSpec.Builder codecClassBuilder =
@@ -287,18 +287,14 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return builderType;
   }
 
-  private List<ExecutableElement> findGettersFromType(
-      TypeElement encodedType, TypeElement builderTypeForFiltering) {
+  private List<ExecutableElement> findGettersFromType(TypeElement encodedType) {
     List<ExecutableElement> result = new ArrayList<>();
     for (ExecutableElement method :
         ElementFilter.methodsIn(env.getElementUtils().getAllMembers(encodedType))) {
       if (!method.getModifiers().contains(Modifier.STATIC)
           && method.getModifiers().contains(Modifier.ABSTRACT)
           && method.getParameters().isEmpty()
-          && method.getReturnType().getKind() != TypeKind.VOID
-          && (!method.getReturnType().getKind().equals(TypeKind.DECLARED)
-              || !builderTypeForFiltering.equals(
-                  env.getTypeUtils().asElement(method.getReturnType())))) {
+          && method.getReturnType().getKind() != TypeKind.VOID) {
         result.add(method);
       }
     }
@@ -419,13 +415,13 @@ public class AutoCodecProcessor extends AbstractProcessor {
         ElementFilter.methodsIn(env.getElementUtils().getAllMembers(builderType));
     String varName = getNameFromGetter(getter);
     TypeMirror type = getter.getReturnType();
-    ImmutableSet<String> setterNames = ImmutableSet.of(varName, addCamelCasePrefix(varName, "set"));
+    String setterName = addCamelCasePrefix(varName, "set");
 
     ExecutableElement setterMethod = null;
     for (ExecutableElement method : methods) {
       if (!method.getModifiers().contains(Modifier.STATIC)
           && !method.getModifiers().contains(Modifier.PRIVATE)
-          && setterNames.contains(method.getSimpleName().toString())
+          && method.getSimpleName().toString().equals(setterName)
           && method.getReturnType().equals(builderType.asType())
           && method.getParameters().size() == 1
           && env.getTypeUtils()
