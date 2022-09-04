@@ -1,25 +1,24 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.feature;
 
+import smile.data.Attribute;
+import smile.data.NumericAttribute;
 import java.io.Serializable;
-import smile.data.DataFrame;
-import smile.data.Tuple;
 
 /**
  * Feature transformation. In general, learning algorithms benefit from
@@ -28,40 +27,68 @@ import smile.data.Tuple;
  *
  * @author Haifeng Li
  */
-public interface FeatureTransform extends Serializable {
-
+public abstract class FeatureTransform implements Serializable {
+    private static final long serialVersionUID = 1L;
     /**
-     * Transform a feature vector.
-     * @param x a feature vector.
-     * @return the transformed feature value.
+     * If false, try to avoid a copy and do inplace transformation instead.
      */
-    double[] transform(double[] x);
+    protected boolean copy;
 
-    /**
-     * Transform a data frame.
-     * @param data a data frame.
-     * @return the transformed data frame.
-     */
-    default double[][] transform(double[][] data) {
-        int n = data.length;
-        double[][] y = new double[n][];
-        for (int i = 0; i < n; i++) {
-            y[i] = transform(data[i]);
-        }
-        return y;
+    /** Constructor. Inplace transformation. */
+    public FeatureTransform() {
+        this(false);
     }
 
     /**
+     * Constructor.
+     * @param copy  If false, try to avoid a copy and do inplace scaling instead.
+     */
+    public FeatureTransform(boolean copy) {
+        this.copy = copy;
+    }
+
+    /**
+     * Learns transformation parameters from a dataset.
+     * All features are assumed numeric.
+     * @param data The training data.
+     */
+    public void learn(double[][] data) {
+        int p = data[0].length;
+        Attribute[] attributes = new Attribute[p];
+        for (int i = 0; i < p; i++) {
+            attributes[i] = new NumericAttribute("V"+i);
+        }
+        learn(attributes, data);
+    }
+
+    /**
+     * Learns transformation parameters from a dataset.
+     * @param attributes The variable attributes. Of which, numeric variables
+     *                   will be standardized.
+     * @param data The training data to learn scaling parameters.
+     *             The data will not be modified.
+     */
+    public abstract void learn(Attribute[] attributes, double[][] data);
+
+    /**
      * Transform a feature vector.
      * @param x a feature vector.
      * @return the transformed feature value.
      */
-    Tuple transform(Tuple x);
+    public abstract double[] transform(double[] x);
 
     /**
-     * Transform a data frame.
-     * @param data a data frame.
-     * @return the transformed data frame.
+     * Transform an array of feature vectors.
+     * @param x an array of feature vectors. The feature
+     *         vectors may be modified on output if copy is false.
+     * @return the transformed feature vectors.
      */
-    DataFrame transform(DataFrame data);
+    public double[][] transform(double[][] x) {
+        double[][] y = copy ? new double[x.length][] : x;
+        for (int i = 0; i < y.length; i++) {
+            y[i] = transform(x[i]);
+        }
+
+        return y;
+    }
 }
