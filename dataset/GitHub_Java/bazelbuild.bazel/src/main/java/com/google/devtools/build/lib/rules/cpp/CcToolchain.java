@@ -33,25 +33,24 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.License;
+import com.google.devtools.build.lib.rules.MakeVariableProvider;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,72 +64,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
    */
   private static final PathFragment BUILTIN_INCLUDE_FILE_SUFFIX =
       PathFragment.create("include/stdc-predef.h");
-
-  private static String getLLVMProfileFileName(Path fdoProfile) {
-    if (CppFileTypes.LLVM_PROFILE.matches(fdoProfile)) {
-      return fdoProfile.getBaseName();
-    } else {
-      return FileSystemUtils.removeExtension(fdoProfile.getBaseName())
-          + CppFileTypes.LLVM_PROFILE.getExtensions().get(0);
-    }
-  }
-
-  /*
-   * This function checks the format of the input profile data and converts it to
-   * the indexed format (.profdata) if necessary.
-   */
-  private Artifact convertLLVMRawProfileToIndexed(
-      Path fdoProfile, CppConfiguration cppConfiguration, RuleContext ruleContext)
-      throws InterruptedException {
-
-    Artifact profileArtifact =
-        ruleContext.getUniqueDirectoryArtifact(
-            "fdo", getLLVMProfileFileName(fdoProfile), ruleContext.getBinOrGenfilesDirectory());
-
-    // If the profile file is already in the desired format, symlink to it and return.
-    if (CppFileTypes.LLVM_PROFILE.matches(fdoProfile)) {
-      ruleContext.registerAction(
-          new SymlinkAction(
-              ruleContext.getActionOwner(),
-              PathFragment.create(fdoProfile.getPathString()),
-              profileArtifact,
-              "Symlinking LLVM Profile " + fdoProfile.getPathString()));
-      return profileArtifact;
-    }
-
-    Artifact rawProfileArtifact =
-        ruleContext.getUniqueDirectoryArtifact(
-            "fdo", fdoProfile.getBaseName(), ruleContext.getBinOrGenfilesDirectory());
-
-    ruleContext.registerAction(
-        new SymlinkAction(
-            ruleContext.getActionOwner(),
-            PathFragment.create(fdoProfile.getPathString()),
-            rawProfileArtifact,
-            "Symlinking LLVM Profile " + fdoProfile.getPathString()));
-
-    if (cppConfiguration.getLLVMProfDataExecutable() == null) {
-      ruleContext.ruleError(
-          "llvm-profdata not available with this crosstool, needed for profile conversion");
-      return null;
-    }
-
-    // Convert LLVM raw profile to indexed format.
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .addInput(rawProfileArtifact)
-            .addTransitiveInputs(getFiles(ruleContext, "all_files"))
-            .addOutput(profileArtifact)
-            .useDefaultShellEnvironment()
-            .setExecutable(cppConfiguration.getLLVMProfDataExecutable())
-            .addArguments("merge", "-o", profileArtifact.getExecPathString())
-            .addArgument(rawProfileArtifact.getExecPathString())
-            .setProgressMessage("LLVMProfDataAction: Generating " + profileArtifact.prettyPrint())
-            .setMnemonic("LLVMProfDataAction")
-            .build(ruleContext));
-
-    return profileArtifact;
-  }
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
@@ -165,15 +98,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     if (skyframeEnv.valuesMissing()) {
       return null;
-    }
-
-    // This tries to convert LLVM profiles to the indexed format if necessary.
-    Artifact profileArtifact = null;
-    if (cppConfiguration.isLLVMOptimizedFdo()) {
-      profileArtifact = convertLLVMRawProfileToIndexed(fdoZip, cppConfiguration, ruleContext);
-      if (ruleContext.hasErrors()) {
-        return null;
-      }
     }
 
     final Label label = ruleContext.getLabel();
@@ -282,7 +206,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       coverage = crosstool;
     }
 
-    CcToolchainProvider provider =
+    CcToolchainProvider ccProvider =
         new CcToolchainProvider(
             cppConfiguration,
             crosstool,
@@ -309,12 +233,20 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST),
             getEnvironment(ruleContext),
             cppConfiguration.getBuiltInIncludeDirectories());
+
+    // TODO(kmensah): Remove sysroot from cppConfiguration and calculate it here.
+    PathFragment sysroot = cppConfiguration.getSysroot();
+
+    MakeVariableProvider makeVariableProvider =
+        createMakeVariableProvider(cppConfiguration, sysroot);
+
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
-            .addProvider(provider)
-            .addNativeDeclaredProvider(provider)
-            .addProvider(
-                fdoSupport.getFdoSupport().createFdoSupportProvider(ruleContext, profileArtifact))
+            .addProvider(ccProvider)
+            .addNativeDeclaredProvider(ccProvider)
+            .addProvider(makeVariableProvider)
+            .addNativeDeclaredProvider(makeVariableProvider)
+            .addProvider(fdoSupport.getFdoSupport().createFdoSupportProvider(ruleContext))
             .setFilesToBuild(new NestedSetBuilder<Artifact>(Order.STABLE_ORDER).build())
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
 
@@ -431,6 +363,22 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     return dep != null
         ? getFiles(context, attribute)
         : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
+  }
+
+  private MakeVariableProvider createMakeVariableProvider(
+      CppConfiguration cppConfiguration, PathFragment sysroot) {
+
+    HashMap<String, String> makeVariables =
+        new HashMap<>(cppConfiguration.getAdditionalMakeVariables());
+
+    // Overwrite the CC_FLAGS variable to include sysroot, if it's available.
+    if (sysroot != null) {
+      String sysrootFlag = "--sysroot=" + sysroot;
+      String ccFlags = makeVariables.get("CC_FLAGS");
+      ccFlags = ccFlags.isEmpty() ? sysrootFlag : ccFlags + " " + sysrootFlag;
+      makeVariables.put("CC_FLAGS", ccFlags);
+    }
+    return new MakeVariableProvider(ImmutableMap.copyOf(makeVariables));
   }
 
   /**
