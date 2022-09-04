@@ -15,39 +15,38 @@
  */
 package org.androidannotations.handler.rest;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JExpr.lit;
+import static org.androidannotations.helper.CanonicalNameConstants.ARRAYLIST;
+import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
+
+import java.util.List;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+
 import org.androidannotations.annotations.rest.Rest;
-import org.androidannotations.handler.BaseAnnotationHandler;
-import org.androidannotations.handler.GeneratingAnnotationHandler;
-import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.handler.BaseGeneratingAnnotationHandler;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.holder.RestHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 import org.androidannotations.process.ProcessHolder;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.DeclaredType;
-import java.util.List;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldVar;
 
-import static com.sun.codemodel.JExpr.*;
-import static org.androidannotations.helper.CanonicalNameConstants.ARRAYLIST;
-import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_REQUEST_INTERCEPTOR;
-
-public class RestHandler extends BaseAnnotationHandler<RestHolder> implements GeneratingAnnotationHandler<RestHolder> {
+public class RestHandler extends BaseGeneratingAnnotationHandler<RestHolder> {
 
 	private final AnnotationHelper annotationHelper;
-	private final APTCodeModelHelper codeModelHelper;
 
 	public RestHandler(ProcessingEnvironment processingEnvironment) {
 		super(Rest.class, processingEnvironment);
 		annotationHelper = new AnnotationHelper(processingEnv);
-		codeModelHelper = new APTCodeModelHelper();
 	}
 
 	@Override
@@ -57,6 +56,8 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+		super.validate(element, validatedElements, valid);
+
 		TypeElement typeElement = (TypeElement) element;
 
 		validatorHelper.notAlreadyValidated(element, validatedElements, valid);
@@ -96,8 +97,8 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 		JFieldVar restTemplateField = holder.getRestTemplateField();
 		JBlock init = holder.getInit().body();
 		for (DeclaredType converterType : converters) {
-			JInvocation newConverter = codeModelHelper.newBeanOrEBean(holder, converterType, holder.getInitContextParam());
-			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(newConverter));
+			JClass converterClass = refClass(converterType.toString());
+			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(_new(converterClass)));
 		}
 	}
 
@@ -111,8 +112,8 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 			JBlock init = holder.getInit().body();
 			init.add(invoke(restTemplateField, "setInterceptors").arg(_new(listClass)));
 			for (DeclaredType interceptorType : interceptors) {
-				JInvocation newInterceptor = codeModelHelper.newBeanOrEBean(holder, interceptorType, holder.getInitContextParam());
-				init.add(invoke(restTemplateField, "getInterceptors").invoke("add").arg(newInterceptor));
+				JClass interceptorClass = refClass(interceptorType.toString());
+				init.add(invoke(restTemplateField, "getInterceptors").invoke("add").arg(_new(interceptorClass)));
 			}
 		}
 	}

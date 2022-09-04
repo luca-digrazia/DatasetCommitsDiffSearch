@@ -569,7 +569,6 @@ public class ValidatorHelper {
 			boolean sharedPrefValidatedInRound = false;
 			if (elementTypeName.endsWith(GENERATION_SUFFIX)) {
 				String prefTypeName = elementTypeName.substring(0, elementTypeName.length() - GENERATION_SUFFIX.length());
-				prefTypeName = prefTypeName.replace("_.", ".");
 
 				Set<? extends Element> sharedPrefElements = validatedElements.getRootAnnotatedElements(SharedPref.class.getName());
 
