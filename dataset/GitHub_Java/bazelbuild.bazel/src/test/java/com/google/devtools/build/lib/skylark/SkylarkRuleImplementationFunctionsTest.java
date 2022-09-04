@@ -2402,12 +2402,11 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkError(
         ruleContext,
-        "Invalid value for parameter \"param_file_arg\": Expected string with a single \"--file=\"",
+        "Invalid value for parameter \"param_file_arg\": Expected string with a single \"%s\"",
         "args = ruleContext.actions.args()\n" + "args.use_param_file('--file=')");
     checkError(
         ruleContext,
-        "Invalid value for parameter \"param_file_arg\": "
-            + "Expected string with a single \"--file=%s%s\"",
+        "Invalid value for parameter \"param_file_arg\": Expected string with a single \"%s\"",
         "args = ruleContext.actions.args()\n" + "args.use_param_file('--file=%s%s')");
   }
 

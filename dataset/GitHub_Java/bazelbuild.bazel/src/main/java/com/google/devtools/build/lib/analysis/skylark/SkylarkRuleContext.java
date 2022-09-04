@@ -610,8 +610,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
       return false;
     }
     if (targetUnchecked == Runtime.NONE) {
-      return InstrumentedFilesCollector.shouldIncludeLocalSources(
-          ruleContext.getConfiguration(), ruleContext.getLabel(), ruleContext.isTestTarget());
+      return InstrumentedFilesCollector.shouldIncludeLocalSources(ruleContext);
     }
     TransitiveInfoCollection target = (TransitiveInfoCollection) targetUnchecked;
     return (target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR) != null)
