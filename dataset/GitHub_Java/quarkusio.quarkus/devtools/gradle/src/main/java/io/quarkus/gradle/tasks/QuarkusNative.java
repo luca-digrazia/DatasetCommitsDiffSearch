@@ -18,6 +18,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 
 import io.quarkus.bootstrap.model.AppArtifact;
+import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.creator.AppCreatorException;
@@ -386,9 +387,10 @@ public class QuarkusNative extends QuarkusTask {
         getLogger().lifecycle("building native image");
 
         final AppArtifact appArtifact = extension().getAppArtifact();
+        final AppModel appModel;
         final AppModelResolver modelResolver = extension().resolveAppModel();
         try {
-            modelResolver.resolveModel(appArtifact);
+            appModel = modelResolver.resolveModel(appArtifact);
         } catch (AppModelResolverException e) {
             throw new GradleException("Failed to resolve application model " + appArtifact + " dependencies", e);
         }
