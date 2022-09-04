@@ -59,6 +59,7 @@ public class BuildEventServiceProtoUtilTest {
           BUILD_INVOCATION_ID,
           PROJECT_ID,
           COMMAND_NAME,
+          clock,
           ImmutableSet.of(ADDITIONAL_KEYWORD));
 
   @Test

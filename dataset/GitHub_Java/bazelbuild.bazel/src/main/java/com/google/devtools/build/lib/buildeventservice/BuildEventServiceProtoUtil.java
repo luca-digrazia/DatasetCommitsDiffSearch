@@ -18,6 +18,7 @@ import static com.google.devtools.build.v1.BuildEvent.BuildComponentStreamFinish
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.v1.BuildEvent;
 import com.google.devtools.build.v1.BuildEvent.BuildComponentStreamFinished;
 import com.google.devtools.build.v1.BuildEvent.BuildEnqueued;
@@ -35,14 +36,16 @@ import com.google.devtools.build.v1.StreamId.BuildComponent;
 import com.google.protobuf.Any;
 import com.google.protobuf.Timestamp;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
 
-/** Utility class with convenience methods for building a {@link BuildEventServiceTransport}. */
+/** Utility class used to build protobuffs requests that are meant to be sent over BES. */
 public final class BuildEventServiceProtoUtil {
 
   private final String buildRequestId;
   private final String buildInvocationId;
   private final String projectId;
+  private final AtomicInteger streamSequenceNumber;
   private final String commandName;
   private final Set<String> additionalKeywords;
 
@@ -51,12 +54,14 @@ public final class BuildEventServiceProtoUtil {
       String buildInvocationId,
       @Nullable String projectId,
       String commandName,
+      Clock clock,
       Set<String> additionalKeywords) {
     this.buildRequestId = buildRequestId;
     this.buildInvocationId = buildInvocationId;
     this.projectId = projectId;
     this.commandName = commandName;
-    this.additionalKeywords = ImmutableSet.copyOf(additionalKeywords);
+    this.additionalKeywords = additionalKeywords;
+    this.streamSequenceNumber = new AtomicInteger(1);
   }
 
   public PublishLifecycleEventRequest buildEnqueued(Timestamp timestamp) {
@@ -104,9 +109,13 @@ public final class BuildEventServiceProtoUtil {
         .build();
   }
 
+  public int nextSequenceNumber() {
+    return streamSequenceNumber.getAndIncrement();
+  }
+
   /** Creates a PublishBuildToolEventStreamRequest from a packed bazel event. */
   public PublishBuildToolEventStreamRequest bazelEvent(
-      long sequenceNumber, Timestamp timestamp, Any packedEvent) {
+      int sequenceNumber, Timestamp timestamp, Any packedEvent) {
     return publishBuildToolEventStreamRequest(
         sequenceNumber,
         timestamp,
@@ -114,7 +123,7 @@ public final class BuildEventServiceProtoUtil {
   }
 
   public PublishBuildToolEventStreamRequest streamFinished(
-      long sequenceNumber, Timestamp timestamp) {
+      int sequenceNumber, Timestamp timestamp) {
     return publishBuildToolEventStreamRequest(
         sequenceNumber,
         timestamp,
@@ -125,7 +134,7 @@ public final class BuildEventServiceProtoUtil {
 
   @VisibleForTesting
   public PublishBuildToolEventStreamRequest publishBuildToolEventStreamRequest(
-      long sequenceNumber, Timestamp timestamp, BuildEvent.Builder besEvent) {
+      int sequenceNumber, Timestamp timestamp, BuildEvent.Builder besEvent) {
     PublishBuildToolEventStreamRequest.Builder builder =
         PublishBuildToolEventStreamRequest.newBuilder()
             .setOrderedBuildEvent(
