@@ -70,7 +70,7 @@ public final class ExtraAction extends SpawnAction {
       CommandLine argv,
       ActionEnvironment env,
       Map<String, String> executionInfo,
-      CharSequence progressMessage,
+      String progressMessage,
       String mnemonic) {
     super(
         shadowedAction.getOwner(),
