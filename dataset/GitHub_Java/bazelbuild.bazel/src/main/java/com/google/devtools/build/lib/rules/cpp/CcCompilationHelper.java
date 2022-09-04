@@ -292,10 +292,10 @@ public final class CcCompilationHelper {
     this.cppConfiguration =
         Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class));
     setGenerateNoPicAction(
-        !ccToolchain.usePicForDynamicLibraries()
+        !CppHelper.usePicForDynamicLibraries(ruleContext, ccToolchain)
             || !CppHelper.usePicForBinaries(ruleContext, ccToolchain));
     setGeneratePicAction(
-        ccToolchain.usePicForDynamicLibraries()
+        CppHelper.usePicForDynamicLibraries(ruleContext, ccToolchain)
             || CppHelper.usePicForBinaries(ruleContext, ccToolchain));
   }
 
@@ -767,7 +767,7 @@ public final class CcCompilationHelper {
     outputGroups.put(OutputGroupInfo.TEMP_FILES, ccOutputs.getTemps());
     if (emitCompileProviders) {
       boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
-      boolean usePic = ccToolchain.usePicForDynamicLibraries();
+      boolean usePic = CppHelper.usePicForDynamicLibraries(ruleContext, ccToolchain);
       outputGroups.put(
           OutputGroupInfo.FILES_TO_COMPILE,
           ccOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
