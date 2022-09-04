@@ -13,7 +13,6 @@ package com.facebook.stetho.inspector.protocol.module;
 
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.inspector.console.RuntimeRepl;
-import com.facebook.stetho.inspector.console.RuntimeReplFactory;
 import com.facebook.stetho.inspector.helper.ObjectIdMapper;
 import com.facebook.stetho.inspector.jsonrpc.DisconnectReceiver;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcException;
@@ -41,7 +40,6 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 public class Runtime implements ChromeDevtoolsDomain {
   private final ObjectMapper mObjectMapper = new ObjectMapper();
@@ -49,14 +47,19 @@ public class Runtime implements ChromeDevtoolsDomain {
   private static final Map<JsonRpcPeer, Session> sSessions =
       Collections.synchronizedMap(new HashMap<JsonRpcPeer, Session>());
 
-  private final RuntimeReplFactory mReplFactory;
+  private final RuntimeRepl mRepl;
 
   public Runtime() {
-    this(new DefaultRuntimeReplFactory());
+    this(new RuntimeRepl() {
+      @Override
+      public Object evaluate(String expression) {
+        return "Not supported (yet)";
+      }
+    });
   }
 
-  public Runtime(RuntimeReplFactory replFactory) {
-    mReplFactory = replFactory;
+  public Runtime(RuntimeRepl repl) {
+    mRepl = repl;
   }
 
   public static int mapObject(JsonRpcPeer peer, Object object) {
@@ -129,7 +132,7 @@ public class Runtime implements ChromeDevtoolsDomain {
 
   @ChromeDevtoolsMethod
   public JsonRpcResult evaluate(JsonRpcPeer peer, JSONObject params) {
-    return getSession(peer).evaluate(mReplFactory, params);
+    return getSession(peer).evaluate(mRepl, params);
   }
 
   @ChromeDevtoolsMethod
@@ -164,9 +167,6 @@ public class Runtime implements ChromeDevtoolsDomain {
   private static class Session {
     private final ObjectIdMapper mObjects = new ObjectIdMapper();
     private final ObjectMapper mObjectMapper = new ObjectMapper();
-
-    @Nullable
-    private RuntimeRepl mRepl;
 
     public ObjectIdMapper getObjects() {
       return mObjects;
@@ -223,7 +223,7 @@ public class Runtime implements ChromeDevtoolsDomain {
       return result;
     }
 
-    public EvaluateResponse evaluate(RuntimeReplFactory replFactory, JSONObject params) {
+    public EvaluateResponse evaluate(RuntimeRepl repl, JSONObject params) {
       EvaluateRequest request = mObjectMapper.convertValue(params, EvaluateRequest.class);
 
       try {
@@ -231,20 +231,11 @@ public class Runtime implements ChromeDevtoolsDomain {
           return buildExceptionResponse("Not supported by FAB");
         }
 
-        RuntimeRepl repl = getRepl(replFactory);
         Object result = repl.evaluate(request.expression);
         return buildNormalResponse(result);
       } catch (Exception e) {
         return buildExceptionResponse(e);
       }
-    }
-
-    @Nonnull
-    private synchronized RuntimeRepl getRepl(RuntimeReplFactory replFactory) {
-      if (mRepl == null) {
-        mRepl = replFactory.newInstance();
-      }
-      return mRepl;
     }
 
     private EvaluateResponse buildNormalResponse(Object retval) {
@@ -559,18 +550,6 @@ public class Runtime implements ChromeDevtoolsDomain {
     @JsonValue
     public String getProtocolValue() {
       return mProtocolValue;
-    }
-  }
-
-  private static class DefaultRuntimeReplFactory implements RuntimeReplFactory {
-    @Override
-    public RuntimeRepl newInstance() {
-      return new RuntimeRepl() {
-        @Override
-        public Object evaluate(String expression) throws Exception {
-          return "Not supported";
-        }
-      };
     }
   }
 }
