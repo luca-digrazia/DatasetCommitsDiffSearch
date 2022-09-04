@@ -184,7 +184,7 @@ public class CurrentInjectionPointProvider<T> implements InjectableReferenceProv
 
         AnnotatedBase(Type baseType, Set<Annotation> annotations) {
             this.baseType = baseType;
-            this.annotations = CollectionHelpers.toImmutableSmallSet(annotations);
+            this.annotations = annotations;
         }
 
         @Override

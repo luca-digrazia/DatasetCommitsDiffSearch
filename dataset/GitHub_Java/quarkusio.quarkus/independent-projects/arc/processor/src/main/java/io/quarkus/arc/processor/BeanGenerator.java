@@ -50,6 +50,7 @@ import java.util.function.Supplier;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.IllegalProductException;
+import javax.enterprise.inject.TransientReference;
 import javax.enterprise.inject.literal.InjectLiteral;
 import javax.enterprise.inject.spi.InterceptionType;
 import javax.interceptor.InvocationContext;
@@ -69,7 +70,9 @@ import org.jboss.jandex.Type;
 public class BeanGenerator extends AbstractGenerator {
 
     static final String BEAN_SUFFIX = "_Bean";
+
     static final String PRODUCER_METHOD_SUFFIX = "_ProducerMethod";
+
     static final String PRODUCER_FIELD_SUFFIX = "_ProducerField";
 
     protected static final String FIELD_NAME_DECLARING_PROVIDER_SUPPLIER = "declaringProviderSupplier";
