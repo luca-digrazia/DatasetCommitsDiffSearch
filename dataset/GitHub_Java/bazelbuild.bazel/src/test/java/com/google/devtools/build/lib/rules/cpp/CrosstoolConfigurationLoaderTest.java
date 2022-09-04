@@ -21,7 +21,7 @@ import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
+import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -192,10 +192,10 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(ccProvider.getAbi()).isEqualTo("abi-version");
     assertThat(ccProvider.getAbiGlibcVersion()).isEqualTo("abi-libc-version");
 
-    assertThat(ccProvider.supportsGoldLinker()).isTrue();
+    assertThat(toolchain.supportsGoldLinker()).isTrue();
     assertThat(toolchain.supportsStartEndLib()).isFalse();
     assertThat(toolchain.supportsInterfaceSharedObjects()).isFalse();
-    assertThat(ccProvider.supportsEmbeddedRuntimes()).isFalse();
+    assertThat(toolchain.supportsEmbeddedRuntimes()).isFalse();
     assertThat(toolchain.toolchainNeedsPic()).isFalse();
     assertThat(toolchain.supportsFission()).isTrue();
 
@@ -492,7 +492,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     ConfiguredTarget ccToolchainA = getCcToolchainTarget(toolchainA);
     CcToolchainProvider ccProviderA =
         (CcToolchainProvider) ccToolchainA.get(ToolchainInfo.PROVIDER);
-    TemplateVariableInfo makeProviderA = ccToolchainA.get(TemplateVariableInfo.PROVIDER);
+    MakeVariableInfo makeProviderA = ccToolchainA.get(MakeVariableInfo.PROVIDER);
     assertThat(toolchainA.getToolchainIdentifier()).isEqualTo("toolchain-identifier-A");
     assertThat(toolchainA.getHostSystemName()).isEqualTo("host-system-name-A");
     assertThat(toolchainA.getTargetGnuSystemName()).isEqualTo("target-system-name-A");
@@ -513,9 +513,9 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         .isEqualTo(getToolPath("path/to/objdump-A"));
     assertThat(toolchainA.getToolPathFragment(Tool.STRIP))
         .isEqualTo(getToolPath("path/to/strip-A"));
-    assertThat(ccProviderA.supportsGoldLinker()).isTrue();
+    assertThat(toolchainA.supportsGoldLinker()).isTrue();
     assertThat(toolchainA.supportsStartEndLib()).isTrue();
-    assertThat(ccProviderA.supportsEmbeddedRuntimes()).isTrue();
+    assertThat(toolchainA.supportsEmbeddedRuntimes()).isTrue();
     assertThat(toolchainA.toolchainNeedsPic()).isTrue();
 
     assertThat(toolchainA.getCompilerOptions(NO_FEATURES))
@@ -591,7 +591,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         .containsExactly("ld-embed-flag-A-1", "ld-embed-flag-A-2")
         .inOrder();
 
-    assertThat(makeProviderA.getVariables().entrySet())
+    assertThat(makeProviderA.getMakeVariables().entrySet())
         .containsExactlyElementsIn(
             ImmutableMap.<String, String>builder()
                 .put("SOME_MAKE_VARIABLE-A-1", "make-variable-value-A-1")
@@ -634,10 +634,10 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     assertThat(ccProviderC.getAbi()).isEqualTo("abi-version-C");
     assertThat(ccProviderC.getAbiGlibcVersion()).isEqualTo("abi-libc-version-C");
     // Don't bother with testing the list of tools again.
-    assertThat(ccProviderC.supportsGoldLinker()).isFalse();
+    assertThat(toolchainC.supportsGoldLinker()).isFalse();
     assertThat(toolchainC.supportsStartEndLib()).isFalse();
     assertThat(toolchainC.supportsInterfaceSharedObjects()).isFalse();
-    assertThat(ccProviderC.supportsEmbeddedRuntimes()).isFalse();
+    assertThat(toolchainC.supportsEmbeddedRuntimes()).isFalse();
     assertThat(toolchainC.toolchainNeedsPic()).isFalse();
     assertThat(toolchainC.supportsFission()).isFalse();
 
