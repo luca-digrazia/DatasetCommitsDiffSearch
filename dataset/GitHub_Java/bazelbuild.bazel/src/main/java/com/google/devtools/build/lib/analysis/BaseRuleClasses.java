@@ -66,11 +66,6 @@ public class BaseRuleClasses {
         public Object getDefault(AttributeMap rule) {
           return rule.getPackageDefaultTestOnly();
         }
-
-        @Override
-        public boolean resolvableWithRawAttributes() {
-          return true;
-        }
       };
 
   @AutoCodec @AutoCodec.VisibleForSerialization
@@ -79,32 +74,6 @@ public class BaseRuleClasses {
         @Override
         public Object getDefault(AttributeMap rule) {
           return rule.getPackageDefaultDeprecation();
-        }
-
-        @Override
-        public boolean resolvableWithRawAttributes() {
-          return true;
-        }
-      };
-
-  @AutoCodec
-  public static final Attribute.ComputedDefault TIMEOUT_DEFAULT =
-      new Attribute.ComputedDefault() {
-        @Override
-        public Object getDefault(AttributeMap rule) {
-          TestSize size = TestSize.getTestSize(rule.get("size", Type.STRING));
-          if (size != null) {
-            String timeout = size.getDefaultTimeout().toString();
-            if (timeout != null) {
-              return timeout;
-            }
-          }
-          return "illegal";
-        }
-
-        @Override
-        public boolean resolvableWithRawAttributes() {
-          return true;
         }
       };
 
@@ -201,7 +170,20 @@ public class BaseRuleClasses {
               attr("timeout", STRING)
                   .taggable()
                   .nonconfigurable("policy decision: should be consistent across configurations")
-                  .value(TIMEOUT_DEFAULT))
+                  .value(
+                      new Attribute.ComputedDefault() {
+                        @Override
+                        public Object getDefault(AttributeMap rule) {
+                          TestSize size = TestSize.getTestSize(rule.get("size", Type.STRING));
+                          if (size != null) {
+                            String timeout = size.getDefaultTimeout().toString();
+                            if (timeout != null) {
+                              return timeout;
+                            }
+                          }
+                          return "illegal";
+                        }
+                      }))
           .add(
               attr("flaky", BOOLEAN)
                   .value(false)
@@ -405,9 +387,6 @@ public class BaseRuleClasses {
               attr(RuleClass.TARGET_COMPATIBLE_WITH_ATTR, LABEL_LIST)
                   .mandatoryProviders(ConstraintValueInfo.PROVIDER.id())
                   // This should be configurable to allow for complex types of restrictions.
-                  .tool(
-                      "target_compatible_with exists for constraint checking, not to create an"
-                          + " actual dependency")
                   .allowedFileTypes(FileTypeSet.NO_FILE))
           .build();
     }
@@ -468,9 +447,6 @@ public class BaseRuleClasses {
               attr(RuleClass.EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
                   .allowedFileTypes()
                   .nonconfigurable("Used in toolchain resolution")
-                  .tool(
-                      "exec_compatible_with exists for constraint checking, not to create an"
-                          + " actual dependency")
                   .value(ImmutableList.of()))
           .build();
     }
