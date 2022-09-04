@@ -69,7 +69,7 @@ public class FunctionTest extends EvaluationTestCase {
 
   private void createOuterFunction(final List<Object> params) throws Exception {
     BaseFunction outerFunc =
-        new BaseFunction("outer_func", FunctionSignature.ANY) {
+        new BaseFunction("outer_func") {
           @Override
           public Object call(
               List<Object> args,

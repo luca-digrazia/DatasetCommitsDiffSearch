@@ -27,7 +27,12 @@ import org.junit.runners.JUnit4;
 
 /** Tests of StarlarkThread. */
 @RunWith(JUnit4.class)
-public final class StarlarkThreadTest extends EvaluationTestCase {
+public class StarlarkThreadTest extends EvaluationTestCase {
+
+  @Override
+  public StarlarkThread newStarlarkThread() {
+    return newBuildStarlarkThread();
+  }
 
   // Test the API directly
   @Test
@@ -134,6 +139,13 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testToString() throws Exception {
+    update("subject", new StringLiteral("Hello, 'world'."));
+    update("from", new StringLiteral("Java"));
+    assertThat(getStarlarkThread().toString()).isEqualTo("<StarlarkThread[test]>");
+  }
+
+  @Test
   public void testBindToNullThrowsException() throws Exception {
     NullPointerException e =
         assertThrows(NullPointerException.class, () -> update("some_name", null));
@@ -175,9 +187,9 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
 
   @Test
   public void testBuiltinsCanBeShadowed() throws Exception {
-    StarlarkThread thread = newStarlarkThreadWithSkylarkOptions();
-    EvalUtils.exec(ParserInput.fromLines("True = 123"), thread);
-    assertThat(thread.moduleLookup("True")).isEqualTo(123);
+    StarlarkThread thread = newStarlarkThreadWithSkylarkOptions().setup("special_var", 42);
+    EvalUtils.exec(ParserInput.fromLines("special_var = 41"), thread);
+    assertThat(thread.moduleLookup("special_var")).isEqualTo(41);
   }
 
   @Test
@@ -205,7 +217,7 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
     parentThread.update("a", 1);
     parentThread.update("c", 2);
     parentThread.update("b", 3);
-    Module parentFrame = parentThread.getGlobals();
+    StarlarkThread.GlobalFrame parentFrame = parentThread.getGlobals();
     parentMutability.freeze();
     Mutability mutability = Mutability.create("testing");
     StarlarkThread thread =

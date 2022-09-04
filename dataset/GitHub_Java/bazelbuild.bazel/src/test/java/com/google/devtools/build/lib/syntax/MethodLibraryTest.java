@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import org.junit.Before;
 import org.junit.Test;
@@ -173,11 +172,11 @@ public class MethodLibraryTest extends EvaluationTestCase {
             "object of type 'string' has no attribute 'not_there'",
             "getattr('a string', 'not_there')")
         .testExpression("getattr('a string', 'not_there', 'use this')", "use this")
-        .testExpression("getattr('a string', 'not there', None)", Starlark.NONE);
+        .testExpression("getattr('a string', 'not there', None)", Runtime.NONE);
   }
 
   @SkylarkModule(name = "AStruct", documented = false, doc = "")
-  static final class AStruct implements ClassObject, SkylarkValue {
+  static final class AStruct implements ClassObject {
     @Override
     public Object getValue(String name) {
       switch (name) {
@@ -366,10 +365,10 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testDictionaryGet() throws Exception {
     new BuildTest()
         .testExpression("{1: 'foo'}.get(1)", "foo")
-        .testExpression("{1: 'foo'}.get(2)", Starlark.NONE)
+        .testExpression("{1: 'foo'}.get(2)", Runtime.NONE)
         .testExpression("{1: 'foo'}.get(2, 'a')", "a")
         .testExpression("{1: 'foo'}.get(2, default='a')", "a")
-        .testExpression("{1: 'foo'}.get(2, default=None)", Starlark.NONE);
+        .testExpression("{1: 'foo'}.get(2, default=None)", Runtime.NONE);
   }
 
   @Test
@@ -609,7 +608,8 @@ public class MethodLibraryTest extends EvaluationTestCase {
         .testExpression("type(str)", "function");
   }
 
-  // TODO(bazel-team): Move select and this test into lib/packages.
+  // TODO(bazel-team): Move this into a new BazelLibraryTest.java file, or at least out of
+  // MethodLibraryTest.java.
   @Test
   public void testSelectFunction() throws Exception {
     enableSkylarkMode();
@@ -666,14 +666,15 @@ public class MethodLibraryTest extends EvaluationTestCase {
     checkStrip("abc", "xyz", "abc", "abc", "abc");
     // Default whitespace.
     checkStrip(" a b c ", null, "a b c ", " a b c", "a b c");
-    checkStrip(" a b c ", Starlark.NONE, "a b c ", " a b c", "a b c");
+    checkStrip(" a b c ", Runtime.NONE, "a b c ", " a b c", "a b c");
     // Default whitespace with full range of Latin-1 whitespace chars.
     String whitespace = "\u0009\n\u000B\u000C\r\u001C\u001D\u001E\u001F\u0020\u0085\u00A0";
     checkStrip(
         whitespace + "a" + whitespace, null,
         "a" + whitespace, whitespace + "a", "a");
     checkStrip(
-        whitespace + "a" + whitespace, Starlark.NONE, "a" + whitespace, whitespace + "a", "a");
+        whitespace + "a" + whitespace, Runtime.NONE,
+        "a" + whitespace, whitespace + "a", "a");
     // Empty cases.
     checkStrip("", "", "", "", "");
     checkStrip("abc", "abc", "", "", "");
@@ -705,7 +706,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
         // Parameters which may be specified by keyword but are not explicitly 'named'.
         .testExpression("all(elements=[True, True])", Boolean.TRUE)
         .testExpression("any(elements=[True, False])", Boolean.TRUE)
-        .testEval("sorted(iterable=[3, 0, 2], key=None, reverse=False)", "[0, 2, 3]")
+        .testEval("sorted(self=[3, 0, 2], key=None, reverse=False)", "[0, 2, 3]")
         .testEval("reversed(sequence=[3, 2, 0])", "[0, 2, 3]")
         .testEval("tuple(x=[1, 2])", "(1, 2)")
         .testEval("list(x=(1, 2))", "[1, 2]")
@@ -748,9 +749,15 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testStringJoinRequiresStrings() throws Exception {
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_string_join_requires_strings")
         .testIfErrorContains(
-            "expected string for sequence element 1, got 'int'", "', '.join(['foo', 2])");
+            "sequence element must be a string (got 'int')", "', '.join(['foo', 2])");
+  }
+
+  @Test
+  public void testStringJoinDoesNotRequireStrings() throws Exception {
+    new SkylarkTest("--incompatible_string_join_requires_strings=false")
+        .testEval("', '.join(['foo', 2])", "'foo, 2'");
   }
 
   @Test

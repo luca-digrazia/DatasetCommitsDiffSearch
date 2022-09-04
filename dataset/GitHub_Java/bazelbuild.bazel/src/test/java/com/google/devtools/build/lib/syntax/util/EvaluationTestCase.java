@@ -22,19 +22,23 @@ import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
+import com.google.devtools.build.lib.packages.BazelLibrary;
+import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.SkylarkUtils;
+import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestMode;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +57,31 @@ public class EvaluationTestCase {
   @Before
   public final void initialize() throws Exception {
     thread = newStarlarkThread();
+  }
+
+  /**
+   * Creates a standard StarlarkThread for tests in the BUILD language. No PythonPreprocessing,
+   * mostly empty mutable StarlarkThread.
+   */
+  public StarlarkThread newBuildStarlarkThread() {
+    StarlarkThread thread =
+        StarlarkThread.builder(mutability)
+            .useDefaultSemantics()
+            .setGlobals(BazelLibrary.GLOBALS)
+            .setEventHandler(getEventHandler())
+            .build();
+
+    SkylarkUtils.setPhase(thread, Phase.LOADING);
+
+    new BazelStarlarkContext(
+            TestConstants.TOOLS_REPOSITORY,
+            /* fragmentNameToClass= */ null,
+            /* repoMapping= */ ImmutableMap.of(),
+            new SymbolGenerator<>(new Object()),
+            /* analysisRuleLabel= */ null)
+        .storeInThread(thread);
+
+    return thread;
   }
 
   /**
@@ -119,7 +148,6 @@ public class EvaluationTestCase {
   public StarlarkThread getStarlarkThread() {
     return thread;
   }
-
   // TODO(adonovan): don't let subclasses inherit vaguely specified "helpers".
   // Separate all the tests clearly into tests of the scanner, parser, resolver,
   // and evaluation.
@@ -129,15 +157,13 @@ public class EvaluationTestCase {
     return Expression.parse(ParserInput.fromLines(lines));
   }
 
-  /** Updates a binding in the module associated with the thread. */
   public EvaluationTestCase update(String varname, Object value) throws Exception {
-    thread.getGlobals().put(varname, value);
+    thread.update(varname, value);
     return this;
   }
 
-  /** Returns the value of a binding in the module associated with the thread. */
   public Object lookup(String varname) throws Exception {
-    return thread.getGlobals().lookup(varname);
+    return thread.moduleLookup(varname);
   }
 
   /** Joins the lines, parses them as an expression, and evaluates it. */
@@ -166,8 +192,7 @@ public class EvaluationTestCase {
       // For BUILD mode, validation events are reported but don't (yet)
       // prevent execution. We also apply BUILD dialect syntax checks.
       Event.replayEventsOn(getEventHandler(), file.errors());
-      List<String> globs = new ArrayList<>(); // unused
-      PackageFactory.checkBuildSyntax(file, globs, globs, new HashMap<>(), getEventHandler());
+      PackageFactory.checkBuildSyntax(file, getEventHandler());
     }
     EvalUtils.exec(file, thread);
   }
@@ -430,7 +455,7 @@ public class EvaluationTestCase {
     }
 
     /**
-     * Registers an update to a module variable to be bound before a test
+     * Registers a variable that has to be updated before a test
      *
      * @param name
      * @param value

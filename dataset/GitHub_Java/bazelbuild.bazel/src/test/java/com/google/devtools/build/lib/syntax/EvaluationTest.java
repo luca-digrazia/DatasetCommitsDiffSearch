@@ -17,9 +17,11 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.EventCollector;
+import com.google.devtools.build.lib.packages.BazelLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.Collections;
@@ -57,9 +59,7 @@ public class EvaluationTest extends EvaluationTestCase {
     StarlarkThread thread =
         StarlarkThread.builder(mutability)
             .useDefaultSemantics()
-            .setGlobals(
-                Module.createForBuiltins(
-                    Starlark.UNIVERSE)) // for print... this should not be necessary
+            .setGlobals(BazelLibrary.GLOBALS) // for print... this should not be necessary
             .setEventHandler(printEvents)
             .build();
     ParserInput input = ParserInput.fromLines("print('hello'); x = 1//0; print('goodbye')");
@@ -137,7 +137,7 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testSumFunction() throws Exception {
     BaseFunction sum =
-        new BaseFunction("sum", FunctionSignature.ANY) {
+        new BaseFunction("sum") {
           @Override
           public Object call(
               List<Object> args,
@@ -179,7 +179,7 @@ public class EvaluationTest extends EvaluationTestCase {
 
     // This function returns the map of keyword arguments passed to it.
     BaseFunction kwargs =
-        new BaseFunction("kwargs", FunctionSignature.ANY) {
+        new BaseFunction("kwargs") {
           @Override
           public Object call(
               List<Object> args,

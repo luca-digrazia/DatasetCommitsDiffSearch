@@ -19,6 +19,8 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -492,7 +494,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
         "s = depset() + [2, 4, 6] + [3, 4, 5]", //
         "x = s.to_list()");
     Object value = lookup("x");
-    assertThat(value).isInstanceOf(StarlarkList.class);
+    assertThat(value).isInstanceOf(MutableList.class);
     assertThat((Iterable<?>) value).containsExactly(2, 4, 6, 3, 5).inOrder();
   }
 
@@ -591,17 +593,23 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
   @Test
   public void testDepthExceedsLimitDuringIteration() throws Exception {
     NestedSet.setApplicationDepthLimit(2000);
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_depset_is_not_iterable=false")
         .setUp(
             "def create_depset(depth):",
             "  x = depset([0])",
             "  for i in range(1, depth):",
             "    x = depset([i], transitive = [x])",
-            "  for element in x.to_list():",
+            "  for element in x:",
             "    str(x)",
             "  return None")
         .testEval("create_depset(1000)", "None")
         .testIfErrorContains("depset exceeded maximum depth 2000", "create_depset(3000)");
+  }
+
+  @Test
+  public void testListComprehensionsWithNestedSet() throws Exception {
+    new SkylarkTest("--incompatible_depset_is_not_iterable=false")
+        .testEval("[x + x for x in depset([1, 2, 3])]", "[2, 4, 6]");
   }
 
   private interface MergeStrategy {

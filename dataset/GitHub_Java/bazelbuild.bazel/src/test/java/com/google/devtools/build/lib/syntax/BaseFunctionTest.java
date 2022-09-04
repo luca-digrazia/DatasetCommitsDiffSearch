@@ -33,17 +33,12 @@ import org.junit.runners.JUnit4;
 public class BaseFunctionTest extends EvaluationTestCase {
 
   /**
-   * Handy implementation of {@link BaseFunction} that returns all its args as a list. (We'd use
-   * Tuple, but it can't handle null.)
+   * Handy implementation of {@link BaseFunction} that returns all its args as a list.
+   * (We'd use SkylarkList.tuple, but it can't handle null.)
    */
   private static class TestingBaseFunction extends BaseFunction {
     TestingBaseFunction(FunctionSignature signature) {
-      super(signature);
-    }
-
-    @Override
-    public String getName() {
-      return "mixed";
+      super("mixed", signature);
     }
 
     @Override
@@ -146,15 +141,18 @@ public class BaseFunctionTest extends EvaluationTestCase {
             + "b1 = bar(name='foo', type='jpg', version=42)\n"
             + "b2 = bar()\n");
 
-    assertThat(Starlark.repr(lookup("v1"))).isEqualTo("(1, 2, 3, 4, 7, 8, (), {})");
-    assertThat(Starlark.repr(lookup("v2")))
+    assertThat(Printer.repr(lookup("v1")))
+        .isEqualTo("(1, 2, 3, 4, 7, 8, (), {})");
+    assertThat(Printer.repr(lookup("v2")))
         .isEqualTo("(1, \"x\", \"y\", \"z\", \"t\", 9, (), {\"i\": 0})");
-    assertThat(Starlark.repr(lookup("v3"))).isEqualTo("(1, 2, 3, 4, 5, 6, (7, 8), {\"i\": 0})");
+    assertThat(Printer.repr(lookup("v3")))
+        .isEqualTo("(1, 2, 3, 4, 5, 6, (7, 8), {\"i\": 0})");
 
     // NB: the conversion to a TreeMap below ensures the keys are sorted.
-    assertThat(Starlark.repr(new TreeMap<String, Object>((Map<String, Object>) lookup("b1"))))
+    assertThat(Printer.repr(
+        new TreeMap<String, Object>((Map<String, Object>) lookup("b1"))))
         .isEqualTo("{\"name\": \"foo\", \"type\": \"jpg\", \"version\": 42}");
-    assertThat(Starlark.repr(lookup("b2"))).isEqualTo("{}");
+    assertThat(Printer.repr(lookup("b2"))).isEqualTo("{}");
   }
 
   @Test
@@ -168,9 +166,9 @@ public class BaseFunctionTest extends EvaluationTestCase {
             + "v3 = f(a=1,)\n"
             + "v4 = f(**{\"a\": 1},)\n");
 
-    assertThat(Starlark.repr(lookup("v1"))).isEqualTo("None");
-    assertThat(Starlark.repr(lookup("v2"))).isEqualTo("None");
-    assertThat(Starlark.repr(lookup("v3"))).isEqualTo("None");
-    assertThat(Starlark.repr(lookup("v4"))).isEqualTo("None");
+    assertThat(Printer.repr(lookup("v1"))).isEqualTo("None");
+    assertThat(Printer.repr(lookup("v2"))).isEqualTo("None");
+    assertThat(Printer.repr(lookup("v3"))).isEqualTo("None");
+    assertThat(Printer.repr(lookup("v4"))).isEqualTo("None");
   }
 }

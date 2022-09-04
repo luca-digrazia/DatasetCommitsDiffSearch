@@ -18,9 +18,9 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import java.io.BufferedReader;
@@ -59,8 +59,7 @@ class Starlark {
   private final StarlarkThread thread =
       StarlarkThread.builder(mutability)
           .useDefaultSemantics()
-          .setGlobals(
-              Module.createForBuiltins(com.google.devtools.build.lib.syntax.Starlark.UNIVERSE))
+          .setGlobals(StarlarkThread.DEFAULT_GLOBALS)
           .setEventHandler(PRINT_HANDLER)
           .build();
 
@@ -102,7 +101,7 @@ class Starlark {
       try {
         Object result = EvalUtils.execAndEvalOptionalFinalExpression(input, thread);
         if (result != null) {
-          System.out.println(com.google.devtools.build.lib.syntax.Starlark.repr(result));
+          System.out.println(Printer.repr(result));
         }
       } catch (SyntaxError ex) {
         for (Event ev : ex.errors()) {
