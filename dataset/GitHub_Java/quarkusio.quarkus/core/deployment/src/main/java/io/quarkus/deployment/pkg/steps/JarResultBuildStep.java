@@ -120,8 +120,7 @@ public class JarResultBuildStep {
             "META-INF/quarkus-extension.yaml",
             "META-INF/quarkus-deployment-dependency.graph",
             "META-INF/jandex.idx",
-            "META-INF/panache-archive.marker",
-            "META-INF/build.metadata", // present in the Red Hat Build of Quarkus
+            "META-INF/build.metadata", //present in the red hat build of Quarkus
             "LICENSE");
 
     private static final Logger log = Logger.getLogger(JarResultBuildStep.class);

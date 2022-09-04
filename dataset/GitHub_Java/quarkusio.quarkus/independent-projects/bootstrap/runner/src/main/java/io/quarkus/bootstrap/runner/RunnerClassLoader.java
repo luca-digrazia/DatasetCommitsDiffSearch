@@ -25,10 +25,6 @@ public class RunnerClassLoader extends ClassLoader {
 
     private final Set<String> parentFirstPackages;
     private final Set<String> nonExistentResources;
-    // the following two fields go hand in hand - they need to both be populated from the same data
-    // in order for the resource loading to work properly
-    private final Set<String> fullyIndexedDirectories;
-    private final Map<String, ClassLoadingResource[]> directlyIndexedResourcesIndexMap;
 
     private final ConcurrentMap<ClassLoadingResource, ProtectionDomain> protectionDomains = new ConcurrentHashMap<>();
 
@@ -37,14 +33,11 @@ public class RunnerClassLoader extends ClassLoader {
     }
 
     RunnerClassLoader(ClassLoader parent, Map<String, ClassLoadingResource[]> resourceDirectoryMap,
-            Set<String> parentFirstPackages, Set<String> nonExistentResources,
-            Set<String> fullyIndexedDirectories, Map<String, ClassLoadingResource[]> directlyIndexedResourcesIndexMap) {
+            Set<String> parentFirstPackages, Set<String> nonExistentResources) {
         super(parent);
         this.resourceDirectoryMap = resourceDirectoryMap;
         this.parentFirstPackages = parentFirstPackages;
         this.nonExistentResources = nonExistentResources;
-        this.fullyIndexedDirectories = fullyIndexedDirectories;
-        this.directlyIndexedResourcesIndexMap = directlyIndexedResourcesIndexMap;
     }
 
     @Override
@@ -128,20 +121,13 @@ public class RunnerClassLoader extends ClassLoader {
     }
 
     private ClassLoadingResource[] getClassLoadingResources(String name) {
-        ClassLoadingResource[] resources = directlyIndexedResourcesIndexMap.get(name);
-        if (resources != null) {
-            return resources;
-        }
         String dirName = getDirNameFromResourceName(name);
+        ClassLoadingResource[] resources;
         if (dirName == null) {
-            dirName = "";
+            resources = resourceDirectoryMap.get("");
+        } else {
+            resources = resourceDirectoryMap.get(dirName);
         }
-        if (!dirName.equals(name) && fullyIndexedDirectories.contains(dirName)) {
-            // If we arrive here, we know that resource being queried belongs to one of the fully indexed directories
-            // Had that resource existed however, it would have been present in directlyIndexedResourcesIndexMap
-            return null;
-        }
-        resources = resourceDirectoryMap.get(dirName);
         if (resources == null) {
             // the resource could itself be a directory
             resources = resourceDirectoryMap.get(name);
