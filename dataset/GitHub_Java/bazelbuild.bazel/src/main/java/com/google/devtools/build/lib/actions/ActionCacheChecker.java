@@ -19,7 +19,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
@@ -238,9 +238,9 @@ public class ActionCacheChecker {
    * <p>The method checks if any of the action's inputs or outputs have changed. Returns a non-null
    * {@link Token} if the action needs to be executed, and null otherwise.
    *
-   * <p>If this method returns non-null, indicating that the action will be executed, the {@code
-   * metadataHandler} must have any cached metadata cleared so that it does not serve stale metadata
-   * for the action's outputs after the action is executed.
+   * <p>If this method returns non-null, indicating that the action will be executed, the
+   * metadataHandler's {@link MetadataHandler#discardOutputMetadata} method must be called, so that
+   * it does not serve stale metadata for the action's outputs after the action is executed.
    */
   // Note: the handler should only be used for DEPCHECKER events; there's no
   // guarantee it will be available for other events.
@@ -250,7 +250,6 @@ public class ActionCacheChecker {
       Map<String, String> clientEnv,
       EventHandler handler,
       MetadataHandler metadataHandler,
-      ArtifactExpander artifactExpander,
       Map<String, String> remoteDefaultPlatformProperties) {
     // TODO(bazel-team): (2010) For RunfilesAction/SymlinkAction and similar actions that
     // produce only symlinks we should not check whether inputs are valid at all - all that matters
@@ -294,7 +293,6 @@ public class ActionCacheChecker {
         entry,
         handler,
         metadataHandler,
-        artifactExpander,
         actionInputs,
         clientEnv,
         remoteDefaultPlatformProperties)) {
@@ -310,12 +308,11 @@ public class ActionCacheChecker {
     return null;
   }
 
-  private boolean mustExecute(
+  protected boolean mustExecute(
       Action action,
       @Nullable ActionCache.Entry entry,
       EventHandler handler,
       MetadataHandler metadataHandler,
-      ArtifactExpander artifactExpander,
       NestedSet<Artifact> actionInputs,
       Map<String, String> clientEnv,
       Map<String, String> remoteDefaultPlatformProperties) {
@@ -340,7 +337,9 @@ public class ActionCacheChecker {
       reportChanged(handler, action);
       actionCache.accountMiss(MissReason.DIFFERENT_FILES);
       return true;
-    } else if (!entry.getActionKey().equals(action.getKey(actionKeyContext, artifactExpander))) {
+    } else if (!entry
+        .getActionKey()
+        .equals(action.getKey(actionKeyContext, /*artifactExpander=*/ null))) {
       reportCommand(handler, action);
       actionCache.accountMiss(MissReason.DIFFERENT_ACTION_KEY);
       return true;
@@ -384,7 +383,6 @@ public class ActionCacheChecker {
       Action action,
       Token token,
       MetadataHandler metadataHandler,
-      ArtifactExpander artifactExpander,
       Map<String, String> clientEnv,
       Map<String, String> remoteDefaultPlatformProperties)
       throws IOException {
@@ -400,7 +398,7 @@ public class ActionCacheChecker {
         computeUsedEnv(action, clientEnv, remoteDefaultPlatformProperties);
     ActionCache.Entry entry =
         new ActionCache.Entry(
-            action.getKey(actionKeyContext, artifactExpander),
+            action.getKey(actionKeyContext, /*artifactExpander=*/ null),
             usedEnvironment,
             action.discoversInputs());
     for (Artifact output : action.getOutputs()) {
