@@ -161,6 +161,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
             cppOptions,
             crosstoolTopLabel,
             (Rule) crosstoolTop,
+            crosstoolRelease,
             transformedCpu,
             key);
 
@@ -267,6 +268,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       CppOptions cppOptions,
       Label crosstoolTopLabel,
       Rule crosstoolTop,
+      CrosstoolRelease crosstoolRelease,
       String transformedCpu,
       String key)
       throws InvalidConfigurationException {
@@ -275,6 +277,16 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         NonconfigurableAttributeMapper.of(crosstoolTop)
             .get("toolchains", BuildType.LABEL_DICT_UNARY);
     Label ccToolchainLabel = toolchains.get(key);
+    if (ccToolchainLabel == null) {
+      ccToolchainLabel =
+          selectCcToolchainLabelUsingCrosstool(
+              transformedCpu,
+              compiler,
+              crosstoolTopLabel,
+              toolchains,
+              crosstoolRelease,
+              cppOptions.disableCcToolchainFromCrosstool);
+    }
     if (ccToolchainLabel == null) {
       throw new InvalidConfigurationException(
           getMissingCcToolchainErrorMessage(crosstoolTopLabel, transformedCpu, compiler));
@@ -286,12 +298,47 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       Label crosstoolTopLabel, String transformedCpu, String compiler) {
     String errorMessage =
         String.format(
-            "cc_toolchain_suite '%s' does not contain a toolchain for cpu '%s'",
+            "cc_toolchain_suite '%s' does not contain a toolchain for CPU '%s'",
             crosstoolTopLabel, transformedCpu);
     if (compiler != null) {
-      errorMessage = errorMessage + " and compiler '" + compiler + "'.";
+      errorMessage = errorMessage + " and compiler " + compiler;
     }
     return errorMessage;
+  }
+
+  static Label selectCcToolchainLabelUsingCrosstool(
+      String cpu,
+      String compiler,
+      Label crosstoolTopLabel,
+      Map<String, Label> toolchains,
+      CrosstoolRelease crosstoolRelease,
+      boolean usingCrosstoolForToolchainSelectionDisabled)
+      throws InvalidConfigurationException {
+    // If the cc_toolchain_suite does not contain entry for --cpu|--compiler (or only --cpu if
+    // --compiler is not present) we select the toolchain by looping through all the toolchains
+    // in the CROSSTOOL file and selecting the one that matches --cpu (and --compiler, if
+    // present). Then we use the toolchain.target_cpu|toolchain.compiler key to get the
+    // cc_toolchain label.
+    CToolchain toolchain =
+        CToolchainSelectionUtils.selectCToolchain(
+            /* identifierAttribute= */ null,
+            /* cpuAttribute= */ null,
+            /* compilerAttribute= */ null,
+            cpu,
+            compiler,
+            crosstoolRelease);
+    if (usingCrosstoolForToolchainSelectionDisabled) {
+      throw new InvalidConfigurationException(
+          getMissingCcToolchainErrorMessage(crosstoolTopLabel, cpu, compiler)
+              + String.format(
+                  ", you may want to add an entry for '%s|%s' into toolchains and "
+                      + "toolchain_identifier '%s' into the corresponding cc_toolchain rule "
+                      + "(see --incompatible_disable_cc_toolchain_label_from_crosstool_proto).",
+                  toolchain.getTargetCpu(),
+                  toolchain.getCompiler(),
+                  toolchain.getToolchainIdentifier()));
+    }
+    return toolchains.get(toolchain.getTargetCpu() + "|" + toolchain.getCompiler());
   }
 
   @Nullable

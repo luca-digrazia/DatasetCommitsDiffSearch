@@ -32,7 +32,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -148,8 +148,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
           .contains(
               String.format(
                   "Unrecognized file extension '.wrong_ext', allowed "
-                      + "extensions are %s, please check artifact_name_pattern configuration for "
-                      + "%s in your CROSSTOOL.",
+                     + "extensions are %s, please check artifact_name_pattern configuration for %s "
+                     + "in your CROSSTOOL.",
                   StringUtil.joinEnglishList(correctExtensions, "or", "'"), categoryName));
     }
   }
@@ -613,7 +613,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             "cc_library(name = 'x', srcs = ['x.cc'])");
     assertThat(
             ActionsTestUtil.baseArtifactNames(
-                x.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR).getInstrumentationMetadataFiles()))
+                x.getProvider(InstrumentedFilesProvider.class).getInstrumentationMetadataFiles()))
         .containsExactly("x.pic.gcno");
   }
 

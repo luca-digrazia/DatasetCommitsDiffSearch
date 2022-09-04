@@ -33,13 +33,13 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestBase;
 import com.google.devtools.build.lib.analysis.util.ExpectedTrimmedConfigurationErrors;
 import com.google.devtools.build.lib.analysis.util.MockRule;
-import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.OutputFilter.RegexOutputFilter;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -222,22 +222,6 @@ public class BuildViewTest extends BuildViewTestBase {
     AnalysisFailureEvent event = recorder.events.get(0);
     assertThat(event.getLegacyFailureReason().toString()).isEqualTo("//foo:bar");
     assertThat(event.getFailedTarget().getLabel().toString()).isEqualTo("//foo:foo");
-  }
-
-  @Test
-  public void testAnalysisReportsDependencyCycle() throws Exception {
-    scratch.file("foo/BUILD", "sh_library(name='foo',deps=['//bar'])");
-    scratch.file("bar/BUILD", "sh_library(name='bar',deps=[':bar'])");
-
-    reporter.removeHandler(failFastHandler);
-    EventBus eventBus = new EventBus();
-    AnalysisFailureRecorder recorder = new AnalysisFailureRecorder();
-    eventBus.register(recorder);
-    AnalysisResult result = update(eventBus, defaultFlags().with(Flag.KEEP_GOING), "//foo");
-    assertThat(result.hasError()).isTrue();
-    assertThat(recorder.events).hasSize(1);
-    AnalysisFailureEvent event = recorder.events.get(0);
-    assertThat(event.getConfigurationId()).isNotEqualTo(NullConfiguration.INSTANCE.getEventId());
   }
 
   @Test
@@ -1073,6 +1057,18 @@ public class BuildViewTest extends BuildViewTestBase {
   }
 
   @Test
+  public void testBadLabelInConfiguration() throws Exception {
+    useConfiguration("--crosstool_top=//third_party/crosstool/v2");
+    reporter.removeHandler(failFastHandler);
+    try {
+      update(defaultFlags().with(Flag.KEEP_GOING));
+      fail();
+    } catch (InvalidConfigurationException e) {
+      assertThat(e).hasMessageThat().contains("third_party/crosstool/v2");
+    }
+  }
+
+  @Test
   public void testVisibilityReferencesNonexistentPackage() throws Exception {
     scratch.file("z/a/BUILD",
         "py_library(name='a', visibility=['//nonexistent:nothing'])");
@@ -1421,9 +1417,5 @@ public class BuildViewTest extends BuildViewTestBase {
     @Test
     public void testErrorBelowCycle() {
     }
-
-    @Override
-    @Test
-    public void testAnalysisReportsDependencyCycle() {}
   }
 }
