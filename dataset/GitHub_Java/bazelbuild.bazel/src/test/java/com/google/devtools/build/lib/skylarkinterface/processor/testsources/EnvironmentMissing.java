@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
-import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 
 /**
@@ -23,13 +22,8 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
  */
 public class EnvironmentMissing {
 
-  @SkylarkCallable(name = "three_arg_method_missing_env", documented = false,
-      parameters = {
-          @Param(name = "one", type = String.class, named = true),
-          @Param(name = "two", type = Integer.class, named = true),
-      },
-      useEnvironment = true)
-  public String threeArgMethod(String one, Integer two, String shouldBeEnv) {
+  @SkylarkCallable(name = "three_arg_method_missing_env", documented = false, useEnvironment = true)
+  public String threeArgMethod(String one, Integer two, String three) {
     return "bar";
   }
 }

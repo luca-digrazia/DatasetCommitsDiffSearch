@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package com.google.devtools.build.lib.analysis.skylarkinterface.processor.testsources;
+package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -25,7 +25,7 @@ public class TooManyArguments {
 
   @SkylarkCallable(
     name = "method_with_too_many_arguments",
-    doc = "",
+    documented = false,
     parameters = {
       @Param(name = "parameter_one", type = String.class, named = true),
     })
