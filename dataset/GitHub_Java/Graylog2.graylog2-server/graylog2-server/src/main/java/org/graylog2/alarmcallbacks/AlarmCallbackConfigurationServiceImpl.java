@@ -87,20 +87,11 @@ public class AlarmCallbackConfigurationServiceImpl extends PersistedServiceImpl 
 
     @Override
     public String save(AlarmCallbackConfiguration model) throws ValidationException {
-
-        return super.save(getImplOrFail(model));
+        return super.save(model);
     }
 
     @Override
     public int destroy(AlarmCallbackConfiguration model) {
-        return super.destroy(getImplOrFail(model));
-    }
-
-    private AlarmCallbackConfigurationImpl getImplOrFail(AlarmCallbackConfiguration alarmCallback) {
-        if (alarmCallback instanceof AlarmCallbackConfigurationImpl) {
-            return (AlarmCallbackConfigurationImpl) alarmCallback;
-        } else {
-            throw new IllegalArgumentException("Argument must be of implementation class AlarmCallbackConfigurationImpl, not " + alarmCallback.getClass());
-        }
+        return super.destroy(model);
     }
 }

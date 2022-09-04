@@ -97,7 +97,7 @@ public class AlarmCallbackResource extends RestResource {
                     callback.getId(),
                     callback.getStreamId(),
                     callback.getType(),
-                    callback.getConfiguration(),
+                    callback.getConfiguration().getSource(),
                     callback.getCreatedAt(),
                     callback.getCreatorUserId()
             ));
@@ -123,7 +123,7 @@ public class AlarmCallbackResource extends RestResource {
             throw new javax.ws.rs.NotFoundException();
         }
 
-        return AlarmCallbackSummary.create(result.getId(), result.getStreamId(), result.getType(), result.getConfiguration(), result.getCreatedAt(), result.getCreatorUserId());
+        return AlarmCallbackSummary.create(result.getId(), result.getStreamId(), result.getType(), result.getConfiguration().getSource(), result.getCreatedAt(), result.getCreatorUserId());
     }
 
     @POST
@@ -140,6 +140,7 @@ public class AlarmCallbackResource extends RestResource {
         final Stream stream = streamService.load(streamid);
 
         final AlarmCallbackConfiguration alarmCallbackConfiguration = alarmCallbackConfigurationService.create(streamid, cr, getCurrentUser().getName());
+        alarmCallbackConfiguration.setStream(stream);
 
         final String id;
         try {
@@ -205,7 +206,7 @@ public class AlarmCallbackResource extends RestResource {
     }
 
     @PUT
-    @Path("/{alarmCallbackId}")
+    @Path("/{alarmCallbackId")
     @Timed
     @ApiOperation(value = "Update an alarm callback",
             response = CreateAlarmCallbackResponse.class)
