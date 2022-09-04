@@ -36,7 +36,7 @@ import static org.apache.commons.lang3.StringUtils.isNotBlank;
 
 public class UserContext {
     private final UserService userService;
-    private final String userId;
+    private final String username;
     private final Subject subject;
 
     public static class Factory {
@@ -59,11 +59,11 @@ public class UserContext {
         public UserContext create() throws UserContextMissingException {
             try {
                 final Subject subject = SecurityUtils.getSubject();
-                final Object userId = subject.getPrincipal();
-                if (!(userId instanceof String)) {
-                    throw new UserContextMissingException("Unknown SecurityContext class <" + userId + ">, cannot continue.");
+                final Object username = subject.getPrincipal();
+                if (!(username instanceof String)) {
+                    throw new UserContextMissingException("Unknown SecurityContext class <" + username + ">, cannot continue.");
                 }
-                return new UserContext((String) userId, subject, userService);
+                return new UserContext((String) username, subject, userService);
             } catch (IllegalStateException | UnavailableSecurityManagerException e) {
                 throw new UserContextMissingException("Cannot retrieve current subject, SecurityContext isn't set.");
             }
@@ -106,18 +106,18 @@ public class UserContext {
         subject.execute(runnable);
     }
 
-    public UserContext(String userId, Subject subject, UserService userService) {
-        this.userId = userId;
+    public UserContext(String username, Subject subject, UserService userService) {
+        this.username = username;
         this.subject = subject;
         this.userService = userService;
     }
 
-    public String getUserId() {
-        return userId;
+    public String getUsername() {
+        return username;
     }
 
     public User getUser() {
-        return Optional.ofNullable(userService.loadById(userId)).orElseThrow(() -> new IllegalStateException("Cannot load user <" + userId + "> from db"));
+        return Optional.ofNullable(userService.load(username)).orElseThrow(() -> new IllegalStateException("Cannot load user <" + username + "> from db"));
     }
 
     protected boolean isOwner(GRN entity) {
