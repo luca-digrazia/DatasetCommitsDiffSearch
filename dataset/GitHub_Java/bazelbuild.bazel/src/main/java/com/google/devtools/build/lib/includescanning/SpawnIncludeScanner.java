@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.includescanning.IncludeParser.GrepIncludesFileType;
 import com.google.devtools.build.lib.includescanning.IncludeParser.Inclusion;
-import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -54,9 +53,8 @@ import javax.annotation.Nullable;
  * transitively referenced include files.
  */
 public class SpawnIncludeScanner {
-  /** The grep-includes tool is very lightweight, so don't use the default from AbstractAction. */
   private static final ResourceSet LOCAL_RESOURCES =
-      ResourceSet.createWithRamCpu(/*memoryMb=*/ 10, /*cpuUsage=*/ 1);
+      ResourceSet.createWithRamCpuIo(/*memoryMb=*/10, /*cpuUsage=*/.3, /*ioUsage=*/.0);
 
   private final Path execRoot;
   private OutputService outputService;
@@ -363,28 +361,10 @@ public class SpawnIncludeScanner {
 
     actionExecutionContext.maybeReportSubcommand(spawn);
 
-    // Don't share the originalOutErr across spawnGrep calls. Doing so would not be thread-safe.
-    FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
-    FileOutErr grepOutErr = originalOutErr.childOutErr();
     SpawnActionContext context = actionExecutionContext.getContext(SpawnActionContext.class);
-    List<SpawnResult> results;
-    try {
-      results = context.exec(spawn, actionExecutionContext.withFileOutErr(grepOutErr));
-      dump(actionExecutionContext, grepOutErr, originalOutErr);
-    } catch (ExecException e) {
-      dump(actionExecutionContext, grepOutErr, originalOutErr);
-      throw e;
-    }
+    List<SpawnResult> results = context.exec(spawn, actionExecutionContext);
 
     SpawnResult result = Iterables.getLast(results);
     return result.getInMemoryOutput(output);
-  }
-
-  private static void dump(ActionExecutionContext parentContext, FileOutErr from, FileOutErr to) {
-    if (from.hasRecordedOutput()) {
-      synchronized (parentContext) {
-        FileOutErr.dump(from, to);
-      }
-    }
   }
 }
