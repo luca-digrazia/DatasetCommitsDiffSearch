@@ -8,7 +8,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -140,9 +139,7 @@ public class ResteasyCommonProcessor {
             CombinedIndexBuildItem indexBuildItem,
             BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             List<ResteasyJaxrsProviderBuildItem> contributedProviderBuildItems,
-            List<RestClientBuildItem> restClients,
-            Optional<ResteasyConfigBuildItem> resteasyConfig,
-            Capabilities capabilities) throws Exception {
+            List<RestClientBuildItem> restClients, Capabilities capabilities) throws Exception {
 
         Set<String> contributedProviders = new HashSet<>();
         for (ResteasyJaxrsProviderBuildItem contributedProviderBuildItem : contributedProviderBuildItems) {
@@ -203,8 +200,8 @@ public class ResteasyCommonProcessor {
         IndexView beansIndex = beanArchiveIndexBuildItem.getIndex();
 
         // find the providers declared in our services
-        boolean useBuiltinProviders = collectDeclaredProviders(restClients, resteasyConfig, providersToRegister,
-                categorizedReaders, categorizedWriters, categorizedContextResolvers, index, beansIndex);
+        boolean useBuiltinProviders = collectDeclaredProviders(restClients, providersToRegister, categorizedReaders,
+                categorizedWriters, categorizedContextResolvers, index, beansIndex);
 
         if (useBuiltinProviders) {
             providersToRegister = new HashSet<>(contributedProviders);
@@ -362,8 +359,7 @@ public class ResteasyCommonProcessor {
             Set<String> otherProviders) {
         for (String availableProvider : availableProviders) {
             try {
-                Class<?> providerClass = Class.forName(availableProvider, false,
-                        Thread.currentThread().getContextClassLoader());
+                Class<?> providerClass = Class.forName(availableProvider);
                 if (MessageBodyReader.class.isAssignableFrom(providerClass)
                         || MessageBodyWriter.class.isAssignableFrom(providerClass)) {
                     if (MessageBodyReader.class.isAssignableFrom(providerClass)) {
@@ -406,7 +402,6 @@ public class ResteasyCommonProcessor {
     }
 
     private static boolean collectDeclaredProviders(List<RestClientBuildItem> restClients,
-            Optional<ResteasyConfigBuildItem> resteasyConfig,
             Set<String> providersToRegister,
             MediaTypeMap<String> categorizedReaders, MediaTypeMap<String> categorizedWriters,
             MediaTypeMap<String> categorizedContextResolvers, IndexView... indexes) {
@@ -419,44 +414,36 @@ public class ResteasyCommonProcessor {
                 Collection<AnnotationInstance> getMethods = index.getAnnotations(providerDiscoverer.getMethodAnnotation());
                 for (AnnotationInstance getMethod : getMethods) {
                     MethodInfo methodTarget = getMethod.target().asMethod();
-                    boolean isRestClient = restClientNames.contains(methodTarget.declaringClass().name().toString());
-                    boolean jsonDefault = !isRestClient
-                            && (resteasyConfig.isPresent() ? resteasyConfig.get().isJsonDefault() : false);
-
-                    if (isRestClient) {
+                    if (restClientNames.contains(methodTarget.declaringClass().name().toString())) {
                         // when dealing with a REST client, we need to collect @Consumes as writers and @Produces as readers
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
-                                methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll(),
-                                false)) {
+                                methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll())) {
                             return true;
                         }
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
-                                methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll(),
-                                false)) {
+                                methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll())) {
                             return true;
                         }
                     } else {
                         // for JAX-RS resources, we do the opposite
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedReaders,
-                                methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll(),
-                                jsonDefault)) {
+                                methodTarget, ResteasyDotNames.CONSUMES, providerDiscoverer.noConsumesDefaultsToAll())) {
                             return true;
                         }
                         if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister, categorizedWriters,
-                                methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll(),
-                                jsonDefault)) {
+                                methodTarget, ResteasyDotNames.PRODUCES, providerDiscoverer.noProducesDefaultsToAll())) {
                             return true;
                         }
                     }
 
                     if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
                             categorizedContextResolvers, methodTarget, ResteasyDotNames.CONSUMES,
-                            providerDiscoverer.noConsumesDefaultsToAll(), jsonDefault)) {
+                            providerDiscoverer.noConsumesDefaultsToAll())) {
                         return true;
                     }
                     if (collectDeclaredProvidersForMethodAndMediaTypeAnnotation(providersToRegister,
                             categorizedContextResolvers, methodTarget, ResteasyDotNames.PRODUCES,
-                            providerDiscoverer.noProducesDefaultsToAll(), jsonDefault)) {
+                            providerDiscoverer.noProducesDefaultsToAll())) {
                         return true;
                     }
                 }
@@ -467,33 +454,24 @@ public class ResteasyCommonProcessor {
 
     private static boolean collectDeclaredProvidersForMethodAndMediaTypeAnnotation(Set<String> providersToRegister,
             MediaTypeMap<String> categorizedProviders, MethodInfo methodTarget, DotName mediaTypeAnnotation,
-            boolean includeDefaults, boolean jsonDefault) {
-        AnnotationInstance mediaTypeMethodAnnotationInstance = methodTarget.annotation(mediaTypeAnnotation);
-        if (mediaTypeMethodAnnotationInstance == null) {
-            // no media types defined on the method, let's consider the class annotations
-            AnnotationInstance mediaTypeClassAnnotationInstance = methodTarget.declaringClass()
-                    .classAnnotation(mediaTypeAnnotation);
-            if (mediaTypeClassAnnotationInstance != null) {
-                if (collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
-                        mediaTypeClassAnnotationInstance.value().asStringArray(), methodTarget)) {
-                    return true;
+            boolean defaultsToAll) {
+        AnnotationInstance mediaTypeAnnotationInstance = methodTarget.annotation(mediaTypeAnnotation);
+        if (mediaTypeAnnotationInstance == null) {
+            // let's consider the class
+            Collection<AnnotationInstance> classAnnotations = methodTarget.declaringClass().classAnnotations();
+            for (AnnotationInstance classAnnotation : classAnnotations) {
+                if (mediaTypeAnnotation.equals(classAnnotation.name())) {
+                    if (collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
+                            classAnnotation, methodTarget)) {
+                        return true;
+                    }
+                    return false;
                 }
-                return false;
             }
-            // we couldn't find any annotations neither on the method nor on the class, stick to the default
-            if (!includeDefaults) {
-                return false;
-            }
-            if (jsonDefault) {
-                collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
-                        new String[] { MediaType.APPLICATION_JSON }, methodTarget);
-                return false;
-            } else {
-                return true;
-            }
+            return defaultsToAll;
         }
         if (collectDeclaredProvidersForMediaTypeAnnotationInstance(providersToRegister, categorizedProviders,
-                mediaTypeMethodAnnotationInstance.value().asStringArray(), methodTarget)) {
+                mediaTypeAnnotationInstance, methodTarget)) {
             return true;
         }
 
@@ -502,9 +480,9 @@ public class ResteasyCommonProcessor {
 
     private static boolean collectDeclaredProvidersForMediaTypeAnnotationInstance(Set<String> providersToRegister,
             MediaTypeMap<String> categorizedProviders,
-            String[] mediaTypes,
+            AnnotationInstance mediaTypeAnnotationInstance,
             MethodInfo targetMethod) {
-        for (String media : mediaTypes) {
+        for (String media : mediaTypeAnnotationInstance.value().asStringArray()) {
             MediaType mediaType = MediaType.valueOf(media);
             if (MediaType.WILDCARD_TYPE.equals(mediaType)) {
                 // exit early if we have the wildcard type
@@ -607,10 +585,5 @@ public class ResteasyCommonProcessor {
         public boolean noProducesDefaultsToAll() {
             return noProducesDefaultsToAll;
         }
-    }
-
-    private enum NoMediaTypesDefault {
-        ALL,
-        JSON;
     }
 }
