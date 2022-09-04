@@ -323,7 +323,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
             new StarlarkCallbackHelper(
                 (StarlarkFunction) implicitOutputs, thread.getSemantics(), bazelContext);
         builder.setImplicitOutputsFunction(
-            new StarlarkImplicitOutputsFunctionWithCallback(callback));
+            new StarlarkImplicitOutputsFunctionWithCallback(callback, thread.getCallerLocation()));
       } else {
         builder.setImplicitOutputsFunction(
             new StarlarkImplicitOutputsFunctionWithMap(

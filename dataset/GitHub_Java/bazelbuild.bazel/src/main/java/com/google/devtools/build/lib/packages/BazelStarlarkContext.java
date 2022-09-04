@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import javax.annotation.Nullable;
 
@@ -133,7 +132,7 @@ public final class BazelStarlarkContext implements RuleDefinitionContext, Label.
    */
   public void checkLoadingOrWorkspacePhase(String function) throws EvalException {
     if (phase == Phase.ANALYSIS) {
-      throw Starlark.errorf("'%s' cannot be called during the analysis phase", function);
+      throw new EvalException("'" + function + "' cannot be called during the analysis phase");
     }
   }
 
@@ -144,7 +143,7 @@ public final class BazelStarlarkContext implements RuleDefinitionContext, Label.
    */
   public void checkLoadingPhase(String function) throws EvalException {
     if (phase != Phase.LOADING) {
-      throw Starlark.errorf("'%s' can only be called during the loading phase", function);
+      throw new EvalException("'" + function + "' can only be called during the loading phase");
     }
   }
 
@@ -155,7 +154,7 @@ public final class BazelStarlarkContext implements RuleDefinitionContext, Label.
    */
   public void checkWorkspacePhase(String function) throws EvalException {
     if (phase != Phase.WORKSPACE) {
-      throw Starlark.errorf("'%s' can only be called during workspace loading", function);
+      throw new EvalException("'" + function + "' can only be called during workspace loading");
     }
   }
 }

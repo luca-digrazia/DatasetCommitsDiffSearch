@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
@@ -87,7 +86,7 @@ public class ConstantRuleVisibility implements RuleVisibility, Serializable {
     for (Label label : labels) {
       visibility = tryParse(label);
       if (visibility != null) {
-        throw Starlark.errorf(
+        throw new EvalException(
             "Public or private visibility labels (e.g. //visibility:public or"
                 + " //visibility:private) cannot be used in combination with other labels");
       }

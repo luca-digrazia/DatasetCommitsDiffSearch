@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -268,9 +267,14 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      *     position in the string.
      */
     private void abort(String error) throws EvalException {
-      throw Starlark.errorf(
-          "Invalid toolchain configuration: %s at position %s while parsing a flag containing '%s'",
-          error, current, value);
+      throw new EvalException(
+          "Invalid toolchain configuration: "
+              + error
+              + " at position "
+              + current
+              + " while parsing a flag containing '"
+              + value
+              + "'");
     }
   }
 

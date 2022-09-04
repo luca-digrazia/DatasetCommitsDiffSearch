@@ -479,11 +479,12 @@ public class StarlarkRepositoryContext
       Object arg = arguments.get(i);
       if (isRemotable) {
         if (!(arg instanceof String || arg instanceof Label)) {
-          throw Starlark.errorf("Argument %d of execute is neither a label nor a string.", i);
+          throw new EvalException("Argument " + i + " of execute is neither a label nor a string.");
         }
       } else {
         if (!(arg instanceof String || arg instanceof Label || arg instanceof StarlarkPath)) {
-          throw Starlark.errorf("Argument %d of execute is neither a path, label, nor string.", i);
+          throw new EvalException(
+              "Argument " + i + " of execute is neither a path, label, nor string.");
         }
       }
     }
@@ -991,10 +992,11 @@ public class StarlarkRepositoryContext
 
     for (Object o : urlList) {
       if (!(o instanceof String)) {
-        throw Starlark.errorf(
-            "Expected a string or sequence of strings for 'url' argument, but got '%s' item in the"
-                + " sequence",
-            Starlark.type(o));
+        throw new EvalException(
+            String.format(
+                "Expected a string or sequence of strings for 'url' argument, "
+                    + "but got '%s' item in the sequence",
+                Starlark.type(o)));
       }
       result.add((String) o);
     }
@@ -1146,10 +1148,10 @@ public class StarlarkRepositoryContext
         if (authMap.containsKey("type")) {
           if ("basic".equals(authMap.get("type"))) {
             if (!authMap.containsKey("login") || !authMap.containsKey("password")) {
-              throw Starlark.errorf(
-                  "Found request to do basic auth for %s without 'login' and 'password' being"
-                      + " provided.",
-                  entry.getKey());
+              throw new EvalException(
+                  "Found request to do basic auth for "
+                      + entry.getKey()
+                      + " without 'login' and 'password' being provided.");
             }
             String credentials = authMap.get("login") + ":" + authMap.get("password");
             headers.put(
@@ -1161,9 +1163,10 @@ public class StarlarkRepositoryContext
                             .encodeToString(credentials.getBytes(StandardCharsets.UTF_8))));
           } else if ("pattern".equals(authMap.get("type"))) {
             if (!authMap.containsKey("pattern")) {
-              throw Starlark.errorf(
-                  "Found request to do pattern auth for %s without a pattern being provided",
-                  entry.getKey());
+              throw new EvalException(
+                  "Found request to do pattern auth for "
+                      + entry.getKey()
+                      + " without a pattern being provided");
             }
 
             String result = (String) authMap.get("pattern");
@@ -1173,9 +1176,10 @@ public class StarlarkRepositoryContext
 
               if (result.contains(demarcatedComponent)) {
                 if (!authMap.containsKey(component)) {
-                  throw Starlark.errorf(
-                      "Auth pattern contains %s but it was not provided in auth dict.",
-                      demarcatedComponent);
+                  throw new EvalException(
+                      "Auth pattern contains "
+                          + demarcatedComponent
+                          + " but it was not provided in auth dict.");
                 }
               } else {
                 // component isn't in the pattern, ignore it

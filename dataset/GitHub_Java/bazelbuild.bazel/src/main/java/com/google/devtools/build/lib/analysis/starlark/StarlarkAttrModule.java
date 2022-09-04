@@ -85,7 +85,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
           ImmutableList.copyOf(Sequence.cast(fileTypesObj, String.class, "allow_files argument"));
       builder.allowedFileTypes(FileType.of(arg));
     } else {
-      throw Starlark.errorf("%s should be a boolean or a string list", attr);
+      throw new EvalException(attr + " should be a boolean or a string list");
     }
   }
 
@@ -163,7 +163,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
     if (containsNonNoneKey(arguments, EXECUTABLE_ARG) && (Boolean) arguments.get(EXECUTABLE_ARG)) {
       builder.setPropertyFlag("EXECUTABLE");
       if (!containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
-        throw Starlark.errorf(
+        throw new EvalException(
             "cfg parameter is mandatory when executable=True is provided. Please see "
                 + "https://www.bazel.build/versions/master/docs/skylark/rules.html#configurations "
                 + "for more details.");
@@ -172,7 +172,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
 
     if (containsNonNoneKey(arguments, ALLOW_FILES_ARG)
         && containsNonNoneKey(arguments, ALLOW_SINGLE_FILE_ARG)) {
-      throw Starlark.errorf("Cannot specify both allow_files and allow_single_file");
+      throw new EvalException("Cannot specify both allow_files and allow_single_file");
     }
 
     if (containsNonNoneKey(arguments, ALLOW_FILES_ARG)) {
@@ -219,7 +219,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
               || trans instanceof TransitionFactory
               || trans instanceof StarlarkDefinedConfigTransition;
       if (isSplit && defaultValue instanceof StarlarkLateBoundDefault) {
-        throw Starlark.errorf(
+        throw new EvalException(
             "late-bound attributes must not have a split configuration transition");
       }
       if (trans.equals("host")) {
@@ -239,7 +239,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
           builder.hasAnalysisTestTransition();
         } else {
           if (!thread.getSemantics().experimentalStarlarkConfigTransitions()) {
-            throw Starlark.errorf(
+            throw new EvalException(
                 "Starlark-defined transitions on rule attributes is experimental and disabled by "
                     + "default. This API is in development and subject to change at any time. Use "
                     + "--experimental_starlark_config_transitions to use this experimental API.");
@@ -249,7 +249,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
         builder.cfg(new StarlarkAttributeTransitionProvider(starlarkDefinedTransition));
       } else if (!trans.equals("target")) {
         // TODO(b/121134880): update error message when starlark build configurations is ready.
-        throw Starlark.errorf("cfg must be either 'host' or 'target'.");
+        throw new EvalException("cfg must be either 'host' or 'target'.");
       }
     }
 
@@ -311,7 +311,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
       } else if (obj instanceof Provider) {
         Provider constructor = (Provider) obj;
         if (!constructor.isExported()) {
-          throw Starlark.errorf(
+          throw new EvalException(
               "Providers should be top-level values in extension files that define them.");
         }
         result.add(StarlarkProviderIdentifier.forKey(constructor.getKey()));
@@ -330,12 +330,14 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
 
     for (Object o : starlarkList) {
       if (!(o instanceof Sequence)) {
-        throw Starlark.errorf(errorMsg, PROVIDERS_ARG, "an element of type " + Starlark.type(o));
+        throw new EvalException(
+            String.format(errorMsg, PROVIDERS_ARG, "an element of type " + Starlark.type(o)));
       }
       for (Object value : (Sequence) o) {
         if (!isProvider(value)) {
-          throw Starlark.errorf(
-              errorMsg, argumentName, "list with an element of type " + Starlark.type(value));
+          throw new EvalException(
+              String.format(
+                  errorMsg, argumentName, "list with an element of type " + Starlark.type(value)));
         }
       }
       providersList.add(getStarlarkProviderIdentifiers((Sequence<?>) o));

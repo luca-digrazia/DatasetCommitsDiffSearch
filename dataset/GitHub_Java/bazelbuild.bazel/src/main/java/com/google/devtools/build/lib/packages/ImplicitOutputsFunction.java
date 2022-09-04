@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -81,9 +82,12 @@ public abstract class ImplicitOutputsFunction {
       extends StarlarkImplicitOutputsFunction {
 
     private final StarlarkCallbackHelper callback;
+    private final Location loc;
 
-    public StarlarkImplicitOutputsFunctionWithCallback(StarlarkCallbackHelper callback) {
+    public StarlarkImplicitOutputsFunctionWithCallback(
+        StarlarkCallbackHelper callback, Location loc) {
       this.callback = callback;
+      this.loc = loc;
     }
 
     @Override
@@ -119,16 +123,18 @@ public abstract class ImplicitOutputsFunction {
           Iterable<String> substitutions =
               fromTemplates(entry.getValue()).getImplicitOutputs(eventHandler, map);
           if (Iterables.isEmpty(substitutions)) {
-            throw Starlark.errorf(
-                "For attribute '%s' in outputs: Invalid placeholder(s) in template",
-                entry.getKey());
+            throw new EvalException(
+                loc,
+                String.format(
+                    "For attribute '%s' in outputs: %s",
+                    entry.getKey(), "Invalid placeholder(s) in template"));
           }
 
           builder.put(entry.getKey(), Iterables.getOnlyElement(substitutions));
         }
         return builder.build();
-      } catch (IllegalArgumentException ex) {
-        throw new EvalException(ex);
+      } catch (IllegalArgumentException e) {
+        throw new EvalException(loc, e.getMessage());
       }
     }
   }
@@ -155,8 +161,11 @@ public abstract class ImplicitOutputsFunction {
             fromUnsafeTemplates(ImmutableList.of(entry.getValue()));
         Iterable<String> substitutions = outputsFunction.getImplicitOutputs(eventHandler, map);
         if (Iterables.isEmpty(substitutions)) {
-          throw Starlark.errorf(
-              "For attribute '%s' in outputs: Invalid placeholder(s) in template", entry.getKey());
+          throw new EvalException(
+              String.format(
+                  "For attribute '%s' in outputs: %s",
+                  entry.getKey(), "Invalid placeholder(s) in template"));
+
         }
 
         builder.put(entry.getKey(), Iterables.getOnlyElement(substitutions));
@@ -533,8 +542,9 @@ public abstract class ImplicitOutputsFunction {
     // Make sure all attributes are valid.
     for (String placeholder : parsedTemplate.attributeNames()) {
       if (rule.isConfigurable(placeholder)) {
-        throw Starlark.errorf(
-            "Attribute %s is configurable and cannot be used in outputs", placeholder);
+        throw new EvalException(
+            String.format(
+                "Attribute %s is configurable and cannot be used in outputs", placeholder));
       }
     }
 

@@ -13,10 +13,9 @@
 // limitations under the License
 package com.google.devtools.build.lib.analysis.starlark;
 
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 
 /**
  * {@link RuleErrorConsumer} for Native implementations of Starlark APIs.
@@ -44,7 +43,7 @@ public class StarlarkErrorReporter implements AutoCloseable, RuleErrorConsumer {
     try {
       assertNoErrors();
     } catch (RuleErrorException e) {
-      throw Starlark.errorf("error occurred while evaluating builtin function: %s", e.getMessage());
+      throw new EvalException("error occurred while evaluating builtin function", e);
     }
   }
 

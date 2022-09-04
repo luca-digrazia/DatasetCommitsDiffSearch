@@ -294,26 +294,22 @@ public final class Starlark {
 
   /** Returns the string form of a value as if by the Starlark expression {@code str(x)}. */
   public static String str(Object x) {
-    return new Printer().str(x).toString();
+    return Printer.getPrinter().str(x).toString();
   }
 
   /** Returns the string form of a value as if by the Starlark expression {@code repr(x)}. */
   public static String repr(Object x) {
-    return new Printer().repr(x).toString();
+    return Printer.getPrinter().repr(x).toString();
   }
 
   /** Returns a string formatted as if by the Starlark expression {@code pattern % arguments}. */
   public static String format(String pattern, Object... arguments) {
-    Printer pr = new Printer();
-    Printer.format(pr, pattern, arguments);
-    return pr.toString();
+    return Printer.getPrinter().format(pattern, arguments).toString();
   }
 
   /** Returns a string formatted as if by the Starlark expression {@code pattern % arguments}. */
   public static String formatWithList(String pattern, List<?> arguments) {
-    Printer pr = new Printer();
-    Printer.formatWithList(pr, pattern, arguments);
-    return pr.toString();
+    return Printer.getPrinter().formatWithList(pattern, arguments).toString();
   }
 
   /** Returns a slice of a sequence as if by the Starlark operation {@code x[start:stop:step]}. */

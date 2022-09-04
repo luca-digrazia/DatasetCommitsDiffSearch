@@ -295,7 +295,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
           "Cannot add outputs to immutable Outputs object");
       if (outputs.containsKey(key)
           || (context.isExecutable() && EXECUTABLE_OUTPUT_NAME.equals(key))) {
-        throw Starlark.errorf("Multiple outputs with the same key: %s", key);
+        throw new EvalException("Multiple outputs with the same key: " + key);
       }
       outputs.put(key, value);
     }
@@ -365,9 +365,11 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
 
     private void checkMutable() throws EvalException {
       if (isImmutable()) {
-        throw Starlark.errorf(
-            "cannot access outputs of rule '%s' outside of its own rule implementation function",
-            context.ruleLabelCanonicalName);
+        throw new EvalException(
+            String.format(
+                "cannot access outputs of rule '%s' outside of its own "
+                    + "rule implementation function",
+                context.ruleLabelCanonicalName));
       }
     }
 
@@ -403,10 +405,11 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
 
   public void checkMutable(String attrName) throws EvalException {
     if (isImmutable()) {
-      throw Starlark.errorf(
-          "cannot access field or method '%s' of rule context for '%s' outside of its own rule "
-              + "implementation function",
-          attrName, ruleLabelCanonicalName);
+      throw new EvalException(
+          String.format(
+              "cannot access field or method '%s' of rule context for '%s' outside of its own rule "
+                  + "implementation function",
+              attrName, ruleLabelCanonicalName));
     }
   }
 
@@ -590,9 +593,10 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   @Nullable
   public Object getBuildSettingValue() throws EvalException {
     if (ruleContext.getRule().getRuleClassObject().getBuildSetting() == null) {
-      throw Starlark.errorf(
-          "attempting to access 'build_setting_value' of non-build setting %s",
-          ruleLabelCanonicalName);
+      throw new EvalException(
+          String.format(
+              "attempting to access 'build_setting_value' of non-build setting %s",
+              ruleLabelCanonicalName));
     }
     ImmutableMap<Label, Object> starlarkFlagSettings =
         ruleContext.getConfiguration().getOptions().getStarlarkOptions();
@@ -715,7 +719,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
     try {
       ShellUtils.tokenize(options, optionString);
     } catch (TokenizationException e) {
-      throw Starlark.errorf("%s while tokenizing '%s'", e.getMessage(), optionString);
+      throw new EvalException(e.getMessage() + " while tokenizing '" + optionString + "'");
     }
     return StarlarkList.immutableCopyOf(options);
   }
@@ -734,7 +738,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
       }
       return LabelExpander.expand(expression, labelMap, labelResolver);
     } catch (NotUniqueExpansionException e) {
-      throw Starlark.errorf("%s while expanding '%s'", e.getMessage(), expression);
+      throw new EvalException(e.getMessage() + " while expanding '" + expression + "'");
     }
   }
 

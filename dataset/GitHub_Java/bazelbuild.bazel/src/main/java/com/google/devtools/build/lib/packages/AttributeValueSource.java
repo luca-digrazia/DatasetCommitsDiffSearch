@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 
 /**
  * An enum that represents different types of rule attributes, based on where their values come
@@ -49,10 +48,11 @@ public enum AttributeValueSource {
     }
 
     if (mustHaveStarlarkPrefix && !attrStarlarkName.startsWith(STARLARK_PREFIX)) {
-      throw Starlark.errorf(
-          "When an attribute value is a function, the attribute must be private "
-              + "(i.e. start with '%s'). Found '%s'",
-          STARLARK_PREFIX, attrStarlarkName);
+      throw new EvalException(
+          String.format(
+              "When an attribute value is a function, the attribute must be private "
+                  + "(i.e. start with '%s'). Found '%s'",
+              STARLARK_PREFIX, attrStarlarkName));
     }
   }
 

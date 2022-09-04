@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.EnumSet;
@@ -500,7 +499,7 @@ public class CcToolchainProviderHelper {
               });
       for (CppConfiguration.Tool tool : neededTools) {
         if (!toolPathsCollector.containsKey(tool.getNamePart())) {
-          throw Starlark.errorf("Tool path for '%s' is missing", tool.getNamePart());
+          throw new EvalException("Tool path for '" + tool.getNamePart() + "' is missing");
         }
       }
     }

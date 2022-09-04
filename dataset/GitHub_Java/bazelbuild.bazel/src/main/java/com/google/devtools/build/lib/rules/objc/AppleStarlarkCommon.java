@@ -217,7 +217,7 @@ public class AppleStarlarkCommon
         }
         resultBuilder.addDirectDepProvidersFromStarlark(entry.getValue());
       } else {
-        throw Starlark.errorf(BAD_KEY_ERROR, entry.getKey());
+        throw new EvalException(String.format(BAD_KEY_ERROR, entry.getKey()));
       }
     }
     return resultBuilder.build();

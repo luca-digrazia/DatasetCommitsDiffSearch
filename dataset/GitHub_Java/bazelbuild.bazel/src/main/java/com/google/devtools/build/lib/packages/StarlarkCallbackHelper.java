@@ -14,15 +14,17 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
  * A helper class for calling Starlark functions from Java, where the argument values are supplied
@@ -36,39 +38,48 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 public class StarlarkCallbackHelper {
 
   private final StarlarkFunction callback;
-  private final FuncallExpression ast;
+
+  // These fields, parts of the state of the loading-phase
+  // thread that instantiated a rule, must be propagated to
+  // the child threads (implicit outputs, attribute defaults).
+  // This includes any other thread-local state, such as
+  // the Label.HasRepoMapping or PackageFactory.PackageContext.
+  // TODO(adonovan): it would be cleaner and less error prone to
+  // perform these callbacks in the actual loading-phase thread,
+  // at the end of BUILD file execution.
+  // Alternatively (or additionally), we could put PackageContext
+  // into BazelStarlarkContext so there's only a single blob of state.
   private final StarlarkSemantics starlarkSemantics;
-  private final BazelStarlarkContext starlarkContext;
+  private final BazelStarlarkContext context;
 
   public StarlarkCallbackHelper(
       StarlarkFunction callback,
-      FuncallExpression ast,
       StarlarkSemantics starlarkSemantics,
-      BazelStarlarkContext starlarkContext) {
+      BazelStarlarkContext context) {
     this.callback = callback;
-    this.ast = ast;
     this.starlarkSemantics = starlarkSemantics;
-    this.starlarkContext = starlarkContext;
+    this.context = context;
   }
 
   public ImmutableList<String> getParameterNames() {
-    return callback.getSignature().getSignature().getNames();
+    return callback.getParameterNames();
   }
 
   // TODO(adonovan): opt: all current callers are forced to construct a temporary ClassObject.
   // Instead, make them supply a map.
   public Object call(EventHandler eventHandler, ClassObject ctx, Object... arguments)
       throws EvalException, InterruptedException {
-    try (Mutability mutability = Mutability.create("callback %s", callback)) {
-      Environment env =
-          Environment.builder(mutability)
-              .setSemantics(starlarkSemantics)
-              .setEventHandler(eventHandler)
-              .setStarlarkContext(starlarkContext)
-              .build();
-      return callback.call(buildArgumentList(ctx, arguments), null, ast, env);
-    } catch (ClassCastException | IllegalArgumentException e) {
-      throw new EvalException(ast.getLocation(), e.getMessage());
+    try (Mutability mu = Mutability.create("callback", callback)) {
+      StarlarkThread thread = new StarlarkThread(mu, starlarkSemantics);
+      thread.setPrintHandler(Event.makeDebugPrintHandler(eventHandler));
+      context.storeInThread(thread);
+      return Starlark.call(
+          thread,
+          callback,
+          buildArgumentList(ctx, arguments),
+          /*kwargs=*/ ImmutableMap.of());
+    } catch (ClassCastException | IllegalArgumentException e) { // TODO(adonovan): investigate
+      throw new EvalException(e);
     }
   }
 

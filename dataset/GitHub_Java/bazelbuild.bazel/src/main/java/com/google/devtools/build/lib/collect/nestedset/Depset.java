@@ -322,7 +322,7 @@ public final class Depset implements StarlarkValue, Debug.ValueWithDebugAttribut
   @Override
   public void repr(Printer printer) {
     printer.append("depset(");
-    printer.printList(set.toList(), "[", ", ", "]");
+    printer.printList(set.toList(), "[", ", ", "]", null);
     Order order = getOrder();
     if (order != Order.STABLE_ORDER) {
       printer.append(", order = ");

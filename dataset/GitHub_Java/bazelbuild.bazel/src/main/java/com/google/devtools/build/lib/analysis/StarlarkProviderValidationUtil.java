@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
 
 /** Utility class to validate results of executing Starlark rules and aspects. */
 public class StarlarkProviderValidationUtil {
@@ -26,17 +25,17 @@ public class StarlarkProviderValidationUtil {
     ImmutableSet<Artifact> treeArtifactsConflictingWithFiles =
         ruleContext.getAnalysisEnvironment().getTreeArtifactsConflictingWithFiles();
     if (!treeArtifactsConflictingWithFiles.isEmpty()) {
-      throw Starlark.errorf(
-          "The following directories were also declared as files:\n%s",
-          artifactsDescription(treeArtifactsConflictingWithFiles));
+      throw new EvalException(
+          "The following directories were also declared as files:\n"
+              + artifactsDescription(treeArtifactsConflictingWithFiles));
     }
 
     ImmutableSet<Artifact> orphanArtifacts =
         ruleContext.getAnalysisEnvironment().getOrphanArtifacts();
     if (!orphanArtifacts.isEmpty()) {
-      throw Starlark.errorf(
-          "The following files have no generating action:\n%s",
-          artifactsDescription(orphanArtifacts));
+      throw new EvalException(
+          "The following files have no generating action:\n"
+              + artifactsDescription(orphanArtifacts));
     }
   }
 
