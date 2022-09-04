@@ -118,7 +118,6 @@ public final class TargetCompleteEvent
   private final NestedSet<Artifact> baselineCoverageArtifacts;
   private final Label aliasLabel;
   private final boolean isTest;
-  private final boolean announceTargetSummary;
   @Nullable private final Long testTimeoutSeconds;
   @Nullable private final TestProvider.TestParams testParams;
   private final BuildEvent configurationEvent;
@@ -132,8 +131,7 @@ public final class TargetCompleteEvent
       NestedSet<Cause> rootCauses,
       CompletionContext completionContext,
       ImmutableMap<String, ArtifactsInOutputGroup> outputs,
-      boolean isTest,
-      boolean announceTargetSummary) {
+      boolean isTest) {
     this.rootCauses =
         (rootCauses == null) ? NestedSetBuilder.emptySet(Order.STABLE_ORDER) : rootCauses;
     this.executableTargetData = new ExecutableTargetData(targetAndData);
@@ -158,7 +156,6 @@ public final class TargetCompleteEvent
     this.completionContext = completionContext;
     this.outputs = outputs;
     this.isTest = isTest;
-    this.announceTargetSummary = announceTargetSummary;
     this.testTimeoutSeconds = isTest ? getTestTimeoutSeconds(targetAndData) : null;
     BuildConfiguration configuration = targetAndData.getConfiguration();
     this.configEventId =
@@ -205,20 +202,16 @@ public final class TargetCompleteEvent
   public static TargetCompleteEvent successfulBuild(
       ConfiguredTargetAndData ct,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs,
-      boolean announceTargetSummary) {
-    return new TargetCompleteEvent(
-        ct, null, completionContext, outputs, false, announceTargetSummary);
+      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
+    return new TargetCompleteEvent(ct, null, completionContext, outputs, false);
   }
 
   /** Construct a successful target completion event for a target that will be tested. */
   public static TargetCompleteEvent successfulBuildSchedulingTest(
       ConfiguredTargetAndData ct,
       CompletionContext completionContext,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs,
-      boolean announceTargetSummary) {
-    return new TargetCompleteEvent(
-        ct, null, completionContext, outputs, true, announceTargetSummary);
+      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
+    return new TargetCompleteEvent(ct, null, completionContext, outputs, true);
   }
 
   /**
@@ -228,11 +221,9 @@ public final class TargetCompleteEvent
       ConfiguredTargetAndData ct,
       CompletionContext completionContext,
       NestedSet<Cause> rootCauses,
-      ImmutableMap<String, ArtifactsInOutputGroup> outputs,
-      boolean announceTargetSummary) {
+      ImmutableMap<String, ArtifactsInOutputGroup> outputs) {
     Preconditions.checkArgument(!rootCauses.isEmpty());
-    return new TargetCompleteEvent(
-        ct, rootCauses, completionContext, outputs, false, announceTargetSummary);
+    return new TargetCompleteEvent(ct, rootCauses, completionContext, outputs, false);
   }
 
   /** Returns the label of the target associated with the event. */
@@ -286,6 +277,7 @@ public final class TargetCompleteEvent
       // For tests, announce all the test actions that will minimally happen (except for
       // interruption). If after the result of a test action another attempt is necessary,
       // it will be announced with the action that made the new attempt necessary.
+      Label label = getLabel();
       for (int run = 0; run < Math.max(testParams.getRuns(), 1); run++) {
         for (int shard = 0; shard < Math.max(testParams.getShards(), 1); shard++) {
           childrenBuilder.add(BuildEventIdUtil.testResult(label, run, shard, configEventId));
@@ -293,19 +285,7 @@ public final class TargetCompleteEvent
       }
       childrenBuilder.add(BuildEventIdUtil.testSummary(label, configEventId));
     }
-    if (announceTargetSummary) {
-      childrenBuilder.add(BuildEventIdUtil.targetSummary(label, configEventId));
-    }
     return childrenBuilder.build();
-  }
-
-  public CompletionContext getCompletionContext() {
-    return completionContext;
-  }
-
-  @Nullable
-  public ArtifactsInOutputGroup getOutputGroup(String outputGroup) {
-    return outputs.get(outputGroup);
   }
 
   // TODO(aehlig): remove as soon as we managed to get rid of the deprecated "important_output"
@@ -391,8 +371,7 @@ public final class TargetCompleteEvent
               public void accept(Artifact artifact) {
                 builder.add(
                     new LocalFile(
-                        completionContext.pathResolver().toPath(artifact),
-                        LocalFileType.OUTPUT_FILE));
+                        completionContext.pathResolver().toPath(artifact), LocalFileType.OUTPUT));
               }
 
               @Override
@@ -498,7 +477,6 @@ public final class TargetCompleteEvent
           groups.add(
               OutputGroup.newBuilder()
                   .setName(outputGroup)
-                  .setIncomplete(artifactsInOutputGroup.isIncomplete())
                   .addFileSets(namer.apply(artifactsInOutputGroup.getArtifacts().toNode()))
                   .build());
         });
