@@ -60,16 +60,12 @@ public class ServerValue {
         set("local_hostname", hostname);
     }
 
-    public void writeThroughput(int current, int highest) {
-        graylogServer.getMongoBridge().writeThroughput(graylogServer.getServerId(), current, highest);
+    public void writeThroughput(int current) {
+        graylogServer.getMongoBridge().writeThroughput(graylogServer.getServerId(), current);
     }
     
     public void writeBufferWatermarks(BufferWatermark outputBuffer, BufferWatermark processBuffer) {
         graylogServer.getMongoBridge().writeBufferWatermarks(graylogServer.getServerId(), outputBuffer, processBuffer);
-    }
-    
-    public void writeMasterCacheSizes(int inputCacheSize, int outputCacheSize) {
-        graylogServer.getMongoBridge().writeMasterCacheSizes(graylogServer.getServerId(), inputCacheSize, outputCacheSize);
     }
     
     public void setIsMaster(boolean isIt) {
