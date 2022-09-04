@@ -98,7 +98,7 @@ public class UserImpl extends PersistedImpl implements User {
 
     @Override
     public String getName() {
-        return String.valueOf(fields.get(USERNAME));
+        return fields.get(USERNAME).toString();
     }
 
     @Override
