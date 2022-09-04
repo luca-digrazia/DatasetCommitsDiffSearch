@@ -6,11 +6,14 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.reflect.TypeToken;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.jersey.validation.Validators;
+import io.dropwizard.validation.ConstraintViolations;
 import io.dropwizard.validation.Validated;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.junit.Before;
 import org.junit.Test;
 
+import javax.validation.ConstraintViolationException;
 import javax.validation.Valid;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
@@ -26,6 +29,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -45,7 +49,7 @@ public class JacksonMessageBodyProviderTest {
     public static class Example {
         @Min(0)
         @JsonProperty
-        public int id;
+        int id;
 
         @Override
         public int hashCode() {
@@ -69,7 +73,7 @@ public class JacksonMessageBodyProviderTest {
         @NotEmpty
         @Valid
         @JsonProperty
-        public List<Example> examples;
+        List<Example> examples;
     }
 
     public interface Partial1{}
@@ -78,11 +82,11 @@ public class JacksonMessageBodyProviderTest {
     public static class PartialExample {
         @Min(value = 0, groups = Partial1.class)
         @JsonProperty
-        public int id;
+        int id;
 
         @NotNull(groups = Partial2.class)
         @JsonProperty
-        public String text;
+        String text;
     }
 
     @JsonIgnoreType
@@ -97,7 +101,8 @@ public class JacksonMessageBodyProviderTest {
 
     private final ObjectMapper mapper = spy(Jackson.newObjectMapper());
     private final JacksonMessageBodyProvider provider =
-            new JacksonMessageBodyProvider(mapper);
+            new JacksonMessageBodyProvider(mapper,
+                                           Validators.newValidator());
 
     @Before
     public void setUp() throws Exception {
@@ -155,7 +160,7 @@ public class JacksonMessageBodyProviderTest {
                                              Example.class,
                                              NONE,
                                              MediaType.APPLICATION_JSON_TYPE,
-                                             new MultivaluedHashMap<>(),
+                                             new MultivaluedHashMap<String,String>(),
                                              entity);
 
         assertThat(obj)
@@ -178,7 +183,7 @@ public class JacksonMessageBodyProviderTest {
             PartialExample.class,
             new Annotation[]{valid},
             MediaType.APPLICATION_JSON_TYPE,
-            new MultivaluedHashMap<>(),
+            new MultivaluedHashMap<String,String>(),
             entity);
 
         assertThat(obj)
@@ -201,7 +206,7 @@ public class JacksonMessageBodyProviderTest {
             PartialExample.class,
             new Annotation[]{valid},
             MediaType.APPLICATION_JSON_TYPE,
-            new MultivaluedHashMap<>(),
+            new MultivaluedHashMap<String,String>(),
             entity);
 
         assertThat(obj)
@@ -209,6 +214,73 @@ public class JacksonMessageBodyProviderTest {
 
         assertThat(((PartialExample) obj).id)
             .isEqualTo(1);
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForPartialValidatedRequestEntities() throws Exception {
+        final Validated valid = mock(Validated.class);
+        doReturn(Validated.class).when(valid).annotationType();
+        when(valid.value()).thenReturn(new Class<?>[]{Partial1.class, Partial2.class});
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes());
+
+        try {
+            final Class<?> klass = PartialExample.class;
+            provider.readFrom((Class<Object>) klass,
+                              PartialExample.class,
+                              new Annotation[]{ valid },
+                              MediaType.APPLICATION_JSON_TYPE,
+                              new MultivaluedHashMap<String,String>(),
+                              entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch(ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                .containsOnly("text may not be null");
+        }
+    }
+
+    @Test
+    public void returnsValidatedRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":1}".getBytes());
+        final Class<?> klass = Example.class;
+
+        final Object obj = provider.readFrom((Class<Object>) klass,
+                                             Example.class,
+                                             new Annotation[]{ valid },
+                                             MediaType.APPLICATION_JSON_TYPE,
+                                             new MultivaluedHashMap<String,String>(),
+                                             entity);
+
+        assertThat(obj)
+                .isInstanceOf(Example.class);
+
+        assertThat(((Example) obj).id)
+                .isEqualTo(1);
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForInvalidRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"id\":-1}".getBytes());
+
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
+                              Example.class,
+                              new Annotation[]{ valid },
+                              MediaType.APPLICATION_JSON_TYPE,
+                              new MultivaluedHashMap<String,String>(),
+                              entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .containsOnly("id must be greater than or equal to 0");
+        }
     }
 
     @Test
@@ -221,7 +293,7 @@ public class JacksonMessageBodyProviderTest {
                               Example.class,
                               NONE,
                               MediaType.APPLICATION_JSON_TYPE,
-                              new MultivaluedHashMap<>(),
+                              new MultivaluedHashMap<String,String>(),
                               entity);
             failBecauseExceptionWasNotThrown(WebApplicationException.class);
         } catch (JsonProcessingException e) {
@@ -243,11 +315,49 @@ public class JacksonMessageBodyProviderTest {
                          Example.class,
                          NONE,
                          MediaType.APPLICATION_JSON_TYPE,
-                         new MultivaluedHashMap<>(),
+                         new MultivaluedHashMap<String,Object>(),
                          output);
 
         assertThat(output.toString())
                 .isEqualTo("{\"id\":500}");
+    }
+
+    @Test(expected = ConstraintViolationException.class)
+    public void throwsAConstraintViolationExceptionForEmptyRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final Class<?> klass = Example.class;
+        provider.readFrom((Class<Object>) klass,
+                Example.class,
+                new Annotation[]{valid},
+                MediaType.APPLICATION_JSON_TYPE,
+                new MultivaluedHashMap<String,String>(),
+                null);
+    }
+
+    @Test
+    public void returnsValidatedArrayRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":1}, {\"id\":2}]".getBytes());
+        final Class<?> klass = Example[].class;
+
+        final Object obj = provider.readFrom((Class<Object>) klass,
+                Example[].class,
+                new Annotation[]{ valid },
+                MediaType.APPLICATION_JSON_TYPE,
+                new MultivaluedHashMap<String, String>(),
+                entity);
+
+        assertThat(obj)
+                .isInstanceOf(Example[].class);
+
+        assertThat(((Example[]) obj)[0].id)
+                .isEqualTo(1);
+        assertThat(((Example[]) obj)[1].id)
+                .isEqualTo(2);
     }
 
     @Test
@@ -268,6 +378,29 @@ public class JacksonMessageBodyProviderTest {
                 new TypeToken<List<Example>>() {}.getType());
     }
 
+    @Test
+    public void returnsValidatedMapRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"one\": {\"id\":1}, \"two\": {\"id\":2}}".getBytes());
+        final Class<?> klass = Map.class;
+
+        final Object obj = provider.readFrom((Class<Object>) klass,
+                new TypeToken<Map<Object, Example>>() {}.getType(),
+                new Annotation[]{ valid },
+                MediaType.APPLICATION_JSON_TYPE,
+                new MultivaluedHashMap<String, String>(),
+                entity);
+
+        assertThat(obj)
+                .isInstanceOf(Map.class);
+
+        Map<Object, Example> map = (Map<Object, Example>) obj;
+        assertThat(map.get("one").id).isEqualTo(1);
+        assertThat(map.get("two").id).isEqualTo(2);
+    }
+
     private void testValidatedCollectionType(Class<?> klass, Type type) throws IOException {
         final Annotation valid = mock(Annotation.class);
         doReturn(Valid.class).when(valid).annotationType();
@@ -278,7 +411,7 @@ public class JacksonMessageBodyProviderTest {
                 type,
                 new Annotation[]{ valid },
                 MediaType.APPLICATION_JSON_TYPE,
-                new MultivaluedHashMap<>(),
+                new MultivaluedHashMap<String, String>(),
                 entity);
 
         assertThat(obj)
@@ -287,6 +420,166 @@ public class JacksonMessageBodyProviderTest {
         Iterator<Example> iterator = ((Iterable<Example>)obj).iterator();
         assertThat(iterator.next().id).isEqualTo(1);
         assertThat(iterator.next().id).isEqualTo(2);
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForInvalidCollectionRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":-1}, {\"id\":-2}]".getBytes());
+
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
+                    new TypeToken<Collection<Example>>() {}.getType(),
+                    new Annotation[]{ valid },
+                    MediaType.APPLICATION_JSON_TYPE,
+                    new MultivaluedHashMap<String, String>(),
+                    entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .contains("id must be greater than or equal to 0",
+                            "id must be greater than or equal to 0");
+        }
+    }
+
+    @Test
+    public void throwsASingleInvalidEntityExceptionForInvalidCollectionRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":1}, {\"id\":-2}]".getBytes());
+
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
+                    new TypeToken<Collection<Example>>() {}.getType(),
+                    new Annotation[]{ valid },
+                    MediaType.APPLICATION_JSON_TYPE,
+                    new MultivaluedHashMap<String, String>(),
+                    entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .contains("id must be greater than or equal to 0");
+        }
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForInvalidSetRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":-1}, {\"id\":-2}]".getBytes());
+
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
+                    new TypeToken<Set<Example>>() {}.getType(),
+                    new Annotation[]{ valid },
+                    MediaType.APPLICATION_JSON_TYPE,
+                    new MultivaluedHashMap<String, String>(),
+                    entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .contains("id must be greater than or equal to 0",
+                            "id must be greater than or equal to 0");
+        }
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForInvalidListRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("[{\"id\":-1}, {\"id\":-2}]".getBytes());
+
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
+                    new TypeToken<List<Example>>() {}.getType(),
+                    new Annotation[]{ valid },
+                    MediaType.APPLICATION_JSON_TYPE,
+                    new MultivaluedHashMap<String, String>(),
+                    entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .containsOnly("id must be greater than or equal to 0",
+                            "id must be greater than or equal to 0");
+        }
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForInvalidMapRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity = new ByteArrayInputStream("{\"one\": {\"id\":-1}, \"two\": {\"id\":-2}}".getBytes());
+
+        try {
+            final Class<?> klass = Example.class;
+            provider.readFrom((Class<Object>) klass,
+                    new TypeToken<Map<Object, Example>>() {}.getType(),
+                    new Annotation[]{ valid },
+                    MediaType.APPLICATION_JSON_TYPE,
+                    new MultivaluedHashMap<String, String>(),
+                    entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .contains("id must be greater than or equal to 0",
+                            "id must be greater than or equal to 0");
+        }
+    }
+
+    @Test
+    public void returnsValidatedEmbeddedListRequestEntities() throws IOException {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity =
+                new ByteArrayInputStream("[ {\"examples\": [ {\"id\":1 } ] } ]".getBytes());
+        Class<?> klass = List.class;
+
+        final Object obj = provider.readFrom((Class<Object>) klass,
+                new TypeToken<List<ListExample>>() {}.getType(),
+                new Annotation[]{ valid },
+                MediaType.APPLICATION_JSON_TYPE,
+                new MultivaluedHashMap<String, String>(),
+                entity);
+
+        assertThat(obj)
+                .isInstanceOf(klass);
+
+        Iterator<ListExample> iterator = ((Iterable<ListExample>)obj).iterator();
+        assertThat(iterator.next().examples.get(0).id).isEqualTo(1);
+    }
+
+    @Test
+    public void throwsAnInvalidEntityExceptionForInvalidEmbeddedListRequestEntities() throws Exception {
+        final Annotation valid = mock(Annotation.class);
+        doReturn(Valid.class).when(valid).annotationType();
+
+        final ByteArrayInputStream entity =
+                new ByteArrayInputStream("[ {\"examples\": [ {\"id\":1 } ] }, { } ]".getBytes());
+
+        try {
+            final Class<?> klass = List.class;
+            provider.readFrom((Class<Object>) klass,
+                    new TypeToken<List<ListExample>>() {}.getType(),
+                    new Annotation[]{ valid },
+                    MediaType.APPLICATION_JSON_TYPE,
+                    new MultivaluedHashMap<String, String>(),
+                    entity);
+            failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
+        } catch (ConstraintViolationException e) {
+            assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
+                    .containsOnly("examples may not be empty");
+        }
     }
 
 }

@@ -1,39 +1,33 @@
 package io.dropwizard.hibernate;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
 import io.dropwizard.db.DataSourceFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.errors.ErrorMessage;
-import io.dropwizard.jersey.jackson.JacksonFeature;
-import io.dropwizard.jersey.optional.EmptyOptionalExceptionMapper;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
+import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.setup.Environment;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.test.JerseyTest;
+import org.glassfish.jersey.test.TestProperties;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.hibernate.Transaction;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.After;
 import org.junit.Test;
 
-import javax.annotation.Nullable;
-import javax.ws.rs.GET;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.*;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Collections;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
@@ -51,7 +45,7 @@ public class JerseyIntegrationTest extends JerseyTest {
         }
 
         public Optional<Person> findByName(String name) {
-            return Optional.ofNullable(get(name));
+            return Optional.fromNullable(get(name));
         }
 
         @Override
@@ -82,7 +76,6 @@ public class JerseyIntegrationTest extends JerseyTest {
         }
     }
 
-    @Nullable
     private SessionFactory sessionFactory;
 
     @Override
@@ -97,18 +90,18 @@ public class JerseyIntegrationTest extends JerseyTest {
 
     @Override
     protected Application configure() {
+        forceSet(TestProperties.CONTAINER_PORT, "0");
+
         final MetricRegistry metricRegistry = new MetricRegistry();
         final SessionFactoryFactory factory = new SessionFactoryFactory();
         final DataSourceFactory dbConfig = new DataSourceFactory();
-        dbConfig.setProperties(Collections.singletonMap("hibernate.jdbc.time_zone", "UTC"));
-
         final HibernateBundle<?> bundle = mock(HibernateBundle.class);
         final Environment environment = mock(Environment.class);
         final LifecycleEnvironment lifecycleEnvironment = mock(LifecycleEnvironment.class);
         when(environment.lifecycle()).thenReturn(lifecycleEnvironment);
         when(environment.metrics()).thenReturn(metricRegistry);
 
-        dbConfig.setUrl("jdbc:hsqldb:mem:DbTest-" + System.nanoTime() + "?hsqldb.translate_dti_types=false");
+        dbConfig.setUrl("jdbc:hsqldb:mem:DbTest-" + System.nanoTime()+"?hsqldb.translate_dti_types=false");
         dbConfig.setUser("sa");
         dbConfig.setDriverClass("org.hsqldb.jdbcDriver");
         dbConfig.setValidationQuery("SELECT 1 FROM INFORMATION_SCHEMA.SYSTEM_USERS");
@@ -116,34 +109,35 @@ public class JerseyIntegrationTest extends JerseyTest {
         this.sessionFactory = factory.build(bundle,
                                             environment,
                                             dbConfig,
-                                            Collections.singletonList(Person.class));
+                                            ImmutableList.<Class<?>>of(Person.class));
 
-        try (Session session = sessionFactory.openSession()) {
-            Transaction transaction = session.beginTransaction();
-            session.createNativeQuery("DROP TABLE people IF EXISTS").executeUpdate();
-            session.createNativeQuery(
-                "CREATE TABLE people (name varchar(100) primary key, email varchar(16), birthday timestamp with time zone)")
-                .executeUpdate();
-            session.createNativeQuery(
-                "INSERT INTO people VALUES ('Coda', 'coda@example.com', '1979-01-02 00:22:00+0:00')")
-                .executeUpdate();
-            transaction.commit();
+        final Session session = sessionFactory.openSession();
+        try {
+            session.createSQLQuery("DROP TABLE people IF EXISTS").executeUpdate();
+            session.createSQLQuery(
+                    "CREATE TABLE people (name varchar(100) primary key, email varchar(16), birthday timestamp with time zone)")
+                   .executeUpdate();
+            session.createSQLQuery(
+                    "INSERT INTO people VALUES ('Coda', 'coda@example.com', '1979-01-02 00:22:00+0:00')")
+                   .executeUpdate();
+        } finally {
+            session.close();
         }
 
-        final DropwizardResourceConfig config = DropwizardResourceConfig.forTesting();
+        final DropwizardResourceConfig config = DropwizardResourceConfig.forTesting(new MetricRegistry());
         config.register(new UnitOfWorkApplicationListener("hr-db", sessionFactory));
         config.register(new PersonResource(new PersonDAO(sessionFactory)));
-        config.register(new PersistenceExceptionMapper());
-        config.register(new JacksonFeature(Jackson.newObjectMapper()));
+        config.register(new JacksonMessageBodyProvider(Jackson.newObjectMapper(),
+                                                       Validators.newValidator()));
         config.register(new DataExceptionMapper());
-        config.register(new EmptyOptionalExceptionMapper());
 
         return config;
     }
 
     @Override
     protected void configureClient(ClientConfig config) {
-        config.register(new JacksonFeature(Jackson.newObjectMapper()));
+        config.register(new JacksonMessageBodyProvider(Jackson.newObjectMapper(),
+                Validators.newValidator()));
     }
 
     @Test

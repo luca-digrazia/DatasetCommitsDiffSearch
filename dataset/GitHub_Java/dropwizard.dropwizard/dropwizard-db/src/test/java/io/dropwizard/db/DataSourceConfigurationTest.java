@@ -1,15 +1,14 @@
 package io.dropwizard.db;
 
+import com.google.common.base.Optional;
 import com.google.common.io.Resources;
-
-import io.dropwizard.configuration.YamlConfigurationFactory;
+import io.dropwizard.configuration.ConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.util.Duration;
 import org.junit.Test;
 
 import java.io.File;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,7 +39,6 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getAbandonWhenPercentageFull()).isEqualTo(75);
         assertThat(ds.isAlternateUsernamesAllowed()).isTrue();
         assertThat(ds.getCommitOnReturn()).isTrue();
-        assertThat(ds.getRollbackOnReturn()).isTrue();
         assertThat(ds.getAutoCommitByDefault()).isFalse();
         assertThat(ds.getDefaultCatalog()).isEqualTo("test_catalog");
         assertThat(ds.getDefaultTransactionIsolation())
@@ -82,7 +80,6 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getAbandonWhenPercentageFull()).isEqualTo(0);
         assertThat(ds.isAlternateUsernamesAllowed()).isFalse();
         assertThat(ds.getCommitOnReturn()).isFalse();
-        assertThat(ds.getRollbackOnReturn()).isFalse();
         assertThat(ds.getAutoCommitByDefault()).isNull();
         assertThat(ds.getDefaultCatalog()).isNull();
         assertThat(ds.getDefaultTransactionIsolation())
@@ -91,11 +88,11 @@ public class DataSourceConfigurationTest {
         assertThat(ds.getInitializationQuery()).isNull();
         assertThat(ds.getLogAbandonedConnections()).isEqualTo(false);
         assertThat(ds.getLogValidationErrors()).isEqualTo(false);
-        assertThat(ds.getMaxConnectionAge()).isEqualTo(Optional.empty());
+        assertThat(ds.getMaxConnectionAge()).isEqualTo(Optional.absent());
         assertThat(ds.getCheckConnectionOnBorrow()).isEqualTo(false);
         assertThat(ds.getCheckConnectionOnConnect()).isEqualTo(true);
         assertThat(ds.getCheckConnectionOnReturn()).isEqualTo(false);
-        assertThat(ds.getValidationQueryTimeout()).isEqualTo(Optional.empty());
+        assertThat(ds.getValidationQueryTimeout()).isEqualTo(Optional.absent());
     }
 
     @Test
@@ -109,7 +106,7 @@ public class DataSourceConfigurationTest {
     }
 
     private DataSourceFactory getDataSourceFactory(String resourceName) throws Exception {
-        return new YamlConfigurationFactory<>(DataSourceFactory.class,
+        return new ConfigurationFactory<>(DataSourceFactory.class,
                 Validators.newValidator(), Jackson.newObjectMapper(), "dw")
                 .build(new File(Resources.getResource(resourceName).toURI()));
     }
