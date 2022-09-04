@@ -43,15 +43,18 @@ public class ProduceValidator implements ElementValidator {
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
 
-		if (annotationHelper.enclosingElementIsGenerated(element)) {
+		if (!annotationHelper.enclosingElementHasEnhancedComponentAnnotation(element)) {
 			return false;
 		}
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validatedElements, valid);
-
 		ExecutableElement executableElement = (ExecutableElement) element;
+
+		/*
+		 * We check that twice to skip invalid annotated elements
+		 */
+		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(executableElement, validatedElements, valid);
 
 		validatorHelper.returnTypeIsNotVoid(executableElement, valid);
 
@@ -61,9 +64,8 @@ public class ProduceValidator implements ElementValidator {
 
 		validatorHelper.isNotFinal(element, valid);
 
-		validatorHelper.zeroParameter(executableElement, valid);
+		validatorHelper.param.zeroParameter(executableElement, valid);
 
 		return valid.isValid();
 	}
-
 }
