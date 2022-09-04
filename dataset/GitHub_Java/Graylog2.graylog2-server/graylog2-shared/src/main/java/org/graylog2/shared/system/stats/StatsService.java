@@ -16,8 +16,6 @@
  */
 package org.graylog2.shared.system.stats;
 
-import org.graylog2.shared.system.stats.network.NetworkProbe;
-import org.graylog2.shared.system.stats.network.NetworkStats;
 import org.graylog2.shared.system.stats.os.OsProbe;
 import org.graylog2.shared.system.stats.os.OsStats;
 import org.graylog2.shared.system.stats.process.ProcessProbe;
@@ -28,19 +26,13 @@ import javax.inject.Singleton;
 
 @Singleton
 public class StatsService {
-    private final NetworkProbe networkProbe;
     private final OsProbe osProbe;
     private final ProcessProbe processProbe;
 
     @Inject
-    public StatsService(NetworkProbe networkProbe, OsProbe osProbe, ProcessProbe processProbe) {
-        this.networkProbe = networkProbe;
+    public StatsService(OsProbe osProbe, ProcessProbe processProbe) {
         this.osProbe = osProbe;
         this.processProbe = processProbe;
-    }
-
-    public NetworkStats networkStats() {
-        return networkProbe.networkStats();
     }
 
     public OsStats osStats() {
@@ -52,6 +44,6 @@ public class StatsService {
     }
 
     public SystemStats systemStats() {
-        return SystemStats.create(networkStats(), osStats(), processStats());
+        return SystemStats.create(osStats(), processStats());
     }
 }
