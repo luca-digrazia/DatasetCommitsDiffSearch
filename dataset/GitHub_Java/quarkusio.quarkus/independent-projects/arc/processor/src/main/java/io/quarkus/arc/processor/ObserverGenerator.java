@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -10,7 +26,6 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableObserverMethod;
 import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
-import io.quarkus.arc.processor.BuiltinBean.GeneratorContext;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
 import io.quarkus.gizmo.AssignableResultHandle;
@@ -36,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.event.Reception;
 import javax.enterprise.inject.spi.EventContext;
 import javax.enterprise.inject.spi.ObserverMethod;
@@ -212,14 +226,11 @@ public class ObserverGenerator extends AbstractGenerator {
                 doesNotExist.trueBranch().returnValue(null);
                 BytecodeCreator isNotPresent = doesNotExist.falseBranch();
                 isNotPresent.assign(ctxHandle, skipRelease ? isNotPresent.loadNull()
-                        : isNotPresent.newInstance(
-                                MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class),
-                                declaringProviderHandle));
+                        : isNotPresent.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class)));
             }
         } else {
             notify.assign(ctxHandle, skipRelease ? notify.loadNull()
-                    : notify.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class),
-                            declaringProviderHandle));
+                    : notify.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class)));
             notify.assign(declaringProviderInstanceHandle, notify.invokeInterfaceMethod(
                     MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
                     ctxHandle));
@@ -326,10 +337,9 @@ public class ObserverGenerator extends AbstractGenerator {
                 builtinBean = BuiltinBean.resolve(injectionPoint);
             }
             if (builtinBean != null) {
-                builtinBean.getGenerator()
-                        .generate(new GeneratorContext(classOutput, observer.getDeclaringBean().getDeployment(), injectionPoint,
-                                observerCreator, constructor, injectionPointToProviderField.get(injectionPoint),
-                                annotationLiterals, observer));
+                builtinBean.getGenerator().generate(classOutput, observer.getDeclaringBean().getDeployment(), injectionPoint,
+                        observerCreator, constructor,
+                        injectionPointToProviderField.get(injectionPoint), annotationLiterals);
             } else {
                 if (injectionPoint.getResolvedBean().getAllInjectionPoints().stream()
                         .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.getRequiredType().name()))) {
