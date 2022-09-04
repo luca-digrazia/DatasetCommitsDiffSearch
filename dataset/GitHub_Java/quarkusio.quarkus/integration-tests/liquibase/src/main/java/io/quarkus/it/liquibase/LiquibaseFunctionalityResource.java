@@ -5,13 +5,19 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 import javax.inject.Inject;
-import javax.ws.rs.*;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 
 import io.quarkus.liquibase.LiquibaseFactory;
 import liquibase.Liquibase;
 import liquibase.changelog.ChangeSet;
 import liquibase.changelog.ChangeSetStatus;
+import liquibase.command.CommandFactory;
+import liquibase.command.core.DropAllCommand;
 
 @Path("/")
 @Consumes(MediaType.APPLICATION_JSON)
@@ -24,6 +30,8 @@ public class LiquibaseFunctionalityResource {
     @GET
     @Path("update")
     public String doUpdateAuto() {
+        assertCommandFactoryResolvesProperly();
+
         try (Liquibase liquibase = liquibaseFactory.createLiquibase()) {
             liquibase.update(liquibaseFactory.createContexts(), liquibaseFactory.createLabels());
             List<ChangeSetStatus> status = liquibase.getChangeSetStatuses(liquibaseFactory.createContexts(),
@@ -37,6 +45,14 @@ public class LiquibaseFunctionalityResource {
                     .collect(Collectors.joining(","));
         } catch (Exception ex) {
             throw new WebApplicationException(ex.getMessage(), ex);
+        }
+    }
+
+    private void assertCommandFactoryResolvesProperly() {
+        try {
+            DropAllCommand dropAll = (DropAllCommand) CommandFactory.getInstance().getCommand("dropAll");
+        } catch (Exception e) {
+            throw new RuntimeException("Unable to load 'dropAll' command from Liquibase's CommandFactory", e);
         }
     }
 
