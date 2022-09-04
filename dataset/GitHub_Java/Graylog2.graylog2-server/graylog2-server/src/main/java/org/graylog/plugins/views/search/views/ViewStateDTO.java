@@ -23,8 +23,8 @@ import com.google.auto.value.AutoValue;
 import org.graylog.autovalue.WithBeanGetter;
 
 import javax.annotation.Nullable;
+import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 @AutoValue
@@ -40,16 +40,15 @@ public abstract class ViewStateDTO {
     static final String FIELD_FORMATTING = "formatting";
     static final String FIELD_DISPLAY_MODE_SETTINGS = "display_mode_settings";
 
-    @Nullable
     @JsonProperty(FIELD_SELECTED_FIELDS)
-    public abstract Optional<Set<String>> fields();
+    public abstract Set<String> fields();
 
     @Nullable
     @JsonProperty(FIELD_STATIC_MESSAGE_LIST_ID)
-    public abstract Optional<String> staticMessageListId();
+    public abstract String staticMessageListId();
 
     @JsonProperty(FIELD_TITLES)
-    public abstract Titles titles();
+    public abstract Map<String, Map<String, String>> titles();
 
     @JsonProperty(FIELD_WIDGETS)
     public abstract Set<WidgetDTO> widgets();
@@ -69,7 +68,6 @@ public abstract class ViewStateDTO {
 
     @AutoValue.Builder
     public static abstract class Builder {
-        @Nullable
         @JsonProperty(FIELD_SELECTED_FIELDS)
         public abstract Builder fields(Set<String> fields);
 
@@ -78,7 +76,7 @@ public abstract class ViewStateDTO {
         public abstract Builder staticMessageListId(String staticMessageListId);
 
         @JsonProperty(FIELD_TITLES)
-        public abstract Builder titles(Titles titles);
+        public abstract Builder titles(Map<String, Map<String, String>> titles);
 
         @JsonProperty(FIELD_WIDGETS)
         public abstract Builder widgets(Set<WidgetDTO> widgets);
@@ -100,7 +98,7 @@ public abstract class ViewStateDTO {
         @JsonCreator
         public static Builder create() {
             return new AutoValue_ViewStateDTO.Builder()
-                    .titles(Titles.empty())
+                    .titles(Collections.emptyMap())
                     .displayModeSettings(DisplayModeSettings.empty());
         }
     }
