@@ -1,49 +1,98 @@
-import com.google.common.collect.Lists;
-import lib.security.ServerRestInterfaceRealm;
-import org.apache.shiro.SecurityUtils;
-import org.apache.shiro.authc.credential.HashedCredentialsMatcher;
-import org.apache.shiro.mgt.DefaultSecurityManager;
-import org.apache.shiro.realm.Realm;
-import org.apache.shiro.realm.SimpleAccountRealm;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+/*
+ * Copyright 2013 TORCH GmbH
+ *
+ * This file is part of Graylog2.
+ *
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 import play.Application;
 import play.Configuration;
 import play.GlobalSettings;
+import play.api.mvc.EssentialFilter;
+import play.api.mvc.Handler;
+import play.libs.F;
+import play.mvc.Action;
+import play.mvc.Http;
+import play.mvc.SimpleResult;
+
+import java.io.File;
+import java.lang.reflect.Method;
 
 /**
- *
+ * This class is simply delegating to the real class {@see lib.Global},
+ * to avoid having to configure the exact name in the application.conf
+ * which is lost when a user overrides the config file location with -Dconfig.file etc.
  */
 @SuppressWarnings("unused")
 public class Global extends GlobalSettings {
-	private static final Logger log = LoggerFactory.getLogger(Global.class);
+    private final lib.Global global = new lib.Global();
 
-	@Override
-	public void onStart(Application app) {
-		SimpleAccountRealm webInterfaceLocalRealm = new SimpleAccountRealm("local-accounts");
-		webInterfaceLocalRealm.setCredentialsMatcher(new HashedCredentialsMatcher("MD5"));
-		setupLocalUsers(webInterfaceLocalRealm, app);
 
-		Realm serverRestInterfaceRealm = new ServerRestInterfaceRealm();
-		final DefaultSecurityManager securityManager =
-				new DefaultSecurityManager(
-						Lists.newArrayList(serverRestInterfaceRealm, webInterfaceLocalRealm)
-				);
-		SecurityUtils.setSecurityManager(securityManager);
-	}
+    @Override
+    public void onStart(Application app) {
+        global.onStart(app);
+    }
 
-	private void setupLocalUsers(SimpleAccountRealm realm, Application app) {
-		final Configuration config = app.configuration();
-		if (config.getString("local-user.password-md5") == null) {
-			log.warn("No password hash for local user {} set. " +
-					"If you lose connection to the graylog2-server at {}, you will be unable to log in!",
-					config.getString("local-user.name", "localadmin"), config.getString("graylog2-server"));
-			return;
-		}
-		realm.addAccount(
-				config.getString("local-user.name", "localadmin"),
-				config.getString("local-user.password-md5"),
-				"local-admin"
-		);
-	}
+    @Override
+    public void onStop(Application app) {
+        global.onStop(app);
+    }
+
+    @Override
+    public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
+        return global.onLoadConfig(configuration, file, classLoader);
+    }
+
+    @Override
+    public <A> A getControllerInstance(Class<A> controllerClass) throws Exception {
+        return global.getControllerInstance(controllerClass);
+    }
+
+    @Override
+    public Handler onRouteRequest(Http.RequestHeader request) {
+        return global.onRouteRequest(request);
+    }
+
+    @Override
+    public Action onRequest(Http.Request request, Method actionMethod) {
+        return global.onRequest(request, actionMethod);
+    }
+
+    @Override
+    public F.Promise<SimpleResult> onHandlerNotFound(Http.RequestHeader request) {
+        return global.onHandlerNotFound(request);
+    }
+
+    @Override
+    public F.Promise<SimpleResult> onError(Http.RequestHeader request, Throwable t) {
+        return global.onError(request, t);
+    }
+
+    @Override
+    public F.Promise<SimpleResult> onBadRequest(Http.RequestHeader request, String error) {
+        return global.onBadRequest(request, error);
+    }
+
+    @Override
+    public void beforeStart(Application app) {
+        global.beforeStart(app);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T extends EssentialFilter> Class<T>[] filters() {
+        return global.filters();
+    }
 }
