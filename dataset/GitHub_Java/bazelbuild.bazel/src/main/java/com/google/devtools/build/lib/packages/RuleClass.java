@@ -645,7 +645,6 @@ public class RuleClass {
     private boolean workspaceOnly = false;
     private boolean isExecutableSkylark = false;
     private boolean isAnalysisTest = false;
-    private boolean hasAnalysisTestTransition = false;
     private boolean isConfigMatcher = false;
     private boolean hasFunctionTransitionWhitelist = false;
     private boolean ignorePackageLicenses = false;
@@ -809,7 +808,6 @@ public class RuleClass {
           workspaceOnly,
           isExecutableSkylark,
           isAnalysisTest,
-          hasAnalysisTestTransition,
           hasFunctionTransitionWhitelist,
           ignorePackageLicenses,
           implicitOutputsFunction,
@@ -1197,19 +1195,6 @@ public class RuleClass {
     }
 
     /**
-     * This rule class has at least one attribute with an analysis test transition. (A
-     * starlark-defined transition using analysis_test_transition()).
-     */
-    public Builder setHasAnalysisTestTransition() {
-      this.hasAnalysisTestTransition = true;
-      return this;
-    }
-
-    public boolean hasAnalysisTestTransition() {
-      return this.hasAnalysisTestTransition;
-    }
-
-    /**
      * This rule class has the _whitelist_function_transition attribute.  Intended only for Skylark
      * rules.
      */
@@ -1405,7 +1390,6 @@ public class RuleClass {
   private final boolean workspaceOnly;
   private final boolean isExecutableSkylark;
   private final boolean isAnalysisTest;
-  private final boolean hasAnalysisTestTransition;
   private final boolean isConfigMatcher;
   private final boolean hasFunctionTransitionWhitelist;
   private final boolean ignorePackageLicenses;
@@ -1535,7 +1519,6 @@ public class RuleClass {
       boolean workspaceOnly,
       boolean isExecutableSkylark,
       boolean isAnalysisTest,
-      boolean hasAnalysisTestTransition,
       boolean hasFunctionTransitionWhitelist,
       boolean ignorePackageLicenses,
       ImplicitOutputsFunction implicitOutputsFunction,
@@ -1586,7 +1569,6 @@ public class RuleClass {
     this.workspaceOnly = workspaceOnly;
     this.isExecutableSkylark = isExecutableSkylark;
     this.isAnalysisTest = isAnalysisTest;
-    this.hasAnalysisTestTransition = hasAnalysisTestTransition;
     this.hasFunctionTransitionWhitelist = hasFunctionTransitionWhitelist;
     this.ignorePackageLicenses = ignorePackageLicenses;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
@@ -2439,14 +2421,6 @@ public class RuleClass {
   /** Returns true if this rule class is an analysis test (set by analysis_test = true). */
   public boolean isAnalysisTest() {
     return isAnalysisTest;
-  }
-
-  /**
-   * Returns true if this rule class has at least one attribute with an analysis test transition. (A
-   * starlark-defined transition using analysis_test_transition()).
-   */
-  public boolean hasAnalysisTestTransition() {
-    return hasAnalysisTestTransition;
   }
 
   /**

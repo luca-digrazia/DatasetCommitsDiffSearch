@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -26,7 +27,7 @@ import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
-import com.google.devtools.build.lib.syntax.StarlarkFunction;
+import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.Map;
 import java.util.Set;
@@ -48,9 +49,15 @@ public class RuleFactory {
    * Maps rule class name to the metaclass instance for that rule.
    */
   private final ImmutableMap<String, RuleClass> ruleClassMap;
+  private final Function<RuleClass, AttributeContainer> attributeContainerFactory;
 
-  /** Constructs a RuleFactory instance. */
-  public RuleFactory(RuleClassProvider provider) {
+  /**
+   * Constructs a RuleFactory instance.
+   */
+  public RuleFactory(
+      RuleClassProvider provider,
+      Function<RuleClass, AttributeContainer> attributeContainerFactory) {
+    this.attributeContainerFactory = attributeContainerFactory;
     this.ruleClassMap = ImmutableMap.copyOf(provider.getRuleClassMap());
   }
 
@@ -68,6 +75,14 @@ public class RuleFactory {
     return ruleClassMap.get(ruleClassName);
   }
 
+  AttributeContainer getAttributeContainer(RuleClass ruleClass) {
+    return attributeContainerFactory.apply(ruleClass);
+  }
+
+  Function<RuleClass, AttributeContainer> getAttributeContainerFactory() {
+    return attributeContainerFactory;
+  }
+
   /**
    * Creates and returns a rule instance.
    *
@@ -79,6 +94,7 @@ public class RuleFactory {
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
       EventHandler eventHandler,
+      @Nullable FuncallExpression ast,
       Location location,
       @Nullable Environment env,
       AttributeContainer attributeContainer)
@@ -112,22 +128,15 @@ public class RuleFactory {
     AttributesAndLocation generator =
         generatorAttributesForMacros(attributeValues, env, location, label);
     try {
-      // Examines --incompatible_disable_third_party_license_checking to see if we should check
-      // third party targets for license existence.
-      //
-      // This flag is overridable by RuleClass.ThirdPartyLicenseEnforcementPolicy (which is checked
-      // in RuleClass). This lets Bazel and Blaze migrate away from license logic on independent
-      // timelines. See --incompatible_disable_third_party_license_checking comments for details.
-      boolean checkThirdPartyLicenses =
-          env != null && !env.getSemantics().incompatibleDisableThirdPartyLicenseChecking();
       return ruleClass.createRule(
           pkgBuilder,
           label,
           generator.attributes,
           eventHandler,
+          ast,
           generator.location,
           attributeContainer,
-          checkThirdPartyLicenses);
+          env == null ? false : env.getSemantics().checkThirdPartyTargetsHaveLicenses());
     } catch (LabelSyntaxException | CannotPrecomputeDefaultsException e) {
       throw new RuleFactory.InvalidRuleException(ruleClass + " " + e.getMessage());
     }
@@ -145,6 +154,7 @@ public class RuleFactory {
    *     be a map entry for each non-optional attribute of this class of rule.
    * @param eventHandler a eventHandler on which errors and warnings are reported during
    *     rule creation
+   * @param ast the abstract syntax tree of the rule expression (optional)
    * @param location the location at which this rule was declared
    * @param env the lexical environment of the function call which declared this rule (optional)
    * @param attributeContainer the {@link AttributeContainer} the rule will contain
@@ -159,6 +169,7 @@ public class RuleFactory {
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
       EventHandler eventHandler,
+      @Nullable FuncallExpression ast,
       Location location,
       @Nullable Environment env,
       AttributeContainer attributeContainer)
@@ -169,6 +180,7 @@ public class RuleFactory {
             ruleClass,
             attributeValues,
             eventHandler,
+            ast,
             location,
             env,
             attributeContainer);
@@ -182,11 +194,12 @@ public class RuleFactory {
    * @param context the package-building context in which this rule was declared
    * @param ruleClass the {@link RuleClass} of the rule
    * @param attributeValues a {@link BuildLangTypedAttributeValuesMap} mapping attribute names to
-   *     attribute values of build-language type. Each attribute must be defined for this class of
-   *     rule, and have a build-language-typed value which can be converted to the appropriate
-   *     native type of the attribute (i.e. via {@link BuildType#selectableConvert}). There must be
-   *     a map entry for each non-optional attribute of this class of rule.
-   * @param loc the location of the rule expression
+   *     attribute values of build-language type. Each attribute must be defined for this class
+   *     of rule, and have a build-language-typed value which can be converted to the appropriate
+   *     native type of the attribute (i.e. via {@link BuildType#selectableConvert}). There must
+   *     be a map entry for each non-optional attribute of this class of rule.
+   * @param ast the abstract syntax tree of the rule expression (mandatory because this looks up a
+   *     {@link Location} from the {@code ast})
    * @param env the lexical environment of the function call which declared this rule (optional)
    * @param attributeContainer the {@link AttributeContainer} the rule will contain
    * @throws InvalidRuleException if the rule could not be constructed for any reason (e.g. no
@@ -199,7 +212,7 @@ public class RuleFactory {
       PackageContext context,
       RuleClass ruleClass,
       BuildLangTypedAttributeValuesMap attributeValues,
-      Location loc,
+      FuncallExpression ast,
       @Nullable Environment env,
       AttributeContainer attributeContainer)
       throws InvalidRuleException, NameConflictException, InterruptedException {
@@ -208,7 +221,8 @@ public class RuleFactory {
         ruleClass,
         attributeValues,
         context.eventHandler,
-        loc,
+        ast,
+        ast.getLocation(),
         env,
         attributeContainer);
   }
@@ -320,7 +334,7 @@ public class RuleFactory {
       return new AttributesAndLocation(args, location);
     }
     Pair<FuncallExpression, BaseFunction> topCall = env.getTopCall();
-    if (topCall == null || !(topCall.second instanceof StarlarkFunction)) {
+    if (topCall == null || !(topCall.second instanceof UserDefinedFunction)) {
       return new AttributesAndLocation(args, location);
     }
 
