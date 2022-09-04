@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -28,7 +28,6 @@ import com.googlecode.androidannotations.annotations.AfterTextChange;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
 import com.googlecode.androidannotations.helper.TextWatcherHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpression;
@@ -40,7 +39,7 @@ import com.sun.codemodel.JVar;
 /**
  * @author Mathieu Boniface
  */
-public class AfterTextChangeProcessor implements DecoratingElementProcessor {
+public class AfterTextChangeProcessor implements ElementProcessor {
 
 	private final TextWatcherHelper helper;
 
@@ -57,7 +56,9 @@ public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
 		String methodName = element.getSimpleName().toString();
 
@@ -84,7 +85,9 @@ public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 
 		}
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
+		AfterTextChange annotation = element.getAnnotation(AfterTextChange.class);
+
+		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "AfterTextChanged", holder);
 
 		for (JFieldRef idRef : idsRefs) {
 			TextWatcherHolder textWatcherHolder = helper.getOrCreateListener(codeModel, holder, idRef, viewParameterType);
@@ -96,7 +99,7 @@ public class AfterTextChangeProcessor implements DecoratingElementProcessor {
 			JBlock methodBody = methodToCall.body();
 
 			methodBody.add(previousBody);
-			JExpression activityRef = holder.generatedClass.staticRef("this");
+			JExpression activityRef = holder.eBean.staticRef("this");
 			textChangeCall = methodBody.invoke(activityRef, methodName);
 
 			for (int i = 0; i < parameters.size(); i++) {
