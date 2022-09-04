@@ -1,5 +1,4 @@
 /*
-/*
  * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
@@ -19,14 +18,13 @@
  */
 package models.api.results;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import org.joda.time.DateTime;
+import com.google.inject.Inject;
+import lib.APIException;
+import models.Stream;
 
-import javax.annotation.Nullable;
-import java.text.DecimalFormat;
+import java.io.IOException;
 import java.util.*;
 
 public class MessageResult {
@@ -43,7 +41,7 @@ public class MessageResult {
     private final Map<String, Object> fields;
     private final String index;
     private final String id;
-    private final DateTime timestamp;
+    private final String timestamp;
     private final String sourceNodeId;
     private final String sourceInputId;
     private final String sourceRadioId;
@@ -75,12 +73,15 @@ public class MessageResult {
             }
         });
         for (Map.Entry<String, Object> f : message.entrySet()) {
+            if (HIDDEN_FIELDS.contains(f.getKey())) {
+                continue;
+            }
+
             fields.put(f.getKey(), f.getValue());
         }
 
         this.id = (String) message.get("_id");
-        final Object timestamp1 = message.get("timestamp");
-        this.timestamp = new DateTime(timestamp1);
+        this.timestamp = (String) message.get("timestamp");
 
         this.sourceNodeId = (String) message.get("gl2_source_node");
         this.sourceInputId = (String) message.get("gl2_source_input");
@@ -100,39 +101,12 @@ public class MessageResult {
         return id;
     }
 
-    public DateTime getTimestamp() {
+    public String getTimestamp() {
         return timestamp;
-    }
-
-    public Map<String, Object> getFilteredFields() {
-        // return a _view_ of the fields map, do not make a copy, because subsequent manipulation would get lost!
-        return Maps.filterEntries(getFields(), new Predicate<Map.Entry<String, Object>>() {
-            @Override
-            public boolean apply(@Nullable Map.Entry<String, Object> input) {
-                return !HIDDEN_FIELDS.contains(input.getKey());
-            }
-        });
     }
 
     public Map<String, Object> getFields() {
         return fields;
-    }
-
-    public Map<String, Object> getFormattedFields() {
-        final DecimalFormat doubleFormatter = new DecimalFormat("#");
-
-        return Maps.transformEntries(getFilteredFields(), new Maps.EntryTransformer<String, Object, Object>() {
-            @Override
-            public Object transformEntry(@Nullable String key, @Nullable Object value) {
-                // Get rid of .0 of doubles. 9001.0 becomes "9001", 9001.25 becomes "9001.25"
-                // Never format a double in scientific notation.
-                if(value instanceof Double) {
-                    Double d = (Double) value;
-                    value = (d.longValue() == d ? Long.toString(d.longValue()) : doubleFormatter.format(d));
-                }
-                return value;
-            }
-        });
     }
 
     public String getIndex() {
@@ -166,5 +140,16 @@ public class MessageResult {
             return Lists.newArrayList();
         }
     }
+
+    /*public List<Stream> getStreams() throws IOException, APIException {
+        List<Stream> result = Lists.newArrayList();
+        for (String streamId : getStreamIds()) {
+            System.out.println("Fetching stream " + streamId);
+            Stream stream = streamService.get(streamId);
+            if (stream != null)
+                result.add(stream);
+        }
+        return result;
+    }*/
 
 }
