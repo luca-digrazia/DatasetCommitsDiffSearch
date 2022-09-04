@@ -1,33 +1,32 @@
 package org.jboss.shamrock.undertow;
 
-import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.DENY;
-import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.PERMIT;
 import static javax.servlet.DispatcherType.REQUEST;
 import static org.jboss.shamrock.annotations.ExecutionTime.RUNTIME_INIT;
 import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EventListener;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import javax.annotation.security.DeclareRoles;
 import javax.annotation.security.RunAs;
 import javax.inject.Inject;
+import javax.servlet.Filter;
+import javax.servlet.Servlet;
 import javax.servlet.annotation.MultipartConfig;
 import javax.servlet.annotation.ServletSecurity;
 import javax.servlet.annotation.WebFilter;
 import javax.servlet.annotation.WebListener;
 import javax.servlet.annotation.WebServlet;
-import javax.xml.stream.XMLInputFactory;
-import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.annotation.javaee.Descriptions;
 import org.jboss.annotation.javaee.DisplayNames;
@@ -48,11 +47,7 @@ import org.jboss.metadata.javaee.spec.IconsImpl;
 import org.jboss.metadata.javaee.spec.ParamValueMetaData;
 import org.jboss.metadata.javaee.spec.RunAsMetaData;
 import org.jboss.metadata.javaee.spec.SecurityRoleMetaData;
-import org.jboss.metadata.javaee.spec.SecurityRoleRefMetaData;
 import org.jboss.metadata.javaee.spec.SecurityRolesMetaData;
-import org.jboss.metadata.parser.servlet.WebMetaDataParser;
-import org.jboss.metadata.parser.util.MetaDataElementParser;
-import org.jboss.metadata.property.PropertyReplacers;
 import org.jboss.metadata.web.spec.AnnotationMetaData;
 import org.jboss.metadata.web.spec.AnnotationsMetaData;
 import org.jboss.metadata.web.spec.DispatcherType;
@@ -76,21 +71,21 @@ import org.jboss.shamrock.deployment.ApplicationArchive;
 import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
 import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
-import org.jboss.shamrock.deployment.builditem.InjectionFactoryBuildItem;
+import org.jboss.shamrock.deployment.builditem.ReflectiveClassBuildItem;
+import org.jboss.shamrock.deployment.builditem.ResourceBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import org.jboss.shamrock.deployment.recording.RecorderContext;
+import org.jboss.shamrock.deployment.builditem.SubstrateConfigBuildItem;
+import org.jboss.shamrock.deployment.recording.BeanFactory;
+import org.jboss.shamrock.deployment.recording.BytecodeRecorder;
 import org.jboss.shamrock.runtime.ConfiguredValue;
+import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
-import io.undertow.servlet.api.HttpMethodSecurityInfo;
+import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.ServletInfo;
-import io.undertow.servlet.api.ServletSecurityInfo;
 import io.undertow.servlet.handlers.DefaultServlet;
 
 public class UndertowBuildStep {
@@ -107,38 +102,14 @@ public class UndertowBuildStep {
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
 
-    @BuildStep
-    @Record(RUNTIME_INIT)
-    public ServiceStartBuildItem boot(UndertowDeploymentTemplate template, ServletHandlerBuildItem servletHandlerBuildItem, List<HttpHandlerWrapperBuildItem> wrappers) throws Exception {
-        template.startUndertow(null, servletHandlerBuildItem.getHandler(), new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), new ConfiguredValue("http.io-threads", ""), new ConfiguredValue("http.worker-threads", ""), wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
-        return new ServiceStartBuildItem("undertow");
-    }
+    @Inject
+    BuildProducer<ResourceBuildItem> resourceProducer;
 
 
     @BuildStep
-    SubstrateConfigBuildItem config() {
-        return SubstrateConfigBuildItem.builder()
-                .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerResponseConduit")
-                .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerRequestConduit")
-
-                .build();
-    }
-
-
     @Record(STATIC_INIT)
-    @BuildStep
-    public ServletHandlerBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
-                                         List<ServletBuildItem> servlets,
-                                         List<FilterBuildItem> filters,
-                                         List<ServletInitParamBuildItem> initParams,
-                                         List<ServletContextAttributeBuildItem> contextParams,
-                                         UndertowDeploymentTemplate template, RecorderContext context,
-                                         List<ServletExtensionBuildItem> extensions,
-                                         InjectionFactoryBuildItem injectionFactory,
-                                         BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
-
-        reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(), "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
-
+    public DeploymentInfoBuildItem createDeploymentInfo(UndertowDeploymentTemplate template,
+                                                        ApplicationArchivesBuildItem applicationArchivesBuildItem) throws Exception {
         //we need to check for web resources in order to get welcome files to work
         //this kinda sucks
         Set<String> knownFiles = new HashSet<>();
@@ -160,34 +131,54 @@ public class UndertowBuildStep {
             }
         }
 
-        RuntimeValue<DeploymentInfo> deployment = template.createDeployment("test", knownFiles, knownDirectories);
+        RuntimeValue<DeploymentInfo> info = template.createDeployment("test", knownFiles, knownDirectories);
+        return new DeploymentInfoBuildItem(info);
+    }
 
-        WebMetaData result;
-        Path webXml = applicationArchivesBuildItem.getRootArchive().getChildPath("META-INF/web.xml");
-        if (webXml != null) {
+    @BuildStep
+    @Record(RUNTIME_INIT)
+    public ServiceStartBuildItem boot(UndertowDeploymentTemplate template, ServletHandlerBuildItem servletHandlerBuildItem, List<HttpHandlerWrapperBuildItem> wrappers) throws Exception {
+        template.startUndertow(null, servletHandlerBuildItem.getHandler(), new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), new ConfiguredValue("http.io-threads", ""), new ConfiguredValue("http.worker-threads", ""), wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
+        return new ServiceStartBuildItem("undertow");
+    }
 
-            final XMLInputFactory inputFactory = XMLInputFactory.newInstance();
-            MetaDataElementParser.DTDInfo dtdInfo = new MetaDataElementParser.DTDInfo();
-            inputFactory.setXMLResolver(dtdInfo);
-            try (FileInputStream in = new FileInputStream(webXml.toFile())) {
-                final XMLStreamReader xmlReader = inputFactory.createXMLStreamReader(in);
-                result = WebMetaDataParser.parse(xmlReader, dtdInfo, PropertyReplacers.noop());
-            }
-        } else {
-            result = new WebMetaData();
-        }
+
+    @BuildStep
+    SubstrateConfigBuildItem config() {
+        return SubstrateConfigBuildItem.builder()
+                .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerResponseConduit")
+                .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerRequestConduit")
+
+                .build();
+    }
+
+
+    @Record(STATIC_INIT)
+    @BuildStep
+    public ServletHandlerBuildItem build(List<ServletBuildItem> servlets,
+                                         List<FilterBuildItem> filters,
+                                         List<ServletContextParamBuildItem> contextParams,
+                                         UndertowDeploymentTemplate template, BytecodeRecorder context, DeploymentInfoBuildItem deployment,
+                                         BeanFactory beanFactory,
+                                         BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
+
+        reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(), "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
 
         final IndexView index = combinedIndexBuildItem.getIndex();
-        processAnnotations(index, result);
+        WebMetaData result = processAnnotations(index);
+
+
         //add servlets
         if (result.getServlets() != null) {
             for (ServletMetaData servlet : result.getServlets()) {
                 reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
-                RuntimeValue<ServletInfo> sref = template.registerServlet(deployment, servlet.getServletName(),
+                InjectionInstance<? extends Servlet> injection = (InjectionInstance<? extends Servlet>) beanFactory.newInstanceFactory(servlet.getServletClass());
+                InstanceFactory<? extends Servlet> factory = template.createInstanceFactory(injection);
+                AtomicReference<ServletInfo> sref = template.registerServlet(deployment.getValue(), servlet.getServletName(),
                         context.classProxy(servlet.getServletClass()),
                         servlet.isAsyncSupported(),
                         servlet.getLoadOnStartupInt(),
-                        injectionFactory.getFactory());
+                        factory);
                 if (servlet.getInitParam() != null) {
                     for (ParamValueMetaData init : servlet.getInitParam()) {
                         template.addServletInitParam(sref, init.getParamName(), init.getParamValue());
@@ -196,42 +187,13 @@ public class UndertowBuildStep {
                 if (servlet.getMultipartConfig() != null) {
                     template.setMultipartConfig(sref, servlet.getMultipartConfig().getLocation(), servlet.getMultipartConfig().getMaxFileSize(), servlet.getMultipartConfig().getMaxRequestSize(), servlet.getMultipartConfig().getFileSizeThreshold());
                 }
-                // Map the @ServletSecurity annotations
-                if (result.getAnnotations() != null) {
-                    for (AnnotationMetaData amd : result.getAnnotations()) {
-                        if (amd.getClassName().equals(servlet.getServletClass())) {
-                            // Process the @ServletSecurity into metadata
-                            ServletSecurityMetaData ssmd = amd.getServletSecurity();
-                            ServletSecurityInfo securityInfo = new ServletSecurityInfo();
-                            securityInfo.setEmptyRoleSemantic(ssmd.getEmptyRoleSemantic() == EmptyRoleSemanticType.DENY ? DENY : PERMIT);
-                            securityInfo.setTransportGuaranteeType(transportGuaranteeType(ssmd.getTransportGuarantee()))
-                                    .addRolesAllowed(ssmd.getRolesAllowed());
-                            if (ssmd.getHttpMethodConstraints() != null) {
-                                for (HttpMethodConstraintMetaData method : ssmd.getHttpMethodConstraints()) {
-                                    securityInfo.addHttpMethodSecurityInfo(
-                                            new HttpMethodSecurityInfo()
-                                                    .setEmptyRoleSemantic(method.getEmptyRoleSemantic() == EmptyRoleSemanticType.DENY ? DENY : PERMIT)
-                                                    .setTransportGuaranteeType(transportGuaranteeType(method.getTransportGuarantee()))
-                                                    .addRolesAllowed(method.getRolesAllowed())
-                                                    .setMethod(method.getMethod()));
-                                }
-                            }
-                            template.setSecurityInfo(sref, securityInfo);
-                        }
-                        if (servlet.getSecurityRoleRefs() != null) {
-                            for (final SecurityRoleRefMetaData ref : servlet.getSecurityRoleRefs()) {
-                                template.addSecurityRoleRef(sref, ref.getRoleName(), ref.getRoleLink());
-                            }
-                        }
-                    }
-                }
             }
         }
         //servlet mappings
         if (result.getServletMappings() != null) {
             for (ServletMappingMetaData mapping : result.getServletMappings()) {
                 for (String m : mapping.getUrlPatterns()) {
-                    template.addServletMapping(deployment, mapping.getServletName(), m);
+                    template.addServletMapping(deployment.getValue(), mapping.getServletName(), m);
                 }
             }
         }
@@ -239,11 +201,13 @@ public class UndertowBuildStep {
         if (result.getFilters() != null) {
             for (FilterMetaData filter : result.getFilters()) {
                 reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, filter.getFilterClass()));
-                RuntimeValue<FilterInfo> sref = template.registerFilter(deployment,
+                InjectionInstance<? extends Filter> injection = (InjectionInstance<? extends Filter>) beanFactory.newInstanceFactory(filter.getFilterClass());
+                InstanceFactory<? extends Filter> factory = template.createInstanceFactory(injection);
+                AtomicReference<FilterInfo> sref = template.registerFilter(deployment.getValue(),
                         filter.getFilterName(),
                         context.classProxy(filter.getFilterClass()),
                         filter.isAsyncSupported(),
-                        injectionFactory.getFactory());
+                        factory);
                 if (filter.getInitParam() != null) {
                     for (ParamValueMetaData init : filter.getInitParam()) {
                         template.addFilterInitParam(sref, init.getParamName(), init.getParamValue());
@@ -255,11 +219,11 @@ public class UndertowBuildStep {
             for (FilterMappingMetaData mapping : result.getFilterMappings()) {
                 for (String m : mapping.getUrlPatterns()) {
                     if (mapping.getDispatchers() == null || mapping.getDispatchers().isEmpty()) {
-                        template.addFilterURLMapping(deployment, mapping.getFilterName(), m, REQUEST);
+                        template.addFilterURLMapping(deployment.getValue(), mapping.getFilterName(), m, REQUEST);
                     } else {
 
                         for (DispatcherType dispatcher : mapping.getDispatchers()) {
-                            template.addFilterURLMapping(deployment, mapping.getFilterName(), m, javax.servlet.DispatcherType.valueOf(dispatcher.name()));
+                            template.addFilterURLMapping(deployment.getValue(), mapping.getFilterName(), m, javax.servlet.DispatcherType.valueOf(dispatcher.name()));
                         }
                     }
                 }
@@ -270,63 +234,62 @@ public class UndertowBuildStep {
         if (result.getListeners() != null) {
             for (ListenerMetaData listener : result.getListeners()) {
                 reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, listener.getListenerClass()));
-                template.registerListener(deployment, context.classProxy(listener.getListenerClass()), injectionFactory.getFactory());
+                InjectionInstance<? extends EventListener> injection = (InjectionInstance<? extends EventListener>) beanFactory.newInstanceFactory(listener.getListenerClass());
+                InstanceFactory<? extends EventListener> factory = template.createInstanceFactory(injection);
+                template.registerListener(deployment.getValue(), context.classProxy(listener.getListenerClass()), factory);
             }
         }
 
         for (ServletBuildItem servlet : servlets) {
             String servletClass = servlet.getServletClass();
-            if (servlet.getLoadOnStartup() == 0) {
+            InjectionInstance<? extends Servlet> injection = (InjectionInstance<? extends Servlet>) beanFactory.newInstanceFactory(servletClass);
+            InstanceFactory<? extends Servlet> factory = template.createInstanceFactory(injection);
+            if(servlet.getLoadOnStartup() == 0) {
                 reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
             }
-            template.registerServlet(deployment, servlet.getName(), context.classProxy(servletClass), servlet.isAsyncSupported(), servlet.getLoadOnStartup(), injectionFactory.getFactory());
+            template.registerServlet(deployment.getValue(), servlet.getName(), context.classProxy(servletClass), servlet.isAsyncSupported(), servlet.getLoadOnStartup(), factory);
 
             for (String m : servlet.getMappings()) {
-                template.addServletMapping(deployment, servlet.getName(), m);
+                template.addServletMapping(deployment.getValue(), servlet.getName(), m);
             }
         }
 
         for (FilterBuildItem filter : filters) {
             String filterClass = filter.getFilterClass();
             reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, filterClass));
-            template.registerFilter(deployment, filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(), injectionFactory.getFactory());
+            InjectionInstance<? extends Filter> injection = (InjectionInstance<? extends Filter>) beanFactory.newInstanceFactory(filterClass);
+            InstanceFactory<? extends Filter> factory = template.createInstanceFactory(injection);
+            template.registerFilter(deployment.getValue(), filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(), factory);
             for (FilterBuildItem.FilterMappingInfo m : filter.getMappings()) {
-                if (m.getMappingType() == FilterBuildItem.FilterMappingInfo.MappingType.URL) {
-                    template.addFilterURLMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
+                if(m.getMappingType() == FilterBuildItem.FilterMappingInfo.MappingType.URL) {
+                    template.addFilterURLMapping(deployment.getValue(), filter.getName(), m.getMapping(), m.getDispatcher());
                 } else {
-                    template.addFilterServletNameMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
+                    template.addFilterServletNameMapping(deployment.getValue(), filter.getName(), m.getMapping(), m.getDispatcher());
                 }
             }
         }
-        for (ServletInitParamBuildItem i : initParams) {
-            template.addServltInitParameter(deployment, i.getKey(), i.getValue());
+        for(ServletContextParamBuildItem i : contextParams) {
+            template.addServletContextParameter(deployment.getValue(), i.getKey(), i.getValue());
         }
-        for (ServletContextAttributeBuildItem i : contextParams) {
-            template.addServletContextAttribute(deployment, i.getKey(), i.getValue());
-        }
-        for (ServletExtensionBuildItem i : extensions) {
-            template.addServletExtension(deployment, i.getValue());
-        }
-        return new ServletHandlerBuildItem(template.bootServletContainer(deployment));
+        return new ServletHandlerBuildItem(template.bootServletContainer(deployment.getValue()));
 
     }
 
     @BuildStep
-    SubstrateResourceBuildItem registerSubstrateResources(ArchiveRootBuildItem root,
-                                                          ApplicationArchivesBuildItem applicationArchivesBuildItem) throws IOException {
-        List<String> res = new ArrayList<>();
+    void registerSubstrateResources(ArchiveRootBuildItem root,
+                                    BuildProducer<ResourceBuildItem> resourceProducer,
+                                    ApplicationArchivesBuildItem applicationArchivesBuildItem) throws IOException {
         Path resources = applicationArchivesBuildItem.getRootArchive().getChildPath("META-INF/resources");
         if (resources != null) {
             Files.walk(resources).forEach(new Consumer<Path>() {
                 @Override
                 public void accept(Path path) {
                     if (!Files.isDirectory(path)) {
-                        res.add(root.getPath().relativize(path).toString());
+                        resourceProducer.produce(new ResourceBuildItem(root.getPath().relativize(path).toString()));
                     }
                 }
             });
         }
-        return new SubstrateResourceBuildItem(res);
     }
 
     /**
@@ -334,7 +297,8 @@ public class UndertowBuildStep {
      *
      * @param index the annotation index
      */
-    private void processAnnotations(IndexView index, WebMetaData metaData) {
+    private WebMetaData processAnnotations(IndexView index) {
+        WebMetaData metaData = new WebMetaData();
         // @WebServlet
         final Collection<AnnotationInstance> webServletAnnotations = index.getAnnotations(webServlet);
         if (webServletAnnotations != null && webServletAnnotations.size() > 0) {
@@ -690,27 +654,7 @@ public class UndertowBuildStep {
                 annotationMD.setServletSecurity(servletSecurity);
             }
         }
-    }
-
-    /**
-     * Map web metadata type to undertow type
-     *
-     * @param type web metadata TransportGuaranteeType
-     * @return undertow TransportGuaranteeType
-     */
-    private static io.undertow.servlet.api.TransportGuaranteeType transportGuaranteeType(final TransportGuaranteeType type) {
-        if (type == null) {
-            return io.undertow.servlet.api.TransportGuaranteeType.NONE;
-        }
-        switch (type) {
-            case CONFIDENTIAL:
-                return io.undertow.servlet.api.TransportGuaranteeType.CONFIDENTIAL;
-            case INTEGRAL:
-                return io.undertow.servlet.api.TransportGuaranteeType.INTEGRAL;
-            case NONE:
-                return io.undertow.servlet.api.TransportGuaranteeType.NONE;
-        }
-        throw new RuntimeException("UNREACHABLE");
+        return metaData;
     }
 
     protected Descriptions getDescription(String description) {

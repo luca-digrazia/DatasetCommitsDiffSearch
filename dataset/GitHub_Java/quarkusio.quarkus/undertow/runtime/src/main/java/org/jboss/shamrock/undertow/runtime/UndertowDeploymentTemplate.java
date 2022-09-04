@@ -1,10 +1,12 @@
 package org.jboss.shamrock.undertow.runtime;
 
+import java.io.Closeable;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.EventListener;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -14,12 +16,11 @@ import javax.servlet.MultipartConfigElement;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
+import org.jboss.shamrock.runtime.Template;
 import org.jboss.shamrock.runtime.ConfiguredValue;
-import org.jboss.shamrock.runtime.InjectionFactory;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.RuntimeValue;
-import org.jboss.shamrock.runtime.ShutdownContext;
-import org.jboss.shamrock.runtime.Template;
+import org.jboss.shamrock.runtime.StartupContext;
 
 import io.undertow.Undertow;
 import io.undertow.server.HandlerWrapper;
@@ -29,7 +30,6 @@ import io.undertow.server.handlers.CanonicalPathHandler;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
 import io.undertow.server.handlers.resource.PathResourceManager;
 import io.undertow.server.session.SessionIdGenerator;
-import io.undertow.servlet.ServletExtension;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
@@ -38,7 +38,6 @@ import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletInfo;
-import io.undertow.servlet.api.ServletSecurityInfo;
 
 /**
  * Provides the runtime methods to bootstrap Undertow. This class is present in the final uber-jar,
@@ -87,23 +86,23 @@ public class UndertowDeploymentTemplate {
         return new ShamrockInstanceFactory<T>(injectionInstance);
     }
 
-    public RuntimeValue<ServletInfo> registerServlet(RuntimeValue<DeploymentInfo> deploymentInfo,
-                                                     String name,
-                                                     Class<?> servletClass,
-                                                     boolean asyncSupported,
-                                                     int loadOnStartup,
-                                                     InjectionFactory instanceFactory) throws Exception {
-        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, new ShamrockInstanceFactory(instanceFactory.create(servletClass)));
+    public AtomicReference<ServletInfo> registerServlet(RuntimeValue<DeploymentInfo> deploymentInfo,
+                                                        String name,
+                                                        Class<?> servletClass,
+                                                        boolean asyncSupported,
+                                                        int loadOnStartup,
+                                                        InstanceFactory<? extends Servlet> instanceFactory) throws Exception {
+        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, instanceFactory);
         deploymentInfo.getValue().addServlet(servletInfo);
         servletInfo.setAsyncSupported(asyncSupported);
         if (loadOnStartup > 0) {
             servletInfo.setLoadOnStartup(loadOnStartup);
         }
-        return new RuntimeValue<>(servletInfo);
+        return new AtomicReference<>(servletInfo);
     }
 
-    public void addServletInitParam(RuntimeValue<ServletInfo> info, String name, String value) {
-        info.getValue().addInitParam(name, value);
+    public void addServletInitParam(AtomicReference<ServletInfo> info, String name, String value) {
+        info.get().addInitParam(name, value);
     }
 
     public void addServletMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping) throws Exception {
@@ -111,40 +110,23 @@ public class UndertowDeploymentTemplate {
         sv.addMapping(mapping);
     }
 
-    public void setMultipartConfig(RuntimeValue<ServletInfo> sref, String location, long fileSize, long maxRequestSize, int fileSizeThreshold) {
+    public void setMultipartConfig(AtomicReference<ServletInfo> sref, String location, long fileSize, long maxRequestSize, int fileSizeThreshold) {
         MultipartConfigElement mp = new MultipartConfigElement(location, fileSize, maxRequestSize, fileSizeThreshold);
-        sref.getValue().setMultipartConfig(mp);
+        sref.get().setMultipartConfig(mp);
     }
 
-    /**
-     * @param sref
-     * @param securityInfo
-     */
-    public void setSecurityInfo(RuntimeValue<ServletInfo> sref, ServletSecurityInfo securityInfo) {
-        sref.getValue().setServletSecurityInfo(securityInfo);
-    }
-
-    /**
-     * @param sref
-     * @param roleName
-     * @param roleLink
-     */
-    public void addSecurityRoleRef(RuntimeValue<ServletInfo> sref, String roleName, String roleLink) {
-        sref.getValue().addSecurityRoleRef(roleName, roleLink);
-    }
-
-    public RuntimeValue<FilterInfo> registerFilter(RuntimeValue<DeploymentInfo> info,
-                                                   String name, Class<?> filterClass,
-                                                   boolean asyncSupported,
-                                                   InjectionFactory instanceFactory) throws Exception {
-        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, new ShamrockInstanceFactory(instanceFactory.create(filterClass)));
+    public AtomicReference<FilterInfo> registerFilter(RuntimeValue<DeploymentInfo> info,
+                                                      String name, Class<?> filterClass,
+                                                      boolean asyncSupported,
+                                                      InstanceFactory<? extends Filter> instanceFactory) throws Exception {
+        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, instanceFactory);
         info.getValue().addFilter(filterInfo);
         filterInfo.setAsyncSupported(asyncSupported);
-        return new RuntimeValue<>(filterInfo);
+        return new AtomicReference<>(filterInfo);
     }
 
-    public void addFilterInitParam(RuntimeValue<FilterInfo> info, String name, String value) {
-        info.getValue().addInitParam(name, value);
+    public void addFilterInitParam(AtomicReference<FilterInfo> info, String name, String value) {
+        info.get().addInitParam(name, value);
     }
 
     public void addFilterURLMapping(RuntimeValue<DeploymentInfo> info, String name, String mapping, DispatcherType dispatcherType) throws Exception {
@@ -155,24 +137,23 @@ public class UndertowDeploymentTemplate {
         info.getValue().addFilterServletNameMapping(name, mapping, dispatcherType);
     }
 
-    public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, InjectionFactory factory) {
-        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, (InstanceFactory<? extends EventListener>) new ShamrockInstanceFactory<>(factory.create(listenerClass))));
+    public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, InstanceFactory<? extends EventListener> factory) {
+        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, factory));
     }
 
-    public void addServltInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
+    public void addServletContextParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
     }
 
-    public void startUndertow(ShutdownContext shutdown, HttpHandler handler, ConfiguredValue port, ConfiguredValue host, ConfiguredValue ioThreads, ConfiguredValue workerThreads, List<HandlerWrapper> wrappers) throws ServletException {
+    public void startUndertow(StartupContext startupContext, HttpHandler handler, ConfiguredValue port, ConfiguredValue host, ConfiguredValue ioThreads, ConfiguredValue workerThreads, List<HandlerWrapper> wrappers) throws ServletException {
         if (undertow == null) {
             startUndertowEagerly(port, host, ioThreads, workerThreads, null);
 
             //in development mode undertow is started eagerly
-            shutdown.addShutdownTask(new Runnable() {
+            startupContext.addCloseable(new Closeable() {
                 @Override
-                public void run() {
+                public void close() {
                     undertow.stop();
-                    undertow = null;
                 }
             });
         }
@@ -191,7 +172,7 @@ public class UndertowDeploymentTemplate {
      * be no chance to use hot deployment to fix the error. In development mode we start Undertow early, so any error
      * on boot can be corrected via the hot deployment handler
      */
-    public static void startUndertowEagerly(ConfiguredValue port, ConfiguredValue host, ConfiguredValue ioThreads, ConfiguredValue workerThreads, HandlerWrapper hotDeploymentWrapper) throws ServletException {
+    public void startUndertowEagerly(ConfiguredValue port, ConfiguredValue host, ConfiguredValue ioThreads, ConfiguredValue workerThreads, HandlerWrapper hotDeploymentWrapper) throws ServletException {
         if (undertow == null) {
             log.log(Level.INFO, "Starting Undertow on port " + port.getValue());
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
@@ -223,14 +204,6 @@ public class UndertowDeploymentTemplate {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    public void addServletContextAttribute(RuntimeValue<DeploymentInfo> deployment, String key, Object value1) {
-        deployment.getValue().addServletContextAttribute(key, value1);
-    }
-
-    public void addServletExtension(RuntimeValue<DeploymentInfo> deployment, ServletExtension extension) {
-        deployment.getValue().addServletExtension(extension);
     }
 
     /**

@@ -35,6 +35,7 @@ import java.util.Collection;
 import java.util.Enumeration;
 import java.util.List;
 
+import javax.servlet.Servlet;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.ext.Providers;
@@ -50,19 +51,26 @@ import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
+import org.jboss.shamrock.annotations.ExecutionTime;
 import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import org.jboss.shamrock.deployment.builditem.ProxyDefinitionBuildItem;
+import org.jboss.shamrock.deployment.builditem.ReflectiveClassBuildItem;
+import org.jboss.shamrock.deployment.builditem.ReflectiveHierarchyBuildItem;
+import org.jboss.shamrock.deployment.builditem.ResourceBuildItem;
+import org.jboss.shamrock.deployment.builditem.SubstrateConfigBuildItem;
+import org.jboss.shamrock.deployment.recording.BeanFactory;
+import org.jboss.shamrock.deployment.recording.BytecodeRecorder;
 import org.jboss.shamrock.jaxrs.runtime.graal.JaxrsTemplate;
 import org.jboss.shamrock.jaxrs.runtime.graal.ShamrockInjectorFactory;
+import org.jboss.shamrock.runtime.InjectionInstance;
+import org.jboss.shamrock.undertow.DeploymentInfoBuildItem;
 import org.jboss.shamrock.undertow.ServletBuildItem;
-import org.jboss.shamrock.undertow.ServletInitParamBuildItem;
+import org.jboss.shamrock.undertow.ServletContextParamBuildItem;
+import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
+
+import io.undertow.servlet.api.InstanceFactory;
 
 /**
  * Processor that finds jax-rs classes in the deployment
@@ -94,44 +102,40 @@ public class JaxrsScanningProcessor {
 
 
     @BuildStep
-    ServletInitParamBuildItem registerProviders(List<JaxrsProviderBuildItem> providers) {
+    ServletContextParamBuildItem registerProviders(List<JaxrsProviderBuildItem> providers) {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < providers.size(); ++i) {
-            if (i != 0) {
+        for(int i = 0; i < providers.size(); ++i) {
+            if(i != 0) {
                 sb.append(",");
             }
             sb.append(providers.get(i).getName());
         }
-        return new ServletInitParamBuildItem("resteasy.providers", sb.toString());
+        return new ServletContextParamBuildItem("resteasy.providers", sb.toString());
     }
 
     @BuildStep
     SubstrateConfigBuildItem config() {
         return SubstrateConfigBuildItem.builder()
                 .addResourceBundle("messages")
-                .addNativeImageSystemProperty("com.sun.xml.internal.bind.v2.bytecode.ClassTailor.noOptimize", "true") //com.sun.xml.internal.bind.v2.runtime.reflect.opt.AccessorInjector will attempt to use code that does not work if this is not set
                 .build();
     }
 
     @BuildStep
     public void build(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-                      BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition,
+                      BuildProducer<ProxyDefinitionBuildItem> proxyDefinition,
                       BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
-                      BuildProducer<SubstrateResourceBuildItem> resource,
-                      BuildProducer<RuntimeInitializedClassBuildItem> runtimeClasses,
+                      BuildProducer<ResourceBuildItem> resource,
                       BuildProducer<ServletBuildItem> servletProducer,
                       CombinedIndexBuildItem combinedIndexBuildItem,
-                      BuildProducer<ServletInitParamBuildItem> servletContextParams
+                      BuildProducer<ServletContextParamBuildItem> servletContextParams
     ) throws Exception {
-
-
         //this is pretty yuck, and does not really belong here, but it is needed to get the json-p
         //provider to work
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "org.glassfish.json.JsonProviderImpl",
                 "com.fasterxml.jackson.module.jaxb.JaxbAnnotationIntrospector",
                 "com.fasterxml.jackson.databind.ser.std.SqlDateSerializer"));
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ArrayList.class.getName()));
-        resource.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
+        resource.produce(new ResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
         IndexView index = combinedIndexBuildItem.getIndex();
 
         Collection<AnnotationInstance> app = index.getAnnotations(APPLICATION_PATH);
@@ -140,10 +144,8 @@ public class JaxrsScanningProcessor {
         }
         Collection<AnnotationInstance> xmlRoot = index.getAnnotations(XML_ROOT);
         if (!xmlRoot.isEmpty()) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "com.sun.xml.bind.v2.ContextFactory",
-                    "com.sun.xml.internal.bind.v2.ContextFactory"));
+            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, "com.sun.xml.bind.v2.ContextFactory", "com.sun.xml.internal.bind.v2.ContextFactory"));
         }
-        runtimeClasses.produce(new RuntimeInitializedClassBuildItem("com.sun.xml.internal.bind.v2.runtime.reflect.opt.Injector"));
         for (DotName i : Arrays.asList(XML_ROOT, JSONB_ANNOTATION)) {
             for (AnnotationInstance anno : index.getAnnotations(i)) {
                 if (anno.target().kind() == AnnotationTarget.Kind.CLASS) {
@@ -170,14 +172,14 @@ public class JaxrsScanningProcessor {
                 ClassInfo type = index.getClassByName(typeName);
                 if (type != null) {
                     if (Modifier.isInterface(type.flags())) {
-                        proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(type.toString()));
+                        proxyDefinition.produce(new ProxyDefinitionBuildItem(type.toString()));
                     }
                 } else {
                     //might be a framework class, which should be loadable
                     try {
                         Class<?> typeClass = Class.forName(typeName.toString());
                         if (typeClass.isInterface()) {
-                            proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(typeName.toString()));
+                            proxyDefinition.produce(new ProxyDefinitionBuildItem(typeName.toString()));
                         }
                     } catch (Exception e) {
                         //ignore
@@ -222,11 +224,11 @@ public class JaxrsScanningProcessor {
             }
 
             if (sb.length() > 0) {
-                servletContextParams.produce(new ServletInitParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString()));
+                servletContextParams.produce(new ServletContextParamBuildItem(ResteasyContextParameters.RESTEASY_SCANNED_RESOURCES, sb.toString()));
             }
-            servletContextParams.produce(new ServletInitParamBuildItem("resteasy.servlet.mapping.prefix", path));
-            servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
-            servletContextParams.produce(new ServletInitParamBuildItem(Application.class.getName(), appClass));
+            servletContextParams.produce(new ServletContextParamBuildItem("resteasy.servlet.mapping.prefix", path));
+            servletContextParams.produce(new ServletContextParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
+            servletContextParams.produce(new ServletContextParamBuildItem(Application.class.getName(), appClass));
 
         }
         for (DotName annotationType : METHOD_ANNOTATIONS) {
