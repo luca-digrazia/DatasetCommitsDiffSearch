@@ -18,80 +18,47 @@
  */
 package controllers;
 
-import com.google.common.base.Splitter;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.google.common.net.MediaType;
-import com.google.gson.Gson;
 import com.google.inject.Inject;
-import lib.*;
-import lib.security.RestPermissions;
-import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.lib.Field;
-import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
-import org.graylog2.restclient.lib.timeranges.TimeRange;
-import org.graylog2.restclient.models.*;
-import org.graylog2.restclient.models.api.results.DateHistogramResult;
-import org.graylog2.restclient.models.api.results.SearchResult;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeConstants;
-import org.joda.time.Minutes;
+import lib.APIException;
+import lib.ApiClient;
+import lib.Field;
+import lib.SearchTools;
+import lib.timeranges.*;
+import models.*;
+import models.api.results.DateHistogramResult;
+import models.api.results.SearchResult;
 import play.mvc.Result;
-import views.helpers.Permissions;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public class SearchController extends AuthenticatedController {
 
-    // guess high, so we never have a bad resolution
-    private static int DEFAULT_ASSUMED_GRAPH_RESOLUTION = 4000;
+    @Inject
+    private UniversalSearch.Factory searchFactory;
+    @Inject
+    private MessagesService messagesService;
 
     @Inject
-    protected UniversalSearch.Factory searchFactory;
+    private StreamService streamService;
 
-    @Inject
-    protected MessagesService messagesService;
-
-    @Inject
-    protected SavedSearchService savedSearchService;
-
-    @Inject
-    private ServerNodes serverNodes;
-
-    public Result globalSearch() {
-        // User would not be allowed to do any global searches anyway, so we can redirect him to the streams page to avoid confusion.
-        if (Permissions.isPermitted(RestPermissions.SEARCHES_ABSOLUTE)
-                || Permissions.isPermitted(RestPermissions.SEARCHES_RELATIVE)
-                || Permissions.isPermitted(RestPermissions.SEARCHES_KEYWORD)) {
-            return ok(views.html.search.global.render(currentUser()));
-        } else {
-            return redirect(routes.StreamsController.index());
+    public Result indexForStream(String streamId, String q, String rangeType, int relative, String from, String to, String keyword, String interval, int page) {
+        Stream stream;
+        try {
+            stream = streamService.get(streamId);
+        } catch (IOException e) {
+            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Unable to fetch stream. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
+            return status(504, views.html.errors.error.render(message, e, request()));
         }
-    }
 
-    public Result index(String q,
-                        String rangeType,
-                        int relative,
-                        String from, String to,
-                        String keyword,
-                        String interval,
-                        int page,
-                        String savedSearchId,
-                        String sortField, String sortOrder,
-                        String fields,
-                        int displayWidth) {
-        SearchSort sort = buildSearchSort(sortField, sortOrder);
+        String filter = "streams:" + streamId;
 
         UniversalSearch search;
         try {
-            search = getSearch(q, null, rangeType, relative, from, to, keyword, page, sort);
+            search = getSearch(q, filter, rangeType, relative, from, to, keyword, page);
         } catch(InvalidRangeParametersException e2) {
             return status(400, views.html.errors.error.render("Invalid range parameters provided.", e2, request()));
         } catch(IllegalArgumentException e1) {
@@ -100,28 +67,22 @@ public class SearchController extends AuthenticatedController {
 
         SearchResult searchResult;
         DateHistogramResult histogramResult;
-        SavedSearch savedSearch;
-        Set<String> selectedFields = getSelectedFields(fields);
-        String formattedHistogramResults;
         try {
-            if(savedSearchId != null && !savedSearchId.isEmpty()) {
-                savedSearch = savedSearchService.get(savedSearchId);
-            } else {
-                savedSearch = null;
-            }
-
-            searchResult = search.search();
-            if (searchResult.getError() != null) {
-                return ok(views.html.search.queryerror.render(currentUser(), q, searchResult, savedSearch, fields, null));
-            }
-            searchResult.setAllFields(getAllFields());
-
-            // histogram resolution (strangely aka interval)
+            // Histogram interval.
             if (interval == null || interval.isEmpty() || !SearchTools.isAllowedDateHistogramInterval(interval)) {
-                interval = determineHistogramResolution(searchResult);
+                interval = "minute";
             }
+
+            searchResult = FieldMapper.run(search.search());
+
+            List<Field> allFields = Lists.newArrayList();
+            for(String f : messagesService.getMessageFields()) {
+                allFields.add(new Field(f));
+            }
+
+            searchResult.setAllFields(allFields);
+
             histogramResult = search.dateHistogram(interval);
-            formattedHistogramResults = formatHistogramResults(histogramResult.getResults(), displayWidth);
         } catch (IOException e) {
             return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
@@ -130,91 +91,40 @@ public class SearchController extends AuthenticatedController {
         }
 
         if (searchResult.getTotalResultCount() > 0) {
-            return ok(views.html.search.results.render(currentUser(), search, searchResult, histogramResult, formattedHistogramResults, q, page, savedSearch, selectedFields, serverNodes.asMap(), null));
+            return ok(views.html.search.results.render(currentUser(), search, searchResult, histogramResult, q, page, stream));
         } else {
-            return ok(views.html.search.noresults.render(currentUser(), q, searchResult, savedSearch, selectedFields, null));
+            return ok(views.html.search.noresults.render(currentUser(), q, searchResult));
         }
     }
 
-    protected String determineHistogramResolution(final SearchResult searchResult) {
-        final String interval;
-        final int queryRangeInMinutes = Minutes.minutesBetween(searchResult.getFromDateTime(), searchResult.getToDateTime()).getMinutes();
-        final int HOUR = DateTimeConstants.MINUTES_PER_HOUR;
-        final int DAY = DateTimeConstants.MINUTES_PER_DAY;
-        final int WEEK = DateTimeConstants.MINUTES_PER_WEEK;
-        final int MONTH = DAY * 30;
-        final int YEAR = MONTH * 12;
-
-        if (queryRangeInMinutes < DAY / 2) {
-            interval = "minute";
-        } else if (queryRangeInMinutes < DAY * 2) {
-            interval = "hour";
-        } else if (queryRangeInMinutes < MONTH) {
-            interval = "day";
-        } else if (queryRangeInMinutes < MONTH * 6) {
-            interval = "week";
-        } else if (queryRangeInMinutes < YEAR * 2) {
-            interval = "month";
-        } else if (queryRangeInMinutes < YEAR * 10) {
-            interval = "quarter";
-        } else {
-            interval = "year";
-        }
-        return interval;
-    }
-
-    /**
-     * [{ x: -1893456000, y: 92228531 }, { x: -1577923200, y: 106021568 }]
-     *
-     * @return A JSON string representation of the result, suitable for Rickshaw data graphing.
-     */
-    protected String formatHistogramResults(Map<String, Long> histogramResults, int displayWidth) {
-        final int saneDisplayWidth = (displayWidth == -1 || displayWidth < 100 || displayWidth > DEFAULT_ASSUMED_GRAPH_RESOLUTION) ? DEFAULT_ASSUMED_GRAPH_RESOLUTION : displayWidth;
-        final List<Map<String, Long>> points = Lists.newArrayList();
-
-        // using the absolute value guarantees, that there will always be enough values for the given resolution
-        final int factor = (saneDisplayWidth != -1 && histogramResults.size() > saneDisplayWidth) ? histogramResults.size() / saneDisplayWidth : 1;
-
-        int index = 0;
-        for (Map.Entry<String, Long> result : histogramResults.entrySet()) {
-            // TODO: instead of sampling we might consider interpolation (compare DashboardsApiController)
-            if (index % factor == 0) {
-                Map<String, Long> point = Maps.newHashMap();
-                point.put("x", Long.parseLong(result.getKey()));
-                point.put("y", result.getValue());
-
-                points.add(point);
-            }
-            index++;
-        }
-
-        return new Gson().toJson(points);
-    }
-
-    protected Set<String> getSelectedFields(String fields) {
-        Set<String> selectedFields = Sets.newLinkedHashSet();
-        if (fields != null && !fields.isEmpty()) {
-            Iterables.addAll(selectedFields, Splitter.on(',').split(fields));
-        } else {
-            selectedFields.addAll(Field.STANDARD_SELECTED_FIELDS);
-        }
-        return selectedFields;
-    }
-
-    public Result exportAsCsv(String q, String filter, String rangeType, int relative, String from, String to, String keyword, String fields) {
+    public Result index(String q, String rangeType, int relative, String from, String to, String keyword, String interval, int page) {
         UniversalSearch search;
         try {
-            search = getSearch(q, filter.isEmpty() ? null : filter, rangeType, relative, from, to, keyword, 0, UniversalSearch.DEFAULT_SORT);
+            search = getSearch(q, null, rangeType, relative, from, to, keyword, page);
         } catch(InvalidRangeParametersException e2) {
             return status(400, views.html.errors.error.render("Invalid range parameters provided.", e2, request()));
         } catch(IllegalArgumentException e1) {
             return status(400, views.html.errors.error.render("Invalid range type provided.", e1, request()));
         }
 
-        final String s;
+        SearchResult searchResult;
+        DateHistogramResult histogramResult;
         try {
-            Set<String> selectedFields = getSelectedFields(fields);
-            s = search.searchAsCsv(selectedFields);
+            // Histogram interval.
+            if (interval == null || interval.isEmpty() || !SearchTools.isAllowedDateHistogramInterval(interval)) {
+                interval = "minute";
+            }
+
+            searchResult = FieldMapper.run(search.search());
+
+            List<Field> allFields = Lists.newArrayList();
+            for(String f : messagesService.getMessageFields()) {
+                allFields.add(new Field(f));
+            }
+
+            searchResult.setAllFields(allFields);
+
+            histogramResult = search.dateHistogram(interval);
         } catch (IOException e) {
             return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
         } catch (APIException e) {
@@ -222,21 +132,14 @@ public class SearchController extends AuthenticatedController {
             return status(504, views.html.errors.error.render(message, e, request()));
         }
 
-        // TODO streaming the result
-        response().setContentType(MediaType.CSV_UTF_8.toString());
-        response().setHeader("Content-Disposition", "attachment; filename=graylog2-searchresult.csv");
-        return ok(s);
-    }
-
-    protected List<Field> getAllFields() {
-        List<Field> allFields = Lists.newArrayList();
-        for(String f : messagesService.getMessageFields()) {
-            allFields.add(new Field(f));
+        if (searchResult.getTotalResultCount() > 0) {
+            return ok(views.html.search.results.render(currentUser(), search, searchResult, histogramResult, q, page, null));
+        } else {
+            return ok(views.html.search.noresults.render(currentUser(), q, searchResult));
         }
-        return allFields;
     }
 
-    protected UniversalSearch getSearch(String q, String filter, String rangeType, int relative,String from, String to, String keyword, int page, SearchSort order)
+    private UniversalSearch getSearch(String q, String filter, String rangeType, int relative,String from, String to, String keyword, int page)
         throws InvalidRangeParametersException, IllegalArgumentException {
         if (q == null || q.trim().isEmpty()) {
             q = "*";
@@ -246,24 +149,11 @@ public class SearchController extends AuthenticatedController {
         TimeRange timerange = TimeRange.factory(rangeType, relative, from, to, keyword);
 
         UniversalSearch search;
-        if (filter == null) {
-            search = searchFactory.queryWithRangePageAndOrder(q, timerange, page, order);
-        } else {
-            search = searchFactory.queryWithFilterRangePageAndOrder(q, filter, timerange, page, order);
-        }
+        if (filter == null)
+            search= searchFactory.queryWithRangeAndPage(q, timerange, page);
+        else
+            search = searchFactory.queryWithFilterRangeAndPage(q, filter, timerange, page);
 
         return search;
-    }
-
-    protected SearchSort buildSearchSort(String sortField, String sortOrder) {
-        if (sortField == null || sortOrder == null || sortField.isEmpty() || sortOrder.isEmpty()) {
-            return UniversalSearch.DEFAULT_SORT;
-        }
-
-        try {
-            return new SearchSort(sortField, SearchSort.Direction.valueOf(sortOrder.toUpperCase()));
-        } catch(IllegalArgumentException e) {
-            return UniversalSearch.DEFAULT_SORT;
-        }
     }
 }

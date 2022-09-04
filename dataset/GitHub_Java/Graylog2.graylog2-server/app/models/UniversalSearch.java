@@ -18,7 +18,6 @@
  */
 package models;
 
-import com.google.common.net.MediaType;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import controllers.routes;
@@ -33,12 +32,10 @@ import play.mvc.Call;
 import play.mvc.Http.Request;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 public class UniversalSearch {
 
     public static final int PER_PAGE = 100;
-    public static final int KEITH = 61;  // http://en.wikipedia.org/wiki/61_(number) -> Keith
 
     private final ApiClient api;
     private final String query;
@@ -66,25 +63,19 @@ public class UniversalSearch {
         if (page == 0) {
             this.page = 0;
         } else {
-            this.page = page - 1;
+            this.page = page-1;
         }
     }
 
-    private <T> T doSearch(Class<T> clazz, MediaType mediaType, int pageSize) throws APIException, IOException {
-        return api.get(clazz)
+    public SearchResult search() throws IOException, APIException {
+        SearchResultResponse response = api.get(SearchResultResponse.class)
                 .path("/search/universal/{0}", timeRange.getType().toString().toLowerCase())
                 .queryParams(timeRange.getQueryParams())
                 .queryParam("query", query)
-                .queryParam("limit", pageSize)
-                .queryParam("offset", page * pageSize)
+                .queryParam("limit", PER_PAGE)
+                .queryParam("offset", page*PER_PAGE)
                 .queryParam("filter", (filter == null ? "*" : filter))
-                .accept(mediaType)
-                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
-    }
-
-    public SearchResult search() throws IOException, APIException {
-        SearchResultResponse response = doSearch(SearchResultResponse.class, MediaType.JSON_UTF_8, PER_PAGE);
 
         SearchResult result = new SearchResult(
                 query,
@@ -100,18 +91,12 @@ public class UniversalSearch {
         return result;
     }
 
-    public String searchAsCsv() throws IOException, APIException {
-        return doSearch(String.class, MediaType.CSV_UTF_8, 100000);  // TODO fix huge page size by using scroll searches and streaming results
-    }
-
     public DateHistogramResult dateHistogram(String interval) throws IOException, APIException {
         DateHistogramResponse response = api.get(DateHistogramResponse.class)
                 .path("/search/universal/{0}/histogram", timeRange.getType().toString().toLowerCase())
                 .queryParam("interval", interval)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
         return new DateHistogramResult(response.query, response.time, response.interval, response.results);
     }
@@ -122,8 +107,6 @@ public class UniversalSearch {
                 .queryParam("field", field)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
     }
 
@@ -133,8 +116,6 @@ public class UniversalSearch {
                 .queryParam("field", field)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
     }
 
@@ -145,8 +126,6 @@ public class UniversalSearch {
                 .queryParam("interval", interval)
                 .queryParam("query", query)
                 .queryParams(timeRange.getQueryParams())
-                .queryParam("filter", (filter == null ? "*" : filter))
-                .timeout(KEITH, TimeUnit.SECONDS)
                 .execute();
     }
 
@@ -169,27 +148,9 @@ public class UniversalSearch {
         );
     }
 
-    public Call getCsvRoute(Request request) {
-        int relative = Tools.intSearchParamOrEmpty(request, "relative");
-        String from = Tools.stringSearchParamOrEmpty(request, "from");
-        String to = Tools.stringSearchParamOrEmpty(request, "to");
-        String keyword = Tools.stringSearchParamOrEmpty(request, "keyword");
-
-        return routes.SearchController.exportAsCsv(
-                query,
-                timeRange.getType().toString().toLowerCase(),
-                relative,
-                from,
-                to,
-                keyword
-        );
-    }
-
     public interface Factory {
         UniversalSearch queryWithRange(String query, TimeRange timeRange);
-
         UniversalSearch queryWithRangeAndPage(String query, TimeRange timeRange, Integer page);
-
         UniversalSearch queryWithFilterRangeAndPage(@Assisted("query") String query, @Assisted("filter") String filter, TimeRange timeRange, Integer page);
     }
 
