@@ -17,18 +17,17 @@
 package org.graylog2.restclient.models;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
 import com.google.common.net.MediaType;
+import javax.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.ApiRequestBuilder;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
-import org.graylog2.restclient.models.api.responses.DateHistogramResponse;
-import org.graylog2.restclient.models.api.responses.FieldHistogramResponse;
-import org.graylog2.restclient.models.api.responses.FieldStatsResponse;
-import org.graylog2.restclient.models.api.responses.FieldTermsResponse;
-import org.graylog2.restclient.models.api.responses.SearchResultResponse;
+import org.graylog2.restclient.models.api.responses.*;
+import org.graylog2.restclient.models.api.responses.system.indices.IndexSummaryResponse;
 import org.graylog2.restclient.models.api.results.DateHistogramResult;
 import org.graylog2.restclient.models.api.results.SearchResult;
 import org.graylog2.restroutes.PathMethod;
@@ -38,7 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.io.InputStream;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -107,15 +106,6 @@ public class UniversalSearch {
     }
 
     private <T> T doSearch(Class<T> clazz, MediaType mediaType, int pageSize, Set<String> selectedFields) throws APIException, IOException {
-        final ApiRequestBuilder<T> builder = getSearchRequestBuilder(clazz, pageSize, selectedFields);
-        return builder
-                .accept(mediaType)
-                .timeout(KEITH, TimeUnit.SECONDS)
-                .expect(200, 400)
-                .execute();
-    }
-
-    private <T> ApiRequestBuilder<T> getSearchRequestBuilder(Class<T> clazz, int pageSize, Set<String> selectedFields) {
         PathMethod pathMethod;
         switch (timeRange.getType()) {
             case ABSOLUTE:
@@ -140,7 +130,11 @@ public class UniversalSearch {
         if (selectedFields != null && !selectedFields.isEmpty()) {
             builder.queryParam("fields", Joiner.on(',').skipNulls().join(selectedFields));
         }
-        return builder;
+        return builder
+                .accept(mediaType)
+                .timeout(KEITH, TimeUnit.SECONDS)
+                .expect(200, 400)
+                .execute();
     }
 
     public SearchResult search() throws IOException, APIException {
@@ -165,14 +159,8 @@ public class UniversalSearch {
         );
     }
 
-    public InputStream searchAsCsv(Set<String> selectedFields) throws IOException, APIException {
-        final ApiRequestBuilder<String> builder = getSearchRequestBuilder(String.class,
-                                                                          Integer.MAX_VALUE,
-                                                                          selectedFields);
-        return builder.accept(MediaType.CSV_UTF_8)
-                .timeout(KEITH, TimeUnit.SECONDS)
-                .expect(200, 400)
-                .executeStreaming();
+    public String searchAsCsv(Set<String> selectedFields) throws IOException, APIException {
+        return doSearch(String.class, MediaType.CSV_UTF_8, 10_000, selectedFields);  // TODO make use of streaming support in the server.
     }
 
     public DateHistogramResult dateHistogram(String interval) throws IOException, APIException {
