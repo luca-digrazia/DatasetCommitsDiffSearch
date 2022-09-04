@@ -36,18 +36,15 @@ public abstract class ProtoJavaApiInfoProvider implements TransitiveInfoProvider
       JavaCompilationArgs transitiveJavaCompilationArgss1,
       JavaCompilationArgs transitiveJavaCompilationArgssMutable,
       JavaCompilationArgs transitiveJavaCompilationArgssImmutable,
-      JavaCompilationArtifacts javaCompilationArgs1,
-      JavaCompilationArtifacts javaCompilationArgsMutable,
-      JavaCompilationArtifacts javaCompilationArgsImmutable,
+      JavaCompilationArgs javaCompilationArgs1,
+      JavaCompilationArgs javaCompilationArgsMutable,
+      JavaCompilationArgs javaCompilationArgsImmutable,
       Artifact sourceJar1,
       Artifact sourceJarMutable,
       Artifact sourceJarImmutable,
-      @Nullable ImmutableList<JavaCompilationArgsProvider> protoRuntime1,
-      @Nullable ImmutableList<JavaCompilationArgsProvider> protoRuntimeMutable,
-      @Nullable ImmutableList<JavaCompilationArgsProvider> protoRuntimeImmutable,
-      JavaCompilationArgs transitiveProtoRuntime1,
-      JavaCompilationArgs transitiveProtoRuntimeMutable,
-      JavaCompilationArgs transitiveProtoRuntimeImmutable,
+      ImmutableList<JavaCompilationArgsProvider> protoRuntime1,
+      ImmutableList<JavaCompilationArgsProvider> protoRuntimeMutable,
+      ImmutableList<JavaCompilationArgsProvider> protoRuntimeImmutable,
       Map<Artifact, Artifact> compileTimeJarToRuntimeJar,
       boolean mixedApiVersions,
       int apiVersion,
@@ -70,9 +67,6 @@ public abstract class ProtoJavaApiInfoProvider implements TransitiveInfoProvider
         protoRuntime1,
         protoRuntimeMutable,
         protoRuntimeImmutable,
-        transitiveProtoRuntime1,
-        transitiveProtoRuntimeMutable,
-        transitiveProtoRuntimeImmutable,
         mixedApiVersions,
         apiVersion,
         supportsProto1,
@@ -117,20 +111,22 @@ public abstract class ProtoJavaApiInfoProvider implements TransitiveInfoProvider
    */
   public abstract JavaCompilationArgs getTransitiveJavaCompilationArgsImmutable();
 
-  /** Returns the artifacts for java compilation (API version 1) for only this target. */
-  public abstract JavaCompilationArtifacts getJavaCompilationArtifacts1();
+  /**
+   * Returns the artifacts for java compilation (API version 1) for only this target.
+   */
+  public abstract JavaCompilationArgs getJavaCompilationArgs1();
 
   /**
-   * Returns the artifacts for java compilation (API version 2, code for mutable API) for only this
-   * target.
+   * Returns the artifacts for java compilation (API version 2, code for mutable API)
+   * for only this target.
    */
-  public abstract JavaCompilationArtifacts getJavaCompilationArtifactsMutable();
+  public abstract JavaCompilationArgs getJavaCompilationArgsMutable();
 
   /**
-   * Returns the artifacts for java compilation (API version 2, code for immutable API) for only
-   * this target.
+   * Returns the artifacts for java compilation (API version 2, code for immutable API)
+   * for only this target.
    */
-  public abstract JavaCompilationArtifacts getJavaCompilationArtifactsImmutable();
+  public abstract JavaCompilationArgs getJavaCompilationArgsImmutable();
 
   // The following 3 fields are the -src.jar artifact created by proto_library. If a certain
   // proto_library does not produce some artifact, it'll be null. This can happen for example when
@@ -157,14 +153,6 @@ public abstract class ProtoJavaApiInfoProvider implements TransitiveInfoProvider
 
   @Nullable
   public abstract ImmutableList<JavaCompilationArgsProvider> getProtoRuntimeImmutable();
-
-  // The following 3 fields are the jars that proto_library got from the proto runtime, and their
-  // transitive dependencies.
-  public abstract JavaCompilationArgs getTransitiveProtoRuntime1();
-
-  public abstract JavaCompilationArgs getTransitiveProtoRuntimeMutable();
-
-  public abstract JavaCompilationArgs getTransitiveProtoRuntimeImmutable();
 
   /**
    * Returns true if the transitive closure contains libraries with API versions other than the one
