@@ -187,11 +187,11 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     }
 
     @Override
-    public void prefetchInputs() throws IOException, InterruptedException {
+    public void prefetchInputs() throws IOException {
       if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
         actionExecutionContext
             .getActionInputPrefetcher()
-            .prefetchFiles(getInputMapping(true).values(), getMetadataProvider());
+            .prefetchFiles(getInputMapping(true).values());
       }
     }
 
