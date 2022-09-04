@@ -299,7 +299,12 @@ public class HttpClientBuilderTest {
 
     @Test
     public void usesACustomHttpRequestRetryHandler() throws Exception {
-        final HttpRequestRetryHandler customHandler = (exception, executionCount, context) -> false;
+        final HttpRequestRetryHandler customHandler = new HttpRequestRetryHandler() {
+            @Override
+            public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
+                return false;
+            }
+        };
 
         configuration.setRetries(1);
         assertThat(builder.using(configuration).using(customHandler)

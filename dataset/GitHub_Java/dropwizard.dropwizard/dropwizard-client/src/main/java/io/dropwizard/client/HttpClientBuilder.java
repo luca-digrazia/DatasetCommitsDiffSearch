@@ -234,15 +234,14 @@ public class HttpClientBuilder {
     }
 
     /**
-     * For internal use only, used in {@link io.dropwizard.client.JerseyClientBuilder}
-     * to create an instance of {@link io.dropwizard.client.DropwizardApacheConnector}
+     * For internal use only, used in {@link io.dropwizard.client.JerseyClientBuilder} to create an instance of {@link io.dropwizard.client.DropwizardApacheConnector}
      *
      * @param name
      * @return an {@link io.dropwizard.client.ConfiguredCloseableHttpClient}
      */
     ConfiguredCloseableHttpClient buildWithDefaultRequestConfiguration(String name) {
-        return createClient(org.apache.http.impl.client.HttpClientBuilder.create(),
-                createConnectionManager(createConfiguredRegistry(), name), name);
+        final InstrumentedHttpClientConnectionManager manager = createConnectionManager(createConfiguredRegistry(), name);
+        return createClient(org.apache.http.impl.client.HttpClientBuilder.create(), manager, name);
     }
 
     /**
@@ -303,12 +302,12 @@ public class HttpClientBuilder {
         }
 
         // create a tunnel through a proxy host if it's specified in the config
-        final ProxyConfiguration proxy = configuration.getProxyConfiguration();
+        ProxyConfiguration proxy = configuration.getProxyConfiguration();
         if (proxy != null) {
-            final HttpHost httpHost = new HttpHost(proxy.getHost(), proxy.getPort(), proxy.getScheme());
+            HttpHost httpHost = new HttpHost(proxy.getHost(), proxy.getPort(), proxy.getScheme());
             builder.setRoutePlanner(new NonProxyListProxyRoutePlanner(httpHost, proxy.getNonProxyHosts()));
             // if the proxy host requires authentication then add the host credentials to the credentials provider
-            final AuthConfiguration auth = proxy.getAuth();
+            AuthConfiguration auth = proxy.getAuth();
             if (auth != null) {
                 if (credentialsProvider == null) {
                     credentialsProvider = new BasicCredentialsProvider();
@@ -386,8 +385,7 @@ public class HttpClientBuilder {
         if (configuration.getTlsConfiguration() == null) {
             sslConnectionSocketFactory = SSLConnectionSocketFactory.getSocketFactory();
         } else {
-            sslConnectionSocketFactory = new DropwizardSSLConnectionSocketFactory(configuration.getTlsConfiguration())
-                    .getSocketFactory();
+            sslConnectionSocketFactory = new DropwizardSSLConnectionSocketFactory(configuration.getTlsConfiguration()).getSocketFactory();
         }
 
         return RegistryBuilder.<ConnectionSocketFactory>create()
