@@ -221,7 +221,7 @@ public class VertxHttpRecorder {
                 public Integer get() {
                     return ProcessorInfo.availableProcessors() * 2; //this is dev mode, so the number of IO threads not always being 100% correct does not really matter in this case
                 }
-            }, null, false);
+            }, null);
 
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -237,8 +237,7 @@ public class VertxHttpRecorder {
     public void startServer(Supplier<Vertx> vertx, ShutdownContext shutdown,
             HttpBuildTimeConfig httpBuildTimeConfig, HttpConfiguration httpConfiguration,
             LaunchMode launchMode,
-            boolean startVirtual, boolean startSocket, Supplier<Integer> ioThreads, List<String> websocketSubProtocols,
-            boolean auxiliaryApplication)
+            boolean startVirtual, boolean startSocket, Supplier<Integer> ioThreads, List<String> websocketSubProtocols)
             throws IOException {
 
         if (startVirtual) {
@@ -248,7 +247,7 @@ public class VertxHttpRecorder {
             // Start the server
             if (closeTask == null) {
                 doServerStart(vertx.get(), httpBuildTimeConfig, httpConfiguration, launchMode, ioThreads,
-                        websocketSubProtocols, auxiliaryApplication);
+                        websocketSubProtocols);
                 if (launchMode != LaunchMode.DEVELOPMENT) {
                     shutdown.addShutdownTask(closeTask);
                 }
@@ -460,7 +459,7 @@ public class VertxHttpRecorder {
 
     private static void doServerStart(Vertx vertx, HttpBuildTimeConfig httpBuildTimeConfig,
             HttpConfiguration httpConfiguration, LaunchMode launchMode,
-            Supplier<Integer> eventLoops, List<String> websocketSubProtocols, boolean auxiliaryApplication) throws IOException {
+            Supplier<Integer> eventLoops, List<String> websocketSubProtocols) throws IOException {
         // Http server configuration
         HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode, websocketSubProtocols);
         HttpServerOptions domainSocketOptions = createDomainSocketOptions(httpConfiguration, websocketSubProtocols);
@@ -533,13 +532,12 @@ public class VertxHttpRecorder {
             throw new RuntimeException("Unable to start HTTP server", e);
         }
 
-        setHttpServerTiming(httpConfiguration.insecureRequests, httpServerOptions, sslConfig, domainSocketOptions,
-                auxiliaryApplication);
+        setHttpServerTiming(httpConfiguration.insecureRequests, httpServerOptions, sslConfig, domainSocketOptions);
     }
 
     private static void setHttpServerTiming(InsecureRequests insecureRequests, HttpServerOptions httpServerOptions,
             HttpServerOptions sslConfig,
-            HttpServerOptions domainSocketOptions, boolean auxiliaryApplication) {
+            HttpServerOptions domainSocketOptions) {
         String serverListeningMessage = "Listening on: ";
         int socketCount = 0;
 
@@ -563,7 +561,7 @@ public class VertxHttpRecorder {
             }
             serverListeningMessage += String.format("unix:%s", domainSocketOptions.getHost());
         }
-        Timing.setHttpServer(serverListeningMessage, auxiliaryApplication);
+        Timing.setHttpServer(serverListeningMessage);
     }
 
     /**
@@ -595,7 +593,6 @@ public class VertxHttpRecorder {
         }
         serverOptions.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
         serverOptions.setMaxChunkSize(httpConfiguration.limits.maxChunkSize.asBigInteger().intValueExact());
-        serverOptions.setMaxFormAttributeSize(httpConfiguration.limits.maxFormAttributeSize.asBigInteger().intValueExact());
         setIdleTimeout(httpConfiguration, serverOptions);
 
         if (certFile.isPresent() && keyFile.isPresent()) {
@@ -728,7 +725,6 @@ public class VertxHttpRecorder {
         setIdleTimeout(httpConfiguration, options);
         options.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
         options.setMaxChunkSize(httpConfiguration.limits.maxChunkSize.asBigInteger().intValueExact());
-        options.setMaxFormAttributeSize(httpConfiguration.limits.maxFormAttributeSize.asBigInteger().intValueExact());
         options.setWebSocketSubProtocols(websocketSubProtocols);
         options.setReusePort(httpConfiguration.soReusePort);
         options.setTcpQuickAck(httpConfiguration.tcpQuickAck);
@@ -749,7 +745,6 @@ public class VertxHttpRecorder {
         setIdleTimeout(httpConfiguration, options);
         options.setMaxHeaderSize(httpConfiguration.limits.maxHeaderSize.asBigInteger().intValueExact());
         options.setMaxChunkSize(httpConfiguration.limits.maxChunkSize.asBigInteger().intValueExact());
-        options.setMaxFormAttributeSize(httpConfiguration.limits.maxFormAttributeSize.asBigInteger().intValueExact());
         options.setWebSocketSubProtocols(websocketSubProtocols);
         return options;
     }
