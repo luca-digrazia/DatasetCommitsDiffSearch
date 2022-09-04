@@ -339,7 +339,6 @@ public class Environment extends AbstractLifeCycle {
      * @param name     the name of the Jersey property
      * @see ResourceConfig
      */
-    @SuppressWarnings("unchecked")
     public <T> T getJerseyProperty(String name) {
         return (T) config.getProperties().get(name);
     }
