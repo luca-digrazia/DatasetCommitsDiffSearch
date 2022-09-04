@@ -1425,24 +1425,26 @@ public class Package {
 
       // The Iterable returned by getTargets is sorted, so when we build up the list of tests by
       // processing it in order below, that list will be sorted too.
-      Iterable<Rule> sortedRules = ImmutableList.copyOf(getTargets(Rule.class));
+      Iterable<Rule> sortedRules = Lists.newArrayList(getTargets(Rule.class));
 
-      List<Label> sortedTests = new ArrayList<>();
-      for (final Rule rule : sortedRules) {
-        if (discoverAssumedInputFiles) {
-          // All labels mentioned in a rule that refer to an unknown target in the
-          // current package are assumed to be InputFiles, so let's create them:
+      if (discoverAssumedInputFiles) {
+        // All labels mentioned in a rule that refer to an unknown target in the
+        // current package are assumed to be InputFiles, so let's create them:
+        for (final Rule rule : sortedRules) {
           for (AttributeMap.DepEdge depEdge : AggregatingAttributeMapper.of(rule).visitLabels()) {
             createInputFileMaybe(
                 depEdge.getLabel(), rule.getAttributeLocation(depEdge.getAttribute().getName()));
           }
         }
+      }
 
-        // "test_suite" rules have the idiosyncratic semantics of implicitly
-        // depending on all tests in the package, iff tests=[] and suites=[].
-        // Note, we implement this here when the Package is fully constructed,
-        // since clearly this information isn't available at Rule construction
-        // time, as forward references are permitted.
+      // "test_suite" rules have the idiosyncratic semantics of implicitly
+      // depending on all tests in the package, iff tests=[] and suites=[].
+      // Note, we implement this here when the Package is fully constructed,
+      // since clearly this information isn't available at Rule construction
+      // time, as forward references are permitted.
+      List<Label> sortedTests = new ArrayList<>();
+      for (Rule rule : sortedRules) {
         if (TargetUtils.isTestRule(rule) && !TargetUtils.hasManualTag(rule)) {
           sortedTests.add(rule.getLabel());
         }
@@ -1472,7 +1474,7 @@ public class Package {
       }
 
       // Freeze targets and distributions.
-      targets = Collections.unmodifiableMap(targets);
+      targets = ImmutableMap.copyOf(targets);
       defaultDistributionSet =
           Collections.unmodifiableSet(defaultDistributionSet);
 
