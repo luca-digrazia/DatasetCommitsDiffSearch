@@ -151,7 +151,7 @@ class ObjcVariablesExtension implements VariablesExtension {
   private void addArchiveVariables(CcToolchainFeatures.Variables.Builder builder) {
     builder.addStringVariable(
         OBJ_LIST_PATH_VARIABLE_NAME,
-        intermediateArtifacts.archiveObjList().getExecPathString());
+        ObjcRuleClasses.intermediateArtifacts(ruleContext).archiveObjList().getExecPathString());
     builder.addStringVariable(
         ARCHIVE_PATH_VARIABLE_NAME, compilationArtifacts.getArchive().get().getExecPathString());
   }
