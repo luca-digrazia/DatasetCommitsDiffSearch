@@ -16,6 +16,7 @@
  */
 package org.graylog2.security.realm;
 
+import com.google.common.base.Strings;
 import org.apache.directory.api.ldap.model.cursor.CursorException;
 import org.apache.directory.api.ldap.model.exception.LdapException;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
@@ -38,9 +39,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-
-import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.base.Strings.isNullOrEmpty;
+import java.io.IOException;
 
 public class LdapUserAuthenticator extends AuthenticatingRealm {
     private static final Logger LOG = LoggerFactory.getLogger(LdapUserAuthenticator.class);
@@ -62,7 +61,7 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
     @Override
     protected AuthenticationInfo doGetAuthenticationInfo(AuthenticationToken authtoken) throws AuthenticationException {
         // safe, we only handle this type
-        final UsernamePasswordToken token = (UsernamePasswordToken) authtoken;
+        UsernamePasswordToken token = (UsernamePasswordToken) authtoken;
 
         final LdapConnectionConfig config = new LdapConnectionConfig();
         final LdapSettings ldapSettings = ldapSettingsService.load();
@@ -81,18 +80,21 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
         config.setCredentials(ldapSettings.getSystemPassword());
 
         final String principal = (String) token.getPrincipal();
-        final char[] tokenPassword = firstNonNull(token.getPassword(), new char[0]);
-        final String password = String.valueOf(tokenPassword);
-        // do not try to look a token up in LDAP if there is no principal or password
-        if (isNullOrEmpty(principal) || isNullOrEmpty(password)) {
-            LOG.debug("Principal or password were empty. Not trying to look up a token in LDAP.");
+        if (Strings.isNullOrEmpty(principal) || token.getPassword() == null) {
+            // do not try to look a token up in LDAP if there is no principal or password
             return null;
         }
-        try(final LdapNetworkConnection connection = ldapConnector.connect(config)) {
+        LdapNetworkConnection connection = null;
+        try {
+            connection = ldapConnector.connect(config);
+
             if (null == connection) {
                 LOG.error("Couldn't connect to LDAP directory");
                 return null;
             }
+
+            final String password = String.valueOf(token.getPassword());
+
             final LdapEntry userEntry = ldapConnector.search(connection,
                                                              ldapSettings.getSearchBase(),
                                                              ldapSettings.getSearchPattern(),
@@ -130,6 +132,14 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
             LOG.error("Unable to read LDAP entry", e);
         } catch (Exception e) {
             LOG.error("Error during LDAP user account sync. Cannot log in user {}", principal, e);
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (IOException e) {
+                    LOG.error("Unable to close LDAP connection", e);
+                }
+            }
         }
 
         // Return null by default to ensure a login failure if anything goes wrong.
@@ -137,7 +147,6 @@ public class LdapUserAuthenticator extends AuthenticatingRealm {
     }
 
     public boolean isEnabled() {
-        final LdapSettings ldapSettings = ldapSettingsService.load();
-        return ldapSettings != null && ldapSettings.isEnabled();
+        return ldapSettingsService.load().isEnabled();
     }
 }
