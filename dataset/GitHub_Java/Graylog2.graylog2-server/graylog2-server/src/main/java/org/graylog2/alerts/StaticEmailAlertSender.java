@@ -16,7 +16,6 @@
  */
 package org.graylog2.alerts;
 
-import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import org.apache.commons.mail.DefaultAuthenticator;
 import org.apache.commons.mail.Email;
@@ -30,7 +29,6 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
-import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.system.NodeId;
@@ -55,7 +53,6 @@ public class StaticEmailAlertSender implements AlertSender {
     private final UserService userService;
     private final NotificationService notificationService;
     private final NodeId nodeId;
-    private Configuration pluginConfig;
 
     @Inject
     public StaticEmailAlertSender(EmailConfiguration configuration,
@@ -72,7 +69,6 @@ public class StaticEmailAlertSender implements AlertSender {
 
     @Override
     public void initialize(org.graylog2.plugin.configuration.Configuration configuration) {
-        this.pluginConfig = configuration;
     }
 
     @Override
@@ -87,11 +83,7 @@ public class StaticEmailAlertSender implements AlertSender {
         }
 
         final Email email = new SimpleEmail();
-        if (Strings.isNullOrEmpty(configuration.getHostname())) {
-            throw new TransportConfigurationException("No hostname configured for email transport while trying to send alert email!");
-        } else {
-            email.setHostName(configuration.getHostname());
-        }
+        email.setHostName(configuration.getHostname());
         email.setSmtpPort(configuration.getPort());
         if (configuration.isUseSsl()) {
             email.setSslSmtpPort(Integer.toString(configuration.getPort()));
@@ -99,18 +91,14 @@ public class StaticEmailAlertSender implements AlertSender {
 
         if(configuration.isUseAuth()) {
             email.setAuthenticator(new DefaultAuthenticator(
-                    Strings.nullToEmpty(configuration.getUsername()),
-                    Strings.nullToEmpty(configuration.getPassword())
+                    configuration.getUsername(),
+                    configuration.getPassword()
             ));
         }
 
         email.setSSLOnConnect(configuration.isUseSsl());
         email.setStartTLSEnabled(configuration.isUseTls());
-        if (!Strings.isNullOrEmpty(pluginConfig.getString("sender"))) {
-            email.setFrom(pluginConfig.getString("sender"));
-        } else {
-            email.setFrom(configuration.getFromEmail());
-        }
+        email.setFrom(configuration.getFromEmail());
         email.setSubject(buildSubject(stream, checkResult, backlog));
         email.setMsg(buildBody(stream, checkResult, backlog));
         email.addTo(emailAddress);
