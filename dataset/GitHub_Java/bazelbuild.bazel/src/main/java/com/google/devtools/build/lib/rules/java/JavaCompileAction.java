@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -190,7 +189,7 @@ public final class JavaCompileAction extends SpawnAction {
       Map<String, String> executionInfo,
       StrictDepsMode strictJavaDeps,
       NestedSet<Artifact> compileTimeDependencyArtifacts,
-      CharSequence progressMessage) {
+      String progressMessage) {
     super(
         owner,
         tools,
@@ -650,7 +649,7 @@ public final class JavaCompileAction extends SpawnAction {
           executionInfo,
           strictJavaDeps,
           compileTimeDependencyArtifacts,
-          getProgressMessage());
+          buildProgressMessage());
     }
 
     private CustomCommandLine buildParamFileContents(Collection<String> javacOpts) {
@@ -758,32 +757,22 @@ public final class JavaCompileAction extends SpawnAction {
       return result.build();
     }
 
-    private LazyString getProgressMessage() {
-      Artifact outputJar = this.outputJar;
-      int sourceFileCount = sourceFiles.size();
-      int sourceJarCount = sourceJars.size();
-      String annotationProcessorNames = getProcessorNames();
-      return new LazyString() {
-        @Override
-        public String toString() {
-          StringBuilder sb = new StringBuilder("Building ");
-          sb.append(outputJar.prettyPrint());
-          sb.append(" (");
-          boolean first = true;
-          first = appendCount(sb, first, sourceFileCount, "source file");
-          first = appendCount(sb, first, sourceJarCount, "source jar");
-          sb.append(")");
-          sb.append(annotationProcessorNames);
-          return sb.toString();
-        }
-      };
+    private String buildProgressMessage() {
+      StringBuilder sb = new StringBuilder("Building ");
+      sb.append(outputJar.prettyPrint());
+      sb.append(" (");
+      boolean first = true;
+      first = appendCount(sb, first, sourceFiles.size(), "source file");
+      first = appendCount(sb, first, sourceJars.size(), "source jar");
+      sb.append(")");
+      addProcessorNames(sb);
+      return sb.toString();
     }
 
-    private String getProcessorNames() {
+    private void addProcessorNames(StringBuilder sb) {
       if (processorNames.isEmpty()) {
-        return "";
+        return;
       }
-      StringBuilder sb = new StringBuilder();
       List<String> shortNames = new ArrayList<>();
       for (String name : processorNames) {
         // Annotation processor names are qualified class names. Omit the package part for the
@@ -795,7 +784,7 @@ public final class JavaCompileAction extends SpawnAction {
       sb.append(" and running annotation processors (");
       Joiner.on(", ").appendTo(sb, shortNames);
       sb.append(")");
-      return sb.toString();
+      return;
     }
 
     /**
