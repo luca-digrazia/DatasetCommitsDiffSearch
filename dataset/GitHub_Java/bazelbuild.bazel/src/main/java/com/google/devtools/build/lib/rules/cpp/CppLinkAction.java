@@ -106,6 +106,7 @@ public final class CppLinkAction extends AbstractAction
   private static final String FAKE_LINK_GUID = "da36f819-5a15-43a9-8a45-e01b60e10c8b";
   
   @Nullable private final String mnemonic;
+  private final CppConfiguration cppConfiguration;
   private final LibraryToLink outputLibrary;
   private final Artifact linkOutput;
   private final LibraryToLink interfaceOutputLibrary;
@@ -156,6 +157,7 @@ public final class CppLinkAction extends AbstractAction
       String mnemonic,
       Iterable<Artifact> inputs,
       ImmutableList<Artifact> outputs,
+      CppConfiguration cppConfiguration,
       LibraryToLink outputLibrary,
       Artifact linkOutput,
       LibraryToLink interfaceOutputLibrary,
@@ -175,6 +177,7 @@ public final class CppLinkAction extends AbstractAction
       this.mnemonic = mnemonic;
     }
     this.mandatoryInputs = inputs;
+    this.cppConfiguration = cppConfiguration;
     this.outputLibrary = outputLibrary;
     this.linkOutput = linkOutput;
     this.interfaceOutputLibrary = interfaceOutputLibrary;
@@ -189,6 +192,10 @@ public final class CppLinkAction extends AbstractAction
     this.ldExecutable = toolchain.getToolPathFragment(Tool.LD);
     this.hostSystemName = toolchain.getHostSystemName();
     this.targetCpu = toolchain.getTargetCpu();
+  }
+
+  private CppConfiguration getCppConfiguration() {
+    return cppConfiguration;
   }
 
   @VisibleForTesting
@@ -271,7 +278,7 @@ public final class CppLinkAction extends AbstractAction
     }
     return result.build();
   }
-
+  
   @Override
   public List<String> getArguments() {
     return linkCommandLine.arguments();
@@ -471,7 +478,9 @@ public final class CppLinkAction extends AbstractAction
     message.append(getProgressMessage());
     message.append('\n');
     message.append("  Command: ");
-    message.append(ShellEscaper.escapeString(linkCommandLine.getLinkerPathString()));
+    message.append(
+        ShellEscaper.escapeString(
+            getCppConfiguration().getToolPathFragment(Tool.LD).getPathString()));
     message.append('\n');
     // Outputting one argument per line makes it easier to diff the results.
     for (String argument : ShellEscaper.escapeAll(linkCommandLine.arguments())) {

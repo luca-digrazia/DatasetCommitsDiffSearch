@@ -15,12 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.cpp.ExtraLinkTimeLibrary.BuildLibraryOutput;
-import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.Collection;
@@ -36,6 +31,9 @@ import java.util.Map;
  */
 @AutoCodec
 public final class ExtraLinkTimeLibraries {
+  public static final ObjectCodec<ExtraLinkTimeLibraries> CODEC =
+      new ExtraLinkTimeLibraries_AutoCodec();
+
   /**
    * We can have multiple different kinds of lists of libraries to include
    * at link time.  We map from the class type to an actual instance.
@@ -102,19 +100,5 @@ public final class ExtraLinkTimeLibraries {
       libraries.get(c).addTransitive(b);
       return this;
     }
-  }
-
-  public BuildLibraryOutput buildLibraries(
-      RuleContext ruleContext, boolean staticMode, boolean forDynamicLibrary)
-      throws InterruptedException, RuleErrorException {
-    NestedSetBuilder<LibraryToLink> librariesToLink = NestedSetBuilder.linkOrder();
-    NestedSetBuilder<Artifact> runtimeLibraries = NestedSetBuilder.linkOrder();
-    for (ExtraLinkTimeLibrary extraLibrary : getExtraLibraries()) {
-      BuildLibraryOutput buildLibraryOutput =
-          extraLibrary.buildLibraries(ruleContext, staticMode, forDynamicLibrary);
-      librariesToLink.addTransitive(buildLibraryOutput.getLibrariesToLink());
-      runtimeLibraries.addTransitive(buildLibraryOutput.getRuntimeLibraries());
-    }
-    return new BuildLibraryOutput(librariesToLink.build(), runtimeLibraries.build());
   }
 }

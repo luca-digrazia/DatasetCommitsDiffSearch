@@ -409,8 +409,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     final NestedSet<Artifact> compile = getFiles(ruleContext, "compiler_files");
     final NestedSet<Artifact> strip = getFiles(ruleContext, "strip_files");
     final NestedSet<Artifact> objcopy = getFiles(ruleContext, "objcopy_files");
-    final NestedSet<Artifact> as = getOptionalFiles(ruleContext, "as_files");
-    final NestedSet<Artifact> ar = getOptionalFiles(ruleContext, "ar_files");
     final NestedSet<Artifact> link = getFiles(ruleContext, "linker_files");
     final NestedSet<Artifact> dwp = getFiles(ruleContext, "dwp_files");
     final NestedSet<Artifact> libcLink = inputsForLibc(ruleContext);
@@ -490,12 +488,13 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     Preconditions.checkState(
         (dynamicRuntimeLinkMiddleman == null) == dynamicRuntimeLinkSymlinks.isEmpty());
 
-    CcCompilationInfo.Builder ccCompilationInfoBuilder = new CcCompilationInfo.Builder(ruleContext);
+    CppCompilationContext.Builder contextBuilder =
+        new CppCompilationContext.Builder(ruleContext);
     CppModuleMap moduleMap = createCrosstoolModuleMap(ruleContext);
     if (moduleMap != null) {
-      ccCompilationInfoBuilder.setCppModuleMap(moduleMap);
+      contextBuilder.setCppModuleMap(moduleMap);
     }
-    final CcCompilationInfo ccCompilationInfo = ccCompilationInfoBuilder.build();
+    final CppCompilationContext context = contextBuilder.build();
     boolean supportsParamFiles = ruleContext.attributes().get("supports_param_files", BOOLEAN);
     boolean supportsHeaderParsing =
         ruleContext.attributes().get("supports_header_parsing", BOOLEAN);
@@ -552,8 +551,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             compile,
             strip,
             objcopy,
-            as,
-            ar,
             fullInputsForLink(ruleContext, link),
             ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST),
             dwp,
@@ -564,7 +561,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             dynamicRuntimeLinkSymlinks,
             dynamicRuntimeLinkMiddleman,
             runtimeSolibDir,
-            ccCompilationInfo,
+            context,
             supportsParamFiles,
             supportsHeaderParsing,
             getBuildVariables(ruleContext, toolchainInfo.getDefaultSysroot()),
