@@ -44,6 +44,11 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget
     this.generatingRule = Preconditions.checkNotNull(generatingRule);
   }
 
+  @Override
+  public OutputFile getTarget() {
+    return (OutputFile) super.getTarget();
+  }
+
   public TransitiveInfoCollection getGeneratingRule() {
     return generatingRule;
   }

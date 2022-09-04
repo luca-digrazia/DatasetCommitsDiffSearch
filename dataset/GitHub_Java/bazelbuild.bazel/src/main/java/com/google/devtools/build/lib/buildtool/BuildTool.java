@@ -54,8 +54,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.License.DistributionType;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.LoadingCallback;
@@ -484,14 +482,13 @@ public final class BuildTool {
               public void processOutput(Iterable<ConfiguredTarget> partialResult)
                   throws IOException, InterruptedException {
                 for (ConfiguredTarget configuredTarget : partialResult) {
-                  BuildConfiguration config = configuredTarget.getConfiguration();
-                  StringBuilder output =
-                      new StringBuilder()
-                          .append(configuredTarget.getLabel())
-                          .append(" (")
-                          .append(config != null && config.isHostConfiguration() ? "HOST" : config)
-                          .append(")");
-                  env.getReporter().getOutErr().printOutLn(output.toString());
+                  env.getReporter()
+                      .getOutErr()
+                      .printOutLn(
+                          configuredTarget.getLabel()
+                              + " ("
+                              + configuredTarget.getConfiguration()
+                              + ")");
                 }
               }
             });
@@ -677,14 +674,7 @@ public final class BuildTool {
   private void validateLicensingForTargets(Iterable<ConfiguredTarget> configuredTargets,
       boolean keepGoing) throws ViewCreationFailedException {
     for (ConfiguredTarget configuredTarget : configuredTargets) {
-      Target target = null;
-      try {
-        target = env.getPackageManager().getTarget(env.getReporter(), configuredTarget.getLabel());
-      } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
-        env.getReporter().handle(Event.error("Failed to get target to validate license"));
-        throw new ViewCreationFailedException(
-            "Build aborted due to issue getting targets to validate licenses", e);
-      }
+      final Target target = configuredTarget.getTarget();
 
       if (TargetUtils.isTestRule(target)) {
         continue;  // Tests are exempt from license checking
@@ -706,7 +696,7 @@ public final class BuildTool {
             }
           }
         }
-      } else if (target instanceof InputFile) {
+      } else if (configuredTarget.getTarget() instanceof InputFile) {
         // Input file targets do not provide licenses because they do not
         // depend on the rule where their license is taken from. This is usually
         // not a problem, because the transitive collection of licenses always
@@ -715,7 +705,7 @@ public final class BuildTool {
         //
         // See FileTarget#getLicense for more information about the handling of
         // license issues with File targets.
-        License license = target.getLicense();
+        License license = configuredTarget.getTarget().getLicense();
         if (!license.checkCompatibility(distribs, target, configuredTarget.getLabel(),
             getReporter(), staticallyLinked)) {
           if (!keepGoing) {

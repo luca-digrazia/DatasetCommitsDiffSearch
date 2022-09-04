@@ -98,7 +98,7 @@ public class ConfiguredTargetQueryEnvironment
   private final String parserPrefix;
   protected final PathPackageLocator pkgPath;
   private final Supplier<WalkableGraph> walkableGraphSupplier;
-  private ConfiguredTargetAccessor accessor;
+  private final ConfiguredTargetAccessor accessor = new ConfiguredTargetAccessor();
   protected WalkableGraph graph;
 
   private static final Function<ConfiguredTarget, SkyKey> CT_TO_SKYKEY =
@@ -152,7 +152,6 @@ public class ConfiguredTargetQueryEnvironment
             eventHandler,
             FilteringPolicies.NO_FILTER,
             MultisetSemaphore.unbounded());
-    accessor = new ConfiguredTargetAccessor(walkableGraphSupplier.get());
     checkSettings(settings);
   }
 

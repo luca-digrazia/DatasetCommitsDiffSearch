@@ -51,6 +51,11 @@ public final class InputFileConfiguredTarget extends FileConfiguredTarget implem
   }
 
   @Override
+  public InputFile getTarget() {
+    return (InputFile) super.getTarget();
+  }
+
+  @Override
   public Artifact getArtifact() {
     return artifact;
   }
