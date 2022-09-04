@@ -47,40 +47,24 @@ public class FastHotKeyAtomicLongMap<T> {
   }
 
   public long incrementAndGet(T key) {
-    return getCounter(key).incrementAndGet();
+    return getOrInsertCounter(key).incrementAndGet();
   }
 
   public long decrementAndGet(T key) {
-    return getCounter(key).decrementAndGet();
+    return getOrInsertCounter(key).decrementAndGet();
   }
 
   public ImmutableMap<T, Long> asImmutableMap() {
     return ImmutableMap.copyOf(Maps.transformValues(map, AtomicLong::get));
   }
 
-  /**
-   * Returns the {@link AtomicLong} for the given {@code element}. Mutations to this
-   * {@link AtomicLong} will be reflected in the {@link FastHotKeyAtomicLongMap}: for example,
-   * {@code map.getCounter(e).incrementAndGet()} has exactly the same side effects as
-   * {@code map.incrementAndGet(e)}.
-   *
-   * <p>Consider using this method when you have a super-hot key that you know about a priori.
-   * Prefer {@link #incrementAndGet} and {@link #decrementAndGet} otherwise.
-   */
-  public AtomicLong getCounter(T element) {
+  public void clear() {
+    map.clear();
+  }
+
+  private AtomicLong getOrInsertCounter(T element) {
     // Optimize for the case where 'element' is already in our map. See the class javadoc.
     AtomicLong counter = map.get(element);
     return counter != null ? counter : map.computeIfAbsent(element, s -> new AtomicLong(0));
-  }
-
-  /**
-   * Clears the {@link FastHotKeyAtomicLongMap}.
-   *
-   * <p>Any {@link AtomicLong} instances previously returned by a call to {@link #getCounter} are
-   * now meaningless: mutations to them will not be reflected in the
-   * {@link FastHotKeyAtomicLongMap}.
-   */
-  public void clear() {
-    map.clear();
   }
 }

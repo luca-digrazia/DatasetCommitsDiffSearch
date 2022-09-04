@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -29,19 +28,14 @@ public class FastHotKeyAtomicLongMapTest {
   public void simple() {
     FastHotKeyAtomicLongMap<String> map = FastHotKeyAtomicLongMap.create();
     assertThat(map.asImmutableMap()).isEmpty();
-    AtomicLong catAtomicLong = map.getCounter("cat");
-    assertThat(catAtomicLong.get()).isEqualTo(0L);
     assertThat(map.incrementAndGet("cat")).isEqualTo(1L);
-    assertThat(catAtomicLong.get()).isEqualTo(1L);
-    assertThat(catAtomicLong.incrementAndGet()).isEqualTo(2L);
     assertThat(map.incrementAndGet("dog")).isEqualTo(1L);
     assertThat(ImmutableSortedMap.copyOf(map.asImmutableMap())).isEqualTo(
-        ImmutableMap.of("cat", 2L, "dog", 1L));
-    assertThat(map.incrementAndGet("cat")).isEqualTo(3L);
+        ImmutableMap.of("cat", 1L, "dog", 1L));
+    assertThat(map.incrementAndGet("cat")).isEqualTo(2L);
     assertThat(ImmutableSortedMap.copyOf(map.asImmutableMap())).isEqualTo(
-        ImmutableMap.of("cat", 3L, "dog", 1L));
-    assertThat(map.decrementAndGet("cat")).isEqualTo(2L);
-    assertThat(catAtomicLong.decrementAndGet()).isEqualTo(1L);
+        ImmutableMap.of("cat", 2L, "dog", 1L));
+    assertThat(map.decrementAndGet("cat")).isEqualTo(1L);
     assertThat(map.decrementAndGet("dog")).isEqualTo(0L);
     assertThat(map.decrementAndGet("cat")).isEqualTo(0L);
     assertThat(ImmutableSortedMap.copyOf(map.asImmutableMap())).isEqualTo(
