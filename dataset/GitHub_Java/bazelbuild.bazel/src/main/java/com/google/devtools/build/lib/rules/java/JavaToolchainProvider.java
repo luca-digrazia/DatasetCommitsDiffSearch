@@ -316,7 +316,6 @@ public class JavaToolchainProvider extends NativeInfo
    * Return the {@link Artifact} of the binary that enforces one-version compliance of java
    * binaries.
    */
-  @Override
   @Nullable
   public Artifact getOneVersionBinary() {
     return oneVersion;
