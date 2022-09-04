@@ -1,5 +1,6 @@
 package io.quarkus.mongodb.reactive;
 
+import com.mongodb.reactivestreams.client.MongoDatabase;
 import java.util.List;
 
 import org.bson.Document;
@@ -10,7 +11,6 @@ import com.mongodb.client.model.CreateCollectionOptions;
 import com.mongodb.client.model.CreateViewOptions;
 import com.mongodb.client.model.changestream.ChangeStreamDocument;
 import com.mongodb.reactivestreams.client.ClientSession;
-import com.mongodb.reactivestreams.client.MongoDatabase;
 
 import io.quarkus.mongodb.AggregateOptions;
 import io.quarkus.mongodb.ChangeStreamOptions;
@@ -565,6 +565,7 @@ public interface ReactiveMongoDatabase {
      */
     <T> Multi<T> aggregate(ClientSession clientSession, List<? extends Bson> pipeline, Class<T> clazz,
             AggregateOptions options);
+
 
     /**
      * @return the underlying database.
