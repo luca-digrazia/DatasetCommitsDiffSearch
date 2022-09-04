@@ -1,16 +1,13 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.ClientProxyGenerator.MOCK_FIELD;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
-import static org.objectweb.asm.Opcodes.ACC_VOLATILE;
 
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableObserverMethod;
 import io.quarkus.arc.impl.CreationalContextImpl;
 import io.quarkus.arc.impl.CurrentInjectionPointProvider;
-import io.quarkus.arc.impl.Mockable;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
 import io.quarkus.arc.processor.BuiltinBean.GeneratorContext;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
@@ -69,12 +66,11 @@ public class ObserverGenerator extends AbstractGenerator {
     private final Set<String> existingClasses;
     private final Map<ObserverInfo, String> observerToGeneratedName;
     private final Predicate<DotName> injectionPointAnnotationsPredicate;
-    private final boolean mockable;
 
     public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals, Predicate<DotName> applicationClassPredicate,
             PrivateMembersCollector privateMembers, boolean generateSources, ReflectionRegistration reflectionRegistration,
             Set<String> existingClasses, Map<ObserverInfo, String> observerToGeneratedName,
-            Predicate<DotName> injectionPointAnnotationsPredicate, boolean mockable) {
+            Predicate<DotName> injectionPointAnnotationsPredicate) {
         super(generateSources);
         this.annotationLiterals = annotationLiterals;
         this.applicationClassPredicate = applicationClassPredicate;
@@ -83,7 +79,6 @@ public class ObserverGenerator extends AbstractGenerator {
         this.existingClasses = existingClasses;
         this.observerToGeneratedName = observerToGeneratedName;
         this.injectionPointAnnotationsPredicate = injectionPointAnnotationsPredicate;
-        this.mockable = mockable;
     }
 
     /**
@@ -169,14 +164,8 @@ public class ObserverGenerator extends AbstractGenerator {
                 name -> name.equals(generatedName) ? SpecialType.OBSERVER : null, generateSources);
 
         // Foo_Observer_fooMethod_hash implements ObserverMethod<T>
-        List<Class<?>> interfaces = new ArrayList<>();
-        interfaces.add(InjectableObserverMethod.class);
-        if (mockable) {
-            // Observers declared on mocked beans can be disabled during tests
-            interfaces.add(Mockable.class);
-        }
         ClassCreator observerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
-                .interfaces(interfaces.toArray((new Class[0])))
+                .interfaces(InjectableObserverMethod.class)
                 .build();
 
         // Fields
@@ -185,9 +174,6 @@ public class ObserverGenerator extends AbstractGenerator {
         FieldCreator observedQualifiers = null;
         if (!observer.getQualifiers().isEmpty()) {
             observedQualifiers = observerCreator.getFieldCreator(QUALIFIERS, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
-        }
-        if (mockable) {
-            observerCreator.getFieldCreator(MOCK_FIELD, boolean.class).setModifiers(ACC_PRIVATE | ACC_VOLATILE);
         }
 
         Map<InjectionPointInfo, String> injectionPointToProviderField = new HashMap<>();
@@ -215,10 +201,6 @@ public class ObserverGenerator extends AbstractGenerator {
             implementIsAsync(observerCreator);
         }
         implementGetDeclaringBeanIdentifier(observerCreator, observer.getDeclaringBean());
-
-        if (mockable) {
-            implementMockMethods(observerCreator);
-        }
 
         observerCreator.close();
         return classOutput.getResources();
@@ -291,14 +273,6 @@ public class ObserverGenerator extends AbstractGenerator {
             // Synthetic observers generate the notify method themselves
             observer.getNotify().accept(notify);
             return;
-        }
-
-        if (mockable) {
-            // If mockable and mocked then just return from the method
-            ResultHandle mock = notify.readInstanceField(
-                    FieldDescriptor.of(observerCreator.getClassName(), MOCK_FIELD, boolean.class.getName()),
-                    notify.getThis());
-            notify.ifTrue(mock).trueBranch().returnValue(null);
         }
 
         boolean isStatic = Modifier.isStatic(observer.getObserverMethod().flags());
@@ -573,33 +547,7 @@ public class ObserverGenerator extends AbstractGenerator {
                     unmodifiableQualifiersHandle);
         }
 
-        if (mockable) {
-            constructor.writeInstanceField(
-                    FieldDescriptor.of(observerCreator.getClassName(), MOCK_FIELD, boolean.class.getName()),
-                    constructor.getThis(),
-                    constructor.load(false));
-        }
-
         constructor.returnValue(null);
-    }
-
-    private void implementMockMethods(ClassCreator observerCreator) {
-        MethodCreator clear = observerCreator
-                .getMethodCreator(MethodDescriptor.ofMethod(observerCreator.getClassName(),
-                        ClientProxyGenerator.CLEAR_MOCK_METHOD_NAME, void.class));
-        clear.writeInstanceField(FieldDescriptor.of(observerCreator.getClassName(), MOCK_FIELD, boolean.class),
-                clear.getThis(),
-                clear.load(false));
-        clear.returnValue(null);
-        MethodCreator set = observerCreator
-                .getMethodCreator(
-                        MethodDescriptor.ofMethod(observerCreator.getClassName(), ClientProxyGenerator.SET_MOCK_METHOD_NAME,
-                                void.class,
-                                Object.class));
-        set.writeInstanceField(FieldDescriptor.of(observerCreator.getClassName(), MOCK_FIELD, boolean.class),
-                set.getThis(),
-                set.load(true));
-        set.returnValue(null);
     }
 
 }
