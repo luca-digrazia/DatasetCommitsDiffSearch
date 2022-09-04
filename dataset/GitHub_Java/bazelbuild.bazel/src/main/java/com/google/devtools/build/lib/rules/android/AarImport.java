@@ -104,12 +104,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
       boolean neverlink = JavaCommon.isNeverLink(ruleContext);
       ValidatedAndroidResources validatedResources =
           AndroidResources.forAarImport(resources)
-              .process(
-                  ruleContext,
-                  dataContext,
-                  manifest,
-                  DataBinding.contextFrom(ruleContext),
-                  neverlink);
+              .process(ruleContext, dataContext, manifest, neverlink);
       MergedAndroidAssets mergedAssets =
           AndroidAssets.forAarImport(assets)
               .process(
@@ -152,8 +147,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(createAarNativeLibsFilterActions(ruleContext, aar, nativeLibs));
 
     JavaRuleOutputJarsProvider.Builder jarProviderBuilder =
-        new JavaRuleOutputJarsProvider.Builder()
-            .addOutputJar(mergedJar, null /* ijar */, null /* manifestProto */, ImmutableList.of());
+        new JavaRuleOutputJarsProvider.Builder().addOutputJar(mergedJar, null, ImmutableList.of());
 
     ImmutableList<TransitiveInfoCollection> targets =
         ImmutableList.<TransitiveInfoCollection>builder()
