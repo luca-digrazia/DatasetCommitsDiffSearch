@@ -50,15 +50,14 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidManifestMerger;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagProvider;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.ProguardHelper;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
@@ -138,8 +137,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_symbols/merged.bin");
   public static final SafeImplicitOutputsFunction ANDROID_COMPILED_SYMBOLS =
       fromTemplates("%{name}_symbols/symbols.zip");
-  public static final SafeImplicitOutputsFunction ANDROID_SYMLINKED_MANIFEST =
-      fromTemplates("%{name}_symlinked_manifest/AndroidManifest.xml");
   public static final ImplicitOutputsFunction ANDROID_PROCESSED_MANIFEST =
       fromTemplates("%{name}_processed_manifest/AndroidManifest.xml");
   public static final SafeImplicitOutputsFunction MOBILE_INSTALL_STUB_APPLICATION_MANIFEST =
@@ -663,19 +660,6 @@ public final class AndroidRuleClasses {
                   .allowedFileTypes()
                   .aspect(androidNeverlinkAspect)
                   .aspect(dexArchiveAspect, DexArchiveAspect.PARAM_EXTRACTOR))
-          /* <!-- #BLAZE_RULE($android_binary_base).ATTRIBUTE(debug_key) -->
-          File containing the debug keystore to be used to sign the debug apk. Usually you do not
-          want to use a key other than the default key, so this attribute should be omitted.
-          <p><em class="harmful">WARNING: Do not use your production keys, they should be
-          strictly safeguarded and not kept in your source tree</em>.</p>
-          <p>This keystore must contain a single key named "AndroidDebugKey", and
-          have a keystore password of "android".
-          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(
-              attr("debug_key", LABEL)
-                  .cfg(HOST)
-                  .legacyAllowAnyFileType()
-                  .value(env.getToolsLabel("//tools/android:debug_keystore")))
           .add(
               attr("feature_of", LABEL)
                   .allowedRuleClasses("android_binary")
@@ -941,7 +925,7 @@ public final class AndroidRuleClasses {
                   .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:resource_extractor")))
-          .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
+          .advertiseProvider(JavaCompilationArgsProvider.class)
           .build();
       }
 
