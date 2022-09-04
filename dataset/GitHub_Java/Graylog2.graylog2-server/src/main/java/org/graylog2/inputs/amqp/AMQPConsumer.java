@@ -20,7 +20,6 @@
 package org.graylog2.inputs.amqp;
 
 import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.AlreadyClosedException;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -32,7 +31,6 @@ import com.yammer.metrics.core.Meter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -60,7 +58,6 @@ public class AMQPConsumer implements Runnable {
     
     Connection connection;
     Channel channel;
-    ExecutorService executor;
     
     private final Meter handledMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPMessages", "messages", TimeUnit.SECONDS);
     private final Meter handledSyslogMessages = Metrics.newMeter(AMQPConsumer.class, "HandledAMQPSyslogMessages", "messages", TimeUnit.SECONDS);
@@ -142,24 +139,9 @@ public class AMQPConsumer implements Runnable {
             AMQPInput.getConsumers().remove(queueConfig.getId());
             
             channel.close();
-        } catch (AlreadyClosedException ignore) {
-            // do nothing
+            connection.close();
         } catch(IOException e) {
             LOG.error("Could not disconnect from AMQP broker!", e);
-        } finally {
-            if (executor != null) {
-                executor.shutdownNow();
-                executor = null;
-            }
-            try {
-                if (connection != null && connection.isOpen()) {
-                    connection.close();
-                }
-            } catch (AlreadyClosedException ignore) {
-                // do nothing
-            } catch (IOException e) {
-                LOG.error("Could not disconnect from AMQP broker!", e);
-            }
         }
     }
 
@@ -177,11 +159,11 @@ public class AMQPConsumer implements Runnable {
         factory.setHost(server.getConfiguration().getAmqpHost());
         factory.setPort(server.getConfiguration().getAmqpPort());
 
-        executor = Executors.newCachedThreadPool(
-                new ThreadFactoryBuilder()
-                    .setNameFormat("amqp-consumer-" + queueConfig.getId() + "-%d")
-                    .build());
-        connection = factory.newConnection(executor);
+        connection = factory.newConnection(Executors.newCachedThreadPool(
+            new ThreadFactoryBuilder()
+                .setNameFormat("amqp-consumer-" + queueConfig.getId() + "-%d")
+                .build()
+        ));
         
         return connection.createChannel();
     }
