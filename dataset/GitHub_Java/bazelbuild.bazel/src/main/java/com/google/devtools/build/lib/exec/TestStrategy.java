@@ -481,12 +481,7 @@ public abstract class TestStrategy implements TestActionContext {
             actionExecutionContext.getInputPath(execSettings.getInputManifest()),
             runfilesDir,
             false)
-        .createSymlinks(
-            actionExecutionContext.getExecRoot(),
-            actionExecutionContext.getFileOutErr(),
-            binTools,
-            shellEnvironment,
-            enableRunfiles);
+        .createSymlinks(actionExecutionContext, binTools, shellEnvironment, enableRunfiles);
 
     actionExecutionContext.getEventHandler()
         .handle(Event.progress(testAction.getProgressMessage()));
