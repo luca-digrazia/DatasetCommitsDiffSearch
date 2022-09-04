@@ -44,7 +44,6 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
     private final Class<T> klass;
     private final String propertyPrefix;
     protected final ObjectMapper mapper;
-    private final ConfigurationMetadata configurationMetadata;
 
     @Nullable
     private final Validator validator;
@@ -73,7 +72,6 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
         this.mapper = objectMapper;
         this.parserFactory = parserFactory;
         this.validator = validator;
-        this.configurationMetadata = new ConfigurationMetadata(mapper, klass);
     }
 
     @Override
@@ -172,7 +170,8 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
             }
             final ObjectNode obj = (ObjectNode) node;
 
-            final String remainingPath = String.join(".", parts.subList(i, parts.size()));
+            final String remainingPath = parts.subList(i, parts.size()).stream()
+                    .collect(Collectors.joining("."));
             if (obj.has(remainingPath) && !remainingPath.equals(key)) {
                 if (obj.get(remainingPath).isValueNode()) {
                     obj.put(remainingPath, value);
@@ -220,13 +219,8 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
             }
 
             if (!moreParts) {
-                if ((node.get(key) != null && node.get(key).isArray())
-                    || (node.get(key) == null && configurationMetadata.isCollectionOfStrings(name))) {
-                    ArrayNode arrayNode = (ArrayNode) obj.get(key);
-                    if (arrayNode == null) {
-                        arrayNode = obj.arrayNode();
-                        obj.set(key, arrayNode);
-                    }
+                if (node.get(key) != null && node.get(key).isArray()) {
+                    final ArrayNode arrayNode = (ArrayNode) obj.get(key);
                     arrayNode.removeAll();
                     Arrays.stream(ESCAPED_COMMA_SPLIT_PATTERN.split(value))
                             .map(String::trim)
