@@ -123,8 +123,6 @@ public class InputsResource extends RestResource {
             input.setCreatedAt(createdAt);
             input.setGlobal(lr.global);
 
-            input.setConfiguration(inputConfig);
-
             input.checkConfiguration(inputConfig);
         } catch (NoSuchInputTypeException e) {
             LOG.error("There is no such input type registered.", e);
@@ -210,12 +208,21 @@ public class InputsResource extends RestResource {
     public Response launchExisting(@PathParam("inputId") String inputId) {
         final InputState inputState = inputRegistry.getInputState(inputId);
 
-        final MessageInput input;
         if (inputState == null) {
-            input = inputRegistry.getPersisted(inputId);
-        } else {
-            input = inputState.getMessageInput();
+            try {
+                if (inputService.getPersistedInput(inputId) == null) {
+                    throw new NotFoundException("Input <" + inputId + "> not found!");
+                }
+            } catch (IOException e) {
+                throw new NotFoundException("Input <" + inputId + "> not found!", e);
+            }
+
+            return Response.serverError()
+                    .entity("Couldn't get input state for Input <" + inputId + ">!")
+                    .build();
         }
+
+        final MessageInput input = inputState.getMessageInput();
 
         if (input == null) {
             final String message = "Cannot launch input <" + inputId + ">. Input not found.";
@@ -224,12 +231,7 @@ public class InputsResource extends RestResource {
         }
 
         LOG.info("Launching existing input [" + input.getName() + "]. Reason: REST request.");
-        input.initialize(input.getConfiguration());
-        if (inputState != null) {
-            inputRegistry.launch(inputState);
-        } else {
-            inputRegistry.launchPersisted(input);
-        }
+        inputRegistry.launch(inputState);
         LOG.info("Launched existing input [" + input.getName() + "]. Reason: REST request.");
 
         final Map<String, String> result = ImmutableMap.of(
