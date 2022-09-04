@@ -2,35 +2,26 @@ package io.quarkus.mongodb.panache.runtime;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bson.codecs.pojo.annotations.BsonProperty;
-import org.jboss.logging.Logger;
 
-public final class MongoPropertyUtil {
-    private static final Logger LOGGER = Logger.getLogger(MongoPropertyUtil.class);
+final class MongoPropertyUtil {
 
-    // will be replaced at augmentation phase
-    private static volatile Map<String, Map<String, String>> replacementCache = Collections.emptyMap();
+    private static final Map<Class<?>, Map<String, String>> REPLACEMENT_CACHE = new ConcurrentHashMap<>();
 
     private MongoPropertyUtil() {
         //prevent initialization
     }
 
-    public static void setReplacementCache(Map<String, Map<String, String>> newReplacementCache) {
-        replacementCache = newReplacementCache;
+    static Map<String, String> extractReplacementMap(Class<?> clazz) {
+        return REPLACEMENT_CACHE.computeIfAbsent(clazz, theClass -> computeReplacement(theClass));
+
     }
 
-    static Map<String, String> getReplacementMap(Class<?> clazz) {
-        return replacementCache.computeIfAbsent(clazz.getName(), s -> buildWithReflection(clazz));
-    }
-
-    private static Map<String, String> buildWithReflection(Class<?> clazz) {
-        LOGGER.info("No replacement map found for " + clazz.getName()
-                + ", default to using reflection. To avoid that, make sure the class is in the Jandex index or, " +
-                "if using class based projection, annotated it with @ProjectionFor");
+    private static Map<String, String> computeReplacement(Class<?> clazz) {
         Map<String, String> replacementMap = new HashMap<>();
         for (Field field : clazz.getDeclaredFields()) {
             BsonProperty bsonProperty = field.getAnnotation(BsonProperty.class);
