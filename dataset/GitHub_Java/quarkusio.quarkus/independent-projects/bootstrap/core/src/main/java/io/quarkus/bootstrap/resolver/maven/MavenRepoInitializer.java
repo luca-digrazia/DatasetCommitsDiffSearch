@@ -55,7 +55,6 @@ import org.eclipse.aether.repository.ArtifactRepository;
 import org.eclipse.aether.repository.Authentication;
 import org.eclipse.aether.repository.LocalRepository;
 import org.eclipse.aether.repository.Proxy;
-import org.eclipse.aether.repository.ProxySelector;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.repository.RepositoryPolicy;
 import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
@@ -69,9 +68,8 @@ import org.jboss.logging.Logger;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.util.PropertyUtils;
 
-import static java.util.stream.Collectors.toList;
-
 /**
+ *
  * @author Alexey Loubyansky
  */
 public class MavenRepoInitializer {
@@ -218,7 +216,7 @@ public class MavenRepoInitializer {
     }
 
     public static List<RemoteRepository> getRemoteRepos() throws AppModelResolverException {
-        if (remoteRepos != null) {
+        if(remoteRepos != null) {
             return remoteRepos;
         }
         return remoteRepos = Collections.unmodifiableList(getRemoteRepos(getSettings()));
@@ -226,6 +224,8 @@ public class MavenRepoInitializer {
 
     public static List<RemoteRepository> getRemoteRepos(Settings settings) throws AppModelResolverException {
         final List<RemoteRepository> remotes = new ArrayList<>();
+
+        final Proxy proxy = toAetherProxy(settings.getActiveProxy());
 
         final int profilesTotal = settings.getProfiles().size();
         if(profilesTotal > 0) {
@@ -276,7 +276,7 @@ public class MavenRepoInitializer {
                 }
             });
             for(org.apache.maven.model.Profile modelProfile : modelProfiles) {
-                addProfileRepos(modelProfile, remotes);
+                addProfileRepos(modelProfile, remotes, proxy);
             }
         }
 
@@ -286,7 +286,7 @@ public class MavenRepoInitializer {
             for (String profileName : activeProfiles) {
                 final Profile profile = getProfile(profileName, settings);
                 if(profile != null) {
-                    addProfileRepos(profile, remotes);
+                    addProfileRepos(profile, remotes, proxy);
                 }
             }
         }
@@ -295,41 +295,15 @@ public class MavenRepoInitializer {
             remotes.add(new RemoteRepository.Builder(DEFAULT_REMOTE_REPO_ID, "default", DEFAULT_REMOTE_REPO_URL)
                     .setReleasePolicy(new RepositoryPolicy(true, RepositoryPolicy.UPDATE_POLICY_DAILY, RepositoryPolicy.CHECKSUM_POLICY_WARN))
                     .setSnapshotPolicy(new RepositoryPolicy(false, RepositoryPolicy.UPDATE_POLICY_DAILY, RepositoryPolicy.CHECKSUM_POLICY_WARN))
+                    .setProxy(proxy)
                     .build());
         }
-        final ProxyAwareMirrorSelector proxyAwareMirrorSelector = new ProxyAwareMirrorSelector(
-                settings.getMirrors(),
-                getProxySelector(settings)
-        );
-        return remotes.stream()
-                .map(proxyAwareMirrorSelector::getMirror)
-                // remove duplicates
-                .distinct()
-                .collect(toList());
-    }
 
-    private static ProxySelector getProxySelector(Settings settings) {
-        final org.apache.maven.settings.Proxy settingsProxy = settings.getActiveProxy();
-        if (settingsProxy == null) {
-            return null;
-        }
-        return new DefaultProxySelector().add(
-                new Proxy(
-                        settingsProxy.getProtocol(),
-                        settingsProxy.getHost(),
-                        settingsProxy.getPort(),
-                        settingsProxy.getUsername() == null ? null : new AuthenticationBuilder()
-                                .addUsername(settingsProxy.getUsername())
-                                .addPassword(settingsProxy.getPassword())
-                                .build()
-                ),
-                settingsProxy.getNonProxyHosts()
-        );
+        return remotes;
     }
 
     /**
      * Convert a {@link org.apache.maven.settings.Proxy} to a {@link Proxy}.
-     *
      * @param proxy Maven proxy settings, may be {@code null}.
      * @return Aether repository proxy or {@code null} if given {@link org.apache.maven.settings.Proxy} is {@code null}.
      */
@@ -365,7 +339,7 @@ public class MavenRepoInitializer {
         log.warn(buf.toString());
     }
 
-    private static void addProfileRepos(final org.apache.maven.model.Profile profile, final List<RemoteRepository> all) {
+    private static void addProfileRepos(final org.apache.maven.model.Profile profile, final List<RemoteRepository> all, final Proxy proxy) {
         final List<org.apache.maven.model.Repository> repositories = profile.getRepositories();
         for (org.apache.maven.model.Repository repo : repositories) {
             final RemoteRepository.Builder repoBuilder = new RemoteRepository.Builder(repo.getId(), repo.getLayout(), repo.getUrl());
@@ -377,11 +351,12 @@ public class MavenRepoInitializer {
             if (policy != null) {
                 repoBuilder.setSnapshotPolicy(toAetherRepoPolicy(policy));
             }
+            repoBuilder.setProxy(proxy);
             all.add(repoBuilder.build());
         }
     }
 
-    private static void addProfileRepos(final Profile profile, final List<RemoteRepository> all) {
+    private static void addProfileRepos(final Profile profile, final List<RemoteRepository> all, final Proxy proxy) {
         final List<Repository> repositories = profile.getRepositories();
         for (Repository repo : repositories) {
             final RemoteRepository.Builder repoBuilder = new RemoteRepository.Builder(repo.getId(), repo.getLayout(), repo.getUrl());
@@ -393,6 +368,7 @@ public class MavenRepoInitializer {
             if (policy != null) {
                 repoBuilder.setSnapshotPolicy(toAetherRepoPolicy(policy));
             }
+            repoBuilder.setProxy(proxy);
             all.add(repoBuilder.build());
         }
     }
