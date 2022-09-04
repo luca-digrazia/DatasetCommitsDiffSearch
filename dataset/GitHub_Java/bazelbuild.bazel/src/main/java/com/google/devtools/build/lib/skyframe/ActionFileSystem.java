@@ -22,14 +22,12 @@ import com.google.common.collect.Streams;
 import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputMap;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateType;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.skyframe.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -44,6 +42,7 @@ import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
@@ -58,19 +57,23 @@ import javax.annotation.Nullable;
  *       access {@link env}, they must also used synchronized access.
  * </ul>
  */
-final class ActionFileSystem extends FileSystem implements MetadataProvider, InjectionListener {
+final class ActionFileSystem extends FileSystem implements ActionInputFileCache, InjectionListener {
   private static final Logger LOGGER = Logger.getLogger(ActionFileSystem.class.getName());
 
   /** Actual underlying filesystem. */
   private final FileSystem delegate;
 
   private final PathFragment execRootFragment;
+  private final Path execRootPath;
   private final ImmutableList<PathFragment> sourceRoots;
 
-  private final ActionInputMap inputArtifactData;
+  private final InputArtifactData inputArtifactData;
 
   /** exec path → artifact and metadata */
   private final HashMap<PathFragment, OptionalInputMetadata> optionalInputs;
+
+  /** digest → artifacts in {@link inputs} */
+  private final ConcurrentHashMap<ByteString, Artifact> optionalInputsByDigest;
 
   /** exec path → artifact and metadata */
   private final ImmutableMap<PathFragment, OutputMetadata> outputs;
@@ -90,7 +93,7 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
       FileSystem delegate,
       Path execRoot,
       ImmutableList<Root> sourceRoots,
-      ActionInputMap inputArtifactData,
+      InputArtifactData inputArtifactData,
       Iterable<Artifact> allowedInputs,
       Iterable<Artifact> outputArtifacts) {
     try {
@@ -98,6 +101,7 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
       this.delegate = delegate;
 
       this.execRootFragment = execRoot.asFragment();
+      this.execRootPath = getPath(execRootFragment);
       this.sourceRoots =
           sourceRoots
               .stream()
@@ -115,12 +119,14 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
         //
         // TODO(shahan): there are no currently known cases where metadata is requested for an
         // optional source input. If there are any, we may want to stage those.
-        if (input.isSourceArtifact() || inputArtifactData.getMetadata(input) != null) {
+        if (input.isSourceArtifact() || inputArtifactData.contains(input)) {
           continue;
         }
         optionalInputs.computeIfAbsent(
             input.getExecPath(), unused -> new OptionalInputMetadata(input));
       }
+
+      this.optionalInputsByDigest = new ConcurrentHashMap<>();
 
       this.outputs =
           Streams.stream(outputArtifacts)
@@ -143,18 +149,12 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
     this.metadataConsumer = metadataConsumer;
   }
 
-  // -------------------- MetadataProvider implementation --------------------
+  // -------------------- ActionInputFileCache implementation --------------------
 
   @Override
   @Nullable
   public FileArtifactValue getMetadata(ActionInput actionInput) throws IOException {
     return getMetadataChecked(actionInput.getExecPath());
-  }
-
-  @Override
-  @Nullable
-  public ActionInput getInput(String execPath) {
-    return inputArtifactData.getInput(execPath);
   }
 
   // -------------------- InjectionListener Implementation --------------------
@@ -265,7 +265,7 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
   @Override
   protected void createSymbolicLink(Path linkPath, PathFragment targetFragment) throws IOException {
     PathFragment targetExecPath = asExecPath(targetFragment);
-    FileArtifactValue inputMetadata = inputArtifactData.getMetadata(targetExecPath.getPathString());
+    FileArtifactValue inputMetadata = inputArtifactData.get(targetExecPath);
     if (inputMetadata == null) {
       OptionalInputMetadata metadataHolder = optionalInputs.get(targetExecPath);
       if (metadataHolder != null) {
@@ -381,7 +381,7 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
   @Nullable
   private FileArtifactValue getMetadataChecked(PathFragment execPath) throws IOException {
     {
-      FileArtifactValue metadata = inputArtifactData.getMetadata(execPath.getPathString());
+      FileArtifactValue metadata = inputArtifactData.get(execPath);
       if (metadata != null) {
         return metadata;
       }
@@ -488,6 +488,9 @@ final class ActionFileSystem extends FileSystem implements MetadataProvider, Inj
             }
             if (metadata == null) {
               throw new ActionExecutionFunction.MissingDepException();
+            }
+            if (metadata.getType().exists() && metadata.getDigest() != null) {
+              optionalInputsByDigest.put(toByteString(metadata.getDigest()), artifact);
             }
           }
         }

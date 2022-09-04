@@ -22,15 +22,11 @@ import com.google.common.collect.Sets;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileStateValue;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.cache.Md5Digest;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -82,7 +78,7 @@ public class ActionMetadataHandler implements MetadataHandler {
    *
    * <p>This should never be read directly. Use {@link #getInputFileArtifactValue} instead.
    */
-  private final ActionInputMap inputArtifactData;
+  private final InputArtifactData inputArtifactData;
 
   /** FileValues for each output Artifact. */
   private final ConcurrentMap<Artifact, FileValue> outputArtifactData =
@@ -134,7 +130,7 @@ public class ActionMetadataHandler implements MetadataHandler {
 
   @VisibleForTesting
   public ActionMetadataHandler(
-      ActionInputMap inputArtifactData,
+      InputArtifactData inputArtifactData,
       Iterable<Artifact> outputs,
       TimestampGranularityMonitor tsgm,
       ArtifactPathResolver artifactPathResolver)  {
@@ -157,8 +153,7 @@ public class ActionMetadataHandler implements MetadataHandler {
     return artifact.isConstantMetadata() ? null : tsgm;
   }
 
-  private static FileArtifactValue metadataFromValue(FileArtifactValue value)
-      throws FileNotFoundException {
+  private static Metadata metadataFromValue(FileArtifactValue value) throws FileNotFoundException {
     if (value == FileArtifactValue.MISSING_FILE_MARKER
         || value == FileArtifactValue.OMITTED_FILE_MARKER) {
       throw new FileNotFoundException();
@@ -176,11 +171,11 @@ public class ActionMetadataHandler implements MetadataHandler {
       return null;
     }
 
-    return inputArtifactData.getMetadata(input);
+    return inputArtifactData.get(input);
   }
 
   @Override
-  public FileArtifactValue getMetadata(Artifact artifact) throws IOException {
+  public Metadata getMetadata(Artifact artifact) throws IOException {
     FileArtifactValue value = getInputFileArtifactValue(artifact);
     if (value != null) {
       return metadataFromValue(value);
@@ -253,8 +248,8 @@ public class ActionMetadataHandler implements MetadataHandler {
    * for normal (non-middleman) artifacts.
    */
   @Nullable
-  private FileArtifactValue maybeStoreAdditionalData(
-      Artifact artifact, FileValue data, @Nullable byte[] injectedDigest) throws IOException {
+  private Metadata maybeStoreAdditionalData(Artifact artifact, FileValue data,
+      @Nullable byte[] injectedDigest) throws IOException {
     if (!data.exists()) {
       // Nonexistent files should only occur before executing an action.
       throw new FileNotFoundException(artifact.prettyPrint() + " does not exist");

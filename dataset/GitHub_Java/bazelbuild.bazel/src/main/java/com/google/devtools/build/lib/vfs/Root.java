@@ -20,8 +20,6 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import javax.annotation.Nullable;
 
 /**
@@ -66,8 +64,6 @@ public abstract class Root implements Comparable<Root>, Serializable {
   /** Returns whether the given absolute path fragment is under this root. */
   public abstract boolean contains(PathFragment absolutePathFragment);
 
-  public abstract BigInteger getFingerprint();
-
   /**
    * Returns the underlying path. Please avoid using this method.
    *
@@ -82,17 +78,9 @@ public abstract class Root implements Comparable<Root>, Serializable {
   @AutoCodec
   public static final class PathRoot extends Root {
     private final Path path;
-    private final BigInteger fingerprint;
 
     PathRoot(Path path) {
       this.path = path;
-      // Can't use BigIntegerFingerprint because would cause cycle.
-      this.fingerprint =
-          new BigInteger(
-              1,
-              DigestHashFunction.MD5
-                  .cloneOrCreateMessageDigest()
-                  .digest(path.getPathString().getBytes(StandardCharsets.UTF_8)));
     }
 
     @Override
@@ -154,11 +142,6 @@ public abstract class Root implements Comparable<Root>, Serializable {
     }
 
     @Override
-    public BigInteger getFingerprint() {
-      return fingerprint;
-    }
-
-    @Override
     public boolean equals(Object o) {
       if (this == o) {
         return true;
@@ -179,8 +162,6 @@ public abstract class Root implements Comparable<Root>, Serializable {
   /** An absolute root of a file system. Can only resolve absolute path fragments. */
   @AutoCodec
   public static final class AbsoluteRoot extends Root {
-    private static final BigInteger FINGERPRINT = new BigInteger("15742446659214128006");
-
     private FileSystem fileSystem; // Non-final for serialization
 
     AbsoluteRoot(FileSystem fileSystem) {
@@ -243,11 +224,6 @@ public abstract class Root implements Comparable<Root>, Serializable {
       } else {
         throw new AssertionError("Unknown Root subclass: " + o.getClass().getName());
       }
-    }
-
-    @Override
-    public BigInteger getFingerprint() {
-      return FINGERPRINT;
     }
 
     @Override
