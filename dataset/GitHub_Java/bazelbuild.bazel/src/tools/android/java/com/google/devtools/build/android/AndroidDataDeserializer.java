@@ -112,7 +112,7 @@ public class AndroidDataDeserializer {
       }
       readEntriesSegment(consumers, in, currentFileSystem, header);
     } catch (IOException e) {
-      throw new DeserializationException("Error deserializing " + inPath, e);
+      throw new DeserializationException(e);
     } finally {
       logger.fine(
           String.format("Deserialized in merged in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
