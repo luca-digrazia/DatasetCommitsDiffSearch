@@ -6,13 +6,12 @@ import java.io.OutputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 
+import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
-import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.ext.Provider;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
@@ -22,8 +21,7 @@ import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyWriter;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerResponse;
 
-@Provider
-@Produces({ "application/json", "application/*+json", "text/json" })
+// this gets conditionally registered
 public class JsonbMessageBodyWriter implements QuarkusRestMessageBodyWriter<Object> {
 
     private final Jsonb json;
@@ -35,6 +33,11 @@ public class JsonbMessageBodyWriter implements QuarkusRestMessageBodyWriter<Obje
         } else {
             this.json = JsonbBuilder.create();
         }
+    }
+
+    @Inject
+    public JsonbMessageBodyWriter(Jsonb json) {
+        this.json = json;
     }
 
     @Override
@@ -55,7 +58,7 @@ public class JsonbMessageBodyWriter implements QuarkusRestMessageBodyWriter<Obje
 
     @Override
     public void writeResponse(Object o, QuarkusRestRequestContext context) throws WebApplicationException {
-        HttpServerResponse vertxResponse = context.getContext().response();
+        HttpServerResponse vertxResponse = context.getHttpServerResponse();
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         json.toJson(o, baos);
         vertxResponse.end(Buffer.buffer(baos.toByteArray()));

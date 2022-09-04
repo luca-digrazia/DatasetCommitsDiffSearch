@@ -289,8 +289,6 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         requestScopeActivated = true;
         if (currentRequestScope == null) {
             requestContext.activate();
-            // if we don't do this we can't close it in close()
-            currentRequestScope = requestContext.getState();
             QuarkusHttpUser user = (QuarkusHttpUser) context.user();
             if (user != null) {
                 fireSecurityIdentity(user.getSecurityIdentity());
@@ -309,16 +307,10 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
      * @param newHandlerChain The new handler chain
      */
     public void restart(RestHandler[] newHandlerChain) {
-        restart(newHandlerChain, false);
-    }
-
-    public void restart(RestHandler[] newHandlerChain, boolean keepTarget) {
         this.handlers = newHandlerChain;
         position = 0;
         parameters = new Object[0];
-        if (!keepTarget) {
-            target = null;
-        }
+        target = null;
     }
 
     /**
@@ -435,10 +427,6 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return result;
     }
 
-    public Throwable getThrowable() {
-        return throwable;
-    }
-
     public Object getResponseEntity() {
         Object result = responseEntity();
         if (result instanceof GenericEntity) {
@@ -523,15 +511,11 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
      * a response result and switch to the abort chain
      */
     public void handleException(Throwable t) {
-        handleException(t, false);
-    }
-
-    public void handleException(Throwable t, boolean keepSameTarget) {
         if (handlers == abortHandlerChain) {
             sendInternalError(t);
         } else {
             this.throwable = t;
-            restart(abortHandlerChain, keepSameTarget);
+            restart(abortHandlerChain);
         }
     }
 
@@ -545,7 +529,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     public void close() {
         //TODO: do we even have any other resources to close?
         if (this.currentRequestScope != null) {
-            this.requestContext.destroy(this.currentRequestScope);
+            this.requestContext.destroy();
         }
         // FIXME: this could be moved to a handler I guess
         onComplete(throwable);

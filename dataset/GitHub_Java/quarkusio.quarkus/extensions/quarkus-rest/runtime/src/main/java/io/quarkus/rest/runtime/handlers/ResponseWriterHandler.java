@@ -23,11 +23,7 @@ public class ResponseWriterHandler implements RestHandler {
 
     @Override
     public void handle(QuarkusRestRequestContext requestContext) throws Exception {
-        Response response = requestContext.getResponse();
-        // has been converted in ResponseHandler
-        //TODO: should we do this the other way around so there is no need to allocate the Response object
-
-        Object entity = response.getEntity();
+        Object entity = requestContext.getResponseEntity();
         if (entity != null && !requestContext.getMethod().equals(HEAD)) {
             EntityWriter entityWriter = requestContext.getEntityWriter();
             if (entityWriter == null) {
@@ -38,19 +34,33 @@ public class ResponseWriterHandler implements RestHandler {
         } else {
             setContentTypeIfNecessary(requestContext);
             Serialisers.encodeResponseHeaders(requestContext);
-            requestContext.getContext().response().end();
+            requestContext.getHttpServerResponse().end();
         }
     }
 
     // set the content type header to what the resource method uses as a final fallback
     private void setContentTypeIfNecessary(QuarkusRestRequestContext requestContext) {
-        if ((requestContext.getTarget() != null) && (requestContext.getTarget().getProduces() != null)
-                && (requestContext.getProducesMediaType() == null)) {
+        if (hasBody(requestContext)
+                && requestContext.getTarget() != null
+                && requestContext.getTarget().getProduces() != null
+                && requestContext.getResponseContentType() == null) {
             ServerMediaType serverMediaType = requestContext.getTarget().getProduces();
             if (serverMediaType.getSortedOriginalMediaTypes().length > 0) {
-                requestContext.getContext().response().headers().add(HttpHeaders.CONTENT_TYPE,
+                requestContext.getHttpServerResponse().headers().add(HttpHeaders.CONTENT_TYPE,
                         serverMediaType.getSortedOriginalMediaTypes()[0].toString());
             }
+        }
+    }
+
+    private boolean hasBody(QuarkusRestRequestContext requestContext) {
+        // pretend it has, because we want content-type/length headers
+        if (requestContext.getMethod().equals(HEAD))
+            return true;
+        if (requestContext.getResponse().isCreated()) {
+            int status = requestContext.getResponse().get().getStatus();
+            return status != Response.Status.NO_CONTENT.getStatusCode();
+        } else {
+            return requestContext.getResponseEntity() != null;
         }
     }
 }
