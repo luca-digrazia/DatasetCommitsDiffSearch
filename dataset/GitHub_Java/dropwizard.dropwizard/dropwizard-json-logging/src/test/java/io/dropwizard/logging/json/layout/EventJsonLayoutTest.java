@@ -13,6 +13,7 @@ import io.dropwizard.util.Sets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.slf4j.Marker;
 
 import java.time.ZoneId;
 import java.util.Collections;
@@ -38,6 +39,7 @@ public class EventJsonLayoutTest {
             EventAttribute.LEVEL,
             EventAttribute.THREAD_NAME,
             EventAttribute.MDC,
+            EventAttribute.MARKER,
             EventAttribute.LOGGER_NAME,
             EventAttribute.MESSAGE,
             EventAttribute.EXCEPTION,
@@ -48,16 +50,18 @@ public class EventJsonLayoutTest {
     private final JsonFormatter jsonFormatter = new JsonFormatter(Jackson.newObjectMapper(), false, true);
     private ThrowableProxyConverter throwableProxyConverter = Mockito.mock(ThrowableProxyConverter.class);
     private ILoggingEvent event = Mockito.mock(ILoggingEvent.class);
+    private Marker marker = Mockito.mock(Marker.class);
     private Map<String, Object> defaultExpectedFields;
 
     private EventJsonLayout eventJsonLayout;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         when(event.getTimeStamp()).thenReturn(1514906361000L);
         when(event.getLevel()).thenReturn(Level.INFO);
         when(event.getThreadName()).thenReturn("main");
         when(event.getMDCPropertyMap()).thenReturn(mdc);
+        when(event.getMarker()).thenReturn(marker);
         when(event.getLoggerName()).thenReturn(logger);
         when(event.getFormattedMessage()).thenReturn(message);
         when(event.getLoggerContextVO()).thenReturn(new LoggerContextVO("test", Collections.emptyMap(), 0));
@@ -65,12 +69,15 @@ public class EventJsonLayoutTest {
                 new StackTraceElement("declaringClass", "methodName", "fileName", 42)
         });
 
+        when(marker.getName()).thenReturn("marker");
+
         eventJsonLayout = new EventJsonLayout(jsonFormatter, timestampFormatter, throwableProxyConverter,
                 DEFAULT_EVENT_ATTRIBUTES, Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), false);
 
         defaultExpectedFields = new HashMap<>();
         defaultExpectedFields.put("timestamp", timestamp);
         defaultExpectedFields.put("logger", logger);
+        defaultExpectedFields.put("marker", "marker");
         defaultExpectedFields.put("message", message);
         defaultExpectedFields.put("thread", "main");
         defaultExpectedFields.put("level", "INFO");
@@ -82,14 +89,14 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testProducesDefaultMap() {
+    void testProducesDefaultMap() {
         Map<String, Object> map = eventJsonLayout.toJsonMap(event);
         final HashMap<String, Object> expectedFields = new HashMap<>(defaultExpectedFields);
         assertThat(map).isEqualTo(expectedFields);
     }
 
     @Test
-    public void testLogsAnException() {
+    void testLogsAnException() {
         when(event.getThrowableProxy()).thenReturn(new ThrowableProxyVO());
         when(throwableProxyConverter.convert(event)).thenReturn("Boom!");
 
@@ -99,7 +106,7 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testDisableTimestamp() {
+    void testDisableTimestamp() {
         EnumSet<EventAttribute> eventAttributes = EnumSet.copyOf(DEFAULT_EVENT_ATTRIBUTES);
         eventAttributes.remove(EventAttribute.TIMESTAMP);
         eventJsonLayout.setIncludes(eventAttributes);
@@ -110,7 +117,7 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testLogVersion() {
+    void testLogVersion() {
         eventJsonLayout.setJsonProtocolVersion("1.2");
 
         final HashMap<String, Object> expectedFields = new HashMap<>(defaultExpectedFields);
@@ -119,7 +126,7 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testReplaceFieldName() {
+    void testReplaceFieldName() {
         final Map<String, String> customFieldNames = Maps.of(
                 "timestamp", "@timestamp",
                 "message", "@message");
@@ -136,7 +143,7 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testAddNewField() {
+    void testAddNewField() {
         final Map<String, Object> additionalFields = Maps.of(
                 "serviceName", "userService",
                 "serviceBuild", 207);
@@ -152,7 +159,7 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testFilterMdc() {
+    void testFilterMdc() {
         final Set<String> includesMdcKeys = Sets.of("userId", "orderId");
         Map<String, Object> map = new EventJsonLayout(jsonFormatter, timestampFormatter, throwableProxyConverter, DEFAULT_EVENT_ATTRIBUTES,
             Collections.emptyMap(), Collections.emptyMap(), includesMdcKeys, false)
@@ -167,7 +174,7 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testFlattensMdcMap() {
+    void testFlattensMdcMap() {
         Map<String, Object> map = new EventJsonLayout(jsonFormatter, timestampFormatter, throwableProxyConverter,
                 DEFAULT_EVENT_ATTRIBUTES, Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet(), true)
                 .toJsonMap(event);
@@ -179,15 +186,19 @@ public class EventJsonLayoutTest {
     }
 
     @Test
-    public void testStartThrowableConverter() {
+    void testStartThrowableConverter() {
         eventJsonLayout.start();
+
+        assertThat(eventJsonLayout.isStarted()).isTrue();
 
         verify(throwableProxyConverter).start();
     }
 
     @Test
-    public void testStopThrowableConverter() {
+    void testStopThrowableConverter() {
         eventJsonLayout.stop();
+
+        assertThat(eventJsonLayout.isStarted()).isFalse();
 
         verify(throwableProxyConverter).stop();
     }
