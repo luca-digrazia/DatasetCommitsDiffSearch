@@ -31,8 +31,6 @@ import com.google.common.io.Flushables;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.events.PrintingEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.runtime.commands.ProjectFileSupport;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
@@ -159,25 +157,22 @@ public class BlazeCommandDispatcher {
    * was called from the output directory and fail if it was.
    */
   private ExitCode checkCwdInWorkspace(CommandEnvironment env, Command commandAnnotation,
-      String commandName, EventHandler eventHandler) {
+      String commandName, OutErr outErr) {
     if (!commandAnnotation.mustRunInWorkspace()) {
       return ExitCode.SUCCESS;
     }
 
     if (!env.inWorkspace()) {
-      eventHandler.handle(
-          Event.error(
-              "The '" + commandName + "' command is only supported from within a workspace."));
+      outErr.printErrLn(
+          "The '" + commandName + "' command is only supported from within a workspace.");
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
     Path workspace = env.getWorkspace();
     // TODO(kchodorow): Remove this once spaces are supported.
     if (workspace.getPathString().contains(" ")) {
-      eventHandler.handle(
-          Event.error(
-              runtime.getProductName() + " does not currently work properly from paths "
-                  + "containing spaces (" + workspace + ")."));
+      outErr.printErrLn(runtime.getProductName() + " does not currently work properly from paths "
+          + "containing spaces (" + workspace + ").");
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     }
 
@@ -186,21 +181,21 @@ public class BlazeCommandDispatcher {
 
     if (doNotBuild.exists()) {
       if (!commandAnnotation.canRunInOutputDirectory()) {
-        eventHandler.handle(Event.error(getNotInRealWorkspaceError(doNotBuild)));
+        outErr.printErrLn(getNotInRealWorkspaceError(doNotBuild));
         return ExitCode.COMMAND_LINE_ERROR;
       } else {
-        eventHandler.handle(
-            Event.warn(
-                runtime.getProductName() + " is run from output directory. This is unsound."));
+        outErr.printErrLn(
+            "WARNING: "
+                + runtime.getProductName()
+                + " is run from output directory. This is unsound.");
       }
     }
     return ExitCode.SUCCESS;
   }
 
   private ExitCode parseArgsAndConfigs(CommandEnvironment env, OptionsParser optionsParser,
-      Command commandAnnotation, List<String> args, List<String> rcfileNotes,
-      EventHandler eventHandler)
-          throws OptionsParsingException {
+      Command commandAnnotation, List<String> args, List<String> rcfileNotes, OutErr outErr)
+      throws OptionsParsingException {
 
     Function<String, String> commandOptionSourceFunction =
         new Function<String, String>() {
@@ -223,7 +218,7 @@ public class BlazeCommandDispatcher {
     // and --rc_source. A no-op if none are provided.
     CommonCommandOptions rcFileOptions = optionsParser.getOptions(CommonCommandOptions.class);
     List<Pair<String, ListMultimap<String, String>>> optionsMap =
-        getOptionsMap(eventHandler, rcFileOptions.rcSource, rcFileOptions.optionsOverrides,
+        getOptionsMap(outErr, rcFileOptions.rcSource, rcFileOptions.optionsOverrides,
             runtime.getCommandMap().keySet());
 
     parseOptionsForCommand(rcfileNotes, commandAnnotation, optionsParser, optionsMap, null, null);
@@ -245,15 +240,11 @@ public class BlazeCommandDispatcher {
     }
     if (!unknownConfigs.isEmpty()) {
       if (commonOptions.allowUndefinedConfigs) {
-        eventHandler.handle(
-            Event.warn(
-                "Config values are not defined in any .rc file: "
-                    + Joiner.on(", ").join(unknownConfigs)));
+        outErr.printErrLn("WARNING: Config values are not defined in any .rc file: "
+            + Joiner.on(", ").join(unknownConfigs));
       } else {
-        eventHandler.handle(
-            Event.error(
-                "Config values are not defined in any .rc file: "
-                    + Joiner.on(", ").join(unknownConfigs)));
+        outErr.printErrLn("ERROR: Config values are not defined in any .rc file: "
+            + Joiner.on(", ").join(unknownConfigs));
         return ExitCode.COMMAND_LINE_ERROR;
       }
     }
@@ -404,8 +395,7 @@ public class BlazeCommandDispatcher {
       LoggingUtil.logToRemote(Level.WARNING, "Unable to delete or open command.log", ioException);
     }
 
-    EventHandler eventHandler = new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
-    ExitCode result = checkCwdInWorkspace(env, commandAnnotation, commandName, eventHandler);
+    ExitCode result = checkCwdInWorkspace(env, commandAnnotation, commandName, outErr);
     if (!result.equals(ExitCode.SUCCESS)) {
       return result.getNumericExitCode();
     }
@@ -417,14 +407,12 @@ public class BlazeCommandDispatcher {
     try {
       optionsParser = createOptionsParser(command);
     } catch (OptionsParser.ConstructionException e) {
-      eventHandler.handle(
-          Event.error("Internal error while constructing options parser: " + e.getMessage()));
+      outErr.printErrLn("Internal error while constructing options parser: " + e.getMessage());
       return ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
     }
     try {
       ExitCode parseResult =
-          parseArgsAndConfigs(
-              env, optionsParser, commandAnnotation, args, rcfileNotes, eventHandler);
+          parseArgsAndConfigs(env, optionsParser, commandAnnotation, args, rcfileNotes, outErr);
       if (!parseResult.equals(ExitCode.SUCCESS)) {
         return parseResult.getNumericExitCode();
       }
@@ -440,9 +428,9 @@ public class BlazeCommandDispatcher {
       optionsPolicyEnforcer.enforce(optionsParser, commandName);
     } catch (OptionsParsingException e) {
       for (String note : rcfileNotes) {
-        eventHandler.handle(Event.info(note));
+        outErr.printErrLn("INFO: " + note);
       }
-      eventHandler.handle(Event.error(e.getMessage()));
+      outErr.printErrLn(e.getMessage());
       return ExitCode.COMMAND_LINE_ERROR.getNumericExitCode();
     }
 
@@ -770,7 +758,7 @@ public class BlazeCommandDispatcher {
    */
   @VisibleForTesting
   static List<Pair<String, ListMultimap<String, String>>> getOptionsMap(
-      EventHandler eventHandler,
+      OutErr outErr,
       List<String> rcFiles,
       List<CommonCommandOptions.OptionOverride> overrides,
       Set<String> validCommands) {
@@ -780,8 +768,8 @@ public class BlazeCommandDispatcher {
     ListMultimap<String, String> lastMap = null;
     for (CommonCommandOptions.OptionOverride override : overrides) {
       if (override.blazeRc < 0 || override.blazeRc >= rcFiles.size()) {
-        eventHandler.handle(
-            Event.warn("inconsistency in generated command line args. Ignoring bogus argument\n"));
+        outErr.printErrLn("WARNING: inconsistency in generated command line "
+            + "args. Ignoring bogus argument\n");
         continue;
       }
       String rcFile = rcFiles.get(override.blazeRc);
@@ -792,10 +780,9 @@ public class BlazeCommandDispatcher {
         command = command.substring(0, index);
       }
       if (!validCommands.contains(command) && !command.equals("common")) {
-        eventHandler.handle(
-            Event.warn(
-                "while reading option defaults file '" + rcFile + "':\n"
-                    + "  invalid command name '" + override.command + "'."));
+        outErr.printErrLn("WARNING: while reading option defaults file '"
+            + rcFile + "':\n"
+            + "  invalid command name '" + override.command + "'.");
         continue;
       }
 

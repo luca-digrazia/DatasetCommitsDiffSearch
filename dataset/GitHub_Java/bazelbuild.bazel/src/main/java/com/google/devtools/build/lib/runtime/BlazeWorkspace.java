@@ -91,10 +91,6 @@ public final class BlazeWorkspace {
     this.outputBaseFilesystemTypeName = FileSystemUtils.getFileSystem(getOutputBase());
   }
 
-  public BlazeRuntime getRuntime() {
-    return runtime;
-  }
-
   /**
    * Returns the Blaze directories object for this runtime.
    */
@@ -212,19 +208,10 @@ public final class BlazeWorkspace {
   }
 
   /**
-   * Reinitializes the Skyframe evaluator.
-   */
-  public void resetEvaluator() throws IOException {
-    skyframeExecutor.resetEvaluator();
-  }
-
-  /**
    * Removes in-memory caches.
    */
   public void clearCaches() throws IOException {
-    if (actionCache != null) {
-      actionCache.clear();
-    }
+    skyframeExecutor.resetEvaluator();
     actionCache = null;
     FileSystemUtils.deleteTree(getCacheDirectory());
   }
