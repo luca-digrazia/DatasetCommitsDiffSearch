@@ -61,8 +61,6 @@ public class BufferWatermarkThread implements Runnable {
                     + pWm.getUtilizationPercentage() + "%. [" + pWm.getUtilization() + "/" + ringSize +"]");
         }
         
-        graylogServer.getServerValues().writeBufferWatermarks(oWm, pWm);
-        
         sendMetrics(oWm, pWm);
     }
     
