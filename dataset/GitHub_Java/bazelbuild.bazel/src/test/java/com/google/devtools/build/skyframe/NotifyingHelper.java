@@ -246,9 +246,9 @@ public class NotifyingHelper {
     }
 
     @Override
-    public boolean signalDep(Version childVersion, @Nullable SkyKey childForDebugging) {
+    public boolean signalDep(Version childVersion) {
       graphListener.accept(myKey, EventType.SIGNAL, Order.BEFORE, childVersion);
-      boolean result = super.signalDep(childVersion, childForDebugging);
+      boolean result = super.signalDep(childVersion);
       graphListener.accept(myKey, EventType.SIGNAL, Order.AFTER, childVersion);
       return result;
     }

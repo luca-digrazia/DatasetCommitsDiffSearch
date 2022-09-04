@@ -18,15 +18,12 @@ import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.NodeEntry;
 import com.google.devtools.build.skyframe.QueryableGraph;
 import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.WalkableGraph;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-/**
- * {@link com/google/devtools/build/lib/skyframe/SkyframeExecutorWrappingWalkableGraph.java used
- * only in javadoc: com.google.devtools.build.skyframe.WalkableGraph} backed by a {@link
- * SkyframeExecutor}.
- */
+/** {@link WalkableGraph} backed by a {@link SkyframeExecutor}. */
 public class SkyframeExecutorWrappingWalkableGraph extends DelegatingWalkableGraph {
 
   private SkyframeExecutorWrappingWalkableGraph(MemoizingEvaluator evaluator) {

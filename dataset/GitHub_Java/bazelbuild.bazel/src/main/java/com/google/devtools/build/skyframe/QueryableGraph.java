@@ -16,7 +16,6 @@ package com.google.devtools.build.skyframe;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.GroupedList;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.util.Map;
 import java.util.Set;
@@ -67,17 +66,17 @@ public interface QueryableGraph {
   /**
    * Optimistically prefetches dependencies.
    *
-   * @see PrefetchDepsRequest
+   * @param excludedKeys keys that could overlap with {@code depKeys}. {@code prefetchDeps} is
+   *     usually called together with an actual fetch, and the keys actually fetched should be
+   *     excluded from the prefetch.
    */
-  default void prefetchDeps(PrefetchDepsRequest request) throws InterruptedException {
-    if (request.oldDeps.isEmpty()) {
-      return;
-    }
-    request.excludedKeys = request.depKeys.toSet();
+  default void prefetchDeps(
+      @Nullable SkyKey requestor, Iterable<? extends SkyKey> depKeys, Set<SkyKey> excludedKeys)
+      throws InterruptedException {
     getBatchAsync(
-        request.requestor,
+        requestor,
         Reason.PREFETCH,
-        Iterables.filter(request.oldDeps, Predicates.not(Predicates.in(request.excludedKeys))));
+        Iterables.filter(depKeys, Predicates.not(Predicates.in(excludedKeys))));
   }
 
   /**
@@ -157,36 +156,5 @@ public interface QueryableGraph {
 
     /** Some other reason than one of the above. */
     OTHER,
-  }
-
-  /** Parameters for {@link QueryableGraph#prefetchDeps}. */
-  static class PrefetchDepsRequest {
-    public final SkyKey requestor;
-
-    /**
-     * Old dependencies to prefetch.
-     *
-     * <p>The implementation might ignore this if it has another way to determine the dependencies.
-     */
-    public final Set<SkyKey> oldDeps;
-
-    /**
-     * Direct deps that will be subsequently fetched and therefore should be excluded from
-     * prefetching.
-     */
-    public final GroupedList<SkyKey> depKeys;
-
-    /**
-     * Output parameter: {@code depKeys} as a set.
-     *
-     * <p>The implementation might set this, in which case, the caller could reuse it.
-     */
-    @Nullable public Set<SkyKey> excludedKeys = null;
-
-    public PrefetchDepsRequest(SkyKey requestor, Set<SkyKey> oldDeps, GroupedList<SkyKey> depKeys) {
-      this.requestor = requestor;
-      this.oldDeps = oldDeps;
-      this.depKeys = depKeys;
-    }
   }
 }

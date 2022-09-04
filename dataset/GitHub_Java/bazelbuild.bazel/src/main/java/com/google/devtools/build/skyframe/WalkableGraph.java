@@ -14,6 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -88,7 +89,8 @@ public interface WalkableGraph {
 
   /** Provides a WalkableGraph on demand after preparing it. */
   interface WalkableGraphFactory {
-    EvaluationResult<SkyValue> prepareAndGet(Set<SkyKey> roots, EvaluationContext evaluationContext)
+    EvaluationResult<SkyValue> prepareAndGet(
+        Set<SkyKey> roots, int numThreads, ExtendedEventHandler eventHandler)
         throws InterruptedException;
 
     /** Returns the {@link SkyKey} that defines this universe. */

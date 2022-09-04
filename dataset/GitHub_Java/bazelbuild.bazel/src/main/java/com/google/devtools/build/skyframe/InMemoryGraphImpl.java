@@ -15,16 +15,14 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicates;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.collect.compacthashmap.CompactHashMap;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -38,8 +36,7 @@ public class InMemoryGraphImpl implements InMemoryGraph {
   protected final ConcurrentMap<SkyKey, NodeEntry> nodeMap = new ConcurrentHashMap<>(1024);
   private final boolean keepEdges;
 
-  @VisibleForTesting
-  public InMemoryGraphImpl() {
+  InMemoryGraphImpl() {
     this(/*keepEdges=*/ true);
   }
 
@@ -76,21 +73,20 @@ public class InMemoryGraphImpl implements InMemoryGraph {
     return keepEdges ? new InMemoryNodeEntry() : new EdgelessInMemoryNodeEntry();
   }
 
-  /**
-   * This is used to call newNodeEntry() from within computeIfAbsent. Instantiated here to avoid
-   * lambda instantiation overhead.
-   */
-  @SuppressWarnings("UnnecessaryLambda")
-  private final Function<SkyKey, NodeEntry> newNodeEntryFunction = k -> newNodeEntry(k);
+  protected NodeEntry createIfAbsent(SkyKey key) {
+    NodeEntry newval = newNodeEntry(key);
+    NodeEntry oldval = nodeMap.putIfAbsent(key, newval);
+    return oldval == null ? newval : oldval;
+  }
 
   @Override
   public Map<SkyKey, NodeEntry> createIfAbsentBatch(
       @Nullable SkyKey requestor, Reason reason, Iterable<SkyKey> keys) {
-    Map<SkyKey, NodeEntry> result = CompactHashMap.createWithExpectedSize(Iterables.size(keys));
+    ImmutableMap.Builder<SkyKey, NodeEntry> builder = ImmutableMap.builder();
     for (SkyKey key : keys) {
-      result.put(key, nodeMap.computeIfAbsent(key, newNodeEntryFunction));
+      builder.put(key, createIfAbsent(key));
     }
-    return result;
+    return builder.build();
   }
 
   @Override
