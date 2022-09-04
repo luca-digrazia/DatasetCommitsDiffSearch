@@ -83,7 +83,7 @@ public final class BazelFilegroupRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("filegroup")
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .factoryClass(Filegroup.class)
         .build();
   }

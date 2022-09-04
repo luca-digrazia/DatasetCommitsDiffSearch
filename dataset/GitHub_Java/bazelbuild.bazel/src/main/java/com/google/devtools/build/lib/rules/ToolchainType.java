@@ -34,7 +34,7 @@ public class ToolchainType implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws ActionConflictException, InterruptedException {
+      throws ActionConflictException {
 
     ToolchainTypeInfo toolchainTypeInfo = ToolchainTypeInfo.create(ruleContext.getLabel());
 

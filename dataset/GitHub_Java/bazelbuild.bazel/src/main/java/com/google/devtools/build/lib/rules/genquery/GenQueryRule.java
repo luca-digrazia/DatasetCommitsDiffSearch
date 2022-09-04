@@ -33,7 +33,7 @@ public final class GenQueryRule implements RuleDefinition {
 
   /** Adds {@link GenQueryRule} and its dependencies to the provided builder. */
   public static void register(ConfiguredRuleClassProvider.Builder builder) {
-    builder.addConfigurationFragment(GenQueryConfiguration.class);
+    builder.addConfigurationFragment(new GenQueryConfiguration.Loader());
     builder.addRuleDefinition(new GenQueryRule());
   }
 
@@ -74,7 +74,7 @@ public final class GenQueryRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("genquery")
-        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class)
         .factoryClass(GenQuery.class)
         .build();
   }

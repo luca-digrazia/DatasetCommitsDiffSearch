@@ -42,7 +42,7 @@ public class PlatformRule implements RuleDefinition {
     /* <!-- #BLAZE_RULE(platform).NAME -->
     <!-- #END_BLAZE_RULE.NAME --> */
     return builder
-        .advertiseStarlarkProvider(PlatformInfo.PROVIDER.id())
+        .advertiseProvider(PlatformInfo.class)
 
         /* <!-- #BLAZE_RULE(platform).ATTRIBUTE(constraint_values) -->
         The combination of constraint choices that this platform comprises. In order for a platform
@@ -51,7 +51,7 @@ public class PlatformRule implements RuleDefinition {
         <p>Each <code>constraint_value</code> in this list must be for a different
         <code>constraint_setting</code>. For example, you cannot define a platform that requires the
         cpu architecture to be both <code>@platforms//cpu:x86_64</code> and
-        <code>@platforms//cpu:arm</code>.
+        <code>@bazel_tools//platforms:arm</code>.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr(CONSTRAINT_VALUES_ATTR, BuildType.LABEL_LIST)

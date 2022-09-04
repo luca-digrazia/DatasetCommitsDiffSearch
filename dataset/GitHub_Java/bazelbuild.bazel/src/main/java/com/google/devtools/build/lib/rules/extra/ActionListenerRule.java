@@ -56,7 +56,7 @@ public final class ActionListenerRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("action_listener")
-        .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class)
         .factoryClass(ActionListener.class)
         .build();
   }
