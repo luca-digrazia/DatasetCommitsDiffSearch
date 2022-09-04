@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.ArtifactNamePattern;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingModeFlags;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.TextFormat;
@@ -79,6 +80,7 @@ public final class CppToolchainInfo {
   private final ImmutableList<String> dynamicLibraryLinkFlags;
   private final ImmutableList<String> legacyLinkOptions;
   private final ImmutableListMultimap<LinkingMode, String> legacyLinkOptionsFromLinkingMode;
+  private final ImmutableListMultimap<LipoMode, String> legacyLinkOptionsFromLipoMode;
   private final ImmutableListMultimap<CompilationMode, String> legacyLinkOptionsFromCompilationMode;
   private final ImmutableList<String> testOnlyLinkFlags;
   private final ImmutableList<String> ldOptionsForEmbedding;
@@ -98,6 +100,8 @@ public final class CppToolchainInfo {
 
   private final ImmutableListMultimap<CompilationMode, String> cFlagsByCompilationMode;
   private final ImmutableListMultimap<CompilationMode, String> cxxFlagsByCompilationMode;
+  private final ImmutableListMultimap<LipoMode, String> lipoCFlags;
+  private final ImmutableListMultimap<LipoMode, String> lipoCxxFlags;
 
   private final ImmutableList<String> unfilteredCompilerFlags;
 
@@ -150,6 +154,15 @@ public final class CppToolchainInfo {
       cxxFlagsBuilder.putAll(realmode, flags.getCxxFlagList());
     }
 
+    ImmutableListMultimap.Builder<LipoMode, String> lipoCFlagsBuilder =
+        ImmutableListMultimap.builder();
+    ImmutableListMultimap.Builder<LipoMode, String> lipoCxxFlagsBuilder =
+        ImmutableListMultimap.builder();
+    for (CrosstoolConfig.LipoModeFlags flags : toolchain.getLipoModeFlagsList()) {
+      LipoMode realmode = flags.getMode();
+      lipoCFlagsBuilder.putAll(realmode, flags.getCompilerFlagList());
+      lipoCxxFlagsBuilder.putAll(realmode, flags.getCxxFlagList());
+    }
     try {
       return new CppToolchainInfo(
           toolchain,
@@ -172,6 +185,7 @@ public final class CppToolchainInfo {
           ImmutableList.copyOf(toolchain.getDynamicLibraryLinkerFlagList()),
           ImmutableList.copyOf(toolchain.getLinkerFlagList()),
           linkOptionsFromLinkingModeBuilder.build(),
+          computeLinkOptionsFromLipoMode(toolchain),
           computeLinkOptionsFromCompilationMode(toolchain),
           ImmutableList.copyOf(toolchain.getTestOnlyLinkerFlagList()),
           ImmutableList.copyOf(toolchain.getLdEmbedFlagList()),
@@ -193,6 +207,8 @@ public final class CppToolchainInfo {
           ImmutableList.copyOf(toolchain.getCxxFlagList()),
           cFlagsBuilder.build(),
           cxxFlagsBuilder.build(),
+          lipoCFlagsBuilder.build(),
+          lipoCxxFlagsBuilder.build(),
           ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
           toolchain.getSupportsFission(),
           toolchain.getSupportsStartEndLib(),
@@ -226,6 +242,7 @@ public final class CppToolchainInfo {
       ImmutableList<String> dynamicLibraryLinkFlags,
       ImmutableList<String> legacyLinkOptions,
       ImmutableListMultimap<LinkingMode, String> legacyLinkOptionsFromLinkingMode,
+      ImmutableListMultimap<LipoMode, String> legacyLinkOptionsFromLipoMode,
       ImmutableListMultimap<CompilationMode, String> legacyLinkOptionsFromCompilationMode,
       ImmutableList<String> testOnlyLinkFlags,
       ImmutableList<String> ldOptionsForEmbedding,
@@ -241,6 +258,8 @@ public final class CppToolchainInfo {
       ImmutableList<String> crosstoolCxxFlags,
       ImmutableListMultimap<CompilationMode, String> cFlagsByCompilationMode,
       ImmutableListMultimap<CompilationMode, String> cxxFlagsByCompilationMode,
+      ImmutableListMultimap<LipoMode, String> lipoCFlags,
+      ImmutableListMultimap<LipoMode, String> lipoCxxFlags,
       ImmutableList<String> unfilteredCompilerFlags,
       boolean supportsFission,
       boolean supportsStartEndLib,
@@ -268,6 +287,7 @@ public final class CppToolchainInfo {
     this.dynamicLibraryLinkFlags = dynamicLibraryLinkFlags;
     this.legacyLinkOptions = legacyLinkOptions;
     this.legacyLinkOptionsFromLinkingMode = legacyLinkOptionsFromLinkingMode;
+    this.legacyLinkOptionsFromLipoMode = legacyLinkOptionsFromLipoMode;
     this.legacyLinkOptionsFromCompilationMode = legacyLinkOptionsFromCompilationMode;
     this.testOnlyLinkFlags = testOnlyLinkFlags;
     this.ldOptionsForEmbedding = ldOptionsForEmbedding;
@@ -283,6 +303,8 @@ public final class CppToolchainInfo {
     this.crosstoolCxxFlags = crosstoolCxxFlags;
     this.cFlagsByCompilationMode = cFlagsByCompilationMode;
     this.cxxFlagsByCompilationMode = cxxFlagsByCompilationMode;
+    this.lipoCFlags = lipoCFlags;
+    this.lipoCxxFlags = lipoCxxFlags;
     this.unfilteredCompilerFlags = unfilteredCompilerFlags;
     this.supportsFission = supportsFission;
     this.supportsStartEndLib = supportsStartEndLib;
@@ -430,13 +452,16 @@ public final class CppToolchainInfo {
     return legacyLinkOptions;
   }
 
-  /** @see CcToolchainProvider#configureAllLegacyLinkOptions(CompilationMode, LinkingMode). */
+  /**
+   * @see CcToolchainProvider#configureAllLegacyLinkOptions(CompilationMode, LipoMode, LinkingMode).
+   */
   ImmutableList<String> configureAllLegacyLinkOptions(
-      CompilationMode compilationMode, LinkingMode linkingMode) {
+      CompilationMode compilationMode, LipoMode lipoMode, LinkingMode linkingMode) {
     List<String> result = new ArrayList<>();
     result.addAll(legacyLinkOptions);
 
     result.addAll(legacyLinkOptionsFromCompilationMode.get(compilationMode));
+    result.addAll(legacyLinkOptionsFromLipoMode.get(lipoMode));
     result.addAll(legacyLinkOptionsFromLinkingMode.get(linkingMode));
     return ImmutableList.copyOf(result);
   }
@@ -450,7 +475,7 @@ public final class CppToolchainInfo {
 
   /**
    * Returns the toolchain identifier, which uniquely identifies the compiler version, target libc
-   * version, and target cpu.
+   * version, target cpu, and LIPO linkage.
    */
   public String getToolchainIdentifier() {
     return toolchainIdentifier;
@@ -711,6 +736,16 @@ public final class CppToolchainInfo {
     return cxxFlagsByCompilationMode;
   }
 
+  /** Returns compiler flags for C compilation by lipo mode. */
+  public ImmutableListMultimap<LipoMode, String> getLipoCFlags() {
+    return lipoCFlags;
+  }
+
+  /** Returns compiler flags for C compilation by lipo mode. */
+  public ImmutableListMultimap<LipoMode, String> getLipoCxxFlags() {
+    return lipoCxxFlags;
+  }
+
   /** Returns unfiltered compiler options for C++ from this toolchain. */
   public ImmutableList<String> getUnfilteredCompilerOptions(@Nullable PathFragment sysroot) {
     if (sysroot == null) {
@@ -747,6 +782,17 @@ public final class CppToolchainInfo {
       linkOptionsFromCompilationModeBuilder.putAll(realmode, flags.getLinkerFlagList());
     }
     return linkOptionsFromCompilationModeBuilder.build();
+  }
+
+  private static ImmutableListMultimap<LipoMode, String> computeLinkOptionsFromLipoMode(
+      CToolchain toolchain) {
+    ImmutableListMultimap.Builder<LipoMode, String> linkOptionsFromLipoModeBuilder =
+        ImmutableListMultimap.builder();
+    for (CrosstoolConfig.LipoModeFlags flags : toolchain.getLipoModeFlagsList()) {
+      LipoMode realmode = flags.getMode();
+      linkOptionsFromLipoModeBuilder.putAll(realmode, flags.getLinkerFlagList());
+    }
+    return linkOptionsFromLipoModeBuilder.build();
   }
 
   private static ImmutableMap<String, PathFragment> computeToolPaths(
