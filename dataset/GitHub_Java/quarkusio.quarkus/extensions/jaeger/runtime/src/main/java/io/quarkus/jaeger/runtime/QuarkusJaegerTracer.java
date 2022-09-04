@@ -1,49 +1,93 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.jaeger.runtime;
 
-import java.util.concurrent.atomic.AtomicReference;
-
 import io.jaegertracing.Configuration;
+import io.jaegertracing.internal.JaegerTracer;
+import io.jaegertracing.spi.MetricsFactory;
+import io.opentracing.Scope;
 import io.opentracing.ScopeManager;
 import io.opentracing.Span;
 import io.opentracing.SpanContext;
 import io.opentracing.Tracer;
 import io.opentracing.propagation.Format;
+import io.opentracing.util.ThreadLocalScopeManager;
 
 public class QuarkusJaegerTracer implements Tracer {
 
-    static AtomicReference<Tracer> REF = new AtomicReference<>();
+    private volatile JaegerTracer tracer;
 
-    public QuarkusJaegerTracer() {
+    private boolean logTraceContext;
+    private MetricsFactory metricsFactory;
+
+    private final ScopeManager scopeManager = new ScopeManager() {
+
+        volatile ScopeManager delegate;
+
+        @Override
+        public Scope activate(Span span, boolean b) {
+            return sm().activate(span, b);
+        }
+
+        @Override
+        public Scope active() {
+            if (delegate == null) {
+                return null;
+            }
+            return sm().active();
+        }
+
+        ScopeManager sm() {
+            if (delegate == null) {
+                synchronized (this) {
+                    if (delegate == null) {
+                        delegate = getScopeManager();
+                    }
+                }
+            }
+            return delegate;
+        }
+    };
+
+    void setLogTraceContext(boolean logTraceContext) {
+        this.logTraceContext = logTraceContext;
+    }
+
+    void setMetricsFactory(MetricsFactory metricsFactory) {
+        this.metricsFactory = metricsFactory;
     }
 
     @Override
     public String toString() {
-        return "Jaeger Tracer";
+        return tracer().toString();
     }
 
-    Tracer tracer() {
-        return REF.updateAndGet((orig) -> {
-            if (orig != null) {
-                return orig;
+    synchronized void reset() {
+        if (tracer != null) {
+            tracer.close();
+        }
+        tracer = null;
+    }
+
+    private Tracer tracer() {
+        if (tracer == null) {
+            synchronized (this) {
+                if (tracer == null) {
+                    tracer = Configuration.fromEnv()
+                            .withMetricsFactory(metricsFactory)
+                            .getTracerBuilder()
+                            .withScopeManager(scopeManager)
+                            .build();
+                }
             }
-            return Configuration.fromEnv().withMetricsFactory(new QuarkusJaegerMetricsFactory()).getTracer();
-        });
+        }
+        return tracer;
+    }
+
+    private ScopeManager getScopeManager() {
+        ScopeManager scopeManager = new ThreadLocalScopeManager();
+        if (logTraceContext) {
+            scopeManager = new MDCScopeManager(scopeManager);
+        }
+        return scopeManager;
     }
 
     @Override
@@ -63,7 +107,7 @@ public class QuarkusJaegerTracer implements Tracer {
 
     @Override
     public ScopeManager scopeManager() {
-        return tracer().scopeManager();
+        return scopeManager;
     }
 
     @Override
@@ -71,4 +115,3 @@ public class QuarkusJaegerTracer implements Tracer {
         return tracer().activeSpan();
     }
 }
-
