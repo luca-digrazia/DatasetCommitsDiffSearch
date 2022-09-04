@@ -17,7 +17,6 @@
 package org.graylog2.inputs;
 
 import com.google.common.collect.Lists;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
@@ -49,35 +48,12 @@ public class PersistedInputsImpl implements PersistedInputs {
                 final MessageInput input = inputService.getMessageInput(io);
                 result.add(input);
             } catch (NoSuchInputTypeException e) {
-                LOG.warn("Cannot instantiate persisted input. No such type [{}].", io.getType());
+                LOG.warn("Cannot launch persisted input. No such type [{}].", io.getType());
             } catch (Throwable e) {
-                LOG.warn("Cannot instantiate persisted input. Exception caught: ", e);
+                LOG.warn("Cannot launch persisted input. Exception caught: ", e);
             }
         }
 
         return result.iterator();
-    }
-
-    @Override
-    public MessageInput get(String id) {
-        try {
-            return inputService.getMessageInput(inputService.find(id));
-        } catch (NoSuchInputTypeException e) {
-            LOG.warn("Cannot instantiate persisted input: ", e);
-        } catch (NotFoundException e) {
-            LOG.warn("Cannot find persisted Input with id {}", id);
-        }
-
-        return null;
-    }
-
-    @Override
-    public boolean add(MessageInput e) {
-        return false;
-    }
-
-    @Override
-    public boolean remove(Object o) {
-        return false;
     }
 }
