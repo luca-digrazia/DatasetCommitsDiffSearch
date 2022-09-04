@@ -13,18 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android.databinding;
 
-import static com.google.devtools.build.lib.rules.android.AndroidStarlarkData.fromNoneable;
+import static com.google.devtools.build.lib.rules.android.AndroidSkylarkData.fromNoneable;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
-import com.google.devtools.build.lib.starlarkbuildapi.android.DataBindingV2ProviderApi;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
+import com.google.devtools.build.lib.skylarkbuildapi.android.DataBindingV2ProviderApi;
+import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import javax.annotation.Nullable;
 
 /**
  * A provider that exposes this enables <a
@@ -36,23 +37,27 @@ public final class DataBindingV2Provider extends NativeInfo
 
   public static final Provider PROVIDER = new Provider();
 
-  private final NestedSet<Artifact> classInfos;
+  private final ImmutableList<Artifact> classInfos;
 
-  private final NestedSet<Artifact> setterStores;
+  private final ImmutableList<Artifact> setterStores;
 
   private final NestedSet<Artifact> transitiveBRFiles;
 
-  /** The label and java package of this rule and any rules that this rule exports. */
+  /**
+   * The label and java package of this rule and any rules that this rule exports.
+   */
+  @Nullable
   private final ImmutableList<LabelJavaPackagePair> labelAndJavaPackages;
 
   private final NestedSet<LabelJavaPackagePair> transitiveLabelAndJavaPackages;
 
   public DataBindingV2Provider(
-      NestedSet<Artifact> classInfos,
-      NestedSet<Artifact> setterStores,
+      ImmutableList<Artifact> classInfos,
+      ImmutableList<Artifact> setterStores,
       NestedSet<Artifact> transitiveBRFiles,
       ImmutableList<LabelJavaPackagePair> labelAndJavaPackages,
       NestedSet<LabelJavaPackagePair> transitiveLabelAndJavaPackages) {
+    super(PROVIDER);
     this.classInfos = classInfos;
     this.setterStores = setterStores;
     this.transitiveBRFiles = transitiveBRFiles;
@@ -61,25 +66,12 @@ public final class DataBindingV2Provider extends NativeInfo
   }
 
   @Override
-  public Provider getProvider() {
-    return PROVIDER;
-  }
-
-  @Override
-  public Depset /*<Artifact>*/ getClassInfosForStarlark() {
-    return Depset.of(Artifact.TYPE, classInfos);
-  }
-
-  public NestedSet<Artifact> getClassInfos() {
+  public ImmutableList<Artifact> getClassInfos() {
     return classInfos;
   }
 
   @Override
-  public Depset /*<Artifact>*/ getSetterStoresForStarlark() {
-    return Depset.of(Artifact.TYPE, setterStores);
-  }
-
-  public NestedSet<Artifact> getSetterStores() {
+  public ImmutableList<Artifact> getSetterStores() {
     return setterStores;
   }
 
@@ -93,6 +85,7 @@ public final class DataBindingV2Provider extends NativeInfo
   }
 
   @Override
+  @Nullable
   public ImmutableList<LabelJavaPackagePair> getLabelAndJavaPackages() {
     return labelAndJavaPackages;
   }
@@ -116,12 +109,12 @@ public final class DataBindingV2Provider extends NativeInfo
       Iterable<? extends DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInDeps,
       Iterable<? extends DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInExports) {
 
-    NestedSetBuilder<Artifact> setterStoreFiles = NestedSetBuilder.stableOrder();
+    ImmutableList.Builder<Artifact> setterStoreFiles = ImmutableList.builder();
     if (setterStoreFile != null) {
       setterStoreFiles.add(setterStoreFile);
     }
 
-    NestedSetBuilder<Artifact> classInfoFiles = NestedSetBuilder.stableOrder();
+    ImmutableList.Builder<Artifact> classInfoFiles = ImmutableList.builder();
     if (classInfoFile != null) {
       classInfoFiles.add(classInfoFile);
     }
@@ -156,8 +149,8 @@ public final class DataBindingV2Provider extends NativeInfo
       // depend on this target appear to depend on the exported targets.
       for (DataBindingV2ProviderApi<Artifact> p : databindingV2ProvidersInExports) {
         DataBindingV2Provider provider = (DataBindingV2Provider) p;
-        setterStoreFiles.addTransitive(provider.getSetterStores());
-        classInfoFiles.addTransitive(provider.getClassInfos());
+        setterStoreFiles.addAll(provider.getSetterStores());
+        classInfoFiles.addAll(provider.getClassInfos());
         brFiles.addTransitive(provider.getTransitiveBRFiles());
         labelAndJavaPackages.addAll(provider.getLabelAndJavaPackages());
         transitiveLabelAndJavaPackages.addTransitive(provider.getTransitiveLabelAndJavaPackages());
@@ -200,17 +193,13 @@ public final class DataBindingV2Provider extends NativeInfo
           databindingV2ProvidersInDeps == null
               ? null
               : ImmutableList.copyOf(
-                  Sequence.cast(
-                      databindingV2ProvidersInDeps,
-                      DataBindingV2Provider.class,
-                      "databinding_v2_providers_in_deps")),
+                  databindingV2ProvidersInDeps.getContents(
+                      DataBindingV2Provider.class, "databinding_v2_providers_in_deps")),
           databindingV2ProvidersInExports == null
               ? null
               : ImmutableList.copyOf(
-                  Sequence.cast(
-                      databindingV2ProvidersInExports,
-                      DataBindingV2Provider.class,
-                      "databinding_v2_providers_in_exports")));
+                  databindingV2ProvidersInExports.getContents(
+                      DataBindingV2Provider.class, "databinding_v2_providers_in_exports")));
     }
   }
 }

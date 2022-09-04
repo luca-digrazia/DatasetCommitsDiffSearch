@@ -24,11 +24,12 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Value;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,7 +62,8 @@ public final class DebuggerSerializationTest {
   @Test
   public void testSimpleNestedSet() {
     Set<String> children = ImmutableSet.of("a", "b");
-    Depset set = Depset.of(Object.class, NestedSetBuilder.stableOrder().addAll(children).build());
+    Depset set =
+        Depset.of(SkylarkType.STRING, NestedSetBuilder.stableOrder().addAll(children).build());
 
     Value value = getValueProto("name", set);
 
@@ -90,7 +92,7 @@ public final class DebuggerSerializationTest {
     ImmutableSet<String> directChildren = ImmutableSet.of("a", "b");
     Depset outerSet =
         Depset.of(
-            String.class,
+            SkylarkType.STRING,
             NestedSetBuilder.<String>linkOrder()
                 .addAll(directChildren)
                 .addTransitive(innerNestedSet)
@@ -207,7 +209,7 @@ public final class DebuggerSerializationTest {
   }
 
   @Test
-  public void testSkylarkValue() {
+  public void testStarlarkValue() {
     DummyType dummy = new DummyType();
 
     Value value = getValueProto("name", dummy);
@@ -215,9 +217,9 @@ public final class DebuggerSerializationTest {
     assertThat(getChildren(value)).containsExactly(getValueProto("bool", true));
   }
 
-  private static class DummyType implements SkylarkValue {
+  private static class DummyType implements StarlarkValue {
     @Override
-    public void repr(SkylarkPrinter printer) {
+    public void repr(Printer printer) {
       printer.append("DummyType");
     }
 
@@ -240,9 +242,9 @@ public final class DebuggerSerializationTest {
     assertThat(getChildren(value)).containsExactly(getValueProto("bool", true));
   }
 
-  private static class DummyTypeWithException implements SkylarkValue {
+  private static class DummyTypeWithException implements StarlarkValue {
     @Override
-    public void repr(SkylarkPrinter printer) {
+    public void repr(Printer printer) {
       printer.append("DummyTypeWithException");
     }
 
@@ -263,7 +265,7 @@ public final class DebuggerSerializationTest {
 
   private static void assertTypeAndDescription(Object object, Value value) {
     assertThat(value.getType()).isEqualTo(EvalUtils.getDataTypeName(object));
-    assertThat(value.getDescription()).isEqualTo(Printer.repr(object));
+    assertThat(value.getDescription()).isEqualTo(Starlark.repr(object));
   }
 
   /**

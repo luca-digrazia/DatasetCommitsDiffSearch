@@ -13,9 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.rules.android.AndroidStarlarkData.fromNoneable;
+import static com.google.devtools.build.lib.rules.android.AndroidSkylarkData.fromNoneable;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -156,7 +157,7 @@ public final class AndroidAssetsInfo extends NativeInfo
 
   private Optional<ParsedAndroidAssets> getLocalParsedAndroidAssets() {
     return hasLocalAssets && getDirectParsedAssets().isSingleton()
-        ? Optional.of(getDirectParsedAssets().getSingleton())
+        ? Optional.of(Iterables.getOnlyElement(getDirectParsedAssets()))
         : Optional.empty();
   }
 
@@ -200,7 +201,7 @@ public final class AndroidAssetsInfo extends NativeInfo
     private static <T> NestedSet<T> nestedSet(Depset from, Class<T> with, String fieldName)
         throws EvalException {
       return NestedSetBuilder.<T>naiveLinkOrder()
-          .addTransitive(Depset.cast(from, with, fieldName))
+          .addTransitive(from.getSetFromParam(with, fieldName))
           .build();
     }
   }

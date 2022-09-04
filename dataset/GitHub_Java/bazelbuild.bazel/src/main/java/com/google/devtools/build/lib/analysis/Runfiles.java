@@ -348,7 +348,7 @@ public final class Runfiles implements RunfilesApi {
   public NestedSet<Artifact> getArtifacts() {
     NestedSetBuilder<Artifact> allArtifacts = NestedSetBuilder.stableOrder();
     allArtifacts.addTransitive(unconditionalArtifacts);
-    for (PruningManifest manifest : getPruningManifests().toList()) {
+    for (PruningManifest manifest : getPruningManifests()) {
       allArtifacts.addTransitive(manifest.getCandidateRunfiles());
     }
     return allArtifacts.build();
@@ -372,8 +372,8 @@ public final class Runfiles implements RunfilesApi {
   public NestedSet<String> getEmptyFilenames() {
     Set<PathFragment> manifestKeys =
         Streams.concat(
-                symlinks.toList().stream().map(SymlinkEntry::getPath),
-                getArtifacts().toList().stream().map(Artifact::getRootRelativePath))
+                Streams.stream(symlinks).map(SymlinkEntry::getPath),
+                Streams.stream(getArtifacts()).map(Artifact::getRootRelativePath))
             .collect(ImmutableSet.toImmutableSet());
     Iterable<PathFragment> emptyKeys = emptyFilesSupplier.getExtraPaths(manifestKeys);
     return NestedSetBuilder.<String>stableOrder()
@@ -461,15 +461,15 @@ public final class Runfiles implements RunfilesApi {
     ConflictChecker checker = new ConflictChecker(conflictPolicy, eventHandler, location);
     Map<PathFragment, Artifact> manifest = getSymlinksAsMap(checker);
     // Add unconditional artifacts (committed to inclusion on construction of runfiles).
-    for (Artifact artifact : getUnconditionalArtifacts().toList()) {
+    for (Artifact artifact : getUnconditionalArtifacts()) {
       checker.put(manifest, artifact.getRootRelativePath(), artifact);
     }
 
     // Add conditional artifacts (only included if they appear in a pruning manifest).
-    for (Runfiles.PruningManifest pruningManifest : getPruningManifests().toList()) {
+    for (Runfiles.PruningManifest pruningManifest : getPruningManifests()) {
       // This map helps us convert from source tree root-relative paths back to artifacts.
       Map<String, Artifact> allowedRunfiles = new HashMap<>();
-      for (Artifact artifact : pruningManifest.getCandidateRunfiles().toList()) {
+      for (Artifact artifact : pruningManifest.getCandidateRunfiles()) {
         allowedRunfiles.put(artifact.getRootRelativePath().getPathString(), artifact);
       }
       try (BufferedReader reader = new BufferedReader(
@@ -617,7 +617,7 @@ public final class Runfiles implements RunfilesApi {
     // If multiple artifacts have the same root-relative path, the last one in the list will win.
     // That is because the runfiles tree cannot contain the same artifact for different
     // configurations, because it only uses root-relative paths.
-    for (Artifact artifact : unconditionalArtifacts.toList()) {
+    for (Artifact artifact : unconditionalArtifacts) {
       result.put(artifact.getRootRelativePath(), artifact);
     }
     return result;
@@ -649,9 +649,9 @@ public final class Runfiles implements RunfilesApi {
     NestedSetBuilder<Artifact> allArtifacts = NestedSetBuilder.stableOrder();
     allArtifacts
         .addTransitive(unconditionalArtifacts)
-        .addAll(Iterables.transform(symlinks.toList(), TO_ARTIFACT))
-        .addAll(Iterables.transform(rootSymlinks.toList(), TO_ARTIFACT));
-    for (PruningManifest manifest : getPruningManifests().toList()) {
+        .addAll(Iterables.transform(symlinks, TO_ARTIFACT))
+        .addAll(Iterables.transform(rootSymlinks, TO_ARTIFACT));
+    for (PruningManifest manifest : getPruningManifests()) {
       allArtifacts.addTransitive(manifest.getCandidateRunfiles());
     }
     return allArtifacts.build();
@@ -673,14 +673,14 @@ public final class Runfiles implements RunfilesApi {
    *
    * @param entrySet Sequence of entries to add.
    * @param checker If not null, check for conflicts with this checker, otherwise silently allow
-   *     entries to overwrite previous entries.
+   *    entries to overwrite previous entries.
    * @return Map<PathFragment, Artifact> Map of runfile entries.
    */
   private static Map<PathFragment, Artifact> entriesToMap(
-      NestedSet<SymlinkEntry> entrySet, @Nullable ConflictChecker checker) {
+      Iterable<SymlinkEntry> entrySet, @Nullable ConflictChecker checker) {
     checker = (checker != null) ? checker : ConflictChecker.IGNORE_CHECKER;
     Map<PathFragment, Artifact> map = new LinkedHashMap<>();
-    for (SymlinkEntry entry : entrySet.toList()) {
+    for (SymlinkEntry entry : entrySet) {
       checker.put(map, entry.getPath(), entry.getArtifact());
     }
     return map;
@@ -873,7 +873,8 @@ public final class Runfiles implements RunfilesApi {
     public Builder addArtifacts(NestedSet<Artifact> artifacts) {
       // Do not delete this method, or else addArtifacts(Iterable) calls with a NestedSet argument
       // will not be flagged.
-      addArtifacts(artifacts.toList());
+      Iterable<Artifact> it = artifacts;
+      addArtifacts(it);
       return this;
     }
 
@@ -1217,12 +1218,12 @@ public final class Runfiles implements RunfilesApi {
       fp.addPath(rootSymlink.getValue().getExecPath());
     }
 
-    for (Artifact artifact : getArtifacts().toList()) {
+    for (Artifact artifact : getArtifacts()) {
       fp.addPath(artifact.getRootRelativePath());
       fp.addPath(artifact.getExecPath());
     }
 
-    for (String name : getEmptyFilenames().toList()) {
+    for (String name : getEmptyFilenames()) {
       fp.addString(name);
     }
   }

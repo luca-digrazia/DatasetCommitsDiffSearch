@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkList;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Arrays;
 import java.util.Collection;
@@ -205,7 +205,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
     }
 
     @Override
-    public Sequence<LibraryToLink> getSkylarkLibrariesToLink(StarlarkSemantics semantics) {
+    public Sequence<LibraryToLink> getSkylarkLibrariesToLink(StarlarkThread thread) {
       return StarlarkList.immutableCopyOf(getLibraries());
     }
 
@@ -404,9 +404,9 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   }
 
   @Override
-  public Object getSkylarkLibrariesToLink(StarlarkSemantics semantics) {
+  public Object getSkylarkLibrariesToLink(StarlarkThread thread) {
     // TODO(plf): Flag can be removed already.
-    if (semantics.incompatibleDepsetForLibrariesToLinkGetter()) {
+    if (thread.getSemantics().incompatibleDepsetForLibrariesToLinkGetter()) {
       return Depset.of(LibraryToLink.TYPE, getLibraries());
     } else {
       return StarlarkList.immutableCopyOf(getLibraries().toList());

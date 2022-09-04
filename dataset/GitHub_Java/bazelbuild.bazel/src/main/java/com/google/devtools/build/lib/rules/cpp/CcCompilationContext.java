@@ -89,7 +89,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   private final boolean propagateModuleMapAsActionInput;
 
   // Derived from depsContexts.
-  private final NestedSet<Artifact> compilationPrerequisites;
+  private final ImmutableSet<Artifact> compilationPrerequisites;
 
   private final CppConfiguration.HeadersCheckingMode headersCheckingMode;
 
@@ -106,7 +106,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   @VisibleForSerialization
   CcCompilationContext(
       CommandLineCcCompilationContext commandLineCcCompilationContext,
-      NestedSet<Artifact> compilationPrerequisites,
+      ImmutableSet<Artifact> compilationPrerequisites,
       NestedSet<PathFragment> declaredIncludeDirs,
       NestedSet<Artifact> declaredIncludeSrcs,
       NestedSet<Artifact> nonCodeInputs,
@@ -140,7 +140,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
 
   @Override
   public Depset getSkylarkDefines() {
-    return Depset.of(SkylarkType.STRING, getDefines());
+    return Depset.of(SkylarkType.STRING, NestedSetBuilder.wrap(Order.STABLE_ORDER, getDefines()));
   }
 
   @Override
@@ -216,7 +216,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
    * <p>The returned set can be empty if there are no prerequisites. Usually, it contains a single
    * middleman.
    */
-  public NestedSet<Artifact> getTransitiveCompilationPrerequisites() {
+  public ImmutableSet<Artifact> getTransitiveCompilationPrerequisites() {
     return compilationPrerequisites;
   }
 
@@ -472,7 +472,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
    * Returns the set of defines needed to compile this target. This includes definitions from the
    * transitive deps closure for the target. The order of the returned collection is deterministic.
    */
-  public NestedSet<String> getDefines() {
+  public ImmutableList<String> getDefines() {
     return commandLineCcCompilationContext.defines;
   }
 
@@ -556,7 +556,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     private final ImmutableList<PathFragment> quoteIncludeDirs;
     private final ImmutableList<PathFragment> systemIncludeDirs;
     private final ImmutableList<PathFragment> frameworkIncludeDirs;
-    private final NestedSet<String> defines;
+    private final ImmutableList<String> defines;
     private final ImmutableList<String> localDefines;
 
     CommandLineCcCompilationContext(
@@ -564,7 +564,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         ImmutableList<PathFragment> quoteIncludeDirs,
         ImmutableList<PathFragment> systemIncludeDirs,
         ImmutableList<PathFragment> frameworkIncludeDirs,
-        NestedSet<String> defines,
+        ImmutableList<String> defines,
         ImmutableList<String> localDefines) {
       this.includeDirs = includeDirs;
       this.quoteIncludeDirs = quoteIncludeDirs;
@@ -586,8 +586,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
   /** Builder class for {@link CcCompilationContext}. */
   public static class Builder {
     private String purpose;
-    private final NestedSetBuilder<Artifact> compilationPrerequisites =
-        NestedSetBuilder.stableOrder();
+    private final Set<Artifact> compilationPrerequisites = new LinkedHashSet<>();
     private final Set<PathFragment> includeDirs = new LinkedHashSet<>();
     private final Set<PathFragment> quoteIncludeDirs = new LinkedHashSet<>();
     private final Set<PathFragment> systemIncludeDirs = new LinkedHashSet<>();
@@ -603,7 +602,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     private final NestedSetBuilder<Artifact> transitiveModules = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> transitivePicModules = NestedSetBuilder.stableOrder();
     private final Set<Artifact> directModuleMaps = new LinkedHashSet<>();
-    private final NestedSetBuilder<String> defines = NestedSetBuilder.linkOrder();
+    private final Set<String> defines = new LinkedHashSet<>();
     private final Set<String> localDefines = new LinkedHashSet<>();
     private CppModuleMap cppModuleMap;
     private CppModuleMap verificationModuleMap;
@@ -654,7 +653,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     public Builder mergeDependentCcCompilationContext(
         CcCompilationContext otherCcCompilationContext) {
       Preconditions.checkNotNull(otherCcCompilationContext);
-      compilationPrerequisites.addTransitive(
+      compilationPrerequisites.addAll(
           otherCcCompilationContext.getTransitiveCompilationPrerequisites());
       includeDirs.addAll(otherCcCompilationContext.getIncludeDirs());
       quoteIncludeDirs.addAll(otherCcCompilationContext.getQuoteIncludeDirs());
@@ -680,7 +679,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         directModuleMaps.add(otherCcCompilationContext.getCppModuleMap().getArtifact());
       }
 
-      defines.addTransitive(otherCcCompilationContext.getDefines());
+      defines.addAll(otherCcCompilationContext.getDefines());
       virtualToOriginalHeaders.addTransitive(
           otherCcCompilationContext.getVirtualToOriginalHeaders());
       return this;
@@ -798,15 +797,19 @@ public final class CcCompilationContext implements CcCompilationContextApi {
       return this;
     }
 
-    /** Adds a single define. */
+    /**
+     * Adds a single define.
+     */
     public Builder addDefine(String define) {
       defines.add(define);
       return this;
     }
 
-    /** Adds multiple defines. */
-    public Builder addDefines(NestedSet<String> defines) {
-      this.defines.addTransitive(defines);
+    /**
+     * Adds multiple defines.
+     */
+    public Builder addDefines(Iterable<String> defines) {
+      Iterables.addAll(this.defines, defines);
       return this;
     }
 
@@ -889,14 +892,14 @@ public final class CcCompilationContext implements CcCompilationContextApi {
               ImmutableList.copyOf(quoteIncludeDirs),
               ImmutableList.copyOf(systemIncludeDirs),
               ImmutableList.copyOf(frameworkIncludeDirs),
-              defines.build(),
+              ImmutableList.copyOf(defines),
               ImmutableList.copyOf(localDefines)),
           // TODO(b/110873917): We don't have the middle man compilation prerequisite, therefore, we
           // use the compilation prerequisites as they were passed to the builder, i.e. we use every
           // header instead of a middle man.
           prerequisiteStampFile == null
-              ? compilationPrerequisites.build()
-              : NestedSetBuilder.create(Order.STABLE_ORDER, prerequisiteStampFile),
+              ? ImmutableSet.copyOf(compilationPrerequisites)
+              : ImmutableSet.of(prerequisiteStampFile),
           declaredIncludeDirs.build(),
           declaredIncludeSrcs.build(),
           nonCodeInputs.build(),
@@ -945,7 +948,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
           owner,
           name,
           purpose,
-          compilationPrerequisites.build(),
+          ImmutableList.copyOf(compilationPrerequisites),
           configuration.getMiddlemanDirectory(label.getPackageIdentifier().getRepository()));
     }
   }
