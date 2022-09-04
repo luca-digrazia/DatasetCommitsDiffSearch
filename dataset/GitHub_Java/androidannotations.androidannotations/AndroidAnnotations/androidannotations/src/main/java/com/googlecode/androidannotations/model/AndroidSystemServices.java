@@ -1,13 +1,13 @@
-/**
- * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
- *
+/*
+ * Copyright 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
+ * 
+ * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations under
@@ -44,7 +44,6 @@ public class AndroidSystemServices {
         registeredServices.put("android.app.UiModeManager", "android.content.Context.UI_MODE_SERVICE");
         registeredServices.put("android.app.DownloadManager", "android.content.Context.DOWNLOAD_SERVICE");
         registeredServices.put("android.hardware.SensorManager", "android.content.Context.SENSOR_SERVICE");
-        registeredServices.put("android.text.ClipboardManager", "android.content.Context.CLIPBOARD_SERVICE");        
     }
 
     public boolean contains(TypeMirror serviceType) {
