@@ -10,7 +10,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.MessageBodyWriter;
 
-import io.quarkus.rest.runtime.core.EncodedMediaType;
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
 import io.quarkus.rest.runtime.core.Serialisers;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
@@ -29,7 +28,7 @@ public class DynamicEntityWriter implements EntityWriter {
 
     @Override
     public void write(QuarkusRestRequestContext context, Object entity) throws IOException {
-        EncodedMediaType producesMediaType = context.getResponseContentType();
+        MediaType producesMediaType = context.getProducesMediaType();
         MessageBodyWriter<?>[] writers = null;
         if (producesMediaType == null) {
             MediaType selectedMediaType = null;
@@ -72,13 +71,13 @@ public class DynamicEntityWriter implements EntityWriter {
                     context.getContext().response().end();
                     return;
                 } else {
-                    context.setResponseContentType(selectedMediaType);
+                    context.setProducesMediaType(selectedMediaType);
                     // this will be used as the fallback if Response does NOT contain a type
                     context.getContext().response().headers().add(HttpHeaders.CONTENT_TYPE, selectedMediaType.toString());
                 }
             }
         } else {
-            writers = serialisers.findWriters(null, entity.getClass(), producesMediaType.getMediaType(), RuntimeType.SERVER)
+            writers = serialisers.findWriters(null, entity.getClass(), producesMediaType, RuntimeType.SERVER)
                     .toArray(Serialisers.NO_WRITER);
         }
         for (MessageBodyWriter<?> w : writers) {

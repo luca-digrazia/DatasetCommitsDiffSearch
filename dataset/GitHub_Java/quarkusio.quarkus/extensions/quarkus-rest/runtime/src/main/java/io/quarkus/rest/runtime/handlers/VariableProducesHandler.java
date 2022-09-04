@@ -57,7 +57,7 @@ public class VariableProducesHandler implements RestHandler {
                     .notAcceptable(Variant.mediaTypes(mediaTypeList.getSortedMediaTypes()).build())
                     .build());
         }
-        requestContext.setResponseContentType(res);
+        requestContext.setProducesMediaType(res);
         requestContext.setEntityWriter(new FixedEntityWriterArray(writers.toArray(EMPTY), serialisers));
     }
 }
