@@ -495,7 +495,9 @@ public abstract class AbstractServerFactory implements ServerFactory {
         handler.addFilter(ThreadNameFilter.class, "/*", EnumSet.of(DispatcherType.REQUEST));
         serverPush.addFilter(handler);
         if (jerseyContainer != null) {
-            jerseyRootPath.ifPresent(jersey::setUrlPattern);
+            if (jerseyRootPath.isPresent()) {
+                jersey.setUrlPattern(jerseyRootPath.get());
+            }
             jersey.register(new JacksonBinder(objectMapper));
             jersey.register(new HibernateValidationFeature(validator));
             if (registerDefaultExceptionMappers == null || registerDefaultExceptionMappers) {
