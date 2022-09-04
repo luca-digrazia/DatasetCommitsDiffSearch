@@ -255,6 +255,7 @@ public class LocalSpawnRunner implements SpawnRunner {
 
     private void setState(State newState) {
       long now = System.currentTimeMillis();
+      long totalDelta = now - creationTime;
       long stepDelta = now - stateStartTime;
       stateStartTime = now;
 
@@ -262,6 +263,9 @@ public class LocalSpawnRunner implements SpawnRunner {
       long stateTime = (stateTimeBoxed == null) ? 0 : stateTimeBoxed;
       stateTimes.put(currentState, stateTime + stepDelta);
 
+      logger.atInfo().log(
+          "Step #%d time: %.3f delta: %.3f state: %s --> %s",
+          id, totalDelta / 1000f, stepDelta / 1000f, currentState, newState);
       currentState = newState;
     }
 
