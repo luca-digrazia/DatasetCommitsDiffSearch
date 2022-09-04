@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.TestExecException;
-import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
 import com.google.devtools.build.lib.analysis.SingleRunfilesSupplier;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
@@ -158,9 +157,6 @@ public class TestRunnerAction extends AbstractAction
   private final NestedSetBuilder<Artifact> lcovMergerFilesToRun;
   private final RunfilesSupplier lcovMergerRunfilesSupplier;
 
-  // TODO(b/192694287): Remove once we migrate all tests from the allowlist.
-  private final PackageSpecificationProvider networkAllowlist;
-
   private static ImmutableSet<Artifact> nonNullAsSet(Artifact... artifacts) {
     ImmutableSet.Builder<Artifact> builder = ImmutableSet.builder();
     for (Artifact artifact : artifacts) {
@@ -202,8 +198,7 @@ public class TestRunnerAction extends AbstractAction
       Iterable<Artifact> tools,
       boolean splitCoveragePostProcessing,
       NestedSetBuilder<Artifact> lcovMergerFilesToRun,
-      RunfilesSupplier lcovMergerRunfilesSupplier,
-      PackageSpecificationProvider networkAllowlist) {
+      RunfilesSupplier lcovMergerRunfilesSupplier) {
     super(
         owner,
         NestedSetBuilder.wrap(Order.STABLE_ORDER, tools),
@@ -261,7 +256,6 @@ public class TestRunnerAction extends AbstractAction
     this.splitCoveragePostProcessing = splitCoveragePostProcessing;
     this.lcovMergerFilesToRun = lcovMergerFilesToRun;
     this.lcovMergerRunfilesSupplier = lcovMergerRunfilesSupplier;
-    this.networkAllowlist = networkAllowlist;
 
     // Mark all possible test outputs for deletion before test execution.
     // TestRunnerAction potentially can create many more non-declared outputs - xml output, coverage
@@ -582,15 +576,6 @@ public class TestRunnerAction extends AbstractAction
     if (executionSettings.getTotalRuns() > 1 && !env.containsKey("TEST_RANDOM_SEED")) {
       env.put("TEST_RANDOM_SEED", Integer.toString(getRunNumber() + 1));
     }
-    // TODO(b/184206260): Actually set TEST_RANDOM_SEED with random seed.
-    // The above TEST_RANDOM_SEED has histroically been set with the run number, but we should
-    // explicitly set TEST_RUN_NUMBER to indicate the run number and actually set TEST_RANDOM_SEED
-    // with a random seed. However, much code has come to depend on it being set to the run number
-    // and this is an externally documented behavior. Modifying TEST_RANDOM_SEED should be done
-    // carefully.
-    if (executionSettings.getTotalRuns() > 1 && !env.containsKey("TEST_RUN_NUMBER")) {
-      env.put("TEST_RUN_NUMBER", Integer.toString(getRunNumber() + 1));
-    }
 
     String testFilter = getExecutionSettings().getTestFilter();
     if (testFilter != null) {
@@ -828,10 +813,6 @@ public class TestRunnerAction extends AbstractAction
   @Override
   public Artifact getPrimaryOutput() {
     return testLog;
-  }
-
-  public PackageSpecificationProvider getNetworkAllowlist() {
-    return networkAllowlist;
   }
 
   @Override
