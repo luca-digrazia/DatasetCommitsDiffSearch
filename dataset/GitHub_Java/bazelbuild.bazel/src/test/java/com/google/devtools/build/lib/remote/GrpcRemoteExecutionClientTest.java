@@ -108,16 +108,6 @@ public class GrpcRemoteExecutionClientTest {
   private final SpawnExecutionPolicy simplePolicy =
       new SpawnExecutionPolicy() {
         @Override
-        public int getId() {
-          return 0;
-        }
-
-        @Override
-        public void prefetchInputs(Iterable<ActionInput> inputs) {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public void lockOutputFiles() throws InterruptedException {
           throw new UnsupportedOperationException();
         }
@@ -149,7 +139,7 @@ public class GrpcRemoteExecutionClientTest {
         }
 
         @Override
-        public void report(ProgressStatus state, String name) {
+        public void report(ProgressStatus state) {
           // TODO(ulfjack): Test that the right calls are made.
         }
       };
