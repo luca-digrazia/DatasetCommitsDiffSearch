@@ -3,7 +3,6 @@ package io.quarkus.it.kubernetes.client;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import io.fabric8.kubernetes.api.model.Pod;
@@ -12,6 +11,7 @@ import io.fabric8.kubernetes.api.model.PodListBuilder;
 import io.fabric8.kubernetes.client.server.mock.KubernetesMockServer;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.kubernetes.client.KubernetesMockServerTestResource;
 import io.quarkus.test.kubernetes.client.MockServer;
 import io.restassured.RestAssured;
 
@@ -19,7 +19,7 @@ import io.restassured.RestAssured;
  * KubernetesClientTest.TestResource contains the entire process of setting up the Mock Kubernetes API Server
  * It has to live there otherwise the Kubernetes client in native mode won't be able to locate the mock API Server
  */
-@QuarkusTestResource(CustomKubernetesMockServerTestResource.class)
+@QuarkusTestResource(KubernetesMockServerTestResource.class)
 @QuarkusTest
 public class KubernetesClientTest {
 
@@ -56,7 +56,6 @@ public class KubernetesClientTest {
     }
 
     @Test
-    @Disabled("https://github.com/quarkusio/quarkus/issues/11783")
     public void testInteractionWithAPIServer() {
         RestAssured.when().get("/pod/test").then()
                 .body("size()", is(2)).body(containsString("pod1"), containsString("pod2"));
