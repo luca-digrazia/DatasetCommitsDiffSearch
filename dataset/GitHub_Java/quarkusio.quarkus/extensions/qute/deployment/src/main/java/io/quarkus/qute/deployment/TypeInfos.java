@@ -4,15 +4,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.ParameterizedType;
-import org.jboss.jandex.PrimitiveType;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 
@@ -22,8 +18,6 @@ import io.quarkus.qute.TemplateException;
 import io.quarkus.qute.TemplateNode.Origin;
 
 final class TypeInfos {
-
-    private static final String ARRAY_DIM = "[]";
 
     static List<Info> create(Expression expression, IndexView index, Function<String, String> templateIdToPathFun) {
         if (expression.isLiteral()) {
@@ -59,24 +53,16 @@ final class TypeInfos {
             if (classStr.equals(Expressions.TYPECHECK_NAMESPACE_PLACEHOLDER)) {
                 return new Info(typeInfo, part);
             } else {
-                // TODO make the parsing logic more robust 
-                ClassInfo rawClass;
-                Type resolvedType;
-                int idx = classStr.indexOf(ARRAY_DIM);
-                if (idx > 0) {
-                    // int[], java.lang.String[][], etc.
-                    String componentTypeStr = classStr.substring(0, idx);
-                    Type componentType = decodePrimitive(componentTypeStr);
-                    if (componentType == null) {
-                        componentType = resolveType(componentTypeStr);
-                    }
-                    String[] dimensions = classStr.substring(idx, classStr.length()).split("\\]");
-                    rawClass = null;
-                    resolvedType = ArrayType.create(componentType, dimensions.length);
-                } else {
-                    rawClass = getClassInfo(classStr, index, templateIdToPathFun, expressionOrigin);
-                    resolvedType = resolveType(classStr);
+                DotName rawClassName = rawClassName(classStr);
+                ClassInfo rawClass = index.getClassByName(rawClassName);
+                if (rawClass == null) {
+                    throw new TemplateException(
+                            "Class [" + rawClassName + "] used in the parameter declaration in template ["
+                                    + templateIdToPathFun.apply(expressionOrigin.getTemplateGeneratedId()) + "] on line "
+                                    + expressionOrigin.getLine()
+                                    + " was not found in the application index. Make sure it is spelled correctly.");
                 }
+                Type resolvedType = resolveType(classStr);
                 return new TypeInfo(typeInfo, part, helperHint(typeInfo.substring(endIdx, typeInfo.length())), resolvedType,
                         rawClass);
             }
@@ -89,43 +75,6 @@ final class TypeInfos {
                 return new VirtualMethodInfo(typeInfo, part.asVirtualMethod());
             }
             return new PropertyInfo(typeInfo, part, hint);
-        }
-    }
-
-    private static ClassInfo getClassInfo(String val, IndexView index, Function<String, String> templateIdToPathFun,
-            Origin expressionOrigin) {
-        DotName rawClassName = rawClassName(val);
-        ClassInfo clazz = index.getClassByName(rawClassName);
-        if (clazz == null) {
-            throw new TemplateException(
-                    "Class [" + rawClassName + "] used in the parameter declaration in template ["
-                            + templateIdToPathFun.apply(expressionOrigin.getTemplateGeneratedId()) + "] on line "
-                            + expressionOrigin.getLine()
-                            + " was not found in the application index. Make sure it is spelled correctly.");
-        }
-        return clazz;
-    }
-
-    private static PrimitiveType decodePrimitive(String val) {
-        switch (val) {
-            case "byte":
-                return PrimitiveType.BYTE;
-            case "char":
-                return PrimitiveType.CHAR;
-            case "double":
-                return PrimitiveType.DOUBLE;
-            case "float":
-                return PrimitiveType.FLOAT;
-            case "int":
-                return PrimitiveType.INT;
-            case "long":
-                return PrimitiveType.LONG;
-            case "short":
-                return PrimitiveType.SHORT;
-            case "boolean":
-                return PrimitiveType.BOOLEAN;
-            default:
-                return null;
         }
     }
 
@@ -212,27 +161,11 @@ final class TypeInfos {
 
     static abstract class HintInfo extends Info {
 
-        static final Pattern HINT_PATTERN = Pattern.compile("\\<[a-zA-Z_0-9#-]+\\>");
+        final String hint;
 
-        // <loop#1>, <set#10><loop-element>, etc.
-        final List<String> hints;
-
-        HintInfo(String value, Expression.Part part, String hintStr) {
+        public HintInfo(String value, Expression.Part part, String hint) {
             super(value, part);
-            if (hintStr != null) {
-                List<String> found = new ArrayList<>();
-                Matcher m = HINT_PATTERN.matcher(hintStr);
-                while (m.find()) {
-                    found.add(m.group());
-                }
-                this.hints = found;
-            } else {
-                this.hints = Collections.emptyList();
-            }
-        }
-
-        boolean hasHints() {
-            return !hints.isEmpty();
+            this.hint = hint;
         }
 
     }
@@ -242,7 +175,7 @@ final class TypeInfos {
         final Type resolvedType;
         final ClassInfo rawClass;
 
-        TypeInfo(String value, Expression.Part part, String hint, Type resolvedType, ClassInfo rawClass) {
+        public TypeInfo(String value, Expression.Part part, String hint, Type resolvedType, ClassInfo rawClass) {
             super(value, part, hint);
             this.resolvedType = resolvedType;
             this.rawClass = rawClass;
@@ -264,7 +197,7 @@ final class TypeInfos {
 
         final String name;
 
-        PropertyInfo(String name, Expression.Part part, String hint) {
+        public PropertyInfo(String name, Expression.Part part, String hint) {
             super(name, part, hint);
             this.name = name;
         }
@@ -285,7 +218,7 @@ final class TypeInfos {
 
         final String name;
 
-        VirtualMethodInfo(String value, Expression.VirtualMethodPart part) {
+        public VirtualMethodInfo(String value, Expression.VirtualMethodPart part) {
             super(value, part);
             this.name = part.getName();
         }
