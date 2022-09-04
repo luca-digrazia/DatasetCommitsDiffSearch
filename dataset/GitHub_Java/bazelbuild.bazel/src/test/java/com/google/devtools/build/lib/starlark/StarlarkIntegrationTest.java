@@ -341,7 +341,8 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
             OutputGroupInfo.HIDDEN_TOP_LEVEL,
             OutputGroupInfo.COMPILATION_PREREQUISITES,
             OutputGroupInfo.FILES_TO_COMPILE,
-            OutputGroupInfo.TEMP_FILES);
+            OutputGroupInfo.TEMP_FILES,
+            OutputGroupInfo.VALIDATION);
   }
 
   @Test
@@ -403,49 +404,40 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   @Test
   public void testStackTraceErrorInFunction() throws Exception {
     runStackTraceTest(
-        "  str.index(1)",
-        // The error occurs in a built-in, so the backtrace omits the
-        // final frame and instead prints "Error in index:".
-        "Error in index: in call to index(), parameter 'sub' got value of type 'int', want"
-            + " 'string'");
+        "str",
+        "\t\tstr.index(1)"
+            + System.lineSeparator()
+            + "in call to index(), parameter 'sub' got value of type 'int', want 'string'");
   }
 
   @Test
   public void testStackTraceMissingMethod() throws Exception {
-    // The error occurs in a Starlark operator, so the backtrace includes
-    // the final frame, with a source location. We report "Error: ...".
     runStackTraceTest(
-        "  (None   ).index(1)", "Error: 'NoneType' value has no field or method 'index'");
+        "None",
+        "\t\tNone.index"
+            + System.lineSeparator()
+            + "'NoneType' value has no field or method 'index'");
   }
 
-  // Precondition: 'expr' must have a 2-space indent and an error at column 12. Ugh.
-  // TODO(adonovan): rewrite this and similar tests as assertions over the error data
-  // structure, not its formatting.
-  protected void runStackTraceTest(String expr, String errorMessage) throws Exception {
+  protected void runStackTraceTest(String object, String errorMessage) throws Exception {
     reporter.removeHandler(failFastHandler);
-    // The stack doesn't include source lines because we haven't told the relevant
-    // call to EvalException.getMessageWithStack how to read from scratch.
     String expectedTrace =
-        Joiner.on("\n")
+        Joiner.on(System.lineSeparator())
             .join(
                 "Traceback (most recent call last):",
-                // outermost frame is fake:
-                "\tFile \"/workspace/test/starlark/BUILD\", line 3, column 12, in custom_rule(name"
-                    + " = 'cr')",
-                // "\t\tcustom_rule(name = 'cr')",
-                "\tFile \"/workspace/test/starlark/extension.bzl\", line 6, column 6, in"
-                    + " custom_rule_impl",
-                // "\t\tfoo()",
-                "\tFile \"/workspace/test/starlark/extension.bzl\", line 9, column 6, in foo",
-                // "\t\tbar(2, 4)",
-                "\tFile \"/workspace/test/starlark/extension.bzl\", line 11, column 8, in bar",
-                // "\t\tfirst(x, y, z)",
-                "\tFile \"/workspace/test/starlark/functions.bzl\", line 2, column 9, in first",
-                // "\t\tsecond(a, b)",
-                "\tFile \"/workspace/test/starlark/functions.bzl\", line 5, column 8, in second",
-                // "\t\tthird(\"legal\")",
-                "\tFile \"/workspace/test/starlark/functions.bzl\", line 7, column 12, in third",
-                // ...
+                "\tFile \"/workspace/test/starlark/BUILD\", line 3",
+                "\t\tcustom_rule(name = 'cr')",
+                "\tFile \"/workspace/test/starlark/extension.bzl\", line 6, in custom_rule_impl",
+                "\t\tfoo()",
+                "\tFile \"/workspace/test/starlark/extension.bzl\", line 9, in foo",
+                "\t\tbar(2, 4)",
+                "\tFile \"/workspace/test/starlark/extension.bzl\", line 11, in bar",
+                "\t\tfirst(x, y, z)",
+                "\tFile \"/workspace/test/starlark/functions.bzl\", line 2, in first",
+                "\t\tsecond(a, b)",
+                "\tFile \"/workspace/test/starlark/functions.bzl\", line 5, in second",
+                "\t\tthird(\"legal\")",
+                "\tFile \"/workspace/test/starlark/functions.bzl\", line 7, in third",
                 errorMessage);
     scratch.file(
         "test/starlark/extension.bzl",
@@ -470,7 +462,7 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "def second(a, b):",
         "  third('legal')",
         "def third(str):",
-        expr); // 2-space indent, error at column 12
+        "  " + object + ".index(1)");
     scratch.file(
         "test/starlark/BUILD",
         "load('//test/starlark:extension.bzl', 'custom_rule')",
@@ -1858,9 +1850,10 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "   return [PInfo(outputs = ctx.outputs), DefaultInfo(executable = o)]",
         "my_rule = rule(_impl, executable = True)",
         "def _dep_impl(ctx):",
-        "   o = ctx.attr.dep[PInfo].outputs.executable", // this is line 8
+        "   o = ctx.attr.dep[PInfo].outputs.executable",
         "   pass",
-        "my_dep_rule = rule(_dep_impl, attrs = { 'dep' : attr.label() })");
+        "my_dep_rule = rule(_dep_impl, attrs = { 'dep' : attr.label() })"
+    );
 
     scratch.file(
         "test/BUILD",
@@ -1872,7 +1865,8 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:yyy");
     assertContainsEvent("ERROR /workspace/test/BUILD:3:12: in my_dep_rule rule //test:yyy: ");
-    assertContainsEvent("File \"/workspace/test/rule.bzl\", line 8, column 35, in _dep_impl");
+    assertContainsEvent("File \"/workspace/test/rule.bzl\", line 8, in _dep_impl");
+    assertContainsEvent("ctx.attr.dep[PInfo].outputs.executable");
     assertContainsEvent("cannot access outputs of rule '//test:xxx' outside "
         + "of its own rule implementation function");
   }
