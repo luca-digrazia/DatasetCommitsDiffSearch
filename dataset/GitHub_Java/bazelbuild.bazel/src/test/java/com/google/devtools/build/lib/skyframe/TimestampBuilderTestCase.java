@@ -175,7 +175,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
         new BlazeDirectories(
             new ServerDirectories(rootDirectory, outputBase, outputBase),
             rootDirectory,
-            /* defaultSystemJavabase= */ null,
             TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper = ExternalFilesHelper.createForTesting(
         pkgLocator,
@@ -186,11 +185,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     ActionExecutionStatusReporter statusReporter =
         ActionExecutionStatusReporter.create(new StoredEventHandler());
     final SkyframeActionExecutor skyframeActionExecutor =
-        new SkyframeActionExecutor(
-            actionKeyContext,
-            new AtomicReference<>(statusReporter),
-            /*sourceRootSupplier=*/ () -> ImmutableList.of(),
-            /*usesActionFileSystem=*/ () -> false);
+        new SkyframeActionExecutor(actionKeyContext, new AtomicReference<>(statusReporter));
 
     Path actionOutputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/action_out/");
     skyframeActionExecutor.setActionLogBufferPathGenerator(
@@ -264,7 +259,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
           Set<ConfiguredTarget> targetsToSkip,
           Collection<AspectValue> aspects,
           Executor executor,
-          Set<ConfiguredTargetKey> builtTargets,
+          Set<ConfiguredTarget> builtTargets,
           Set<AspectKey> builtAspects,
           boolean explain,
           Range<Long> lastExecutionTimeRange,
@@ -407,7 +402,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
     tsgm.setCommandStartTime();
     Set<Artifact> artifactsToBuild = Sets.newHashSet(artifacts);
-    Set<ConfiguredTargetKey> builtTargets = new HashSet<>();
+    Set<ConfiguredTarget> builtTargets = new HashSet<>();
     Set<AspectKey> builtAspects = new HashSet<>();
     try {
       builder.buildArtifacts(

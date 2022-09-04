@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.Builder;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -104,7 +103,7 @@ public class SkyframeBuilder implements Builder {
       Set<ConfiguredTarget> targetsToSkip,
       Collection<AspectValue> aspects,
       Executor executor,
-      Set<ConfiguredTargetKey> builtTargets,
+      Set<ConfiguredTarget> builtTargets,
       Set<AspectKey> builtAspects,
       boolean explain,
       @Nullable Range<Long> lastExecutionTimeRange,

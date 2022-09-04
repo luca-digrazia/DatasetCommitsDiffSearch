@@ -86,7 +86,7 @@ public interface Builder {
       Set<ConfiguredTarget> targetsToSkip,
       Collection<AspectValue> aspects,
       Executor executor,
-      Set<ConfiguredTargetKey> builtTargets,
+      Set<ConfiguredTarget> builtTargets,
       Set<AspectKey> builtAspects,
       boolean explain,
       @Nullable Range<Long> lastExecutionTimeRange,
