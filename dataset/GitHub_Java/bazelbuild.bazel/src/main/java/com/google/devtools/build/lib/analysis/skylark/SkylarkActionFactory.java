@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Su
 import com.google.devtools.build.lib.analysis.skylark.SkylarkCustomCommandLine.ScalarArg;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -1102,9 +1103,12 @@ public class SkylarkActionFactory implements SkylarkValue {
       this.parameterFileType = parameterFileType;
     }
 
-    private Args(@Nullable Mutability mutability, SkylarkSemantics skylarkSemantics) {
+    private Args(
+        @Nullable Mutability mutability,
+        SkylarkSemantics skylarkSemantics,
+        EventHandler eventHandler) {
       this.mutability = mutability != null ? mutability : Mutability.IMMUTABLE;
-      this.commandLine = new SkylarkCustomCommandLine.Builder(skylarkSemantics);
+      this.commandLine = new SkylarkCustomCommandLine.Builder(skylarkSemantics, eventHandler);
     }
 
     public SkylarkCustomCommandLine build() {
@@ -1128,7 +1132,9 @@ public class SkylarkActionFactory implements SkylarkValue {
     useEnvironment = true
   )
   public Args args(Environment env) {
-    return new Args(env.mutability(), env.getSemantics());
+    return new Args(env.mutability(),
+        env.getSemantics(),
+        ruleContext.getAnalysisEnvironment().getEventHandler());
   }
 
   @Override
