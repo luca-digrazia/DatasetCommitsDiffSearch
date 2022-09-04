@@ -2607,7 +2607,7 @@ public class MemoizingEvaluatorTest {
     assertThat(numInconsistencyCalls.get()).isEqualTo(1);
   }
 
-  protected void deleteKeyFromGraph(SkyKey key) throws Exception {
+  protected void deleteKeyFromGraph(SkyKey key) {
     ((InMemoryMemoizingEvaluator) tester.evaluator).getGraphForTesting().remove(key);
   }
 

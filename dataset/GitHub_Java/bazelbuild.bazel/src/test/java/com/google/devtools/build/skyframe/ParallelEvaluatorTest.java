@@ -2163,7 +2163,7 @@ public class ParallelEvaluatorTest {
     int numUniqueCycles = 0;
     CycleDeduper<SkyKey> cycleDeduper = new CycleDeduper<SkyKey>();
     for (ImmutableList<SkyKey> cycle : cycles) {
-      if (!cycleDeduper.alreadySeen(cycle)) {
+      if (cycleDeduper.seen(cycle)) {
         numUniqueCycles++;
       }
     }

@@ -149,7 +149,6 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.StarlarkBuiltinsValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -262,10 +261,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         "bazel_tools_workspace/tools/jdk/local_java_repository.bzl",
         "def local_java_repository(**kwargs):",
         "  pass");
-    mockToolsConfig.create(
-        "bazel_tools_workspace/tools/jdk/remote_java_repository.bzl",
-        "def remote_java_repository(**kwargs):",
-        "  pass");
     initializeMockClient();
 
     packageOptions = parsePackageOptions();
@@ -369,7 +364,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return false;
   }
 
-  protected void initializeMockClient() throws IOException {
+  public void initializeMockClient() throws IOException {
     analysisMock.setupMockClient(mockToolsConfig);
     analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
   }
@@ -570,14 +565,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Returns options that will be implicitly prepended to any options passed to {@link
-   * #useConfiguration}.
-   */
-  protected Iterable<String> getDefaultsForConfiguration() {
-    return TestConstants.PRODUCT_SPECIFIC_FLAGS;
-  }
-
-  /**
    * Sets host and target configuration using the specified options, falling back to the default
    * options for unspecified ones, and recreates the build view.
    *
@@ -592,7 +579,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected void useConfiguration(ImmutableMap<String, Object> starlarkOptions, String... args)
       throws Exception {
     ImmutableList<String> actualArgs =
-        ImmutableList.<String>builder().addAll(getDefaultsForConfiguration()).add(args).build();
+        ImmutableList.<String>builder()
+            .addAll(TestConstants.PRODUCT_SPECIFIC_FLAGS)
+            .add(args)
+            .build();
 
     masterConfig = createConfigurations(starlarkOptions, actualArgs.toArray(new String[0]));
     targetConfig = getTargetConfiguration();
@@ -626,11 +616,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     view.setArtifactRoots(new PackageRootsNoSymlinkCreation(Root.fromPath(rootDirectory)));
   }
 
-  protected CachingAnalysisEnvironment getTestAnalysisEnvironment() throws InterruptedException {
-    SkyFunction.Environment env = skyframeExecutor.getSkyFunctionEnvironmentForTesting(reporter);
-    StarlarkBuiltinsValue starlarkBuiltinsValue =
-        (StarlarkBuiltinsValue)
-            Preconditions.checkNotNull(env.getValue(StarlarkBuiltinsValue.key()));
+  protected CachingAnalysisEnvironment getTestAnalysisEnvironment() {
     return new CachingAnalysisEnvironment(
         view.getArtifactFactory(),
         actionKeyContext,
@@ -650,8 +636,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         /*extendedSanityChecks=*/ false,
         /*allowAnalysisFailures=*/ false,
         reporter,
-        env,
-        starlarkBuiltinsValue);
+        skyframeExecutor.getSkyFunctionEnvironmentForTesting(reporter));
   }
 
   /**
@@ -2121,11 +2106,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     @Override
     public StarlarkSemantics getStarlarkSemantics() {
       return buildLanguageOptions.toStarlarkSemantics();
-    }
-
-    @Override
-    public ImmutableMap<String, Object> getStarlarkDefinedBuiltins() throws InterruptedException {
-      throw new UnsupportedOperationException();
     }
 
     @Override
