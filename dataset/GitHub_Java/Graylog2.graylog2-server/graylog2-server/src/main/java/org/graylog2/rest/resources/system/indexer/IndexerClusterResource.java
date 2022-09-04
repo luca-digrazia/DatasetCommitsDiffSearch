@@ -17,10 +17,11 @@
 package org.graylog2.rest.resources.system.indexer;
 
 import com.codahale.metrics.annotation.Timed;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.rest.models.system.indexer.responses.ClusterHealth;
 import org.graylog2.rest.models.system.indexer.responses.ClusterName;
@@ -29,10 +30,10 @@ import org.graylog2.shared.security.RestPermissions;
 
 import javax.inject.Inject;
 import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import java.util.Locale;
 
 @RequiresAuthentication
 @Api(value = "Indexer/Cluster", description = "Indexer cluster information")
@@ -49,9 +50,7 @@ public class IndexerClusterResource extends RestResource {
     @ApiOperation(value = "Get the cluster name")
     @Produces(MediaType.APPLICATION_JSON)
     public ClusterName clusterName() {
-        final String clusterName = cluster.clusterName()
-                .orElseThrow(() -> new InternalServerErrorException("Couldn't read Elasticsearch cluster health"));
-        return ClusterName.create(clusterName);
+        return ClusterName.create(cluster.health().getClusterName());
     }
 
     @GET
@@ -61,7 +60,13 @@ public class IndexerClusterResource extends RestResource {
     @RequiresPermissions(RestPermissions.INDEXERCLUSTER_READ)
     @Produces(MediaType.APPLICATION_JSON)
     public ClusterHealth clusterHealth() {
-        return cluster.clusterHealthStats()
-                .orElseThrow(() -> new InternalServerErrorException("Couldn't read Elasticsearch cluster health"));
+        final ClusterHealthResponse health = cluster.health();
+        final ClusterHealth.ShardStatus shards = ClusterHealth.ShardStatus.create(
+                health.getActiveShards(),
+                health.getInitializingShards(),
+                health.getRelocatingShards(),
+                health.getUnassignedShards());
+
+        return ClusterHealth.create(health.getStatus().toString().toLowerCase(Locale.ENGLISH), shards);
     }
 }

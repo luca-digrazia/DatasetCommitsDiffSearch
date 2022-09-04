@@ -1,21 +1,18 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models.alerts;
 
@@ -27,20 +24,20 @@ import org.graylog2.restclient.models.api.responses.alerts.AlertConditionSummary
 import org.joda.time.DateTime;
 
 import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class AlertCondition {
 
     public interface Factory {
-        public AlertCondition fromSummaryResponse(AlertConditionSummaryResponse acsr);
+        AlertCondition fromSummaryResponse(AlertConditionSummaryResponse acsr);
     }
 
     public enum Type {
         MESSAGE_COUNT,
-        FIELD_VALUE
+        FIELD_VALUE,
+        FIELD_CONTENT_VALUE
     }
 
     private final String id;
@@ -53,7 +50,7 @@ public class AlertCondition {
     @AssistedInject
     private AlertCondition(UserService userService, @Assisted AlertConditionSummaryResponse acsr) {
         this.id = acsr.id;
-        this.type = Type.valueOf(acsr.type.toUpperCase());
+        this.type = Type.valueOf(acsr.type.toUpperCase(Locale.ENGLISH));
         this.parameters = acsr.parameters;
         this.inGrace = acsr.inGrace;
         this.createdAt = DateTime.parse(acsr.createdAt);
@@ -90,6 +87,8 @@ public class AlertCondition {
                 return "Message count condition";
             case FIELD_VALUE:
                 return "Field value condition";
+            case FIELD_CONTENT_VALUE:
+                return "Field content value condition";
         }
 
         throw new RuntimeException("Cannot build summary for unknown alert condition type [" + type + "]");
@@ -109,6 +108,9 @@ public class AlertCondition {
             case FIELD_VALUE:
                 sb.append(buildFieldValueDescription());
                 break;
+            case FIELD_CONTENT_VALUE:
+                sb.append(buildFieldContentValueDescription());
+                break;
             default:
                 throw new RuntimeException("Cannot build description for unknown alert condition type [" + type + "]");
         }
@@ -117,6 +119,12 @@ public class AlertCondition {
         sb.append(buildBacklogDescription(backlog));
 
         return sb.toString();
+    }
+
+    private String buildFieldContentValueDescription() {
+        String query = String.valueOf(parameters.get("field")) + ":\"" + parameters.get("value") + "\"";
+
+        return "Alert is triggered when messages matching <" + query + "> are received.";
     }
 
     private String buildBacklogDescription(int backlog) {
@@ -184,7 +192,7 @@ public class AlertCondition {
     private String buildFieldValueDescription() {
         StringBuilder sb = new StringBuilder();
         double threshold = ((Number) parameters.get("threshold")).doubleValue();
-        String thresholdFormatted = new DecimalFormat("#.###").format(threshold);
+        String thresholdFormatted = new DecimalFormat("#.###", DecimalFormatSymbols.getInstance(Locale.ENGLISH)).format(threshold);
         int time = (int) ((Number) parameters.get("time")).longValue();
 
         sb.append("Alert is triggered when the field ")

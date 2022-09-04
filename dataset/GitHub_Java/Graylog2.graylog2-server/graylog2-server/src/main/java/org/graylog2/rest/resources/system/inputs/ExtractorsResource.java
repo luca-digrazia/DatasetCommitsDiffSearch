@@ -19,15 +19,13 @@ package org.graylog2.rest.resources.system.inputs;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.ConfigurationException;
-import org.graylog2.auditlog.Actions;
-import org.graylog2.auditlog.jersey.AuditLog;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
@@ -48,6 +46,7 @@ import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.PersistedInputs;
 import org.graylog2.shared.metrics.MetricUtils;
 import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.shared.rest.resources.system.inputs.InputsResource;
 import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -113,7 +112,6 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    @AuditLog(object = "extractor", captureRequestEntity = true, captureResponseEntity = true)
     public Response create(@ApiParam(name = "inputId", required = true)
                            @PathParam("inputId") String inputId,
                            @ApiParam(name = "JSON body", required = true)
@@ -162,7 +160,6 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field the extractor should write on is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    @AuditLog(object = "extractor", captureRequestEntity = true, captureResponseEntity = true)
     public ExtractorSummary update(@ApiParam(name = "inputId", required = true)
                                       @PathParam("inputId") String inputId,
                                       @ApiParam(name = "extractorId", required = true)
@@ -259,7 +256,6 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "Extractor not found.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    @AuditLog(object = "extractor")
     public void terminate(
             @ApiParam(name = "inputId", required = true)
             @PathParam("inputId") String inputId,
@@ -292,7 +288,6 @@ public class ExtractorsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input on this node.")
     })
     @Path("order")
-    @AuditLog(action = Actions.UPDATE, object = "extractor order", captureRequestEntity = true, captureResponseEntity = true)
     public void order(@ApiParam(name = "inputId", value = "Persist ID (!) of input.", required = true)
                       @PathParam("inputId") String inputPersistId,
                       @ApiParam(name = "JSON body", required = true) OrderExtractorsRequest oer) throws NotFoundException {

@@ -54,7 +54,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
     @Override
     public Notification buildNow() {
         Notification notification = build();
-        notification.addTimestamp(Tools.nowUTC());
+        notification.addTimestamp(Tools.iso8601());
 
         return notification;
     }
@@ -104,7 +104,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
 
         // also the timestamp should never be empty
         if (notification.getTimestamp() == null) {
-            notification.addTimestamp(Tools.nowUTC());
+            notification.addTimestamp(Tools.iso8601());
         }
 
         // Write only if there is no such warning yet.

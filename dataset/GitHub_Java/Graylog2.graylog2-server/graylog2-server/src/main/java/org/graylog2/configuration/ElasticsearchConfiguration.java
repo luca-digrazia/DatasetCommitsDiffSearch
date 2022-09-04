@@ -19,23 +19,23 @@ package org.graylog2.configuration;
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.converters.StringListConverter;
 import com.github.joschi.jadconfig.util.Duration;
-import com.github.joschi.jadconfig.validators.FilePathReadableValidator;
+import com.github.joschi.jadconfig.validators.FileReadableValidator;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
 import org.joda.time.Period;
 
-import java.nio.file.Path;
+import java.io.File;
 import java.util.List;
 import java.util.Locale;
 
 public class ElasticsearchConfiguration {
     @Parameter(value = "elasticsearch_cluster_name")
-    private String clusterName = "graylog";
+    private String clusterName = "graylog2";
 
-    @Parameter(value = "elasticsearch_node_name_prefix")
-    private String nodeNamePrefix = "graylog-";
+    @Parameter(value = "elasticsearch_node_name")
+    private String nodeName = "graylog2-server";
 
     @Parameter(value = "elasticsearch_node_master")
     private boolean masterNode = false;
@@ -45,9 +45,6 @@ public class ElasticsearchConfiguration {
 
     @Parameter(value = "elasticsearch_path_data")
     private String pathData = "data/elasticsearch";
-
-    @Parameter(value = "elasticsearch_path_home")
-    private String pathHome = "data/elasticsearch";
 
     @Parameter(value = "elasticsearch_transport_tcp_port", validator = InetPortValidator.class)
     private int transportTcpPort = 9350;
@@ -79,25 +76,21 @@ public class ElasticsearchConfiguration {
     @Parameter(value = "elasticsearch_disable_version_check")
     private boolean disableVersionCheck = false;
 
-    @Parameter(value = "elasticsearch_config_file", validator = FilePathReadableValidator.class)
-    private Path configFile; // = "/etc/graylog/server/elasticsearch.yml";
+    @Parameter(value = "elasticsearch_config_file", validator = FileReadableValidator.class)
+    private File configFile; // = "/etc/graylog/server/elasticsearch.yml";
 
     @Parameter(value = "elasticsearch_index_prefix", required = true)
-    private String indexPrefix = "graylog";
+    private String indexPrefix = "graylog2";
 
-    @Deprecated // Should be removed in Graylog 3.0
     @Parameter(value = "elasticsearch_max_number_of_indices", required = true, validator = PositiveIntegerValidator.class)
     private int maxNumberOfIndices = 20;
 
-    @Deprecated // Should be removed in Graylog 3.0
     @Parameter(value = "elasticsearch_max_docs_per_index", validator = PositiveIntegerValidator.class, required = true)
-    private int maxDocsPerIndex = 20000000;
+    private int maxDocsPerIndex = 80000000;
 
-    @Deprecated // Should be removed in Graylog 3.0
     @Parameter(value = "elasticsearch_max_size_per_index", validator = PositiveLongValidator.class, required = true)
     private long maxSizePerIndex = 1L * 1024 * 1024 * 1024; // 1GB
 
-    @Deprecated // Should be removed in Graylog 3.0
     @Parameter(value = "elasticsearch_max_time_per_index", required = true)
     private Period maxTimePerIndex = Period.days(1);
 
@@ -110,17 +103,12 @@ public class ElasticsearchConfiguration {
     @Parameter(value = "elasticsearch_analyzer", required = true)
     private String analyzer = "standard";
 
-    @Parameter(value = "elasticsearch_template_name")
-    private String templateName = "graylog-internal";
-
     @Parameter(value = "no_retention")
     private boolean noRetention = false;
 
-    @Deprecated // Should be removed in Graylog 3.0
     @Parameter(value = "retention_strategy", required = true)
     private String retentionStrategy = "delete";
 
-    @Deprecated // Should be removed in Graylog 3.0
     @Parameter(value = "rotation_strategy")
     private String rotationStrategy = "count";
 
@@ -137,8 +125,8 @@ public class ElasticsearchConfiguration {
         return clusterName;
     }
 
-    public String getNodeNamePrefix() {
-        return nodeNamePrefix;
+    public String getNodeName() {
+        return nodeName;
     }
 
     public boolean isMasterNode() {
@@ -193,7 +181,7 @@ public class ElasticsearchConfiguration {
         return disableVersionCheck;
     }
 
-    public Path getConfigFile() {
+    public File getConfigFile() {
         return configFile;
     }
 
@@ -201,22 +189,18 @@ public class ElasticsearchConfiguration {
         return indexPrefix.toLowerCase(Locale.ENGLISH);
     }
 
-    @Deprecated // Should be removed in Graylog 3.0
     public int getMaxNumberOfIndices() {
         return maxNumberOfIndices;
     }
 
-    @Deprecated // Should be removed in Graylog 3.0
     public int getMaxDocsPerIndex() {
         return maxDocsPerIndex;
     }
 
-    @Deprecated // Should be removed in Graylog 3.0
     public long getMaxSizePerIndex() {
         return maxSizePerIndex;
     }
 
-    @Deprecated // Should be removed in Graylog 3.0
     public Period getMaxTimePerIndex() {
         return maxTimePerIndex;
     }
@@ -233,11 +217,6 @@ public class ElasticsearchConfiguration {
         return analyzer;
     }
 
-    public String getTemplateName() {
-        return templateName;
-    }
-
-    @Deprecated // Should be removed in Graylog 3.0
     public String getRotationStrategy() {
         return rotationStrategy;
     }
@@ -250,7 +229,6 @@ public class ElasticsearchConfiguration {
         noRetention = !retention;
     }
 
-    @Deprecated // Should be removed in Graylog 3.0
     public String getRetentionStrategy() {
         return retentionStrategy;
     }
@@ -265,10 +243,6 @@ public class ElasticsearchConfiguration {
 
     public String getPathData() {
         return pathData;
-    }
-
-    public String getPathHome() {
-        return pathHome;
     }
 
     public Duration getRequestTimeout() {

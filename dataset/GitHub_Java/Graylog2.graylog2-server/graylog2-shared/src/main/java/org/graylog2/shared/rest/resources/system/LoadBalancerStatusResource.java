@@ -22,10 +22,12 @@ import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.lifecycles.LoadBalancerStatus;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 
+import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
@@ -34,6 +36,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.util.Locale;
 
 @Api(value = "System/LoadBalancers", description = "Status propagation for load balancers")
 @Path("/system/lbstatus")
@@ -44,6 +47,13 @@ public class LoadBalancerStatusResource extends RestResource {
      *             acccess for load balancers. think about this
      *             when adding more stuff.
      */
+
+    private final ServerStatus serverStatus;
+
+    @Inject
+    public LoadBalancerStatusResource(ServerStatus serverStatus) {
+        this.serverStatus = serverStatus;
+    }
 
     @GET
     @Timed
@@ -57,7 +67,7 @@ public class LoadBalancerStatusResource extends RestResource {
                 ? Response.Status.OK : Response.Status.SERVICE_UNAVAILABLE;
 
         return Response.status(status)
-                .entity(lbStatus.toString().toUpperCase())
+                .entity(lbStatus.toString().toUpperCase(Locale.ENGLISH))
                 .build();
     }
 
@@ -72,7 +82,7 @@ public class LoadBalancerStatusResource extends RestResource {
     public void override(@ApiParam(name = "status") @PathParam("status") String status) {
         final LoadBalancerStatus lbStatus;
         try {
-            lbStatus = LoadBalancerStatus.valueOf(status.toUpperCase());
+            lbStatus = LoadBalancerStatus.valueOf(status.toUpperCase(Locale.ENGLISH));
         } catch (IllegalArgumentException e) {
             throw new BadRequestException(e);
         }

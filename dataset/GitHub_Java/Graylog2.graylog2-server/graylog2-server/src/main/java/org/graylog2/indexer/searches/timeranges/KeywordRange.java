@@ -1,52 +1,42 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.searches.timeranges;
 
+import com.google.common.base.MoreObjects;
+import com.google.common.collect.ImmutableMap;
 import org.graylog2.utilities.date.NaturalDateParser;
 import org.joda.time.DateTime;
 
-import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class KeywordRange implements TimeRange, FromToRange {
+import static com.google.common.base.Strings.isNullOrEmpty;
 
+public class KeywordRange implements TimeRange {
+    private static final NaturalDateParser DATE_PARSER = new NaturalDateParser();
     private final String keyword;
-    private final DateTime from;
-    private final DateTime to;
-
-    @Override
-    public Type getType() {
-        return Type.KEYWORD;
-    }
 
     public KeywordRange(String keyword) throws InvalidRangeParametersException {
-        if (keyword == null || keyword.isEmpty()) {
+        if (isNullOrEmpty(keyword)) {
             throw new InvalidRangeParametersException();
         }
+
         try {
-            NaturalDateParser.Result result = new NaturalDateParser().parse(keyword);
-            from = result.getFrom();
-            to = result.getTo();
+            parseKeyword(keyword);
         } catch (NaturalDateParser.DateNotParsableException e) {
             throw new InvalidRangeParametersException("Could not parse from natural date: " + keyword);
         }
@@ -54,12 +44,21 @@ public class KeywordRange implements TimeRange, FromToRange {
         this.keyword = keyword;
     }
 
+    private NaturalDateParser.Result parseKeyword(String keyword) throws NaturalDateParser.DateNotParsableException {
+        return DATE_PARSER.parse(keyword);
+    }
+
+    @Override
+    public Type getType() {
+        return Type.KEYWORD;
+    }
+
     @Override
     public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("type", getType().toString().toLowerCase());
-            put("keyword", getKeyword());
-        }};
+        return ImmutableMap.<String, Object>builder()
+                .put("type", getType().toString().toLowerCase(Locale.ENGLISH))
+                .put("keyword", getKeyword())
+                .build();
     }
 
     public String getKeyword() {
@@ -67,11 +66,43 @@ public class KeywordRange implements TimeRange, FromToRange {
     }
 
     public DateTime getFrom() {
-        return from;
+        try {
+            return parseKeyword(keyword).getFrom();
+        } catch (NaturalDateParser.DateNotParsableException e) {
+            return null;
+        }
     }
 
     public DateTime getTo() {
-        return to;
+        try {
+            return parseKeyword(keyword).getTo();
+        } catch (NaturalDateParser.DateNotParsableException e) {
+            return null;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return MoreObjects.toStringHelper(this)
+                .add("keyword", getKeyword())
+                .add("from", getFrom())
+                .add("to", getTo())
+                .toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        KeywordRange that = (KeywordRange) o;
+        return keyword.equals(that.keyword);
+
+    }
+
+    @Override
+    public int hashCode() {
+        return keyword.hashCode();
     }
 }
 

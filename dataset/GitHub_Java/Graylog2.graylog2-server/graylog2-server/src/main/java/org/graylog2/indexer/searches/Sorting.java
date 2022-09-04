@@ -17,13 +17,15 @@
 package org.graylog2.indexer.searches;
 
 import org.elasticsearch.search.sort.SortOrder;
-import org.graylog2.plugin.Message;
 
 import java.util.Locale;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class Sorting {
 
-    public static final Sorting DEFAULT = new Sorting(Message.FIELD_TIMESTAMP, Direction.DESC);
+    public static final Sorting DEFAULT = new Sorting("timestamp", Direction.DESC);
 
     public enum Direction {
         ASC,
@@ -45,8 +47,6 @@ public class Sorting {
     public SortOrder asElastic() {
         return SortOrder.valueOf(direction.toString().toUpperCase(Locale.ENGLISH));
     }
-
-    public Direction getDirection() { return this.direction; }
 
     public static Sorting fromApiParam(String param) {
         if (param == null || !param.contains(":")) {

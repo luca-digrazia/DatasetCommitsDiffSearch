@@ -1,25 +1,23 @@
-/*
- * Copyright 2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.rotation;
 
-import com.google.inject.Inject;
-import org.graylog2.Configuration;
+import javax.inject.Inject;
+import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
@@ -27,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.text.MessageFormat;
+import java.util.Locale;
 
 public class MessageCountRotationStrategy implements RotationStrategy {
     private static final Logger log = LoggerFactory.getLogger(MessageCountRotationStrategy.class);
@@ -35,9 +34,9 @@ public class MessageCountRotationStrategy implements RotationStrategy {
     private int maxDocsPerIndex;
 
     @Inject
-    public MessageCountRotationStrategy(Configuration configuration, Indices indices) {
+    public MessageCountRotationStrategy(ElasticsearchConfiguration configuration, Indices indices) {
         this.indices = indices;
-        maxDocsPerIndex = configuration.getElasticSearchMaxDocsPerIndex();
+        maxDocsPerIndex = configuration.getMaxDocsPerIndex();
     }
 
     @Override
@@ -57,9 +56,11 @@ public class MessageCountRotationStrategy implements RotationStrategy {
     private static class Result implements RotationStrategy.Result {
 
         public static final MessageFormat ROTATE_FORMAT = new MessageFormat(
-                "Number of messages in <{0}> ({1}) is higher than the limit ({2}). Pointing deflector to new index now!");
+                "Number of messages in <{0}> ({1}) is higher than the limit ({2}). Pointing deflector to new index now!",
+                Locale.ENGLISH);
         public static final MessageFormat NOT_ROTATE_FORMAT = new MessageFormat(
-                "Number of messages in <{0}> ({1}) is lower than the limit ({2}). Not doing anything.");
+                "Number of messages in <{0}> ({1}) is lower than the limit ({2}). Not doing anything.",
+                Locale.ENGLISH);
         private final String index;
         private final long actualCount;
         private final long maxDocs;

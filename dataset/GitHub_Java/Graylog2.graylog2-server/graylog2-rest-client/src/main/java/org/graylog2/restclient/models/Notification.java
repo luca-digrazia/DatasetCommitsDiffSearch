@@ -1,52 +1,52 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
-import com.google.inject.Inject;
 import org.graylog2.restclient.models.api.responses.system.NotificationSummaryResponse;
 import org.joda.time.DateTime;
 
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class Notification {
-
-    @Inject
-    private NodeService nodeService;
 
     public enum Type {
         DEFLECTOR_EXISTS_AS_INDEX,
         MULTI_MASTER,
         NO_MASTER,
         ES_OPEN_FILES,
+        ES_CLUSTER_RED,
+        ES_UNAVAILABLE,
         NO_INPUT_RUNNING,
         INPUT_FAILED_TO_START,
         CHECK_SERVER_CLOCKS,
         OUTDATED_VERSION,
         EMAIL_TRANSPORT_CONFIGURATION_INVALID,
         EMAIL_TRANSPORT_FAILED,
-        STREAM_PROCESSING_DISABLED;
+        STREAM_PROCESSING_DISABLED,
+        GC_TOO_LONG,
+        JOURNAL_UTILIZATION_TOO_HIGH,
+        JOURNAL_UNCOMMITTED_MESSAGES_DELETED,
+        OUTPUT_DISABLED,
+        INDEX_RANGES_RECALCULATION,
+        GENERIC;
 
         public static Type fromString(String name) {
-            return valueOf(name.toUpperCase());
+            return valueOf(name.toUpperCase(Locale.ENGLISH));
         }
     }
 
@@ -57,14 +57,14 @@ public class Notification {
     private final Type type;
     private final DateTime timestamp;
     private final Severity severity;
-    private final String node_id;
+    private final String nodeId;
     private final Map<String, Object> details;
 
     public Notification(NotificationSummaryResponse x) {
-        this.type = Type.valueOf(x.type.toUpperCase());
+        this.type = Type.valueOf(x.type.toUpperCase(Locale.ENGLISH));
         this.timestamp = DateTime.parse(x.timestamp);
-        this.severity = Severity.valueOf(x.severity.toUpperCase());
-        this.node_id = x.node_id;
+        this.severity = Severity.valueOf(x.severity.toUpperCase(Locale.ENGLISH));
+        this.nodeId = x.node_id;
         this.details = x.details;
     }
 
@@ -77,15 +77,7 @@ public class Notification {
     }
 
     public String getNodeId() {
-        return this.node_id;
-    }
-
-    public Node getNode() {
-        try {
-            return nodeService.loadNode(this.node_id);
-        } catch (NodeService.NodeNotFoundException e) {
-            return null;
-        }
+        return this.nodeId;
     }
 
     public Map<String, Object> getDetails() {
@@ -93,9 +85,14 @@ public class Notification {
     }
 
     public Object getDetail(String id) {
-        if (details == null)
+        if (details == null) {
             return null;
+        }
 
         return details.get(id);
+    }
+
+    public Severity getSeverity() {
+        return severity;
     }
 }

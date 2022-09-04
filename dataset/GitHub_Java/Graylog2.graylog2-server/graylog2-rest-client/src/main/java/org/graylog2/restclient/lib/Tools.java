@@ -1,36 +1,31 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.lib;
 
 import com.google.common.collect.Maps;
-import play.api.templates.Html;
 import play.data.Form;
 import play.mvc.Controller;
 import play.mvc.Http;
-import scala.collection.mutable.StringBuilder;
+import play.twirl.api.Html;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class Tools {
 
     private Tools() { /* pure utility class */ }
@@ -63,13 +58,13 @@ public class Tools {
      */
     public static Object orNbsp(Object x) {
         if (x == null) {
-            return new Html(new StringBuilder("&nbsp;"));
+            return new Html("&nbsp;");
         }
 
         if (x instanceof String) {
             final String s = x.toString();
             if (s.isEmpty()) {
-                return new Html(new StringBuilder("&nbsp;"));
+                return new Html("&nbsp;");
             }
         }
         return x;
@@ -157,7 +152,7 @@ public class Tools {
         int exp = (int) (Math.log(bytes) / Math.log(1024));
 
         String pre = "kMGTPE".charAt(exp-1) + "i";
-        return String.format("%.1f%sB", bytes / Math.pow(1024, exp), pre);
+        return String.format(Locale.ENGLISH, "%.1f%sB", bytes / Math.pow(1024, exp), pre);
     }
 
     public static <T> T firstNonNull(T defaultValue, T... objects) {

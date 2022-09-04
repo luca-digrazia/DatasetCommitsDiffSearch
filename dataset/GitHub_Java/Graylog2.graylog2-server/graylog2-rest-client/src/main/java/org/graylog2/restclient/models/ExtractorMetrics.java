@@ -1,26 +1,26 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
+import org.graylog2.rest.models.metrics.responses.TimerRateMetricsResponse;
 import org.graylog2.restclient.lib.metrics.Meter;
 import org.graylog2.restclient.lib.metrics.Timer;
-import org.graylog2.restclient.models.api.responses.metrics.TimerRateMetricsResponse;
+
+import java.util.Locale;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -34,11 +34,11 @@ public class ExtractorMetrics {
 
     public ExtractorMetrics(TimerRateMetricsResponse total, TimerRateMetricsResponse converters) {
         if (total.durationUnit != null) {
-            this.totalTiming = new Timer(total.time, Timer.Unit.valueOf(total.durationUnit.toUpperCase()));
+            this.totalTiming = new Timer(total.time, Timer.Unit.valueOf(total.durationUnit.toUpperCase(Locale.ENGLISH)));
         }
 
         if (converters.durationUnit != null) {
-            this.converterTiming = new Timer(converters.time, Timer.Unit.valueOf(converters.durationUnit.toUpperCase()));
+            this.converterTiming = new Timer(converters.time, Timer.Unit.valueOf(converters.durationUnit.toUpperCase(Locale.ENGLISH)));
         }
 
         if (total.rate == null) {

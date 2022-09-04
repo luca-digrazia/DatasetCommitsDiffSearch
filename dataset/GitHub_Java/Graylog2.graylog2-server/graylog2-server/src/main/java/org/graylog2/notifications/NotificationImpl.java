@@ -1,41 +1,38 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.notifications;
 
 import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
-import org.graylog2.Core;
 import org.graylog2.cluster.Node;
 import org.graylog2.database.CollectionName;
 import org.graylog2.database.PersistedImpl;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.validators.Validator;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 @CollectionName("notifications")
 public class NotificationImpl extends PersistedImpl implements Notification {
 
@@ -49,19 +46,19 @@ public class NotificationImpl extends PersistedImpl implements Notification {
     protected NotificationImpl(ObjectId id, Map<String, Object> fields) {
         super(id, fields);
 
-        this.type = Type.valueOf(((String) fields.get("type")).toUpperCase());
-        this.severity = Severity.valueOf(((String) fields.get("severity")).toUpperCase());
-        this.timestamp = new DateTime(fields.get("timestamp"));
-        this.node_id = (String)fields.get("node_id");
+        this.type = Type.valueOf(((String) fields.get("type")).toUpperCase(Locale.ENGLISH));
+        this.severity = Severity.valueOf(((String) fields.get("severity")).toUpperCase(Locale.ENGLISH));
+        this.timestamp = new DateTime(fields.get("timestamp"), DateTimeZone.UTC);
+        this.node_id = (String) fields.get("node_id");
     }
 
     protected NotificationImpl(Map<String, Object> fields) {
         super(fields);
 
-        this.type = Type.valueOf(((String) fields.get("type")).toUpperCase());
-        this.severity = Severity.valueOf(((String) fields.get("severity")).toUpperCase());
-        this.timestamp = new DateTime(fields.get("timestamp"));
-        this.node_id = (String)fields.get("node_id");
+        this.type = Type.valueOf(((String) fields.get("type")).toUpperCase(Locale.ENGLISH));
+        this.severity = Severity.valueOf(((String) fields.get("severity")).toUpperCase(Locale.ENGLISH));
+        this.timestamp = new DateTime(fields.get("timestamp"), DateTimeZone.UTC);
+        this.node_id = (String) fields.get("node_id");
     }
 
     public NotificationImpl() {
@@ -71,7 +68,7 @@ public class NotificationImpl extends PersistedImpl implements Notification {
     @Override
     public Notification addType(Type type) {
         this.type = type;
-        fields.put("type", type.toString().toLowerCase());
+        fields.put("type", type.toString().toLowerCase(Locale.ENGLISH));
         return this;
     }
 
@@ -86,7 +83,7 @@ public class NotificationImpl extends PersistedImpl implements Notification {
     @Override
     public Notification addSeverity(Severity severity) {
         this.severity = severity;
-        fields.put("severity", severity.toString().toLowerCase());
+        fields.put("severity", severity.toString().toLowerCase(Locale.ENGLISH));
         return this;
     }
 
@@ -121,9 +118,18 @@ public class NotificationImpl extends PersistedImpl implements Notification {
         if (fields.get("details") == null)
             fields.put("details", new HashMap<String, Object>());
 
-        details = (Map<String, Object>)fields.get("details");
+        details = (Map<String, Object>) fields.get("details");
         details.put(key, value);
         return this;
+    }
+
+    @Override
+    public Object getDetail(String key) {
+        final Map<String, Object> details = (Map<String, Object>) fields.get("details");
+        if (details == null)
+            return null;
+
+        return details.get(key);
     }
 
     @Override
@@ -135,11 +141,6 @@ public class NotificationImpl extends PersistedImpl implements Notification {
     }
 
     @Override
-    public Notification addThisNode(Core core) {
-        return addNode(core.getNodeId());
-    }
-
-    @Override
     public Notification addNode(String nodeId) {
         fields.put("node_id", nodeId);
         return this;  //To change body of created methods use File | Settings | File Templates.
@@ -147,12 +148,12 @@ public class NotificationImpl extends PersistedImpl implements Notification {
 
     @Override
     public Map<String, Validator> getValidations() {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
 }

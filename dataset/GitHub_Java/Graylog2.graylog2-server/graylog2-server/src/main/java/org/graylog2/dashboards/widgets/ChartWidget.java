@@ -21,8 +21,10 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableMap;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.Searches.DateHistogramInterval;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 
 import javax.annotation.Nullable;
+import java.util.Locale;
 import java.util.Map;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -33,13 +35,13 @@ public abstract class ChartWidget extends DashboardWidget {
     protected final String streamId;
     protected final DateHistogramInterval interval;
 
-    protected ChartWidget(MetricRegistry metricRegistry, Type type, String id, String description, WidgetCacheTime cacheTime, Map<String, Object> config, String creatorUserId) {
-        super(metricRegistry, type, id, description, cacheTime, config, creatorUserId);
+    protected ChartWidget(MetricRegistry metricRegistry, Type type, String id, TimeRange timeRange, String description, WidgetCacheTime cacheTime, Map<String, Object> config, String creatorUserId) {
+        super(metricRegistry, type, id, timeRange, description, cacheTime, config, creatorUserId);
 
         this.streamId = (String) config.get("stream_id");
 
         if (config.containsKey("interval")) {
-            this.interval = Searches.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase());
+            this.interval = Searches.DateHistogramInterval.valueOf(((String) config.get("interval")).toUpperCase(Locale.ENGLISH));
         } else {
             this.interval = Searches.DateHistogramInterval.MINUTE;
         }
@@ -48,7 +50,8 @@ public abstract class ChartWidget extends DashboardWidget {
     @Override
     public Map<String, Object> getPersistedConfig() {
         final ImmutableMap.Builder<String, Object> persistedConfig = ImmutableMap.<String, Object>builder()
-                .put("interval", interval.toString().toLowerCase());
+                .putAll(super.getPersistedConfig())
+                .put("interval", interval.toString().toLowerCase(Locale.ENGLISH));
 
         if (!isNullOrEmpty(streamId)) {
             persistedConfig.put("stream_id", streamId);

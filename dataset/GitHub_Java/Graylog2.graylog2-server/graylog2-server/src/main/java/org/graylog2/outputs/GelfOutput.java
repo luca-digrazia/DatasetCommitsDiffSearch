@@ -41,7 +41,6 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.File;
 import java.util.List;
@@ -185,44 +184,22 @@ public class GelfOutput implements MessageOutput {
         }
     }
 
-    @Nullable
     private GelfMessageLevel extractLevel(Object rawLevel) {
-        GelfMessageLevel level;
-        if (rawLevel instanceof Number) {
-            final int numericLevel = ((Number) rawLevel).intValue();
-            level = extractLevel(numericLevel);
-        } else if (rawLevel instanceof String) {
-            Integer numericLevel;
+        if (rawLevel != null) {
+            if (rawLevel instanceof Number) {
+                return GelfMessageLevel.fromNumericLevel(((Number) rawLevel).intValue());
+            }
+        }
+
+        if (rawLevel instanceof String) {
             try {
-                numericLevel = Integer.parseInt((String) rawLevel);
+                return GelfMessageLevel.fromNumericLevel(Integer.getInteger(rawLevel.toString()));
             } catch (NumberFormatException e) {
-                LOG.debug("Invalid message level " + rawLevel, e);
-                numericLevel = null;
+                return null;
             }
-
-            if (numericLevel == null) {
-                level = null;
-            } else {
-                level = extractLevel(numericLevel);
-            }
-        } else {
-            LOG.debug("Invalid message level {}", rawLevel);
-            level = null;
         }
 
-        return level;
-    }
-
-    @Nullable
-    private GelfMessageLevel extractLevel(int numericLevel) {
-        GelfMessageLevel level;
-        try {
-            level = GelfMessageLevel.fromNumericLevel(numericLevel);
-        } catch (IllegalArgumentException e) {
-            LOG.debug("Invalid numeric message level " + numericLevel, e);
-            level = null;
-        }
-        return level;
+        return null;
     }
 
     protected GelfMessage toGELFMessage(final Message message) {

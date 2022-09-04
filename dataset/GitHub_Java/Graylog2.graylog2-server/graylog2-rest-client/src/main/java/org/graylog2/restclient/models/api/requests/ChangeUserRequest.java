@@ -1,29 +1,29 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models.api.requests;
 
-import com.google.common.collect.Lists;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.Lists;
 import org.graylog2.restclient.models.User;
 import play.data.validation.Constraints;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public class ChangeUserRequest extends ApiRequest {
     @Constraints.Required
@@ -31,7 +31,9 @@ public class ChangeUserRequest extends ApiRequest {
     public String fullname;
     @Constraints.Required
     public String email;
-    public List<String> permissions = Lists.newArrayList();
+    public List<String> permissions = Collections.emptyList();
+    @JsonProperty
+    public List<String> roles = Lists.newArrayList();
 
     public String timezone;
 
@@ -61,6 +63,14 @@ public class ChangeUserRequest extends ApiRequest {
         this.timezone = timezone;
     }
 
+    public List<String> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(List<String> roles) {
+        this.roles = roles;
+    }
+
     @JsonProperty("session_timeout_ms")
     public long sessionTimeoutMs;
 
@@ -77,9 +87,10 @@ public class ChangeUserRequest extends ApiRequest {
         this.startpage = new ChangeStartpageRequest();
 
         if(user.getStartpage() != null) {
-            this.startpage.type = user.getStartpage().getType().toString().toLowerCase();
+            this.startpage.type = user.getStartpage().getType().toString().toLowerCase(Locale.ENGLISH);
             this.startpage.id = user.getStartpage().getId();
         }
         this.sessionTimeoutMs = user.getSessionTimeoutMs();
+        this.roles = Lists.newArrayList(user.getRoles());
     }
 }

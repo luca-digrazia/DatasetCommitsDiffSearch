@@ -28,11 +28,11 @@ import org.glassfish.jersey.server.ChunkedOutput;
 import org.graylog2.indexer.results.ScrollResult;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.SearchesConfig;
+import org.graylog2.indexer.searches.SearchesConfigBuilder;
 import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.KeywordRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
-import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.graylog2.rest.models.search.responses.FieldStatsResult;
 import org.graylog2.rest.models.search.responses.HistogramResult;
 import org.graylog2.rest.models.search.responses.TermsResult;
@@ -62,8 +62,8 @@ public class KeywordSearchResource extends SearchResource {
     private static final Logger LOG = LoggerFactory.getLogger(KeywordSearchResource.class);
 
     @Inject
-    public KeywordSearchResource(Searches searches, ClusterConfigService clusterConfigService) {
-        super(searches, clusterConfigService);
+    public KeywordSearchResource(Searches searches) {
+        super(searches);
     }
 
     @GET
@@ -89,14 +89,14 @@ public class KeywordSearchResource extends SearchResource {
         final List<String> fieldList = parseOptionalFields(fields);
         final Sorting sorting = buildSorting(sort);
         final TimeRange timeRange = buildKeywordTimeRange(keyword);
-        final SearchesConfig searchesConfig = SearchesConfig.builder()
-                .query(query)
-                .filter(filter)
-                .fields(fieldList)
-                .range(timeRange)
-                .limit(limit)
-                .offset(offset)
-                .sorting(sorting)
+        final SearchesConfig searchesConfig = SearchesConfigBuilder.newConfig()
+                .setQuery(query)
+                .setFilter(filter)
+                .setFields(fieldList)
+                .setRange(timeRange)
+                .setLimit(limit)
+                .setOffset(offset)
+                .setSorting(sorting)
                 .build();
 
         try {
@@ -296,7 +296,7 @@ public class KeywordSearchResource extends SearchResource {
 
     private TimeRange buildKeywordTimeRange(String keyword) {
         try {
-            return restrictTimeRange(KeywordRange.create(keyword));
+            return new KeywordRange(keyword);
         } catch (InvalidRangeParametersException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.");
             throw new BadRequestException("Invalid timerange parameters provided", e);

@@ -1,27 +1,24 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models.dashboards.widgets;
 
+import org.graylog2.rest.models.dashboards.requests.AddWidgetRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.lib.DateTools;
 import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
 import org.graylog2.restclient.models.api.requests.dashboards.WidgetUpdateRequest;
@@ -29,15 +26,12 @@ import org.graylog2.restclient.models.api.responses.dashboards.DashboardWidgetRe
 import org.graylog2.restclient.models.api.responses.dashboards.DashboardWidgetValueResponse;
 import org.graylog2.restclient.models.dashboards.Dashboard;
 import org.graylog2.restroutes.generated.routes;
-import org.joda.time.DateTime;
-import play.mvc.Call;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public abstract class DashboardWidget {
 
     public enum Type {
@@ -45,7 +39,9 @@ public abstract class DashboardWidget {
         STREAM_SEARCH_RESULT_COUNT,
         FIELD_CHART,
         QUICKVALUES,
-        SEARCH_RESULT_CHART
+        SEARCH_RESULT_CHART,
+        STATS_COUNT,
+        STACKED_CHART
     }
 
     private final Type type;
@@ -60,6 +56,9 @@ public abstract class DashboardWidget {
 
     private int col = 1;
     private int row = 1;
+
+    private int height = 0;
+    private int width = 0;
 
     protected DashboardWidget(Type type, String id, String description, int cacheTime, Dashboard dashboard, String query, TimeRange timeRange) {
         this(type, id, description, cacheTime, dashboard, null, query, timeRange);
@@ -104,11 +103,26 @@ public abstract class DashboardWidget {
         this.row = row;
     }
 
+    public void setHeight(int height) {
+        this.height = height;
+    }
+
+    public void setWidth(int width) {
+        this.width = width;
+    }
+
     public DashboardWidgetValueResponse getValue(ApiClient api) throws APIException, IOException {
         return api.path(routes.DashboardsResource().widgetValue(dashboard.getId(), id),  DashboardWidgetValueResponse.class)
                     .onlyMasterNode()
                     .execute();
     }
+
+    public void updateWidget(ApiClient api, AddWidgetRequest addWidgetRequest) throws APIException, IOException {
+        api.path(routes.DashboardsResource().updateWidget(dashboard.getId(), id))
+                .body(addWidgetRequest)
+                .onlyMasterNode()
+                .execute();
+    };
 
     public void updateDescription(ApiClient api, String newDescription) throws APIException, IOException {
         WidgetUpdateRequest wur = new WidgetUpdateRequest();
@@ -133,7 +147,7 @@ public abstract class DashboardWidget {
     public static DashboardWidget factory(Dashboard dashboard, DashboardWidgetResponse w) throws NoSuchWidgetTypeException, InvalidRangeParametersException {
         Type type;
         try {
-            type = Type.valueOf(w.type.toUpperCase());
+            type = Type.valueOf(w.type.toUpperCase(Locale.ENGLISH));
         } catch(IllegalArgumentException e) {
             throw new NoSuchWidgetTypeException();
         }
@@ -149,6 +163,8 @@ public abstract class DashboardWidget {
                         w.cacheTime,
                         (String) w.config.get("query"),
                         TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
+                        w.config.get("trend") != null && Boolean.parseBoolean(String.valueOf(w.config.get("trend"))),
+                        w.config.get("lower_is_better") != null && Boolean.parseBoolean(String.valueOf(w.config.get("lower_is_better"))),
                         w.creatorUserId
                 );
                 break;
@@ -160,6 +176,8 @@ public abstract class DashboardWidget {
                         w.cacheTime,
                         (String) w.config.get("query"),
                         TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
+                        w.config.get("trend") != null && Boolean.parseBoolean(String.valueOf(w.config.get("trend"))),
+                        w.config.get("lower_is_better") != null && Boolean.parseBoolean(String.valueOf(w.config.get("lower_is_better"))),
                         (String) w.config.get("stream_id"),
                         w.creatorUserId
                 );
@@ -172,7 +190,7 @@ public abstract class DashboardWidget {
                         w.cacheTime,
                         (String) w.config.get("query"),
                         TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
-                        (w.config.containsKey("stream_id") ? (String) w.config.get("stream_id") : null),
+                        (String) w.config.get("stream_id"),
                         w.config,
                         w.creatorUserId
                 );
@@ -182,11 +200,13 @@ public abstract class DashboardWidget {
                         dashboard,
                         w.id,
                         w.description,
-                        (w.config.containsKey("stream_id") ? (String) w.config.get("stream_id") : null),
+                        (String) w.config.get("stream_id"),
                         w.cacheTime,
                         (String) w.config.get("query"),
                         TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
                         (String) w.config.get("field"),
+                        w.config.get("show_pie_chart") != null && Boolean.parseBoolean(String.valueOf(w.config.get("show_pie_chart"))),
+                        !w.config.containsKey("show_data_table") || Boolean.parseBoolean(String.valueOf(w.config.get("show_data_table"))),
                         w.creatorUserId
                 );
                 break;
@@ -195,7 +215,7 @@ public abstract class DashboardWidget {
                         dashboard,
                         w.id,
                         w.description,
-                        (w.config.containsKey("stream_id") ? (String) w.config.get("stream_id") : null),
+                        (String) w.config.get("stream_id"),
                         w.cacheTime,
                         (String) w.config.get("query"),
                         TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
@@ -203,21 +223,58 @@ public abstract class DashboardWidget {
                         (String) w.config.get("interval")
                 );
                 break;
+            case STATS_COUNT:
+                widget = new StatisticalCountWidget(
+                        dashboard,
+                        w.id,
+                        w.description,
+                        w.cacheTime,
+                        (String) w.config.get("query"),
+                        TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
+                        w.config.get("trend") != null && Boolean.parseBoolean(String.valueOf(w.config.get("trend"))),
+                        w.config.get("lower_is_better") != null && Boolean.parseBoolean(String.valueOf(w.config.get("lower_is_better"))),
+                        (String) w.config.get("field"),
+                        (String) w.config.get("stats_function"),
+                        (w.config.containsKey("stream_id") ? (String) w.config.get("stream_id") : null),
+                        w.creatorUserId
+                );
+                break;
+            case STACKED_CHART:
+                widget = new StackedChartWidget(
+                        dashboard,
+                        w.id,
+                        w.description,
+                        w.cacheTime,
+                        TimeRange.factory((Map<String, Object>) w.config.get("timerange")),
+                        (String) w.config.get("stream_id"),
+                        (String) w.config.get("renderer"),
+                        (String) w.config.get("interpolation"),
+                        (String) w.config.get("interval"),
+                        (List<Map<String, Object>>) w.config.get("series"),
+                        w.creatorUserId
+                );
+                break;
             default:
                 throw new NoSuchWidgetTypeException();
         }
-        // Read and set positions. Defaults to 1, which is then rescued by the JS dashboard library.
+        // Read and set positions. Defaults to 0, which is then rescued by the JS dashboard library.
         if (dashboard.getPositions().containsKey(w.id)) {
             widget.setCol(dashboard.getPositions().get(w.id).col);
             widget.setRow(dashboard.getPositions().get(w.id).row);
+            widget.setHeight(dashboard.getPositions().get(w.id).height);
+            widget.setWidth(dashboard.getPositions().get(w.id).width);
         }
 
         return widget;
     }
 
     public abstract Map<String, Object> getConfig();
-    public abstract int getWidth();
-    public abstract int getHeight();
+    public int getWidth() {
+        return width;
+    };
+    public int getHeight() {
+        return height;
+    };
     public abstract String getStreamId();
 
     /* Indicate if the representation should contain the whole searched time range */

@@ -1,32 +1,31 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.lib.metrics;
 
-import org.graylog2.restclient.models.api.responses.metrics.RateMetricsResponse;
+import com.google.common.collect.ImmutableMap;
+import org.graylog2.rest.models.metrics.responses.RateMetricsResponse;
 
 import java.text.DecimalFormat;
-import java.util.HashMap;
+import java.text.DecimalFormatSymbols;
+import java.util.Locale;
 import java.util.Map;
 
 public class Meter extends Metric {
-
-    DecimalFormat df = new DecimalFormat("#.##");
+    private static final DecimalFormat DF = new DecimalFormat("#.##", DecimalFormatSymbols.getInstance(Locale.ENGLISH));
 
     public final double total;
     public final double mean;
@@ -45,13 +44,13 @@ public class Meter extends Metric {
     }
 
     public Meter(final RateMetricsResponse rate) {
-        this(new HashMap<String, Object>() {{
-            put("total", rate.total);
-            put("mean", rate.mean);
-            put("one_minute", rate.oneMinute);
-            put("five_minute", rate.fiveMinute);
-            put("fifteen_minute", rate.fifteenMinute);
-        }});
+        this(ImmutableMap.<String, Object>builder()
+                .put("total", rate.total)
+                .put("mean", rate.mean)
+                .put("one_minute", rate.oneMinute)
+                .put("five_minute", rate.fiveMinute)
+                .put("fifteen_minute", rate.fifteenMinute)
+                .build());
     }
 
     public double getTotal() {
@@ -75,19 +74,18 @@ public class Meter extends Metric {
     }
 
     public String getMeanFormatted() {
-        return df.format(mean);
+        return DF.format(mean);
     }
 
     public String getOneMinuteFormatted() {
-        return df.format(oneMinute);
+        return DF.format(oneMinute);
     }
 
     public String getFiveMinuteFormatted() {
-        return df.format(fiveMinute);
+        return DF.format(fiveMinute);
     }
 
     public String getFifteenMinuteFormatted() {
-        return df.format(fifteenMinute);
+        return DF.format(fifteenMinute);
     }
-
 }

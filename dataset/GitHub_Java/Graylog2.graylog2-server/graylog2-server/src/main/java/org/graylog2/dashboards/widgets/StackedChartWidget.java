@@ -123,7 +123,7 @@ public class StackedChartWidget extends ChartWidget {
             }
         }
 
-        final AbsoluteRange computationTimeRange = AbsoluteRange.create(from, to);
+        final AbsoluteRange computationTimeRange = new AbsoluteRange(from, to);
 
         return new ComputationResult(results, tookMs, computationTimeRange);
     }

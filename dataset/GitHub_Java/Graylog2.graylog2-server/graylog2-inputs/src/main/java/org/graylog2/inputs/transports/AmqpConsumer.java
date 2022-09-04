@@ -55,7 +55,6 @@ public class AmqpConsumer {
 
     private final String queue;
     private final String exchange;
-    private final boolean exchangeBind;
     private final String routingKey;
     private final boolean requeueInvalid;
 
@@ -73,7 +72,7 @@ public class AmqpConsumer {
     private AtomicLong lastSecBytesReadTmp = new AtomicLong(0);
 
     public AmqpConsumer(String hostname, int port, String virtualHost, String username, String password,
-                        int prefetchCount, String queue, String exchange, boolean exchangeBind, String routingKey,int parallelQueues,
+                        int prefetchCount, String queue, String exchange, String routingKey, int parallelQueues,
                         boolean tls, boolean requeueInvalid, int heartbeatTimeout, MessageInput sourceInput,
                         ScheduledExecutorService scheduler, AmqpTransport amqpTransport) {
         this.hostname = hostname;
@@ -85,7 +84,6 @@ public class AmqpConsumer {
 
         this.queue = queue;
         this.exchange = exchange;
-        this.exchangeBind = exchangeBind;
         this.routingKey = routingKey;
         this.heartbeatTimeout = heartbeatTimeout;
 
@@ -111,9 +109,6 @@ public class AmqpConsumer {
         for (int i = 0; i < parallelQueues; i++) {
             final String queueName = String.format(Locale.ENGLISH, queue, i);
             channel.queueDeclare(queueName, true, false, false, null);
-            if (exchangeBind) {
-                channel.queueBind(queueName, exchange, routingKey);
-            }
             channel.basicConsume(queueName, false, new DefaultConsumer(channel) {
                 @Override
                 public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
