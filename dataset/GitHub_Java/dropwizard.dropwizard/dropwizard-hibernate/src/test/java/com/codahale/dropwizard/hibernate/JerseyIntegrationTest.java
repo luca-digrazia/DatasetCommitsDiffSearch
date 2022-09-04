@@ -121,7 +121,8 @@ public class JerseyIntegrationTest extends JerseyTest {
             session.close();
         }
 
-        final DropwizardResourceConfig config = DropwizardResourceConfig.forTesting(new MetricRegistry());
+        final DropwizardResourceConfig config = new DropwizardResourceConfig(true,
+                                                                             new MetricRegistry());
         config.getSingletons().add(new UnitOfWorkResourceMethodDispatchAdapter(sessionFactory));
         config.getSingletons().add(new PersonResource(new PersonDAO(sessionFactory)));
         config.getSingletons().add(new JacksonMessageBodyProvider(Jackson.newObjectMapper(),
