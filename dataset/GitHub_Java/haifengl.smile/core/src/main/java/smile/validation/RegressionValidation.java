@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.validation;
 
@@ -87,14 +87,14 @@ public class RegressionValidation<M> implements Serializable {
      * Trains and validates a model on multiple train/validation split.
      */
     @SuppressWarnings("unchecked")
-    public static <T, M extends Regression<T>> RegressionValidations<M> of(Bag[] bags, T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
-        List<RegressionValidation<M>> rounds = new ArrayList<>(bags.length);
+    public static <T, M extends Regression<T>> RegressionValidations<M> of(Split[] splits, T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
+        List<RegressionValidation<M>> rounds = new ArrayList<>(splits.length);
 
-        for (Bag bag : bags) {
-            T[] trainx = MathEx.slice(x, bag.samples);
-            double[] trainy = MathEx.slice(y, bag.samples);
-            T[] testx = MathEx.slice(x, bag.oob);
-            double[] testy = MathEx.slice(y, bag.oob);
+        for (Split split : splits) {
+            T[] trainx = MathEx.slice(x, split.train);
+            double[] trainy = MathEx.slice(y, split.train);
+            T[] testx = MathEx.slice(x, split.test);
+            double[] testy = MathEx.slice(y, split.test);
 
             rounds.add(of(trainx, trainy, testx, testy, trainer));
         }
@@ -135,11 +135,11 @@ public class RegressionValidation<M> implements Serializable {
      * Trains and validates a model on multiple train/validation split.
      */
     @SuppressWarnings("unchecked")
-    public static <M extends DataFrameRegression> RegressionValidations<M> of(Bag[] bags, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
-        List<RegressionValidation<M>> rounds = new ArrayList<>(bags.length);
+    public static <M extends DataFrameRegression> RegressionValidations<M> of(Split[] splits, Formula formula, DataFrame data, BiFunction<Formula, DataFrame, M> trainer) {
+        List<RegressionValidation<M>> rounds = new ArrayList<>(splits.length);
 
-        for (Bag bag : bags) {
-            rounds.add(of(formula, data.of(bag.samples), data.of(bag.oob), trainer));
+        for (Split split : splits) {
+            rounds.add(of(formula, data.of(split.train), data.of(split.test), trainer));
         }
 
         return new RegressionValidations<>(rounds);

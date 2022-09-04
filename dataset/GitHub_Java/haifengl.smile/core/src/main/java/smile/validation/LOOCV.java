@@ -44,20 +44,33 @@ import smile.validation.metric.Error;
  * 
  * @author Haifeng Li
  */
-public interface LOOCV {
+public class LOOCV implements Serializable {
+    private static final long serialVersionUID = 2L;
+
     /**
-     * Returns the training sample index for each round.
-     * @param n the number of samples.
-     * @return The index of training instances for each round.
-     *         The left one of i-th round is i-th sample.
+     * The index of training instances.
      */
-    static int[][] of(int n) {
+    public final int[][] train;
+    /**
+     * The index of testing instances.
+     */
+    public final int[] test;
+
+    /**
+     * Constructor.
+     * @param n the number of samples.
+     */
+    public LOOCV(int n) {
         if (n < 0) {
             throw new IllegalArgumentException("Invalid sample size: " + n);
         }
 
-        int[][] train = new int[n][n-1];
+        train = new int[n][n-1];
+        test = new int[n];
+
         for (int i = 0; i < n; i++) {
+            test[i] = i;
+
             int p = 0;
             for (int j = 0; j < i; j++) {
                 train[i][p++] = j;
@@ -67,19 +80,17 @@ public interface LOOCV {
                 train[i][p++] = j;
             }
         }
-
-        return train;
     }
 
     /**
      * Runs leave-one-out cross validation tests.
      * @return the predictions.
      */
-    static <T, M extends Classifier<T>> ClassificationMetrics classification(T[] x, int[] y, BiFunction<T[], int[], M> trainer) {
+    public static <T, M extends Classifier<T>> ClassificationMetrics classification(T[] x, int[] y, BiFunction<T[], int[], M> trainer) {
         int k = MathEx.unique(y).length;
         int n = x.length;
 
-        int[][] train = LOOCV.of(n);
+        LOOCV cv = new LOOCV(n);
         int[] prediction = new int[n];
         double[][] posteriori = new double[n][k];
         long fitTime = 0;
@@ -87,8 +98,8 @@ public interface LOOCV {
         boolean soft = false;
 
         for (int i = 0; i < n; i++) {
-            T[] trainx = MathEx.slice(x, train[i]);
-            int[] trainy = MathEx.slice(y, train[i]);
+            T[] trainx = MathEx.slice(x, cv.train[i]);
+            int[] trainy = MathEx.slice(y, cv.train[i]);
 
             long start = System.nanoTime();
             M model = trainer.apply(trainx, trainy);
@@ -97,11 +108,13 @@ public interface LOOCV {
             if (model instanceof SoftClassifier) {
                 soft = true;
                 start = System.nanoTime();
-                prediction[i] = ((SoftClassifier<T>) model).predict(x[i], posteriori[i]);
+                int j = cv.test[i];
+                prediction[j] = ((SoftClassifier<T>) model).predict(x[j], posteriori[j]);
                 scoreTime += System.nanoTime() - start;
             } else {
                 start = System.nanoTime();
-                prediction[i] = model.predict(x[i]);
+                int j = cv.test[i];
+                prediction[j] = model.predict(x[j]);
                 scoreTime += System.nanoTime() - start;
             }
         }
@@ -161,12 +174,12 @@ public interface LOOCV {
      * @return the predictions.
      */
     @SuppressWarnings("unchecked")
-    static ClassificationMetrics classification(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
+    public static ClassificationMetrics classification(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameClassifier> trainer) {
         int[] y = formula.y(data).toIntArray();
         int k = MathEx.unique(y).length;
         int n = y.length;
 
-        int[][] train = LOOCV.of(n);
+        LOOCV cv = new LOOCV(n);
         int[] prediction = new int[n];
         double[][] posteriori = new double[n][k];
         long fitTime = 0;
@@ -175,17 +188,19 @@ public interface LOOCV {
 
         for (int i = 0; i < n; i++) {
             long start = System.nanoTime();
-            DataFrameClassifier model = trainer.apply(formula, data.of(train[i]));
+            DataFrameClassifier model = trainer.apply(formula, data.of(cv.train[i]));
             fitTime += System.nanoTime() - start;
 
             if (model instanceof SoftClassifier) {
                 soft = true;
                 start = System.nanoTime();
-                prediction[i] = ((SoftClassifier<Tuple>) model).predict(data.get(i), posteriori[i]);
+                int j = cv.test[i];
+                prediction[j] = ((SoftClassifier<Tuple>) model).predict(data.get(j), posteriori[j]);
                 scoreTime += System.nanoTime() - start;
             } else {
                 start = System.nanoTime();
-                prediction[i] = model.predict(data.get(i));
+                int j = cv.test[i];
+                prediction[j] = model.predict(data.get(j));
                 scoreTime += System.nanoTime() - start;
             }
         }
@@ -244,23 +259,23 @@ public interface LOOCV {
      * Runs leave-one-out cross validation tests.
      * @return the predictions.
      */
-    static <T, M extends Regression<T>> RegressionMetrics regression(T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
+    public static <T, M extends Regression<T>> RegressionMetrics regression(T[] x, double[] y, BiFunction<T[], double[], M> trainer) {
         int n = x.length;
-        int[][] train = LOOCV.of(n);
+        LOOCV cv = new LOOCV(n);
         double[] prediction = new double[n];
         long fitTime = 0;
         long scoreTime = 0;
 
         for (int i = 0; i < n; i++) {
-            T[] trainx = MathEx.slice(x, train[i]);
-            double[] trainy = MathEx.slice(y, train[i]);
+            T[] trainx = MathEx.slice(x, cv.train[i]);
+            double[] trainy = MathEx.slice(y, cv.train[i]);
 
             long start = System.nanoTime();
             M model = trainer.apply(trainx, trainy);
             fitTime += System.nanoTime() - start;
 
             start = System.nanoTime();
-            prediction[i] = model.predict(x[i]);
+            prediction[cv.test[i]] = model.predict(x[cv.test[i]]);
             scoreTime += System.nanoTime() - start;
         }
 
@@ -280,9 +295,9 @@ public interface LOOCV {
      * Runs leave-one-out cross validation tests.
      * @return the predictions.
      */
-    static RegressionMetrics regression(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameRegression> trainer) {
+    public static RegressionMetrics regression(Formula formula, DataFrame data, BiFunction<Formula, DataFrame, DataFrameRegression> trainer) {
         int n = data.size();
-        int[][] train = LOOCV.of(n);
+        LOOCV cv = new LOOCV(n);
         double[] y = formula.y(data).toDoubleArray();
         double[] prediction = new double[n];
         long fitTime = 0;
@@ -290,11 +305,11 @@ public interface LOOCV {
 
         for (int i = 0; i < n; i++) {
             long start = System.nanoTime();
-            DataFrameRegression model = trainer.apply(formula, data.of(train[i]));
+            DataFrameRegression model = trainer.apply(formula, data.of(cv.train[i]));
             fitTime += System.nanoTime() - start;
 
             start = System.nanoTime();
-            prediction[i] = model.predict(data.get(i));
+            prediction[cv.test[i]] = model.predict(data.get(cv.test[i]));
             scoreTime += System.nanoTime() - start;
         }
 
