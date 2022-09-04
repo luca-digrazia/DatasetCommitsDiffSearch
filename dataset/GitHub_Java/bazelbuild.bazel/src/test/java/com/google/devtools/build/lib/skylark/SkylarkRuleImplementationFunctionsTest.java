@@ -23,7 +23,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -36,7 +35,6 @@ import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.DefaultInfo;
-import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -312,8 +310,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testCreateSpawnActionArgumentsBadExecutable() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
-        "expected value of type 'File or string or FilesToRunProvider' for parameter 'executable', "
-            + "for call to method run(",
+        "expected value of type 'File or string' for parameter 'executable', in method call "
+            + "run(list inputs, list outputs, list arguments, int executable) of 'actions'",
         "ruleContext.actions.run(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
@@ -368,7 +366,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
         ruleContext,
-        "unexpected keyword 'bad_param', for call to method run(",
+        "unexpected keyword 'bad_param', in method call run("
+            + "list outputs, string bad_param, File executable) of 'actions'",
         "f = ruleContext.actions.declare_file('foo.sh')",
         "ruleContext.actions.run(outputs=[], bad_param = 'some text', executable = f)");
   }
@@ -540,8 +539,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
     checkErrorContains(
         ruleContext,
-        "parameter 'mnemonic' has no default value, for call to method "
-            + "do_nothing(mnemonic, inputs = []) of 'actions'",
+        "parameter 'mnemonic' has no default value, "
+        + "in method call do_nothing(list inputs) of 'actions'",
         "ruleContext.actions.do_nothing(inputs = ruleContext.files.srcs)");
   }
 
@@ -825,7 +824,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   public void testRunfilesBadSetGenericType() throws Exception {
     checkErrorContains(
         "expected value of type 'depset of Files or NoneType' for parameter 'transitive_files', "
-            + "for call to method runfiles(",
+            + "in method call runfiles(depset transitive_files) of 'ctx'",
         "ruleContext.runfiles(transitive_files=depset([1, 2, 3]))");
   }
 
@@ -940,7 +939,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
         ruleContext,
-        "unexpected keyword 'bad_keyword', for call to method runfiles(",
+        "unexpected keyword 'bad_keyword', in method call runfiles(string bad_keyword) of 'ctx'",
         "ruleContext.runfiles(bad_keyword = '')");
   }
 
@@ -1293,7 +1292,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:my_rule"));
     assertThat(expected)
         .hasMessageThat()
-        .contains("unexpected keyword 'foo', for call to function DefaultInfo(");
+        .contains("unexpected keyword 'foo', in call to DefaultInfo");
   }
 
   @Test
@@ -2795,61 +2794,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
             + "the attribute must be private (i.e. start with '_')");
   }
 
-  @Test
-  public void testFilesToRunInActionsRun() throws Exception {
-    scratch.file(
-        "a/a.bzl",
-        "def _impl(ctx):",
-        "    f = ctx.actions.declare_file('output')",
-        "    ctx.actions.run(",
-        "        inputs = [],",
-        "        outputs = [f],",
-        "        executable = ctx.attr._tool[DefaultInfo].files_to_run)",
-        "    return [DefaultInfo(files=depset([f]))]",
-        "r = rule(implementation=_impl, attrs = {'_tool': attr.label(default='//a:tool')})");
-
-    scratch.file(
-        "a/BUILD",
-        "load(':a.bzl', 'r')",
-        "r(name='r')",
-        "sh_binary(name='tool', srcs=['tool.sh'], data=['data'])");
-
-    ConfiguredTarget r = getConfiguredTarget("//a:r");
-    Action action =
-        getGeneratingAction(
-            Iterables.getOnlyElement(r.getProvider(FileProvider.class).getFilesToBuild()));
-    assertThat(ActionsTestUtil.baseArtifactNames(action.getRunfilesSupplier().getArtifacts()))
-        .containsAllOf("tool", "tool.sh", "data");
-  }
-
-  @Test
-  public void testFilesToRunInActionsTools() throws Exception {
-    scratch.file(
-        "a/a.bzl",
-        "def _impl(ctx):",
-        "    f = ctx.actions.declare_file('output')",
-        "    ctx.actions.run(",
-        "        inputs = [],",
-        "        outputs = [f],",
-        "        tools = [ctx.attr._tool[DefaultInfo].files_to_run],",
-        "        executable = 'a/tool')",
-        "    return [DefaultInfo(files=depset([f]))]",
-        "r = rule(implementation=_impl, attrs = {'_tool': attr.label(default='//a:tool')})");
-
-    scratch.file(
-        "a/BUILD",
-        "load(':a.bzl', 'r')",
-        "r(name='r')",
-        "sh_binary(name='tool', srcs=['tool.sh'], data=['data'])");
-
-    ConfiguredTarget r = getConfiguredTarget("//a:r");
-    Action action =
-        getGeneratingAction(
-            Iterables.getOnlyElement(r.getProvider(FileProvider.class).getFilesToBuild()));
-    assertThat(ActionsTestUtil.baseArtifactNames(action.getRunfilesSupplier().getArtifacts()))
-        .containsAllOf("tool", "tool.sh", "data");
-  }
-
   // Verifies that configuration_field can only be used on 'label' attributes.
   @Test
   public void testConfigurationField_invalidAttributeType() throws Exception {
@@ -2872,11 +2816,9 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     AssertionError expected =
         assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:main"));
 
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "expected value of type 'int or function' for parameter 'default', "
-                + "for call to method int(");
+    assertThat(expected).hasMessageThat()
+        .contains("expected value of type 'int or function' for parameter 'default', "
+            + "in method call int(LateBoundDefault default)");
   }
 
   @Test
