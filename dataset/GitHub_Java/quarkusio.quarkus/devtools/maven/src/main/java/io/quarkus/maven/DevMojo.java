@@ -241,10 +241,6 @@ public class DevMojo extends AbstractMojo {
                     AppArtifact appArtifact = project.getAppArtifact();
                     MavenProject mavenProject = projectMap.get(String.format("%s:%s:%s",
                             appArtifact.getGroupId(), appArtifact.getArtifactId(), appArtifact.getVersion()));
-                    // no information about this project from Maven. Skip.
-                    if (mavenProject == null) {
-                        continue;
-                    }
                     String sourcePath = null;
                     String classesPath = null;
                     String resourcePath = null;

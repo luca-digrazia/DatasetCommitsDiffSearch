@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.dev;
 
 import java.io.File;
@@ -7,11 +23,10 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,25 +60,13 @@ public class ClassLoaderCompiler {
             throws IOException {
         this.compilationProviders = compilationProviders;
 
-        Set<URL> urls = new HashSet<>();
+        List<URL> urls = new ArrayList<>();
         ClassLoader c = classLoader;
         while (c != null) {
             if (c instanceof URLClassLoader) {
                 urls.addAll(Arrays.asList(((URLClassLoader) c).getURLs()));
             }
             c = c.getParent();
-        }
-        //this is pretty yuck, but under JDK11 the URLClassLoader trick does not work
-        Enumeration<URL> manifests = classLoader.getResources("META-INF/MANIFEST.MF");
-        while (manifests.hasMoreElements()) {
-            URL url = manifests.nextElement();
-            if (url.getProtocol().equals("jar")) {
-                String path = url.getPath();
-                if (path.startsWith("file:")) {
-                    path = path.substring(5, path.lastIndexOf('!'));
-                    urls.add(new File(URLDecoder.decode(path, StandardCharsets.UTF_8.name())).toURL());
-                }
-            }
         }
 
         urls.addAll(context.getClassPath());
@@ -133,8 +136,7 @@ public class ClassLoaderCompiler {
                                     classPathElements,
                                     new File(i.getProjectDirectory()),
                                     new File(sourcePath),
-                                    new File(i.getClassesPath()),
-                                    context.getSourceEncoding()));
+                                    new File(i.getClassesPath())));
                 });
             }
         }
@@ -158,16 +160,5 @@ public class ClassLoaderCompiler {
                 }
             }
         }
-    }
-
-    public Path findSourcePath(Path classFilePath, Set<String> sourcePaths, String classesPath) {
-        for (CompilationProvider compilationProvider : compilationProviders) {
-            Path sourcePath = compilationProvider.getSourcePath(classFilePath, sourcePaths, classesPath);
-
-            if (sourcePath != null) {
-                return sourcePath;
-            }
-        }
-        return null;
     }
 }

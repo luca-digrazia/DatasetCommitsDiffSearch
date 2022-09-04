@@ -1,14 +1,11 @@
 package io.quarkus.dev;
 
-import java.io.File;
 import java.io.Serializable;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Object that is used to pass context data from the plugin doing the invocation
@@ -38,14 +35,14 @@ public class DevModeContext implements Serializable {
 
         private final String name;
         private final String projectDirectory;
-        private final Set<String> sourcePaths;
+        private final List<String> sourcePaths;
         private final String classesPath;
         private final String resourcePath;
 
         public ModuleInfo(
                 String name,
                 String projectDirectory,
-                Set<String> sourcePaths,
+                List<String> sourcePaths,
                 String classesPath,
                 String resourcePath) {
             this.name = name;
@@ -63,12 +60,8 @@ public class DevModeContext implements Serializable {
             return projectDirectory;
         }
 
-        public Set<String> getSourcePaths() {
+        public List<String> getSourcePaths() {
             return sourcePaths;
-        }
-
-        public void addSourcePaths(Collection<String> additionalPaths) {
-            additionalPaths.stream().map(p -> projectDirectory + File.separator + p).forEach(sourcePaths::add);
         }
 
         public String getClassesPath() {
