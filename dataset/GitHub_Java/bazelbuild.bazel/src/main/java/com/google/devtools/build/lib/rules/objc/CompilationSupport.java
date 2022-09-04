@@ -661,16 +661,16 @@ public class CompilationSupport {
   private final CcToolchainProvider toolchain;
   private final boolean usePch;
   private final IncludeProcessingType includeProcessingType;
-  private Optional<CcCompilationContext> ccCompilationContext;
+  private Optional<ObjcProvider> objcProvider;
 
-  private void setCcCompilationContext(CcCompilationContext ccCompilationContext) {
-    checkState(!this.ccCompilationContext.isPresent());
-    this.ccCompilationContext = Optional.of(ccCompilationContext);
+  private void setObjcProvider(ObjcProvider objcProvider) {
+    checkState(!this.objcProvider.isPresent());
+    this.objcProvider = Optional.of(objcProvider);
   }
 
-  public CcCompilationContext getCcCompilationContext() {
-    checkState(ccCompilationContext.isPresent());
-    return ccCompilationContext.get();
+  public ObjcProvider getObjcProvider() {
+    checkState(objcProvider.isPresent());
+    return objcProvider.get();
   }
 
   /**
@@ -704,7 +704,7 @@ public class CompilationSupport {
     this.intermediateArtifacts = intermediateArtifacts;
     this.outputGroupCollector = outputGroupCollector;
     this.objectFilesCollector = objectFilesCollector;
-    this.ccCompilationContext = Optional.absent();
+    this.objcProvider = Optional.absent();
     this.usePch = usePch;
     if (toolchain == null
         && ruleContext
@@ -916,6 +916,7 @@ public class CompilationSupport {
     return registerCompileAndArchiveActions(
         compilationArtifacts,
         objcCompilationContext,
+        Optional.absent(),
         ExtraCompileArgs.NONE,
         ImmutableList.<PathFragment>of());
   }
@@ -960,6 +961,7 @@ public class CompilationSupport {
   private CompilationSupport registerCompileAndArchiveActions(
       CompilationArtifacts compilationArtifacts,
       ObjcCompilationContext objcCompilationContext,
+      Optional<ObjcCommon> objcCommon,
       ExtraCompileArgs extraCompileArgs,
       List<PathFragment> priorityHeaders)
       throws RuleErrorException, InterruptedException {
@@ -1014,7 +1016,17 @@ public class CompilationSupport {
         compilationResult.getCcCompilationOutputs().getObjectFiles(/* usePic= */ false));
     outputGroupCollector.putAll(compilationResult.getOutputGroups());
 
-    setCcCompilationContext(compilationResult.getCcCompilationContext());
+    if (objcCommon.isPresent()
+        && objcCommon.get().getPurpose() == ObjcCommon.Purpose.COMPILE_AND_LINK) {
+
+      ObjcProvider.NativeBuilder objcProviderBuilder = objcCommon.get().getObjcProviderBuilder();
+      ObjcProvider objcProvider =
+          objcProviderBuilder
+              .setCcCompilationContext(compilationResult.getCcCompilationContext())
+              .build();
+
+      setObjcProvider(objcProvider);
+    }
 
     return this;
   }
@@ -1035,6 +1047,7 @@ public class CompilationSupport {
       registerCompileAndArchiveActions(
           common.getCompilationArtifacts().get(),
           common.getObjcCompilationContext(),
+          Optional.of(common),
           extraCompileArgs,
           priorityHeaders);
     }

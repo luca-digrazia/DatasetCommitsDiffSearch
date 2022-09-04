@@ -1013,13 +1013,9 @@ public final class CcCompilationHelper {
     PathFragment repositoryPath = repositoryName.getExecPath(siblingRepositoryLayout);
     ccCompilationContextBuilder.addQuoteIncludeDir(repositoryPath);
     ccCompilationContextBuilder.addQuoteIncludeDir(
-        siblingRepositoryLayout
-            ? ruleContext.getGenfilesFragment()
-            : ruleContext.getGenfilesFragment().getRelative(repositoryPath));
+        ruleContext.getGenfilesFragment().getRelative(repositoryPath));
     ccCompilationContextBuilder.addQuoteIncludeDir(
-        siblingRepositoryLayout
-            ? ruleContext.getBinFragment()
-            : ruleContext.getBinFragment().getRelative(repositoryPath));
+        ruleContext.getBinFragment().getRelative(repositoryPath));
 
     ccCompilationContextBuilder.addSystemIncludeDirs(systemIncludeDirs);
     ccCompilationContextBuilder.addFrameworkIncludeDirs(frameworkIncludeDirs);
@@ -2099,10 +2095,8 @@ public final class CcCompilationHelper {
     String path = source.getFilename();
     boolean isCFile = CppFileTypes.C_SOURCE.matches(path);
     boolean isCppFile = CppFileTypes.CPP_SOURCE.matches(path);
-    boolean isObjcFile = CppFileTypes.OBJC_SOURCE.matches(path);
-    boolean isObjcppFile = CppFileTypes.OBJCPP_SOURCE.matches(path);
 
-    if (!isCFile && !isCppFile && !isObjcFile && !isObjcppFile) {
+    if (!isCFile && !isCppFile) {
       return ImmutableList.of();
     }
 
