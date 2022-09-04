@@ -2100,8 +2100,7 @@ public class MathEx {
     }
 
     /**
-     * The Euclidean distance on binary sparse arrays,
-     * which are the indices of nonzero elements in ascending order.
+     * The Euclidean distance.
      */
     public static double distance(int[] x, int[] y) {
         return sqrt(squaredDistance(x, y));
@@ -2129,32 +2128,43 @@ public class MathEx {
     }
 
     /**
-     * The squared Euclidean distance on binary sparse arrays,
-     * which are the indices of nonzero elements in ascending order.
+     * The squared Euclidean distance.
      */
     public static double squaredDistance(int[] x, int[] y) {
-        double d = 0.0;
+        if (x.length != y.length) {
+            throw new IllegalArgumentException("Input vector sizes are different.");
+        }
 
-        int p1 = 0, p2 = 0;
-        while (p1 < x.length && p2 < y.length) {
-            int i1 = x[p1];
-            int i2 = y[p2];
-            if (i1 == i2) {
-                p1++;
-                p2++;
-            } else if (i1 > i2) {
-                d++;
-                p2++;
-            } else {
-                d++;
-                p1++;
+        switch (x.length) {
+            case 2: {
+                int d0 = x[0] - y[0];
+                int d1 = x[1] - y[1];
+                return d0 * d0 + d1 * d1;
+            }
+
+            case 3: {
+                int d0 = x[0] - y[0];
+                int d1 = x[1] - y[1];
+                int d2 = x[2] - y[2];
+                return d0 * d0 + d1 * d1 + d2 * d2;
+            }
+
+            case 4: {
+                int d0 = x[0] - y[0];
+                int d1 = x[1] - y[1];
+                int d2 = x[2] - y[2];
+                int d3 = x[3] - y[3];
+                return d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3;
             }
         }
 
-        d += x.length - p1;
-        d += y.length - p2;
+        double sum = 0.0;
+        for (int i = 0; i < x.length; i++) {
+            int d = x[i] - y[i];
+            sum += d * d;
+        }
 
-        return d;
+        return sum;
     }
 
     /**
@@ -2301,50 +2311,7 @@ public class MathEx {
     }
 
     /**
-     * Returns a pairwise distance matrix.
-     * @param n the size of matrix.
-     * @param half If true, the matrix is lower half to save space.
-     * @return the distance matrix.
-     */
-    private static double[][] pdist(int n, boolean half) {
-        double[][] dist = half ? new double[n][] : new double[n][n];
-        if (half) {
-            for (int i = 0; i < n; i++) {
-                dist[i] = new double[i];
-            }
-        }
-        return dist;
-    }
-
-    /**
-     * Returns the pairwise distance matrix of multiple binary sparse vectors.
-     * @param x Each row is a binary sparse array, which are the indices of
-     *          nonzero elements in ascending order.
-     * @return a full pairwise distance matrix.
-     */
-    public static double[][] pdist(int[][] x) {
-        return pdist(x, false, false);
-    }
-
-    /**
-     * Returns the pairwise distance matrix of multiple binary sparse vectors.
-     * @param x Each row is a binary sparse array, which are the indices of
-     *          nonzero elements in ascending order.
-     * @param squared If true, compute the squared Euclidean distance.
-     * @param half If true, only the lower half of distance matrix will be computed.
-     * @return the pairwise distance matrix.
-     */
-    public static double[][] pdist(int[][] x, boolean squared, boolean half) {
-        int n = x.length;
-
-        double[][] dist = pdist(n, half);
-        pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance, half);
-
-        return dist;
-    }
-
-    /**
-     * Returns the pairwise distance matrix of multiple vectors.
+     * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @return a full pairwise distance matrix.
      */
@@ -2353,23 +2320,23 @@ public class MathEx {
     }
 
     /**
-     * Returns the pairwise distance matrix of multiple vectors.
+     * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @param squared If true, compute the squared Euclidean distance.
-     * @param half If true, only the lower half of distance matrix will be computed.
+     * @param half If true, only the lower half of distance matrix will be referenced.
      * @return the pairwise distance matrix.
      */
     public static double[][] pdist(float[][] x, boolean squared, boolean half) {
         int n = x.length;
 
-        double[][] dist = pdist(n, half);
+        double[][] dist = new double[n][n];
         pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance, half);
 
         return dist;
     }
 
     /**
-     * Returns the pairwise distance matrix of multiple vectors.
+     * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @return a full pairwise distance matrix.
      */
@@ -2378,24 +2345,24 @@ public class MathEx {
     }
 
     /**
-     * Returns the pairwise distance matrix of multiple vectors.
+     * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @param squared If true, compute the squared Euclidean distance.
-     * @param half If true, only the lower half of distance matrix will be computed.
+     * @param half If true, only the lower half of distance matrix will be referenced.
      * @return the pairwise distance matrix.
      */
     public static double[][] pdist(double[][] x, boolean squared, boolean half) {
         int n = x.length;
 
-        double[][] dist = pdist(n, half);
+        double[][] dist = new double[n][n];
         pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance, half);
 
         return dist;
     }
 
     /**
-     * Returns the pairwise distance matrix of multiple vectors.
-     * @param x Each row is the sparse array of observations
+     * Pairwise distance between pairs of objects.
+     * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @return a full pairwise distance matrix.
      */
     public static double[][] pdist(SparseArray[] x) {
@@ -2403,23 +2370,23 @@ public class MathEx {
     }
 
     /**
-     * Returns the pairwise distance matrix of multiple vectors.
-     * @param x Each row is the sparse array of observations
+     * Pairwise distance between pairs of objects.
+     * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @param squared If true, compute the squared Euclidean distance.
-     * @param half If true, only the lower half of distance matrix will be computed.
+     * @param half If true, only the lower half of distance matrix will be referenced.
      * @return the pairwise distance matrix.
      */
     public static double[][] pdist(SparseArray[] x, boolean squared, boolean half) {
         int n = x.length;
 
-        double[][] dist = pdist(n, half);
+        double[][] dist = new double[n][n];
         pdist(x, dist, squared ? MathEx::squaredDistance : MathEx::distance, half);
 
         return dist;
     }
 
     /**
-     * Returns the pairwise distance matrix of multiple vectors.
+     * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
      * @param distance The distance lambda.
      * @param half If true, only the lower half of dist will be referenced.
