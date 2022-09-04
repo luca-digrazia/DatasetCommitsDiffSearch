@@ -34,9 +34,8 @@ import org.junit.runners.JUnit4;
 public class CcProtoLibraryTest extends BuildViewTestCase {
   @Before
   public void setUp() throws Exception {
-    mockToolsConfig.create("/protobuf/WORKSPACE");
-    mockToolsConfig.overwrite(
-        "/protobuf/BUILD",
+    scratch.file(
+        "protobuf/BUILD",
         "package(default_visibility=['//visibility:public'])",
         "exports_files(['protoc'])",
         "proto_lang_toolchain(",
@@ -49,7 +48,8 @@ public class CcProtoLibraryTest extends BuildViewTestCase {
         new String(FileSystemUtils.readContentAsLatin1(rootDirectory.getRelative("WORKSPACE")));
     mockToolsConfig.overwrite(
         "WORKSPACE",
-        "local_repository(name = 'com_google_protobuf', path = '/protobuf/')",
+        "local_repository(name = 'com_google_protobuf', path = 'protobuf/')",
+        "local_repository(name = 'com_google_protobuf_cc', path = 'protobuf/')",
         existingWorkspace);
     invalidatePackages(); // A dash of magic to re-evaluate the WORKSPACE file.
   }
@@ -148,7 +148,6 @@ public class CcProtoLibraryTest extends BuildViewTestCase {
     scratch.file(
         "x/BUILD", "cc_proto_library(name = 'foo_cc_proto', deps = ['@bla//foo:bar_proto'])");
 
-    scratch.file("/bla/WORKSPACE");
     // Create the rule '@bla//foo:bar_proto'.
     scratch.file(
         "/bla/foo/BUILD",
