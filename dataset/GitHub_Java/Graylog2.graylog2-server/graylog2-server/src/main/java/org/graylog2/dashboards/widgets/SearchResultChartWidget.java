@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,10 +15,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.dashboards.widgets;
 
-import com.codahale.metrics.MetricRegistry;
+import org.graylog2.Core;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.HistogramResult;
@@ -32,18 +33,18 @@ import java.util.Map;
  */
 public class SearchResultChartWidget extends DashboardWidget {
 
-    private final Indexer indexer;
+    private final Core core;
     private final String query;
     private final TimeRange timeRange;
     private final Indexer.DateHistogramInterval interval;
     private final String streamId;
 
-    public SearchResultChartWidget(MetricRegistry metricRegistry, Indexer indexer, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
-        super(metricRegistry, Type.SEARCH_RESULT_CHART, id, description, cacheTime, config, creatorUserId);
-        this.indexer = indexer;
+    public SearchResultChartWidget(Core core, String id, String description, int cacheTime, Map<String, Object> config, String query, TimeRange timeRange, String creatorUserId) {
+        super(core, Type.SEARCH_RESULT_CHART, id, description, cacheTime, config, creatorUserId);
 
         this.query = query;
         this.timeRange = timeRange;
+        this.core = core;
 
         if (config.containsKey("stream_id")) {
             this.streamId = (String) config.get("stream_id");
@@ -84,7 +85,7 @@ public class SearchResultChartWidget extends DashboardWidget {
         }
 
         try {
-            HistogramResult histogram = indexer.searches().histogram(query, interval, filter, timeRange);
+            HistogramResult histogram = core.getIndexer().searches().histogram(query, interval, filter, timeRange);
             return new ComputationResult(histogram.getResults(), histogram.took().millis());
         } catch (IndexHelper.InvalidRangeFormatException e) {
             throw new RuntimeException("Invalid timerange format.", e);

@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,8 +15,8 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package org.graylog2.rest.resources.dashboards;
 
 import com.beust.jcommander.internal.Lists;
@@ -24,26 +24,22 @@ import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.bson.types.ObjectId;
 import org.graylog2.dashboards.Dashboard;
-import org.graylog2.dashboards.DashboardImpl;
-import org.graylog2.dashboards.DashboardRegistry;
-import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
-import org.graylog2.database.ValidationException;
+import org.graylog2.database.*;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.dashboards.requests.*;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.system.activities.Activity;
-import org.graylog2.system.activities.ActivityWriter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -60,15 +56,6 @@ import java.util.concurrent.ExecutionException;
 @Path("/dashboards")
 public class DashboardsResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(DashboardsResource.class);
-
-    @Inject
-    private DashboardService dashboardService;
-
-    @Inject
-    private DashboardRegistry dashboardRegistry;
-
-    @Inject
-    private ActivityWriter activityWriter;
 
     @POST
     @Timed
@@ -97,19 +84,19 @@ public class DashboardsResource extends RestResource {
         dashboardData.put("creator_user_id", cr.creatorUserId);
         dashboardData.put("created_at", new DateTime(DateTimeZone.UTC));
 
-        Dashboard dashboard = new DashboardImpl(dashboardData);
-        String id;
+        Dashboard dashboard = new Dashboard(dashboardData, core);
+        ObjectId id;
         try {
-            id = dashboardService.save(dashboard);
+            id = dashboard.save();
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        dashboardRegistry.add(dashboard);
+        core.dashboards().add(dashboard);
 
         Map<String, Object> result = Maps.newHashMap();
-        result.put("dashboard_id", id);
+        result.put("dashboard_id", id.toStringMongod());
 
         return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
@@ -124,7 +111,7 @@ public class DashboardsResource extends RestResource {
         restrictToMaster();
         List<Map<String, Object>> dashboards = Lists.newArrayList();
 
-        for (Dashboard dashboard : dashboardService.all(core)) {
+        for (Dashboard dashboard : Dashboard.all(core)) {
             if (isPermitted(RestPermissions.DASHBOARDS_READ, dashboard.getId())) {
                 dashboards.add(dashboard.asMap());
             }
@@ -150,7 +137,7 @@ public class DashboardsResource extends RestResource {
         checkPermission(RestPermissions.DASHBOARDS_READ, dashboardId);
 
         try {
-            Dashboard dashboard = dashboardService.load(dashboardId);
+            Dashboard dashboard = Dashboard.load(loadObjectId(dashboardId), core);
             return json(dashboard.asMap());
         } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
@@ -170,13 +157,13 @@ public class DashboardsResource extends RestResource {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
         try {
-            Dashboard dashboard = dashboardService.load(dashboardId);
-            dashboardRegistry.remove(dashboardId);
-            dashboardService.destroy(dashboard);
+            Dashboard dashboard = Dashboard.load(loadObjectId(dashboardId), core);
+            core.dashboards().remove(dashboardId);
+            dashboard.destroy();
 
             String msg = "Deleted dashboard <" + dashboard.getId() + ">. Reason: REST request.";
             LOG.info(msg);
-            activityWriter.write(new Activity(msg, DashboardsResource.class));
+            core.getActivityWriter().write(new Activity(msg, DashboardsResource.class));
         } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
         }
@@ -203,7 +190,7 @@ public class DashboardsResource extends RestResource {
                 throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
             }
 
-            Dashboard dashboard = dashboardService.load(dashboardId);
+            Dashboard dashboard = Dashboard.load(loadObjectId(dashboardId), core);
 
             if(cr.title != null) {
                 dashboard.setTitle(cr.title);
@@ -214,7 +201,7 @@ public class DashboardsResource extends RestResource {
             }
 
             // Validations are happening here.
-            dashboardService.save(dashboard);
+            dashboard.save();
         } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
         } catch (ValidationException e) {
@@ -244,8 +231,8 @@ public class DashboardsResource extends RestResource {
                 throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
             }
 
-            Dashboard dashboard = dashboardService.load(dashboardId);
-            dashboardService.updateWidgetPositions(dashboard, uwpr.positions);
+            Dashboard dashboard = Dashboard.load(loadObjectId(dashboardId), core);
+            dashboard.updateWidgetPositions(uwpr.positions);
         } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
         } catch (ValidationException e) {
@@ -293,14 +280,14 @@ public class DashboardsResource extends RestResource {
         try {
             widget = DashboardWidget.fromRequest(core, awr);
 
-            Dashboard dashboard = dashboardRegistry.get(dashboardId);
+            Dashboard dashboard = core.dashboards().get(dashboardId);
 
             if (dashboard == null) {
                 LOG.error("Dashboard not found.");
                 throw new WebApplicationException(404);
             }
 
-            dashboardService.addWidget(dashboard, widget);
+            dashboard.addWidget(widget);
         } catch (ValidationException e1) {
             LOG.error("Validation error.", e1);
             throw new WebApplicationException(e1, Response.Status.BAD_REQUEST);
@@ -346,20 +333,17 @@ public class DashboardsResource extends RestResource {
             throw new WebApplicationException(400);
         }
 
-        final Dashboard dashboard = dashboardRegistry.get(dashboardId);
+        Dashboard dashboard = core.dashboards().get(dashboardId);
 
         if (dashboard == null) {
             LOG.error("Dashboard not found.");
             throw new WebApplicationException(404);
         }
-
-        final DashboardWidget widget = dashboard.getWidget(widgetId);
-
-        dashboardService.removeWidget(dashboard, widget);
+        dashboard.removeWidget(widgetId);
 
         String msg = "Deleted widget <" + widgetId + "> from dashboard <" + dashboardId + ">. Reason: REST request.";
         LOG.info(msg);
-        activityWriter.write(new Activity(msg, DashboardsResource.class));
+        core.getActivityWriter().write(new Activity(msg, DashboardsResource.class));
 
         return Response.status(Response.Status.NO_CONTENT).build();
     }
@@ -379,7 +363,7 @@ public class DashboardsResource extends RestResource {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_READ, dashboardId);
 
-        Dashboard dashboard = dashboardRegistry.get(dashboardId);
+        Dashboard dashboard = core.dashboards().get(dashboardId);
 
         if (dashboard == null) {
             LOG.error("Dashboard not found.");
@@ -436,7 +420,7 @@ public class DashboardsResource extends RestResource {
         }
 
         try {
-            Dashboard dashboard = dashboardRegistry.get(dashboardId);
+            Dashboard dashboard = core.dashboards().get(dashboardId);
 
             if (dashboard == null) {
                 LOG.error("Dashboard not found.");
@@ -450,7 +434,7 @@ public class DashboardsResource extends RestResource {
                 throw new WebApplicationException(404);
             }
 
-            dashboardService.updateWidgetDescription(dashboard, widget, uwr.description);
+            dashboard.updateWidgetDescription(widget, uwr.description);
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
@@ -495,7 +479,7 @@ public class DashboardsResource extends RestResource {
         }
 
         try {
-            Dashboard dashboard = dashboardRegistry.get(dashboardId);
+            Dashboard dashboard = core.dashboards().get(dashboardId);
 
             if (dashboard == null) {
                 LOG.error("Dashboard not found.");
@@ -509,7 +493,7 @@ public class DashboardsResource extends RestResource {
                 throw new WebApplicationException(404);
             }
 
-            dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime);
+            dashboard.updateWidgetCacheTime(widget, uwr.cacheTime);
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
