@@ -174,7 +174,8 @@ public final class Lexer {
 
     @Override
     public PathFragment getPath() {
-      return lineNumberTable.getPath(getStartOffset());
+      PathFragment path = lineNumberTable.getPath(getStartOffset());
+      return path;
     }
 
     @Override
@@ -527,7 +528,6 @@ public final class Lexer {
     keywordMap.put("in", TokenKind.IN);
     keywordMap.put("is", TokenKind.IS);
     keywordMap.put("lambda", TokenKind.LAMBDA);
-    keywordMap.put("load", TokenKind.LOAD);
     keywordMap.put("nonlocal", TokenKind.NONLOCAL);
     keywordMap.put("not", TokenKind.NOT);
     keywordMap.put("or", TokenKind.OR);
