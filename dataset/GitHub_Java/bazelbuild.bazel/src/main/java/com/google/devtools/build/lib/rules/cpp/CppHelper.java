@@ -176,7 +176,7 @@ public class CppHelper {
           ruleContext.getPrerequisites("additional_linker_inputs", Mode.TARGET)) {
         builder.put(
             AliasProvider.getDependencyLabel(current),
-            current.getProvider(FileProvider.class).getFilesToBuild().toList());
+            ImmutableList.copyOf(current.getProvider(FileProvider.class).getFilesToBuild()));
       }
     }
 
@@ -238,9 +238,6 @@ public class CppHelper {
   /**
    * Convenience function for finding the dynamic runtime inputs for the current toolchain. Useful
    * for non C++ rules that link against the C++ runtime.
-   *
-   * <p>This uses the default feature configuration. Do *not* use this method in rules that use a
-   * non-default feature configuration, or risk a mismatch.
    */
   public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputs(
       RuleContext ruleContext) throws RuleErrorException {
@@ -254,9 +251,6 @@ public class CppHelper {
   /**
    * Convenience function for finding the dynamic runtime inputs for the current toolchain. Useful
    * for Starlark-defined rules that link against the C++ runtime.
-   *
-   * <p>This uses the default feature configuration. Do *not* use this method in rules that use a
-   * non-default feature configuration, or risk a mismatch.
    */
   public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputsFromStarlark(
       RuleContext ruleContext) throws EvalException {
@@ -579,7 +573,7 @@ public class CppHelper {
   static List<Artifact> getAggregatingMiddlemanForCppRuntimes(
       RuleContext ruleContext,
       String purpose,
-      NestedSet<Artifact> artifacts,
+      Iterable<Artifact> artifacts,
       String solibDir,
       String solibDirOverride,
       BuildConfiguration configuration) {
@@ -600,7 +594,7 @@ public class CppHelper {
       RuleContext ruleContext,
       ActionOwner owner,
       String purpose,
-      NestedSet<Artifact> artifacts,
+      Iterable<Artifact> artifacts,
       boolean useSolibSymlinks,
       String solibDir,
       BuildConfiguration configuration) {
@@ -621,7 +615,7 @@ public class CppHelper {
       RuleContext ruleContext,
       ActionOwner actionOwner,
       String purpose,
-      NestedSet<Artifact> artifacts,
+      Iterable<Artifact> artifacts,
       boolean useSolibSymlinks,
       boolean isCppRuntime,
       String solibDir,
@@ -629,8 +623,8 @@ public class CppHelper {
       BuildConfiguration configuration) {
     MiddlemanFactory factory = ruleContext.getAnalysisEnvironment().getMiddlemanFactory();
     if (useSolibSymlinks) {
-      NestedSetBuilder<Artifact> symlinkedArtifacts = NestedSetBuilder.stableOrder();
-      for (Artifact artifact : artifacts.toList()) {
+      List<Artifact> symlinkedArtifacts = new ArrayList<>();
+      for (Artifact artifact : artifacts) {
         Preconditions.checkState(Link.SHARED_LIBRARY_FILETYPES.matches(artifact.getFilename()));
         symlinkedArtifacts.add(
             isCppRuntime
@@ -644,7 +638,7 @@ public class CppHelper {
                     /* preserveName= */ false,
                     /* prefixConsumer= */ true));
       }
-      artifacts = symlinkedArtifacts.build();
+      artifacts = symlinkedArtifacts;
       purpose += "_with_solib";
     }
     return ImmutableList.of(
