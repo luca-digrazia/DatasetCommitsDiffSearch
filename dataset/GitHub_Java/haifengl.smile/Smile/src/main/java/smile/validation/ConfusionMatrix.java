@@ -12,13 +12,8 @@ public class ConfusionMatrix {
 	
 	private int[][] matrix;
 	
-	public ConfusionMatrix() {}
 	
-	public ConfusionMatrix(int[] truth, int[] prediction) {
-		generate(truth,prediction);
-	}
-	
-	public int[][] getMatrix() {
+	public int[][] getMatrix(){
 		return matrix;
 	}
 	
