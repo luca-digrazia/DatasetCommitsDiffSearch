@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.repository.RepositoryResolvedEvent;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Rule;
@@ -32,14 +33,12 @@ import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunctio
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.ResolvedHashesValue;
-import com.google.devtools.build.lib.rules.repository.WorkspaceFileHelper;
 import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
@@ -57,6 +56,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
 
   private final HttpDownloader httpDownloader;
   private double timeoutScaling = 1.0;
+  private boolean useNativePatch;
 
   public SkylarkRepositoryFunction(HttpDownloader httpDownloader) {
     this.httpDownloader = httpDownloader;
@@ -64,6 +64,10 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
 
   public void setTimeoutScaling(double timeoutScaling) {
     this.timeoutScaling = timeoutScaling;
+  }
+
+  public void setUseNativePatch(boolean useNativePatch) {
+    this.useNativePatch = useNativePatch;
   }
 
   @Nullable
@@ -118,8 +122,8 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
         Preconditions.checkNotNull(blacklistedPackagesValue).getPatterns();
 
     try (Mutability mutability = Mutability.create("Starlark repository")) {
-      StarlarkThread thread =
-          StarlarkThread.builder(mutability)
+      com.google.devtools.build.lib.syntax.Environment buildEnv =
+          com.google.devtools.build.lib.syntax.Environment.builder(mutability)
               .setSemantics(starlarkSemantics)
               .setEventHandler(env.getListener())
               .build();
@@ -132,7 +136,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               rule.getPackage().getRepositoryMapping(),
               new SymbolGenerator<>(key),
               /* analysisRuleLabel= */ null)
-          .storeInThread(thread);
+          .storeInThread(buildEnv);
 
       SkylarkRepositoryContext skylarkRepositoryContext =
           new SkylarkRepositoryContext(
@@ -143,9 +147,9 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               env,
               clientEnvironment,
               httpDownloader,
-              directories.getEmbeddedBinariesRoot(),
               timeoutScaling,
-              markerData);
+              markerData,
+              useNativePatch);
 
       // Since restarting a repository function can be really expensive, we first ensure that
       // all label-arguments can be resolved to paths.
@@ -173,7 +177,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
               /*args=*/ ImmutableList.of(skylarkRepositoryContext),
               /*kwargs=*/ ImmutableMap.of(),
               null,
-              thread);
+              buildEnv);
       RepositoryResolvedEvent resolved =
           new RepositoryResolvedEvent(
               rule, skylarkRepositoryContext.getAttr(), outputDirectory, retValue);
@@ -226,7 +230,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
           new IOException(rule + " must create a directory"), Transience.TRANSIENT);
     }
 
-    if (!WorkspaceFileHelper.doesWorkspaceFileExistUnder(outputDirectory)) {
+    if (!outputDirectory.getRelative(LabelConstants.WORKSPACE_FILE_NAME).exists()) {
       createWorkspaceFile(outputDirectory, rule.getTargetKind(), rule.getName());
     }
 

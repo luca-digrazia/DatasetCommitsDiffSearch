@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalExceptionWithStackTrace;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -61,7 +62,6 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -97,8 +97,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
     SkylarkRuleContext skylarkRuleContext = null;
     try (Mutability mutability = Mutability.create("configured target")) {
       skylarkRuleContext = new SkylarkRuleContext(ruleContext, null, starlarkSemantics);
-      StarlarkThread thread =
-          StarlarkThread.builder(mutability)
+      Environment env =
+          Environment.builder(mutability)
               .setSemantics(starlarkSemantics)
               .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
               .build(); // NB: loading phase functions are not available: this is analysis already,
@@ -110,7 +110,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
               ruleContext.getTarget().getPackage().getRepositoryMapping(),
               ruleContext.getSymbolGenerator(),
               ruleContext.getLabel())
-          .storeInThread(thread);
+          .storeInThread(env);
 
       RuleClass ruleClass = ruleContext.getRule().getRuleClassObject();
       if (ruleClass.getRuleClassType().equals(RuleClass.Builder.RuleClassType.WORKSPACE)) {
@@ -134,7 +134,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
               /*args=*/ ImmutableList.of(skylarkRuleContext),
               /*kwargs*/ ImmutableMap.of(),
               /*ast=*/ null,
-              thread);
+              env);
 
       if (ruleContext.hasErrors()) {
         return null;
@@ -414,12 +414,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
         StructImpl insStruct = cast("instrumented_files", oldStyleProviders, StructImpl.class, loc);
         addInstrumentedFiles(insStruct, context.getRuleContext(), builder);
       } else if (isNativeDeclaredProviderWithLegacySkylarkName(oldStyleProviders.getValue(field))) {
-        InfoInterface infoInterface = (InfoInterface) oldStyleProviders.getValue(field);
-        NativeProvider.WithLegacySkylarkName provider =
-            (NativeProvider.WithLegacySkylarkName) infoInterface.getProvider();
-        // Add the provider under its proper provider key as well as its legacy name.
-        builder.addNativeDeclaredProvider(infoInterface);
-        builder.addSkylarkTransitiveInfo(provider.getSkylarkName(), infoInterface);
+        builder.addNativeDeclaredProvider((InfoInterface) oldStyleProviders.getValue(field));
       } else if (!field.equals("providers")) {
         // We handled providers already.
         builder.addSkylarkTransitiveInfo(field, oldStyleProviders.getValue(field), loc);

@@ -31,10 +31,10 @@ import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FeatureConfigurationForStarlark;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.BazelCcModuleApi;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
  * A module that contains Skylark utilities for C++ support.
@@ -81,9 +81,8 @@ public class BazelCcModule extends CcModule
       String name,
       boolean disallowPicOutputs,
       boolean disallowNopicOutputs,
-      SkylarkList<Artifact> additionalInputs,
       Location location,
-      StarlarkThread thread)
+      Environment environment)
       throws EvalException, InterruptedException {
     return compile(
         skylarkActionFactoryApi,
@@ -105,10 +104,8 @@ public class BazelCcModule extends CcModule
         disallowNopicOutputs,
         /* grepIncludes= */ null,
         SkylarkList.createImmutable(ImmutableList.of()),
-        SkylarkList.createImmutable(
-            additionalInputs.getContents(Artifact.class, "additional_inputs")),
         location,
-        /* thread= */ null);
+        /* environment= */ null);
   }
 
   @Override
@@ -125,7 +122,7 @@ public class BazelCcModule extends CcModule
       boolean linkDepsStatically,
       SkylarkList<Artifact> additionalInputs,
       Location location,
-      StarlarkThread thread)
+      Environment env)
       throws InterruptedException, EvalException {
     return super.link(
         actions,
@@ -141,7 +138,7 @@ public class BazelCcModule extends CcModule
         additionalInputs,
         /* grepIncludes= */ null,
         location,
-        thread);
+        env);
   }
 
   @Override

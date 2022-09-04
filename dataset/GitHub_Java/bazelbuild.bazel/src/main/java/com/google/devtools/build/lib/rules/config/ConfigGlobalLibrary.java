@@ -24,11 +24,10 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigGlobalLibraryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigurationTransitionApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,27 +42,23 @@ public class ConfigGlobalLibrary implements ConfigGlobalLibraryApi {
   @Override
   public ConfigurationTransitionApi transition(
       BaseFunction implementation,
-      SkylarkList<?> inputs, // <String> expected
-      SkylarkList<?> outputs, // <String> expected
+      List<String> inputs,
+      List<String> outputs,
       Location location,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException {
-    StarlarkSemantics semantics = thread.getSemantics();
-    List<String> inputsList = inputs.getContents(String.class, "inputs");
-    List<String> outputsList = outputs.getContents(String.class, "outputs");
+    StarlarkSemantics semantics = env.getSemantics();
     validateBuildSettingKeys(
-        inputsList, Settings.INPUTS, location, semantics.experimentalStarlarkConfigTransitions());
+        inputs, Settings.INPUTS, location, semantics.experimentalStarlarkConfigTransitions());
     validateBuildSettingKeys(
-        outputsList, Settings.OUTPUTS, location, semantics.experimentalStarlarkConfigTransitions());
+        outputs, Settings.OUTPUTS, location, semantics.experimentalStarlarkConfigTransitions());
     return StarlarkDefinedConfigTransition.newRegularTransition(
-        implementation, inputsList, outputsList, semantics, thread);
+        implementation, inputs, outputs, semantics, env);
   }
 
   @Override
   public ConfigurationTransitionApi analysisTestTransition(
-      SkylarkDict<?, ?> changedSettings, // <String, String> expected
-      Location location,
-      StarlarkSemantics semantics)
+      SkylarkDict<String, String> changedSettings, Location location, StarlarkSemantics semantics)
       throws EvalException {
     Map<String, Object> changedSettingsMap =
         changedSettings.getContents(String.class, Object.class, "changed_settings dict");

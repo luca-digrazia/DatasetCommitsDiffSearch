@@ -20,11 +20,11 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.List;
 
 /**
@@ -34,25 +34,12 @@ import java.util.List;
 public interface ConfigGlobalLibraryApi {
   @SkylarkCallable(
       name = "transition",
+      // TODO(cparsons): Improve documentation with an example once this feature is
+      // non-experimental.
       doc =
-          "A transition that reads a set of input build settings and writes a set of output build "
-              + "settings."
-              + "<p>Example:</p>"
-              + "<p><pre class=\"language-python\">\n"
-              + "def _transition_impl(settings, attr):\n"
-              + "    # This transition just reads the current CPU value as a demonstration.\n"
-              + "    # A real transition could incorporate this into its followup logic.\n"
-              + "    current_cpu = settings[\"//command_line_option:cpu\"]\n"
-              + "    return {\"//command_line_option:compilation_mode\": \"dbg\"}\n"
-              + "\n"
-              + "build_in_debug_mode = transition(\n"
-              + "    implementation = _transition_impl,\n"
-              + "    inputs = [\"//command_line_option:cpu\"],\n"
-              + "    outputs = [\"//command_line_option:compilation_mode\"],\n"
-              + ")"
-              + "</pre></p>"
-              + "<p>For more details see <a href=\"../config.html#user-defined-transitions\">"
-              + "here</a>.</p>",
+          "<b>Experimental. This type is experimental and subject to change at any time. Do "
+              + "not depend on it.</b><p> Creates a configuration transition to be applied across"
+              + " a dependency edge.",
       parameters = {
         @Param(
             name = "implementation",
@@ -100,14 +87,14 @@ public interface ConfigGlobalLibraryApi {
                     + "a superset of the key set of the dictionary returned by this transition."),
       },
       useLocation = true,
-      useStarlarkThread = true)
+      useEnvironment = true)
   @SkylarkConstructor(objectType = ConfigurationTransitionApi.class)
   ConfigurationTransitionApi transition(
       BaseFunction implementation,
       List<String> inputs,
       List<String> outputs,
       Location location,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException;
 
   @SkylarkCallable(

@@ -82,6 +82,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleFunctionsApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
@@ -93,7 +94,6 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.Map;
@@ -270,6 +270,8 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
 
   // TODO(bazel-team): implement attribute copy and other rule properties
   @Override
+  @SuppressWarnings({"rawtypes", "unchecked"}) // castMap produces
+  // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
   public BaseFunction rule(
       StarlarkFunction implementation,
       Boolean test,
@@ -289,11 +291,11 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       Object buildSetting,
       Object cfg,
       FuncallExpression ast,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException {
-    SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "rule", ast.getLocation());
+    SkylarkUtils.checkLoadingOrWorkspacePhase(env, "rule", ast.getLocation());
 
-    BazelStarlarkContext bazelContext = BazelStarlarkContext.from(thread);
+    BazelStarlarkContext bazelContext = BazelStarlarkContext.from(env);
     // analysis_test=true implies test=true.
     test |= Boolean.TRUE.equals(analysisTest);
 
@@ -328,7 +330,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       if (implicitOutputs instanceof StarlarkFunction) {
         StarlarkCallbackHelper callback =
             new StarlarkCallbackHelper(
-                (StarlarkFunction) implicitOutputs, ast, thread.getSemantics(), bazelContext);
+                (StarlarkFunction) implicitOutputs, ast, env.getSemantics(), bazelContext);
         builder.setImplicitOutputsFunction(
             new SkylarkImplicitOutputsFunctionWithCallback(callback, ast.getLocation()));
       } else {
@@ -354,7 +356,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
             hostFragments.getContents(String.class, "host_fragments"));
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
-        (Label) thread.getGlobals().getLabel(), thread.getTransitiveContentHashCode());
+        (Label) env.getGlobals().getLabel(), env.getTransitiveContentHashCode());
 
     builder.addRequiredToolchains(
         collectToolchainLabels(
@@ -497,7 +499,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       String doc,
       Boolean applyToGeneratingRules,
       FuncallExpression ast, // just for getLocation(); TODO(adonovan): simplify
-      StarlarkThread thread)
+      Environment env)
       throws EvalException {
     Location location = ast.getLocation();
     ImmutableList.Builder<String> attrAspects = ImmutableList.builder();
@@ -588,7 +590,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         collectToolchainLabels(
             toolchains.getContents(String.class, "toolchains"),
             ast.getLocation(),
-            BazelStarlarkContext.from(thread).getRepoMapping()),
+            BazelStarlarkContext.from(env).getRepoMapping()),
         applyToGeneratingRules);
   }
 
@@ -636,10 +638,10 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     }
 
     @Override
-    public Object call(Object[] args, FuncallExpression astForLocation, StarlarkThread thread)
+    public Object call(Object[] args, FuncallExpression astForLocation, Environment env)
         throws EvalException, InterruptedException, ConversionException {
       Location loc = astForLocation.getLocation();
-      SkylarkUtils.checkLoadingPhase(thread, getName(), loc);
+      SkylarkUtils.checkLoadingPhase(env, getName(), loc);
       if (ruleClass == null) {
         throw new EvalException(loc, "Invalid rule class hasn't been exported by a bzl file");
       }
@@ -661,11 +663,10 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         }
       }
 
-      @SuppressWarnings("unchecked")
       BuildLangTypedAttributeValuesMap attributeValues =
           new BuildLangTypedAttributeValuesMap((Map<String, Object>) args[0]);
       try {
-        PackageContext pkgContext = thread.getThreadLocal(PackageContext.class);
+        PackageContext pkgContext = env.getThreadLocal(PackageContext.class);
         if (pkgContext == null) {
           throw new EvalException(
               loc,
@@ -673,7 +674,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
                   + "Rules may be instantiated only in a BUILD thread.");
         }
         RuleFactory.createAndAddRule(
-            pkgContext, ruleClass, attributeValues, loc, thread, new AttributeContainer(ruleClass));
+            pkgContext, ruleClass, attributeValues, loc, env, new AttributeContainer(ruleClass));
         return Runtime.NONE;
       } catch (InvalidRuleException | NameConflictException e) {
         throw new EvalException(loc, e.getMessage());
@@ -789,9 +790,9 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
 
   @Override
   public Label label(
-      String labelString, Boolean relativeToCallerRepository, Location loc, StarlarkThread thread)
+      String labelString, Boolean relativeToCallerRepository, Location loc, Environment env)
       throws EvalException {
-    BazelStarlarkContext context = BazelStarlarkContext.from(thread);
+    BazelStarlarkContext context = BazelStarlarkContext.from(env);
 
     // This function is surprisingly complex.
     //
@@ -847,7 +848,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     } else {
       // This is the label of the BUILD/.bzl file on the top of the current call stack.
       // (Function enter/exit changes getGlobals.)
-      parentLabel = (Label) thread.getGlobals().getLabel();
+      parentLabel = (Label) env.getGlobals().getLabel();
     }
 
     try {

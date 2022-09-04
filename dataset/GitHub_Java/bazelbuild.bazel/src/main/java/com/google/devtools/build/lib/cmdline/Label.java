@@ -30,8 +30,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -60,9 +59,6 @@ import javax.annotation.Nullable;
 @ThreadSafe
 public final class Label
     implements Comparable<Label>, Serializable, SkylarkValue, SkyKey, CommandLineItem {
-
-  /** The Starlark type symbol for Label values. */
-  public static final SkylarkType TYPE = SkylarkType.of(Label.class);
 
   /**
    * Package names that aren't made relative to the current repository because they mean special
@@ -507,7 +503,7 @@ public final class Label
    * {@code //wiz:quux} relative to {@code //foo/bar:baz} is {@code //wiz:quux}.
    *
    * @param relName the relative label name; must be non-empty.
-   * @param thread the Starlark thread, which must provide a thread-local {@code HasRepoMapping}.
+   * @param env the Starlark thread, which must provide a thread-local {@code HasRepoMapping}.
    */
   @SkylarkCallable(
       name = "relative",
@@ -541,9 +537,9 @@ public final class Label
             type = String.class,
             doc = "The label that will be resolved relative to this one.")
       },
-      useStarlarkThread = true)
-  public Label getRelative(String relName, StarlarkThread thread) throws LabelSyntaxException {
-    HasRepoMapping hrm = thread.getThreadLocal(HasRepoMapping.class);
+      useEnvironment = true)
+  public Label getRelative(String relName, Environment env) throws LabelSyntaxException {
+    HasRepoMapping hrm = env.getThreadLocal(HasRepoMapping.class);
     return getRelativeWithRemapping(relName, hrm.getRepoMapping());
   }
 

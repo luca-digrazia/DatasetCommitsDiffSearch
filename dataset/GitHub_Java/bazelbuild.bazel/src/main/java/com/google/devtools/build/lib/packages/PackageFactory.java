@@ -511,7 +511,6 @@ public final class PackageFactory {
             name = "include",
             type = SkylarkList.class,
             generic1 = String.class,
-            named = true,
             doc = "a list of strings specifying patterns of files to include."),
         @Param(
             name = "exclude",

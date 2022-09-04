@@ -29,9 +29,13 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Environment.Extension;
+import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
@@ -40,11 +44,7 @@ import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
-import com.google.devtools.build.lib.syntax.StarlarkThread.GlobalFrame;
 import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -134,7 +134,7 @@ public class WorkspaceFactory {
     if (localReporter == null) {
       localReporter = new StoredEventHandler();
     }
-    StarlarkFile buildFileAST = StarlarkFile.parse(source, localReporter);
+    BuildFileAST buildFileAST = BuildFileAST.parse(source, localReporter);
     if (buildFileAST.containsErrors()) {
       throw new BuildFileContainsErrorsException(
           LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, "Failed to parse " + source.getPath());
@@ -153,7 +153,7 @@ public class WorkspaceFactory {
    * the //external package.
    */
   public void execute(
-      StarlarkFile file,
+      BuildFileAST file,
       Map<String, Extension> importedExtensions,
       StarlarkSemantics starlarkSemantics,
       WorkspaceFileValue.WorkspaceFileKey workspaceFileKey)
@@ -165,7 +165,7 @@ public class WorkspaceFactory {
   }
 
   private void execute(
-      StarlarkFile file,
+      BuildFileAST file,
       @Nullable Map<String, Extension> importedExtensions,
       StarlarkSemantics starlarkSemantics,
       StoredEventHandler localReporter,
@@ -176,15 +176,15 @@ public class WorkspaceFactory {
     } else {
       importMap = parentImportMap;
     }
-    StarlarkThread workspaceThread =
-        StarlarkThread.builder(mutability)
+    Environment workspaceEnv =
+        Environment.builder(mutability)
             .setSemantics(starlarkSemantics)
             .setGlobals(BazelLibrary.GLOBALS)
             .setEventHandler(localReporter)
             .setImportedExtensions(importMap)
             .build();
-    SkylarkUtils.setPhase(workspaceThread, Phase.WORKSPACE);
-    addWorkspaceFunctions(workspaceThread, localReporter);
+    SkylarkUtils.setPhase(workspaceEnv, Phase.WORKSPACE);
+    addWorkspaceFunctions(workspaceEnv, localReporter);
 
     // The workspace environment doesn't need the tools repository or the fragment map
     // because executing workspace rules happens before analysis and it doesn't need a
@@ -196,11 +196,11 @@ public class WorkspaceFactory {
             /* repoMapping= */ ImmutableMap.of(),
             new SymbolGenerator<>(workspaceFileKey),
             /* analysisRuleLabel= */ null)
-        .storeInThread(workspaceThread);
+        .storeInThread(workspaceEnv);
 
     for (Map.Entry<String, Object> binding : parentVariableBindings.entrySet()) {
       try {
-        workspaceThread.update(binding.getKey(), binding.getValue());
+        workspaceEnv.update(binding.getKey(), binding.getValue());
       } catch (EvalException e) {
         // This should never happen because everything was already evaluated.
         throw new IllegalStateException(e);
@@ -208,9 +208,9 @@ public class WorkspaceFactory {
     }
 
     if (!ValidationEnvironment.validateFile(
-            file, workspaceThread, /*isBuildFile=*/ true, localReporter)
+            file, workspaceEnv, /*isBuildFile=*/ true, localReporter)
         || !PackageFactory.checkBuildSyntax(file, localReporter)
-        || !file.exec(workspaceThread, localReporter)) {
+        || !file.exec(workspaceEnv, localReporter)) {
       localReporter.handle(Event.error("Error evaluating WORKSPACE file"));
     }
 
@@ -221,7 +221,7 @@ public class WorkspaceFactory {
     // also have a package builder specific to the current part and should be reinitialized for
     // each workspace file.
     ImmutableMap.Builder<String, Object> bindingsBuilder = ImmutableMap.builder();
-    GlobalFrame globals = workspaceThread.getGlobals();
+    GlobalFrame globals = workspaceEnv.getGlobals();
     for (String s : globals.getBindings().keySet()) {
       Object o = globals.get(s);
       if (!isAWorkspaceFunction(s, o)) {
@@ -294,10 +294,10 @@ public class WorkspaceFactory {
       final RuleFactory ruleFactory, final String ruleClassName, final boolean allowOverride) {
     return new BuiltinFunction(
         ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_AST_ENV) {
-      public Object invoke(Map<String, Object> kwargs, FuncallExpression ast, StarlarkThread thread)
+      public Object invoke(Map<String, Object> kwargs, FuncallExpression ast, Environment env)
           throws EvalException, InterruptedException {
         try {
-          Package.Builder builder = PackageFactory.getContext(thread, ast.getLocation()).pkgBuilder;
+          Package.Builder builder = PackageFactory.getContext(env, ast.getLocation()).pkgBuilder;
           String externalRepoName = (String) kwargs.get("name");
           if (!allowOverride
               && externalRepoName != null
@@ -312,7 +312,7 @@ public class WorkspaceFactory {
           // Add an entry in every repository from @<mainRepoName> to "@" to avoid treating
           // @<mainRepoName> as a separate repository. This will be overridden if the main
           // repository has a repo_mapping entry from <mainRepoName> to something.
-          WorkspaceFactoryHelper.addMainRepoEntry(builder, externalRepoName, thread.getSemantics());
+          WorkspaceFactoryHelper.addMainRepoEntry(builder, externalRepoName, env.getSemantics());
           WorkspaceFactoryHelper.addRepoMappings(
               builder, kwargs, externalRepoName, ast.getLocation());
           RuleClass ruleClass = ruleFactory.getRuleClass(ruleClassName);
@@ -359,24 +359,23 @@ public class WorkspaceFactory {
     return map.putAll(ruleFunctions).build();
   }
 
-  private void addWorkspaceFunctions(
-      StarlarkThread workspaceThread, StoredEventHandler localReporter) {
+  private void addWorkspaceFunctions(Environment workspaceEnv, StoredEventHandler localReporter) {
     try {
       for (Map.Entry<String, Object> function : workspaceFunctions.entrySet()) {
-        workspaceThread.update(function.getKey(), function.getValue());
+        workspaceEnv.update(function.getKey(), function.getValue());
       }
       if (installDir != null) {
-        workspaceThread.update("__embedded_dir__", installDir.getPathString());
+        workspaceEnv.update("__embedded_dir__", installDir.getPathString());
       }
       if (workspaceDir != null) {
-        workspaceThread.update("__workspace_dir__", workspaceDir.getPathString());
+        workspaceEnv.update("__workspace_dir__", workspaceDir.getPathString());
       }
-      workspaceThread.update("DEFAULT_SYSTEM_JAVABASE", getDefaultSystemJavabase());
+      workspaceEnv.update("DEFAULT_SYSTEM_JAVABASE", getDefaultSystemJavabase());
 
       for (EnvironmentExtension extension : environmentExtensions) {
-        extension.updateWorkspace(workspaceThread);
+        extension.updateWorkspace(workspaceEnv);
       }
-      workspaceThread.setThreadLocal(
+      workspaceEnv.setThreadLocal(
           PackageFactory.PackageContext.class,
           new PackageFactory.PackageContext(builder, null, localReporter));
     } catch (EvalException e) {
