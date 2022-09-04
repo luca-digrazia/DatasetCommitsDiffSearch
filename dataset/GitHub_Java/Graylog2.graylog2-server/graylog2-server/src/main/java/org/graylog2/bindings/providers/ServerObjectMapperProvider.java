@@ -23,9 +23,7 @@ import org.graylog2.database.ObjectIdSerializer;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 
 import javax.inject.Provider;
-import javax.inject.Singleton;
 
-@Singleton
 public class ServerObjectMapperProvider extends ObjectMapperProvider implements Provider<ObjectMapper> {
     private final ObjectMapper objectMapper;
 
