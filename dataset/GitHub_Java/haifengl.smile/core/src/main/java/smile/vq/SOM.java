@@ -391,20 +391,16 @@ public class SOM implements Clustering<double[]> {
     }
 
     /**
-     * Returns the cluster labels for each neuron.  If the neurons have
-     * not been clustered, throws an Illegal State Exception.
+     * Returns the cluster labels for each Neuron.
      */
-    public int[][] getClusterLabel() {
-        if( y == null ){
-            throw new IllegalStateException();
-        }
-        int[][] classLabels = new int[height][width];
+    public int[][] clabels() {
+        int[][] clabels = new int[height][width];
         for (int i = 0, l = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
-                classLabels[i][j] = y[i*width + j];
+                clabels[i][j] = y[i*width + j];
             }
         }
-        return classLabels;
+        return clabels;
     }
 
     /**
