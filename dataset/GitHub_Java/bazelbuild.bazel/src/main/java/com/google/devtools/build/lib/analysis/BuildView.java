@@ -54,12 +54,8 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
@@ -957,6 +953,16 @@ public class BuildView {
     }
   }
 
+  /**
+   * Drops the analysis cache. If building with Skyframe, targets in {@code topLevelTargets} may
+   * remain in the cache for use during the execution phase.
+   *
+   * @see BuildView.Options#discardAnalysisCache
+   */
+  public void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
+    skyframeBuildView.clearAnalysisCache(topLevelTargets);
+  }
+
   // For testing
   @VisibleForTesting
   public Iterable<ConfiguredTarget> getDirectPrerequisitesForTesting(
@@ -1082,43 +1088,14 @@ public class BuildView {
     return result;
   }
 
-  private Transition getTopLevelTransitionForTarget(Label label, ExtendedEventHandler handler) {
-    Rule rule;
-    try {
-      rule = skyframeExecutor
-          .getPackageManager()
-          .getTarget(handler, label)
-          .getAssociatedRule();
-    } catch (NoSuchPackageException | NoSuchTargetException e) {
-      return ConfigurationTransition.NONE;
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new AssertionError("Configuration of " + label + " interrupted");
-    }
-    if (rule == null) {
-      return ConfigurationTransition.NONE;
-    }
-    RuleTransitionFactory factory = rule
-        .getRuleClassObject()
-        .getTransitionFactory();
-    if (factory == null) {
-      return ConfigurationTransition.NONE;
-    }
-    Transition transition = factory.buildTransitionFor(rule);
-    return (transition == null) ? ConfigurationTransition.NONE : transition;
-  }
-
   /**
-   * Returns a configured target for the specified target and configuration. If dynamic
-   * configurations are activated, and the target in question has a top-level rule class transition,
-   * that transition is applied in the returned ConfiguredTarget. Returns {@code null} if something
-   * goes wrong.
+   * Returns a configured target for the specified target and configuration. Returns {@code null} if
+   * something goes wrong.
    */
   @VisibleForTesting
   public ConfiguredTarget getConfiguredTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config) {
-    return skyframeExecutor.getConfiguredTargetForTesting(eventHandler, label, config,
-        getTopLevelTransitionForTarget(label, eventHandler));
+    return skyframeExecutor.getConfiguredTargetForTesting(eventHandler, label, config);
   }
 
   /**
