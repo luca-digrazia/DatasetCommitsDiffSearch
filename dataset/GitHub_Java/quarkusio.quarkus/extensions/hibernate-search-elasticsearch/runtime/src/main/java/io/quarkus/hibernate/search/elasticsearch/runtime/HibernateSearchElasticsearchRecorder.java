@@ -138,12 +138,10 @@ public class HibernateSearchElasticsearchRecorder {
 
             addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_ENABLED,
                     elasticsearchBackendConfig.discovery.enabled);
-            if (elasticsearchBackendConfig.discovery.enabled) {
-                addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_REFRESH_INTERVAL,
-                        elasticsearchBackendConfig.discovery.refreshInterval.getSeconds());
-                addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_SCHEME,
-                        elasticsearchBackendConfig.discovery.defaultScheme);
-            }
+            addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_REFRESH_INTERVAL,
+                    elasticsearchBackendConfig.discovery.refreshInterval.getSeconds());
+            addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_SCHEME,
+                    elasticsearchBackendConfig.discovery.defaultScheme);
 
             addBackendDefaultIndexConfig(propertyCollector, backendName, ElasticsearchIndexSettings.LIFECYCLE_STRATEGY,
                     elasticsearchBackendConfig.indexDefaults.lifecycle.strategy);
