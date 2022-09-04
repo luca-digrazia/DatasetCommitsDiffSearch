@@ -535,7 +535,10 @@ public class BuildView {
                   "Missing generating action for %s (%s)", artifact, generatingActionKey);
               return null;
             }
-            return val.getActions().get(generatingActionKey.getActionIndex());
+            int actionIndex = generatingActionKey.getActionIndex();
+            return val.isActionTemplate(actionIndex)
+                ? val.getActionTemplate(actionIndex)
+                : val.getAction(actionIndex);
           }
         };
     return new AnalysisResult(
