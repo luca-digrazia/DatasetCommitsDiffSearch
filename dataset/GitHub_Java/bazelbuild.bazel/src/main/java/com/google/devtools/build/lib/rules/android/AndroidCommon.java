@@ -60,6 +60,7 @@ import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
+import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
@@ -573,19 +574,7 @@ public class AndroidCommon {
             javaCommon.getJavacOpts(),
             attributes,
             useDataBinding ? DataBinding.processDeps(ruleContext) : ImmutableList.<Artifact>of(),
-            /* We have to disable strict deps checking with data binding because data binding
-             * propagates layout XML up the dependency chain. Say a library's XML references a Java
-             * class, e.g.: "<variable type="some.package.SomeClass" />". Data binding's annotation
-             * processor triggers a compile against SomeClass. Because data binding reprocesses
-             * bindings each step up the dependency chain (via merged resources), that means this
-             * compile also happens at the top-level binary. Since SomeClass.java is declared in the
-             * library, this creates a strict deps violation.
-             *
-             * This weakening of strict deps is unfortunate and deserves to be fixed. Once data
-             * binding integrates with aapt2 this problem should naturally go away (since
-             * reprocessing will no longer happen).
-             */
-            /*disableStrictDeps=*/ useDataBinding);
+            /*disableStrictDeps=*/ false);
 
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     attributes.setTargetLabel(ruleContext.getLabel());
@@ -739,7 +728,6 @@ public class AndroidCommon {
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
         .addProvider(JavaPluginInfoProvider.class, JavaCommon.getTransitivePlugins(ruleContext))
-        .setRuntimeJars(javaCommon.getJavaCompilationArtifacts().getRuntimeJars())
         .setNeverlink(isNeverlink)
         .build();
 
@@ -750,6 +738,9 @@ public class AndroidCommon {
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addNativeDeclaredProvider(javaInfo)
+        .addProvider(
+            JavaRuntimeJarProvider.class,
+            new JavaRuntimeJarProvider(javaCommon.getJavaCompilationArtifacts().getRuntimeJars()))
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(getRunfiles()))
         .addNativeDeclaredProvider(resourceInfo)
         .addProvider(
