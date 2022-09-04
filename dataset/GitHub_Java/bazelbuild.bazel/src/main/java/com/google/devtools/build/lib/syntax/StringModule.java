@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Ascii;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -111,7 +110,7 @@ public final class StringModule {
       doc = "Returns the lower case version of this string.",
       parameters = {@Param(name = "self", type = String.class)})
   public String lower(String self) {
-    return Ascii.toLowerCase(self);
+    return self.toLowerCase();
   }
 
   @SkylarkCallable(
@@ -119,7 +118,7 @@ public final class StringModule {
       doc = "Returns the upper case version of this string.",
       parameters = {@Param(name = "self", type = String.class)})
   public String upper(String self) {
-    return Ascii.toUpperCase(self);
+    return self.toUpperCase();
   }
 
   /**
@@ -490,7 +489,7 @@ public final class StringModule {
     if (self.isEmpty()) {
       return self;
     }
-    return Character.toUpperCase(self.charAt(0)) + Ascii.toLowerCase(self.substring(1));
+    return Character.toUpperCase(self.charAt(0)) + self.substring(1).toLowerCase();
   }
 
   @SkylarkCallable(
@@ -910,7 +909,8 @@ public final class StringModule {
             defaultValue = "None",
             doc = "optional position at which to stop comparing.")
       })
-  public Boolean endsWith(String self, Object sub, Integer start, Object end) throws EvalException {
+  public Boolean endsWith(String self, Object sub, Integer start, Object end)
+      throws ConversionException, EvalException {
     String str = pythonSubstring(self, start, end, "'end' operand of 'endswith'");
     if (sub instanceof String) {
       return str.endsWith((String) sub);
@@ -1001,7 +1001,7 @@ public final class StringModule {
             doc = "Stop comparing at this position.")
       })
   public Boolean startsWith(String self, Object sub, Integer start, Object end)
-      throws EvalException {
+      throws ConversionException, EvalException {
     String str = pythonSubstring(self, start, end, "'end' operand of 'startswith'");
     if (sub instanceof String) {
       return str.startsWith((String) sub);

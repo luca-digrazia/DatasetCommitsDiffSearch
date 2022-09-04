@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionGraph;
-import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
@@ -47,7 +46,6 @@ import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -118,7 +116,6 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.repository.ResolvedHashesFunction;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
-import com.google.devtools.build.lib.skyframe.CompletionFunction.PathResolverFactory;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
@@ -186,9 +183,9 @@ import javax.annotation.Nullable;
 /**
  * A helper object to support Skyframe-driven execution.
  *
- * <p>This object is mostly used to inject external state, such as the executor engine or some
- * additional artifacts (workspace status and build info artifacts) into SkyFunctions for use during
- * the build.
+ * <p>This object is mostly used to inject external state, such as the executor engine or
+ * some additional artifacts (workspace status and build info artifacts) into SkyFunctions
+ * for use during the build.
  */
 public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private final EvaluatorSupplier evaluatorSupplier;
@@ -307,8 +304,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   private static final Logger logger = Logger.getLogger(SkyframeExecutor.class.getName());
 
-  private final PathResolverFactory pathResolverFactory = new PathResolverFactoryImpl();
-
   /** An {@link ArtifactResolverSupplier} that supports setting of an {@link ArtifactFactory}. */
   public static class MutableArtifactFactorySupplier implements ArtifactResolverSupplier {
 
@@ -321,20 +316,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     @Override
     public ArtifactFactory get() {
       return artifactFactory;
-    }
-  }
-
-  class PathResolverFactoryImpl implements PathResolverFactory {
-    @Override
-    public boolean shouldCreatePathResolverForArtifactValues() {
-      return outputService != null && outputService.supportsPathResolverForArtifactValues();
-    }
-
-    @Override
-    public ArtifactPathResolver createPathResolverForArtifactValues(ActionInputMap actionInputMap) {
-      Preconditions.checkState(shouldCreatePathResolverForArtifactValues());
-      return outputService.createPathResolverForArtifactValues(
-          directories.getExecRoot().asFragment(), fileSystem, getPathEntries(), actionInputMap);
     }
   }
 
@@ -510,12 +491,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         SkyFunctions.WORKSPACE_FILE,
         new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories));
     map.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
-    map.put(
-        SkyFunctions.TARGET_COMPLETION,
-        CompletionFunction.targetCompletionFunction(pathResolverFactory));
-    map.put(
-        SkyFunctions.ASPECT_COMPLETION,
-        CompletionFunction.aspectCompletionFunction(pathResolverFactory));
+    map.put(SkyFunctions.TARGET_COMPLETION, CompletionFunction.targetCompletionFunction());
+    map.put(SkyFunctions.ASPECT_COMPLETION, CompletionFunction.aspectCompletionFunction());
     map.put(SkyFunctions.TEST_COMPLETION, new TestCompletionFunction());
     map.put(Artifact.ARTIFACT, new ArtifactFunction());
     map.put(

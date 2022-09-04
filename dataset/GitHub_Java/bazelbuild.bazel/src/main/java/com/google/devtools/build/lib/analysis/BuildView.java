@@ -351,7 +351,6 @@ public class BuildView {
               target.getFirst(), target.getSecond(), aspectConfigurations.get(target)));
     }
 
-    getArtifactFactory().noteAnalysisStarting();
     SkyframeAnalysisResult skyframeAnalysisResult;
     try {
       skyframeAnalysisResult =

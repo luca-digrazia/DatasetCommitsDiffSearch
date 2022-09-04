@@ -23,13 +23,11 @@ import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationResolver.TopLevelTargetsAndConfigsResult;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -94,17 +92,15 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
    * Returns the intended top-level targets and configurations for the build. Note that this
    * performs additional Skyframe calls for the involved configurations and targets, which may be
    * expensive.
-   *
-   * <p>Skips targets that have errors and registers the errors to be reported later as part of
-   * {@link com.google.devtools.build.lib.analysis.AnalysisResult} error resolution.
    */
-  public TopLevelTargetsAndConfigsResult getTopLevelCts(
+  public Collection<TargetAndConfiguration> getTopLevelCts(
       ExtendedEventHandler eventHandler, SkyframeExecutor skyframeExecutor) {
     List<TargetAndConfiguration> result = new ArrayList<>();
     Map<BuildConfigurationValue.Key, BuildConfiguration> configs =
         skyframeExecutor.getConfigurations(
             eventHandler,
-            topLevelCtKeys.stream()
+            topLevelCtKeys
+                .stream()
                 .map(ctk -> ctk.getConfigurationKey())
                 .filter(Predicates.notNull())
                 .collect(Collectors.toSet()));
@@ -112,22 +108,18 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
     // TODO(ulfjack): This performs one Skyframe call per top-level target. This is not a
     // regression, but we should fix it nevertheless, either by doing a bulk lookup call or by
     // migrating the consumers of these to Skyframe so they can directly request the values.
-    boolean hasError = false;
     for (ConfiguredTargetKey key : topLevelCtKeys) {
       Target target;
       try {
         target = skyframeExecutor.getPackageManager().getTarget(eventHandler, key.getLabel());
       } catch (NoSuchPackageException | NoSuchTargetException | InterruptedException e) {
-        eventHandler.handle(
-            Event.error("Failed to get package from TargetPatternPhaseValue: " + e.getMessage()));
-        hasError = true;
-        continue;
+        throw new RuntimeException("Failed to get package from TargetPatternPhaseValue", e);
       }
       BuildConfiguration config =
           key.getConfigurationKey() == null ? null : configs.get(key.getConfigurationKey());
       result.add(new TargetAndConfiguration(target, config));
     }
-    return new TopLevelTargetsAndConfigsResult(result, hasError);
+    return result;
   }
 
   @Override

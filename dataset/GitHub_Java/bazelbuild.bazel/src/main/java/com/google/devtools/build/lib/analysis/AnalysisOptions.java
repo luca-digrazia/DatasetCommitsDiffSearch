@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 
 /**
@@ -49,18 +48,6 @@ public class AnalysisOptions extends OptionsBase {
             + " Reduces memory usage by ~10%, but makes further incremental builds slower."
   )
   public boolean discardAnalysisCache;
-
-  @Option(
-    name = "max_config_changes_to_show",
-    defaultValue = "3",
-    documentationCategory = OptionDocumentationCategory.LOGGING,
-    effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-    help =
-        "When discarding the analysis cache due to a change in the build options, "
-        + "displays up to the given number of changed option names. "
-        + "If the number given is -1, all changed options will be displayed."
-  )
-  public int maxConfigChangesToShow;
 
   @Option(
     name = "experimental_extra_action_filter",
@@ -111,14 +98,4 @@ public class AnalysisOptions extends OptionsBase {
     help = "Switches analysis preparation to a new code path based on Skyframe."
   )
   public boolean skyframePrepareAnalysis;
-
-  @Option(
-      name = "experimental_strict_conflict_checks",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      metadataTags = OptionMetadataTag.INCOMPATIBLE_CHANGE,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      help =
-          "Check for action prefix file path conflicts, regardless of action-specific overrides.")
-  public boolean strictConflictChecks;
 }

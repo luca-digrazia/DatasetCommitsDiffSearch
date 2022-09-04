@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.PackageRoots;
@@ -91,8 +90,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * A util class that contains all the helper stuff previously in BuildView that only exists to give
@@ -313,25 +310,13 @@ public class BuildViewForTesting {
       }
 
       @Override
-      protected Map<Label, Target> getTargets(
-          Iterable<Label> labels,
-          Target fromTarget,
-          NestedSetBuilder<Cause> rootCauses,
-          int labelsSizeHint) {
-        return Streams.stream(labels)
-            .distinct()
-            .collect(
-                Collectors.toMap(
-                    Function.identity(),
-                    label -> {
-                      try {
-                        return skyframeExecutor.getPackageManager().getTarget(eventHandler, label);
-                      } catch (NoSuchPackageException
-                          | NoSuchTargetException
-                          | InterruptedException e) {
-                        throw new IllegalStateException(e);
-                      }
-                    }));
+      protected Target getTarget(Target from, Label label, NestedSetBuilder<Cause> rootCauses)
+          throws InterruptedException {
+        try {
+          return skyframeExecutor.getPackageManager().getTarget(eventHandler, label);
+        } catch (NoSuchThingException e) {
+          throw new IllegalStateException(e);
+        }
       }
 
       @Override

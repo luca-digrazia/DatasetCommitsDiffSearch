@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
@@ -59,12 +58,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 import java.util.stream.Stream;
 
 /** Performs target pattern eval, configuration creation, loading and analysis. */
 public final class AnalysisPhaseRunner {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static Logger logger = Logger.getLogger(BuildTool.class.getName());
 
   protected CommandEnvironment env;
 
@@ -110,6 +110,9 @@ public final class AnalysisPhaseRunner {
     // Exit if there are any pending exceptions from modules.
     env.throwPendingException();
 
+    env.getSkyframeExecutor().setConfigurationFragmentFactories(
+        env.getRuntime().getConfigurationFragmentFactories());
+
     AnalysisResult analysisResult = null;
     if (request.getBuildOptions().performAnalysisPhase) {
       Profiler.instance().markPhase(ProfilePhase.ANALYZE);
@@ -148,7 +151,7 @@ public final class AnalysisPhaseRunner {
     } else {
       env.getReporter().handle(Event.progress("Loading complete."));
       env.getReporter().post(new NoAnalyzeEvent());
-      logger.atInfo().log("No analysis requested, so finished");
+      logger.info("No analysis requested, so finished");
       String errorMessage = BuildView.createErrorMessage(loadingResult, null);
       if (errorMessage != null) {
         throw new BuildFailedException(errorMessage);
@@ -223,8 +226,7 @@ public final class AnalysisPhaseRunner {
         .post(
             new AnalysisPhaseCompleteEvent(
                 analysisResult.getTargetsToBuild(),
-                view.getTargetsLoaded(),
-                view.getTargetsConfigured(),
+                view.getTargetsVisited(),
                 timer.stop().elapsed(TimeUnit.MILLISECONDS),
                 view.getAndClearPkgManagerStatistics(),
                 view.getActionsConstructed()));
