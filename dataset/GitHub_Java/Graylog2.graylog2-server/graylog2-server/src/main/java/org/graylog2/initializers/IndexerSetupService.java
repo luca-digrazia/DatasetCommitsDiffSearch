@@ -25,9 +25,9 @@ import com.google.common.base.Splitter;
 import com.google.common.net.HostAndPort;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
+import com.squareup.okhttp.OkHttpClient;
+import com.squareup.okhttp.Request;
+import com.squareup.okhttp.Response;
 import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
@@ -40,7 +40,6 @@ import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.DocsHelper;
 import org.graylog2.plugin.Tools;
-import org.graylog2.rest.models.system.indexer.responses.ClusterHealth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,8 +61,8 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 @Singleton
 public class IndexerSetupService extends AbstractIdleService {
     private static final Logger LOG = LoggerFactory.getLogger(IndexerSetupService.class);
-    private static final Version MINIMUM_ES_VERSION = Version.V_2_0_0;
-    private static final Version MAXIMUM_ES_VERSION = Version.fromId(2999999);
+    private static final Version MINIMUM_ES_VERSION = Version.V_1_3_4;
+    private static final Version MAXIMUM_ES_VERSION = Version.fromString("1.7.99");
 
     private final Node node;
     private final ElasticsearchConfiguration configuration;
@@ -142,10 +141,6 @@ public class IndexerSetupService extends AbstractIdleService {
                 LOG.info("This usually indicates a crashed and corrupt cluster and needs to be investigated. Graylog will write into the local disk journal.");
                 LOG.info("See {} for details.", DocsHelper.PAGE_ES_CONFIGURATION);
             }
-            if (ClusterHealthStatus.GREEN.equals(health.getStatus())) {
-                notificationService.fixed(Notification.Type.ES_CLUSTER_RED);
-            }
-            notificationService.fixed(Notification.Type.ES_UNAVAILABLE);
         } catch (ElasticsearchTimeoutException e) {
             final String hosts = node.settings().get("discovery.zen.ping.unicast.hosts");
 
