@@ -109,19 +109,22 @@ final class StringModule implements SkylarkValue {
             type = Object.class,
             doc = "The objects to join.")
       },
-      useLocation = true)
-  public String join(String self, Object elements, Location loc) throws EvalException {
+      useLocation = true,
+      useStarlarkThread = true)
+  public String join(String self, Object elements, Location loc, StarlarkThread thread)
+      throws EvalException {
     Collection<?> items = EvalUtils.toCollection(elements, loc);
-    int i = 0;
-    for (Object item : items) {
-      if (!(item instanceof String)) {
-        throw new EvalException(
-            loc,
-            String.format(
-                "expected string for sequence element %d, got '%s'",
-                i, EvalUtils.getDataTypeName(item)));
+    if (thread.getSemantics().incompatibleStringJoinRequiresStrings()) {
+      for (Object item : items) {
+        if (!(item instanceof String)) {
+          throw new EvalException(
+              loc,
+              "sequence element must be a string (got '"
+                  + EvalUtils.getDataTypeName(item)
+                  + "'). See https://github.com/bazelbuild/bazel/issues/7802 for information about "
+                  + "--incompatible_string_join_requires_strings.");
+        }
       }
-      i++;
     }
     return Joiner.on(self).join(items);
   }

@@ -1011,7 +1011,6 @@ class MethodLibrary {
       StarlarkSemantics semantics)
       throws EvalException {
     Order order;
-    SkylarkNestedSet result;
     try {
       order = Order.parse(orderString);
     } catch (IllegalArgumentException ex) {
@@ -1026,7 +1025,7 @@ class MethodLibrary {
         }
         direct = x;
       }
-      result = depsetConstructor(direct, order, transitive, loc);
+      return depsetConstructor(direct, order, transitive, loc);
     } else {
       if (x != Starlark.NONE) {
         if (!isEmptySkylarkList(items)) {
@@ -1035,21 +1034,8 @@ class MethodLibrary {
         }
         items = x;
       }
-      result = legacyDepsetConstructor(items, order, direct, transitive, loc);
+      return legacyDepsetConstructor(items, order, direct, transitive, loc);
     }
-
-    if (semantics.debugDepsetDepth()) {
-      // Flatten the underlying nested set. If the set exceeds the depth limit, then this will
-      // throw a NestedSetDepthException.
-      // This is an extremely inefficient check and should be only done in the
-      // "--debug_depset_depth" mode.
-      try {
-        result.getSet().toList();
-      } catch (NestedSetDepthException ex) {
-        throw new EvalException(null, "depset exceeded maximum depth " + ex.getDepthLimit());
-      }
-    }
-    return result;
   }
 
   private static SkylarkNestedSet depsetConstructor(

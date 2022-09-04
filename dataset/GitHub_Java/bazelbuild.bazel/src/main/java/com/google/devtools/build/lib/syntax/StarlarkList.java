@@ -48,11 +48,8 @@ import javax.annotation.Nullable;
             + "Lists are mutable, as in Python.")
 public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E>, StarlarkMutable {
 
-  // The implementation strategy is similar to ArrayList,
-  // but without the extra indirection of using ArrayList.
-
   private int size;
-  private Object[] elems = EMPTY_ARRAY; // elems[i] == null  iff  i >= size
+  private Object[] elems = EMPTY_ARRAY;
 
   /** Final except for {@link #unsafeShallowFreeze}; must not be modified any other way. */
   private Mutability mutability;
@@ -97,11 +94,6 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
   @SuppressWarnings("unchecked")
   public static <T> StarlarkList<T> empty() {
     return (StarlarkList<T>) EMPTY;
-  }
-
-  /** Returns a new, empty list with the specified Mutability. */
-  public static <T> StarlarkList<T> newList(Mutability mutability) {
-    return wrap(mutability, EMPTY_ARRAY);
   }
 
   /**
@@ -246,18 +238,6 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
     return wrap(mutability, array);
   }
 
-  // Postcondition: elems.length >= mincap.
-  private void grow(int mincap) {
-    int oldcap = elems.length;
-    if (oldcap < mincap) {
-      int newcap = oldcap + (oldcap >> 1); // grow by at least 50%
-      if (newcap < mincap) {
-        newcap = mincap;
-      }
-      elems = Arrays.copyOf(elems, newcap);
-    }
-  }
-
   /**
    * Appends an element to the end of the list, after validating that mutation is allowed.
    *
@@ -268,6 +248,18 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
     checkMutable(loc);
     grow(size + 1);
     elems[size++] = element;
+  }
+
+  // Postcondition: elems.length >= mincap.
+  private void grow(int mincap) {
+    int oldcap = elems.length;
+    if (oldcap < mincap) {
+      int newcap = oldcap + (oldcap >> 1); // grow by at least 50%
+      if (newcap < mincap) {
+        newcap = mincap;
+      }
+      elems = Arrays.copyOf(elems, newcap);
+    }
   }
 
   /**
@@ -294,16 +286,24 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
   public void addAll(Iterable<? extends E> elements, Location loc) throws EvalException {
     checkMutable(loc);
     if (elements instanceof StarlarkList) {
-      StarlarkList<?> that = (StarlarkList) elements;
-      // (safe even if this == that)
-      grow(this.size + that.size);
-      System.arraycopy(that.elems, 0, this.elems, this.size, that.size);
-      this.size += that.size;
+      if (this == elements) {
+        // special case: x.addAll(x)
+        grow(size + size);
+        System.arraycopy(elems, 0, elems, size, size);
+        size += size;
+      } else {
+        // another list
+        StarlarkList<?> src = (StarlarkList) elements;
+        grow(this.size + src.size);
+        System.arraycopy(src.elems, 0, this.elems, this.size, src.size);
+        this.size += src.size;
+      }
     } else if (elements instanceof Collection) {
       // collection of known size
-      Collection<?> that = (Collection) elements;
-      grow(size + that.size());
-      for (Object x : that) {
+      Collection<?> src = (Collection) elements;
+      int srcsize = src.size();
+      grow(size + srcsize);
+      for (Object x : src) {
         elems[size++] = x;
       }
     } else {
@@ -380,9 +380,7 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
       useLocation = true)
   public NoneType clearMethod(Location loc) throws EvalException {
     checkMutable(loc);
-    for (int i = 0; i < size; i++) {
-      elems[i] = null; // aid GC
-    }
+    Arrays.fill(elems, null); // aid GC
     size = 0;
     return Starlark.NONE;
   }
