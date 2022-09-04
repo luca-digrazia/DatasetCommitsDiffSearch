@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.authandtls.GrpcUtils;
 import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.exec.SpawnResult;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
@@ -68,7 +67,6 @@ import com.google.watcher.v1.Change;
 import com.google.watcher.v1.ChangeBatch;
 import com.google.watcher.v1.Request;
 import com.google.watcher.v1.WatcherGrpc.WatcherImplBase;
-import io.grpc.CallCredentials;
 import io.grpc.Channel;
 import io.grpc.Server;
 import io.grpc.Status;
@@ -77,7 +75,6 @@ import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import io.grpc.util.MutableHandlerRegistry;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.Set;
 import java.util.SortedMap;
@@ -139,8 +136,8 @@ public class GrpcRemoteExecutionClientTest {
         }
 
         @Override
-        public Duration getTimeout() {
-          return Duration.ZERO;
+        public long getTimeoutMillis() {
+          return 0;
         }
 
         @Override
@@ -219,10 +216,10 @@ public class GrpcRemoteExecutionClientTest {
     Channel channel = InProcessChannelBuilder.forName(fakeServerName).directExecutor().build();
     GrpcRemoteExecutor executor =
         new GrpcRemoteExecutor(channel, null, options.remoteTimeout, retrier);
-    CallCredentials creds =
-        GrpcUtils.newCallCredentials(Options.getDefaults(AuthAndTLSOptions.class));
+    ChannelOptions defaultOpts =
+        ChannelOptions.create(Options.getDefaults(AuthAndTLSOptions.class));
     GrpcRemoteCache remoteCache =
-        new GrpcRemoteCache(channel, creds, options, retrier);
+        new GrpcRemoteCache(channel, defaultOpts, options, retrier);
     client = new RemoteSpawnRunner(execRoot, options, null, true, remoteCache, executor);
     inputDigest = fakeFileCache.createScratchInput(simpleSpawn.getInputFiles().get(0), "xyz");
   }

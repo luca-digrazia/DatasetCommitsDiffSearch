@@ -59,7 +59,11 @@ final class RemoteActionContextProvider extends ActionContextProvider {
         executionOptions.verboseFailures,
         cache,
         executor);
-    return ImmutableList.of(new RemoteSpawnStrategy(spawnRunner));
+    RemoteSpawnStrategy spawnStrategy =
+        new RemoteSpawnStrategy(
+            spawnRunner,
+            executionOptions.verboseFailures);
+    return ImmutableList.of(checkNotNull(spawnStrategy));
   }
 
   private static SpawnRunner createFallbackRunner(CommandEnvironment env) {
