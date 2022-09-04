@@ -106,10 +106,6 @@ public interface DataFrameClassifier extends Classifier<Tuple> {
         int[] y = formula.y(data).toIntArray();
 
         FeatureTransform preprocessor = FeatureTransform.of(transformer, x);
-        if (preprocessor != null) {
-            x = preprocessor.transform(x);
-        }
-
         Classifier<double[]> model = trainer.apply(x, y);
 
         return new DataFrameClassifier() {
