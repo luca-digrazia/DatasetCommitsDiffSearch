@@ -2369,13 +2369,10 @@ public class RuleClass {
     // all test labels, populated later.
     if (this.name.equals("test_suite")) {
       Attribute implicitTests = this.getAttributeByName("$implicit_tests");
-      NonconfigurableAttributeMapper attributeMapper = NonconfigurableAttributeMapper.of(rule);
-      if (implicitTests != null && attributeMapper.get("tests", BuildType.LABEL_LIST).isEmpty()) {
+      if (implicitTests != null
+          && NonconfigurableAttributeMapper.of(rule).get("tests", BuildType.LABEL_LIST).isEmpty()) {
         boolean explicit = true; // so that it appears in query output
-        rule.setAttributeValue(
-            implicitTests,
-            pkgBuilder.getTestSuiteImplicitTestsRef(attributeMapper.get("tags", Type.STRING_LIST)),
-            explicit);
+        rule.setAttributeValue(implicitTests, pkgBuilder.getTestSuiteImplicitTestsRef(), explicit);
       }
     }
 

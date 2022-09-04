@@ -1003,8 +1003,7 @@ public class Package {
 
     private ImmutableMap<Location, String> generatorMap = ImmutableMap.of();
 
-    private final TestSuiteImplicitTestsAccumulator testSuiteImplicitTestsAccumulator =
-        new TestSuiteImplicitTestsAccumulator();
+    private final List<Label> testSuiteImplicitTests = new ArrayList<>();
 
     /** Returns the "generator_name" to use for a given call site location in a BUILD file. */
     @Nullable
@@ -1023,14 +1022,10 @@ public class Package {
      * when the {@code test_suite} doesn't specify an explicit, non-empty {@code tests} value. The
      * returned list is mutated by the package-building process - it may be observed to be empty or
      * incomplete before package loading is complete. When package loading is complete it will
-     * contain the label of each non-manual test matching the provided tags in the package, in label
-     * order.
-     *
-     * <p>This method <b>MUST</b> be called before the package is built - otherwise the requested
-     * implicit tests won't be accumulated.
+     * contain the label of each non-manual test in the package, in label order.
      */
-    List<Label> getTestSuiteImplicitTestsRef(List<String> tags) {
-      return testSuiteImplicitTestsAccumulator.getTestSuiteImplicitTestsRefForTags(tags);
+    List<Label> getTestSuiteImplicitTestsRef() {
+      return Collections.unmodifiableList(testSuiteImplicitTests);
     }
 
     @ThreadCompatible
@@ -1701,10 +1696,7 @@ public class Package {
       // current instance here.
       buildFile = (InputFile) Preconditions.checkNotNull(targets.get(buildFileLabel.getName()));
 
-      // Clear tests before discovering them again in order to keep this method idempotent -
-      // otherwise we may double-count tests if we're called twice due to a skyframe restart, etc.
-      testSuiteImplicitTestsAccumulator.clearAccumulatedTests();
-
+      List<Label> tests = new ArrayList<>();
       Map<String, InputFile> newInputFiles = new HashMap<>();
       for (final Rule rule : getRules()) {
         if (discoverAssumedInputFiles) {
@@ -1727,11 +1719,24 @@ public class Package {
           }
         }
 
-        testSuiteImplicitTestsAccumulator.processRule(rule);
+        // "test_suite" rules have the idiosyncratic semantics of implicitly
+        // depending on all tests in the package, iff tests=[] and suites=[],
+        // which is about 20% of >1M test_suite instances in Google's corpus.
+        // Note, we implement this here when the Package is fully constructed,
+        // since clearly this information isn't available at Rule construction
+        // time, as forward references are permitted.
+        if (TargetUtils.isTestRule(rule) && !TargetUtils.hasManualTag(rule)) {
+          // Update the testSuiteImplicitTests list shared
+          // by all test_suite.$implicit_test attributes.
+          tests.add(rule.getLabel());
+        }
       }
 
-      // Make sure all accumulated values are sorted for determinism.
-      testSuiteImplicitTestsAccumulator.sortTests();
+      Collections.sort(tests); // (for determinism)
+      // In case we're called multiple times, as can happen in PackageFunction if skyframe deps are
+      // missing.
+      this.testSuiteImplicitTests.clear();
+      this.testSuiteImplicitTests.addAll(tests);
 
       for (InputFile file : newInputFiles.values()) {
         addInputFile(file);

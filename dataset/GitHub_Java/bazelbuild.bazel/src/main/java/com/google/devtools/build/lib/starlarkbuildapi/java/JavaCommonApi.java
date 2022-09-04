@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.starlarkbuildapi.StarlarkActionFactoryApi;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.TransitiveInfoCollectionApi;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.Param;
@@ -40,7 +39,7 @@ import net.starlark.java.eval.StarlarkValue;
 @StarlarkBuiltin(name = "java_common", doc = "Utilities for Java compilation support in Starlark.")
 public interface JavaCommonApi<
         FileT extends FileApi,
-        JavaInfoT extends JavaInfoApi<FileT, ?, ?>,
+        JavaInfoT extends JavaInfoApi<FileT, ?>,
         JavaToolchainT extends JavaToolchainStarlarkApiProviderApi,
         ConstraintValueT extends ConstraintValueInfoApi,
         starlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
@@ -150,13 +149,6 @@ public interface JavaCommonApi<
             defaultValue = "[]",
             doc = "A list of exported plugins. Optional."),
         @Param(
-            name = "native_libraries",
-            positional = false,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = CcInfoApi.class)},
-            named = true,
-            defaultValue = "[]",
-            doc = "CC native library dependencies that are needed for this library."),
-        @Param(
             name = "annotation_processor_additional_inputs",
             positional = false,
             named = true,
@@ -227,7 +219,6 @@ public interface JavaCommonApi<
       Sequence<?> exports, // <JavaInfoT> expected.
       Sequence<?> plugins, // <JavaInfoT> expected.
       Sequence<?> exportedPlugins, // <JavaInfoT> expected.
-      Sequence<?> nativeLibraries, // <CcInfoT> expected.
       Sequence<?> annotationProcessorAdditionalInputs, // <FileT> expected.
       Sequence<?> annotationProcessorAdditionalOutputs, // <FileT> expected.
       String strictDepsMode,

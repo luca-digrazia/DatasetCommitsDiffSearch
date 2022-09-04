@@ -31,7 +31,7 @@ import net.starlark.java.eval.StarlarkValue;
             + "Common utilities and functionality related to Android rules.",
     documented = false)
 public interface AndroidStarlarkCommonApi<
-        FileT extends FileApi, JavaInfoT extends JavaInfoApi<?, ?, ?>>
+        FileT extends FileApi, JavaInfoT extends JavaInfoApi<?, ?>>
     extends StarlarkValue {
 
   @StarlarkMethod(
@@ -66,16 +66,7 @@ public interface AndroidStarlarkCommonApi<
               + "the --fat_apk_cpu and --android_crosstool_top flags.",
       documented = false,
       structField = true)
-  AndroidSplitTransitionApi getAndroidSplitTransition();
-
-  @StarlarkMethod(
-      name = "android_platforms_transition",
-      doc =
-          "A configuration for rules that uses the --android_platforms flag instead of"
-              + " --platforms.",
-      documented = false,
-      structField = true)
-  AndroidPlatformsTransitionApi getAndroidPlatformsTransition();
+  AndroidSplitTransititionApi getAndroidSplitTransition();
 
   @StarlarkMethod(
       name = "enable_implicit_sourceless_deps_exports_compatibility",
