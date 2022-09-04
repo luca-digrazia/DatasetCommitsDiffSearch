@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.Set;
 
 // if defined, the rootUrl will be added as a prefix to every request
-@Rest(rootUrl = "http://company.com/ajax/services", converters = { MappingJacksonHttpMessageConverter.class }, interceptors = { RequestInterceptor.class })
+@Rest(rootUrl = "http://company.com/ajax/services", converters = { MappingJacksonHttpMessageConverter.class, EBeanConverter.class }, interceptors = { RequestInterceptor.class, EBeanInterceptor.class })
 public interface MyService {
 
 	// *** GET ***
@@ -100,7 +100,6 @@ public interface MyService {
 	GenericEvent<GenericEvent<GenericEvent<String>>> getEventsGenericsInception(String location, int year) throws RestClientException;
 
 	@Get("/events/{year}/{location}")
-	@SetsCookie({ "xt", "sjsaid" })
 	Map<String, Event> getEventsGenericsMap(String location, int year) throws RestClientException;
 
 	@RequiresCookie("sjsaid")

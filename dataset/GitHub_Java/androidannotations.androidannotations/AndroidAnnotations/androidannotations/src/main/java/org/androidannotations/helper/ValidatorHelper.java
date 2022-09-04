@@ -27,7 +27,6 @@ import static org.androidannotations.helper.CanonicalNameConstants.INTERNET_PERM
 import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_COMPONENT_ANNOTATIONS;
 import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS;
-import static org.androidannotations.helper.ModelConstants.VALID_ANDROID_ANNOTATIONS;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -179,13 +178,6 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void isStatic(Element element, IsValid valid) {
-		if (!annotationHelper.isPublic(element)) {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "%s cannot be used on a non static inner element");
-		}
-	}
-
 	public void enclosingElementHasEBeanAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
 		hasClassAnnotation(element, enclosingElement, validatedElements, EBean.class, valid);
@@ -231,11 +223,6 @@ public class ValidatorHelper {
 	public void enclosingElementHasEnhancedComponentAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
 		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, VALID_ENHANCED_COMPONENT_ANNOTATIONS, valid);
-	}
-
-	public void enclosingElementHasAndroidAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
-		Element enclosingElement = element.getEnclosingElement();
-		hasOneOfClassAnnotations(element, enclosingElement, validatedElements, VALID_ANDROID_ANNOTATIONS, valid);
 	}
 
 	private void hasClassAnnotation(Element reportElement, Element element, AnnotationElements validatedElements, Class<? extends Annotation> validAnnotation, IsValid valid) {
@@ -1059,6 +1046,9 @@ public class ValidatorHelper {
 				Element converterElement = converterType.asElement();
 				if (converterElement.getKind().isClass()) {
 					if (!annotationHelper.isAbstract(converterElement)) {
+						if (converterElement.getAnnotation(EBean.class) != null) {
+							return;
+						}
 						List<ExecutableElement> constructors = ElementFilter.constructorsIn(converterElement.getEnclosedElements());
 						for (ExecutableElement constructor : constructors) {
 							if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
@@ -1104,7 +1094,7 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void validateInterceptors(Element element, IsValid valid) {
+	public void validateInterceptors(Element element, AnnotationElements validatedElements, IsValid valid) {
 		TypeMirror clientHttpRequestInterceptorType = annotationHelper.typeElementFromQualifiedName(CLIENT_HTTP_REQUEST_INTERCEPTOR).asType();
 		TypeMirror clientHttpRequestInterceptorTypeErased = annotationHelper.getTypeUtils().erasure(clientHttpRequestInterceptorType);
 		List<DeclaredType> interceptors = annotationHelper.extractAnnotationClassArrayParameter(element, annotationHelper.getTarget(), "interceptors");
@@ -1117,6 +1107,9 @@ public class ValidatorHelper {
 				Element interceptorElement = interceptorType.asElement();
 				if (interceptorElement.getKind().isClass()) {
 					if (!annotationHelper.isAbstract(interceptorElement)) {
+						if (interceptorElement.getAnnotation(EBean.class) != null) {
+							return;
+						}
 						List<ExecutableElement> constructors = ElementFilter.constructorsIn(interceptorElement.getEnclosedElements());
 						for (ExecutableElement constructor : constructors) {
 							if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
@@ -1124,7 +1117,7 @@ public class ValidatorHelper {
 							}
 						}
 						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "The interceptor class must have a public no argument constructor");
+						annotationHelper.printAnnotationError(element, "The interceptor class must have a public no argument constructor or be annotated with @EBean");
 					} else {
 						valid.invalidate();
 						annotationHelper.printAnnotationError(element, "The interceptor class must not be abstract");
