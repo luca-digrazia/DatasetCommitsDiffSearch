@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.platform.DeclaredToolchainInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 
 /** Rule definition for {@link Toolchain}. */
 public class ToolchainRule implements RuleDefinition {
@@ -64,7 +64,7 @@ public class ToolchainRule implements RuleDefinition {
         A list of <code>constraint_value</code>s that must be satisfied by an execution platform in
         order for this toolchain to be selected for a target building on that platform.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .override(
+        .add(
             attr(EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST)
                 .mandatoryProviders(ConstraintValueInfo.PROVIDER.id())
                 .allowedFileTypes()
@@ -84,7 +84,10 @@ public class ToolchainRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         // This needs to not introduce a dependency so that we can load the toolchain only if it is
         // needed.
-        .add(attr(TOOLCHAIN_ATTR, BuildType.NODEP_LABEL).mandatory())
+        .add(
+            attr(TOOLCHAIN_ATTR, BuildType.NODEP_LABEL)
+                .mandatory()
+                .nonconfigurable("part of toolchain configuration"))
         .build();
   }
 

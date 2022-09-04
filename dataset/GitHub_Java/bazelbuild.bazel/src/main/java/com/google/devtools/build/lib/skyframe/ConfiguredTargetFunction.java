@@ -380,7 +380,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                 .handle(
                     Event.error(
                         String.format(
-                            "While resolving toolchains for target %s: %s",
+                            "XXX - While resolving toolchains for target %s: %s",
                             target.getLabel(), e.getCause().getMessage())));
           }
         }
