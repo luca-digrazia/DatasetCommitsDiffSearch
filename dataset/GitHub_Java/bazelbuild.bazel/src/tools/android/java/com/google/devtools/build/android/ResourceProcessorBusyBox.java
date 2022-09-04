@@ -155,12 +155,6 @@ public class ResourceProcessorBusyBox {
       void call(String[] args) throws Exception {
         AndroidAssetMergingAction.main(args);
       }
-    },
-    PROCESS_DATABINDING {
-      @Override
-      void call(String[] args) throws Exception {
-        AndroidDataBindingProcessingAction.main(args);
-      }
     };
 
     abstract void call(String[] args) throws Exception;
@@ -193,7 +187,7 @@ public class ResourceProcessorBusyBox {
     public Tool tool;
   }
 
-  public static void main(String[] args) throws Exception {
+  public static void main(String[] args) {
     // It's cheaper and cleaner to detect for a single flag to start worker mode without having to
     // initialize Options/OptionsParser here. This keeps the processRequest interface minimal and
     // minimizes moving option state between these methods.
@@ -204,7 +198,7 @@ public class ResourceProcessorBusyBox {
     }
   }
 
-  private static int runPersistentWorker() throws Exception {
+  private static int runPersistentWorker() {
     while (true) {
       try {
         WorkRequest request = WorkRequest.parseDelimitedFrom(System.in);
@@ -228,7 +222,7 @@ public class ResourceProcessorBusyBox {
     return 0;
   }
 
-  private static int processRequest(List<String> args) throws Exception {
+  private static int processRequest(List<String> args) {
     OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
     optionsParser.setAllowResidue(true);
     optionsParser.enableParamsFileSupport(
@@ -245,10 +239,10 @@ public class ResourceProcessorBusyBox {
         | Aapt2Exception
         | InvalidJavaIdentifier e) {
       logSuppressed(e);
-      throw e;
+      return 1;
     } catch (Exception e) {
       logger.log(Level.SEVERE, "Error during processing", e);
-      throw e;
+      return 1;
     }
     return 0;
   }
