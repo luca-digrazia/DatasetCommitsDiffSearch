@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
 import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
@@ -302,39 +301,38 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
       if (key.getTransition() == NullTransition.INSTANCE) {
         continue;
       }
-      ConfigurationTransition transition = key.getTransition();
+
       ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
           fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
-        // TODO(juliexxia): combine these skyframe calls with other skyframe calls for this
-        // configured target.
         ImmutableMap<Label, Object> defaultBuildSettingValues =
-            StarlarkTransition.getDefaultInputValues(env, transition);
-        if (env.valuesMissing()) {
-          return null;
-        }
-        ImmutableSet<SkyKey> buildSettingOutputPackageKeys =
-            StarlarkTransition.getBuildSettingPackageKeys(transition, "outputs");
-        Map<SkyKey, SkyValue> buildSettingOutputPackages =
-            env.getValues(buildSettingOutputPackageKeys);
+            StarlarkTransition.getDefaultInputValues(env, key.getTransition());
         if (env.valuesMissing()) {
           return null;
         }
         List<BuildOptions> toOptions =
             ConfigurationResolver.applyTransition(
                 fromOptions,
-                transition,
+                key.getTransition(),
                 depFragments,
                 ruleClassProvider,
                 true,
-                defaultBuildSettingValues,
-                buildSettingOutputPackages);
-        StarlarkTransition.replayEvents(env.getListener(), transition);
+                defaultBuildSettingValues);
         for (BuildOptions toOption : toOptions) {
           configSkyKeys.add(
               BuildConfigurationValue.key(
                   depFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, toOption)));
         }
+        // Post-process transitions on starlark build settings
+        ImmutableSet<SkyKey> buildSettingOutputPackageKeys =
+            StarlarkTransition.getBuildSettingPackageKeys(key.getTransition(), "outputs");
+        Map<SkyKey, SkyValue> buildSettingOutputPackages =
+            env.getValues(buildSettingOutputPackageKeys);
+        if (env.valuesMissing()) {
+          return null;
+        }
+        StarlarkTransition.validate(
+            key.getTransition(), buildSettingOutputPackages, toOptions, env.getListener());
       }
     }
     Map<SkyKey, SkyValue> configsResult = env.getValues(configSkyKeys);
@@ -348,31 +346,22 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
       if (key.getTransition() == NullTransition.INSTANCE) {
         continue;
       }
-      ConfigurationTransition transition = key.getTransition();
       ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
           fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
         ImmutableMap<Label, Object> defaultBuildSettingValues =
-            StarlarkTransition.getDefaultInputValues(env, transition);
-        if (env.valuesMissing()) {
-          return null;
-        }
-        ImmutableSet<SkyKey> buildSettingOutputPackageKeys =
-            StarlarkTransition.getBuildSettingPackageKeys(transition, "outputs");
-        Map<SkyKey, SkyValue> buildSettingOutputPackages =
-            env.getValues(buildSettingOutputPackageKeys);
+            StarlarkTransition.getDefaultInputValues(env, key.getTransition());
         if (env.valuesMissing()) {
           return null;
         }
         List<BuildOptions> toOptions =
             ConfigurationResolver.applyTransition(
                 fromOptions,
-                transition,
+                key.getTransition(),
                 depFragments,
                 ruleClassProvider,
                 true,
-                defaultBuildSettingValues,
-                buildSettingOutputPackages);
+                defaultBuildSettingValues);
         for (BuildOptions toOption : toOptions) {
           SkyKey configKey =
               BuildConfigurationValue.key(
