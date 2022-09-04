@@ -876,30 +876,32 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void hasEmptyOrContextConstructor(Element element, IsValid valid) {
+	public void isAbstractOrHasEmptyOrContextConstructor(Element element, IsValid valid) {
 		List<ExecutableElement> constructors = ElementFilter.constructorsIn(element.getEnclosedElements());
 
-		if (constructors.size() == 1) {
-			ExecutableElement constructor = constructors.get(0);
+		if (!element.getModifiers().contains(Modifier.ABSTRACT)) {
+			if (constructors.size() == 1) {
+				ExecutableElement constructor = constructors.get(0);
 
-			if (!annotationHelper.isPrivate(constructor)) {
-				if (constructor.getParameters().size() > 1) {
-					annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
-					valid.invalidate();
-				} else if (constructor.getParameters().size() == 1) {
-					VariableElement parameter = constructor.getParameters().get(0);
-					if (!parameter.asType().toString().equals(CanonicalNameConstants.CONTEXT)) {
+				if (!annotationHelper.isPrivate(constructor)) {
+					if (constructor.getParameters().size() > 1) {
 						annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
 						valid.invalidate();
+					} else if (constructor.getParameters().size() == 1) {
+						VariableElement parameter = constructor.getParameters().get(0);
+						if (!parameter.asType().toString().equals(CanonicalNameConstants.CONTEXT)) {
+							annotationHelper.printAnnotationError(element, "%s annotated element should have a constructor with one parameter max, of type " + CanonicalNameConstants.CONTEXT);
+							valid.invalidate();
+						}
 					}
+				} else {
+					annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");
+					valid.invalidate();
 				}
 			} else {
-				annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");
+				annotationHelper.printAnnotationError(element, "%s annotated element should have only one constructor");
 				valid.invalidate();
 			}
-		} else {
-			annotationHelper.printAnnotationError(element, "%s annotated element should have only one constructor");
-			valid.invalidate();
 		}
 	}
 
@@ -1091,7 +1093,7 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void validateInterceptors(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public void validateInterceptors(Element element, IsValid valid) {
 		TypeMirror clientHttpRequestInterceptorType = annotationHelper.typeElementFromQualifiedName(CLIENT_HTTP_REQUEST_INTERCEPTOR).asType();
 		TypeMirror clientHttpRequestInterceptorTypeErased = annotationHelper.getTypeUtils().erasure(clientHttpRequestInterceptorType);
 		List<DeclaredType> interceptors = annotationHelper.extractAnnotationClassArrayParameter(element, annotationHelper.getTarget(), "interceptors");
@@ -1104,9 +1106,6 @@ public class ValidatorHelper {
 				Element interceptorElement = interceptorType.asElement();
 				if (interceptorElement.getKind().isClass()) {
 					if (!annotationHelper.isAbstract(interceptorElement)) {
-						if (interceptorElement.getAnnotation(EBean.class) != null) {
-							return;
-						}
 						List<ExecutableElement> constructors = ElementFilter.constructorsIn(interceptorElement.getEnclosedElements());
 						for (ExecutableElement constructor : constructors) {
 							if (annotationHelper.isPublic(constructor) && constructor.getParameters().isEmpty()) {
@@ -1114,7 +1113,7 @@ public class ValidatorHelper {
 							}
 						}
 						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "The interceptor class must have a public no argument constructor or be annotated with @EBean");
+						annotationHelper.printAnnotationError(element, "The interceptor class must have a public no argument constructor");
 					} else {
 						valid.invalidate();
 						annotationHelper.printAnnotationError(element, "The interceptor class must not be abstract");
