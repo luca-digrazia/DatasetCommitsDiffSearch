@@ -147,11 +147,8 @@ public class SwaggerUiProcessor {
                     }
                 }
             }
-
-            Handler<RoutingContext> handler = recorder
-                    .handler(SWAGGER_UI_FINAL_DESTINATION, httpRootPathBuildItem.adjustPath(swaggerUiConfig.path));
-            routes.produce(new RouteBuildItem(swaggerUiConfig.path, handler));
-            routes.produce(new RouteBuildItem(swaggerUiConfig.path + "/*", handler));
+            routes.produce(new RouteBuildItem(swaggerUiConfig.path + "/*",
+                    recorder.handler(SWAGGER_UI_FINAL_DESTINATION, httpRootPathBuildItem.adjustPath(swaggerUiConfig.path))));
         }
     }
 
