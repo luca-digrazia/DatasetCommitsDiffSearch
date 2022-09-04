@@ -43,15 +43,12 @@ import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static javax.ws.rs.core.Response.Status.BAD_GATEWAY;
 
 @RequiresAuthentication
 @Api(value = "Cluster", description = "System information of all nodes in the cluster")
@@ -89,10 +86,10 @@ public class ClusterSystemResource extends ProxiedResource {
                         if (response.isSuccess()) {
                             return Optional.of(response.body());
                         } else {
-                            LOG.warn("Unable to fetch system overview from node {}: {}", entry.getKey(), response.message());
+                            LOG.warn("Unable to fetch system overview from node " + entry.getKey() + ": " + response.message());
                         }
                     } catch (IOException e) {
-                        LOG.warn("Unable to fetch system overview from node {}: {}", entry.getKey(), e);
+                        LOG.warn("Unable to fetch system overview from node " + entry.getKey() + ": ", e);
                     }
                     return Optional.absent();
                 }));
@@ -113,9 +110,10 @@ public class ClusterSystemResource extends ProxiedResource {
         if (response.isSuccess()) {
             return response.body();
         } else {
-            LOG.warn("Unable to get jvm information on node {}: {}", nodeId, response.message());
-            throw new WebApplicationException(response.message(), BAD_GATEWAY);
+            LOG.warn("Unable to get jvm information on node " + nodeId + ": " + response.message());
         }
+
+        return null;
     }
 
     @GET
@@ -134,9 +132,10 @@ public class ClusterSystemResource extends ProxiedResource {
         if (response.isSuccess()) {
             return response.body();
         } else {
-            LOG.warn("Unable to get thread dump on node {}: {}", nodeId, response.message());
-            throw new WebApplicationException(response.message(), BAD_GATEWAY);
+            LOG.warn("Unable to get thread dump on node " + nodeId + ": " + response.message());
         }
+
+        return null;
     }
 }
 
