@@ -55,9 +55,6 @@ public class DropwizardAppExtension<C extends Configuration> implements Dropwiza
         this(applicationClass, configPath, (String) null, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppExtension(Class<? extends Application<C>> applicationClass,
                                   @Nullable String configPath,
                                   ConfigurationSourceProvider configSourceProvider,
@@ -76,9 +73,6 @@ public class DropwizardAppExtension<C extends Configuration> implements Dropwiza
         this(applicationClass, configPath, customPropertyPrefix.orElse(null), configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppExtension(Class<? extends Application<C>> applicationClass,
                                   @Nullable String configPath,
                                   @Nullable String customPropertyPrefix,
@@ -86,9 +80,6 @@ public class DropwizardAppExtension<C extends Configuration> implements Dropwiza
         this(applicationClass, configPath, customPropertyPrefix, ServerCommand::new, configOverrides);
     }
 
-    /**
-     * @since 2.0
-     */
     public DropwizardAppExtension(Class<? extends Application<C>> applicationClass,
                                   @Nullable String configPath,
                                   ConfigurationSourceProvider configSourceProvider,
