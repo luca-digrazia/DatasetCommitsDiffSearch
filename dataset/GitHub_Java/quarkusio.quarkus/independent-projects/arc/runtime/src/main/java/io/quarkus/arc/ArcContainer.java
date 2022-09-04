@@ -40,7 +40,6 @@ public interface ArcContainer {
      * @param type
      * @param qualifiers
      * @return a new instance handle
-     * @throws IllegalArgumentException if an instance of an annotation that is not a qualifier type is given
      */
     <T> InstanceHandle<T> instance(Class<T> type, Annotation... qualifiers);
 
@@ -51,7 +50,6 @@ public interface ArcContainer {
      * @param type
      * @param qualifiers
      * @return a new instance handle
-     * @throws IllegalArgumentException if an instance of an annotation that is not a qualifier type is given
      */
     <T> InstanceHandle<T> instance(TypeLiteral<T> type, Annotation... qualifiers);
 
@@ -62,7 +60,6 @@ public interface ArcContainer {
      * @param type
      * @param qualifiers
      * @return a new instance handle
-     * @throws IllegalArgumentException if an instance of an annotation that is not a qualifier type is given
      */
     <X> InstanceHandle<X> instance(Type type, Annotation... qualifiers);
 
