@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -245,6 +246,10 @@ public final class ActionsTestUtil {
     }
 
     @Override protected String computeKey() { return "action"; }
+
+    @Override public ResourceSet estimateResourceConsumption(Executor executor) {
+      return ResourceSet.ZERO;
+    }
 
     @Override
     public String getMnemonic() {

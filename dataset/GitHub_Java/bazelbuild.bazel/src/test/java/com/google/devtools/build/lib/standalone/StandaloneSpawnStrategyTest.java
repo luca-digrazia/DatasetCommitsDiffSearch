@@ -26,8 +26,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
-import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -98,9 +96,6 @@ public class StandaloneSpawnStrategyTest {
 
     EventBus bus = new EventBus();
 
-    ResourceManager resourceManager = ResourceManager.instanceForTestingOnly();
-    resourceManager.setAvailableResources(
-        ResourceSet.create(/*memoryMb=*/1, /*cpuUsage=*/1, /*ioUsage=*/1, /*localTestCount=*/1));
     this.executor =
         new BlazeExecutor(
             directories.getExecRoot(),
@@ -111,19 +106,15 @@ public class StandaloneSpawnStrategyTest {
             ImmutableList.<ActionContext>of(),
             ImmutableMap.<String, SpawnActionContext>of(
                 "",
-                new StandaloneSpawnStrategy(
-                    directories.getExecRoot(), false, "mock-product-name", resourceManager)),
+                new StandaloneSpawnStrategy(directories.getExecRoot(), false, "mock-product-name")),
             ImmutableList.<ActionContextProvider>of());
 
     executor.getExecRoot().createDirectory();
   }
 
   private Spawn createSpawn(String... arguments) {
-    return new BaseSpawn.Local(
-        Arrays.asList(arguments),
-        ImmutableMap.<String, String>of(),
-        new ActionsTestUtil.NullAction(),
-        ResourceSet.ZERO);
+    return new BaseSpawn.Local(Arrays.asList(arguments), ImmutableMap.<String, String>of(),
+        new ActionsTestUtil.NullAction());
   }
 
   private TestFileOutErr outErr = new TestFileOutErr();
@@ -194,11 +185,9 @@ public class StandaloneSpawnStrategyTest {
 
   @Test
   public void testCommandHonorsEnvironment() throws Exception {
-    Spawn spawn = new BaseSpawn.Local(
-        Arrays.asList("/usr/bin/env"),
+    Spawn spawn = new BaseSpawn.Local(Arrays.asList("/usr/bin/env"),
         ImmutableMap.of("foo", "bar", "baz", "boo"),
-        new ActionsTestUtil.NullAction(),
-        ResourceSet.ZERO);
+        new ActionsTestUtil.NullAction());
     run(spawn);
     assertEquals(Sets.newHashSet("foo=bar", "baz=boo"), Sets.newHashSet(out().split("\n")));
   }
@@ -219,12 +208,10 @@ public class StandaloneSpawnStrategyTest {
     if (OS.getCurrent() == OS.DARWIN) {
       return;
     }
-    Spawn spawn = new BaseSpawn.Local(
-        Arrays.asList("/bin/sh", "-c", "echo $SDKROOT"),
+    Spawn spawn = new BaseSpawn.Local(Arrays.asList("/bin/sh", "-c", "echo $SDKROOT"),
         ImmutableMap.<String, String>of(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME, "8.4",
             AppleConfiguration.APPLE_SDK_PLATFORM_ENV_NAME, "iPhoneSimulator"),
-        new ActionsTestUtil.NullAction(),
-        ResourceSet.ZERO);
+        new ActionsTestUtil.NullAction());
 
     try {
       run(spawn);

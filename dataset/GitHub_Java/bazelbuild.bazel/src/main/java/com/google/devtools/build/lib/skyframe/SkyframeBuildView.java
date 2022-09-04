@@ -24,7 +24,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
@@ -184,11 +183,10 @@ public final class SkyframeBuildView {
    *
    * @see com.google.devtools.build.lib.analysis.BuildView.Options#discardAnalysisCache
    */
-  public void clearAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects) {
+  public void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
     // TODO(bazel-team): Consider clearing packages too to save more memory.
     skyframeAnalysisWasDiscarded = true;
-    skyframeExecutor.clearAnalysisCache(topLevelTargets, topLevelAspects);
+    skyframeExecutor.clearAnalysisCache(topLevelTargets);
   }
 
   /**
@@ -603,8 +601,7 @@ public final class SkyframeBuildView {
     this.enableAnalysis = enable;
   }
 
-  private class ConfiguredTargetValueProgressReceiver
-      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
+  private class ConfiguredTargetValueProgressReceiver implements EvaluationProgressReceiver {
     @Override
     public void invalidated(SkyKey skyKey, InvalidationState state) {
       if (skyKey.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {
@@ -619,6 +616,12 @@ public final class SkyframeBuildView {
         }
       }
     }
+
+    @Override
+    public void enqueueing(SkyKey skyKey) {}
+
+    @Override
+    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
 
     @Override
     public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,

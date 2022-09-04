@@ -143,7 +143,7 @@ public class MemoizingEvaluatorTest {
   }
 
   private static SkyKey toSkyKey(String name) {
-    return LegacySkyKey.create(NODE_TYPE, name);
+    return SkyKey.create(NODE_TYPE, name);
   }
 
   @Test
@@ -3423,7 +3423,7 @@ public class MemoizingEvaluatorTest {
     assertNull(nonNullValueMessage.get(), nonNullValueMessage.get());
 
     // And the SkyFunction for otherErrorKey was evaluated exactly once.
-    assertEquals(1, numOtherInvocations.get());
+    assertEquals(numOtherInvocations.get(), 1);
     assertNull(bogusInvocationMessage.get(), bogusInvocationMessage.get());
 
     // NB: The SkyFunction for otherErrorKey gets evaluated exactly once--it does not get

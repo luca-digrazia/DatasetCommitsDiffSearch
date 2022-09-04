@@ -176,7 +176,6 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
               eventHandler,
               emittedEventState,
               DEFAULT_STORED_EVENT_FILTER,
-              ErrorInfoManager.UseChildErrorInfoIfNecessary.INSTANCE,
               keepGoing,
               numThreads,
               progressReceiver);
@@ -256,11 +255,6 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
   @Override
   public Map<SkyKey, SkyValue> getValues() {
     return graph.getValues();
-  }
-
-  @Override
-  public Map<SkyKey, ? extends NodeEntry> getGraphMap() {
-    return graph.getAllValuesMutable();
   }
 
   @Override

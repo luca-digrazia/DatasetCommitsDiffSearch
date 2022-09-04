@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.events;
 
 import static org.junit.Assert.assertEquals;
 
+import com.google.common.eventbus.EventBus;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -36,10 +37,10 @@ public class SimpleReportersTest extends EventTestTemplate {
       }
     };
 
-    Reporter reporter = new Reporter(handler);
-    reporter.handle(new Event(EventKind.INFO, location, "Add to handlerCount."));
-    reporter.handle(new Event(EventKind.INFO, location, "Add to handlerCount."));
-    reporter.handle(new Event(EventKind.INFO, location, "Add to handlerCount."));
+    Reporter reporter = new Reporter(new EventBus(), handler);
+    reporter.handle(Event.info(location, "Add to handlerCount."));
+    reporter.handle(Event.info(location, "Add to handlerCount."));
+    reporter.handle(Event.info(location, "Add to handlerCount."));
     assertEquals(3, handlerCount);
   }
 }

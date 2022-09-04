@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
+import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
@@ -114,11 +115,11 @@ public class SkyframeBuilder implements Builder {
                 .addAll(parallelTests)
                 .addAll(exclusiveTests)
                 .build(),
-            topLevelArtifactContext,
             skyframeExecutor.getEventBus());
     skyframeExecutor
         .getEventBus()
         .post(new ExecutionProgressReceiverAvailableEvent(executionProgressReceiver));
+    ResourceManager.instance().setEventBus(skyframeExecutor.getEventBus());
 
     List<ExitCode> exitCodes = new LinkedList<>();
     EvaluationResult<?> result;
@@ -206,6 +207,7 @@ public class SkyframeBuilder implements Builder {
       }
     } finally {
       watchdog.stop();
+      ResourceManager.instance().unsetEventBus();
       skyframeExecutor.setActionExecutionProgressReportingObjects(null, null, null);
       statusReporter.unregisterFromEventBus();
     }

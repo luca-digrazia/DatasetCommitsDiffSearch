@@ -28,10 +28,6 @@ public class StoredEventHandler implements ExtendedEventHandler {
     return ImmutableList.copyOf(events);
   }
 
-  public synchronized ImmutableList<ExtendedEventHandler.Postable> getPosts() {
-    return ImmutableList.copyOf(posts);
-  }
-
   /** Returns true if there are no stored events. */
   public synchronized boolean isEmpty() {
     return events.isEmpty() && posts.isEmpty();

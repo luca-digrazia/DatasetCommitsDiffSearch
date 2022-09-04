@@ -41,12 +41,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A {@link RecursivePackageProvider} backed by an {@link Environment}. Its methods may throw {@link
- * MissingDepException} if the package values this depends on haven't been calculated and added to
- * its environment.
- *
- * <p>This implementation never emits events through the {@link ExtendedEventHandler}s passed to its
- * methods. Instead, it emits events through its environment's {@link Environment#getListener()}.
+ * A {@link RecursivePackageProvider} backed by an {@link Environment}. Its methods
+ * may throw {@link MissingDepException} if the package values this depends on haven't been
+ * calculated and added to its environment.
  */
 public final class EnvironmentBackedRecursivePackageProvider implements RecursivePackageProvider {
 
@@ -83,11 +80,12 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
   }
 
   @Override
-  public Map<PackageIdentifier, Package> bulkGetPackages(Iterable<PackageIdentifier> pkgIds)
+  public Map<PackageIdentifier, Package> bulkGetPackages(
+      ExtendedEventHandler eventHandler, Iterable<PackageIdentifier> pkgIds)
       throws NoSuchPackageException, InterruptedException {
     ImmutableMap.Builder<PackageIdentifier, Package> builder = ImmutableMap.builder();
     for (PackageIdentifier pkgId : pkgIds) {
-      builder.put(pkgId, getPackage(env.getListener(), pkgId));
+      builder.put(pkgId, getPackage(eventHandler, pkgId));
     }
     return builder.build();
   }
@@ -105,14 +103,13 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
       }
       return packageLookupValue.packageExists();
     } catch (NoSuchPackageException | InconsistentFilesystemException e) {
-      env.getListener().handle(Event.error(e.getMessage()));
+      eventHandler.handle(Event.error(e.getMessage()));
       return false;
     }
   }
 
   @Override
   public Iterable<PathFragment> getPackagesUnderDirectory(
-      ExtendedEventHandler eventHandler,
       RepositoryName repository,
       PathFragment directory,
       ImmutableSet<PathFragment> excludedSubdirectories)
@@ -132,11 +129,6 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
         throw new MissingDepException();
       }
 
-      if (!repositoryValue.repositoryExists()) {
-        // This shouldn't be possible; we're given a repository, so we assume that the caller has
-        // already checked for its existence.
-        throw new IllegalStateException(String.format("No such repository '%s'", repository));
-      }
       roots.add(repositoryValue.getPath());
     }
 
@@ -160,7 +152,7 @@ public final class EnvironmentBackedRecursivePackageProvider implements Recursiv
     }
     // TODO(bazel-team): Make RecursivePkgValue return NestedSet<PathFragment> so this transform is
     // unnecessary.
-    return Iterables.transform(packageNames.build(), PathFragment::create);
+    return Iterables.transform(packageNames.build(), PathFragment.TO_PATH_FRAGMENT);
   }
 
   @Override

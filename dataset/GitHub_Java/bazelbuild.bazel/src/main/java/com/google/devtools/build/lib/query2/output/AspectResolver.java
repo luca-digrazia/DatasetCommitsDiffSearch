@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import java.util.Collection;
 import java.util.Set;
 
 /** Utility class that determines additional dependencies of a target from its aspects. */
@@ -29,7 +30,7 @@ public interface AspectResolver {
   /**
    * How to resolve aspect dependencies in 'blaze query'.
    */
-  enum Mode {
+  public enum Mode {
     // Do not report aspect dependencies
     OFF {
       @Override
@@ -62,16 +63,40 @@ public interface AspectResolver {
         PackageProvider provider, ExtendedEventHandler eventHandler);
   }
 
+  /** The way aspect dependencies for a BUILD file are calculated. */
+  enum BuildFileDependencyMode  {
+
+    /** Return all the subincluded files that may affect the package. */
+    SUBINCLUDE {
+      @Override
+      protected Collection<Label> getDependencies(Package pkg) {
+        return pkg.getSubincludeLabels();
+      }
+    },
+
+    /** Return all Skylark files that may affect the package. */
+    SKYLARK {
+      @Override
+      protected Collection<Label> getDependencies(Package pkg) {
+        return pkg.getSkylarkFileDependencies();
+      }
+    };
+
+    protected abstract Collection<Label> getDependencies(Package pkg);
+  }
+
   /**
    * Compute additional dependencies of target from aspects. This method may load the direct deps
    * of target to determine their types. Returns map of attributes and corresponding label values.
    */
   ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target,
-      DependencyFilter dependencyFilter) throws InterruptedException;
+      DependencyFilter dependencyFilter)
+      throws InterruptedException;
 
   /**
-   * Compute the labels of the BUILD Skylark files on which the results of the other two methods
-   * depend for a target in the given package.
+   * Compute the labels of the BUILD and subinclude and Skylark files on which the results of the
+   * other two methods depend for a target in the given package.
    */
-  Set<Label> computeBuildFileDependencies(Package pkg) throws InterruptedException;
+  Set<Label> computeBuildFileDependencies(Package pkg, BuildFileDependencyMode mode)
+      throws InterruptedException;
 }

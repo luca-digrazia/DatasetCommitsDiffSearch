@@ -85,6 +85,16 @@ class SkyframePackageManager implements PackageManager {
       public int getPackagesLoaded() {
         return numPackagesLoaded.get();
       }
+
+      @Override
+      public int getPackagesLookedUp() {
+        return -1;
+      }
+
+      @Override
+      public int getCacheSize() {
+        return -1;
+      }
     };
   }
 

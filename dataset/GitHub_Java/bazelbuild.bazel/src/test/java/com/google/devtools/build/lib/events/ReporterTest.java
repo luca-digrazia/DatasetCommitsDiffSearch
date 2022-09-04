@@ -14,10 +14,10 @@
 package com.google.devtools.build.lib.events;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,7 +55,7 @@ public class ReporterTest extends EventTestTemplate {
     reporter.handle(interesting);
     reporter.handle(Event.warn(null, "ignore-me").withTag("good"));
 
-    assertThat(ImmutableList.of(interesting)).isEqualTo(ImmutableList.copyOf(collector));
+    assertEquals(ImmutableList.copyOf(collector), ImmutableList.of(interesting));
   }
 
   @Test
@@ -67,7 +67,7 @@ public class ReporterTest extends EventTestTemplate {
       reporter.handle(e);
     }
     ImmutableList<Event> got = ImmutableList.copyOf(collector);
-    assertThat(want).isEqualTo(got);
+    assertEquals(got, want);
   }
 
   @Test
@@ -79,10 +79,10 @@ public class ReporterTest extends EventTestTemplate {
     reporter.addHandler(outAppender);
     reporter.addHandler(outAppender); // Should have 4 handlers now.
     copiedReporter.handle(Event.error(location, "."));
-    assertThat(out.toString()).isEqualTo("..."); // The copied reporter has 3 handlers.
+    assertEquals("...", out.toString()); // The copied reporter has 3 handlers.
     out = new StringBuilder();
     reporter.handle(Event.error(location, "."));
-    assertThat(out.toString()).isEqualTo("...."); // The old reporter has 4 handlers.
+    assertEquals("....", out.toString()); // The old reporter has 4 handlers.
   }
 
   @Test
@@ -90,37 +90,11 @@ public class ReporterTest extends EventTestTemplate {
     assertThat(out.toString()).isEmpty();
     reporter.addHandler(outAppender);
     reporter.handle(Event.error(location, "Event gets registered."));
-    assertThat(out.toString()).isEqualTo("Event gets registered.");
+    assertEquals("Event gets registered.", out.toString());
     out = new StringBuilder();
     reporter.removeHandler(outAppender);
     reporter.handle(Event.error(location, "Event gets ignored."));
     assertThat(out.toString()).isEmpty();
   }
 
-  @Test
-  public void propagatePostCalls() {
-    FakeExtendedEventHandler extendedEventHandler = new FakeExtendedEventHandler();
-    assertThat(extendedEventHandler.calledPost).isEqualTo(0);
-
-    reporter.addHandler(extendedEventHandler);
-    reporter.post(new FakePostable());
-
-    assertThat(extendedEventHandler.calledPost).isEqualTo(1);
-  }
-
-  private static class FakeExtendedEventHandler implements ExtendedEventHandler {
-    int calledPost = 0;
-
-    @Override
-    public void post(Postable obj) {
-      calledPost++;
-    }
-
-    @Override
-    public void handle(Event event) {
-      throw new UnsupportedOperationException();
-    }
-  }
-
-  private static class FakePostable implements Postable {}
 }

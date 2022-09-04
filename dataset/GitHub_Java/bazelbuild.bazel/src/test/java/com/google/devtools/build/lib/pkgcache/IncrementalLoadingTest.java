@@ -524,7 +524,7 @@ public class IncrementalLoadingTest {
       Path path = workspace.getRelative(fileName);
       Preconditions.checkState(!path.exists());
       FileSystemUtils.createDirectoryAndParents(path.getParentDirectory());
-      path.createSymbolicLink(PathFragment.create(target));
+      path.createSymbolicLink(new PathFragment(target));
       changes.add(path);
     }
 
@@ -546,7 +546,7 @@ public class IncrementalLoadingTest {
       Path symlink = workspace.getRelative(fileName);
       Preconditions.checkState(symlink.exists());
       symlink.delete();
-      symlink.createSymbolicLink(PathFragment.create(newTarget));
+      symlink.createSymbolicLink(new PathFragment(newTarget));
       changes.add(symlink);
     }
 

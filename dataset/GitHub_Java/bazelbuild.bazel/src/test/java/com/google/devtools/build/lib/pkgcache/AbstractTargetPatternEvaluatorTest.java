@@ -21,12 +21,10 @@ import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.DelegatingEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -51,40 +49,17 @@ public abstract class AbstractTargetPatternEvaluatorTest extends PackageLoadingT
       boolean keepGoing)
       throws TargetParsingException, InterruptedException {
     return parseTargetPatternList(
-        PathFragment.EMPTY_FRAGMENT,
-        parser,
-        eventHandler,
-        targetPatterns,
-        FilteringPolicies.NO_FILTER,
-        keepGoing);
+        parser, eventHandler, targetPatterns, FilteringPolicies.NO_FILTER, keepGoing);
   }
 
   protected static ResolvedTargets<Target> parseTargetPatternList(
-      PathFragment relativeWorkingDirectory,
-      TargetPatternEvaluator parser,
-      ExtendedEventHandler eventHandler,
-      List<String> targetPatterns,
-      boolean keepGoing)
-      throws TargetParsingException, InterruptedException {
-    return parseTargetPatternList(
-        relativeWorkingDirectory,
-        parser,
-        eventHandler,
-        targetPatterns,
-        FilteringPolicies.NO_FILTER,
-        keepGoing);
-  }
-
-  protected static ResolvedTargets<Target> parseTargetPatternList(
-      PathFragment relativeWorkingDirectory,
       TargetPatternEvaluator parser,
       ExtendedEventHandler eventHandler,
       List<String> targetPatterns,
       FilteringPolicy policy,
       boolean keepGoing)
       throws TargetParsingException, InterruptedException {
-    return parser.parseTargetPatternList(
-        relativeWorkingDirectory, eventHandler, targetPatterns, policy, keepGoing);
+    return parser.parseTargetPatternList(eventHandler, targetPatterns, policy, keepGoing);
   }
 
   /**
@@ -102,7 +77,7 @@ public abstract class AbstractTargetPatternEvaluatorTest extends PackageLoadingT
   @Before
   public final void initializeParser() throws Exception {
     setUpSkyframe(ConstantRuleVisibility.PRIVATE, loadingMock.getDefaultsPackageContent());
-    parser = skyframeExecutor.newTargetPatternEvaluator();
+    parser = skyframeExecutor.getPackageManager().newTargetPatternEvaluator();
     parsingListener = new RecordingParsingListener(reporter);
   }
 
@@ -116,13 +91,14 @@ public abstract class AbstractTargetPatternEvaluatorTest extends PackageLoadingT
 
   protected Pair<Set<Label>, Boolean> parseListKeepGoing(String... patterns)
       throws TargetParsingException, InterruptedException {
-    ResolvedTargets<Target> result =
-        parseTargetPatternList(parser, parsingListener, Arrays.asList(patterns), true);
+    ResolvedTargets<Target> result = parseTargetPatternList(parser, parsingListener,
+            Arrays.asList(patterns), true);
     return Pair.of(targetsToLabels(result.getTargets()), result.hasError());
   }
 
   /** Event handler that records all parsing errors. */
-  protected static final class RecordingParsingListener extends DelegatingEventHandler {
+  protected static final class RecordingParsingListener extends DelegatingEventHandler
+      implements ParseFailureListener {
     protected final List<Pair<String, String>> events = new ArrayList<>();
 
     private RecordingParsingListener(ExtendedEventHandler delegate) {
@@ -130,12 +106,8 @@ public abstract class AbstractTargetPatternEvaluatorTest extends PackageLoadingT
     }
 
     @Override
-    public void post(Postable post) {
-      super.post(post);
-      if (post instanceof ParsingFailedEvent) {
-        ParsingFailedEvent e = (ParsingFailedEvent) post;
-        events.add(Pair.of(e.getPattern(), e.getMessage()));
-      }
+    public void parsingError(String targetPattern, String message) {
+      events.add(Pair.of(targetPattern, message));
     }
 
     protected void assertEmpty() {

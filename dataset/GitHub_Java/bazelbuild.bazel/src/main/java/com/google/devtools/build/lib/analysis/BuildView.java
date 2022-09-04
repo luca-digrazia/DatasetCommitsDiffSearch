@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
@@ -856,12 +855,11 @@ public class BuildView {
 
       Attribute.Transition ruleclassTransition = null;
       if (targetAndConfig.getTarget().getAssociatedRule() != null) {
-        Rule associatedRule = targetAndConfig.getTarget().getAssociatedRule();
-        RuleTransitionFactory transitionFactory =
-            associatedRule.getRuleClassObject().getTransitionFactory();
-        if (transitionFactory != null) {
-          ruleclassTransition = transitionFactory.buildTransitionFor(associatedRule);
-        }
+        ruleclassTransition = targetAndConfig
+            .getTarget()
+            .getAssociatedRule()
+            .getRuleClassObject()
+            .getTransition();
       }
       if (targetAndConfig.getConfiguration() != null) {
         asDeps.put(targetAndConfig.getConfiguration(),

@@ -98,16 +98,6 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
             evaluatorContext.getReporter().handle(e);
           }
         }
-
-        @Override
-        @SuppressWarnings("UnsynchronizedOverridesSynchronized") // only delegates to thread-safe.
-        public void post(ExtendedEventHandler.Postable e) {
-          if (e instanceof ExtendedEventHandler.ProgressLike) {
-            evaluatorContext.getReporter().post(e);
-          } else {
-            super.post(e);
-          }
-        }
       };
   private final ParallelEvaluatorContext evaluatorContext;
 

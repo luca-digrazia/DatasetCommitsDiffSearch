@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -100,15 +99,15 @@ public interface WalkableGraph {
   /** Provides a WalkableGraph on demand after preparing it. */
   interface WalkableGraphFactory {
     EvaluationResult<SkyValue> prepareAndGet(
-        Set<SkyKey> roots, int numThreads, ExtendedEventHandler eventHandler)
+        SkyKey universeKey, int numThreads, ExtendedEventHandler eventHandler)
         throws InterruptedException;
 
     /**
-     * Returns true if this instance has already been used to {@link #prepareAndGet} {@code roots}.
-     * If so, cached results from {@link #prepareAndGet} can be re-used safely, potentially saving
-     * some processing time.
+     * Returns true if this instance has already been used to {@link #prepareAndGet} {@code
+     * universeKey}. If so, cached results from {@link #prepareAndGet} can be re-used safely,
+     * potentially saving some processing time.
      */
-    boolean isUpToDate(Set<SkyKey> roots);
+    boolean isUpToDate(SkyKey universeKey);
 
     /** Returns the {@link SkyKey} that defines this universe. */
     SkyKey getUniverseKey(Collection<String> roots, String offset);

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -26,6 +25,7 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.CyclesReporter;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -48,22 +48,6 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
 
   protected abstract boolean canReportCycle(SkyKey topLevelKey, CycleInfo cycleInfo);
 
-  /**
-   * Can be used to skip individual keys on the path to cycle.
-   *
-   * @param key
-   */
-  protected boolean shouldSkip(SkyKey key) {
-    return false;
-  }
-
-  /**
-   * Can be used to report an additional message about the cycle.
-   *
-   * @param eventHandler
-   * @param topLevelKey
-   * @param cycleInfo
-   */
   protected String getAdditionalMessageAboutCycle(
       ExtendedEventHandler eventHandler, SkyKey topLevelKey, CycleInfo cycleInfo) {
     return "";
@@ -91,9 +75,6 @@ abstract class AbstractLabelCycleReporter implements CyclesReporter.SingleCycleR
       ImmutableList<SkyKey> pathToCycle = cycleInfo.getPathToCycle();
       ImmutableList<SkyKey> cycle = cycleInfo.getCycle();
       for (SkyKey value : pathToCycle) {
-        if (shouldSkip(value)) {
-          continue;
-        }
         cycleMessage.append("\n    ");
         cycleMessage.append(prettyPrint(value));
       }

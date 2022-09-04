@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetVisitor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadHostile;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import java.io.PrintStream;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -92,13 +91,6 @@ public interface MemoizingEvaluator {
   Map<SkyKey, SkyValue> getValues();
 
   /**
-   * Returns the node entries in the graph. Should only be called between evaluations. The returned
-   * map is mutable, but do not mutate it unless you know what you are doing! Naively deleting an
-   * entry will break graph invariants and cause a crash.
-   */
-  Map<SkyKey, ? extends NodeEntry> getGraphMap();
-
-  /**
    * Returns the done (without error) values in the graph.
    *
    * <p>The returned map may be a live view of the graph.
@@ -166,15 +158,5 @@ public interface MemoizingEvaluator {
    * {@code EmittedEventState} first and pass it to the graph during creation. This allows them to
    * determine whether or not to replay events.
    */
-  class EmittedEventState {
-    final NestedSetVisitor.VisitedState<TaggedEvents> eventState =
-        new NestedSetVisitor.VisitedState<>();
-    final NestedSetVisitor.VisitedState<Postable> postableState =
-        new NestedSetVisitor.VisitedState<>();
-
-    public void clear() {
-      eventState.clear();
-      postableState.clear();
-    }
-  }
+  class EmittedEventState extends NestedSetVisitor.VisitedState<TaggedEvents> {}
 }

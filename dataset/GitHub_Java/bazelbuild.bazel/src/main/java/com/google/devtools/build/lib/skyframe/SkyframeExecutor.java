@@ -1859,6 +1859,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     @Override
     public LoadingResult execute(
         ExtendedEventHandler eventHandler,
+        EventBus eventBus,
         List<String> targetPatterns,
         PathFragment relativeWorkingDirectory,
         LoadingOptions options,
@@ -1873,7 +1874,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
           ImmutableList.copyOf(options.buildTagFilterList),
           TestFilter.forOptions(options, eventHandler, ruleClassNames));
       EvaluationResult<TargetPatternPhaseValue> evalResult;
-      eventHandler.post(new LoadingPhaseStartedEvent(packageProgress));
+      eventBus.post(new LoadingPhaseStartedEvent(packageProgress));
       evalResult =
           buildDriver.evaluate(ImmutableList.of(key), keepGoing, /*numThreads=*/ 10, eventHandler);
       if (evalResult.hasError()) {
@@ -1899,7 +1900,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       long time = timer.stop().elapsed(TimeUnit.MILLISECONDS);
 
       TargetPatternPhaseValue patternParsingValue = evalResult.get(key);
-      eventHandler.post(
+      eventBus.post(
           new TargetParsingCompleteEvent(
               patternParsingValue.getOriginalTargets(),
               patternParsingValue.getFilteredTargets(),
@@ -1910,7 +1911,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       if (callback != null) {
         callback.notifyTargets(patternParsingValue.getTargets());
       }
-      eventHandler.post(new LoadingPhaseCompleteEvent(
+      eventBus.post(new LoadingPhaseCompleteEvent(
           patternParsingValue.getTargets(), patternParsingValue.getTestSuiteTargets(),
           packageManager.getStatistics(), /*timeInMs=*/0));
       return patternParsingValue.toLoadingResult();

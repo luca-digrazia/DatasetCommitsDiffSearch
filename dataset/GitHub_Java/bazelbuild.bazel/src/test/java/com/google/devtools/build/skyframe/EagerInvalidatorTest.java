@@ -23,6 +23,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -181,11 +182,27 @@ public class EagerInvalidatorTest {
   public void receiverWorks() throws Exception {
     final Set<SkyKey> invalidated = Sets.newConcurrentHashSet();
     DirtyTrackingProgressReceiver receiver = new DirtyTrackingProgressReceiver(
-        new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+        new EvaluationProgressReceiver() {
       @Override
       public void invalidated(SkyKey skyKey, InvalidationState state) {
         Preconditions.checkState(state == expectedState());
         invalidated.add(skyKey);
+      }
+
+      @Override
+      public void enqueueing(SkyKey skyKey) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
+          EvaluationState state) {
+        throw new UnsupportedOperationException();
       }
     });
     graph = new InMemoryGraphImpl();
@@ -208,11 +225,27 @@ public class EagerInvalidatorTest {
   public void receiverIsNotifiedAboutNodesInError() throws Exception {
     final Set<SkyKey> invalidated = Sets.newConcurrentHashSet();
     DirtyTrackingProgressReceiver receiver = new DirtyTrackingProgressReceiver(
-        new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+        new EvaluationProgressReceiver() {
       @Override
       public void invalidated(SkyKey skyKey, InvalidationState state) {
         Preconditions.checkState(state == expectedState());
         invalidated.add(skyKey);
+      }
+
+      @Override
+      public void enqueueing(SkyKey skyKey) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
+          EvaluationState state) {
+        throw new UnsupportedOperationException();
       }
     });
 
@@ -237,11 +270,27 @@ public class EagerInvalidatorTest {
   public void invalidateValuesNotInGraph() throws Exception {
     final Set<SkyKey> invalidated = Sets.newConcurrentHashSet();
     DirtyTrackingProgressReceiver receiver = new DirtyTrackingProgressReceiver(
-        new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+        new EvaluationProgressReceiver() {
       @Override
       public void invalidated(SkyKey skyKey, InvalidationState state) {
         Preconditions.checkState(state == InvalidationState.DIRTY);
         invalidated.add(skyKey);
+      }
+
+      @Override
+      public void enqueueing(SkyKey skyKey) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
+          EvaluationState state) {
+        throw new UnsupportedOperationException();
       }
     });
     graph = new InMemoryGraphImpl();
@@ -288,12 +337,12 @@ public class EagerInvalidatorTest {
         .setComputedValue(CONCATENATE);
     eval(false, skyKey("ab_c"), skyKey("bc"));
 
-    assertThat(graph.get(null, Reason.OTHER, skyKey("a")).getReverseDepsForDoneEntry())
-        .containsExactly(skyKey("ab"));
-    assertThat(graph.get(null, Reason.OTHER, skyKey("b")).getReverseDepsForDoneEntry())
-        .containsExactly(skyKey("ab"), skyKey("bc"));
-    assertThat(graph.get(null, Reason.OTHER, skyKey("c")).getReverseDepsForDoneEntry())
-        .containsExactly(skyKey("ab_c"), skyKey("bc"));
+    assertThat(graph.get(null, Reason.OTHER, skyKey("a"))
+        .getReverseDeps()).containsExactly(skyKey("ab"));
+    assertThat(graph.get(null, Reason.OTHER, skyKey("b"))
+        .getReverseDeps()).containsExactly(skyKey("ab"), skyKey("bc"));
+    assertThat(graph.get(null, Reason.OTHER, skyKey("c"))
+        .getReverseDeps()).containsExactly(skyKey("ab_c"), skyKey("bc"));
 
     invalidateWithoutError(new DirtyTrackingProgressReceiver(null), skyKey("ab"));
     eval(false);
@@ -307,18 +356,18 @@ public class EagerInvalidatorTest {
     if (reverseDepsPresent()) {
       reverseDeps.add(skyKey("ab"));
     }
-    assertThat(graph.get(null, Reason.OTHER, skyKey("a")).getReverseDepsForDoneEntry())
-        .containsExactlyElementsIn(reverseDeps);
+    assertThat(graph.get(null, Reason.OTHER, skyKey("a"))
+        .getReverseDeps()).containsExactlyElementsIn(reverseDeps);
     reverseDeps.add(skyKey("bc"));
-    assertThat(graph.get(null, Reason.OTHER, skyKey("b")).getReverseDepsForDoneEntry())
-        .containsExactlyElementsIn(reverseDeps);
+    assertThat(graph.get(null, Reason.OTHER, skyKey("b"))
+        .getReverseDeps()).containsExactlyElementsIn(reverseDeps);
     reverseDeps.clear();
     if (reverseDepsPresent()) {
       reverseDeps.add(skyKey("ab_c"));
     }
     reverseDeps.add(skyKey("bc"));
-    assertThat(graph.get(null, Reason.OTHER, skyKey("c")).getReverseDepsForDoneEntry())
-        .containsExactlyElementsIn(reverseDeps);
+    assertThat(graph.get(null, Reason.OTHER, skyKey("c"))
+        .getReverseDeps()).containsExactlyElementsIn(reverseDeps);
   }
 
   @Test
@@ -341,7 +390,7 @@ public class EagerInvalidatorTest {
     final Thread mainThread = Thread.currentThread();
     final AtomicReference<SkyKey> badKey = new AtomicReference<>();
     DirtyTrackingProgressReceiver receiver = new DirtyTrackingProgressReceiver(
-        new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+        new EvaluationProgressReceiver() {
           @Override
           public void invalidated(SkyKey skyKey, InvalidationState state) {
             if (skyKey.equals(child)) {
@@ -360,6 +409,22 @@ public class EagerInvalidatorTest {
               // thread is already interrupted.
             }
           }
+
+          @Override
+          public void enqueueing(SkyKey skyKey) {
+            throw new UnsupportedOperationException();
+          }
+
+          @Override
+          public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+            throw new UnsupportedOperationException();
+          }
+
+          @Override
+          public void evaluated(
+              SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
+            throw new UnsupportedOperationException();
+          }
         });
     try {
       invalidateWithoutError(receiver, child);
@@ -373,10 +438,26 @@ public class EagerInvalidatorTest {
     assertFalse(isInvalidated(parent));
     assertNotNull(graph.get(null, Reason.OTHER, parent).getValue());
     receiver = new DirtyTrackingProgressReceiver(
-        new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+        new EvaluationProgressReceiver() {
       @Override
       public void invalidated(SkyKey skyKey, InvalidationState state) {
         invalidated.add(skyKey);
+      }
+
+      @Override
+      public void enqueueing(SkyKey skyKey) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
+          EvaluationState state) {
+        throw new UnsupportedOperationException();
       }
     });
     invalidateWithoutError(receiver);
@@ -448,8 +529,7 @@ public class EagerInvalidatorTest {
       int countDownStart = validValuesToDo > 0 ? random.nextInt(validValuesToDo) : 0;
       final CountDownLatch countDownToInterrupt = new CountDownLatch(countDownStart);
       final DirtyTrackingProgressReceiver receiver =
-          new DirtyTrackingProgressReceiver(
-              new EvaluationProgressReceiver.NullEvaluationProgressReceiver() {
+          new DirtyTrackingProgressReceiver(new EvaluationProgressReceiver() {
             @Override
             public void invalidated(SkyKey skyKey, InvalidationState state) {
               countDownToInterrupt.countDown();
@@ -463,6 +543,22 @@ public class EagerInvalidatorTest {
                     visitor.get().getInterruptionLatchForTestingOnly(),
                     "Main thread was not interrupted");
               }
+            }
+
+            @Override
+            public void enqueueing(SkyKey skyKey) {
+              throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void computed(SkyKey skyKey, long elapsedTimeNanos) {
+              throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public void evaluated(
+                SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
+              throw new UnsupportedOperationException();
             }
           });
       try {
@@ -543,7 +639,7 @@ public class EagerInvalidatorTest {
     public void dirtyTrackingProgressReceiverWorksWithDeletingInvalidator() throws Exception {
       setupInvalidatableGraph();
       DirtyTrackingProgressReceiver receiver = new DirtyTrackingProgressReceiver(
-          new EvaluationProgressReceiver.NullEvaluationProgressReceiver());
+          new TrackingProgressReceiver());
 
       // Dirty the node, and ensure that the tracker is aware of it:
       Iterable<SkyKey> diff1 = ImmutableList.of(skyKey("a"));
@@ -617,8 +713,8 @@ public class EagerInvalidatorTest {
     @Test
     public void dirtyTrackingProgressReceiverWorksWithDirtyingInvalidator() throws Exception {
       setupInvalidatableGraph();
-      DirtyTrackingProgressReceiver receiver = new DirtyTrackingProgressReceiver(
-          new EvaluationProgressReceiver.NullEvaluationProgressReceiver());
+      DirtyTrackingProgressReceiver receiver =
+          new DirtyTrackingProgressReceiver(new TrackingProgressReceiver());
 
       // Dirty the node, and ensure that the tracker is aware of it:
       invalidate(graph, receiver, skyKey("a"));

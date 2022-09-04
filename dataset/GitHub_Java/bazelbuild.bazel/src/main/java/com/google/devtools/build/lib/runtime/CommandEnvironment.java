@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
@@ -207,10 +206,11 @@ public final class CommandEnvironment {
   }
 
   @VisibleForTesting
-  void updateClientEnv(List<Map.Entry<String, String>> clientEnvList) {
+  void updateClientEnv(List<Map.Entry<String, String>> clientEnvList, boolean ignoreClientEnv) {
     Preconditions.checkState(clientEnv.isEmpty());
 
-    Collection<Map.Entry<String, String>> env = clientEnvList;
+    Collection<Map.Entry<String, String>> env =
+        ignoreClientEnv ? System.getenv().entrySet() : clientEnvList;
     for (Map.Entry<String, String> entry : env) {
       clientEnv.put(entry.getKey(), entry.getValue());
     }
@@ -323,14 +323,6 @@ public final class CommandEnvironment {
    */
   public Path getExecRoot() {
     return getDirectories().getExecRoot();
-  }
-
-  /**
-   * Returns the directory where actions' outputs and errors will be written. Is below the directory
-   * returned by {@link #getExecRoot}.
-   */
-  public Path getActionConsoleOutputDirectory() {
-    return getDirectories().getActionConsoleOutputDirectory(getExecRoot());
   }
 
   /**
@@ -565,15 +557,14 @@ public final class CommandEnvironment {
     this.relativeWorkingDirectory = workingDirectory.relativeTo(workspace);
     this.workingDirectory = workingDirectory;
 
-    updateClientEnv(options.clientEnv);
+    updateClientEnv(options.clientEnv, options.ignoreClientEnv);
 
     // Fail fast in the case where a Blaze command forgets to install the package path correctly.
     skyframeExecutor.setActive(false);
     // Let skyframe figure out if it needs to store graph edges for this build.
     skyframeExecutor.decideKeepIncrementalState(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,
-        optionsParser.getOptions(BuildView.Options.class),
-        optionsParser.getOptions(ExecutionOptions.class));
+        optionsParser.getOptions(BuildView.Options.class));
 
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, options, execStartTimeNanos);

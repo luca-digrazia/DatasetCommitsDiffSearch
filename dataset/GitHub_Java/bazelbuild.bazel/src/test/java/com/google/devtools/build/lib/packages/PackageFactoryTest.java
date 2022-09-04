@@ -114,16 +114,13 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   @Test
   public void testBadPackageName() throws Exception {
     try {
-      // PathFragment parsing de-double slashes, and normalization of the path fragment removes
-      // up reference (/../), so use triple dot /.../ that will always be a forbidden package name.
-      packages.createPackage("not even a legal/.../label",
-          emptyBuildFile("not even a legal/.../label"));
+      packages.createPackage("not even a legal label", emptyBuildFile("not even a legal label"));
       fail();
     } catch (NoSuchPackageException e) {
       assertThat(e.getMessage())
           .contains(
-              "no such package 'not even a legal/.../label': "
-                  + "illegal package name: 'not even a legal/.../label' ");
+              "no such package 'not even a legal label': "
+                  + "illegal package name: 'not even a legal label' ");
     }
   }
 
@@ -259,7 +256,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
             "genrule(name='c', srcs=[], outs=['ao'], cmd=REPOSITORY_NAME + ' ' + PACKAGE_NAME)");
     Package pkg =
         packages.createPackage(
-            PackageIdentifier.create("@a", PathFragment.create("b")), buildFile, events.reporter());
+            PackageIdentifier.create("@a", new PathFragment("b")), buildFile, events.reporter());
     Rule c = pkg.getRule("c");
     assertThat(AggregatingAttributeMapper.of(c).get("cmd", Type.STRING)).isEqualTo("@a b");
   }

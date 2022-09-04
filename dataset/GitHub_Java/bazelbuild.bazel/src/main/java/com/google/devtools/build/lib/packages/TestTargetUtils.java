@@ -43,11 +43,14 @@ public final class TestTargetUtils {
    * given size.
    */
   public static Predicate<Target> testSizeFilter(final Set<TestSize> allowedSizes) {
-    return target -> {
-      if (!(target instanceof Rule)) {
-        return false;
+    return new Predicate<Target>() {
+      @Override
+      public boolean apply(Target target) {
+        if (!(target instanceof Rule)) {
+          return false;
+        }
+        return allowedSizes.contains(TestSize.getTestSize((Rule) target));
       }
-      return allowedSizes.contains(TestSize.getTestSize((Rule) target));
     };
   }
 
@@ -56,11 +59,14 @@ public final class TestTargetUtils {
    * the given timeout.
    **/
   public static Predicate<Target> testTimeoutFilter(final Set<TestTimeout> allowedTimeouts) {
-    return target -> {
-      if (!(target instanceof Rule)) {
-        return false;
+    return new Predicate<Target>() {
+      @Override
+        public boolean apply(Target target) {
+        if (!(target instanceof Rule)) {
+          return false;
+        }
+        return allowedTimeouts.contains(TestTimeout.getTestTimeout((Rule) target));
       }
-      return allowedTimeouts.contains(TestTimeout.getTestTimeout((Rule) target));
     };
   }
 
@@ -87,10 +93,13 @@ public final class TestTargetUtils {
       }
     }
 
-    return rule -> {
-      String ruleLang = TargetUtils.getRuleLanguage(rule);
-      return (requiredLangs.isEmpty() || requiredLangs.contains(ruleLang))
-          && !excludedLangs.contains(ruleLang);
+    return new Predicate<Target>() {
+      @Override
+      public boolean apply(Target rule) {
+        String ruleLang = TargetUtils.getRuleLanguage(rule);
+        return (requiredLangs.isEmpty() || requiredLangs.contains(ruleLang))
+            && !excludedLangs.contains(ruleLang);
+      }
     };
   }
 

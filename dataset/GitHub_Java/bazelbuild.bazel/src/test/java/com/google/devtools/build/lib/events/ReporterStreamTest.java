@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.events;
 
-import static org.junit.Assert.assertEquals;
+import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
-
+import java.io.PrintWriter;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.PrintWriter;
 
 @RunWith(JUnit4.class)
 public class ReporterStreamTest {
@@ -32,8 +31,8 @@ public class ReporterStreamTest {
   private EventHandler outAppender;
 
   @Before
-  public void setUp() throws Exception {
-    reporter = new Reporter();
+  public final void createOutputAppender() throws Exception  {
+    reporter = new Reporter(new EventBus());
     out = new StringBuilder();
     outAppender = new EventHandler() {
       @Override
@@ -45,16 +44,16 @@ public class ReporterStreamTest {
 
   @Test
   public void reporterStream() throws Exception {
-    assertEquals("", out.toString());
+    assertThat(out.toString()).isEmpty();
     reporter.addHandler(outAppender);
-    PrintWriter infoWriter = new PrintWriter(new ReporterStream(reporter, EventKind.INFO), true);
-    PrintWriter warnWriter = new PrintWriter(new ReporterStream(reporter, EventKind.WARNING), true);
-    try {
+    try (
+      PrintWriter warnWriter =
+        new PrintWriter(new ReporterStream(reporter, EventKind.WARNING), true);
+      PrintWriter infoWriter =
+          new PrintWriter(new ReporterStream(reporter, EventKind.INFO), true)
+    ) {
       infoWriter.println("some info");
       warnWriter.println("a warning");
-    } finally {
-      infoWriter.close();
-      warnWriter.close();
     }
     reporter.getOutErr().printOutLn("some output");
     reporter.getOutErr().printErrLn("an error");

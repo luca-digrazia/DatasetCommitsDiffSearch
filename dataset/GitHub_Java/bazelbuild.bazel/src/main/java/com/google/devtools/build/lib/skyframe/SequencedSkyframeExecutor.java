@@ -26,7 +26,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.BuildView.Options;
+import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
@@ -62,7 +63,6 @@ import com.google.devtools.build.skyframe.Differencer;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.Injectable;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EvaluatorSupplier;
-import com.google.devtools.build.skyframe.NodeEntry;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -75,7 +75,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -93,16 +92,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   private boolean lastAnalysisDiscarded = false;
 
-  private enum IncrementalState {
-    NORMAL,
-    CLEAR_EDGES_AND_ACTIONS
-  }
-
-  // Can only be set once over the lifetime of this object. If CLEAR_EDGES or
-  // CLEAR_EDGES_AND_ACTIONS, the graph will not store edges, saving memory but making incremental
-  // builds impossible. If CLEAR_EDGES_AND_ACTIONS, each action will be dereferenced once it is
-  // executed, saving memory.
-  private IncrementalState incrementalState = IncrementalState.NORMAL;
+  // Can only be set once (to false) over the lifetime of this object. If false, the graph will not
+  // store edges, saving memory but making incremental builds impossible.
+  private boolean keepGraphEdges = true;
 
   private RecordingDifferencer recordingDiffer;
   private final DiffAwarenessManager diffAwarenessManager;
@@ -118,6 +110,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       Predicate<PathFragment> allowedMissingInputs,
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
@@ -133,6 +126,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         workspaceStatusActionFactory,
         buildInfoFactories,
         allowedMissingInputs,
+        preprocessorFactorySupplier,
         extraSkyFunctions,
         extraPrecomputedValues,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
@@ -152,6 +146,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       Predicate<PathFragment> allowedMissingInputs,
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
@@ -166,6 +161,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         buildInfoFactories,
         diffAwarenessFactories,
         allowedMissingInputs,
+        preprocessorFactorySupplier,
         extraSkyFunctions,
         extraPrecomputedValues,
         customDirtinessCheckers,
@@ -183,6 +179,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       Predicate<PathFragment> allowedMissingInputs,
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
@@ -200,6 +197,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             buildInfoFactories,
             diffAwarenessFactories,
             allowedMissingInputs,
+            preprocessorFactorySupplier,
             extraSkyFunctions,
             extraPrecomputedValues,
             customDirtinessCheckers,
@@ -212,15 +210,14 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   @VisibleForTesting
-  public static SequencedSkyframeExecutor create(
-      PackageFactory pkgFactory,
-      BlazeDirectories directories,
-      BinTools binTools,
+  public static SequencedSkyframeExecutor create(PackageFactory pkgFactory,
+      BlazeDirectories directories, BinTools binTools,
       WorkspaceStatusAction.Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       PathFragment blacklistedPackagePrefixesFile,
-      String productName) {
+      String productName,
+      Preprocessor.Factory.Supplier preprocessorFactorySupplier) {
     return create(
         pkgFactory,
         directories,
@@ -229,6 +226,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         buildInfoFactories,
         diffAwarenessFactories,
         Predicates.<PathFragment>alwaysFalse(),
+        preprocessorFactorySupplier,
         ImmutableMap.<SkyFunctionName, SkyFunction>of(),
         ImmutableList.<PrecomputedValue.Injected>of(),
         ImmutableList.<SkyValueDirtinessChecker>of(),
@@ -541,29 +539,24 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   @Override
-  public void decideKeepIncrementalState(boolean batch, Options viewOptions) {
+  public void decideKeepIncrementalState(boolean batch, BuildView.Options viewOptions) {
     Preconditions.checkState(!active);
     if (viewOptions == null) {
       // Some blaze commands don't include the view options. Don't bother with them.
       return;
     }
     if (batch && viewOptions.keepGoing && viewOptions.discardAnalysisCache) {
-      Preconditions.checkState(
-          incrementalState == IncrementalState.NORMAL,
-          "May only be called once if successful: %s",
-          incrementalState);
-      incrementalState = IncrementalState.CLEAR_EDGES_AND_ACTIONS;
+      Preconditions.checkState(keepGraphEdges, "May only be called once if successful");
+      keepGraphEdges = false;
       // Graph will be recreated on next sync.
-      LOG.info("Set incremental state to " + incrementalState);
     }
-    removeActionsAfterEvaluation.set(incrementalState == IncrementalState.CLEAR_EDGES_AND_ACTIONS);
   }
 
   @Override
   public boolean hasIncrementalState() {
     // TODO(bazel-team): Combine this method with clearSkyframeRelevantCaches() once legacy
     // execution is removed [skyframe-execution].
-    return incrementalState == IncrementalState.NORMAL;
+    return keepGraphEdges;
   }
 
   @Override
@@ -602,78 +595,35 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     recordingDiffer.invalidate(dirtyActionValues);
   }
 
-  private static ImmutableSet<SkyFunctionName> LOADING_TYPES =
-      ImmutableSet.of(
-          SkyFunctions.PACKAGE,
-          SkyFunctions.SKYLARK_IMPORTS_LOOKUP,
-          SkyFunctions.AST_FILE_LOOKUP,
-          SkyFunctions.GLOB);
-
   /**
-   * Save memory by removing references to configured targets and aspects in Skyframe.
+   * Save memory by removing references to configured targets and actions in Skyframe.
    *
-   * <p>These nodes must be recreated on subsequent builds. We do not clear the top-level target
-   * nodes, since their configured targets are needed for the target completion middleman values.
+   * <p>These values must be recreated on subsequent builds. We do not clear the top-level target
+   * values, since their configured targets are needed for the target completion middleman values.
    *
-   * <p>The nodes are not deleted during this method call, because they are needed for the execution
-   * phase. Instead, their analysis-time data is cleared while preserving the generating action info
-   * needed for execution. The next build will delete the nodes (and recreate them if necessary).
-   *
-   * <p>If {@link #hasIncrementalState} is false, then also delete loading-phase nodes (as
-   * determined by {@link #LOADING_TYPES}) from the graph, since there will be no future builds to
-   * use them for.
+   * <p>The values are not deleted during this method call, because they are needed for the
+   * execution phase. Instead, their data is cleared. The next build will delete the values (and
+   * recreate them if necessary).
    */
-  private void discardAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects) {
-    topLevelTargets = ImmutableSet.copyOf(topLevelTargets);
-    topLevelAspects = ImmutableSet.copyOf(topLevelAspects);
+  private void discardAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
     try (AutoProfiler p = AutoProfiler.logged("discarding analysis cache", LOG)) {
       lastAnalysisDiscarded = true;
-      Iterator<? extends Map.Entry<SkyKey, ? extends NodeEntry>> it =
-          memoizingEvaluator.getGraphMap().entrySet().iterator();
-      while (it.hasNext()) {
-        Map.Entry<SkyKey, ? extends NodeEntry> keyAndEntry = it.next();
-        NodeEntry entry = keyAndEntry.getValue();
-        if (entry == null || !entry.isDone()) {
+      for (Map.Entry<SkyKey, SkyValue> entry : memoizingEvaluator.getValues().entrySet()) {
+        if (!entry.getKey().functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {
           continue;
         }
-        SkyKey key = keyAndEntry.getKey();
-        SkyFunctionName functionName = key.functionName();
-        if (!hasIncrementalState() && LOADING_TYPES.contains(functionName)) {
-          it.remove();
-          continue;
-        }
-        if (functionName.equals(SkyFunctions.CONFIGURED_TARGET)) {
-          ConfiguredTargetValue ctValue;
-          try {
-            ctValue = (ConfiguredTargetValue) entry.getValue();
-          } catch (InterruptedException e) {
-            throw new IllegalStateException("No interruption in sequenced evaluation", e);
-          }
-          // ctValue may be null if target was not successfully analyzed.
-          if (ctValue != null) {
-            ctValue.clear(!topLevelTargets.contains(ctValue.getConfiguredTarget()));
-          }
-        } else if (functionName.equals(SkyFunctions.ASPECT)) {
-          AspectValue aspectValue;
-          try {
-            aspectValue = (AspectValue) entry.getValue();
-          } catch (InterruptedException e) {
-            throw new IllegalStateException("No interruption in sequenced evaluation", e);
-          }
-          // value may be null if target was not successfully analyzed.
-          if (aspectValue != null) {
-            aspectValue.clear(!topLevelAspects.contains(aspectValue));
-          }
+        ConfiguredTargetValue ctValue = (ConfiguredTargetValue) entry.getValue();
+        // ctValue may be null if target was not successfully analyzed.
+        if (ctValue != null && !topLevelTargets.contains(ctValue.getConfiguredTarget())) {
+          ctValue.clear();
         }
       }
     }
   }
 
   @Override
-  public void clearAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects) {
-    discardAnalysisCache(topLevelTargets, topLevelAspects);
+  public void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets) {
+    discardAnalysisCache(topLevelTargets);
   }
 
   @Override

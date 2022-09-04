@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -74,21 +75,23 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
 
   private static final class ParseFailureListenerImpl extends DelegatingEventHandler
       implements ParseFailureListener, ExtendedEventHandler {
-    private final ExtendedEventHandler eventHandler;
+    private final EventBus eventBus;
 
-    private ParseFailureListenerImpl(ExtendedEventHandler delegate) {
+    private ParseFailureListenerImpl(ExtendedEventHandler delegate, EventBus eventBus) {
       super(delegate);
-      this.eventHandler = delegate;
+      this.eventBus = eventBus;
     }
 
     @Override
     public void parsingError(String targetPattern, String message) {
-      eventHandler.post(new ParsingFailedEvent(targetPattern, message));
+      if (eventBus != null) {
+        eventBus.post(new ParsingFailedEvent(targetPattern, message));
+      }
     }
 
     @Override
     public void post(ExtendedEventHandler.Postable obj) {
-      eventHandler.post(obj);
+      eventBus.post(obj);
     }
   }
 
@@ -112,6 +115,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
   @Override
   public LoadingResult execute(
       ExtendedEventHandler eventHandler,
+      EventBus eventBus,
       List<String> targetPatterns,
       PathFragment relativeWorkingDirectory,
       LoadingOptions options,
@@ -129,7 +133,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
 
     targetPatternEvaluator.updateOffset(relativeWorkingDirectory);
     ExtendedEventHandler parseFailureListener =
-        new ParseFailureListenerImpl(eventHandler);
+        new ParseFailureListenerImpl(eventHandler, eventBus);
     // Determine targets to build:
     ResolvedTargets<Target> targets =
         getTargetsToBuild(
@@ -228,7 +232,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
             getWorkspaceName(eventHandler));
 
     // This is the same code as SkyframeLoadingPhaseRunner.
-    eventHandler.post(
+    eventBus.post(
         new TargetParsingCompleteEvent(
             patternParsingValue.getOriginalTargets(),
             patternParsingValue.getFilteredTargets(),
@@ -239,7 +243,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
     if (callback != null) {
       callback.notifyTargets(patternParsingValue.getTargets());
     }
-    eventHandler.post(
+    eventBus.post(
         new LoadingPhaseCompleteEvent(
             patternParsingValue.getTargets(),
             patternParsingValue.getTestSuiteTargets(),

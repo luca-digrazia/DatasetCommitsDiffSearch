@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.server.signal.InterruptSignalHandler;
 import com.google.devtools.build.lib.shell.JavaSubprocessFactory;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
-import com.google.devtools.build.lib.unix.UnixFileSystem;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Clock;
@@ -64,15 +63,16 @@ import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.util.ProcessUtils;
 import com.google.devtools.build.lib.util.ThreadUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.windows.WindowsFileSystem;
+import com.google.devtools.build.lib.vfs.UnixFileSystem;
+import com.google.devtools.build.lib.vfs.WindowsFileSystem;
 import com.google.devtools.build.lib.windows.WindowsSubprocessFactory;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionPriority;
@@ -139,7 +139,8 @@ public final class BlazeRuntime {
   private final OptionsProvider startupOptionsProvider;
 
   private final ProjectFile.Provider projectFileProvider;
-  @Nullable private final InvocationPolicy moduleInvocationPolicy;
+  @Nullable
+  private final InvocationPolicy invocationPolicy;
   private final String defaultsPackageContent;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final String productName;
@@ -162,7 +163,7 @@ public final class BlazeRuntime {
       Iterable<BlazeModule> blazeModules,
       SubscriberExceptionHandler eventBusExceptionHandler,
       ProjectFile.Provider projectFileProvider,
-      InvocationPolicy moduleInvocationPolicy,
+      InvocationPolicy invocationPolicy,
       Iterable<BlazeCommand> commands,
       String productName,
       PathConverter pathToUriConverter) {
@@ -172,7 +173,7 @@ public final class BlazeRuntime {
 
     this.packageFactory = pkgFactory;
     this.projectFileProvider = projectFileProvider;
-    this.moduleInvocationPolicy = moduleInvocationPolicy;
+    this.invocationPolicy = invocationPolicy;
 
     this.ruleClassProvider = ruleClassProvider;
     this.configurationFactory = configurationFactory;
@@ -186,7 +187,7 @@ public final class BlazeRuntime {
     this.eventBusExceptionHandler = eventBusExceptionHandler;
 
     this.defaultsPackageContent =
-        ruleClassProvider.getDefaultsPackageContent(getModuleInvocationPolicy());
+        ruleClassProvider.getDefaultsPackageContent(getInvocationPolicy());
     CommandNameCache.CommandNameCacheInstance.INSTANCE.setCommandNameCache(
         new CommandNameCacheImpl(getCommandMap()));
     this.productName = productName;
@@ -249,8 +250,8 @@ public final class BlazeRuntime {
   }
 
   @Nullable
-  public InvocationPolicy getModuleInvocationPolicy() {
-    return moduleInvocationPolicy;
+  public InvocationPolicy getInvocationPolicy() {
+    return invocationPolicy;
   }
 
   /**
@@ -559,11 +560,7 @@ public final class BlazeRuntime {
       // Run Blaze in batch mode.
       System.exit(batchMain(modules, args));
     }
-    LOG.info(
-        "Starting Blaze server with pid "
-            + maybeGetPidString()
-            + " and args "
-            + Arrays.toString(args));
+    LOG.info("Starting Blaze server with args " + Arrays.toString(args));
     try {
       // Run Blaze in server mode.
       System.exit(serverMain(modules, OutErr.SYSTEM_OUT_ERR, args));
@@ -740,11 +737,8 @@ public final class BlazeRuntime {
   private static int batchMain(Iterable<BlazeModule> modules, String[] args) {
     captureSigint();
     CommandLineOptions commandLineOptions = splitStartupOptions(modules, args);
-    LOG.info(
-        "Running Blaze in batch mode with "
-            + maybeGetPidString()
-            + "startup args "
-            + commandLineOptions.getStartupArgs());
+    LOG.info("Running Blaze in batch mode with startup args "
+        + commandLineOptions.getStartupArgs());
 
     BlazeRuntime runtime;
     try {
@@ -940,7 +934,7 @@ public final class BlazeRuntime {
     PathFragment installBase = startupOptions.installBase;
     PathFragment outputBase = startupOptions.outputBase;
 
-    maybeForceJNIByGettingPid(installBase); // Must be before first use of JNI.
+    OsUtils.maybeForceJNI(installBase);  // Must be before first use of JNI.
 
     // From the point of view of the Java program --install_base and --output_base
     // are mandatory options, despite the comment in their declarations.
@@ -1022,40 +1016,6 @@ public final class BlazeRuntime {
     AutoProfiler.setClock(runtime.getClock());
     BugReport.setRuntime(runtime);
     return runtime;
-  }
-
-  private static String maybeGetPidString() {
-    Integer pid = maybeForceJNIByGettingPid(null);
-    return pid == null ? "" : "pid " + pid + " and ";
-  }
-
-  /** Loads JNI libraries, if necessary under the current platform. */
-  @Nullable
-  private static Integer maybeForceJNIByGettingPid(@Nullable PathFragment installBase) {
-    return jniLibsAvailable() ? getPidUsingJNI(installBase) : null;
-  }
-
-  private static boolean jniLibsAvailable() {
-    return !"0".equals(System.getProperty("io.bazel.EnableJni"));
-  }
-
-  // Force JNI linking at a moment when we have 'installBase' handy, and print
-  // an informative error if it fails.
-  private static int getPidUsingJNI(@Nullable PathFragment installBase) {
-    try {
-      return ProcessUtils.getpid(); // force JNI initialization
-    } catch (UnsatisfiedLinkError t) {
-      System.err.println(
-          "JNI initialization failed: "
-              + t.getMessage()
-              + ".  "
-              + "Possibly your installation has been corrupted"
-              + (installBase == null
-                  ? ""
-                  : "; if this problem persists, try 'rm -fr " + installBase + "'")
-              + ".");
-      throw t;
-    }
   }
 
   /**

@@ -55,6 +55,7 @@ import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryException;
+import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
@@ -283,7 +284,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     DigraphQueryEvalResult<Target> queryResult;
     OutputFormatter formatter;
     AggregateAllOutputFormatterCallback<Target> targets =
-        QueryUtil.newOrderedAggregateAllOutputFormatterCallback();
+        QueryUtil.newAggregateAllOutputFormatterCallback();
     try {
       Set<Setting> settings = queryOptions.toSettings();
 
@@ -304,25 +305,21 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       // All the packages are already loaded at this point, so there is no need
       // to start up many threads. 4 are started up to make good use of multiple
       // cores.
-      BlazeQueryEnvironment queryEnvironment =
-          (BlazeQueryEnvironment)
-              QUERY_ENVIRONMENT_FACTORY.create(
-                  /*transitivePackageLoader=*/ null,
-                  /*graph=*/ null,
-                  packageProvider,
-                  evaluator,
-                  /*keepGoing=*/ false,
-                  ruleContext.attributes().get("strict", Type.BOOLEAN),
-                  /*orderedResults=*/ !QueryOutputUtils.shouldStreamResults(
-                      queryOptions, formatter),
-                  /*universeScope=*/ ImmutableList.<String>of(),
-                  /*loadingPhaseThreads=*/ 4,
-                  labelFilter,
-                  getEventHandler(ruleContext),
-                  settings,
-                  ImmutableList.<QueryFunction>of(),
-                  /*packagePath=*/ null,
-                  /*blockUniverseEvaluationErrors=*/ false);
+      BlazeQueryEnvironment queryEnvironment = (BlazeQueryEnvironment) QUERY_ENVIRONMENT_FACTORY
+          .create(
+              /*transitivePackageLoader=*/null, /*graph=*/null, packageProvider,
+              evaluator,
+              /*keepGoing=*/false,
+              ruleContext.attributes().get("strict", Type.BOOLEAN),
+              /*orderedResults=*/!QueryOutputUtils.shouldStreamResults(queryOptions, formatter),
+              /*universeScope=*/ImmutableList.<String>of(),
+              /*loadingPhaseThreads=*/4,
+              labelFilter,
+              getEventHandler(ruleContext),
+              settings,
+              ImmutableList.<QueryFunction>of(),
+              QueryExpressionEvalListener.NullListener.<Target>instance(),
+              /*packagePath=*/null);
       queryResult = (DigraphQueryEvalResult<Target>) queryEnvironment.evaluateQuery(query, targets);
     } catch (SkyframeRestartQueryException e) {
       // Do not emit errors for skyframe restarts. They make output of the ConfiguredTargetFunction
