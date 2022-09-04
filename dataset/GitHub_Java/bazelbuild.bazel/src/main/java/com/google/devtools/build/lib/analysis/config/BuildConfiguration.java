@@ -1075,6 +1075,10 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
   private final boolean separateGenfilesDirectory;
 
+  // Cache this value for quicker access. We don't cache it inside BuildOptions because BuildOptions
+  // is mutable, so a cached value there could fall out of date when it's updated.
+  private final boolean actionsEnabled;
+
   /**
    * The global "make variables" such as "$(TARGET_CPU)"; these get applied to all rules analyzed in
    * this configuration.
@@ -1117,6 +1121,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
         // "bazel-out/arm-linux-fastbuild/bin" while the parent bindir is
         // "bazel-out/android-arm-linux-fastbuild/bin". That's pretty awkward to check here.
         //      && outputRoots.equals(other.outputRoots)
+                && actionsEnabled == other.actionsEnabled
                 && fragments.values().containsAll(other.fragments.values())
                 && buildOptions.getOptions().containsAll(other.buildOptions.getOptions()));
   }
@@ -1134,15 +1139,17 @@ public class BuildConfiguration implements BuildConfigurationApi {
       return false;
     }
     BuildConfiguration otherConfig = (BuildConfiguration) other;
-    return fragments.values().equals(otherConfig.fragments.values())
+    return actionsEnabled == otherConfig.actionsEnabled
+        && fragments.values().equals(otherConfig.fragments.values())
         && buildOptions.equals(otherConfig.buildOptions);
   }
 
   private int computeHashCode() {
-    return Objects.hash(fragments, buildOptions.getOptions());
+    return Objects.hash(isActionsEnabled(), fragments, buildOptions.getOptions());
   }
 
   public void describe(StringBuilder sb) {
+    sb.append(isActionsEnabled()).append('\n');
     for (Fragment fragment : fragments.values()) {
       sb.append(fragment.getClass().getName()).append('\n');
     }
@@ -1236,6 +1243,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
     this.buildOptions = buildOptions.clone();
     this.buildOptionsDiff = buildOptionsDiff;
+    this.actionsEnabled = buildOptions.enableActions();
     this.options = buildOptions.get(Options.class);
     this.separateGenfilesDirectory = options.separateGenfilesDirectory;
     this.mainRepositoryName = mainRepositoryName;
@@ -1736,6 +1744,11 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.experimentalJavaCoverage;
   }
 
+  /** If false, AnalysisEnvironment doesn't register any actions created by the ConfiguredTarget. */
+  public boolean isActionsEnabled() {
+    return actionsEnabled;
+  }
+
   public RunUnder getRunUnder() {
     return options.runUnder;
   }
@@ -1760,7 +1773,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
   }
 
   public List<Label> getActionListeners() {
-    return options.actionListeners;
+    return isActionsEnabled() ? options.actionListeners : ImmutableList.<Label>of();
   }
 
   /**
