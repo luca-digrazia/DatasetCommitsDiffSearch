@@ -2,10 +2,12 @@ package io.quarkus.hibernate.orm.runtime.boot;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import org.hibernate.Version;
 import org.hibernate.cfg.Environment;
 import org.hibernate.internal.CoreMessageLogger;
 import org.jboss.logging.Logger;
@@ -30,12 +32,6 @@ public class QuarkusEnvironment {
         if (classLoader != null) {
             InputStream stream = classLoader.getResourceAsStream("/hibernate.properties");
             if (stream != null) {
-                LOG.warnf(
-                        "Resource /hibernate.properties was found. This configuration source is deprecated and will be removed in a future version of Quarkus, "
-                                +
-                                "as it's not compatible with Live-Reloading, with multiple Persistence Units and many more cool features we have planned. Please try to stop "
-                                +
-                                "using this to configure your ORM and report anything you will need to do so: https://github.com/quarkusio/quarkus/issues/ . Thanks! ");
                 final Properties p = new Properties();
                 try {
                     p.load(stream);

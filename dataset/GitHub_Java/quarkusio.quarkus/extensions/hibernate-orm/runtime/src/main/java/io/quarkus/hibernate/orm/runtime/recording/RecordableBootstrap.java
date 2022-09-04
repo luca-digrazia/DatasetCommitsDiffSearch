@@ -67,7 +67,6 @@ import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 import io.quarkus.hibernate.orm.runtime.boot.QuarkusEnvironment;
 import io.quarkus.hibernate.orm.runtime.service.DialectFactoryInitiator;
 import io.quarkus.hibernate.orm.runtime.service.DisabledJMXInitiator;
-import io.quarkus.hibernate.orm.runtime.service.QuarkusMutableIdentifierGeneratorFactoryInitiator;
 import io.quarkus.hibernate.orm.runtime.service.QuarkusRegionFactoryInitiator;
 
 /**
@@ -137,9 +136,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
         serviceInitiators.add(RefCursorSupportInitiator.INSTANCE);
 
         serviceInitiators.add(QueryTranslatorFactoryInitiator.INSTANCE);
-
-        // Custom one! Also, this one has state so can't use the singleton.
-        serviceInitiators.add(new QuarkusMutableIdentifierGeneratorFactoryInitiator());// MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
+        serviceInitiators.add(MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
 
         serviceInitiators.add(JtaPlatformResolverInitiator.INSTANCE);
         serviceInitiators.add(JtaPlatformInitiator.INSTANCE);
