@@ -599,9 +599,7 @@ public abstract class ProguardHelper {
 
     if (proguardDictionary != null) {
       builder.addInput(proguardDictionary);
-      commandLine.addExecPath("-obfuscationdictionary", proguardDictionary)
-          .addExecPath("-classobfuscationdictionary", proguardDictionary)
-          .addExecPath("-packageobfuscationdictionary", proguardDictionary);
+      commandLine.addExecPath("-obfuscationdictionary", proguardDictionary);
     }
 
     for (Artifact proguardSpec : proguardSpecs) {
