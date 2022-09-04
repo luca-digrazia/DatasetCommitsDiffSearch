@@ -21,6 +21,7 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.github.joschi.jadconfig.util.Size;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
@@ -68,11 +69,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.SyncFailedException;
-import java.io.UncheckedIOException;
 import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -85,6 +84,7 @@ import java.util.SortedMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -157,7 +157,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private final int throttleThresholdPercentage;
 
     @Inject
-    public KafkaJournal(@Named("message_journal_dir") Path journalDirectory,
+    public KafkaJournal(@Named("message_journal_dir") File journalDirectory,
                         @Named("scheduler") ScheduledExecutorService scheduler,
                         @Named("message_journal_segment_size") Size segmentSize,
                         @Named("message_journal_segment_age") Duration segmentAge,
@@ -237,20 +237,17 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                         false,
                         "MD5");
 
-        if (!java.nio.file.Files.exists(journalDirectory)) {
-            try {
-                java.nio.file.Files.createDirectories(journalDirectory);
-            } catch (IOException e) {
-                LOG.error("Cannot create journal directory at {}, please check the permissions", journalDirectory.toAbsolutePath());
-                throw new UncheckedIOException(e);
-            }
+        if (!journalDirectory.exists() && !journalDirectory.mkdirs()) {
+            LOG.error("Cannot create journal directory at {}, please check the permissions",
+                    journalDirectory.getAbsolutePath());
+            Throwables.propagate(new AccessDeniedException(journalDirectory.getAbsolutePath(), null, "Could not create journal directory."));
         }
 
         // TODO add check for directory, etc
-        committedReadOffsetFile = new File(journalDirectory.toFile(), "graylog2-committed-read-offset");
+        committedReadOffsetFile = new File(journalDirectory, "graylog2-committed-read-offset");
         try {
             if (!committedReadOffsetFile.createNewFile()) {
-                final String line = Files.asCharSource(committedReadOffsetFile, StandardCharsets.UTF_8).readFirstLine();
+                final String line = Files.readFirstLine(committedReadOffsetFile, StandardCharsets.UTF_8);
                 // the file contains the last offset graylog2 has successfully processed.
                 // thus the nextReadOffset is one beyond that number
                 if (line != null) {
@@ -260,8 +257,9 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
             }
         } catch (IOException e) {
             LOG.error("Cannot access offset file: {}", e.getMessage());
-            final AccessDeniedException accessDeniedException = new AccessDeniedException(committedReadOffsetFile.getAbsolutePath(), null, e.getMessage());
-            throw new RuntimeException(accessDeniedException);
+            Throwables.propagate(new AccessDeniedException(committedReadOffsetFile.getAbsolutePath(),
+                    null,
+                    e.getMessage()));
         }
         try {
             final BrokerState brokerState = new BrokerState();
@@ -269,7 +267,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
             kafkaScheduler = new KafkaScheduler(2, "kafka-journal-scheduler-", false); // TODO make thread count configurable
             kafkaScheduler.startup();
             logManager = new LogManager(
-                    new File[]{journalDirectory.toFile()},
+                    new File[]{journalDirectory},
                     Map$.MODULE$.<String, LogConfig>empty(),
                     defaultConfig,
                     cleanerConfig,
@@ -320,7 +318,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private Timer registerHdrTimer(MetricRegistry metricRegistry, final String metricName) {
         Timer timer;
         try {
-            timer = metricRegistry.register(metricName, new HdrTimer(1, MINUTES, 1));
+            timer = metricRegistry.register(metricName, new HdrTimer(1, TimeUnit.MINUTES, 1));
         } catch (IllegalArgumentException e) {
             final SortedMap<String, Timer> timers = metricRegistry.getTimers((name, metric) -> metricName.equals(name));
             timer = Iterables.getOnlyElement(timers.values());
