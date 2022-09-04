@@ -23,7 +23,6 @@ import com.codahale.metrics.annotation.Timed;
 import org.elasticsearch.action.search.SearchPhaseExecutionException;
 import org.graylog2.indexer.IndexHelper;
 import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
 import org.graylog2.indexer.searches.timeranges.TimeRange;
@@ -57,22 +56,19 @@ public class RelativeSearchResource extends SearchResource {
             @ApiParam(title = "range", description = "Relative timeframe to search in. See method description.", required = true) @QueryParam("range") int range,
             @ApiParam(title = "limit", description = "Maximum number of messages to return.", required = false) @QueryParam("limit") int limit,
             @ApiParam(title = "offset", description = "Offset", required = false) @QueryParam("offset") int offset,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter,
-            @ApiParam(title = "sort", description = "Sorting (field:asc / field:desc)", required = false) @QueryParam("sort") String sort) {
+            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
         checkQuery(query);
-
-        Sorting sorting = buildSorting(sort);
 
         try {
             SearchResponse searchResponse;
 
             if (filter == null) {
                 searchResponse = buildSearchResponse(
-                        core.getIndexer().searches().search(query, buildRelativeTimeRange(range), limit, offset, sorting)
+                        core.getIndexer().searches().search(query, buildRelativeTimeRange(range), limit, offset)
                 );
             } else {
                 searchResponse = buildSearchResponse(
-                        core.getIndexer().searches().search(query, filter, buildRelativeTimeRange(range), limit, offset, sorting)
+                        core.getIndexer().searches().search(query, filter, buildRelativeTimeRange(range), limit, offset)
                 );
             }
 
