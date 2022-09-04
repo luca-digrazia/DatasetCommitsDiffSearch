@@ -31,13 +31,12 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.GeneratedSubstrateClassBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.pkg.steps.NativeBuild;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.runtime.LaunchMode;
 
@@ -146,7 +145,6 @@ public final class AmazonLambdaProcessor {
             BeanContainerBuildItem beanContainerBuildItem,
             AmazonLambdaRecorder recorder,
             LambdaConfig config,
-            List<ServiceStartBuildItem> orderServicesFirst, // try to order this after service recorders
             RecorderContext context) {
         if (providedLambda.isPresent()) {
             Class<? extends RequestHandler<?, ?>> handlerClass = (Class<? extends RequestHandler<?, ?>>) context
@@ -170,22 +168,14 @@ public final class AmazonLambdaProcessor {
     /**
      * This should only run when building a native image
      */
-    @BuildStep(onlyIf = NativeBuild.class)
-    @Record(value = ExecutionTime.RUNTIME_INIT)
-    void startPoolLoop(AmazonLambdaRecorder recorder,
+    @BuildStep
+    @Record(value = ExecutionTime.RUNTIME_INIT, optional = true)
+    void bootNativeEventLoop(AmazonLambdaRecorder recorder,
             ShutdownContextBuildItem shutdownContextBuildItem,
-            List<ServiceStartBuildItem> orderServicesFirst // try to order this after service recorders
+            List<ServiceStartBuildItem> orderServicesFirst, // force some ordering of recorders
+            BuildProducer<GeneratedSubstrateClassBuildItem> substrate // hack to try to force native only
     ) {
         recorder.startPollLoop(shutdownContextBuildItem);
-    }
-
-    /**
-     * Lambda custom runtime does not like ipv6.
-     */
-    @BuildStep(onlyIf = NativeBuild.class)
-    void ipv4Only(BuildProducer<SystemPropertyBuildItem> systemProperty) {
-        // lambda custom runtime does not like IPv6
-        systemProperty.produce(new SystemPropertyBuildItem("java.net.preferIPv4Stack", "true"));
     }
 
     @BuildStep
