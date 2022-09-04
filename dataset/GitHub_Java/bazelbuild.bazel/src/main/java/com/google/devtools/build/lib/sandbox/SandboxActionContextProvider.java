@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.sandbox;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -37,31 +38,39 @@ final class SandboxActionContextProvider extends ActionContextProvider {
   }
 
   public static SandboxActionContextProvider create(
-      CommandEnvironment cmdEnv, BuildRequest buildRequest, Path sandboxBase) throws IOException {
+      CommandEnvironment env, BuildRequest buildRequest, Path sandboxBase) throws IOException {
     ImmutableList.Builder<ActionContext> contexts = ImmutableList.builder();
 
+    BlazeDirectories blazeDirs = env.getDirectories();
     boolean verboseFailures = buildRequest.getOptions(ExecutionOptions.class).verboseFailures;
-    String productName = cmdEnv.getRuntime().getProductName();
+    String productName = env.getRuntime().getProductName();
+
 
     // The ProcessWrapperSandboxedStrategy works on all POSIX-compatible operating systems.
     if (OS.isPosixCompatible()) {
       contexts.add(
           new ProcessWrapperSandboxedStrategy(
-              cmdEnv, buildRequest, sandboxBase, verboseFailures, productName));
+              buildRequest, env.getDirectories(), sandboxBase, verboseFailures, productName));
     }
 
     switch (OS.getCurrent()) {
       case LINUX:
-        if (LinuxSandboxedStrategy.isSupported(cmdEnv)) {
+        if (LinuxSandboxedStrategy.isSupported(env)) {
           contexts.add(
-              new LinuxSandboxedStrategy(cmdEnv, buildRequest, sandboxBase, verboseFailures));
+              new LinuxSandboxedStrategy(
+                  buildRequest, env.getDirectories(), sandboxBase, verboseFailures));
         }
         break;
       case DARWIN:
         if (DarwinSandboxRunner.isSupported()) {
           contexts.add(
               DarwinSandboxedStrategy.create(
-                  cmdEnv, buildRequest, sandboxBase, verboseFailures, productName));
+                  buildRequest,
+                  env.getClientEnv(),
+                  blazeDirs,
+                  sandboxBase,
+                  verboseFailures,
+                  productName));
         }
         break;
       default:
