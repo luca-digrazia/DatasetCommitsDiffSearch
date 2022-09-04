@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,12 +15,10 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models.api.requests;
 
 import models.User;
-import models.api.requests.ApiRequest;
 import play.data.validation.Constraints;
 
 import java.util.List;
@@ -30,8 +28,12 @@ public class ChangeUserRequest extends ApiRequest {
     public String fullname;
     @Constraints.Required
     public String email;
-    @Constraints.Required
+
     public List<String> permissions;
+
+    public String timezone;
+
+    public ChangeStartpageRequest startpage;
 
     public ChangeUserRequest() { /* for data binding */ }
 
@@ -39,5 +41,15 @@ public class ChangeUserRequest extends ApiRequest {
         this.fullname = user.getFullName();
         this.email = user.getEmail();
         this.permissions = user.getPermissions();
+        if (user.getTimeZone() != null) {
+            this.timezone = user.getTimeZone().getID();
+        }
+
+        this.startpage = new ChangeStartpageRequest();
+
+        if(user.getStartpage() != null) {
+            this.startpage.type = user.getStartpage().getType().toString().toLowerCase();
+            this.startpage.id = user.getStartpage().getId();
+        }
     }
 }
