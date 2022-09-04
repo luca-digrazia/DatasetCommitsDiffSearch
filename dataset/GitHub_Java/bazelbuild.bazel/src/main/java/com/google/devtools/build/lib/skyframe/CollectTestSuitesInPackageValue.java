@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.AbstractSkyKey;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 /** Dummy {@link SkyValue} for {@link CollectTestSuitesInPackageFunction}. */
@@ -37,10 +38,7 @@ public class CollectTestSuitesInPackageValue implements SkyValue {
     return Key.create(packageId);
   }
 
-  /**
-   * {@link com/google/devtools/build/lib/skyframe/CollectTestSuitesInPackageValue.java used only in
-   * javadoc: com.google.devtools.build.skyframe.SkyKey} argument.
-   */
+  /** {@link SkyKey} argument. */
   @AutoCodec
   public static class Key extends AbstractSkyKey<PackageIdentifier> {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
