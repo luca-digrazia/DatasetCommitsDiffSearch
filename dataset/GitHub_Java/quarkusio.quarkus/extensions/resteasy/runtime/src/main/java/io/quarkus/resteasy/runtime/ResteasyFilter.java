@@ -1,22 +1,8 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package io.quarkus.resteasy.runtime;
 
 import java.io.IOException;
 
+import javax.enterprise.inject.spi.CDI;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
@@ -27,6 +13,8 @@ import javax.servlet.http.HttpServletResponseWrapper;
 
 import org.jboss.resteasy.plugins.server.servlet.Filter30Dispatcher;
 
+import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
+
 /**
  * A filter that will be mapped to the default servlet. At first content will attempt to be served from the
  * default servlet, and if it fails then a REST response will be attempted
@@ -34,15 +22,25 @@ import org.jboss.resteasy.plugins.server.servlet.Filter30Dispatcher;
 public class ResteasyFilter extends Filter30Dispatcher {
 
     @Override
-    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain)
+            throws IOException, ServletException {
         HttpServletResponse response = (HttpServletResponse) servletResponse;
         HttpServletRequest request = (HttpServletRequest) servletRequest;
-        if (request.getMethod().equals("GET") || request.getMethod().equals("HEAD")) {
-            //we only serve get requests from the default servlet
+        if (request.getMethod().equals("GET") || request.getMethod().equals("HEAD") || isCORSPreflightRequest(request)) {
+            //we only serve get requests from the default servlet and CORS preflight requests
             filterChain.doFilter(servletRequest, new ResteasyResponseWrapper(response, request));
         } else {
+            CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
+            ContextUtil.pushContext(currentVertxRequest.getCurrent());
             servletContainerDispatcher.service(request.getMethod(), request, response, true);
         }
+    }
+
+    private boolean isCORSPreflightRequest(HttpServletRequest request) {
+        return request.getMethod().equals("OPTIONS")
+                && request.getHeader("Origin") != null
+                && request.getHeader("Access-Control-Request-Method") != null
+                && request.getHeader("Access-Control-Request-Headers") != null;
     }
 
     private class ResteasyResponseWrapper extends HttpServletResponseWrapper {
@@ -58,17 +56,24 @@ public class ResteasyFilter extends Filter30Dispatcher {
 
         @Override
         public void sendError(int sc, String msg) throws IOException {
-            if (sc == 404) {
-                servletContainerDispatcher.service(request.getMethod(), request, response, true);
+            if (sc == 404 || sc == 403) {
+
+                service();
             } else {
                 super.sendError(sc, msg);
             }
         }
 
+        protected void service() throws IOException {
+            CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
+            ContextUtil.pushContext(currentVertxRequest.getCurrent());
+            servletContainerDispatcher.service(request.getMethod(), request, response, true);
+        }
+
         @Override
         public void sendError(int sc) throws IOException {
-            if (sc == 404) {
-                servletContainerDispatcher.service(request.getMethod(), request, response, true);
+            if (sc == 404 || sc == 403) {
+                service();
             } else {
                 super.sendError(sc);
             }

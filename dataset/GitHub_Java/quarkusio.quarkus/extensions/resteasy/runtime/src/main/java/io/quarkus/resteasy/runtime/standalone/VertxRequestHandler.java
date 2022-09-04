@@ -3,8 +3,6 @@ package io.quarkus.resteasy.runtime.standalone;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.Executor;
 
 import javax.enterprise.inject.Instance;
@@ -128,10 +126,9 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
                     hostSupplier,
                     dispatcher.getDispatcher(), vertxResponse, requestContext, executor);
             vertxRequest.setInputStream(is);
-            Map<Class<?>, Object> map = new HashMap<>();
-            map.put(SecurityContext.class, new QuarkusResteasySecurityContext(request, routingContext));
-            map.put(RoutingContext.class, routingContext);
-            try (ResteasyContext.CloseableContext restCtx = ResteasyContext.addCloseableContextDataLevel(map)) {
+            try {
+                ResteasyContext.pushContext(SecurityContext.class, new QuarkusResteasySecurityContext(request, routingContext));
+                ResteasyContext.pushContext(RoutingContext.class, routingContext);
                 ContextUtil.pushContext(routingContext);
                 dispatcher.service(ctx, request, response, vertxRequest, vertxResponse, true);
             } catch (Failure e1) {

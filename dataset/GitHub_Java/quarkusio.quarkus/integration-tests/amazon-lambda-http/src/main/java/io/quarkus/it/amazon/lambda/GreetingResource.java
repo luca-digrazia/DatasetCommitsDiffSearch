@@ -8,8 +8,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
-import io.quarkus.amazon.lambda.http.model.AwsProxyRequestContext;
-
 @Path("/hello")
 public class GreetingResource {
 
@@ -51,14 +49,6 @@ public class GreetingResource {
             throw new RuntimeException();
         if (ctx.getAwsRequestId() == null)
             throw new RuntimeException("aws context not set");
-    }
-
-    @GET
-    @Path("proxyRequestContext")
-    @Produces(MediaType.TEXT_PLAIN)
-    public void proxyRequestContext(@Context AwsProxyRequestContext ctx) {
-        if (ctx == null)
-            throw new RuntimeException();
     }
 
 }
