@@ -32,10 +32,12 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.DefaultInfo;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
@@ -44,6 +46,9 @@ import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -86,6 +91,7 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
@@ -184,14 +190,6 @@ public class SkylarkRuleClassFunctions {
                 .value(
                     ImmutableList.of(
                         labelCache.getUnchecked(toolsRepository + "//tools/test:runtime"))))
-        .add(attr("$test_setup_script", LABEL)
-            .cfg(HostTransition.INSTANCE)
-            .singleArtifact()
-            .value(labelCache.getUnchecked(toolsRepository + "//tools/test:test_setup")))
-        .add(attr("$collect_coverage_script", LABEL)
-            .cfg(HostTransition.INSTANCE)
-            .singleArtifact()
-            .value(labelCache.getUnchecked(toolsRepository + "//tools/test:collect_coverage")))
         // Input files for test actions collecting code coverage
         .add(
             attr("$coverage_support", LABEL)
@@ -226,33 +224,23 @@ public class SkylarkRuleClassFunctions {
     name = "DefaultInfo",
     returnType = Provider.class,
     doc =
-        "A provider that gives general information about a target's direct and transitive files. "
-            + "Every rule type has this provider, even if it is not returned explicitly by the "
-            + "rule's implementation function."
-            + "<p>The <code>DefaultInfo</code> constructor accepts the following parameters:"
+        "A provider that is provided by every rule, even if it is not returned explicitly. "
+            + "A <code>DefaultInfo</code> accepts the following parameters:"
             + "<ul>"
-            + "<li><code>executable</code>: If this rule is marked "
-            + "<a href='globals.html#rule.executable'><code>executable</code></a> or "
-            + "<a href='globals.html#rule.test'><code>test</code></a>, this is a "
-            + "<a href='File.html'><code>File</code></a> object representing the file that should "
-            + "be executed to run the target. By default it is the predeclared output "
-            + "<code>ctx.outputs.executable</code>."
-            + "<li><code>files</code>: A <a href='depset.html'><code>depset<code></a> of "
-            + "<a href='File.html'><code>File</code></a> objects representing the default outputs "
-            + "to build when this target is specified on the blaze command line. By default it is "
-            + "all predeclared outputs."
-            + "<li><code>runfiles</code>"
-            + "<li><code>data_runfiles</code>"
-            + "<li><code>default_runfiles</code>"
+            + "<li><code>executable</code></li>"
+            + "<li><code>files</code></li>"
+            + "<li><code>runfiles</code></li>"
+            + "<li><code>data_runfiles</code></li>"
+            + "<li><code>default_runfiles</code></li>"
             + "</ul>"
-            + "Each <code>DefaultInfo</code> instance has the following fields: "
+            + "Each instance of the default provider contains the following standard "
+            + "fields: "
             + "<ul>"
-            + "<li><code>files</code>"
-            + "<li><code>files_to_run</code>"
-            + "<li><code>data_runfiles</code>"
-            + "<li><code>default_runfiles</code>"
+            + "<li><code>files</code></li>"
+            + "<li><code>files_to_run</code></li>"
+            + "<li><code>data_runfiles</code></li>"
+            + "<li><code>default_runfiles</code></li>"
             + "</ul>"
-            + "See the <a href='../rules.$DOC_EXT'>rules</a> page for more information."
   )
   private static final Provider defaultInfo = DefaultInfo.PROVIDER;
 
@@ -260,12 +248,12 @@ public class SkylarkRuleClassFunctions {
     name = "OutputGroupInfo",
     returnType = Provider.class,
     doc =
-        "A provider that indicates what output groups a rule has.<br>"
+        "Provides information about output groups the rule provides.<br>"
             + "Instantiate this provider with <br>"
             + "<pre class=language-python>"
             + "OutputGroupInfo(group1 = &lt;files&gt;, group2 = &lt;files&gt;...)</pre>"
-            + "See <a href=\"../rules.$DOC_EXT#requesting-output-files\">Requesting output files"
-            + "</a> for more information."
+            + "See <a href=\"../rules.$DOC_EXT#output-groups\">Output Groups</a> "
+            + "for more information."
   )
   private static final Provider outputGroupInfo = OutputGroupInfo.SKYLARK_CONSTRUCTOR;
 
@@ -378,14 +366,10 @@ public class SkylarkRuleClassFunctions {
         type = Boolean.class,
         defaultValue = "False",
         doc =
-            "Whether this rule is a test rule, that is, whether it may be the subject of a "
-                + "<code>blaze test</code> or <code>blaze run</code> command. All test rules are "
-                + "automatically considered <a href='#rule.executable'>executable</a>; it is "
-                + "unnecessary (and discouraged) to explicitly set <code>executable = True</code> "
-                + "for a test rule."
-                + "<p>Test rules must have names ending in the suffix <code>\"_test\"</code>; "
-                + "non-test rules must not use this suffix. (Note that this applies only to the "
-                + "name of the rule, not its targets.)"
+            "Whether this rule is a test rule. "
+                + "If True, the rule must end with <code>_test</code> (otherwise it must "
+                + "not), and there must be an action that generates "
+                + "<code>ctx.outputs.executable</code>."
       ),
       @Param(
         name = "attrs",
@@ -426,11 +410,9 @@ public class SkylarkRuleClassFunctions {
         type = Boolean.class,
         defaultValue = "False",
         doc =
-            "Whether this rule is considered executable, that is, whether it may be the subject of "
-                + "a <code>blaze run</code> command. Executable rules automatically get a "
-                + "predeclared output that is addressable as <code>ctx.outputs.executable</code>. "
-                + "See the <a href='../rules.$DOC_EXT#output-files'>Rules page</a> for more "
-                + "information."
+            "whether this rule is marked as executable or not. If True, "
+                + "there must be an action that generates "
+                + "<code>ctx.outputs.executable</code>."
       ),
       @Param(
         name = "output_to_genfiles",
@@ -1241,6 +1223,29 @@ public class SkylarkRuleClassFunctions {
               .replace("\t", "\\t");
         }
       };
+
+  @SkylarkSignature(name = "output_group",
+      documented = false, //  TODO(dslomov): document.
+      objectType =  TransitiveInfoCollection.class,
+      returnType = SkylarkNestedSet.class,
+      parameters = {
+          @Param(name = "self", type = TransitiveInfoCollection.class, doc =
+              "this target"
+          ),
+          @Param(name = "group_name", type = String.class, doc =
+              "Output group name"
+          )
+      }
+  )
+  private static final BuiltinFunction output_group = new BuiltinFunction("output_group") {
+    public SkylarkNestedSet invoke(TransitiveInfoCollection self, String group) {
+      OutputGroupInfo provider = OutputGroupInfo.get(self);
+      NestedSet<Artifact> result = provider != null
+          ? provider.getOutputGroup(group)
+          : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
+      return SkylarkNestedSet.of(Artifact.class, result);
+    }
+  };
 
   static {
     SkylarkSignatureProcessor.configureSkylarkFunctions(SkylarkRuleClassFunctions.class);
