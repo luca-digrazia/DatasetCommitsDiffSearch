@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
+
 /**
  * Byte data type.
  *
@@ -37,11 +39,6 @@ public class ByteType implements DataType {
     }
 
     @Override
-    public ID id() {
-        return ID.Byte;
-    }
-
-    @Override
     public String name() {
         return "byte";
     }
@@ -52,7 +49,7 @@ public class ByteType implements DataType {
     }
 
     @Override
-    public Byte valueOf(String s) {
+    public Byte valueOf(String s) throws ParseException {
         return Byte.valueOf(s);
     }
 

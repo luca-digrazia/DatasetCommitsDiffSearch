@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
+
 /**
  * Boolean data type.
  *
@@ -42,17 +44,12 @@ public class BooleanType implements DataType {
     }
 
     @Override
-    public ID id() {
-        return ID.Boolean;
-    }
-
-    @Override
     public String toString() {
         return "boolean";
     }
 
     @Override
-    public Boolean valueOf(String s) {
+    public Boolean valueOf(String s) throws ParseException {
         return Boolean.valueOf(s);
     }
 

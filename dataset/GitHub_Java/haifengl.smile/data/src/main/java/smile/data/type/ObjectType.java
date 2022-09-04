@@ -15,8 +15,6 @@
  *******************************************************************************/
 package smile.data.type;
 
-import java.util.function.Function;
-
 /**
  * Object data type.
  *
@@ -44,8 +42,6 @@ public class ObjectType implements DataType {
 
     /** Object Class. */
     private Class clazz;
-    /** toString lambda. */
-    private Function<Object, String> format;
 
     /**
      * Constructor.
@@ -53,17 +49,6 @@ public class ObjectType implements DataType {
      */
     ObjectType(Class clazz) {
         this.clazz = clazz;
-        if (clazz == Float.class) {
-            format = o -> DataTypes.FloatType.toString(o);
-        } else if (clazz == Double.class) {
-            format = o -> DataTypes.DoubleType.toString(o);
-        } else if (clazz == Integer.class) {
-            format = o -> DataTypes.IntegerType.toString(o);
-        } else if (clazz == Long.class) {
-            format = o -> DataTypes.IntegerType.toString(o);
-        } else {
-            format = o -> o.toString();
-        }
     }
 
     /**
@@ -122,22 +107,12 @@ public class ObjectType implements DataType {
 
     @Override
     public String name() {
-        return String.format("Object[%s]", clazz.getName());
-    }
-
-    @Override
-    public ID id() {
-        return ID.Object;
+        return String.format("object[%s]", clazz.getName());
     }
 
     @Override
     public String toString() {
         return clazz.getSimpleName();
-    }
-
-    @Override
-    public String toString(Object o) {
-        return format.apply(o);
     }
 
     @Override

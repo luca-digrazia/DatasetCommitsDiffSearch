@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
+
 /**
  * Char data type.
  *
@@ -42,17 +44,12 @@ public class CharType implements DataType {
     }
 
     @Override
-    public ID id() {
-        return ID.Char;
-    }
-
-    @Override
     public String toString() {
         return "char";
     }
 
     @Override
-    public Character valueOf(String s) {
+    public Character valueOf(String s) throws ParseException {
         if (s == null || s.length() == 0) return null;
         return s.charAt(0);
     }
