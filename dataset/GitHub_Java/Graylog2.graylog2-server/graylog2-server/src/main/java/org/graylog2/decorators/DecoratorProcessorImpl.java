@@ -16,6 +16,7 @@
  */
 package org.graylog2.decorators;
 
+import com.google.common.collect.Sets;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.decorators.SearchResponseDecorator;
 import org.graylog2.rest.models.messages.responses.DecorationStats;
@@ -54,14 +55,18 @@ public class DecoratorProcessorImpl implements DecoratorProcessor {
             if (metaDecorator.isPresent()) {
                 final Map<String, ResultMessageSummary> originalMessages = searchResponse.messages()
                         .stream()
-                        .collect(Collectors.toMap(this::getMessageKey, Function.identity()));
+                        .collect(Collectors.toMap(message -> message.message().get("_id").toString(), Function.identity()));
                 final SearchResponse newSearchResponse = metaDecorator.get().apply(searchResponse);
                 final Set<String> newFields = extractFields(newSearchResponse.messages());
+                final Set<String> addedFields = Sets.difference(newFields, searchResponse.fields())
+                        .stream()
+                        .filter(field -> !Message.RESERVED_FIELDS.contains(field) && !field.equals("streams"))
+                        .collect(Collectors.toSet());
 
                 final List<ResultMessageSummary> decoratedMessages = newSearchResponse.messages()
                         .stream()
                         .map(resultMessage -> {
-                            final ResultMessageSummary originalMessage = originalMessages.get(getMessageKey(resultMessage));
+                            final ResultMessageSummary originalMessage = originalMessages.get(resultMessage.message().get("_id").toString());
                             if (originalMessage != null) {
                                 return resultMessage
                                         .toBuilder()
@@ -71,12 +76,11 @@ public class DecoratorProcessorImpl implements DecoratorProcessor {
                             return resultMessage;
                         })
                         .collect(Collectors.toList());
-
                 return newSearchResponse
                         .toBuilder()
                         .messages(decoratedMessages)
                         .fields(newFields)
-                        .decorationStats(this.getSearchDecoratorStats(decoratedMessages))
+                        .decorationStats(SearchDecorationStats.create(addedFields))
                         .build();
             }
         } catch (Exception e) {
@@ -86,33 +90,9 @@ public class DecoratorProcessorImpl implements DecoratorProcessor {
         return searchResponse;
     }
 
-    private String getMessageKey(ResultMessageSummary messageSummary) {
-        // Use index and message ID as key to allow the same message ID from different indices.
-        // This will happen when the same message is indexed into different index sets.
-        return messageSummary.index() + "-" + messageSummary.message().get("_id").toString();
-    }
-
     private Set<String> extractFields(List<ResultMessageSummary> messages) {
         return messages.stream()
-                .flatMap(message -> message.message().keySet().stream())
-                .filter(field -> !Message.RESERVED_FIELDS.contains(field))
-                .collect(Collectors.toSet());
-    }
-
-    private SearchDecorationStats getSearchDecoratorStats(List<ResultMessageSummary> decoratedMessages) {
-        final Set<String> addedFields = new HashSet<>();
-        final Set<String> changedFields = new HashSet<>();
-        final Set<String> removedFields = new HashSet<>();
-
-        decoratedMessages.forEach(message -> {
-            final DecorationStats decorationStats = message.decorationStats();
-            if (decorationStats != null) {
-                addedFields.addAll(decorationStats.addedFields().keySet());
-                changedFields.addAll(decorationStats.changedFields().keySet());
-                removedFields.addAll(decorationStats.removedFields().keySet());
-            }
-        });
-
-        return SearchDecorationStats.create(addedFields, changedFields, removedFields);
+            .map(message -> message.message().keySet())
+            .reduce(new HashSet<>(), (set1, set2) -> { set1.addAll(set2); return set1; });
     }
 }
