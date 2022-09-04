@@ -45,6 +45,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.pkgcache.LoadingCallback;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
@@ -184,7 +185,19 @@ public final class AnalysisPhaseRunner {
   private final LoadingResult evaluateTargetPatterns(
       final BuildRequest request, final TargetValidator validator)
       throws LoadingFailedException, TargetParsingException, InterruptedException {
-    boolean keepGoing = request.getKeepGoing();
+
+    final boolean keepGoing = request.getKeepGoing();
+
+    LoadingCallback callback =
+        new LoadingCallback() {
+          @Override
+          public void notifyTargets(Collection<Target> targets) throws LoadingFailedException {
+            if (validator != null) {
+              validator.validateTargets(targets, keepGoing);
+            }
+          }
+        };
+
     LoadingResult result =
         env.getSkyframeExecutor()
             .loadTargetPatterns(
@@ -193,11 +206,8 @@ public final class AnalysisPhaseRunner {
                 env.getRelativeWorkingDirectory(),
                 request.getLoadingOptions(),
                 keepGoing,
-                request.shouldRunTests());
-    if (validator != null) {
-      Collection<Target> targets = result.getTargets();
-      validator.validateTargets(targets, keepGoing);
-    }
+                request.shouldRunTests(),
+                callback);
     return result;
   }
 
