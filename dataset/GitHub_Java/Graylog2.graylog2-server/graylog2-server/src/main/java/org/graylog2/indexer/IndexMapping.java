@@ -18,143 +18,112 @@ package org.graylog2.indexer;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import org.elasticsearch.action.ActionFuture;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingResponse;
-import org.elasticsearch.client.Client;
-import org.graylog2.indexer.ranges.IndexRange;
+import org.graylog2.indexer.indexset.IndexSetConfig;
+import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 
-import javax.inject.Inject;
-import javax.inject.Singleton;
-import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 /**
- * Representing the message type mapping in ElasticSearch. This is giving ES more
+ * Representing the message type mapping in Elasticsearch. This is giving ES more
  * information about what the fields look like and how it should analyze them.
  */
-@Singleton
-public class IndexMapping {
+public abstract class IndexMapping implements IndexMappingTemplate {
     public static final String TYPE_MESSAGE = "message";
-    public static final String TYPE_INDEX_RANGE = "index_range";
 
-    private final Client client;
-
-    @Inject
-    public IndexMapping(Client client) {
-        this.client = checkNotNull(client);
+    @Override
+    public Map<String, Object> toTemplate(IndexSetConfig indexSetConfig, String indexPattern, int order) {
+        return messageTemplate(indexPattern, indexSetConfig.indexAnalyzer(), order);
     }
 
-    public ActionFuture<PutMappingResponse> createMapping(final String index, final String type, final Map<String, Object> mapping) {
-        return client.admin().indices().putMapping(mappingRequest(index, type, mapping));
+    public Map<String, Object> messageTemplate(final String template, final String analyzer, final int order) {
+        final Map<String, Object> analyzerKeyword = ImmutableMap.of("analyzer_keyword", ImmutableMap.of(
+                "tokenizer", "keyword",
+                "filter", "lowercase"));
+        final Map<String, Object> analysis = ImmutableMap.of("analyzer", analyzerKeyword);
+        final Map<String, Object> settings = ImmutableMap.of("analysis", analysis);
+        final Map<String, Object> mappings = mapping(analyzer);
+
+        return createTemplate(template, order, settings, mappings);
     }
 
-    private PutMappingRequest mappingRequest(final String index, final String type, final Map<String, Object> mapping) {
-        return client.admin().indices().preparePutMapping(index)
-                .setType(type)
-                .setSource(ImmutableMap.of(type, mapping))
-                .request();
-    }
-
-    public Map<String, Object> metaMapping() {
-        final ImmutableMap<String, ? extends Serializable> stringProperty = ImmutableMap.of(
-                "type", "string",
-                "index", "not_analyzed",
-                "doc_values", true);
-        final ImmutableMap<String, ? extends Serializable> dateProperty = ImmutableMap.of(
-                "type", "date",
-                "format", "date_time",
-                "index", "not_analyzed",
-                "doc_values", true);
-        final ImmutableMap<String, ? extends Serializable> intProperty = ImmutableMap.of(
-                "type", "integer",
-                "index", "no",
-                "doc_values", true);
-        final Map<String, ? extends Serializable> properties = ImmutableMap.of(
-                IndexRange.FIELD_INDEX_NAME, stringProperty,
-                IndexRange.FIELD_BEGIN, dateProperty,
-                IndexRange.FIELD_END, dateProperty,
-                IndexRange.FIELD_CALCULATED_AT, dateProperty,
-                IndexRange.FIELD_TOOK_MS, intProperty
+    Map<String, Object> createTemplate(String template, int order, Map<String, Object> settings, Map<String, Object> mappings) {
+        return ImmutableMap.of(
+                "template", template,
+                "order", order,
+                "settings", settings,
+                "mappings", mappings
         );
-
-        return ImmutableMap.<String, Object>of(
-                "properties", properties,
-                "_source", enabled(),
-                "_timestamp", ImmutableMap.of(
-                        "enabled", true,
-                        "format", "date_time"));
     }
 
-    public Map<String, Object> messageMapping(final String analyzer) {
+    protected Map<String, Object> mapping(String analyzer) {
+        return ImmutableMap.of(TYPE_MESSAGE, messageMapping(analyzer));
+    }
+
+    protected Map<String, Object> messageMapping(final String analyzer) {
         return ImmutableMap.of(
-                "properties", partFieldProperties(analyzer),
-                "dynamic_templates", partDefaultAllInDynamicTemplate(),
-                // Compress source field
-                "_source", enabledAndCompressed(),
-                // Enable purging by TTL
-                "_ttl", enabled());
+                "properties", fieldProperties(analyzer),
+                "dynamic_templates", dynamicTemplate(),
+                "_source", enabled());
     }
 
-    /*
-     * Disable analyzing for every field by default.
-     */
-    private List<Map<String, Map<String, Object>>> partDefaultAllInDynamicTemplate() {
-        final Map<String, String> notAnalyzed = ImmutableMap.of("index", "not_analyzed");
-        final Map<String, Object> defaultAll = ImmutableMap.of(
-                // Match all
-                "match", "*",
-                // Analyze nothing by default
-                "mapping", notAnalyzed);
-        final Map<String, Map<String, Object>> template = ImmutableMap.of("store_generic", defaultAll);
-
-        return ImmutableList.of(template);
+    private Map<String, Map<String, Object>> internalFieldsMapping() {
+        return ImmutableMap.of("internal_fields",
+                ImmutableMap.of(
+                        "match", "gl2_*",
+                        "match_mapping_type", "string",
+                        "mapping", notAnalyzedString())
+        );
     }
 
-    /*
-     * Enable analyzing for some fields again. Like for message and full_message.
-     */
-    private Map<String, Map<String, ? extends Serializable>> partFieldProperties(String analyzer) {
-        return ImmutableMap.of(
-                "message", analyzedString(analyzer),
-                "full_message", analyzedString(analyzer),
+    private List<Map<String, Map<String, Object>>> dynamicTemplate() {
+        final Map<String, Map<String, Object>> templateInternal = internalFieldsMapping();
+
+        final Map<String, Map<String, Object>> templateAll = ImmutableMap.of("store_generic", dynamicStrings());
+
+        return ImmutableList.of(templateInternal, templateAll);
+    }
+
+    abstract Map<String, Object> dynamicStrings();
+
+    private Map<String, Map<String, Object>> fieldProperties(String analyzer) {
+        return ImmutableMap.<String, Map<String, Object>>builder()
+                .put("message", analyzedString(analyzer, false))
+                .put("full_message", analyzedString(analyzer, false))
                 // http://joda-time.sourceforge.net/api-release/org/joda/time/format/DateTimeFormat.html
                 // http://www.elasticsearch.org/guide/reference/mapping/date-format.html
-                "timestamp", typeTimeWithMillis(true),
+                .put("timestamp", typeTimeWithMillis())
+                .put(Message.FIELD_GL2_ACCOUNTED_MESSAGE_SIZE, typeLong())
+                .put(Message.FIELD_GL2_RECEIVE_TIMESTAMP, typeTimeWithMillis())
+                .put(Message.FIELD_GL2_PROCESSING_TIMESTAMP, typeTimeWithMillis())
                 // to support wildcard searches in source we need to lowercase the content (wildcard search lowercases search term)
-                "source", analyzedString("analyzer_keyword"));
+                .put("source", analyzedString("analyzer_keyword", true))
+                .put("streams", notAnalyzedString())
+                .build();
     }
 
-    private Map<String, String> analyzedString(String analyzer) {
+    Map<String, Object> notAnalyzedString() {
+        return ImmutableMap.of("type", "keyword");
+    }
+    Map<String, Object> analyzedString(String analyzer, boolean fieldData) {
         return ImmutableMap.of(
-                "index", "analyzed",
-                "type", "string",
-                "analyzer", analyzer);
+                "type", "text",
+                "analyzer", analyzer,
+                "fielddata", fieldData);
     }
 
-    private Map<String, Serializable> typeTimeWithMillis(boolean storeAsDocValues) {
-        final ImmutableMap.Builder<String, Serializable> builder = ImmutableMap.<String, Serializable>builder()
-                .put("type", "date")
-                .put("format", Tools.ES_DATE_FORMAT);
+    protected Map<String, Object> typeTimeWithMillis() {
+        return ImmutableMap.of(
+                "type", "date",
+                "format", Tools.ES_DATE_FORMAT);
+    }
 
-        if (storeAsDocValues) {
-            builder.put("doc_values", true);
-        }
-
-        return builder.build();
+    protected Map<String, Object> typeLong() {
+        return ImmutableMap.of("type", "long");
     }
 
     private Map<String, Boolean> enabled() {
         return ImmutableMap.of("enabled", true);
-    }
-
-    private Map<String, Boolean> enabledAndCompressed() {
-        return ImmutableMap.of(
-                "enabled", true,
-                "compress", true);
     }
 }
