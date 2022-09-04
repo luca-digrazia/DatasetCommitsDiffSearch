@@ -85,7 +85,6 @@ public class BeanDeployment {
     
     private final boolean removeUnusedBeans;
     private final List<Predicate<BeanInfo>> unusedExclusions;
-    private final Set<BeanInfo> removedBeans;
     
     BeanDeployment(IndexView index, Collection<BeanDefiningAnnotation> additionalBeanDefiningAnnotations, List<AnnotationsTransformer> annotationTransformers) {
         this(index, additionalBeanDefiningAnnotations, annotationTransformers, Collections.emptyList(), Collections.emptyList(), null, false, null);
@@ -100,7 +99,6 @@ public class BeanDeployment {
         this.annotationStore = new AnnotationStore(annotationTransformers, buildContext);
         this.removeUnusedBeans = removeUnusedBeans;
         this.unusedExclusions = removeUnusedBeans ? unusedExclusions : null;
-        this.removedBeans = new HashSet<>();
 
         if (buildContext != null) {
             buildContext.putInternal(Key.ANNOTATION_STORE.asString(), annotationStore);
@@ -127,8 +125,8 @@ public class BeanDeployment {
             RegistrationContext registrationContext = new RegistrationContext() {
 
                 @Override
-                public <T> BeanConfigurator<T> configure(DotName beanClassName) {
-                    return new BeanConfigurator<T>(beanClassName, BeanDeployment.this, beans::add);
+                public <T> BeanConfigurator<T> configure(Class<?> beanClass) {
+                    return new BeanConfigurator<T>(beanClass, BeanDeployment.this, beans::add);
                 }
 
                 @Override
@@ -184,11 +182,7 @@ public class BeanDeployment {
     }
     
     public Collection<BeanInfo> getBeans() {
-        return Collections.unmodifiableList(beans);
-    }
-    
-    public Collection<BeanInfo> getRemovedBeans() {
-        return Collections.unmodifiableSet(removedBeans);
+        return beans;
     }
 
     Collection<ObserverInfo> getObservers() {
@@ -281,7 +275,7 @@ public class BeanDeployment {
         beans.forEach(BeanInfo::init);
         observers.forEach(ObserverInfo::init);
         interceptors.forEach(InterceptorInfo::init);
-
+        
         if (removeUnusedBeans) {
             long removalStart = System.currentTimeMillis();
             Set<BeanInfo> removable = new HashSet<>();
@@ -333,11 +327,10 @@ public class BeanDeployment {
             }
             if (!removable.isEmpty()) {
                 beans.removeAll(removable);
-                removedBeans.addAll(removable);
-                removedBeans.forEach(b -> LOGGER.debugf("Removed unused %s", b));
             }
             LOGGER.debugf("Removed %s unused beans in %s ms", removable.size(), System.currentTimeMillis() - removalStart);
         }
+
         LOGGER.debugf("Bean deployment initialized in %s ms", System.currentTimeMillis() - start);
     }
 
@@ -559,9 +552,9 @@ public class BeanDeployment {
             }
         }
 
-        if (LOGGER.isTraceEnabled()) {
+        if (LOGGER.isDebugEnabled()) {
             for (BeanInfo bean : beans) {
-                LOGGER.logf(Level.TRACE, "Created %s", bean);
+                LOGGER.logf(Level.DEBUG, "Created %s", bean);
             }
         }
         return beans;
@@ -612,9 +605,9 @@ public class BeanDeployment {
         for (ClassInfo interceptorClass : interceptorClasses) {
             interceptors.add(Interceptors.createInterceptor(interceptorClass, this));
         }
-        if (LOGGER.isTraceEnabled()) {
+        if (LOGGER.isDebugEnabled()) {
             for (InterceptorInfo interceptor : interceptors) {
-                LOGGER.logf(Level.TRACE, "Created %s", interceptor);
+                LOGGER.logf(Level.DEBUG, "Created %s", interceptor);
             }
         }
         for(InterceptorInfo i : interceptors) {

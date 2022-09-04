@@ -307,7 +307,7 @@ final class Beans {
         return false;
     }
 
-    static void resolveInjectionPoint(BeanDeployment deployment, BeanInfo bean, InjectionPointInfo injectionPoint, List<Throwable> errors) {
+    static void resolveInjectionPoint(BeanDeployment deployment, BeanInfo bean, InjectionPointInfo injectionPoint) {
         if (BuiltinBean.resolvesTo(injectionPoint)) {
             // Skip built-in beans
             return;
@@ -315,37 +315,18 @@ final class Beans {
         List<BeanInfo> resolved = deployment.getBeanResolver().resolve(injectionPoint.getTypeAndQualifiers());
         BeanInfo selected = null;
         if (resolved.isEmpty()) {
-            StringBuilder message = new StringBuilder("Unsatisfied dependency for type ");
-            message.append(injectionPoint.getRequiredType());
-            message.append(" and qualifiers ");
-            message.append(injectionPoint.getRequiredQualifiers());
-            message.append("\n\t- java member: ");
-            message.append(injectionPoint.getTargetInfo());
-            message.append("\n\t- declared on ");
-            message.append(bean);
-            errors.add(new UnsatisfiedResolutionException(message.toString()));
+            throw new UnsatisfiedResolutionException(injectionPoint + " on " + bean);
         } else if (resolved.size() > 1) {
             // Try to resolve the ambiguity
             selected = resolveAmbiguity(resolved);
             if (selected == null) {
-                StringBuilder message = new StringBuilder("Ambiguous dependencies for type ");
-                message.append(injectionPoint.getRequiredType());
-                message.append(" and qualifiers ");
-                message.append(injectionPoint.getRequiredQualifiers());
-                message.append("\n\t- java member: ");
-                message.append(injectionPoint.getTargetInfo());
-                message.append("\n\t- declared on ");
-                message.append(bean);
-                message.append("\n\t- available beans:\n\t\t- ");
-                message.append(resolved.stream().map(Object::toString).collect(Collectors.joining("\n\t\t- ")));
-                errors.add(new AmbiguousResolutionException(message.toString()));
+                throw new AmbiguousResolutionException(
+                        injectionPoint + " on " + bean + "\nBeans:\n" + resolved.stream().map(Object::toString).collect(Collectors.joining("\n")));
             }
         } else {
             selected = resolved.get(0);
         }
-        if (selected != null) {
-            injectionPoint.resolve(selected);
-        }
+        injectionPoint.resolve(selected);
     }
     
     static BeanInfo resolveAmbiguity(List<BeanInfo> resolved) {
