@@ -25,7 +25,6 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vertx.deployment.VertxBuildItem;
 import io.vertx.db2client.DB2Pool;
-import io.vertx.sqlclient.Pool;
 
 class ReactiveDB2ClientProcessor {
 
@@ -63,9 +62,8 @@ class ReactiveDB2ClientProcessor {
                 shutdown);
         db2Pool.produce(new DB2PoolBuildItem(db2PoolValue));
 
-        // Synthetic bean for DB2Pool
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(DB2Pool.class).addType(Pool.class).scope(Singleton.class)
-                .runtimeValue(db2PoolValue)
+        // Synthetic bean for MySQLPool
+        syntheticBeans.produce(SyntheticBeanBuildItem.configure(DB2Pool.class).scope(Singleton.class).runtimeValue(db2PoolValue)
                 .setRuntimeInit().done());
 
         boolean isDefault = true; // assume always the default pool for now
