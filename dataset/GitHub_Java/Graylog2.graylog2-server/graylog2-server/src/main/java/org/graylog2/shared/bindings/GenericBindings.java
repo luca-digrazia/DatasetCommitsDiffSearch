@@ -41,10 +41,9 @@ import org.graylog2.shared.buffers.InputBufferImpl;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.InputStateListener;
-import org.graylog2.shared.stats.ThroughputStats;
 import org.jboss.netty.util.HashedWheelTimer;
 
+import javax.activation.MimetypesFileTypeMap;
 import java.util.concurrent.Semaphore;
 
 public class GenericBindings extends AbstractModule {
@@ -54,7 +53,6 @@ public class GenericBindings extends AbstractModule {
         // This is holding all our metrics.
         bind(MetricRegistry.class).toProvider(MetricRegistryProvider.class).asEagerSingleton();
         bind(LocalMetricRegistry.class).in(Scopes.NO_SCOPE); // must not be a singleton!
-        bind(ThroughputStats.class).toInstance(new ThroughputStats());
 
         install(new FactoryModuleBuilder().build(DecodingProcessor.Factory.class));
 
@@ -75,13 +73,9 @@ public class GenericBindings extends AbstractModule {
 
         bind(InputRegistry.class).asEagerSingleton();
 
-        bindEventBusListeners();
-
         bind(OkHttpClient.class).toProvider(OkHttpClientProvider.class).asEagerSingleton();
         bind(OkHttpClient.class).annotatedWith(Names.named("systemHttpClient")).toProvider(SystemOkHttpClientProvider.class).asEagerSingleton();
-    }
 
-    private void bindEventBusListeners() {
-        bind(InputStateListener.class).asEagerSingleton();
+        bind(MimetypesFileTypeMap.class).toInstance(new MimetypesFileTypeMap());
     }
 }
