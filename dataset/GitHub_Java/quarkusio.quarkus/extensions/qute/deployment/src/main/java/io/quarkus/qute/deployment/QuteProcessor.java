@@ -1,6 +1,6 @@
 package io.quarkus.qute.deployment;
 
-import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
+import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static java.util.stream.Collectors.toMap;
 
 import java.io.File;
@@ -44,11 +44,10 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
-import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
-import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
+import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.DotNames;
@@ -88,7 +87,6 @@ import io.quarkus.qute.runtime.BuiltinTemplateExtensions;
 import io.quarkus.qute.runtime.EngineProducer;
 import io.quarkus.qute.runtime.QuteConfig;
 import io.quarkus.qute.runtime.QuteRecorder;
-import io.quarkus.qute.runtime.QuteRecorder.QuteContext;
 import io.quarkus.qute.runtime.TemplateProducer;
 import io.quarkus.qute.runtime.VariantTemplateProducer;
 import io.quarkus.qute.rxjava.RxjavaPublisherFactory;
@@ -346,9 +344,8 @@ public class QuteProcessor {
             BuildProducer<IncorrectExpressionBuildItem> incorrectExpressions,
             List<TemplateExtensionMethodBuildItem> templateExtensionMethods,
             List<TypeCheckExcludeBuildItem> excludes,
-            BeanRegistrationPhaseBuildItem registrationPhase,
-            // This producer is needed to ensure the correct ordering, ie. this build step must be executed before the ArC validation step
-            BuildProducer<BeanConfiguratorBuildItem> configurators,
+            ValidationPhaseBuildItem validationPhase,
+            BuildProducer<ValidationErrorBuildItem> validationError,
             BuildProducer<ImplicitValueResolverBuildItem> requiredClasses) {
 
         IndexView index = beanArchiveIndex.getIndex();
@@ -361,11 +358,10 @@ public class QuteProcessor {
         Set<Expression> injectExpressions = collectInjectExpressions(analysis);
 
         if (!injectExpressions.isEmpty()) {
-            // IMPLEMENTATION NOTE: 
-            // We do not support injection of synthetic beans with names 
-            // Dependency on the ValidationPhaseBuildItem would result in a cycle in the build chain
-            Map<String, BeanInfo> namedBeans = registrationPhase.getContext().beans().withName()
-                    .collect(toMap(BeanInfo::getName, Function.identity()));
+            ValidationContext context = validationPhase.getContext();
+
+            Map<String, BeanInfo> namedBeans = context.get(BuildExtension.Key.BEANS).stream()
+                    .filter(b -> b.getName() != null).collect(toMap(BeanInfo::getName, Function.identity()));
 
             Set<Expression> expressions = collectInjectExpressions(analysis);
             for (Expression expression : expressions) {
@@ -637,10 +633,12 @@ public class QuteProcessor {
     }
 
     @BuildStep
-    @Record(value = STATIC_INIT)
-    void initialize(QuteConfig config, BuildProducer<SyntheticBeanBuildItem> syntheticBeans, QuteRecorder recorder,
+    @Record(RUNTIME_INIT)
+    void initialize(QuteRecorder recorder, QuteConfig config,
             List<GeneratedValueResolverBuildItem> generatedValueResolvers, List<TemplatePathBuildItem> templatePaths,
-            Optional<TemplateVariantsBuildItem> templateVariants) {
+            Optional<TemplateVariantsBuildItem> templateVariants,
+            BeanContainerBuildItem beanContainer,
+            List<ServiceStartBuildItem> startedServices) {
 
         List<String> templates = new ArrayList<>();
         List<String> tags = new ArrayList<>();
@@ -653,19 +651,19 @@ public class QuteProcessor {
                 templates.add(templatePath.getPath());
             }
         }
+
+        recorder.initEngine(config, beanContainer.getValue(), generatedValueResolvers.stream()
+                .map(GeneratedValueResolverBuildItem::getClassName).collect(Collectors.toList()),
+                templates,
+                tags);
+
         Map<String, List<String>> variants;
         if (templateVariants.isPresent()) {
             variants = templateVariants.get().getVariants();
         } else {
             variants = Collections.emptyMap();
         }
-
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(QuteContext.class)
-                .supplier(recorder.createContext(config, generatedValueResolvers.stream()
-                        .map(GeneratedValueResolverBuildItem::getClassName).collect(Collectors.toList()), templates,
-                        tags, variants))
-                .done());
-        ;
+        recorder.initVariants(beanContainer.getValue(), variants);
     }
 
     private Type resolveType(AnnotationTarget member, Match match, IndexView index) {
