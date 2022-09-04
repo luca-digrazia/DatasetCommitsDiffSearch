@@ -219,7 +219,7 @@ public abstract class NativeDepsHelper {
     FdoSupportProvider fdoSupport =
         CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
     FeatureConfiguration featureConfiguration =
-        CcCommon.configureFeaturesOrReportRuleError(
+        CcCommon.configureFeatures(
             ruleContext,
             /* requestedFeatures= */ ImmutableSet.<String>builder()
                 .addAll(ruleContext.getFeatures())

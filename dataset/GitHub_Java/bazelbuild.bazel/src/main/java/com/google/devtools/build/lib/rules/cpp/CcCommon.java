@@ -673,11 +673,19 @@ public final class CcCommon {
             withBaselineCoverage);
   }
 
-  public static ImmutableList<String> getCoverageFeatures(CcToolchainProvider toolchain) {
+  private static String getHostOrNonHostFeature(RuleContext ruleContext) {
+    if (ruleContext.getConfiguration().isHostConfiguration()) {
+      return "host";
+    } else {
+      return "nonhost";
+    }
+  }
+
+  public static ImmutableList<String> getCoverageFeatures(RuleContext ruleContext) {
     ImmutableList.Builder<String> coverageFeatures = ImmutableList.builder();
-    if (toolchain.isCodeCoverageEnabled()) {
+    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
       coverageFeatures.add(CppRuleClasses.COVERAGE);
-      if (toolchain.useLLVMCoverageMapFormat()) {
+      if (ruleContext.getFragment(CppConfiguration.class).useLLVMCoverageMapFormat()) {
         coverageFeatures.add(CppRuleClasses.LLVM_COVERAGE_MAP_FORMAT);
       } else {
         coverageFeatures.add(CppRuleClasses.GCC_COVERAGE_MAP_FORMAT);
@@ -696,7 +704,6 @@ public final class CcCommon {
       ImmutableSet<String> requestedFeatures,
       ImmutableSet<String> unsupportedFeatures,
       CcToolchainProvider toolchain) {
-    CppConfiguration cppConfiguration = toolchain.getCppConfiguration();
     ImmutableSet.Builder<String> allRequestedFeaturesBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<String> unsupportedFeaturesBuilder = ImmutableSet.builder();
     unsupportedFeaturesBuilder.addAll(unsupportedFeatures);
@@ -735,23 +742,21 @@ public final class CcCommon {
 
     ImmutableList.Builder<String> allFeatures =
         new ImmutableList.Builder<String>()
-            .addAll(ImmutableSet.of(toolchain.getCompilationMode().toString()))
+            .addAll(
+                ImmutableSet.of(
+                    toolchain.getCompilationMode().toString(),
+                    getHostOrNonHostFeature(ruleContext)))
             .addAll(DEFAULT_FEATURES)
             .addAll(DEFAULT_ACTION_CONFIGS)
             .addAll(requestedFeatures)
             .addAll(toolchain.getFeatures().getDefaultFeaturesAndActionConfigs());
-
-    if (toolchain.isHostConfiguration()) {
-      allFeatures.add("host");
-    } else {
-      allFeatures.add("nonhost");
-    }
-
-    if (CppHelper.useFission(cppConfiguration, toolchain)) {
+    if (CppHelper.useFission(ruleContext.getFragment(CppConfiguration.class), toolchain)) {
       allFeatures.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
 
-    allFeatures.addAll(getCoverageFeatures(toolchain));
+    CppConfiguration cppConfiguration = toolchain.getCppConfiguration();
+
+    allFeatures.addAll(getCoverageFeatures(ruleContext));
 
     if (cppConfiguration.getFdoInstrument() != null
         && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_INSTRUMENT)) {
