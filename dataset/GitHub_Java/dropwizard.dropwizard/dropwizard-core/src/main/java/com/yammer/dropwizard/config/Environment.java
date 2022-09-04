@@ -82,6 +82,7 @@ public class Environment extends AbstractLifeCycle {
         this.servletListeners = ImmutableSet.builder();
         this.tasks = ImmutableSet.builder();
         this.lifeCycle = new AggregateLifeCycle();
+
         
         HttpServlet jerseyContainer = service.getJerseyContainer(config);
         if (jerseyContainer != null) {
