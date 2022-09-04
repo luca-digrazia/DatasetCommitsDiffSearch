@@ -74,17 +74,6 @@ public class BeatsFrameDecoder extends ReplayingDecoder<BeatsFrameDecoder.Decodi
     }
 
     @Override
-    protected Object decodeLast(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer, DecodingState state) throws Exception {
-        // ignore, because can't send ACK after frame read
-        if (buffer.readable()) {
-            buffer.readBytes(super.actualReadableBytes());
-        }
-		        
-        checkpoint(DecodingState.PROTOCOL_VERSION);
-        return null;
-    }
-	
-    @Override
     protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer, DecodingState state) throws Exception {
         ChannelBuffer[] events = null;
         switch (state) {
@@ -126,12 +115,16 @@ public class BeatsFrameDecoder extends ReplayingDecoder<BeatsFrameDecoder.Decodi
                 throw new Exception("Unknown decoding state: " + state);
         }
 
-        checkpoint(DecodingState.PROTOCOL_VERSION);
-        return events;
+        try {
+            return events;
+        } finally {
+            checkpoint(DecodingState.PROTOCOL_VERSION);
+        }
     }
 
     @Nullable
     private ChannelBuffer[] processUncompressedBuffer(Channel channel, ChannelBuffer buffer) throws Exception {
+        buffer.markReaderIndex();
         checkVersion(buffer);
         byte frameType = buffer.readByte();
 
@@ -159,7 +152,7 @@ public class BeatsFrameDecoder extends ReplayingDecoder<BeatsFrameDecoder.Decodi
     private void checkVersion(ChannelBuffer channelBuffer) throws Exception {
         byte version = channelBuffer.readByte();
         if (version != PROTOCOL_VERSION) {
-            throw new Exception("Unknown beats protocol version: " + version);
+            throw new Exception("Unknown beats protocol version: {}");
         }
     }
 
@@ -182,29 +175,42 @@ public class BeatsFrameDecoder extends ReplayingDecoder<BeatsFrameDecoder.Decodi
      * <a href="https://github.com/logstash-plugins/logstash-input-beats/blob/master/PROTOCOL.md#json-frame-type">'json' frame type</a>
      */
     private ChannelBuffer[] parseJsonFrame(Channel channel, ChannelBuffer channelBuffer) throws IOException {
-        sequenceNum = channelBuffer.readUnsignedInt();
-        LOG.trace("Received sequence number {}", sequenceNum);
+        if (channelBuffer.readableBytes() >= 4) {
+            sequenceNum = channelBuffer.readUnsignedInt();
+            LOG.trace("Received sequence number {}", sequenceNum);
 
-        final int jsonLength = Ints.saturatedCast(channelBuffer.readUnsignedInt());
+            final int jsonLength = Ints.saturatedCast(channelBuffer.readUnsignedInt());
 
-        final ChannelBuffer buffer = channelBuffer.readSlice(jsonLength);
-        sendACK(channel);
+            final ChannelBuffer buffer = channelBuffer.readSlice(jsonLength);
+            sendACK(channel);
 
-        return new ChannelBuffer[]{buffer};
+            return new ChannelBuffer[]{buffer};
+        }
+
+        return null;
     }
 
     /**
      * @see <a href="https://github.com/logstash-plugins/logstash-input-beats/blob/master/PROTOCOL.md#compressed-frame-type">'compressed' frame type</a>
      */
     private ChannelBuffer[] processCompressedFrame(Channel channel, ChannelBuffer channelBuffer) throws Exception {
-        final long payloadLength = channelBuffer.readUnsignedInt();
-        final byte[] data = new byte[(int) payloadLength];
-        channelBuffer.readBytes(data);
-        try (final ByteArrayInputStream dataStream = new ByteArrayInputStream(data);
-            final InputStream in = new InflaterInputStream(dataStream)) {
-            final ChannelBuffer buffer = ChannelBuffers.wrappedBuffer(ByteStreams.toByteArray(in));
-            return processCompressedDataFrames(channel, buffer);
+        if (channelBuffer.readableBytes() >= 4) {
+            final long payloadLength = channelBuffer.readUnsignedInt();
+            if (channelBuffer.readableBytes() < payloadLength) {
+                channelBuffer.resetReaderIndex();
+            } else {
+                final byte[] data = new byte[(int) payloadLength];
+                channelBuffer.readBytes(data);
+                try (final ByteArrayInputStream dataStream = new ByteArrayInputStream(data);
+                     final InputStream in = new InflaterInputStream(dataStream)) {
+                    final ChannelBuffer buffer = ChannelBuffers.wrappedBuffer(ByteStreams.toByteArray(in));
+                    return processCompressedDataFrames(channel, buffer);
+                }
+            }
+        } else {
+            channelBuffer.resetReaderIndex();
         }
+        return null;
     }
 
     private ChannelBuffer[] processCompressedDataFrames(Channel channel, ChannelBuffer channelBuffer) throws Exception {
@@ -222,34 +228,42 @@ public class BeatsFrameDecoder extends ReplayingDecoder<BeatsFrameDecoder.Decodi
      * @see <a href="https://github.com/logstash-plugins/logstash-input-beats/blob/master/PROTOCOL.md#window-size-frame-type">'window size' frame type</a>
      */
     private void processWindowSizeFrame(ChannelBuffer channelBuffer) {
-        windowSize = channelBuffer.readUnsignedInt();
-        LOG.trace("Changed window size to {}", windowSize);
+        if (channelBuffer.readableBytes() < 4) {
+            channelBuffer.resetReaderIndex();
+        } else {
+            windowSize = channelBuffer.readUnsignedInt();
+            LOG.trace("Changed window size to {}", windowSize);
+        }
     }
 
     /**
      * @see <a href="https://github.com/logstash-plugins/logstash-input-beats/blob/master/PROTOCOL.md#data-frame-type">'data' frame type</a>
      */
     private ChannelBuffer[] parseDataFrame(Channel channel, ChannelBuffer channelBuffer) throws IOException {
-        sequenceNum = channelBuffer.readUnsignedInt();
-        LOG.trace("Received sequence number {}", sequenceNum);
+        if (channelBuffer.readableBytes() >= 8) {
+            sequenceNum = channelBuffer.readUnsignedInt();
+            LOG.trace("Received sequence number {}", sequenceNum);
 
-        final int pairs = Ints.saturatedCast(channelBuffer.readUnsignedInt());
-        final JsonFactory jsonFactory = new JsonFactory();
-        final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        try (final JsonGenerator jg = jsonFactory.createGenerator(outputStream)) {
-            jg.writeStartObject();
-            for (int i = 0; i < pairs; i++) {
-                final String key = parseDataItem(channelBuffer);
-                final String value = parseDataItem(channelBuffer);
-                jg.writeStringField(key, value);
+            final int pairs = Ints.saturatedCast(channelBuffer.readUnsignedInt());
+            final JsonFactory jsonFactory = new JsonFactory();
+            final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            try (final JsonGenerator jg = jsonFactory.createGenerator(outputStream)) {
+                jg.writeStartObject();
+                for (int i = 0; i < pairs; i++) {
+                    final String key = parseDataItem(channelBuffer);
+                    final String value = parseDataItem(channelBuffer);
+                    jg.writeStringField(key, value);
+                }
+                jg.writeEndObject();
             }
-            jg.writeEndObject();
+
+            final ChannelBuffer buffer = ChannelBuffers.wrappedBuffer(outputStream.toByteArray());
+            sendACK(channel);
+
+            return new ChannelBuffer[]{buffer};
         }
 
-        final ChannelBuffer buffer = ChannelBuffers.wrappedBuffer(outputStream.toByteArray());
-        sendACK(channel);
-
-        return new ChannelBuffer[]{buffer};
+        return null;
     }
 
     private String parseDataItem(ChannelBuffer channelBuffer) {
