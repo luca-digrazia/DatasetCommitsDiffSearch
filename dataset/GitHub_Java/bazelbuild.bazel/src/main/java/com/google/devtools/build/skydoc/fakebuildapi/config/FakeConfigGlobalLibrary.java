@@ -18,8 +18,9 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigGlobalLibraryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.config.ConfigurationTransitionApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.Dict;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
@@ -30,8 +31,8 @@ public class FakeConfigGlobalLibrary implements ConfigGlobalLibraryApi {
   @Override
   public ConfigurationTransitionApi transition(
       BaseFunction implementation,
-      Sequence<?> inputs,
-      Sequence<?> outputs,
+      SkylarkList<?> inputs,
+      SkylarkList<?> outputs,
       Location location,
       StarlarkThread thread) {
     return new FakeConfigurationTransition();
@@ -39,7 +40,7 @@ public class FakeConfigGlobalLibrary implements ConfigGlobalLibraryApi {
 
   @Override
   public ConfigurationTransitionApi analysisTestTransition(
-      Dict<?, ?> changedSettings, Location location) {
+      SkylarkDict<?, ?> changedSettings, Location location, StarlarkSemantics semantics) {
     return new FakeConfigurationTransition();
   }
 }

@@ -14,27 +14,26 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.test;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.test.CoverageCommonApi;
 import com.google.devtools.build.lib.skylarkbuildapi.test.InstrumentedFilesInfoApi;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 
 /** Fake implementation of {@link CoverageCommonApi}. */
-public class FakeCoverageCommon
-    implements CoverageCommonApi<
-        ConstraintValueInfoApi, SkylarkRuleContextApi<ConstraintValueInfoApi>> {
+public class FakeCoverageCommon implements CoverageCommonApi<SkylarkRuleContextApi> {
 
   @Override
   public InstrumentedFilesInfoApi instrumentedFilesInfo(
-      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
-      Sequence<?> sourceAttributes,
-      Sequence<?> dependencyAttributes,
-      Object extensions) {
+      SkylarkRuleContextApi skylarkRuleContext,
+      SkylarkList<?> sourceAttributes,
+      SkylarkList<?> dependencyAttributes,
+      Object extensions,
+      Location location) {
     return null;
   }
 
   @Override
-  public void repr(Printer printer) {}
+  public void repr(SkylarkPrinter printer) {}
 }

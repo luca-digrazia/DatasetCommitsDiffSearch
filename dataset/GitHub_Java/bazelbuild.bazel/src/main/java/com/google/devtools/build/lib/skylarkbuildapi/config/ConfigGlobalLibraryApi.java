@@ -111,14 +111,13 @@ public interface ConfigGlobalLibraryApi {
 
   @SkylarkCallable(
       name = "analysis_test_transition",
+      // TODO(cparsons): Improve documentation with an example once this feature is
+      // non-experimental.
       doc =
-          "<p> Creates a configuration transition to be applied on "
+          "<b>Experimental. This type is experimental and subject to change at any time. Do "
+              + "not depend on it.</b><p> Creates a configuration transition to be applied on "
               + "an analysis-test rule's dependencies. This transition may only be applied "
-              + "on attributes of rules with <code>analysis_test = True</code>. Such rules are "
-              + "restricted in capabilities (for example, the size of their dependency tree is "
-              + "limited), so transitions created using this function are limited in potential "
-              + "scope as compared to transitions created using "
-              + "<a href=\"#transition\">transition</a>.",
+              + "on attributes of rules with <code>analysis_test = True</code>.",
       parameters = {
         @Param(
             name = "settings",
