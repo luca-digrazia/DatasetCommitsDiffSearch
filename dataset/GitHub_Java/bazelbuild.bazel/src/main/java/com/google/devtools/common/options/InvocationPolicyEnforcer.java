@@ -349,7 +349,7 @@ public final class InvocationPolicyEnforcer {
         repeatableSubflagsInSetValues.put(currentSubflag.getName(), currentSubflag);
       } else {
         FlagPolicy subflagAsPolicy =
-            getSingleValueSubflagAsPolicy(currentSubflag, originalPolicy, isExpansion);
+            getSubflagAsPolicy(currentSubflag, originalPolicy, isExpansion);
         // In case any of the expanded flags are themselves expansions, recurse.
         expandedPolicies.addAll(expandPolicy(subflagAsPolicy, parser));
       }
@@ -425,28 +425,19 @@ public final class InvocationPolicyEnforcer {
    * For an expansion flag in an invocation policy, each flag it expands to must be given a
    * corresponding policy.
    */
-  private static FlagPolicy getSingleValueSubflagAsPolicy(
+  private static FlagPolicy getSubflagAsPolicy(
       OptionValueDescription currentSubflag, FlagPolicy originalPolicy, boolean isExpansion)
       throws OptionsParsingException {
     FlagPolicy subflagAsPolicy = null;
     switch (originalPolicy.getOperationCase()) {
       case SET_VALUE:
-        if (currentSubflag.getAllowMultiple()) {
-          throw new AssertionError(
-              "SetValue subflags with allowMultiple should have been dealt with separately and "
-                  + "accumulated into a single FlagPolicy.");
-        }
-        // Accept null originalValueStrings, they are expected when the subflag is also an expansion
-        // flag.
-        List<String> subflagValue;
-        if (currentSubflag.getOriginalValueString() == null) {
-          subflagValue = ImmutableList.of();
-        } else {
-          subflagValue = ImmutableList.of(currentSubflag.getOriginalValueString());
-        }
+        assert (!currentSubflag.getAllowMultiple());
         subflagAsPolicy =
             getSetValueSubflagAsPolicy(
-                currentSubflag.getName(), subflagValue, /*allowMultiple=*/ false, originalPolicy);
+                currentSubflag.getName(),
+                ImmutableList.of(currentSubflag.getOriginalValueString()),
+                /*allowMultiple=*/ false,
+                originalPolicy);
         break;
 
       case USE_DEFAULT:
