@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.log4j.Logger;
 import org.graylog2.Core;
 import org.graylog2.buffers.BufferWatermark;
+import org.joda.time.DateTime;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -51,7 +52,15 @@ public class BufferWatermarkThread implements Runnable {
         
         final BufferWatermark oWm = new BufferWatermark(ringSize, graylogServer.outputBufferWatermark());
         final BufferWatermark pWm = new BufferWatermark(ringSize, graylogServer.processBufferWatermark());
-
+        
+        if (graylogServer.isStatsMode()) {
+            DateTime now = new DateTime();
+            System.out.println("[util] [" + now + "] OutputBuffer is at "
+                    + oWm.getUtilizationPercentage() + "%. [" + oWm.getUtilization() + "/" + ringSize +"]");
+            System.out.println("[util] [" + now + "] ProcessBuffer is at "
+                    + pWm.getUtilizationPercentage() + "%. [" + pWm.getUtilization() + "/" + ringSize +"]");
+        }
+        
         graylogServer.getServerValues().writeBufferWatermarks(oWm, pWm);
         
         sendMetrics(oWm, pWm);

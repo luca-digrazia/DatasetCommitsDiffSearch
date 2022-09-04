@@ -20,20 +20,18 @@
 
 package org.graylog2.database;
 
+import org.apache.log4j.Logger;
+import org.graylog2.Tools;
+
 import com.mongodb.BasicDBObject;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
+import java.util.Map;
 import org.graylog2.Core;
-import org.graylog2.Tools;
 import org.graylog2.activities.Activity;
 import org.graylog2.buffers.BufferWatermark;
 import org.joda.time.DateTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Map;
-import java.util.Set;
 
 
 /**
@@ -43,7 +41,7 @@ import java.util.Set;
  */
 public class MongoBridge {
 
-    private static final Logger LOG = LoggerFactory.getLogger(MongoBridge.class);
+    private static final Logger LOG = Logger.getLogger(MongoBridge.class);    
     private MongoConnection connection;
     
     Core server;
@@ -166,17 +164,6 @@ public class MongoBridge {
         
         BasicDBObject obj = new BasicDBObject(info);
         coll.insert(obj);
-    }
-    
-    public void writePluginInformation(Set<Map<String, Object>> plugins, String collection) {
-        DBCollection coll = connection.getDatabase().getCollection(collection);
-
-        // Delete all entries, we only have one at a time.
-        coll.remove(new BasicDBObject());
-        
-        for (Map<String, Object> plugin : plugins) {
-            coll.insert(new BasicDBObject(plugin));
-        }
     }
     
     /**
