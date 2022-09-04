@@ -138,9 +138,15 @@ public class HibernateSearchElasticsearchRecorder {
         @Override
         public void onMetadataInitialized(Metadata metadata, BootstrapContext bootstrapContext,
                 BiConsumer<String, Object> propertyCollector) {
+            Version graalVMVersion = Version.getCurrent();
+            final boolean isAOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
+            boolean isGraalVM20OrBelow = isAOT && graalVMVersion.compareTo(GRAAL_VM_VERSION_21) < 0;
             HibernateOrmIntegrationBooter booter = HibernateOrmIntegrationBooter.builder(metadata, bootstrapContext)
-                    // MethodHandles don't work at all in GraalVM 20 and below, and seem unreliable on GraalVM 21
-                    .valueReadHandleFactory(ValueReadHandleFactory.usingJavaLangReflect())
+                    .valueReadHandleFactory(
+                            // GraalVM 20 or below doesn't support method handles
+                            isGraalVM20OrBelow ? ValueReadHandleFactory.usingJavaLangReflect()
+                                    // GraalVM 21+ and OpenJDK can handle the default (method handles)
+                                    : null)
                     .build();
             booter.preBoot(propertyCollector);
         }
