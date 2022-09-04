@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsInOutputGroup;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsToBuild;
@@ -54,7 +53,7 @@ public class TopLevelArtifactHelperTest {
   public final void setRootDir() throws Exception {
     Scratch scratch = new Scratch();
     Path execRoot = scratch.getFileSystem().getPath("/");
-    root = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "blaze-out");
+    root = ArtifactRoot.asDerivedRoot(execRoot, false, false, false, "blaze-out");
     path = scratch.dir("/blaze-out/foo");
   }
 

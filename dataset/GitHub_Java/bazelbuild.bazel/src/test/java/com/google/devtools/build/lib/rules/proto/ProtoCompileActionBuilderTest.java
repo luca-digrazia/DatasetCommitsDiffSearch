@@ -23,7 +23,6 @@ import static org.mockito.Mockito.mock;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.LabelArtifactOwner;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -56,7 +55,7 @@ public class ProtoCompileActionBuilderTest {
   private final ArtifactRoot root =
       ArtifactRoot.asSourceRoot(Root.fromPath(FILE_SYSTEM.getPath("/")));
   private final ArtifactRoot derivedRoot =
-      ArtifactRoot.asDerivedRoot(FILE_SYSTEM.getPath("/"), RootType.Output, "out");
+      ArtifactRoot.asDerivedRoot(FILE_SYSTEM.getPath("/"), false, false, false, "out");
 
   private ProtoSource protoSource(String importPath) {
     return protoSource(artifact("//:dont-care", importPath));

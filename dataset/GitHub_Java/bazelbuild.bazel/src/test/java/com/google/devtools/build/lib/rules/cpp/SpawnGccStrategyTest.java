@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -52,7 +51,7 @@ public final class SpawnGccStrategyTest {
   public void setup() {
     fs = new InMemoryFileSystem(new JavaClock(), DigestHashFunction.SHA256);
     execRoot = fs.getPath("/exec/root");
-    ar = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "out");
+    ar = ArtifactRoot.asDerivedRoot(execRoot, false, false, false, "out");
   }
 
   @Test

@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
@@ -114,7 +113,7 @@ public class RemoteCacheTests {
     execRoot = fs.getPath("/execroot");
     execRoot.createDirectoryAndParents();
     fakeFileCache = new FakeActionInputFileCache(execRoot);
-    artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "outputs");
+    artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, false, false, false, "outputs");
     artifactRoot.getRoot().asPath().createDirectoryAndParents();
     retryService = MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
   }

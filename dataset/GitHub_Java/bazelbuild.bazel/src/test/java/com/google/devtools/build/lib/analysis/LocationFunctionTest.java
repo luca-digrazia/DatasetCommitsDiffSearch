@@ -21,7 +21,6 @@ import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.LocationExpander.LocationFunction;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -201,7 +200,7 @@ final class LocationFunctionBuilder {
     FileSystem fs = new InMemoryFileSystem(DigestHashFunction.SHA256);
     if (path.startsWith("/exec/out")) {
       return ActionsTestUtil.createArtifact(
-          ArtifactRoot.asDerivedRoot(fs.getPath("/exec"), RootType.Output, "out"),
+          ArtifactRoot.asDerivedRoot(fs.getPath("/exec"), false, false, false, "out"),
           fs.getPath(path));
     } else {
       return ActionsTestUtil.createArtifact(

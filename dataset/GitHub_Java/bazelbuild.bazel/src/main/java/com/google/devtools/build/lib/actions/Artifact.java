@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
@@ -1138,8 +1137,10 @@ public abstract class Artifact
         PathFragment customDerivedTreeRoot) {
       return ArtifactRoot.asDerivedRoot(
           getExecRoot(treeArtifactRoot),
+          false,
+          false,
+          false,
           // e.g. bazel-out/{customDerivedTreeRoot}/k8-fastbuild/bin
-          RootType.Output,
           getExecPathWithinCustomDerivedRoot(
               derivedPathPrefix, customDerivedTreeRoot, treeArtifactRoot.getExecPath()));
     }

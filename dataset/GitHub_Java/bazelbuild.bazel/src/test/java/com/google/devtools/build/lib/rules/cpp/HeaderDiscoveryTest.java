@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -45,7 +44,7 @@ public class HeaderDiscoveryTest {
   private final Path execRoot = fs.getPath("/execroot");
   private final Path derivedRoot = execRoot.getChild(DERIVED_SEGMENT);
   private final ArtifactRoot artifactRoot =
-      ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, DERIVED_SEGMENT);
+      ArtifactRoot.asDerivedRoot(execRoot, false, false, false, DERIVED_SEGMENT);
 
   @Test
   public void errorsWhenMissingHeaders() {

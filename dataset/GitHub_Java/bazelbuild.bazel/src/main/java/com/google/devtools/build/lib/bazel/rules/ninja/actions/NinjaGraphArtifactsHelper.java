@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.vfs.Path;
@@ -78,7 +77,7 @@ class NinjaGraphArtifactsHelper {
             .getExecRoot(ruleContext.getWorkspaceName());
     this.derivedOutputRoot =
         ArtifactRoot.asDerivedRoot(
-            execRoot, RootType.Output, outputRootPath.getSegments().toArray(new String[0]));
+            execRoot, false, false, false, outputRootPath.getSegments().toArray(new String[0]));
     this.sourceRoot = ruleContext.getRule().getPackage().getSourceRoot().get();
   }
 
