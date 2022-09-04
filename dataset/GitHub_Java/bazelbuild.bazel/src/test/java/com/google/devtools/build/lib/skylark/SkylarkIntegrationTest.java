@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.objc.ObjcProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -3297,7 +3296,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testDeclareFileInvalidDirectory_withSibling() throws Exception {
+  public void testDeclareFileInvalidDirectory() throws Exception {
     scratch.file("test/dep/test_file.txt", "Test file");
 
     scratch.file("test/dep/BUILD", "exports_files(['test_file.txt'])");
@@ -3320,172 +3319,5 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertContainsEvent(
         "the output artifact 'test/dep/exe' is not under package directory "
             + "'test/skylark' for target '//test/skylark:target'");
-  }
-
-  @Test
-  public void testDeclareFileInvalidDirectory_noSibling() throws Exception {
-    scratch.file("test/dep/test_file.txt", "Test file");
-
-    scratch.file("test/dep/BUILD", "exports_files(['test_file.txt'])");
-
-    scratch.file(
-        "test/skylark/test_rule.bzl",
-        "def _my_rule_impl(ctx):",
-        "  exe = ctx.actions.declare_file('/foo/exe')",
-        "  ctx.actions.run_shell(outputs=[exe], command=['touch', 'exe'])",
-        "  return []",
-        "my_rule = rule(implementation = _my_rule_impl,",
-        "    attrs = {'dep': attr.label(allow_single_file = True)})");
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:test_rule.bzl', 'my_rule')",
-        "my_rule(name = 'target', dep = '//test/dep:test_file.txt')");
-
-    reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//test/skylark:target")).isNull();
-    assertContainsEvent(
-        "the output artifact '/foo/exe' is not under package directory "
-            + "'test/skylark' for target '//test/skylark:target'");
-  }
-
-  @Test
-  public void testDeclareDirectoryInvalidParent_withSibling() throws Exception {
-    scratch.file("test/dep/test_file.txt", "Test file");
-
-    scratch.file("test/dep/BUILD", "exports_files(['test_file.txt'])");
-
-    scratch.file(
-        "test/skylark/test_rule.bzl",
-        "def _my_rule_impl(ctx):",
-        "  exe = ctx.actions.declare_directory('/foo/exe', sibling = ctx.file.dep)",
-        "  ctx.actions.run_shell(outputs=[exe], command=['touch', 'exe'])",
-        "  return []",
-        "my_rule = rule(implementation = _my_rule_impl,",
-        "    attrs = {'dep': attr.label(allow_single_file = True)})");
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:test_rule.bzl', 'my_rule')",
-        "my_rule(name = 'target', dep = '//test/dep:test_file.txt')");
-
-    reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//test/skylark:target")).isNull();
-    assertContainsEvent(
-        "the output directory '/foo/exe' is not under package directory "
-            + "'test/skylark' for target '//test/skylark:target'");
-  }
-
-  @Test
-  public void testDeclareDirectoryInvalidParent_noSibling() throws Exception {
-    scratch.file("test/dep/test_file.txt", "Test file");
-
-    scratch.file("test/dep/BUILD", "exports_files(['test_file.txt'])");
-
-    scratch.file(
-        "test/skylark/test_rule.bzl",
-        "def _my_rule_impl(ctx):",
-        "  exe = ctx.actions.declare_directory('/foo/exe')",
-        "  ctx.actions.run_shell(outputs=[exe], command=['touch', 'exe'])",
-        "  return []",
-        "my_rule = rule(implementation = _my_rule_impl,",
-        "    attrs = {'dep': attr.label(allow_single_file = True)})");
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:test_rule.bzl', 'my_rule')",
-        "my_rule(name = 'target', dep = '//test/dep:test_file.txt')");
-
-    reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//test/skylark:target")).isNull();
-    assertContainsEvent(
-        "the output directory '/foo/exe' is not under package directory "
-            + "'test/skylark' for target '//test/skylark:target'");
-  }
-
-  @Test
-  public void testLegacyProvider_AddCanonicalLegacyKeyAndModernKey() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
-    scratch.file(
-        "test/skylark/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return struct(foo = apple_common.new_objc_provider(define=depset(['foo'])))",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'test')");
-
-    ConfiguredTarget target = getConfiguredTarget("//test/skylark:test");
-
-    ObjcProvider providerFromModernKey = target.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    ObjcProvider providerFromObjc = (ObjcProvider) target.get("objc");
-    ObjcProvider providerFromFoo = (ObjcProvider) target.get("foo");
-
-    // The modern key and the canonical legacy key "objc" are set to the one available ObjcProvider.
-    assertThat(providerFromModernKey.define()).containsExactly("foo");
-    assertThat(providerFromObjc.define()).containsExactly("foo");
-    assertThat(providerFromFoo.define()).containsExactly("foo");
-  }
-
-  @Test
-  public void testLegacyProvider_DontAutomaticallyAddKeysAlreadyPresent() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
-    scratch.file(
-        "test/skylark/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return struct(providers = [apple_common.new_objc_provider(define=depset(['prov']))],",
-        "       bah = apple_common.new_objc_provider(define=depset(['bah'])),",
-        "       objc = apple_common.new_objc_provider(define=depset(['objc'])))",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'test')");
-
-    ConfiguredTarget target = getConfiguredTarget("//test/skylark:test");
-
-    ObjcProvider providerFromModernKey = target.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    ObjcProvider providerFromObjc = (ObjcProvider) target.get("objc");
-    ObjcProvider providerFromBah = (ObjcProvider) target.get("bah");
-
-    assertThat(providerFromModernKey.define()).containsExactly("prov");
-    assertThat(providerFromObjc.define()).containsExactly("objc");
-    assertThat(providerFromBah.define()).containsExactly("bah");
-  }
-
-  @Test
-  public void testLegacyProvider_FirstNoncanonicalKeyBecomesCanonical() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
-    scratch.file(
-        "test/skylark/extension.bzl",
-        "def custom_rule_impl(ctx):",
-        "  return struct(providers = [apple_common.new_objc_provider(define=depset(['prov']))],",
-        "       foo = apple_common.new_objc_provider(define=depset(['foo'])),",
-        "       bar = apple_common.new_objc_provider(define=depset(['bar'])))",
-        "",
-        "custom_rule = rule(implementation = custom_rule_impl)");
-
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:extension.bzl', 'custom_rule')",
-        "",
-        "custom_rule(name = 'test')");
-
-    ConfiguredTarget target = getConfiguredTarget("//test/skylark:test");
-
-    ObjcProvider providerFromModernKey = target.get(ObjcProvider.SKYLARK_CONSTRUCTOR);
-    ObjcProvider providerFromObjc = (ObjcProvider) target.get("objc");
-    ObjcProvider providerFromFoo = (ObjcProvider) target.get("foo");
-    ObjcProvider providerFromBar = (ObjcProvider) target.get("bar");
-
-    assertThat(providerFromModernKey.define()).containsExactly("prov");
-    // The first defined provider is set to the legacy "objc" key.
-    assertThat(providerFromObjc.define()).containsExactly("foo");
-    assertThat(providerFromFoo.define()).containsExactly("foo");
-    assertThat(providerFromBar.define()).containsExactly("bar");
   }
 }

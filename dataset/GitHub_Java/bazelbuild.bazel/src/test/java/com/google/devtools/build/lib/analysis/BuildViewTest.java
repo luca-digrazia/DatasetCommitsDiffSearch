@@ -83,14 +83,6 @@ public class BuildViewTest extends BuildViewTestBase {
   };
 
   @Test
-  public void directoryArtifactInRoot() throws Exception {
-    scratch.file(
-        "BUILD", "genrule(name = 'slurps_dir', srcs = ['.'], outs = ['out'], cmd = 'touch $@')");
-    // Expect no errors.
-    update("//:slurps_dir");
-  }
-
-  @Test
   public void testRuleConfiguredTarget() throws Exception {
     scratch.file("pkg/BUILD",
         "genrule(name='foo', ",
@@ -773,7 +765,8 @@ public class BuildViewTest extends BuildViewTestBase {
     ConfiguredTarget target = Iterables.getOnlyElement(getAnalysisResult().getTargetsToBuild());
     assertThat(target.getLabel().toString()).isEqualTo(aoutLabel);
 
-    Artifact aout = target.getProvider(FileProvider.class).getFilesToBuild().getSingleton();
+    Artifact aout = Iterables.getOnlyElement(
+        target.getProvider(FileProvider.class).getFilesToBuild());
     Action action = getGeneratingAction(aout);
     assertThat(action.getClass()).isSameInstanceAs(FailAction.class);
   }
@@ -790,7 +783,8 @@ public class BuildViewTest extends BuildViewTestBase {
         "cc_binary(name = 'foo', srcs = ['foo.cc'])");
     ConfiguredTarget foo =
         Iterables.getOnlyElement(update("//actions_not_registered:foo").getTargetsToBuild());
-    Artifact fooOut = foo.getProvider(FileProvider.class).getFilesToBuild().getSingleton();
+    Artifact fooOut =
+        Iterables.getOnlyElement(foo.getProvider(FileProvider.class).getFilesToBuild());
     assertThat(getActionGraph().getGeneratingAction(fooOut)).isNotNull();
     clearAnalysisResult();
 
@@ -834,7 +828,8 @@ public class BuildViewTest extends BuildViewTestBase {
     ConfiguredTarget target = Iterables.getOnlyElement(getAnalysisResult().getTargetsToBuild());
     assertThat(target.getLabel().toString()).isEqualTo(aoutLabel);
 
-    Artifact aout = target.getProvider(FileProvider.class).getFilesToBuild().getSingleton();
+    Artifact aout = Iterables.getOnlyElement(
+        target.getProvider(FileProvider.class).getFilesToBuild());
     Action action = getGeneratingAction(aout);
     assertThat(action.getClass()).isSameInstanceAs(FailAction.class);
   }

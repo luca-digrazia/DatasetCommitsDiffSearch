@@ -1188,7 +1188,10 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
                 "  pattern,",
                 "])",
                 "other_variable = glob(include = ['a'], exclude = ['b'])",
-                "third_variable = glob(['c'], exclude_directories = 0)")));
+                "third_variable = glob(['c'], exclude_directories = 0)"),
+            event -> {
+              throw new IllegalArgumentException(event.getMessage());
+            }));
     assertThat(globPatternExtractor.getExcludeDirectoriesPatterns())
         .containsExactly("ab", "a", "**/*");
     assertThat(globPatternExtractor.getIncludeDirectoriesPatterns()).containsExactly("c");
