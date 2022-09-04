@@ -19,9 +19,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Matchers.any;
 
-import com.facebook.stetho.inspector.network.AsyncPrettyPrinter;
-import com.facebook.stetho.inspector.network.AsyncPrettyPrinterExecutorHolder;
-import dalvik.annotation.TestTargetClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -75,7 +72,6 @@ public class AsyncPrettyPrintResponseBodyTest {
     mResponseBodyFileManager = mock(ResponseBodyFileManager.class);
     mAsyncPrettyPrinterRegistry = new AsyncPrettyPrinterRegistry();
     mAsyncPrettyPrinterRegistry.register(TEST_HEADER_NAME, mPrettyPrinterTestFactory);
-    AsyncPrettyPrinterExecutorHolder.ensureInitialized();
   }
 
   @Test

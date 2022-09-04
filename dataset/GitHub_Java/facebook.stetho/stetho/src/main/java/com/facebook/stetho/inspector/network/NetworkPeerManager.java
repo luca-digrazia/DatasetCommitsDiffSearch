@@ -60,7 +60,6 @@ public class NetworkPeerManager extends ChromePeerManager {
   private final PeersRegisteredListener mTempFileCleanup = new PeersRegisteredListener() {
     @Override
     protected void onFirstPeerRegistered() {
-      AsyncPrettyPrinterExecutorHolder.ensureInitialized();
       if (mAsyncPrettyPrinterRegistry == null && mPrettyPrinterInitializer != null) {
         mAsyncPrettyPrinterRegistry = new AsyncPrettyPrinterRegistry();
         mPrettyPrinterInitializer.populatePrettyPrinters(mAsyncPrettyPrinterRegistry);
@@ -71,7 +70,7 @@ public class NetworkPeerManager extends ChromePeerManager {
     @Override
     protected void onLastPeerUnregistered() {
       mResponseBodyFileManager.cleanupFiles();
-      AsyncPrettyPrinterExecutorHolder.shutdown();
+      AsyncPrettyPrinterExecutorHolder.sExecutorService.shutdownNow();
     }
   };
 }

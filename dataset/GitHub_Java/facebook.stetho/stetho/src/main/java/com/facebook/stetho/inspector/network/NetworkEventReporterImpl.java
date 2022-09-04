@@ -15,6 +15,7 @@ import com.facebook.stetho.inspector.console.CLog;
 import com.facebook.stetho.inspector.protocol.module.Console;
 import com.facebook.stetho.inspector.protocol.module.Network;
 import com.facebook.stetho.inspector.protocol.module.Page;
+import org.apache.http.protocol.HTTP;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -24,7 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Implementation of {@link NetworkEventReporter} which allows callers to inform the Stetho
@@ -33,7 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * implementation will be automatically wired up to them.
  */
 public class NetworkEventReporterImpl implements NetworkEventReporter {
-  private final AtomicInteger mNextRequestId = new AtomicInteger(0);
   @Nullable
   private ResourceTypeHelper mResourceTypeHelper;
 
@@ -316,16 +315,11 @@ public class NetworkEventReporterImpl implements NetworkEventReporter {
     }
   }
 
-  @Override
-  public String nextRequestId() {
-    return String.valueOf(mNextRequestId.getAndIncrement());
-  }
-
   @Nullable
   private String getContentType(InspectorHeaders headers) {
     // This may need to change in the future depending on how cumbersome header simulation
     // is for the various hooks we expose.
-    return headers.firstHeaderValue("Content-Type");
+    return headers.firstHeaderValue(HTTP.CONTENT_TYPE);
   }
 
   private static JSONObject formatHeadersAsJSON(InspectorHeaders headers) {
