@@ -66,111 +66,92 @@ class BuildResultPrinter {
     // problem where the summary message and the exit code disagree.  The logic
     // here is already complex.
 
-    OutErr outErr = request.getOutErr();
     Collection<ConfiguredTarget> targetsToPrint = filterTargetsToPrint(configuredTargets);
     Collection<AspectValue> aspectsToPrint = filterAspectsToPrint(aspects);
-    final boolean success;
-    if (aspectsToPrint.isEmpty()) {
-      // Suppress summary if --show_result value is exceeded:
-      if (targetsToPrint.size() > request.getBuildOptions().maxResultTargets) {
-        return;
-      }
-      // Filter the targets we care about into two buckets:
-      Collection<ConfiguredTarget> succeeded = new ArrayList<>();
-      Collection<ConfiguredTarget> failed = new ArrayList<>();
+
+    // Filter the targets we care about into two buckets:
+    Collection<ConfiguredTarget> succeeded = new ArrayList<>();
+    Collection<ConfiguredTarget> failed = new ArrayList<>();
+    for (ConfiguredTarget target : targetsToPrint) {
       Collection<ConfiguredTarget> successfulTargets = result.getSuccessfulTargets();
-      for (ConfiguredTarget target : targetsToPrint) {
-        (successfulTargets.contains(target) ? succeeded : failed).add(target);
-      }
+      (successfulTargets.contains(target) ? succeeded : failed).add(target);
+    }
 
-      // TODO(bazel-team): convert these to a new "SKIPPED" status when ready: b/62191890.
-      failed.addAll(configuredTargetsToSkip);
+    // TODO(bazel-team): convert these to a new "SKIPPED" status when ready: b/62191890.
+    failed.addAll(configuredTargetsToSkip);
 
-      TopLevelArtifactContext context = request.getTopLevelArtifactContext();
-      for (ConfiguredTarget target : succeeded) {
-        Label label = target.getLabel();
-        // For up-to-date targets report generated artifacts, but only
-        // if they have associated action and not middleman artifacts.
-        boolean headerFlag = true;
-        for (Artifact artifact :
-            TopLevelArtifactHelper.getAllArtifactsToBuild(target, context)
-                .getImportantArtifacts()) {
-          if (shouldPrint(artifact)) {
-            if (headerFlag) {
-              outErr.printErr("Target " + label + " up-to-date:\n");
-              headerFlag = false;
-            }
-            outErr.printErrLn(formatArtifactForShowResults(artifact, request));
-          }
-        }
-        if (headerFlag) {
-          outErr.printErr("Target " + label + " up-to-date (nothing to build)\n");
-        }
-      }
-      for (ConfiguredTarget target : failed) {
-        outErr.printErr("Target " + target.getLabel() + " failed to build\n");
+    // Suppress summary if --show_result value is exceeded:
+    if (succeeded.size() + failed.size() + aspectsToPrint.size()
+        > request.getBuildOptions().maxResultTargets) {
+      return;
+    }
 
-        // For failed compilation, it is still useful to examine temp artifacts,
-        // (ie, preprocessed and assembler files).
-        OutputGroupInfo topLevelProvider = OutputGroupInfo.get(target);
-        String productName = env.getRuntime().getProductName();
-        if (topLevelProvider != null) {
-          for (Artifact temp : topLevelProvider.getOutputGroup(OutputGroupInfo.TEMP_FILES)) {
-            if (temp.getPath().exists()) {
-              outErr.printErrLn(
-                  "  See temp at "
-                      + OutputDirectoryLinksUtils.getPrettyPath(
-                          temp.getPath(),
-                          env.getWorkspaceName(),
-                          env.getWorkspace(),
-                          request.getBuildOptions().getSymlinkPrefix(productName),
-                          productName));
-            }
-          }
-        }
-      }
-      success = failed.isEmpty();
-    } else {
-      // Suppress summary if --show_result value is exceeded:
-      if (aspectsToPrint.size() > request.getBuildOptions().maxResultTargets) {
-        return;
-      }
-      // Filter the targets we care about into two buckets:
-      Collection<AspectValue> succeeded = new ArrayList<>();
-      Collection<AspectValue> failed = new ArrayList<>();
-      Collection<AspectValue> successfulAspects = result.getSuccessfulAspects();
-      for (AspectValue aspect : aspectsToPrint) {
-        (successfulAspects.contains(aspect) ? succeeded : failed).add(aspect);
-      }
-      TopLevelArtifactContext context = request.getTopLevelArtifactContext();
-      for (AspectValue aspect : succeeded) {
-        Label label = aspect.getLabel();
-        String aspectName = aspect.getConfiguredAspect().getName();
-        boolean headerFlag = true;
-        NestedSet<Artifact> importantArtifacts =
-            TopLevelArtifactHelper.getAllArtifactsToBuild(aspect, context).getImportantArtifacts();
-        for (Artifact importantArtifact : importantArtifacts) {
+    OutErr outErr = request.getOutErr();
+
+    TopLevelArtifactContext context = request.getTopLevelArtifactContext();
+    for (ConfiguredTarget target : succeeded) {
+      Label label = target.getLabel();
+      // For up-to-date targets report generated artifacts, but only
+      // if they have associated action and not middleman artifacts.
+      boolean headerFlag = true;
+      for (Artifact artifact :
+          TopLevelArtifactHelper.getAllArtifactsToBuild(target, context).getImportantArtifacts()) {
+        if (shouldPrint(artifact)) {
           if (headerFlag) {
-            outErr.printErr("Aspect " + aspectName + " of " + label + " up-to-date:\n");
+            outErr.printErr("Target " + label + " up-to-date:\n");
             headerFlag = false;
           }
-          if (shouldPrint(importantArtifact)) {
-            outErr.printErrLn(formatArtifactForShowResults(importantArtifact, request));
+          outErr.printErrLn(formatArtifactForShowResults(artifact, request));
+        }
+      }
+      if (headerFlag) {
+        outErr.printErr("Target " + label + " up-to-date (nothing to build)\n");
+      }
+    }
+
+    for (AspectValue aspect : aspectsToPrint) {
+      Label label = aspect.getLabel();
+      String aspectName = aspect.getConfiguredAspect().getName();
+      boolean headerFlag = true;
+      NestedSet<Artifact> importantArtifacts =
+          TopLevelArtifactHelper.getAllArtifactsToBuild(aspect, context).getImportantArtifacts();
+      for (Artifact importantArtifact : importantArtifacts) {
+        if (headerFlag) {
+          outErr.printErr("Aspect " + aspectName + " of " + label + " up-to-date:\n");
+          headerFlag = false;
+        }
+        if (shouldPrint(importantArtifact)) {
+          outErr.printErrLn(formatArtifactForShowResults(importantArtifact, request));
+        }
+      }
+      if (headerFlag) {
+        outErr.printErr(
+            "Aspect " + aspectName + " of " + label + " up-to-date (nothing to build)\n");
+      }
+    }
+
+    for (ConfiguredTarget target : failed) {
+      outErr.printErr("Target " + target.getLabel() + " failed to build\n");
+
+      // For failed compilation, it is still useful to examine temp artifacts,
+      // (ie, preprocessed and assembler files).
+      OutputGroupInfo topLevelProvider =
+          OutputGroupInfo.get(target);
+      String productName = env.getRuntime().getProductName();
+      if (topLevelProvider != null) {
+        for (Artifact temp : topLevelProvider.getOutputGroup(OutputGroupInfo.TEMP_FILES)) {
+          if (temp.getPath().exists()) {
+            outErr.printErrLn("  See temp at "
+                + OutputDirectoryLinksUtils.getPrettyPath(temp.getPath(),
+                    env.getWorkspaceName(),
+                    env.getWorkspace(),
+                    request.getBuildOptions().getSymlinkPrefix(productName),
+                    productName));
           }
         }
-        if (headerFlag) {
-          outErr.printErr(
-              "Aspect " + aspectName + " of " + label + " up-to-date (nothing to build)\n");
-        }
       }
-      for (AspectValue aspect : failed) {
-        Label label = aspect.getLabel();
-        String aspectName = aspect.getConfiguredAspect().getName();
-        outErr.printErr("Aspect " + aspectName + " of " + label + " failed to build\n");
-      }
-      success = failed.isEmpty();
     }
-    if (!success && !request.getOptions(ExecutionOptions.class).verboseFailures) {
+    if (!failed.isEmpty() && !request.getOptions(ExecutionOptions.class).verboseFailures) {
       outErr.printErr("Use --verbose_failures to see the command lines of failed build steps.\n");
     }
   }
