@@ -16,18 +16,25 @@
  */
 package org.graylog2.restclient.lib;
 
+import com.google.common.util.concurrent.Uninterruptibles;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.google.common.util.concurrent.Uninterruptibles.sleepUninterruptibly;
+import static com.jayway.awaitility.Awaitility.await;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class AsyncByteBufferInputStreamTest {
-
     @Test
     public void testSyncRead() throws InterruptedException, IOException {
         final AsyncByteBufferInputStream stream = new AsyncByteBufferInputStream();
@@ -82,94 +89,116 @@ public class AsyncByteBufferInputStreamTest {
             @Override
             public void run() {
                 for (int i = 0; i < 10; i++) {
-                    try {
-                        stream.putBuffer(ByteBuffer.wrap("12345".getBytes()));
-                        stream.putBuffer(ByteBuffer.wrap("6\n".getBytes()));
-                        System.out.println("Wrote buffers step " + i);
-                    } catch (InterruptedException ignored) {
-
-                    }
-                    sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
+                    stream.putBuffer(ByteBuffer.wrap("12345".getBytes()));
+                    stream.putBuffer(ByteBuffer.wrap("67890".getBytes()));
                 }
                 stream.setDone(true);
 
             }
         };
+        final AtomicInteger readBytes = new AtomicInteger(0);
         final Thread reader = new Thread() {
             @Override
             public void run() {
-                int singleByte = -1;
-                int count = 0;
-                do {
-                    try {
-                        singleByte = stream.read();
-                        count++;
-                    } catch (IOException e) {
-
+                try {
+                    while (stream.read() != -1) {
+                        readBytes.incrementAndGet();
                     }
-                    if (count % 5 == 0) {
-                        System.out.println("read " + count + " bytes");
-                    }
-                } while (singleByte != -1);
+                } catch (IOException ignored) {/* no IO done, it's all in memory */}
             }
         };
         reader.start();
         writer.start();
         reader.join();
         writer.join();
+
+        assertTrue(stream.isDone());
+        assertNull(stream.getFailed());
+        assertEquals(100, readBytes.get());
     }
 
     @Test
+    @Ignore
     public void testAsyncException() throws InterruptedException {
         final AsyncByteBufferInputStream stream = new AsyncByteBufferInputStream();
 
         final Thread writer = new Thread() {
             @Override
             public void run() {
-                for (int i = 0; i < 10; i++) {
-                    try {
-                        stream.putBuffer(ByteBuffer.wrap("12345".getBytes()));
-                        stream.putBuffer(ByteBuffer.wrap("6\n".getBytes()));
-                        System.out.println("Wrote buffers step " + i);
-                    } catch (InterruptedException ignored) {
-
-                    }
-                    sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
-                    if (i == 3) {
-                        stream.setFailed(new Throwable());
-                        return;
-                    }
+                for (int i = 0; i < 3; i++) {
+                    stream.putBuffer(ByteBuffer.wrap("12345".getBytes()));
+                    stream.putBuffer(ByteBuffer.wrap("67890".getBytes()));
                 }
-
+                stream.setFailed(new Exception("Some weird error"));
             }
         };
+        final AtomicBoolean caughtExceptionInReader = new AtomicBoolean(false);
         final Thread reader = new Thread() {
             @Override
             public void run() {
-                int singleByte;
                 int count = 0;
-                do {
-                    try {
-                        singleByte = stream.read();
+                try {
+                    while (stream.read() != -1) {
                         count++;
-                    } catch (IOException e) {
-                        System.out.println("Caught exception, success.");
-                        return;
+
+                        if (count > 30) {
+                            fail("Should've caught IOException.");
+                        }
                     }
-                    if (count % 5 == 0) {
-                        System.out.println("read " + count + " bytes");
-                    }
-                    if (count > 50) {
-                        fail("Should've caught IOException.");
-                    }
-                } while (singleByte != -1);
+                } catch (IOException e) {
+                    caughtExceptionInReader.set(true);
+                }
             }
         };
         reader.start();
         writer.start();
         reader.join();
         writer.join();
+
+        await().atMost(20, TimeUnit.SECONDS).untilTrue(caughtExceptionInReader);
+        assertTrue(stream.getFailed() instanceof Exception);
+        assertEquals("Some weird error", stream.getFailed().getMessage());
     }
 
+    @Test
+    @Ignore
+    public void readIsBlockingUntilDataIsPresent() throws InterruptedException {
+        final AsyncByteBufferInputStream stream = new AsyncByteBufferInputStream();
 
+        final Thread writer = new Thread() {
+            @Override
+            public void run() {
+                stream.putBuffer(ByteBuffer.wrap("12345".getBytes()));
+                Uninterruptibles.sleepUninterruptibly(250, TimeUnit.MILLISECONDS);
+                stream.putBuffer(ByteBuffer.wrap("67890".getBytes()));
+                Uninterruptibles.sleepUninterruptibly(250, TimeUnit.MILLISECONDS);
+                stream.setDone(true);
+            }
+        };
+        final AtomicInteger readBytes = new AtomicInteger(0);
+        final Thread reader = new Thread() {
+            @Override
+            public void run() {
+                try {
+                    while (stream.read() != -1) {
+                        readBytes.incrementAndGet();
+                    }
+                } catch (IOException ignored) {/* no IO done, it's all in memory */}
+            }
+        };
+        reader.start();
+        writer.start();
+        reader.join();
+        writer.join();
+
+        await().atMost(20, TimeUnit.SECONDS).until(new Callable<Boolean>() {
+            @Override
+            public Boolean call() throws Exception {
+                return stream.isDone();
+            }
+        });
+
+        assertNull(stream.getFailed());
+        assertEquals(10, readBytes.get());
+    }
 }
