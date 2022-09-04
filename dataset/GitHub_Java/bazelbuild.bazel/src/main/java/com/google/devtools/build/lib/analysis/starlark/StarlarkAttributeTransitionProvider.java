@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -35,6 +36,7 @@ import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.starlarkbuildapi.SplitTransitionProviderApi;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Printer;
 
 /**
@@ -66,9 +68,6 @@ public class StarlarkAttributeTransitionProvider
   public SplitTransition create(AttributeTransitionData data) {
     AttributeMap attributeMap = data.attributes();
     Preconditions.checkArgument(attributeMap instanceof ConfiguredAttributeMapper);
-    // TODO(bazel-team): consider caching transition instances to save CPU time, similar to what's
-    // done in StarlarkRuleTransitionProvider. This could benefit builds that apply transitions over
-    // many build graph edges.
     return new FunctionSplitTransition(
         starlarkDefinedConfigTransition, (ConfiguredAttributeMapper) attributeMap);
   }
@@ -110,12 +109,16 @@ public class StarlarkAttributeTransitionProvider
       // outputs. Rather than complicate BuildOptionsView with more access points to BuildOptions,
       // we just use the original BuildOptions and trust the transition's enforcement logic.
       BuildOptions buildOptions = buildOptionsView.underlying();
-      Map<String, BuildOptions> res =
-          applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject, eventHandler);
-      if (res == null) {
+      try {
+        return applyAndValidate(
+            buildOptions, starlarkDefinedConfigTransition, attrObject, eventHandler);
+      } catch (EvalException e) {
+        eventHandler.handle(
+            Event.error(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                e.getMessageWithStack()));
         return ImmutableMap.of("error", buildOptions.clone());
       }
-      return res;
     }
   }
 }

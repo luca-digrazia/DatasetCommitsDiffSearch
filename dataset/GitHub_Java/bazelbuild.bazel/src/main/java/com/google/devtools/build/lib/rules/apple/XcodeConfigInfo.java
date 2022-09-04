@@ -59,9 +59,8 @@ public class XcodeConfigInfo extends NativeInfo
       DottedVersion macosSdkVersion,
       DottedVersion macosMinimumOsVersion,
       DottedVersion xcodeVersion,
-      Availability availability,
-      String xcodeVersionFlagValue,
-      boolean includeXcodeReqs) {
+      Availability availability) {
+    super(PROVIDER);
     this.iosSdkVersion = Preconditions.checkNotNull(iosSdkVersion);
     this.iosMinimumOsVersion = Preconditions.checkNotNull(iosMinimumOsVersion);
     this.watchosSdkVersion = Preconditions.checkNotNull(watchosSdkVersion);
@@ -85,22 +84,8 @@ public class XcodeConfigInfo extends NativeInfo
       default:
         break;
     }
-    if (includeXcodeReqs) {
-      if (xcodeVersion != null && !xcodeVersion.toString().isEmpty()) {
-        builder.put(ExecutionRequirements.REQUIRES_XCODE + ":" + xcodeVersion, "");
-      }
-      if (xcodeVersionFlagValue != null && xcodeVersionFlagValue.indexOf("-") > 0) {
-        String label = xcodeVersionFlagValue.substring(xcodeVersionFlagValue.indexOf("-") + 1);
-        builder.put(ExecutionRequirements.REQUIRES_XCODE_LABEL + ":" + label, "");
-      }
-    }
     builder.put(ExecutionRequirements.REQUIREMENTS_SET, "");
     this.executionRequirements = builder.buildImmutable();
-  }
-
-  @Override
-  public BuiltinProvider<XcodeConfigInfo> getProvider() {
-    return PROVIDER;
   }
 
   /** Indicates the platform(s) on which an Xcode version is available. */
@@ -154,11 +139,7 @@ public class XcodeConfigInfo extends NativeInfo
             DottedVersion.fromString(macosSdkVersion),
             DottedVersion.fromString(macosMinimumOsVersion),
             DottedVersion.fromString(xcodeVersion),
-            Availability.UNKNOWN,
-            /** xcodeVersionFlagValue= */
-            "",
-            /** includeXcodeReqs= */
-            false);
+            Availability.UNKNOWN);
       } catch (DottedVersion.InvalidDottedVersionException e) {
         throw new EvalException(e);
       }

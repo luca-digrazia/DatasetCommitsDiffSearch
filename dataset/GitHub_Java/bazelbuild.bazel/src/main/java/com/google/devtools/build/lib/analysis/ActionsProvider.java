@@ -16,32 +16,41 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.StarlarkInfo;
+import com.google.devtools.build.lib.packages.StructImpl;
+import com.google.devtools.build.lib.starlarkbuildapi.ActionsInfoProviderApi;
 import java.util.HashMap;
 import java.util.Map;
+import net.starlark.java.eval.Dict;
+import net.starlark.java.syntax.Location;
 
 /**
  * This provides a view over the actions that were created during the analysis of a rule
  * (not including actions for its transitive dependencies).
  */
-public final class ActionsProvider{
+public final class ActionsProvider extends BuiltinProvider<StructImpl>
+    implements ActionsInfoProviderApi {
 
-  public static final SkylarkClassObjectConstructor ACTIONS_PROVIDER =
-      SkylarkClassObjectConstructor.createNative("Actions");
+  /** The ActionsProvider singleton instance. */
+  public static final ActionsProvider INSTANCE = new ActionsProvider();
 
-  public static SkylarkClassObject create(Iterable<ActionAnalysisMetadata> actions) {
+  public ActionsProvider() {
+    super("Actions", StructImpl.class);
+  }
+
+  /** Factory method for creating instances of the Actions provider. */
+  public static StructImpl create(Iterable<ActionAnalysisMetadata> actions) {
     Map<Artifact, ActionAnalysisMetadata> map = new HashMap<>();
     for (ActionAnalysisMetadata action : actions) {
       for (Artifact artifact : action.getOutputs()) {
         // In the case that two actions generated the same artifact, the first wins. They
         // ought to be equal anyway.
-        if (!map.containsKey(artifact)) {
-          map.put(artifact, action);
-        }
+        map.putIfAbsent(artifact, action);
       }
     }
-    ImmutableMap<String, Object> fields = ImmutableMap.of("by_file", map);
-    return new SkylarkClassObject(ACTIONS_PROVIDER, fields);
+    ImmutableMap<String, Object> fields =
+        ImmutableMap.<String, Object>of("by_file", Dict.immutableCopyOf(map));
+    return StarlarkInfo.create(INSTANCE, fields, Location.BUILTIN);
   }
 }

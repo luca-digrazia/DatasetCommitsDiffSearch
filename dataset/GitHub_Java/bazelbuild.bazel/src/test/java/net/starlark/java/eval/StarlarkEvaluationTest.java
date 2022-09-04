@@ -79,7 +79,7 @@ public final class StarlarkEvaluationTest {
   }
 
   // A trivial struct-like class with Starlark fields defined by a map.
-  private static class SimpleStruct implements StarlarkValue, Structure {
+  private static class SimpleStruct implements StarlarkValue, ClassObject {
     final ImmutableMap<String, Object> fields;
 
     SimpleStruct(ImmutableMap<String, Object> fields) {
@@ -345,7 +345,7 @@ public final class StarlarkEvaluationTest {
         doc = "Returns a struct containing all callable method objects of this mock",
         allowReturnNones = true,
         useStarlarkThread = true)
-    public Structure proxyMethodsObject(StarlarkThread thread)
+    public ClassObject proxyMethodsObject(StarlarkThread thread)
         throws EvalException, InterruptedException {
       ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
       for (String name : Starlark.dir(thread.mutability(), thread.getSemantics(), this)) {
@@ -1680,11 +1680,7 @@ public final class StarlarkEvaluationTest {
     ev.new Scenario()
         .setUp("def func(d):", "  d['b'] = 2", "d = {'a' : 1}", "func(d)")
         .testLookup(
-            "d",
-            Dict.builder()
-                .put("a", StarlarkInt.of(1))
-                .put("b", StarlarkInt.of(2))
-                .buildImmutable());
+            "d", Dict.of((Mutability) null, "a", StarlarkInt.of(1), "b", StarlarkInt.of(2)));
   }
 
   @Test
@@ -1756,7 +1752,7 @@ public final class StarlarkEvaluationTest {
   }
 
   @Test
-  public void testRecursionDisallowedByDefault() throws Exception {
+  public void testFunctionCallRecursion() throws Exception {
     ev.new Scenario()
         .testIfErrorContains(
             "function 'f' called recursively",
@@ -1767,22 +1763,6 @@ public final class StarlarkEvaluationTest {
             "def g(n):",
             "  if n > 0: f(n - 1)",
             "main()");
-  }
-
-  @Test
-  public void testRecursionAllowedWithOption() throws Exception {
-    ParserInput input =
-        ParserInput.fromLines(
-            "def fac(n): return 1 if n < 2 else n * fac(n - 1)", //
-            "x = fac(5)");
-    Module module = Module.create();
-    try (Mutability mu = Mutability.create("test")) {
-      StarlarkSemantics semantics =
-          StarlarkSemantics.builder().setBool(StarlarkSemantics.ALLOW_RECURSION, true).build();
-      StarlarkThread thread = new StarlarkThread(mu, semantics);
-      Starlark.execFile(input, FileOptions.DEFAULT, module, thread);
-    }
-    assertThat(module.getGlobal("x")).isEqualTo(StarlarkInt.of(120));
   }
 
   @Test
@@ -2030,7 +2010,7 @@ public final class StarlarkEvaluationTest {
   @Test
   public void testStructMethodDefinedInValuesAndStarlarkMethod() throws Exception {
     // This test exercises the resolution of ambiguity between @StarlarkMethod-annotated
-    // fields and those reported by Structure.getValue.
+    // fields and those reported by ClassObject.getValue.
     ev.new Scenario()
         .update("val", new SimpleStructWithMethods())
         .setUp("v = val.collision_method()")

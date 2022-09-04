@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.packages.StructProvider;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import net.starlark.java.eval.EvalException;
 
 /**
  * This class implements {@link TransitionFactory} to provide a starlark-defined transition that
@@ -107,19 +108,26 @@ public class StarlarkRuleTransitionProvider implements TransitionFactory<Rule> {
     @Override
     public BuildOptions patch(BuildOptionsView buildOptionsView, EventHandler eventHandler)
         throws InterruptedException {
+      Map<String, BuildOptions> result;
       // Starlark transitions already have logic to enforce they only access declared inputs and
       // outputs. Rather than complicate BuildOptionsView with more access points to BuildOptions,
       // we just use the original BuildOptions and trust the transition's enforcement logic.
       BuildOptions buildOptions = buildOptionsView.underlying();
-      Map<String, BuildOptions> result =
-          applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject, eventHandler);
-      if (result == null) {
+      try {
+        result =
+            applyAndValidate(
+                buildOptions, starlarkDefinedConfigTransition, attrObject, eventHandler);
+      } catch (EvalException e) {
+        eventHandler.handle(
+            Event.error(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                e.getMessageWithStack()));
         return buildOptions.clone();
       }
       if (result.size() != 1) {
         eventHandler.handle(
             Event.error(
-                starlarkDefinedConfigTransition.getLocation(),
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
                 "Rule transition only allowed to return a single transitioned configuration."));
         return buildOptions.clone();
       }

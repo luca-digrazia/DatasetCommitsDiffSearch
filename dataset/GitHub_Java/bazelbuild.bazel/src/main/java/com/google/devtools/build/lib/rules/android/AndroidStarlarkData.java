@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarInfo.Aar;
@@ -34,7 +35,6 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
 import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidBinaryDataSettingsApi;
@@ -47,6 +47,7 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkList;
@@ -189,10 +190,12 @@ public abstract class AndroidStarlarkData
         mergeRes(ctx, manifest, resources, deps, neverlink, enableDataBinding);
     JavaInfo javaInfo =
         getJavaInfoForRClassJar(validated.getClassJar(), validated.getJavaSourceJar());
-    return Dict.<Provider, NativeInfo>builder()
-        .put(AndroidResourcesInfo.PROVIDER, validated.toProvider())
-        .put(JavaInfo.PROVIDER, javaInfo)
-        .buildImmutable();
+    return Dict.of(
+        (Mutability) null,
+        AndroidResourcesInfo.PROVIDER,
+        validated.toProvider(),
+        JavaInfo.PROVIDER,
+        javaInfo);
   }
 
   @Override
@@ -586,8 +589,7 @@ public abstract class AndroidStarlarkData
         .addProvider(
             JavaRuleOutputJarsProvider.class,
             JavaRuleOutputJarsProvider.builder()
-                .addOutputJar(
-                    OutputJar.builder().setClassJar(rClassJar).addSourceJar(rClassSrcJar).build())
+                .addOutputJar(rClassJar, null, null, ImmutableList.of(rClassSrcJar))
                 .build())
         .addProvider(
             JavaCompilationArgsProvider.class,
@@ -663,6 +665,15 @@ public abstract class AndroidStarlarkData
   }
 
   public static <T extends NativeInfo> Sequence<T> getProviders(
+      List<ConfiguredTarget> targets, NativeProvider<T> provider) {
+    return StarlarkList.immutableCopyOf(
+        targets.stream()
+            .map(target -> target.get(provider))
+            .filter(Objects::nonNull)
+            .collect(ImmutableList.toImmutableList()));
+  }
+
+  protected static <T extends NativeInfo> Sequence<T> getProviders(
       List<ConfiguredTarget> targets, BuiltinProvider<T> provider) {
     return StarlarkList.immutableCopyOf(
         targets.stream()

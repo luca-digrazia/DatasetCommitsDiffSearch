@@ -87,6 +87,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
+import net.starlark.java.eval.ClassObject;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Printer;
@@ -96,7 +97,6 @@ import net.starlark.java.eval.StarlarkList;
 import net.starlark.java.eval.StarlarkSemantics;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.eval.Structure;
 import net.starlark.java.eval.Tuple;
 
 /**
@@ -186,13 +186,13 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
         if (type.getLabelClass() != LabelClass.OUTPUT) {
           continue;
         }
-        ImmutableList.Builder<Artifact> artifactsBuilder = ImmutableList.builder();
+        StarlarkList.Builder<Artifact> artifactsBuilder = StarlarkList.builder();
         for (OutputFile outputFile : ruleContext.getRule().getOutputFileMap().get(attrName)) {
           Artifact artifact = ruleContext.createOutputArtifact(outputFile);
           artifactsBuilder.add(artifact);
           artifactLabelMapBuilder.put(artifact, outputFile.getLabel());
         }
-        StarlarkList<Artifact> artifacts = StarlarkList.immutableCopyOf(artifactsBuilder.build());
+        StarlarkList<Artifact> artifacts = artifactsBuilder.buildImmutable();
 
         if (type == BuildType.OUTPUT) {
           if (artifacts.size() == 1) {
@@ -272,13 +272,13 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   /**
    * Represents `ctx.outputs`.
    *
-   * <p>The value of its {@code ctx.outputs.executable} field is computed on-demand.
+   * <p>A {@link ClassObject} (struct-like data structure) with "executable" field created lazily
+   * on-demand.
    *
    * <p>Note: There is only one {@code Outputs} object per rule context, so default (object
    * identity) equals and hashCode suffice.
    */
-  // TODO(adonovan): add StarlarkBuiltin(name="ctx.outputs") annotation.
-  private static class Outputs implements Structure, StarlarkValue {
+  private static class Outputs implements ClassObject, StarlarkValue {
     private final Map<String, Object> outputs;
     private final StarlarkRuleContext context;
     private boolean executableCreated = false;
@@ -648,7 +648,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
   }
 
   @Override
-  public Structure outputs() throws EvalException {
+  public ClassObject outputs() throws EvalException {
     checkMutable("outputs");
     if (outputsObject == null) {
       throw new EvalException("'outputs' is not defined");

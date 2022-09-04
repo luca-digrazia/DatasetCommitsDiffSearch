@@ -154,7 +154,7 @@ public class StarlarkRepositoryContext
       if (!name.equals("$local")) {
         // Attribute values should be type safe
         attrBuilder.put(
-            Attribute.getStarlarkName(name), Attribute.valueToStarlark(attrs.getObject(name)));
+            Attribute.getStarlarkName(name), Starlark.fromJava(attrs.getObject(name), null));
       }
     }
     attrObject = StructProvider.STRUCT.create(attrBuilder.build(), "No such attribute '%s'");

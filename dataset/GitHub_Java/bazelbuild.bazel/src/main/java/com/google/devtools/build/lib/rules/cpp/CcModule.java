@@ -73,6 +73,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import javax.annotation.Nullable;
+import net.starlark.java.eval.ClassObject;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.NoneType;
@@ -81,7 +82,6 @@ import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkList;
 import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.Structure;
 import net.starlark.java.eval.Tuple;
 
 /** A module that contains Starlark utilities for C++ support. */
@@ -1043,12 +1043,12 @@ public abstract class CcModule
     }
     if (!type.equals(provider.getValue("type_name"))) {
       throw new EvalException(
-          provider.getCreationLocation(),
+          provider.getCreationLoc(),
           String.format("Expected object of type '%s', received '%s'.", type, providerType));
     }
   }
 
-  private static Object getValueOrNull(Structure x, String name) {
+  private static Object getValueOrNull(ClassObject x, String name) {
     try {
       return x.getValue(name);
     } catch (EvalException e) {
@@ -1065,13 +1065,13 @@ public abstract class CcModule
         getMandatoryFieldFromStarlarkProvider(featureStruct, "enabled", Boolean.class);
     if (name == null || (name.isEmpty() && !enabled)) {
       throw new EvalException(
-          featureStruct.getCreationLocation(),
+          featureStruct.getCreationLoc(),
           "A feature must either have a nonempty 'name' field or be enabled.");
     }
 
     if (!name.matches("^[_a-z0-9+\\-\\.]*$")) {
       throw new EvalException(
-          featureStruct.getCreationLocation(),
+          featureStruct.getCreationLoc(),
           String.format(
               "A feature's name must consist solely of lowercase ASCII letters, digits, '.', "
                   + "'_', '+', and '-', got '%s'",
@@ -1085,7 +1085,7 @@ public abstract class CcModule
       FlagSet flagSet = flagSetFromStarlark(flagSetObject, /* actionName= */ null);
       if (flagSet.getActions().isEmpty()) {
         throw new EvalException(
-            flagSetObject.getCreationLocation(),
+            flagSetObject.getCreationLoc(),
             "A flag_set that belongs to a feature must have nonempty 'actions' parameter.");
       }
       flagSetBuilder.add(flagSet);
@@ -1105,7 +1105,7 @@ public abstract class CcModule
     for (StarlarkInfo featureSetStruct : requires) {
       if (!"feature_set".equals(featureSetStruct.getValue("type_name"))) { // getValue() may be null
         throw new EvalException(
-            featureStruct.getCreationLocation(), "expected object of type 'feature_set'.");
+            featureStruct.getCreationLoc(), "expected object of type 'feature_set'.");
       }
       ImmutableSet<String> featureSet =
           getStringSetFromStarlarkProviderField(featureSetStruct, "features");
@@ -1141,12 +1141,12 @@ public abstract class CcModule
     String value = getMandatoryFieldFromStarlarkProvider(makeVariableStruct, "value", String.class);
     if (name == null || name.isEmpty()) {
       throw new EvalException(
-          makeVariableStruct.getCreationLocation(),
+          makeVariableStruct.getCreationLoc(),
           "'name' parameter of make_variable must be a nonempty string.");
     }
     if (value == null || value.isEmpty()) {
       throw new EvalException(
-          makeVariableStruct.getCreationLocation(),
+          makeVariableStruct.getCreationLoc(),
           "'value' parameter of make_variable must be a nonempty string.");
     }
     return Pair.of(name, value);
@@ -1165,12 +1165,12 @@ public abstract class CcModule
     String path = getMandatoryFieldFromStarlarkProvider(toolPathStruct, "path", String.class);
     if (name == null || name.isEmpty()) {
       throw new EvalException(
-          toolPathStruct.getCreationLocation(),
+          toolPathStruct.getCreationLoc(),
           "'name' parameter of tool_path must be a nonempty string.");
     }
     if (path == null || path.isEmpty()) {
       throw new EvalException(
-          toolPathStruct.getCreationLocation(),
+          toolPathStruct.getCreationLoc(),
           "'path' parameter of tool_path must be a nonempty string.");
     }
     return Pair.of(name, path);
@@ -1187,12 +1187,12 @@ public abstract class CcModule
         getMandatoryFieldFromStarlarkProvider(variableWithValueStruct, "value", String.class);
     if (name == null || name.isEmpty()) {
       throw new EvalException(
-          variableWithValueStruct.getCreationLocation(),
+          variableWithValueStruct.getCreationLoc(),
           "'name' parameter of variable_with_value must be a nonempty string.");
     }
     if (value == null || value.isEmpty()) {
       throw new EvalException(
-          variableWithValueStruct.getCreationLocation(),
+          variableWithValueStruct.getCreationLoc(),
           "'value' parameter of variable_with_value must be a nonempty string.");
     }
     return new VariableWithValue(name, value);
@@ -1206,12 +1206,12 @@ public abstract class CcModule
     String value = getMandatoryFieldFromStarlarkProvider(envEntryStruct, "value", String.class);
     if (key == null || key.isEmpty()) {
       throw new EvalException(
-          envEntryStruct.getCreationLocation(),
+          envEntryStruct.getCreationLoc(),
           "'key' parameter of env_entry must be a nonempty string.");
     }
     if (value == null || value.isEmpty()) {
       throw new EvalException(
-          envEntryStruct.getCreationLocation(),
+          envEntryStruct.getCreationLoc(),
           "'value' parameter of env_entry must be a nonempty string.");
     }
     StringValueParser parser = new StringValueParser(value);
@@ -1237,8 +1237,7 @@ public abstract class CcModule
     ImmutableSet<String> actions = getStringSetFromStarlarkProviderField(envSetStruct, "actions");
     if (actions.isEmpty()) {
       throw new EvalException(
-          envSetStruct.getCreationLocation(),
-          "actions parameter of env_set must be a nonempty list.");
+          envSetStruct.getCreationLoc(), "actions parameter of env_set must be a nonempty list.");
     }
     ImmutableList.Builder<EnvEntry> envEntryBuilder = ImmutableList.builder();
     ImmutableList<StarlarkInfo> envEntryStructs =
@@ -1276,13 +1275,13 @@ public abstract class CcModule
 
     if (flagGroups.size() > 0 && flags.size() > 0) {
       throw new EvalException(
-          flagGroupStruct.getCreationLocation(),
+          flagGroupStruct.getCreationLoc(),
           "flag_group must contain either a list of flags or a list of flag_groups.");
     }
 
     if (flagGroups.size() == 0 && flags.size() == 0) {
       throw new EvalException(
-          flagGroupStruct.getCreationLocation(), "Both 'flags' and 'flag_groups' are empty.");
+          flagGroupStruct.getCreationLoc(), "Both 'flags' and 'flag_groups' are empty.");
     }
 
     String iterateOver =
@@ -1361,15 +1360,13 @@ public abstract class CcModule
     if (toolPathString != null) {
       if (toolArtifact != null) {
         throw new EvalException(
-            toolStruct.getCreationLocation(),
-            "\"tool\" and \"path\" cannot be set at the same time.");
+            toolStruct.getCreationLoc(), "\"tool\" and \"path\" cannot be set at the same time.");
       }
 
       toolPath = PathFragment.create(toolPathString);
       if (toolPath.isEmpty()) {
         throw new EvalException(
-            toolStruct.getCreationLocation(),
-            "The 'path' field of tool must be a nonempty string.");
+            toolStruct.getCreationLoc(), "The 'path' field of tool must be a nonempty string.");
       }
 
       if (toolPath.isAbsolute()) {
@@ -1407,12 +1404,12 @@ public abstract class CcModule
         getMandatoryFieldFromStarlarkProvider(actionConfigStruct, "action_name", String.class);
     if (actionName == null || actionName.isEmpty()) {
       throw new EvalException(
-          actionConfigStruct.getCreationLocation(),
+          actionConfigStruct.getCreationLoc(),
           "The 'action_name' field of action_config must be a nonempty string.");
     }
     if (!actionName.matches("^[_a-z0-9+\\-\\.]*$")) {
       throw new EvalException(
-          actionConfigStruct.getCreationLocation(),
+          actionConfigStruct.getCreationLoc(),
           String.format(
               "An action_config's name must consist solely of lowercase ASCII letters, digits, "
                   + "'.', '_', '+', and '-', got '%s'",
@@ -1453,7 +1450,7 @@ public abstract class CcModule
             artifactNamePatternStruct, "category_name", String.class);
     if (categoryName == null || categoryName.isEmpty()) {
       throw new EvalException(
-          artifactNamePatternStruct.getCreationLocation(),
+          artifactNamePatternStruct.getCreationLoc(),
           "The 'category_name' field of artifact_name_pattern must be a nonempty string.");
     }
     ArtifactCategory foundCategory = null;
@@ -1465,7 +1462,7 @@ public abstract class CcModule
 
     if (foundCategory == null) {
       throw new EvalException(
-          artifactNamePatternStruct.getCreationLocation(),
+          artifactNamePatternStruct.getCreationLoc(),
           String.format("Artifact category %s not recognized.", categoryName));
     }
 
@@ -1475,7 +1472,7 @@ public abstract class CcModule
                 artifactNamePatternStruct, "extension", String.class));
     if (!foundCategory.getAllowedExtensions().contains(extension)) {
       throw new EvalException(
-          artifactNamePatternStruct.getCreationLocation(),
+          artifactNamePatternStruct.getCreationLoc(),
           String.format(
               "Unrecognized file extension '%s', allowed extensions are %s,"
                   + " please check artifact_name_pattern configuration for %s in your rule.",
@@ -1508,8 +1505,7 @@ public abstract class CcModule
     if (obj == null) {
       if (mandatory) {
         throw new EvalException(
-            provider.getCreationLocation(),
-            String.format("Missing mandatory field '%s'", fieldName));
+            provider.getCreationLoc(), String.format("Missing mandatory field '%s'", fieldName));
       }
       return null;
     }
@@ -1520,7 +1516,7 @@ public abstract class CcModule
       return null;
     }
     throw new EvalException(
-        provider.getCreationLocation(),
+        provider.getCreationLoc(),
         String.format("Field '%s' is not of '%s' type.", fieldName, clazz.getName()));
   }
 

@@ -33,9 +33,7 @@ public final class StarlarkMutableTest {
   @Test
   public void testListViewsCheckMutability() throws Exception {
     Mutability mutability = Mutability.create("test");
-    StarlarkList<Object> list =
-        StarlarkList.copyOf(
-            mutability, ImmutableList.of(StarlarkInt.of(1), StarlarkInt.of(2), StarlarkInt.of(3)));
+    StarlarkList<Object> list = StarlarkList.copyOf(mutability, ImmutableList.of(1, 2, 3));
     mutability.freeze();
 
     {

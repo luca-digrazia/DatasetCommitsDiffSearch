@@ -159,7 +159,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
 
   @Override
   public final synchronized boolean inputsDiscovered() {
-    return !discoversInputs() || inputsDiscovered;
+    return discoversInputs() ? inputsDiscovered : true;
   }
 
   /**
@@ -176,23 +176,19 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   /**
-   * Runs input discovery on the action.
+   * Run input discovery on the action.
    *
    * <p>Called by Blaze if {@link #discoversInputs()} returns true. It must return the set of input
-   * artifacts that were not known at analysis time. May also call {@link #updateInputs}; if it
-   * doesn't, the action itself must arrange for the newly discovered artifacts to be available
-   * during action execution, probably by keeping state in the action instance and using a custom
-   * action execution context and for {@link #updateInputs} to be called during the execution of the
-   * action.
+   * artifacts that were not known at analysis time. May also call {@link
+   * #updateInputs(NestedSet<Artifact>)}; if it doesn't, the action itself must arrange for the
+   * newly discovered artifacts to be available during action execution, probably by keeping state
+   * in the action instance and using a custom action execution context and for {@code
+   * #updateInputs()} to be called during the execution of the action.
    *
-   * <p>Since keeping state within an action is bad, don't do that unless there is a very good
-   * reason to do so.
-   *
-   * <p>May return {@code null} if more dependencies were requested from skyframe but were
-   * unavailable, meaning a restart is necessary.
+   * <p>Since keeping state within an action bad, don't do that unless there is a very good reason
+   * to do so.
    */
   @Override
-  @Nullable
   public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     throw new IllegalStateException("discoverInputs cannot be called for " + this.prettyPrint()
@@ -366,21 +362,8 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
     }
 
     for (Artifact output : getOutputs()) {
-      deleteOutput(output, pathResolver);
+      deleteOutput(pathResolver.toPath(output), output.getRoot());
     }
-  }
-
-  /**
-   * Remove an output artifact.
-   *
-   * <p>If the path refers to a directory, recursively removes the contents of the directory.
-   *
-   * @param output artifact to remove
-   */
-  protected static void deleteOutput(Artifact output, ArtifactPathResolver pathResolver)
-      throws IOException {
-    deleteOutput(
-        pathResolver.toPath(output), pathResolver.transformRoot(output.getRoot().getRoot()));
   }
 
   /**
@@ -392,7 +375,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
    * @param root the root containing the output. This is used to check that we don't delete
    *     arbitrary files in the file system.
    */
-  public static void deleteOutput(Path path, @Nullable Root root) throws IOException {
+  public static void deleteOutput(Path path, @Nullable ArtifactRoot root) throws IOException {
     try {
       // Optimize for the common case: output artifacts are files.
       path.delete();
@@ -400,14 +383,15 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
       // Handle a couple of scenarios where the output can still be deleted, but make sure we're not
       // deleting random files on the filesystem.
       if (root == null) {
-        throw new IOException("null root", e);
+        throw new IOException(e);
       }
-      if (!root.contains(path)) {
-        throw new IOException(String.format("%s not under %s", path, root), e);
+      Root outputRoot = root.getRoot();
+      if (!outputRoot.contains(path)) {
+        throw new IOException(e);
       }
 
       Path parentDir = path.getParentDirectory();
-      if (!parentDir.isWritable() && root.contains(parentDir)) {
+      if (!parentDir.isWritable() && outputRoot.contains(parentDir)) {
         // Retry deleting after making the parent writable.
         parentDir.setWritable(true);
         deleteOutput(path, root);
@@ -493,7 +477,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
 
   @Override
   public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     ActionOwner owner = getOwner();
     ExtraActionInfo.Builder result =
         ExtraActionInfo.newBuilder()
@@ -566,7 +550,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public Sequence<String> getStarlarkArgv() throws EvalException, InterruptedException {
+  public Sequence<String> getStarlarkArgv() throws EvalException {
     return null;
   }
 
@@ -577,7 +561,7 @@ public abstract class AbstractAction extends ActionKeyCacher implements Action, 
   }
 
   @Override
-  public String getStarlarkContent() throws IOException, EvalException, InterruptedException {
+  public String getStarlarkContent() throws IOException, EvalException {
     return null;
   }
 
