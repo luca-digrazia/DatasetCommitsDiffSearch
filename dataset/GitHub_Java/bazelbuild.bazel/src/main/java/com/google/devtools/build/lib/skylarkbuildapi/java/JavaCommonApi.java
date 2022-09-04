@@ -16,12 +16,13 @@ package com.google.devtools.build.lib.skylarkbuildapi.java;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
+import com.google.devtools.build.lib.skylarkbuildapi.TransitiveInfoCollectionApi;
+import com.google.devtools.build.lib.skylarkbuildapi.platform.ToolchainInfoApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -30,8 +31,7 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import javax.annotation.Nullable;
 
 /** Utilities for Java compilation support in Skylark. */
@@ -39,8 +39,6 @@ import javax.annotation.Nullable;
 public interface JavaCommonApi<
     FileT extends FileApi,
     JavaInfoT extends JavaInfoApi<FileT>,
-    JavaToolchainT extends JavaToolchainSkylarkApiProviderApi,
-    JavaRuntimeT extends JavaRuntimeInfoApi,
     SkylarkRuleContextT extends SkylarkRuleContextApi,
     SkylarkActionFactoryT extends SkylarkActionFactoryApi> {
 
@@ -116,7 +114,10 @@ public interface JavaCommonApi<
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = ToolchainInfoApi.class)
+            },
             noneable = true,
             defaultValue = "None",
             doc =
@@ -282,14 +283,20 @@ public interface JavaCommonApi<
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = ToolchainInfoApi.class)
+            },
             doc = "A JavaToolchainInfo to be used for this compilation. Mandatory."),
         @Param(
             name = "host_javabase",
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaRuntimeInfoApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = JavaRuntimeInfoApi.class)
+            },
             doc = "A JavaRuntimeInfo to be used for this compilation. Mandatory."),
         @Param(
             name = "sourcepath",
@@ -326,8 +333,8 @@ public interface JavaCommonApi<
       SkylarkList<JavaInfoT> plugins,
       SkylarkList<JavaInfoT> exportedPlugins,
       String strictDepsMode,
-      JavaToolchainT javaToolchain,
-      JavaRuntimeT hostJavabase,
+      Object javaToolchain,
+      Object hostJavabase,
       SkylarkList<FileT> sourcepathEntries,
       SkylarkList<FileT> resources,
       Boolean neverlink,
@@ -371,7 +378,10 @@ public interface JavaCommonApi<
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = ToolchainInfoApi.class)
+            },
             doc = "A JavaToolchainInfo to used to find the ijar tool."),
       },
       useSkylarkSemantics = true,
@@ -380,9 +390,9 @@ public interface JavaCommonApi<
       SkylarkActionFactoryT actions,
       FileT jar,
       Object targetLabel,
-      JavaToolchainT javaToolchain,
+      Object javaToolchain,
       Location location,
-      StarlarkSemantics semantics)
+      SkylarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(
@@ -421,7 +431,10 @@ public interface JavaCommonApi<
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = ToolchainInfoApi.class)
+            },
             doc = "A JavaToolchainInfo to used to find the stamp_jar tool."),
       },
       useSkylarkSemantics = true,
@@ -430,9 +443,9 @@ public interface JavaCommonApi<
       SkylarkActionFactoryT actions,
       FileT jar,
       Label targetLabel,
-      JavaToolchainT javaToolchain,
+      Object javaToolchain,
       Location location,
-      StarlarkSemantics semantics)
+      SkylarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(
@@ -475,14 +488,20 @@ public interface JavaCommonApi<
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = ToolchainInfoApi.class)
+            },
             doc = "A JavaToolchainInfo to used to find the ijar tool."),
         @Param(
             name = "host_javabase",
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaRuntimeInfoApi.class)},
+            allowedTypes = {
+              @ParamType(type = TransitiveInfoCollectionApi.class),
+              @ParamType(type = JavaRuntimeInfoApi.class)
+            },
             doc = "A JavaRuntimeInfo to be used for packing sources."),
       },
       allowReturnNones = true,
@@ -493,10 +512,10 @@ public interface JavaCommonApi<
       FileT outputJar,
       SkylarkList<FileT> sourceFiles,
       SkylarkList<FileT> sourceJars,
-      JavaToolchainT javaToolchain,
-      JavaRuntimeT hostJavabase,
+      Object javaToolchain,
+      Object hostJavabase,
       Location location,
-      StarlarkSemantics semantics)
+      SkylarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(
@@ -505,19 +524,44 @@ public interface JavaCommonApi<
       documented = false,
       parameters = {
         @Param(
+            name = "ctx",
+            positional = true,
+            named = false,
+            type = Object.class,
+            allowedTypes = {@ParamType(type = SkylarkRuleContextApi.class)},
+            noneable = true,
+            defaultValue = "None",
+            doc = "The rule context."),
+        @Param(
+            name = "java_toolchain_attr",
+            positional = false,
+            named = true,
+            type = Object.class,
+            allowedTypes = {@ParamType(type = String.class)},
+            noneable = true,
+            defaultValue = "None"),
+        @Param(
             name = "java_toolchain",
             positional = false,
             named = true,
             type = Object.class,
-            allowedTypes = {@ParamType(type = JavaToolchainSkylarkApiProviderApi.class)},
+            allowedTypes = {@ParamType(type = ToolchainInfoApi.class)},
+            noneable = true,
+            defaultValue = "None",
             doc =
                 "A JavaToolchainInfo to be used for retrieving the ijar "
                     + "tool. Only set when use_ijar is True."),
       },
+      useSkylarkSemantics = true,
       useLocation = true)
   // TODO(b/78512644): migrate callers to passing explicit javacopts or using custom toolchains, and
   // delete
-  public ImmutableList<String> getDefaultJavacOpts(JavaToolchainT javaToolchain, Location loc)
+  public ImmutableList<String> getDefaultJavacOpts(
+      Object skylarkRuleContext,
+      Object javaToolchainAttr,
+      Object javaToolchain,
+      Location loc,
+      SkylarkSemantics semantics)
       throws EvalException;
 
   @SkylarkCallable(
@@ -576,106 +620,6 @@ public interface JavaCommonApi<
             type = SkylarkRuleContextApi.class,
             doc = "The rule context."),
       },
-      doc = "Returns true if --incompatible_use_toolchain_resolution_for_java_rules is enabled.")
+      doc = "Returns true if --experimental_use_toolchain_resolution_for_java_rules is enabled.")
   boolean isJavaToolchainResolutionEnabled(SkylarkRuleContextT ruleContext) throws EvalException;
-
-  @SkylarkCallable(
-      name = "MessageBundleInfo",
-      doc = "The provider used to supply message bundles for translation",
-      structField = true,
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public ProviderApi getMessageBundleInfo();
-
-  @SkylarkCallable(
-      name = "add_constraints",
-      doc = "Returns a copy of the given JavaInfo with the given constraints added.",
-      parameters = {
-        @Param(
-            name = "java_info",
-            positional = true,
-            named = false,
-            type = JavaInfoApi.class,
-            doc = "The JavaInfo to enhance."),
-        @Param(
-            name = "constraints",
-            type = SkylarkList.class,
-            generic1 = String.class,
-            named = true,
-            positional = false,
-            defaultValue = "[]",
-            doc = "Constraints to add")
-      },
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public JavaInfoT addConstraints(JavaInfoT javaInfo, SkylarkList<String> constraints);
-
-  @SkylarkCallable(
-      name = "experimental_disable_annotation_processing",
-      doc =
-          "Returns a copy of the given JavaInfo with any provided annotation processors disabled."
-              + " Annotation processor classpaths are preserved in case they contain Error Prone"
-              + " plugins, but processor names and data are excluded. For example, it can be"
-              + " used to process the inputs to java_common.compile's deps and plugins parameters.",
-      parameters = {
-        @Param(
-            name = "java_info",
-            positional = true,
-            named = false,
-            type = JavaInfoApi.class,
-            doc = "The JavaInfo to process.")
-      },
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public JavaInfoT removeAnnotationProcessors(JavaInfoT javaInfo);
-
-  @SkylarkCallable(
-      name = "compile_time_jdeps",
-      doc = "Returns a depset of the given JavaInfo's compile-time jdeps files.",
-      parameters = {
-        @Param(
-            name = "java_info",
-            positional = true,
-            named = false,
-            type = JavaInfoApi.class,
-            doc = "The JavaInfo to query."),
-      },
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public NestedSet<FileT> getCompileTimeJavaDependencyArtifacts(JavaInfoT javaInfo);
-
-  @SkylarkCallable(
-      name = "add_compile_time_jdeps",
-      doc = "Returns a copy of the given JavaInfo with the given compile-time jdeps files added.",
-      parameters = {
-        @Param(
-            name = "java_info",
-            positional = true,
-            named = false,
-            type = JavaInfoApi.class,
-            doc = "The JavaInfo to clone."),
-        @Param(
-            name = "compile_time_jdeps",
-            type = SkylarkList.class,
-            generic1 = FileApi.class,
-            named = true,
-            positional = false,
-            defaultValue = "[]",
-            doc = "Compile-time jdeps files to add.")
-      },
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public JavaInfoT addCompileTimeJavaDependencyArtifacts(
-      JavaInfoT javaInfo, SkylarkList<FileT> compileTimeJavaDependencyArtifacts);
-
-  @SkylarkCallable(
-      name = "java_toolchain_label",
-      doc = "Returns the toolchain's label.",
-      parameters = {
-        @Param(
-            name = "java_toolchain",
-            positional = true,
-            named = false,
-            type = JavaToolchainSkylarkApiProviderApi.class,
-            doc = "The toolchain."),
-      },
-      useLocation = true,
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  public Label getJavaToolchainLabel(
-      JavaToolchainSkylarkApiProviderApi toolchain, Location location) throws EvalException;
 }
