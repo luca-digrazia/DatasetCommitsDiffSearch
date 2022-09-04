@@ -16,9 +16,9 @@ package com.google.devtools.build.lib.rules.java;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import java.util.List;
 
-// TODO(cushon): delete this class, see discussion in cl/193146318
 @AutoValue
 abstract class JavaCompilationArgsHelper {
   abstract boolean recursive();
@@ -31,15 +31,24 @@ abstract class JavaCompilationArgsHelper {
 
   abstract List<JavaCompilationArgsProvider> depsCompilationArgs();
 
+  abstract Iterable<? extends TransitiveInfoCollection> deps();
+
   abstract List<JavaCompilationArgsProvider> runtimeDepsCompilationArgs();
 
+  abstract Iterable<? extends TransitiveInfoCollection> runtimeDeps();
+
   abstract List<JavaCompilationArgsProvider> exportsCompilationArgs();
+
+  abstract Iterable<? extends TransitiveInfoCollection> exports();
 
   static Builder builder() {
     return new AutoValue_JavaCompilationArgsHelper.Builder()
         .setDepsCompilationArgs(ImmutableList.of())
+        .setDeps(ImmutableList.of())
         .setRuntimeDepsCompilationArgs(ImmutableList.of())
-        .setExportsCompilationArgs(ImmutableList.of());
+        .setRuntimeDeps(ImmutableList.of())
+        .setExportsCompilationArgs(ImmutableList.of())
+        .setExports(ImmutableList.of());
   }
 
   public abstract Builder toBuilder();
@@ -56,9 +65,15 @@ abstract class JavaCompilationArgsHelper {
 
     abstract Builder setDepsCompilationArgs(List<JavaCompilationArgsProvider> value);
 
+    abstract Builder setDeps(Iterable<? extends TransitiveInfoCollection> value);
+
     abstract Builder setRuntimeDepsCompilationArgs(List<JavaCompilationArgsProvider> value);
 
+    abstract Builder setRuntimeDeps(Iterable<? extends TransitiveInfoCollection> value);
+
     abstract Builder setExportsCompilationArgs(List<JavaCompilationArgsProvider> value);
+
+    abstract Builder setExports(Iterable<? extends TransitiveInfoCollection> value);
 
     abstract JavaCompilationArgsHelper build();
   }

@@ -297,17 +297,6 @@ public final class JavaInfo extends NativeInfo {
 
   private final TransitiveInfoProviderMap providers;
 
-  /*
-   * Contains the .jar files to be put on the runtime classpath by the configured target.
-   * <p>Unlike {@link JavaCompilationArgs#getRuntimeJars()}, it does not contain transitive runtime
-   * jars, only those produced by the configured target itself.
-   *
-   * <p>The reason why this field exists is that neverlink libraries do not contain the compiled jar
-   * in {@link JavaCompilationArgs#getRuntimeJars()} and those are sometimes needed, for example,
-   * for Proguarding (the compile time classpath is not enough because that contains only ijars)
-  */
-  private final ImmutableList<Artifact> directRuntimeJars;
-
   // Whether or not this library should be used only for compilation and not at runtime.
   private final boolean neverlink;
 
@@ -409,10 +398,6 @@ public final class JavaInfo extends NativeInfo {
     return javaInfo.getProvider(providerClass);
   }
 
-  public static JavaInfo getJavaInfo(TransitiveInfoCollection target) {
-    return (JavaInfo) target.get(JavaInfo.PROVIDER.getKey());
-  }
-
   public static <T extends TransitiveInfoProvider> T getProvider(
       Class<T> providerClass, TransitiveInfoProviderMap providerMap) {
     T provider = providerMap.getProvider(providerClass);
@@ -457,13 +442,8 @@ public final class JavaInfo extends NativeInfo {
 
   @VisibleForSerialization
   @AutoCodec.Instantiator
-  JavaInfo(
-      TransitiveInfoProviderMap providers,
-      ImmutableList<Artifact> directRuntimeJars,
-      boolean neverlink,
-      Location location) {
+  JavaInfo(TransitiveInfoProviderMap providers, boolean neverlink, Location location) {
     super(PROVIDER, location);
-    this.directRuntimeJars = directRuntimeJars;
     this.providers = providers;
     this.neverlink = neverlink;
   }
@@ -506,7 +486,8 @@ public final class JavaInfo extends NativeInfo {
     NestedSet<Artifact> compileTimeJars =
         getProviderAsNestedSet(
             JavaCompilationArgsProvider.class,
-            JavaCompilationArgsProvider::getDirectCompileTimeJars);
+            JavaCompilationArgsProvider::getJavaCompilationArgs,
+            JavaCompilationArgs::getCompileTimeJars);
     return SkylarkNestedSet.of(Artifact.class, compileTimeJars);
   }
 
@@ -523,7 +504,9 @@ public final class JavaInfo extends NativeInfo {
   public SkylarkNestedSet getFullCompileTimeJars() {
     NestedSet<Artifact> fullCompileTimeJars =
         getProviderAsNestedSet(
-            JavaCompilationArgsProvider.class, JavaCompilationArgsProvider::getFullCompileTimeJars);
+            JavaCompilationArgsProvider.class,
+            JavaCompilationArgsProvider::getJavaCompilationArgs,
+            JavaCompilationArgs::getFullCompileTimeJars);
     return SkylarkNestedSet.of(Artifact.class, fullCompileTimeJars);
   }
 
@@ -573,10 +556,6 @@ public final class JavaInfo extends NativeInfo {
     return getProvider(JavaCompilationInfoProvider.class);
   }
 
-  public ImmutableList<Artifact> getDirectRuntimeJars() {
-    return directRuntimeJars;
-  }
-
   @SkylarkCallable(
     name = "transitive_deps",
     doc = "Returns the transitive set of Jars required to build the target.",
@@ -585,7 +564,8 @@ public final class JavaInfo extends NativeInfo {
   public NestedSet<Artifact> getTransitiveDeps() {
     return getProviderAsNestedSet(
         JavaCompilationArgsProvider.class,
-        JavaCompilationArgsProvider::getTransitiveCompileTimeJars);
+        JavaCompilationArgsProvider::getRecursiveJavaCompilationArgs,
+        JavaCompilationArgs::getCompileTimeJars);
   }
 
   @SkylarkCallable(
@@ -595,7 +575,9 @@ public final class JavaInfo extends NativeInfo {
   )
   public NestedSet<Artifact> getTransitiveRuntimeDeps() {
     return getProviderAsNestedSet(
-        JavaCompilationArgsProvider.class, JavaCompilationArgsProvider::getRuntimeJars);
+        JavaCompilationArgsProvider.class,
+        JavaCompilationArgsProvider::getRecursiveJavaCompilationArgs,
+        JavaCompilationArgs::getRuntimeJars);
   }
 
   @SkylarkCallable(
@@ -645,6 +627,21 @@ public final class JavaInfo extends NativeInfo {
     return mapper.apply(provider);
   }
 
+  /**
+   * The same as {@link JavaInfo#getProviderAsNestedSet(Class, Function)}, but uses
+   * sequence of two mappers.
+   *
+   * @see JavaInfo#getProviderAsNestedSet(Class, Function)
+   */
+  private <P extends TransitiveInfoProvider, S extends SkylarkValue, V>
+      NestedSet<S> getProviderAsNestedSet(
+          Class<P> providerClass,
+          Function<P, V> firstMapper,
+          Function<V, NestedSet<S>> secondMapper) {
+    return getProviderAsNestedSet(providerClass, firstMapper.andThen(secondMapper));
+  }
+
+
   @Override
   public boolean equals(Object otherObject) {
     if (this == otherObject) {
@@ -668,7 +665,6 @@ public final class JavaInfo extends NativeInfo {
    */
   public static class Builder {
     TransitiveInfoProviderMapBuilder providerMap;
-    private ImmutableList<Artifact> runtimeJars;
     private boolean neverlink;
     private Location location = Location.BUILTIN;
 
@@ -677,18 +673,12 @@ public final class JavaInfo extends NativeInfo {
     }
 
     public static Builder create() {
-      return new Builder(new TransitiveInfoProviderMapBuilder())
-          .setRuntimeJars(ImmutableList.of());
+      return new Builder(new TransitiveInfoProviderMapBuilder());
     }
 
     public static Builder copyOf(JavaInfo javaInfo) {
       return new Builder(
           new TransitiveInfoProviderMapBuilder().addAll(javaInfo.getProviders()));
-    }
-
-    public Builder setRuntimeJars(ImmutableList<Artifact> runtimeJars) {
-      this.runtimeJars = runtimeJars;
-      return this;
     }
 
     public Builder setNeverlink(boolean neverlink) {
@@ -709,7 +699,7 @@ public final class JavaInfo extends NativeInfo {
     }
 
     public JavaInfo build() {
-      return new JavaInfo(providerMap.build(), runtimeJars, neverlink, location);
+      return new JavaInfo(providerMap.build(), neverlink, location);
     }
   }
 }

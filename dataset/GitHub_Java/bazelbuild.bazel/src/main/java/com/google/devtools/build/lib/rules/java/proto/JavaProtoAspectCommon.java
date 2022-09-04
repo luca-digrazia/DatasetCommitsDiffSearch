@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDe
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaLibraryHelper;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -130,11 +129,7 @@ public class JavaProtoAspectCommon {
             .setOutput(outputJar)
             .addSourceJars(sourceJar)
             .setJavacOpts(ProtoJavacOpts.constructJavacOpts(ruleContext));
-    if (ruleContext.getFragment(JavaConfiguration.class).isProtoGeneratedStrictDeps()) {
-      helper.addDep(dep).setCompilationStrictDepsMode(StrictDepsMode.ERROR);
-    } else {
-      helper.addDep(dep).setCompilationStrictDepsMode(StrictDepsMode.OFF);
-    }
+    helper.addDep(dep).setCompilationStrictDepsMode(StrictDepsMode.OFF);
     for (TransitiveInfoCollection t : getProtoRuntimeDeps()) {
       JavaCompilationArgsProvider provider =
             JavaInfo.getProvider(JavaCompilationArgsProvider.class, t);
