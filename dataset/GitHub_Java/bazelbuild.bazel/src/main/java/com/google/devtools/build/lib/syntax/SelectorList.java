@@ -17,12 +17,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * An attribute value consisting of a concatenation of native types and selects, e.g:
@@ -41,12 +39,9 @@ import java.util.Objects;
  *   )
  * </pre>
  */
-@SkylarkModule(
-  name = "select",
-  doc = "A selector between configuration-dependent entities.",
-  documented = false
-)
-@AutoCodec
+@SkylarkModule(name = "select",
+    doc = "A selector between configuration-dependent entities.",
+    documented = false)
 public final class SelectorList implements SkylarkValue {
   // TODO(build-team): Selectors are currently split between .packages and .syntax . They should
   // really all be in .packages, but then we'd need to figure out a way how to extend binary
@@ -54,8 +49,7 @@ public final class SelectorList implements SkylarkValue {
   private final Class<?> type;
   private final List<Object> elements;
 
-  @AutoCodec.VisibleForSerialization
-  SelectorList(Class<?> type, List<Object> elements) {
+  private SelectorList(Class<?> type, List<Object> elements) {
     this.type = type;
     this.elements = elements;
   }
@@ -172,22 +166,5 @@ public final class SelectorList implements SkylarkValue {
   @Override
   public void repr(SkylarkPrinter printer) {
     printer.printList(elements, "", " + ", "", null);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(type, elements);
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    if (this == other) {
-      return true;
-    }
-    if (!(other instanceof SelectorList)) {
-      return false;
-    }
-    SelectorList that = (SelectorList) other;
-    return Objects.equals(this.type, that.type) && Objects.equals(this.elements, that.elements);
   }
 }
