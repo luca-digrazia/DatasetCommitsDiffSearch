@@ -8,7 +8,6 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.common.model.ResourceExceptionMapper;
-import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveAsyncExceptionMapper;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveExceptionMapper;
 
 public class ExceptionMapping {
@@ -18,36 +17,26 @@ public class ExceptionMapping {
     private final Map<Class<? extends Throwable>, ResourceExceptionMapper<? extends Throwable>> mappers = new HashMap<>();
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    public void mapException(Throwable throwable, ResteasyReactiveRequestContext context) {
+    public Response mapException(Throwable throwable, ResteasyReactiveRequestContext context) {
         Class<?> klass = throwable.getClass();
         boolean isWebApplicationException = throwable instanceof WebApplicationException;
         Response response = null;
         if (isWebApplicationException) {
             response = ((WebApplicationException) throwable).getResponse();
         }
-        if (response != null && response.hasEntity()) {
-            context.setResult(response);
-            return;
-        }
-
+        if (response != null && response.hasEntity())
+            return response;
         // we match superclasses only if not a WebApplicationException according to spec 3.3.4 Exceptions
         ExceptionMapper exceptionMapper = getExceptionMapper((Class<Throwable>) klass, context);
         if (exceptionMapper != null) {
-            if (exceptionMapper instanceof ResteasyReactiveAsyncExceptionMapper) {
-                ((ResteasyReactiveAsyncExceptionMapper) exceptionMapper).asyncResponse(throwable,
-                        new AsyncExceptionMapperContextImpl(context));
-                return;
-            } else if (exceptionMapper instanceof ResteasyReactiveExceptionMapper) {
-                response = ((ResteasyReactiveExceptionMapper) exceptionMapper).toResponse(throwable, context);
-            } else {
-                response = exceptionMapper.toResponse(throwable);
+            if (exceptionMapper instanceof ResteasyReactiveExceptionMapper) {
+                return ((ResteasyReactiveExceptionMapper) exceptionMapper).toResponse(throwable, context);
             }
-            context.setResult(response);
-            return;
+            return exceptionMapper.toResponse(throwable);
         }
         if (isWebApplicationException) {
-            context.setResult(response);
-            return;
+            // FIXME: can response be null?
+            return response;
         }
         if (throwable instanceof IOException) {
             log.debugf(throwable,
@@ -57,7 +46,7 @@ public class ExceptionMapping {
             log.error("Request failed ", throwable);
         }
         // FIXME: configurable? stack trace?
-        context.setResult(Response.serverError().build());
+        return Response.serverError().build();
     }
 
     /**

@@ -27,6 +27,7 @@ import org.jboss.resteasy.reactive.common.ResteasyReactiveConfig;
 import org.jboss.resteasy.reactive.common.model.MethodParameter;
 import org.jboss.resteasy.reactive.common.model.ParameterType;
 import org.jboss.resteasy.reactive.common.model.ResourceClass;
+import org.jboss.resteasy.reactive.common.model.ResourceMethod;
 import org.jboss.resteasy.reactive.common.util.QuarkusMultivaluedHashMap;
 import org.jboss.resteasy.reactive.common.util.ServerMediaType;
 import org.jboss.resteasy.reactive.common.util.types.TypeSignatureParser;
@@ -72,13 +73,12 @@ import org.jboss.resteasy.reactive.server.handlers.VariableProducesHandler;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.mapping.URITemplate;
 import org.jboss.resteasy.reactive.server.model.ServerMethodParameter;
-import org.jboss.resteasy.reactive.server.model.ServerResourceMethod;
-import org.jboss.resteasy.reactive.server.spi.EndpointInvoker;
-import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveResourceInfo;
-import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
+import org.jboss.resteasy.reactive.server.spi.LazyMethod;
+import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveMessageBodyWriter;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 import org.jboss.resteasy.reactive.server.util.ScoreSystem;
 import org.jboss.resteasy.reactive.spi.BeanFactory;
+import org.jboss.resteasy.reactive.spi.EndpointInvoker;
 
 public class RuntimeResourceDeployment {
 
@@ -107,7 +107,7 @@ public class RuntimeResourceDeployment {
     }
 
     public RuntimeResource buildResourceMethod(ResourceClass clazz,
-            ServerResourceMethod method, boolean locatableResource, URITemplate classPathTemplate) {
+            ResourceMethod method, boolean locatableResource, URITemplate classPathTemplate) {
         RuntimeInterceptorDeployment.MethodInterceptorContext interceptorDeployment = runtimeInterceptorDeployment
                 .forMethod(clazz, method);
         URITemplate methodPathTemplate = new URITemplate(method.getPath(), false);
@@ -183,8 +183,7 @@ public class RuntimeResourceDeployment {
         }
 
         Class<Object> resourceClass = loadClass(clazz.getClassName());
-        ResteasyReactiveResourceInfo lazyMethod = new ResteasyReactiveResourceInfo(method.getName(), resourceClass,
-                parameterTypes, method.getMethodAnnotationNames());
+        LazyMethod lazyMethod = new LazyMethod(method.getName(), resourceClass, parameterTypes);
 
         for (int i = 0; i < parameters.length; i++) {
             ServerMethodParameter param = (ServerMethodParameter) parameters[i];
@@ -276,7 +275,7 @@ public class RuntimeResourceDeployment {
                             MessageBodyWriter<?> writer = buildTimeWriters.get(0);
                             handlers.add(new FixedProducesHandler(mediaType, new FixedEntityWriter(
                                     writer, serialisers)));
-                            if (writer instanceof ServerMessageBodyWriter)
+                            if (writer instanceof ResteasyReactiveMessageBodyWriter)
                                 score.add(ScoreSystem.Category.Writer,
                                         ScoreSystem.Diagnostic.WriterBuildTimeDirect(writer));
                             else

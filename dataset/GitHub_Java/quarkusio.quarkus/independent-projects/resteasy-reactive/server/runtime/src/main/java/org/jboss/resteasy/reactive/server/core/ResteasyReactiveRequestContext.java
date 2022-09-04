@@ -29,27 +29,25 @@ import org.jboss.resteasy.reactive.common.util.EmptyInputStream;
 import org.jboss.resteasy.reactive.common.util.Encode;
 import org.jboss.resteasy.reactive.common.util.PathSegmentImpl;
 import org.jboss.resteasy.reactive.server.core.serialization.EntityWriter;
-import org.jboss.resteasy.reactive.server.injection.ResteasyReactiveInjectionContext;
+import org.jboss.resteasy.reactive.server.injection.QuarkusRestInjectionContext;
 import org.jboss.resteasy.reactive.server.jaxrs.AsyncResponseImpl;
 import org.jboss.resteasy.reactive.server.jaxrs.ContainerRequestContextImpl;
 import org.jboss.resteasy.reactive.server.jaxrs.ContainerResponseContextImpl;
 import org.jboss.resteasy.reactive.server.jaxrs.HttpHeadersImpl;
 import org.jboss.resteasy.reactive.server.jaxrs.ProvidersImpl;
+import org.jboss.resteasy.reactive.server.jaxrs.QuarkusRestSseEventSink;
 import org.jboss.resteasy.reactive.server.jaxrs.RequestImpl;
-import org.jboss.resteasy.reactive.server.jaxrs.SseEventSinkImpl;
 import org.jboss.resteasy.reactive.server.jaxrs.UriInfoImpl;
 import org.jboss.resteasy.reactive.server.mapping.RuntimeResource;
 import org.jboss.resteasy.reactive.server.mapping.URITemplate;
-import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveResourceInfo;
 import org.jboss.resteasy.reactive.server.spi.ServerHttpRequest;
 import org.jboss.resteasy.reactive.server.spi.ServerHttpResponse;
-import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
 public abstract class ResteasyReactiveRequestContext
         extends AbstractResteasyReactiveContext<ResteasyReactiveRequestContext, ServerRestHandler>
-        implements Closeable, ResteasyReactiveInjectionContext, ServerRequestContext {
+        implements Closeable, QuarkusRestInjectionContext {
 
     public static final Object[] EMPTY_ARRAY = new Object[0];
     protected final Deployment deployment;
@@ -126,7 +124,7 @@ public abstract class ResteasyReactiveRequestContext
     private List<UriMatch> matchedURIs;
 
     private AsyncResponseImpl asyncResponse;
-    private SseEventSinkImpl sseEventSink;
+    private QuarkusRestSseEventSink sseEventSink;
     private List<PathSegment> pathSegments;
     private ReaderInterceptor[] readerInterceptors;
     private WriterInterceptor[] writerInterceptors;
@@ -448,7 +446,6 @@ public abstract class ResteasyReactiveRequestContext
      * explicit content type then this is used, otherwise it returns any content type
      * that has been explicitly set.
      */
-    @Override
     public EncodedMediaType getResponseContentType() {
         if (response != null) {
             if (response.isCreated()) {
@@ -461,8 +458,7 @@ public abstract class ResteasyReactiveRequestContext
         return responseContentType;
     }
 
-    @Override
-    public MediaType getResponseMediaType() {
+    public MediaType getResponseContentMediaType() {
         EncodedMediaType resp = getResponseContentType();
         if (resp == null) {
             return null;
@@ -661,11 +657,11 @@ public abstract class ResteasyReactiveRequestContext
         return this;
     }
 
-    public SseEventSinkImpl getSseEventSink() {
+    public QuarkusRestSseEventSink getSseEventSink() {
         return sseEventSink;
     }
 
-    public void setSseEventSink(SseEventSinkImpl sseEventSink) {
+    public void setSseEventSink(QuarkusRestSseEventSink sseEventSink) {
         this.sseEventSink = sseEventSink;
     }
 
@@ -855,11 +851,6 @@ public abstract class ResteasyReactiveRequestContext
             return outputStream = underlyingOutputStream = serverResponse().createResponseOutputStream();
         }
         return outputStream;
-    }
-
-    @Override
-    public ResteasyReactiveResourceInfo getResteasyReactiveResourceInfo() {
-        return target == null ? null : target.getLazyMethod();
     }
 
     @Override

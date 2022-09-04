@@ -11,17 +11,17 @@ import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveContainerRequestCo
 
 import io.quarkus.qute.TemplateInstance;
 import io.quarkus.qute.Variant;
-import io.smallrye.mutiny.Uni;
 
 public class TemplateResponseFilter {
 
     @ServerResponseFilter
-    public Uni<Void> filter(ResteasyReactiveContainerRequestContext requestContext, ContainerResponseContext responseContext) {
+    public void filter(ResteasyReactiveContainerRequestContext requestContext, ContainerResponseContext responseContext) {
         Object entity = responseContext.getEntity();
         if (!(entity instanceof TemplateInstance)) {
-            return null;
+            return;
         }
 
+        requestContext.suspend();
         MediaType mediaType;
         TemplateInstance instance = (TemplateInstance) entity;
         Object variantsAttr = instance.getAttribute(TemplateInstance.VARIANTS);
@@ -46,13 +46,24 @@ public class TemplateResponseFilter {
             mediaType = null;
         }
 
-        return instance.createUni().chain(r -> {
-            if (mediaType != null) {
-                responseContext.setEntity(r, null, mediaType);
-            } else {
-                responseContext.setEntity(r);
-            }
-            return Uni.createFrom().nullItem();
-        });
+        try {
+            instance.renderAsync()
+                    .whenComplete((r, t) -> {
+                        if (t == null) {
+                            // make sure we avoid setting a null media type because that causes
+                            // an NPE further down
+                            if (mediaType != null) {
+                                responseContext.setEntity(r, null, mediaType);
+                            } else {
+                                responseContext.setEntity(r);
+                            }
+                            requestContext.resume();
+                        } else {
+                            requestContext.resume(t);
+                        }
+                    });
+        } catch (Throwable t) {
+            requestContext.resume(t);
+        }
     }
 }
