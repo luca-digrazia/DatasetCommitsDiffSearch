@@ -54,7 +54,7 @@ public class GELFUDPInput extends GELFInputBase {
 
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                        .setNameFormat("input-" + getId() + "-gelfudp-worker-%d")
+                        .setNameFormat("input-" + inputId + "-gelfudp-worker-%d")
                         .build());
 
         bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
