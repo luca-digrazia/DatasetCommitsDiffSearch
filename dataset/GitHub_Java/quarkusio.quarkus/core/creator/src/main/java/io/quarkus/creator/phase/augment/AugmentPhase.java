@@ -38,7 +38,6 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
 
 import io.quarkus.bootstrap.BootstrapDependencyProcessingException;
-import io.quarkus.bootstrap.DefineClassVisibleURLClassLoader;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.util.IoUtils;
@@ -235,7 +234,7 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
         else {
             //if we use gradle we copy the configDir contents to appClassesDir
             try {
-                if (Files.exists(configDir) && !Files.isSameFile(configDir, appClassesDir)) {
+                if (!Files.isSameFile(configDir, appClassesDir)) {
                     Files.walkFileTree(configDir,
                             new CopyDirVisitor(configDir, appClassesDir, StandardCopyOption.REPLACE_EXISTING));
                 }
@@ -289,8 +288,7 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                 cpUrls.add(resolvedDep.toUri().toURL());
             }
 
-            runnerClassLoader = new DefineClassVisibleURLClassLoader(cpUrls.toArray(new URL[cpUrls.size()]),
-                    getClass().getClassLoader());
+            runnerClassLoader = new URLClassLoader(cpUrls.toArray(new URL[cpUrls.size()]), getClass().getClassLoader());
 
             final Path wiringClassesDirectory = wiringClassesDir;
             ClassOutput classOutput = new ClassOutput() {
