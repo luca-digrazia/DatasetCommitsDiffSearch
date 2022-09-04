@@ -13,9 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-import static com.google.common.collect.Streams.stream;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -33,7 +30,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -105,7 +101,7 @@ public class CommandLines {
    */
   public ExpandedCommandLines expand(
       ArtifactExpander artifactExpander, PathFragment paramFileBasePath, CommandLineLimits limits)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     return expand(artifactExpander, paramFileBasePath, limits, PARAM_FILE_ARG_LENGTH_ESTIMATE);
   }
 
@@ -115,8 +111,7 @@ public class CommandLines {
    * <p>Suitable for debugging and printing messages to users. This expands all command lines, so it
    * is potentially expensive.
    */
-  public ImmutableList<String> allArguments()
-      throws CommandLineExpansionException, InterruptedException {
+  public ImmutableList<String> allArguments() throws CommandLineExpansionException {
     ImmutableList.Builder<String> arguments = ImmutableList.builder();
     for (CommandLineAndParamFileInfo pair : getCommandLines()) {
       arguments.addAll(pair.commandLine.arguments());
@@ -130,7 +125,7 @@ public class CommandLines {
       PathFragment paramFileBasePath,
       CommandLineLimits limits,
       int paramFileArgLengthEstimate)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     // Optimize for simple case of single command line
     if (commandLines instanceof CommandLine) {
       CommandLine commandLine = (CommandLine) commandLines;
@@ -173,50 +168,31 @@ public class CommandLines {
                   paramFileInfo.getFlagFormatString(), paramFileExecPath.getPathString());
           arguments.addElement(paramArg);
           cmdLineLength += paramArg.length() + 1;
-
-          if (paramFileInfo.flagsOnly()) {
-            // Move just the flags into the file, and keep the positional parameters on the command
-            // line.
-            paramFiles.add(
-                new ParamFileActionInput(
-                    paramFileExecPath,
-                    ParameterFile.flagsOnly(args),
-                    paramFileInfo.getFileType(),
-                    paramFileInfo.getCharset()));
-            for (String positionalArg : ParameterFile.nonFlags(args)) {
-              arguments.addElement(positionalArg);
-              cmdLineLength += positionalArg.length() + 1;
-            }
-          } else {
-            paramFiles.add(
-                new ParamFileActionInput(
-                    paramFileExecPath,
-                    args,
-                    paramFileInfo.getFileType(),
-                    paramFileInfo.getCharset()));
-          }
+          paramFiles.add(
+              new ParamFileActionInput(
+                  paramFileExecPath,
+                  args,
+                  paramFileInfo.getFileType(),
+                  paramFileInfo.getCharset()));
         }
       }
     }
     return new ExpandedCommandLines(arguments.build(), paramFiles);
   }
 
-  public void addToFingerprint(
-      ActionKeyContext actionKeyContext,
-      @Nullable ArtifactExpander artifactExpander,
-      Fingerprint fingerprint)
-      throws CommandLineExpansionException, InterruptedException {
+  public void addToFingerprint(ActionKeyContext actionKeyContext, Fingerprint fingerprint)
+      throws CommandLineExpansionException {
     // Optimize for simple case of single command line
     if (commandLines instanceof CommandLine) {
       CommandLine commandLine = (CommandLine) commandLines;
-      commandLine.addToFingerprint(actionKeyContext, artifactExpander, fingerprint);
+      commandLine.addToFingerprint(actionKeyContext, fingerprint);
       return;
     }
     List<CommandLineAndParamFileInfo> commandLines = getCommandLines();
     for (CommandLineAndParamFileInfo pair : commandLines) {
       CommandLine commandLine = pair.commandLine;
       ParamFileInfo paramFileInfo = pair.paramFileInfo;
-      commandLine.addToFingerprint(actionKeyContext, artifactExpander, fingerprint);
+      commandLine.addToFingerprint(actionKeyContext, fingerprint);
       if (paramFileInfo != null) {
         addParamFileInfoToFingerprint(paramFileInfo, fingerprint);
       }
@@ -267,18 +243,6 @@ public class CommandLines {
       this.arguments = arguments;
       this.type = type;
       this.charset = charset;
-    }
-
-    /**
-     * Returns a cloned copy of this {@link ParamFileActionInput} replacing each command line
-     * argument with an adjusted version determined by a given function.
-     */
-    public ParamFileActionInput withAdjustedArgs(Function<String, String> adjuster) {
-      return new ParamFileActionInput(
-          paramFileExecPath,
-          stream(arguments).map(adjuster).collect(toImmutableList()),
-          type,
-          charset);
     }
 
     @Override
