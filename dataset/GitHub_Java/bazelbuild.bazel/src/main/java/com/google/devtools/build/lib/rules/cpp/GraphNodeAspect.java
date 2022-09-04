@@ -22,11 +22,14 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
+import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -63,15 +66,21 @@ public final class GraphNodeAspect extends NativeAspectClass implements Configur
       AspectParameters params,
       String toolsRepository)
       throws ActionConflictException {
+    List<Label> linkedStaticallyBy = null;
     ImmutableList.Builder<GraphNodeInfo> children = ImmutableList.builder();
     if (ruleContext.attributes().has("deps")) {
       children.addAll(
           AnalysisUtils.getProviders(
               ruleContext.getPrerequisites("deps", Mode.TARGET), GraphNodeInfo.class));
     }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("linked_statically_by")) {
+      linkedStaticallyBy =
+          ruleContext.attributes().get("linked_statically_by", BuildType.NODEP_LABEL_LIST);
+    }
     return new ConfiguredAspect.Builder(this, params, ruleContext)
         .addProvider(
-            GraphNodeInfo.class, new GraphNodeInfo(ruleContext.getLabel(), children.build()))
+            GraphNodeInfo.class,
+            new GraphNodeInfo(ruleContext.getLabel(), linkedStaticallyBy, children.build()))
         .build();
   }
 }
