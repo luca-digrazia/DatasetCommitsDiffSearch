@@ -6,11 +6,9 @@ import java.net.URISyntaxException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 
@@ -27,9 +25,6 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.ResponseBuilder;
 import javax.ws.rs.core.Variant;
 
-import io.quarkus.rest.runtime.QuarkusRestRecorder;
-import io.quarkus.rest.runtime.core.QuarkusRestDeployment;
-import io.quarkus.rest.runtime.util.CaseInsensitiveMap;
 import io.quarkus.rest.runtime.util.HeaderHelper;
 import io.quarkus.rest.runtime.util.HttpHeaderNames;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
@@ -37,108 +32,25 @@ import io.vertx.core.http.HttpServerRequest;
 
 public class QuarkusRestResponseBuilder extends ResponseBuilder {
 
-    private static final Map<Integer, String> defaultReasonPhrases = new HashMap<>();
-    static {
-        defaultReasonPhrases.put(200, "OK");
-        defaultReasonPhrases.put(201, "Created");
-        defaultReasonPhrases.put(202, "Accepted");
-        defaultReasonPhrases.put(204, "No Content");
-        defaultReasonPhrases.put(205, "Reset Content");
-        defaultReasonPhrases.put(206, "Partial Content");
-        defaultReasonPhrases.put(301, "Moved Permanently");
-        defaultReasonPhrases.put(302, "Found");
-        defaultReasonPhrases.put(303, "See Other");
-        defaultReasonPhrases.put(304, "Not Modified");
-        defaultReasonPhrases.put(305, "Use Proxy");
-        defaultReasonPhrases.put(307, "Temporary Redirect");
-        defaultReasonPhrases.put(400, "Bad Request");
-        defaultReasonPhrases.put(401, "Unauthorized");
-        defaultReasonPhrases.put(402, "Payment Required");
-        defaultReasonPhrases.put(403, "Forbidden");
-        defaultReasonPhrases.put(404, "Not Found");
-        defaultReasonPhrases.put(405, "Method Not Allowed");
-        defaultReasonPhrases.put(406, "Not Acceptable");
-        defaultReasonPhrases.put(407, "Proxy Authentication Required");
-        defaultReasonPhrases.put(408, "Request Timeout");
-        defaultReasonPhrases.put(409, "Conflict");
-        defaultReasonPhrases.put(410, "Gone");
-        defaultReasonPhrases.put(411, "Length Required");
-        defaultReasonPhrases.put(412, "Precondition Failed");
-        defaultReasonPhrases.put(413, "Request Entity Too Large");
-        defaultReasonPhrases.put(414, "Request-URI Too Long");
-        defaultReasonPhrases.put(415, "Unsupported Media Type");
-        defaultReasonPhrases.put(416, "Requested Range Not Satisfiable");
-        defaultReasonPhrases.put(417, "Expectation Failed");
-        defaultReasonPhrases.put(500, "Internal Server Error");
-        defaultReasonPhrases.put(501, "Not Implemented");
-        defaultReasonPhrases.put(502, "Bad Gateway");
-        defaultReasonPhrases.put(503, "Service Unavailable");
-        defaultReasonPhrases.put(504, "Gateway Timeout");
-        defaultReasonPhrases.put(505, "HTTP Version Not Supported");
-    }
-
-    int status = -1;
+    int status;
     String reasonPhrase;
     Object entity;
-    MultivaluedMap<String, Object> metadata = new CaseInsensitiveMap<>();
+    MultivaluedMap<String, Object> metadata = new MultivaluedHashMap<>();
     Annotation[] entityAnnotations;
 
-    public int getStatus() {
-        return status;
-    }
-
-    public String getReasonPhrase() {
-        return reasonPhrase;
-    }
-
-    public Object getEntity() {
-        return entity;
-    }
-
-    public Annotation[] getEntityAnnotations() {
-        return entityAnnotations;
-    }
-
-    public void setEntityAnnotations(Annotation[] entityAnnotations) {
-        this.entityAnnotations = entityAnnotations;
-    }
-
     @Override
-    public QuarkusRestResponse build() {
-        return populateResponse(new QuarkusRestResponse());
-    }
-
-    /**
-     * Populates a response with the standard data
-     * 
-     * @return The given response
-     */
-    public <T extends QuarkusRestResponse> T populateResponse(T response) {
-        response.entity = entity;
-        if ((entity == null) && (status == -1)) {
-            response.status = 204; // spec says that when no status is set and the entity is null, we need to return 204
-        } else if (status == -1) {
-            response.status = 200;
-        } else {
-            response.status = status;
-        }
+    public Response build() {
+        QuarkusRestResponse response = new QuarkusRestResponse();
+        response.status = status;
         response.reasonPhrase = reasonPhrase;
-        response.headers = new CaseInsensitiveMap<>();
+        response.entity = entity;
+        response.headers = new MultivaluedHashMap<>();
         response.headers.putAll(metadata);
-        response.entityAnnotations = entityAnnotations;
         return response;
     }
 
-    public void setAllHeaders(MultivaluedMap<String, String> values) {
-        for (Map.Entry<String, List<String>> i : values.entrySet()) {
-            for (String v : i.getValue()) {
-                metadata.add(i.getKey(), v);
-            }
-        }
-    }
-
     @Override
-    public QuarkusRestResponseBuilder clone() {
+    public ResponseBuilder clone() {
         QuarkusRestResponseBuilder responseBuilder = new QuarkusRestResponseBuilder();
         responseBuilder.status = status;
         responseBuilder.reasonPhrase = reasonPhrase;
@@ -157,7 +69,7 @@ public class QuarkusRestResponseBuilder extends ResponseBuilder {
 
     @Override
     public Response.ResponseBuilder status(int status) {
-        return status(status, defaultReasonPhrases.get(status));
+        return status(status, null);
     }
 
     @Override
@@ -239,38 +151,21 @@ public class QuarkusRestResponseBuilder extends ResponseBuilder {
             return this;
         }
         if (!location.isAbsolute()) {
-            CDI<Object> cdi = null;
+            CurrentVertxRequest cur = CDI.current().select(CurrentVertxRequest.class).get();
+            HttpServerRequest req = cur.getCurrent().request();
             try {
-                cdi = CDI.current();
-            } catch (IllegalStateException ignored) {
-
-            }
-            if (cdi != null) {
-                // FIXME: this leaks server stuff onto the client
-                CurrentVertxRequest cur = cdi.select(CurrentVertxRequest.class).get();
-                HttpServerRequest req = cur.getCurrent().request();
-                try {
-                    String host = req.host();
-                    int port = -1;
-                    int index = host.indexOf(":");
-                    if (index > -1) {
-                        port = Integer.parseInt(host.substring(index + 1));
-                        host = host.substring(0, index);
-                    }
-                    String prefix = "";
-                    QuarkusRestDeployment deployment = QuarkusRestRecorder.getCurrentDeployment();
-                    if (deployment != null) {
-                        // prefix is already sanitised
-                        prefix = deployment.getPrefix();
-                    }
-                    // Spec says relative to request, but TCK tests relative to Base URI, so we do that
-                    location = new URI(req.scheme(), null, host, port,
-                            prefix +
-                                    (location.getPath().startsWith("/") ? location.getPath() : "/" + location.getPath()),
-                            location.getQuery(), null);
-                } catch (URISyntaxException e) {
-                    throw new RuntimeException(e);
+                String host = req.host();
+                int port = -1;
+                int index = host.indexOf(":");
+                if (index > -1) {
+                    port = Integer.parseInt(host.substring(index + 1));
+                    host = host.substring(0, index);
                 }
+                location = new URI(req.scheme(), null, host, port,
+                        location.getPath().startsWith("/") ? location.getPath() : "/" + location.getPath(),
+                        location.getQuery(), null);
+            } catch (URISyntaxException e) {
+                throw new RuntimeException(e);
             }
         }
         metadata.putSingle(HttpHeaderNames.LOCATION, location);
@@ -284,30 +179,21 @@ public class QuarkusRestResponseBuilder extends ResponseBuilder {
             return this;
         }
         if (!location.isAbsolute()) {
-            CDI<Object> cdi = null;
+            CurrentVertxRequest cur = CDI.current().select(CurrentVertxRequest.class).get();
+            HttpServerRequest req = cur.getCurrent().request();
             try {
-                cdi = CDI.current();
-            } catch (IllegalStateException ignored) {
-
-            }
-            if (cdi != null) {
-                // FIXME: this leaks server stuff onto the client
-                CurrentVertxRequest cur = CDI.current().select(CurrentVertxRequest.class).get();
-                HttpServerRequest req = cur.getCurrent().request();
-                try {
-                    String host = req.host();
-                    int port = -1;
-                    int index = host.indexOf(":");
-                    if (index > -1) {
-                        port = Integer.parseInt(host.substring(index + 1));
-                        host = host.substring(0, index);
-                    }
-                    location = new URI(req.scheme(), null, host, port,
-                            location.getPath().startsWith("/") ? location.getPath() : "/" + location.getPath(),
-                            location.getQuery(), null);
-                } catch (URISyntaxException e) {
-                    throw new RuntimeException(e);
+                String host = req.host();
+                int port = -1;
+                int index = host.indexOf(":");
+                if (index > -1) {
+                    port = Integer.parseInt(host.substring(index + 1));
+                    host = host.substring(0, index);
                 }
+                location = new URI(req.scheme(), null, host, port,
+                        location.getPath().startsWith("/") ? location.getPath() : "/" + location.getPath(),
+                        location.getQuery(), null);
+            } catch (URISyntaxException e) {
+                throw new RuntimeException(e);
             }
         }
         metadata.putSingle(HttpHeaderNames.CONTENT_LOCATION, location);
@@ -398,6 +284,7 @@ public class QuarkusRestResponseBuilder extends ResponseBuilder {
         metadata.putSingle(HttpHeaderNames.EXPIRES, getDateFormatRFC822().format(expires));
         return this;
     }
+
     // spec
 
     public Response.ResponseBuilder allow(String... methods) {
