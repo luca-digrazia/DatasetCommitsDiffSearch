@@ -20,12 +20,11 @@ import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.QuarkusConfig;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.security.deployment.JCAProviderBuildItem;
 import io.quarkus.smallrye.jwt.runtime.auth.JWTAuthMechanism;
 import io.quarkus.smallrye.jwt.runtime.auth.JwtPrincipalProducer;
@@ -54,7 +53,7 @@ class SmallRyeJwtProcessor {
      *
      * @param additionalBeans - producer for additional bean items
      */
-    @BuildStep(providesCapabilities = Capabilities.JWT)
+    @BuildStep
     void registerAdditionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
         if (config.enabled) {
             AdditionalBeanBuildItem.Builder unremovable = AdditionalBeanBuildItem.builder().setUnremovable();
@@ -84,17 +83,17 @@ class SmallRyeJwtProcessor {
     }
 
     /**
-     * If the configuration specified a deployment local key resource, register it in native mode
+     * If the configuration specified a deployment local key resource, register it with substrate
      *
-     * @return NativeImageResourceBuildItem
+     * @return SubstrateResourceBuildItem
      */
     @BuildStep
-    NativeImageResourceBuildItem registerNativeImageResources() {
+    SubstrateResourceBuildItem registerSubstrateResources() {
         String publicKeyLocation = QuarkusConfig.getString("mp.jwt.verify.publickey.location", null, true);
         if (publicKeyLocation != null) {
             if (publicKeyLocation.indexOf(':') < 0 || publicKeyLocation.startsWith("classpath:")) {
                 log.infof("Adding %s to native image", publicKeyLocation);
-                return new NativeImageResourceBuildItem(publicKeyLocation);
+                return new SubstrateResourceBuildItem(publicKeyLocation);
             }
         }
         return null;
