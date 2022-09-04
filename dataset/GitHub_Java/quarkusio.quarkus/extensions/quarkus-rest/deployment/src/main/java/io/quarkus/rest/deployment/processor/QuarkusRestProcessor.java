@@ -532,10 +532,6 @@ public class QuarkusRestProcessor {
                 ResourceReader reader = new ResourceReader();
                 reader.setFactory(recorder.factory(readerClass.name().toString(),
                         beanContainerBuildItem.getValue()));
-                AnnotationInstance consumesAnnotation = readerClass.classAnnotation(QuarkusRestDotNames.CONSUMES);
-                if (consumesAnnotation != null) {
-                    reader.setMediaTypeStrings(Arrays.asList(consumesAnnotation.value().asStringArray()));
-                }
                 AnnotationInstance constrainedToInstance = readerClass.classAnnotation(QuarkusRestDotNames.CONSTRAINED_TO);
                 if (constrainedToInstance != null) {
                     reader.setConstraint(RuntimeType.valueOf(constrainedToInstance.value().asEnum()));
