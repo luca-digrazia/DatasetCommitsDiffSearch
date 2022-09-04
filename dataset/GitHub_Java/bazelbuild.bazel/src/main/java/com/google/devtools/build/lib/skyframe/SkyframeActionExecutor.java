@@ -766,11 +766,6 @@ public final class SkyframeActionExecutor {
   }
 
   private void createOutputDirectories(Action action) throws ActionExecutionException {
-    if (usesActionFileSystem()) {
-      // ActionFileSystem constructs directories implicitly.
-      return;
-    }
-
     try {
       Set<Path> done = new HashSet<>(); // avoid redundant calls for the same directory.
       for (Artifact outputFile : action.getOutputs()) {

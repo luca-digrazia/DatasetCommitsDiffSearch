@@ -254,7 +254,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
    */
   @Nullable
   private AllInputs collectInputs(Action action, Environment env) throws InterruptedException {
-    Iterable<Artifact> allKnownInputs = action.getInputs();
+    Iterable<Artifact> allKnownInputs = Iterables.concat(
+        action.getInputs(), action.getRunfilesSupplier().getArtifacts());
     if (action.inputsDiscovered()) {
       return new AllInputs(allKnownInputs);
     }
@@ -676,15 +677,11 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             // We have to cache the "digest" of the aggregating value itself,
             // because the action cache checker may want it.
             inputArtifactData.put(input, aggregatingValue.getSelfData());
-            // Runfiles artifacts are not expanded into the action's inputs but their metadata is
-            // available from the action file cache.
-            if (!(value instanceof RunfilesArtifactValue)) {
-              ImmutableList.Builder<Artifact> expansionBuilder = ImmutableList.builder();
-              for (Pair<Artifact, FileArtifactValue> pair : aggregatingValue.getInputs()) {
-                expansionBuilder.add(pair.first);
-              }
-              expandedArtifacts.put(input, expansionBuilder.build());
+            ImmutableList.Builder<Artifact> expansionBuilder = ImmutableList.builder();
+            for (Pair<Artifact, FileArtifactValue> pair : aggregatingValue.getInputs()) {
+              expansionBuilder.add(pair.first);
             }
+            expandedArtifacts.put(input, expansionBuilder.build());
           } else if (value instanceof TreeArtifactValue) {
             TreeArtifactValue treeValue = (TreeArtifactValue) value;
             expandedArtifacts.put(input, ImmutableSet.<Artifact>copyOf(treeValue.getChildren()));
@@ -709,7 +706,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         actionFailures++;
         // Prefer a catastrophic exception as the one we propagate.
         if (firstActionExecutionException == null
-            || (!firstActionExecutionException.isCatastrophe() && e.isCatastrophe())) {
+            || !firstActionExecutionException.isCatastrophe() && e.isCatastrophe()) {
           firstActionExecutionException = e;
         }
         rootCauses.addTransitive(e.getRootCauses());
