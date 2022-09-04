@@ -41,8 +41,7 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyIgnoreWarningBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor;
@@ -133,15 +132,6 @@ public class SpringWebProcessor {
     }
 
     @BuildStep
-    public void ignoreReflectionHierarchy(BuildProducer<ReflectiveHierarchyIgnoreWarningBuildItem> ignore) {
-        ignore.produce(new ReflectiveHierarchyIgnoreWarningBuildItem(RESPONSE_ENTITY));
-        ignore.produce(
-                new ReflectiveHierarchyIgnoreWarningBuildItem(DotName.createSimple("org.springframework.util.MimeType")));
-        ignore.produce(
-                new ReflectiveHierarchyIgnoreWarningBuildItem(DotName.createSimple("org.springframework.util.MultiValueMap")));
-    }
-
-    @BuildStep
     public void beanDefiningAnnotations(BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations) {
         beanDefiningAnnotations
                 .produce(new BeanDefiningAnnotationBuildItem(REST_CONTROLLER_ANNOTATION, BuiltinScope.SINGLETON.getName()));
@@ -198,6 +188,14 @@ public class SpringWebProcessor {
                         if (pathVariableInstance.target().kind() != AnnotationTarget.Kind.METHOD_PARAMETER) {
                             continue;
                         }
+                        if ((pathVariableInstance.value() == null) && (pathVariableInstance.value("name") == null)) {
+                            MethodInfo method = pathVariableInstance.target().asMethodParameter().method();
+                            throw new IllegalArgumentException(
+                                    "Currently method parameters annotated with @PathVariable must supply a value for 'name' or 'value'."
+                                            +
+                                            "Offending method is " + method.declaringClass().name() + "#" + method.name());
+                        }
+
                     }
                 }
             }
