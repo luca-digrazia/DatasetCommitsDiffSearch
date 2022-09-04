@@ -299,39 +299,24 @@ public class DynamicSpawnStrategy implements SpawnActionContext {
     AtomicReference<String> strategyThatCancelled = new AtomicReference<>(null);
     SettableFuture<List<SpawnResult>> remoteBranch = SettableFuture.create();
 
-    AtomicBoolean localCanReportDone = new AtomicBoolean(false);
-    AtomicBoolean remoteCanReportDone = new AtomicBoolean(false);
-
     ListenableFuture<List<SpawnResult>> localBranch =
         executorService.submit(
             new Branch("local", actionExecutionContext) {
               @Override
               List<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
-                try {
-                  if (!localCanReportDone.compareAndSet(false, true)) {
-                    // If we ever get here, it's because we were cancelled and the listener ran
-                    // first. Just make sure that's the case.
-                    checkState(Thread.interrupted());
-                    throw new InterruptedException();
-                  }
-                  if (delayLocalExecution.get()) {
-                    Thread.sleep(options.localExecutionDelay);
-                  }
-                  return runLocally(
-                      spawn,
-                      context,
-                      () -> stopBranch(remoteBranch, remoteDone, "local", strategyThatCancelled));
-                } finally {
-                  localDone.release();
+                if (delayLocalExecution.get()) {
+                  Thread.sleep(options.localExecutionDelay);
                 }
+                return runLocally(
+                    spawn,
+                    context,
+                    () -> stopBranch(remoteBranch, remoteDone, "local", strategyThatCancelled));
               }
             });
     localBranch.addListener(
         () -> {
-          if (localCanReportDone.compareAndSet(false, true)) {
-            localDone.release();
-          }
+          localDone.release();
           if (!localBranch.isCancelled()) {
             remoteBranch.cancel(true);
           }
@@ -344,31 +329,18 @@ public class DynamicSpawnStrategy implements SpawnActionContext {
               @Override
               public List<SpawnResult> callImpl(ActionExecutionContext context)
                   throws InterruptedException, ExecException {
-                try {
-                  if (!remoteCanReportDone.compareAndSet(false, true)) {
-                    // If we ever get here, it's because we were cancelled and the listener ran
-                    // first. Just make sure that's the case.
-                    checkState(Thread.interrupted());
-                    throw new InterruptedException();
-                  }
-                  List<SpawnResult> spawnResults =
-                      runRemotely(
-                          spawn,
-                          context,
-                          () ->
-                              stopBranch(localBranch, localDone, "remote", strategyThatCancelled));
-                  delayLocalExecution.set(true);
-                  return spawnResults;
-                } finally {
-                  remoteDone.release();
-                }
+                List<SpawnResult> spawnResults =
+                    runRemotely(
+                        spawn,
+                        context,
+                        () -> stopBranch(localBranch, localDone, "remote", strategyThatCancelled));
+                delayLocalExecution.set(true);
+                return spawnResults;
               }
             }));
     remoteBranch.addListener(
         () -> {
-          if (remoteCanReportDone.compareAndSet(false, true)) {
-            remoteDone.release();
-          }
+          remoteDone.release();
           if (!remoteBranch.isCancelled()) {
             localBranch.cancel(true);
           }
