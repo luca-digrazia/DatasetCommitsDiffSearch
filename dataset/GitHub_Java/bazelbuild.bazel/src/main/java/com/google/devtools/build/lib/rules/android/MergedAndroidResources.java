@@ -40,9 +40,11 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   public static MergedAndroidResources mergeFrom(
       AndroidDataContext dataContext,
       ParsedAndroidResources parsed,
-      ResourceDependencies resourceDeps)
+      ResourceDependencies resourceDeps,
+      AndroidAaptVersion aaptVersion)
       throws InterruptedException {
 
+    Preconditions.checkArgument(aaptVersion == AndroidAaptVersion.AAPT2);
     Preconditions.checkNotNull(
         parsed.getCompiledSymbols(),
         "Should not use compiled merge if no compiled symbols are available!");
@@ -169,9 +171,9 @@ public class MergedAndroidResources extends ParsedAndroidResources {
    * MergedAndroidResources, AndroidAaptVersion)}. This method is a convenience method for calling
    * that one.
    */
-  public ValidatedAndroidResources validate(AndroidDataContext dataContext)
-      throws InterruptedException {
-    return ValidatedAndroidResources.validateFrom(dataContext, this);
+  public ValidatedAndroidResources validate(
+      AndroidDataContext dataContext, AndroidAaptVersion aaptVersion) throws InterruptedException {
+    return ValidatedAndroidResources.validateFrom(dataContext, this, aaptVersion);
   }
 
   @Override
