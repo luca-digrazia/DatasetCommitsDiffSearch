@@ -312,7 +312,7 @@ public abstract class StarlarkSemantics {
           .debugDepsetDepth(false)
           .experimentalActionArgs(false)
           .experimentalAllowTagsPropagation(false)
-          .experimentalAspectOutputPropagation(true)
+          .experimentalAspectOutputPropagation(false)
           .experimentalBuildSettingApi(true)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalAllowIncrementalRepositoryUpdates(true)

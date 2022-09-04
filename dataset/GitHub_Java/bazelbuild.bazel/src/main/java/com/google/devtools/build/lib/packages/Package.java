@@ -37,20 +37,20 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.util.SpellChecker;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.starlark.spelling.SpellChecker;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
@@ -62,7 +62,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
@@ -111,10 +110,9 @@ public class Package {
 
   /**
    * The root of the source tree in which this package was found. It is an invariant that {@code
-   * sourceRoot.getRelative(packageId.getSourceRoot()).equals(packageDirectory)}. Returns {@link
-   * Optional#empty} if this {@link Package} is derived from a WORKSPACE file.
+   * sourceRoot.getRelative(packageId.getSourceRoot()).equals(packageDirectory)}.
    */
-  private Optional<Root> sourceRoot;
+  private Root sourceRoot;
 
   /**
    * The "Make" environment of this package, containing package-local
@@ -165,8 +163,10 @@ public class Package {
    */
   private boolean containsErrors;
 
-  /** The list of transitive closure of the Starlark file dependencies. */
-  private ImmutableList<Label> starlarkFileDependencies;
+  /**
+   * The list of transitive closure of the Skylark file dependencies.
+   */
+  private ImmutableList<Label> skylarkFileDependencies;
 
   /** The package's default "applicable_licenses" attribute. */
   private Set<Label> defaultApplicableLicenses = ImmutableSet.of();
@@ -331,13 +331,12 @@ public class Package {
   }
 
   /**
-   * Returns the source root (a directory) beneath which this package's BUILD file was found, or
-   * {@link Optional#empty} if this package was derived from a workspace file.
+   * Returns the source root (a directory) beneath which this package's BUILD file was found.
    *
-   * <p>Assumes invariant: If non-empty, {@code
-   * getSourceRoot().get().getRelative(packageId.getSourceRoot()).equals(getPackageDirectory())}
+   * <p>Assumes invariant: {@code
+   * getSourceRoot().getRelative(packageId.getSourceRoot()).equals(getPackageDirectory())}
    */
-  public Optional<Root> getSourceRoot() {
+  public Root getSourceRoot() {
     return sourceRoot;
   }
 
@@ -379,30 +378,25 @@ public class Package {
     }
     this.filename = builder.getFilename();
     this.packageDirectory = filename.asPath().getParentDirectory();
-    String baseName = filename.getRootRelativePath().getBaseName();
 
-    if (isWorkspaceFile(baseName)) {
-      Preconditions.checkState(
-          packageIdentifier.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER));
-      this.sourceRoot = Optional.empty();
-    } else {
-      Root sourceRoot = getSourceRoot(filename, packageIdentifier.getSourceRoot());
-      if (sourceRoot.asPath() == null
-          || !sourceRoot.getRelative(packageIdentifier.getSourceRoot()).equals(packageDirectory)) {
-        throw new IllegalArgumentException(
-            "Invalid BUILD file name for package '"
-                + packageIdentifier
-                + "': "
-                + filename
-                + " (in source "
-                + sourceRoot
-                + " with packageDirectory "
-                + packageDirectory
-                + " and package identifier source root "
-                + packageIdentifier.getSourceRoot()
-                + ")");
-      }
-      this.sourceRoot = Optional.of(sourceRoot);
+    this.sourceRoot = getSourceRoot(filename, packageIdentifier.getSourceRoot());
+    String baseName = filename.getRootRelativePath().getBaseName();
+    if ((sourceRoot.asPath() == null
+            || !sourceRoot.getRelative(packageIdentifier.getSourceRoot()).equals(packageDirectory))
+        && !(baseName.equals(LabelConstants.WORKSPACE_DOT_BAZEL_FILE_NAME.getPathString())
+            || baseName.equals(LabelConstants.WORKSPACE_FILE_NAME.getPathString()))) {
+      throw new IllegalArgumentException(
+          "Invalid BUILD file name for package '"
+              + packageIdentifier
+              + "': "
+              + filename
+              + " (in source "
+              + sourceRoot
+              + " with packageDirectory "
+              + packageDirectory
+              + " and package identifier source root "
+              + packageIdentifier.getSourceRoot()
+              + ")");
     }
 
     this.makeEnv = ImmutableMap.copyOf(builder.makeEnv);
@@ -416,7 +410,7 @@ public class Package {
     }
     this.buildFile = builder.buildFile;
     this.containsErrors = builder.containsErrors;
-    this.starlarkFileDependencies = builder.starlarkFileDependencies;
+    this.skylarkFileDependencies = builder.skylarkFileDependencies;
     this.defaultLicense = builder.defaultLicense;
     this.defaultDistributionSet = builder.defaultDistributionSet;
     this.features = ImmutableSortedSet.copyOf(builder.features);
@@ -440,14 +434,11 @@ public class Package {
     this.externalPackageRepositoryMappings = repositoryMappingsBuilder.build();
   }
 
-  private static boolean isWorkspaceFile(String baseFileName) {
-    return baseFileName.equals(LabelConstants.WORKSPACE_DOT_BAZEL_FILE_NAME.getPathString())
-        || baseFileName.equals(LabelConstants.WORKSPACE_FILE_NAME.getPathString());
-  }
-
-  /** Returns the list of transitive closure of the Starlark file dependencies of this package. */
-  public ImmutableList<Label> getStarlarkFileDependencies() {
-    return starlarkFileDependencies;
+  /**
+   * Returns the list of transitive closure of the Skylark file dependencies of this package.
+   */
+  public ImmutableList<Label> getSkylarkFileDependencies() {
+    return skylarkFileDependencies;
   }
 
   /**
@@ -870,7 +861,7 @@ public class Package {
     private BiMap<String, Target> targets = HashBiMap.create();
     private final Map<Label, EnvironmentGroup> environmentGroups = new HashMap<>();
 
-    private ImmutableList<Label> starlarkFileDependencies = ImmutableList.of();
+    private ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
 
     private final List<String> registeredExecutionPlatforms = new ArrayList<>();
     private final List<String> registeredToolchains = new ArrayList<>();
@@ -1184,8 +1175,8 @@ public class Package {
       return this;
     }
 
-    Builder setStarlarkFileDependencies(ImmutableList<Label> starlarkFileDependencies) {
-      this.starlarkFileDependencies = starlarkFileDependencies;
+    Builder setSkylarkFileDependencies(ImmutableList<Label> skylarkFileDependencies) {
+      this.skylarkFileDependencies = skylarkFileDependencies;
       return this;
     }
 

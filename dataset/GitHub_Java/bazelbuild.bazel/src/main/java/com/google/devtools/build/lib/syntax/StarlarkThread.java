@@ -21,11 +21,14 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.Fingerprint; // TODO(adonovan): break dependency
+import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -50,7 +53,7 @@ import javax.annotation.Nullable;
  * StarlarkThread}. When the {@code Mutability} is closed at the end of the computation, it freezes
  * the {@code StarlarkThread} along with all of those objects. This pattern enforces the discipline
  * that there should be no dangling mutable {@code StarlarkThread}, or concurrency between
- * interacting {@code StarlarkThread}s. It is a Starlark-level error to attempt to mutate a frozen
+ * interacting {@code StarlarkThread}s. It is a Skylark-level error to attempt to mutate a frozen
  * {@code StarlarkThread} or its objects, but it is a Java-level error to attempt to mutate an
  * unfrozen {@code StarlarkThread} or its objects from within a different {@code StarlarkThread}.
  *
@@ -359,14 +362,14 @@ public final class StarlarkThread {
   // Then clients that call thread.getGlobals() should use 'module' directly.
   private final Module module;
 
-  /** The semantics options that affect how Starlark code is evaluated. */
+  /** The semantics options that affect how Skylark code is evaluated. */
   private final StarlarkSemantics semantics;
 
   /** PrintHandler for Starlark print statements. */
   private PrintHandler printHandler = StarlarkThread::defaultPrintHandler;
 
   /**
-   * For each imported extension, a global Starlark frame from which to load() individual bindings.
+   * For each imported extension, a global Skylark frame from which to load() individual bindings.
    */
   private final Map<String, Extension> importedExtensions;
 
@@ -389,7 +392,7 @@ public final class StarlarkThread {
     ProfilerTask taskKind;
     if (fn instanceof StarlarkFunction) {
       StarlarkFunction sfn = (StarlarkFunction) fn;
-      fr.locals = Maps.newLinkedHashMapWithExpectedSize(sfn.getParameterNames().size());
+      fr.locals = Maps.newLinkedHashMapWithExpectedSize(sfn.getSignature().numParameters());
       taskKind = ProfilerTask.STARLARK_USER_FN;
     } else {
       // built-in function
@@ -478,6 +481,13 @@ public final class StarlarkThread {
   /** Returns the PrintHandler for Starlark print statements. */
   PrintHandler getPrintHandler() {
     return printHandler;
+  }
+
+  /** Returns a PrintHandler that sends DEBUG events to the provided EventHandler. */
+  // TODO(adonovan): move to lib.events.Event when we reverse the dependency.
+  // For now, clients call thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(h));
+  public static PrintHandler makeDebugPrintHandler(EventHandler h) {
+    return (thread, msg) -> h.handle(Event.debug(thread.getCallerLocation(), msg));
   }
 
   /** Sets the behavior of Starlark print statements executed by this thread. */
@@ -635,7 +645,7 @@ public final class StarlarkThread {
    * Specifies a hook function to be run after each assignment at top level.
    *
    * <p>This is a short-term hack to allow us to consolidate all StarlarkFile execution in one place
-   * even while StarlarkImportLookupFunction implements the old "export" behavior, in which rules,
+   * even while SkylarkImportLookupFunction implements the old "export" behavior, in which rules,
    * aspects and providers are "exported" as soon as they are assigned, not at the end of file
    * execution.
    */

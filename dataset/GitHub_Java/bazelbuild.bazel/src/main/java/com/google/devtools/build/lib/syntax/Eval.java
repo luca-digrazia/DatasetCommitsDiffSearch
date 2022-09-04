@@ -16,7 +16,8 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.starlark.spelling.SpellChecker;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.util.SpellChecker;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -91,7 +92,7 @@ final class Eval {
       throws EvalException, InterruptedException {
     Object o = eval(fr, node.getCollection());
     Iterable<?> seq = Starlark.toIterable(o);
-    EvalUtils.addIterator(o);
+    EvalUtils.lock(o, node.getStartLocation());
     try {
       for (Object it : seq) {
         assign(fr, node.getLHS(), it);
@@ -115,7 +116,7 @@ final class Eval {
     } catch (EvalException ex) {
       throw ex.ensureLocation(node.getLHS().getStartLocation());
     } finally {
-      EvalUtils.removeIterator(o);
+      EvalUtils.unlock(o, node.getStartLocation());
     }
     return TokenKind.PASS;
   }
@@ -167,6 +168,14 @@ final class Eval {
 
   private static void execLoad(StarlarkThread.Frame fr, LoadStatement node) throws EvalException {
     for (LoadStatement.Binding binding : node.getBindings()) {
+      Identifier orig = binding.getOriginalName();
+
+      // TODO(adonovan): make this a static check.
+      if (orig.isPrivate() && !node.mayLoadInternalSymbols()) {
+        throw new EvalException(
+            orig.getStartLocation(),
+            "symbol '" + orig.getName() + "' is private and cannot be imported.");
+      }
 
       // Load module.
       String moduleName = node.getImport().getValue();
@@ -181,7 +190,6 @@ final class Eval {
       }
 
       // Extract symbol.
-      Identifier orig = binding.getOriginalName();
       Object value = module.getBindings().get(orig.getName());
       if (value == null) {
         throw new EvalException(
@@ -202,7 +210,7 @@ final class Eval {
       // changing it to fr.locals.put breaks a test. TODO(adonovan): find out why.
       try {
         fn(fr).getModule().put(binding.getLocalName().getName(), value);
-      } catch (EvalException ex) {
+      } catch (Mutability.MutabilityException ex) {
         throw new AssertionError(ex);
       }
     }
@@ -325,7 +333,7 @@ final class Eval {
         try {
           module.put(name, value);
           module.exportedBindings.add(name);
-        } catch (EvalException ex) {
+        } catch (Mutability.MutabilityException ex) {
           throw new IllegalStateException(ex);
         }
         break;
@@ -746,18 +754,19 @@ final class Eval {
             Comprehension.For forClause = (Comprehension.For) clause;
 
             Object iterable = eval(fr, forClause.getIterable());
+            Location loc = comp.getStartLocation(); // TODO(adonovan): use location of 'for' token
             Iterable<?> listValue = Starlark.toIterable(iterable);
-            EvalUtils.addIterator(iterable);
+            // TODO(adonovan): lock should not need loc.
+            EvalUtils.lock(iterable, loc);
             try {
               for (Object elem : listValue) {
                 assign(fr, forClause.getVars(), elem);
                 execClauses(index + 1);
               }
             } catch (EvalException ex) {
-              // TODO(adonovan): use location of 'for' token
-              throw ex.ensureLocation(comp.getStartLocation());
+              throw ex.ensureLocation(loc);
             } finally {
-              EvalUtils.removeIterator(iterable);
+              EvalUtils.unlock(iterable, loc);
             }
 
           } else {
