@@ -6,7 +6,6 @@ import io.dropwizard.Configuration;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.server.SimpleServerFactory;
 import io.dropwizard.setup.Environment;
-import io.dropwizard.testing.DropwizardTestSupport;
 import org.junit.rules.ExternalResource;
 
 import java.net.URI;
@@ -53,10 +52,10 @@ import java.net.URL;
  */
 public class DropwizardClientRule extends ExternalResource {
     private final Object[] resources;
-    private final DropwizardTestSupport<Configuration> testSupport;
+    private final DropwizardAppRule<Configuration> appRule;
 
     public DropwizardClientRule(Object... resources) {
-        testSupport = new DropwizardTestSupport<Configuration>(null, null) {
+        appRule = new DropwizardAppRule<Configuration>(null, null) {
             @Override
             public Application<Configuration> newApplication() {
                 return new FakeApplication();
@@ -66,17 +65,17 @@ public class DropwizardClientRule extends ExternalResource {
     }
 
     public URI baseUri() {
-        return URI.create("http://localhost:" + testSupport.getLocalPort() + "/application");
+        return URI.create("http://localhost:" + appRule.getLocalPort() + "/application");
     }
 
     @Override
     protected void before() throws Throwable {
-        testSupport.before();
+        appRule.before();
     }
 
     @Override
     protected void after() {
-        testSupport.after();
+        appRule.after();
     }
 
     private static class DummyHealthCheck extends HealthCheck {
@@ -97,11 +96,7 @@ public class DropwizardClientRule extends ExternalResource {
             environment.healthChecks().register("dummy", new DummyHealthCheck());
 
             for (Object resource : resources) {
-                if (resource instanceof Class<?>) {
-                    environment.jersey().register((Class<?>) resource);
-                } else {
-                    environment.jersey().register(resource);
-                }
+                environment.jersey().register(resource);
             }
         }
     }
