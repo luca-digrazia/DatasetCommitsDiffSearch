@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.server.CommandProtos.ExecRequest;
@@ -46,22 +45,12 @@ public final class BlazeCommandResult {
     return shutdown;
   }
 
-  @Nullable
-  public ExecRequest getExecRequest() {
-    return execDescription;
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("exitCode", exitCode)
-        .add("execDescription", execDescription)
-        .add("shutdown", shutdown)
-        .toString();
-  }
-
   public static BlazeCommandResult shutdown(ExitCode exitCode) {
     return new BlazeCommandResult(exitCode, null, true);
+  }
+
+  @Nullable public ExecRequest getExecRequest() {
+    return execDescription;
   }
 
   public static BlazeCommandResult exitCode(ExitCode exitCode) {

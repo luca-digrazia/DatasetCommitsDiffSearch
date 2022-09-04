@@ -24,8 +24,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.Flushables;
 import com.google.common.util.concurrent.UncheckedExecutionException;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildtool.buildevent.ProfilerStartedEvent;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.events.Event;
@@ -331,14 +329,7 @@ public class BlazeCommandDispatcher {
       // Early exit. We need to guarantee that the ErrOut and Reporter setup below never error out,
       // so any invariants they need must be checked before this point.
       if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-        return replayEarlyExitEvents(
-            outErr,
-            optionHandler,
-            storedEventHandler,
-            env,
-            earlyExitCode,
-            new NoBuildEvent(
-                commandName, firstContactTime, false, true, env.getCommandId().toString()));
+        return replayEarlyExitEvents(outErr, optionHandler, storedEventHandler, env, earlyExitCode);
       }
 
       Reporter reporter = env.getReporter();
@@ -496,14 +487,7 @@ public class BlazeCommandDispatcher {
       // Parse starlark options.
       earlyExitCode = optionHandler.parseStarlarkOptions(env, storedEventHandler);
       if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-        return replayEarlyExitEvents(
-            outErr,
-            optionHandler,
-            storedEventHandler,
-            env,
-            earlyExitCode,
-            new NoBuildEvent(
-                commandName, firstContactTime, false, true, env.getCommandId().toString()));
+        return replayEarlyExitEvents(outErr, optionHandler, storedEventHandler, env, earlyExitCode);
       }
       options = optionHandler.getOptionsResult();
 
@@ -544,8 +528,7 @@ public class BlazeCommandDispatcher {
       BlazeOptionHandler optionHandler,
       StoredEventHandler storedEventHandler,
       CommandEnvironment env,
-      ExitCode earlyExitCode,
-      NoBuildEvent noBuildEvent) {
+      ExitCode earlyExitCode) {
     PrintingEventHandler printingEventHandler =
         new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
     for (String note : optionHandler.getRcfileNotes()) {
@@ -557,7 +540,6 @@ public class BlazeCommandDispatcher {
     for (Postable post : storedEventHandler.getPosts()) {
       env.getEventBus().post(post);
     }
-    env.getEventBus().post(noBuildEvent);
     return BlazeCommandResult.exitCode(earlyExitCode);
   }
 
