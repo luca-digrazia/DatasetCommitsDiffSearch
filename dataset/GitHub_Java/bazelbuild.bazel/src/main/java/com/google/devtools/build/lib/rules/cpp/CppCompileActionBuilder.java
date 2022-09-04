@@ -19,7 +19,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -482,7 +481,7 @@ public class CppCompileActionBuilder {
   }
 
   private void verifyActionIncludePaths(CppCompileAction action, Consumer<String> errorReporter) {
-    ImmutableSet<PathFragment> ignoredDirs = ImmutableSet.copyOf(action.getValidationIgnoredDirs());
+    Iterable<PathFragment> ignoredDirs = action.getValidationIgnoredDirs();
     // We currently do not check the output of:
     // - getQuoteIncludeDirs(): those only come from includes attributes, and are checked in
     //   CcCommon.getIncludeDirsFromIncludesAttribute().
@@ -492,11 +491,7 @@ public class CppCompileActionBuilder {
     Iterable<PathFragment> includePathsToVerify =
         Iterables.concat(action.getIncludeDirs(), action.getSystemIncludeDirs());
     for (PathFragment includePath : includePathsToVerify) {
-      // includePathsToVerify contains all paths that are added as -isystem directive on the command
-      // line, most of which are added for include directives in the CcCompilationContext and are
-      // thus also in ignoredDirs. The hash lookup prevents this from becoming O(N^2) for these.
-      if (ignoredDirs.contains(includePath)
-          || FileSystemUtils.startsWithAny(includePath, ignoredDirs)) {
+      if (FileSystemUtils.startsWithAny(includePath, ignoredDirs)) {
         continue;
       }
       // One starting ../ is okay for getting to a sibling repository.

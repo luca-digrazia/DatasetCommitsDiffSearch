@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -34,7 +35,7 @@ public final class CompileCommandLine {
   private final Artifact sourceFile;
   private final CoptsFilter coptsFilter;
   private final FeatureConfiguration featureConfiguration;
-  private final CcToolchainVariables variables;
+  private final CcToolchainFeatures.Variables variables;
   private final String actionName;
   private final DotdFile dotdFile;
 
@@ -44,7 +45,7 @@ public final class CompileCommandLine {
       Artifact sourceFile,
       CoptsFilter coptsFilter,
       FeatureConfiguration featureConfiguration,
-      CcToolchainVariables variables,
+      CcToolchainFeatures.Variables variables,
       String actionName,
       DotdFile dotdFile) {
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
@@ -80,7 +81,8 @@ public final class CompileCommandLine {
    * @param overwrittenVariables: Variables that will overwrite original build variables. When null,
    *     unmodified original variables are used.
    */
-  protected List<String> getArguments(@Nullable CcToolchainVariables overwrittenVariables) {
+  protected List<String> getArguments(
+      @Nullable CcToolchainFeatures.Variables overwrittenVariables) {
     List<String> commandLine = new ArrayList<>();
 
     // first: The command name.
@@ -91,12 +93,14 @@ public final class CompileCommandLine {
     return commandLine;
   }
 
-  public List<String> getCompilerOptions(@Nullable CcToolchainVariables overwrittenVariables) {
+  public List<String> getCompilerOptions(
+      @Nullable CcToolchainFeatures.Variables overwrittenVariables) {
     List<String> options = new ArrayList<>();
 
-    CcToolchainVariables updatedVariables = variables;
+    CcToolchainFeatures.Variables updatedVariables = variables;
     if (variables != null && overwrittenVariables != null) {
-      CcToolchainVariables.Builder variablesBuilder = new CcToolchainVariables.Builder(variables);
+      CcToolchainFeatures.Variables.Builder variablesBuilder =
+          new CcToolchainFeatures.Variables.Builder(variables);
       variablesBuilder.addAllNonTransitive(overwrittenVariables);
       updatedVariables = variablesBuilder.build();
     }
@@ -127,7 +131,7 @@ public final class CompileCommandLine {
     return dotdFile;
   }
 
-  public CcToolchainVariables getVariables() {
+  public Variables getVariables() {
     return variables;
   }
 
@@ -140,7 +144,7 @@ public final class CompileCommandLine {
    */
   public ImmutableList<String> getCopts() {
     if (variables.isAvailable(CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName())) {
-      return CcToolchainVariables.toStringList(
+      return Variables.toStringList(
           variables, CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName());
     } else {
       return ImmutableList.of();
@@ -160,7 +164,7 @@ public final class CompileCommandLine {
     private final Artifact sourceFile;
     private CoptsFilter coptsFilter;
     private FeatureConfiguration featureConfiguration;
-    private CcToolchainVariables variables = CcToolchainVariables.EMPTY;
+    private CcToolchainFeatures.Variables variables = Variables.EMPTY;
     private final String actionName;
     @Nullable private final DotdFile dotdFile;
 
@@ -191,7 +195,7 @@ public final class CompileCommandLine {
       return this;
     }
 
-    public Builder setVariables(CcToolchainVariables variables) {
+    public Builder setVariables(Variables variables) {
       this.variables = variables;
       return this;
     }

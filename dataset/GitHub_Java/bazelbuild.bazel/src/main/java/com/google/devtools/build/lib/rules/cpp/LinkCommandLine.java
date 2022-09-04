@@ -50,10 +50,11 @@ public final class LinkCommandLine extends CommandLine {
   @Nullable private final FeatureConfiguration featureConfiguration;
   private final ImmutableList<Artifact> buildInfoHeaderArtifacts;
   private final Iterable<LinkerInput> linkerInputs;
+  private final Iterable<LinkerInput> runtimeInputs;
   private final LinkTargetType linkTargetType;
   private final LinkStaticness linkStaticness;
   private final ImmutableList<String> linkopts;
-  @Nullable private final PathFragment toolchainLibrariesSolibDir;
+  @Nullable private final PathFragment runtimeSolibDir;
   private final boolean nativeDeps;
   private final boolean useTestOnlyFlags;
 
@@ -65,10 +66,11 @@ public final class LinkCommandLine extends CommandLine {
       String forcedToolPath,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<LinkerInput> linkerInputs,
+      Iterable<LinkerInput> runtimeInputs,
       LinkTargetType linkTargetType,
       LinkStaticness linkStaticness,
       ImmutableList<String> linkopts,
-      @Nullable PathFragment toolchainLibrariesSolibDir,
+      @Nullable PathFragment runtimeSolibDir,
       boolean nativeDeps,
       boolean useTestOnlyFlags,
       @Nullable Artifact paramFile,
@@ -81,10 +83,11 @@ public final class LinkCommandLine extends CommandLine {
     this.featureConfiguration = featureConfiguration;
     this.buildInfoHeaderArtifacts = Preconditions.checkNotNull(buildInfoHeaderArtifacts);
     this.linkerInputs = Preconditions.checkNotNull(linkerInputs);
+    this.runtimeInputs = Preconditions.checkNotNull(runtimeInputs);
     this.linkTargetType = Preconditions.checkNotNull(linkTargetType);
     this.linkStaticness = Preconditions.checkNotNull(linkStaticness);
     this.linkopts = linkopts;
-    this.toolchainLibrariesSolibDir = toolchainLibrariesSolibDir;
+    this.runtimeSolibDir = runtimeSolibDir;
     this.nativeDeps = nativeDeps;
     this.useTestOnlyFlags = useTestOnlyFlags;
     this.paramFile = paramFile;
@@ -103,6 +106,11 @@ public final class LinkCommandLine extends CommandLine {
   /** Returns the (ordered, immutable) list of paths to the linker's input files. */
   public Iterable<LinkerInput> getLinkerInputs() {
     return linkerInputs;
+  }
+
+  /** Returns the runtime inputs to the linker. */
+  public Iterable<LinkerInput> getRuntimeInputs() {
+    return runtimeInputs;
   }
 
   /**
@@ -139,9 +147,8 @@ public final class LinkCommandLine extends CommandLine {
    * libraries either do not exist (because they do not come from the depot) or they are in the
    * regular solib directory.
    */
-  @Nullable
-  public PathFragment getToolchainLibrariesSolibDir() {
-    return toolchainLibrariesSolibDir;
+  @Nullable public PathFragment getRuntimeSolibDir() {
+    return runtimeSolibDir;
   }
 
   /**
@@ -415,10 +422,11 @@ public final class LinkCommandLine extends CommandLine {
     private String forcedToolPath;
     private ImmutableList<Artifact> buildInfoHeaderArtifacts = ImmutableList.of();
     private Iterable<LinkerInput> linkerInputs = ImmutableList.of();
+    private Iterable<LinkerInput> runtimeInputs = ImmutableList.of();
     @Nullable private LinkTargetType linkTargetType;
     private LinkStaticness linkStaticness = LinkStaticness.FULLY_STATIC;
     private ImmutableList<String> linkopts = ImmutableList.of();
-    @Nullable private PathFragment toolchainLibrariesSolibDir;
+    @Nullable private PathFragment runtimeSolibDir;
     private boolean nativeDeps;
     private boolean useTestOnlyFlags;
     @Nullable private Artifact paramFile;
@@ -453,10 +461,11 @@ public final class LinkCommandLine extends CommandLine {
           forcedToolPath,
           buildInfoHeaderArtifacts,
           linkerInputs,
+          runtimeInputs,
           linkTargetType,
           linkStaticness,
           linkopts,
-          toolchainLibrariesSolibDir,
+          runtimeSolibDir,
           nativeDeps,
           useTestOnlyFlags,
           paramFile,
@@ -495,6 +504,11 @@ public final class LinkCommandLine extends CommandLine {
      */
     public Builder setLinkerInputs(Iterable<LinkerInput> linkerInputs) {
       this.linkerInputs = CollectionUtils.makeImmutable(linkerInputs);
+      return this;
+    }
+
+    public Builder setRuntimeInputs(ImmutableList<LinkerInput> runtimeInputs) {
+      this.runtimeInputs = runtimeInputs;
       return this;
     }
 
@@ -559,8 +573,8 @@ public final class LinkCommandLine extends CommandLine {
       return this;
     }
 
-    public Builder setToolchainLibrariesSolibDir(PathFragment toolchainLibrariesSolibDir) {
-      this.toolchainLibrariesSolibDir = toolchainLibrariesSolibDir;
+    public Builder setRuntimeSolibDir(PathFragment runtimeSolibDir) {
+      this.runtimeSolibDir = runtimeSolibDir;
       return this;
     }
   }

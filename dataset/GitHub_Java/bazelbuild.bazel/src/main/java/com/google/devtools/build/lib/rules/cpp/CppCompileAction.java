@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import static java.util.Collections.unmodifiableSet;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
@@ -31,6 +29,7 @@ import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
+import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.CommandAction;
@@ -517,6 +516,8 @@ public class CppCompileAction extends AbstractAction
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
+    actionExecutionContext.getEventBus().post(ActionStatusMessage.analysisStrategy(this));
+
     Iterable<Artifact> initialResult = findAdditionalInputs(actionExecutionContext);
 
     if (shouldPruneModules) {
@@ -1040,23 +1041,28 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public Iterable<Artifact> getAllowedDerivedInputs() {
-    HashSet<Artifact> result = new HashSet<>();
-    addNonSources(result, mandatoryInputs);
-    addNonSources(result, prunableInputs);
-    addNonSources(result, getDeclaredIncludeSrcs());
-    addNonSources(result, ccCompilationContextInfo.getTransitiveCompilationPrerequisites());
-    addNonSources(result, ccCompilationContextInfo.getTransitiveModules(usePic));
-    Artifact artifact = getSourceFile();
-    if (!artifact.isSourceArtifact()) {
-      result.add(artifact);
-    }
-    return unmodifiableSet(result);
+    return getAllowedDerivedInputsMap().values();
   }
 
-  private static void addNonSources(HashSet<Artifact> result, Iterable<Artifact> artifacts) {
-    for (Artifact a : artifacts) {
-      if (!a.isSourceArtifact()) {
-        result.add(a);
+  protected Map<PathFragment, Artifact> getAllowedDerivedInputsMap() {
+    Map<PathFragment, Artifact> allowedDerivedInputMap = new HashMap<>();
+    addToMap(allowedDerivedInputMap, mandatoryInputs);
+    addToMap(allowedDerivedInputMap, prunableInputs);
+    addToMap(allowedDerivedInputMap, getDeclaredIncludeSrcs());
+    addToMap(
+        allowedDerivedInputMap, ccCompilationContextInfo.getTransitiveCompilationPrerequisites());
+    addToMap(allowedDerivedInputMap, ccCompilationContextInfo.getTransitiveModules(usePic));
+    Artifact artifact = getSourceFile();
+    if (!artifact.isSourceArtifact()) {
+      allowedDerivedInputMap.put(artifact.getExecPath(), artifact);
+    }
+    return allowedDerivedInputMap;
+  }
+
+  private void addToMap(Map<PathFragment, Artifact> map, Iterable<Artifact> artifacts) {
+    for (Artifact artifact : artifacts) {
+      if (!artifact.isSourceArtifact()) {
+        map.put(artifact.getExecPath(), artifact);
       }
     }
   }
@@ -1223,7 +1229,7 @@ public class CppCompileAction extends AbstractAction
             .setSourceFile(getSourceFile())
             .setDependencies(dependencies.build())
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
-            .setAllowedDerivedinputs(getAllowedDerivedInputs());
+            .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
     if (needsIncludeValidation) {
       discoveryBuilder.shouldValidateInclusions();
@@ -1249,7 +1255,7 @@ public class CppCompileAction extends AbstractAction
             .setDependencies(
                 processDepset(actionExecutionContext, execRoot, reply).getDependencies())
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
-            .setAllowedDerivedinputs(getAllowedDerivedInputs());
+            .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
     if (needsIncludeValidation) {
       discoveryBuilder.shouldValidateInclusions();

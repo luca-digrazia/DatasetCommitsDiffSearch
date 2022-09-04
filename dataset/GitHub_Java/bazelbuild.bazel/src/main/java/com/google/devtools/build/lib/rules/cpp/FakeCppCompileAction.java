@@ -59,7 +59,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       ActionOwner owner,
       NestedSet<Artifact> allInputs,
       FeatureConfiguration featureConfiguration,
-      CcToolchainVariables variables,
+      CcToolchainFeatures.Variables variables,
       Artifact sourceFile,
       boolean shouldScanIncludes,
       boolean shouldPruneModules,
@@ -74,7 +74,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       PathFragment tempOutputFile,
       DotdFile dotdFile,
       ImmutableMap<String, String> localShellEnvironment,
-      CcCompilationContext ccCompilationContext,
+      CcCompilationContextInfo ccCompilationContextInfo,
       CoptsFilter nocopts,
       Iterable<IncludeScannable> lipoScannables,
       CppSemantics cppSemantics,
@@ -110,7 +110,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         // cc_fake_binary and for the negative compilation tests that depend on
         // the cc_fake_binary, and the runfiles must be determined at analysis
         // time, so they can't depend on the contents of the ".d" file.)
-        CcCompilationContext.disallowUndeclaredHeaders(ccCompilationContext),
+        CcCompilationContextInfo.disallowUndeclaredHeaders(ccCompilationContextInfo),
         nocopts,
         lipoScannables,
         /* additionalIncludeScanningRoots=*/ ImmutableList.of(),
@@ -161,7 +161,7 @@ public class FakeCppCompileAction extends CppCompileAction {
               .setDependencies(
                   processDepset(actionExecutionContext, execRoot, reply).getDependencies())
               .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
-              .setAllowedDerivedinputs(getAllowedDerivedInputs());
+              .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
       if (needsIncludeValidation) {
         discoveryBuilder.shouldValidateInclusions();
