@@ -256,7 +256,7 @@ public class ResourceCompiler {
         if (!renamedResFolder.equals(resFolder)) {
           file = Files.copy(
               file,
-              Files.createDirectories(
+              Files.createDirectory(
                   outputDirectory.resolve(renamedResFolder))
                   .resolve(file.getFileName()));
         }
