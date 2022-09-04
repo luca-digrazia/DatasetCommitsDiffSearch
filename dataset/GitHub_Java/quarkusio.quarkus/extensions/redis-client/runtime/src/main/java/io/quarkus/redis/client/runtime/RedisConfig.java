@@ -13,8 +13,8 @@ import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.vertx.redis.client.RedisClientType;
-import io.vertx.redis.client.RedisReplicas;
 import io.vertx.redis.client.RedisRole;
+import io.vertx.redis.client.RedisSlaves;
 
 @ConfigRoot(phase = ConfigPhase.RUN_TIME)
 public class RedisConfig {
@@ -90,10 +90,10 @@ public class RedisConfig {
         public Optional<RedisRole> role;
 
         /**
-         * Whether or not to use replicas nodes (only considered in Cluster mode).
+         * Whether or not to use slave nodes (only considered in Cluster mode).
          */
         @ConfigItem(defaultValueDocumentation = "never")
-        public Optional<RedisReplicas> replicas;
+        public Optional<RedisSlaves> slaves;
 
         /**
          * The maximum size of the connection pool. When working with cluster or sentinel.

@@ -8,7 +8,6 @@ import javax.annotation.PreDestroy;
 
 import io.quarkus.redis.client.RedisClient;
 import io.quarkus.redis.client.reactive.ReactiveRedisClient;
-import io.quarkus.redis.client.runtime.RedisConfig.RedisConfiguration;
 import io.vertx.core.Vertx;
 import io.vertx.redis.client.Redis;
 import io.vertx.redis.client.RedisAPI;
@@ -18,10 +17,10 @@ class RedisAPIProducer {
     private static Map<String, RedisAPIContainer> REDIS_APIS = new ConcurrentHashMap<>();
 
     private final Vertx vertx;
-    private final RedisConfig redisConfig;
+    private final RedisConfig redisRuntimeConfig;
 
     public RedisAPIProducer(RedisConfig redisConfig, Vertx vertx) {
-        this.redisConfig = redisConfig;
+        this.redisRuntimeConfig = redisConfig;
         this.vertx = vertx;
     }
 
@@ -30,12 +29,11 @@ class RedisAPIProducer {
             @Override
             public RedisAPIContainer apply(String s) {
                 long timeout = 10;
-                RedisConfiguration redisConfiguration = RedisClientUtil.getConfiguration(RedisAPIProducer.this.redisConfig,
-                        name);
-                if (redisConfiguration.timeout.isPresent()) {
-                    timeout = redisConfiguration.timeout.get().getSeconds();
+                RedisConfig.RedisConfiguration redisConfig = RedisClientUtil.getConfiguration(redisRuntimeConfig, name);
+                if (redisConfig.timeout.isPresent()) {
+                    timeout = redisConfig.timeout.get().getSeconds();
                 }
-                RedisOptions options = RedisClientUtil.buildOptions(redisConfiguration);
+                RedisOptions options = RedisClientUtil.buildOptions(redisConfig);
                 Redis redis = Redis.createClient(vertx, options);
                 RedisAPI redisAPI = RedisAPI.api(redis);
                 MutinyRedis mutinyRedis = new MutinyRedis(redis);
@@ -52,8 +50,6 @@ class RedisAPIProducer {
         for (RedisAPIContainer container : REDIS_APIS.values()) {
             container.close();
         }
-
-        REDIS_APIS.clear();
     }
 
 }
