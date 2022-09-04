@@ -1,205 +1,270 @@
 /**
- * Copyright 2011, 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.streams;
 
-import java.util.HashMap;
+import com.fasterxml.jackson.annotation.JsonValue;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import org.bson.types.ObjectId;
+import org.graylog2.database.CollectionName;
+import org.graylog2.database.PersistedImpl;
+import org.graylog2.database.validators.DateValidator;
+import org.graylog2.database.validators.FilledStringValidator;
+import org.graylog2.database.validators.MapValidator;
+import org.graylog2.database.validators.OptionalStringValidator;
+import org.graylog2.indexer.IndexSet;
+import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.database.validators.Validator;
+import org.graylog2.plugin.streams.Output;
+import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.streams.StreamRule;
+import org.joda.time.DateTime;
+
+import javax.annotation.Nullable;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.bson.types.ObjectId;
-import org.graylog2.Core;
-import org.graylog2.database.*;
-import org.graylog2.database.validators.DateValidator;
-import org.graylog2.database.validators.FilledStringValidator;
-import org.graylog2.database.validators.Validator;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.alarms.AlarmReceiver;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.plugin.streams.StreamRule;
-
-import com.beust.jcommander.internal.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * Representing a single stream from the streams collection. Also provides method
  * to get all streams of this collection.
- *
- * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class StreamImpl extends Persisted implements Stream, Persistable {
+@CollectionName("streams")
+public class StreamImpl extends PersistedImpl implements Stream {
+    public static final String FIELD_TITLE = "title";
+    public static final String FIELD_DESCRIPTION = "description";
+    public static final String FIELD_RULES = "rules";
+    public static final String FIELD_OUTPUTS = "outputs";
+    public static final String FIELD_CONTENT_PACK = "content_pack";
+    public static final String FIELD_ALERT_RECEIVERS = "alert_receivers";
+    public static final String FIELD_DISABLED = "disabled";
+    public static final String FIELD_CREATED_AT = "created_at";
+    public static final String FIELD_CREATOR_USER_ID = "creator_user_id";
+    public static final String FIELD_MATCHING_TYPE = "matching_type";
+    public static final String FIELD_DEFAULT_STREAM = "is_default_stream";
+    public static final String FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM = "remove_matches_from_default_stream";
+    public static final String FIELD_INDEX_SET_ID = "index_set_id";
+    public static final String EMBEDDED_ALERT_CONDITIONS = "alert_conditions";
 
-    private static final Logger LOG = LoggerFactory.getLogger(StreamImpl.class);
+    private final List<StreamRule> streamRules;
+    private final Set<Output> outputs;
+    private final IndexSet indexSet;
 
-
-    private static final String COLLECTION = "streams";
-
-    public StreamImpl(Map<String, Object> fields, Core core) throws ValidationException {
-    	super(COLLECTION, core, fields, validations());
+    public StreamImpl(Map<String, Object> fields) {
+        super(fields);
+        this.streamRules = null;
+        this.outputs = null;
+        this.indexSet = null;
     }
 
-    protected StreamImpl(ObjectId id, Map<String, Object> fields, Core core) throws ValidationException {
-    	super(COLLECTION, core, id, fields, validations());
-    }
-    
-    @SuppressWarnings("unchecked")
-	public static StreamImpl load(ObjectId id, Core core) throws NotFoundException {
-    	BasicDBObject o = (BasicDBObject) get(id, core, COLLECTION);
-
-    	if (o == null) {
-    		throw new NotFoundException();
-    	}
-
-        try {
-    	    return new StreamImpl((ObjectId) o.get("_id"), o.toMap(), core);
-        } catch (ValidationException e) {
-            throw new RuntimeException("An object loaded from DB (" + id.toStringMongod() + ") is not passing " +
-                    "validations. This should never happen.", e);
-        }
-    }
-    
-    public static List<Stream> loadAllEnabled(Core core) {
-        return loadAllEnabled(core, new HashMap<String, Object>());
-    }
-    
-    @SuppressWarnings("unchecked")
-	public static List<Stream> loadAllEnabled(Core core, Map<String, Object> additionalQueryOpts) {
-    	List<Stream> streams = Lists.newArrayList();
-    	
-    	DBObject query = new BasicDBObject();
-        query.put("disabled", new BasicDBObject("$ne", true));
-    	
-        // putAll() is not working with BasicDBObject.
-        for (Map.Entry<String, Object> o : additionalQueryOpts.entrySet()) {
-        	query.put(o.getKey(), o.getValue());
-        }
-        
-        List<DBObject> results = query(query, core, COLLECTION);
-        for (DBObject o : results) {
-            ObjectId id = (ObjectId) o.get("_id");
-
-            try {
-        	    streams.add(new StreamImpl(id, o.toMap(), core));
-            } catch (ValidationException e) {
-                LOG.error("An object loaded from DB (" + id.toStringMongod() + ") is not passing " +
-                        "validations. This should never happen.", e);
-            }
-        }
-
-    	return streams;
+    protected StreamImpl(ObjectId id, Map<String, Object> fields) {
+        super(id, fields);
+        this.streamRules = null;
+        this.outputs = null;
+        this.indexSet = null;
     }
 
-    public Set<Map<String, String>> getOutputConfigurations(String className) {
-    	return null;
-    }
-    
-    public boolean hasConfiguredOutputs(String typeClass) {
-    	return false;
-    }
-    
-    public boolean inAlarmGracePeriod() {
-    	return true;
-    }
-    
-    public void setLastAlarm(int timestamp, Core server) {
-    }
-    
-    public Set<String> getAlarmCallbacks() {
-    	return Sets.newHashSet();
+    public StreamImpl(ObjectId id, Map<String, Object> fields, List<StreamRule> streamRules, Set<Output> outputs, @Nullable IndexSet indexSet) {
+        super(id, fields);
+
+        this.streamRules = streamRules;
+        this.outputs = outputs;
+        this.indexSet = indexSet;
     }
 
-    public static Map<String, String> nameMap(Core server) {
-    	return Maps.newHashMap();
-    }
-    
-	@Override
-	public List<StreamRule> getStreamRules() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public int getAlarmTimespan() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public int getAlarmMessageLimit() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public int getAlarmPeriod() {
-		// TODO Auto-generated method stub
-		return 0;
-	}
-
-	@Override
-	public Set<AlarmReceiver> getAlarmReceivers(GraylogServer server) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-	
     @Override
     public String toString() {
-        this.getStreamRules();
-        return this.id.toString() + ":" + this.getTitle();
+        return this.id.toString() + ": \"" + this.getTitle() + "\"";
     }
-
-	@Override
-	public ObjectId getId() {
-		return this.id;
-	}
 
     @Override
-	public String getTitle() {
-		return (String) fields.get("title");
-	}
-	
-	public Map<String, Object> asMap() {
-		// We work on the result a bit to allow correct JSON serializing.
-		Map<String, Object> result = Maps.newHashMap(fields);
-		result.remove("_id");
-		result.put("id", ((ObjectId) fields.get("_id")).toStringMongod());
-		
-		if (!result.containsKey("rules")) {
-			result.put("rules", Maps.newHashMap());
-		}
-		
-		return result;
-	}
-
-    private static Map<String, Validator> validations() {
-        return new HashMap<String, Validator>() {{
-            put("title", new FilledStringValidator());
-            put("creator_user_id", new FilledStringValidator());
-            put("created_at", new DateValidator());
-        }};
+    public List<StreamRule> getStreamRules() {
+        return this.streamRules;
     }
 
+    @Override
+    public Set<Output> getOutputs() {
+        return this.outputs;
+    }
+
+    @Override
+    public String getTitle() {
+        return (String) fields.get(FIELD_TITLE);
+    }
+
+    @Override
+    public String getDescription() {
+        return (String) fields.get(FIELD_DESCRIPTION);
+    }
+
+    @Override
+    public void setTitle(String title) {
+        fields.put(FIELD_TITLE, title);
+    }
+
+    @Override
+    public void setDescription(String description) {
+        fields.put(FIELD_DESCRIPTION, description);
+    }
+
+    @Override
+    public Boolean getDisabled() {
+        return (Boolean) fields.get(FIELD_DISABLED);
+    }
+
+    @Override
+    public void setDisabled(Boolean disabled) {
+        fields.put(FIELD_DISABLED, disabled);
+    }
+
+    @Override
+    public String getContentPack() {
+        return (String) fields.get(FIELD_CONTENT_PACK);
+    }
+
+    @Override
+    public void setContentPack(String contentPack) {
+        fields.put(FIELD_CONTENT_PACK, contentPack);
+    }
+
+    @Override
+    public Boolean isPaused() {
+        Boolean disabled = getDisabled();
+        return (disabled != null && disabled);
+    }
+
+    @Override
+    public Map<String, Object> asMap(List<StreamRule> streamRules) {
+        Map<String, Object> result = asMap();
+
+        List<Map<String, Object>> streamRulesMap = Lists.newArrayList();
+
+        for (StreamRule streamRule : streamRules) {
+            streamRulesMap.add(streamRule.asMap());
+        }
+
+        result.put(FIELD_RULES, streamRulesMap);
+
+        return result;
+    }
+
+    @JsonValue
+    @Override
+    public Map<String, Object> asMap() {
+        // We work on the result a bit to allow correct JSON serializing.
+        Map<String, Object> result = Maps.newHashMap(fields);
+        result.remove("_id");
+        result.put("id", ((ObjectId) fields.get("_id")).toHexString());
+        result.remove(FIELD_CREATED_AT);
+        result.put(FIELD_CREATED_AT, (Tools.getISO8601String((DateTime) fields.get(FIELD_CREATED_AT))));
+        result.put(FIELD_RULES, streamRules);
+        result.put(FIELD_OUTPUTS, outputs);
+        result.put(FIELD_MATCHING_TYPE, getMatchingType());
+        result.put(FIELD_DEFAULT_STREAM, isDefaultStream());
+        result.put(FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, getRemoveMatchesFromDefaultStream());
+        result.put(FIELD_INDEX_SET_ID, getIndexSetId());
+        return result;
+    }
+
+    @Override
+    public Map<String, Validator> getValidations() {
+        return ImmutableMap.<String, Validator>builder()
+                .put(FIELD_TITLE, new FilledStringValidator())
+                .put(FIELD_CREATOR_USER_ID, new FilledStringValidator())
+                .put(FIELD_CREATED_AT, new DateValidator())
+                .put(FIELD_CONTENT_PACK, new OptionalStringValidator())
+                .put(FIELD_INDEX_SET_ID, new FilledStringValidator())
+                .build();
+    }
+
+    @Override
+    public Map<String, Validator> getEmbeddedValidations(String key) {
+        if (key.equals(EMBEDDED_ALERT_CONDITIONS)) {
+            return ImmutableMap.of(
+                    "id", new FilledStringValidator(),
+                    "parameters", new MapValidator());
+        }
+
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, List<String>> getAlertReceivers() {
+        @SuppressWarnings("unchecked")
+        final Map<String, List<String>> alertReceivers =
+                (Map<String, List<String>>) fields.getOrDefault(FIELD_ALERT_RECEIVERS, Collections.emptyMap());
+        return alertReceivers;
+    }
+
+    @Override
+    public MatchingType getMatchingType() {
+        final String matchingTypeString = (String) fields.get(FIELD_MATCHING_TYPE);
+
+        if (matchingTypeString == null) {
+            return MatchingType.AND;
+        } else {
+            return MatchingType.valueOf(matchingTypeString);
+        }
+    }
+
+    @Override
+    public void setMatchingType(MatchingType matchingType) {
+        fields.put(FIELD_MATCHING_TYPE, matchingType.toString());
+    }
+
+    @Override
+    public boolean isDefaultStream() {
+        return (boolean) fields.getOrDefault(FIELD_DEFAULT_STREAM, false);
+    }
+
+    @Override
+    public void setDefaultStream(boolean defaultStream) {
+        fields.put(FIELD_DEFAULT_STREAM, defaultStream);
+    }
+
+    @Override
+    public boolean getRemoveMatchesFromDefaultStream() {
+        return (boolean) fields.getOrDefault(FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, false);
+    }
+
+    @Override
+    public void setRemoveMatchesFromDefaultStream(boolean removeMatchesFromDefaultStream) {
+        fields.put(FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, removeMatchesFromDefaultStream);
+    }
+
+    @Override
+    public IndexSet getIndexSet() {
+        // The indexSet might be null because of backwards compatibility but it shouldn't be for regular streams.
+        // Throw an exception if indexSet is not set to avoid losing messages!
+        if (indexSet == null) {
+            throw new IllegalStateException("index set must not be null! (stream id=" + getId() + " title=\"" + getTitle() + "\")");
+        }
+        return indexSet;
+    }
+
+    @Override
+    public String getIndexSetId() {
+        return (String) fields.get(FIELD_INDEX_SET_ID);
+    }
+
+    @Override
+    public void setIndexSetId(String indexSetId) {
+        fields.put(FIELD_INDEX_SET_ID, indexSetId);
+    }
 }

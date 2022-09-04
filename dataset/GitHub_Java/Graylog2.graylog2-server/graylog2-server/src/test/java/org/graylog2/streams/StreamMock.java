@@ -1,33 +1,38 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 package org.graylog2.streams;
 
-import com.google.common.collect.Lists;
+import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import org.graylog2.indexer.IndexSet;
 import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+
+import static org.mockito.Mockito.mock;
 
 public class StreamMock implements Stream {
     private String id;
@@ -36,10 +41,14 @@ public class StreamMock implements Stream {
     private boolean disabled;
     private String contentPack;
     private List<StreamRule> streamRules;
+    private MatchingType matchingType;
+    private boolean defaultStream;
+    private boolean removeMatchesFromDefaultStream;
 
     public StreamMock(Map<String, Object> stream) {
-        this(stream, Lists.<StreamRule>newArrayList());
+        this(stream, Collections.emptyList());
     }
+
     public StreamMock(Map<String, Object> stream, List<StreamRule> streamRules) {
         this.id = stream.get("_id").toString();
         this.title = (String) stream.get(StreamImpl.FIELD_TITLE);
@@ -49,6 +58,9 @@ public class StreamMock implements Stream {
         }
         this.contentPack = (String) stream.get(StreamImpl.FIELD_CONTENT_PACK);
         this.streamRules = streamRules;
+        this.matchingType = (MatchingType) stream.getOrDefault(StreamImpl.FIELD_MATCHING_TYPE, MatchingType.AND);
+        this.defaultStream = (boolean) stream.getOrDefault(StreamImpl.FIELD_DEFAULT_STREAM, false);
+        this.removeMatchesFromDefaultStream = (boolean) stream.getOrDefault(StreamImpl.FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, false);
     }
 
     @Override
@@ -58,22 +70,22 @@ public class StreamMock implements Stream {
 
     @Override
     public Map<String, Object> getFields() {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
     public Map<String, Validator> getValidations() {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
     public Map<String, Validator> getEmbeddedValidations(String key) {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
     public Map<String, Object> asMap() {
-        return Maps.newHashMap();
+        return Collections.emptyMap();
     }
 
     @Override
@@ -145,11 +157,80 @@ public class StreamMock implements Stream {
         return Sets.newHashSet();
     }
 
+
+    @Override
+    public MatchingType getMatchingType() {
+        return this.matchingType;
+    }
+
+    @Override
+    public void setMatchingType(MatchingType matchingType) {
+        this.matchingType = matchingType;
+    }
+
+    @Override
+    public boolean isDefaultStream() {
+        return defaultStream;
+    }
+
+    @Override
+    public void setDefaultStream(boolean defaultStream) {
+        this.defaultStream = defaultStream;
+    }
+
+    @Override
+    public boolean getRemoveMatchesFromDefaultStream() {
+        return removeMatchesFromDefaultStream;
+    }
+
+    @Override
+    public void setRemoveMatchesFromDefaultStream(boolean removeMatchesFromDefaultStream) {
+        this.removeMatchesFromDefaultStream = removeMatchesFromDefaultStream;
+    }
+
     @Override
     public String toString() {
-        return "StreamMock{" +
-                "id='" + id + '\'' +
-                ", title='" + title + '\'' +
-                '}';
+        return MoreObjects.toStringHelper(StreamMock.class)
+                .add("id", id)
+                .add("title", title)
+                .add("matchingType", matchingType)
+                .add("defaultStream", defaultStream)
+                .add("disabled", disabled)
+                .add("removeMatchesFromDefaultStream", removeMatchesFromDefaultStream)
+                .toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        StreamMock that = (StreamMock) o;
+        return defaultStream == that.defaultStream &&
+                Objects.equals(id, that.id) &&
+                Objects.equals(title, that.title) &&
+                Objects.equals(description, that.description) &&
+                Objects.equals(streamRules, that.streamRules) &&
+                Objects.equals(defaultStream, that.defaultStream) &&
+                Objects.equals(removeMatchesFromDefaultStream, that.removeMatchesFromDefaultStream) &&
+                matchingType == that.matchingType;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, title, description, streamRules, matchingType, defaultStream, removeMatchesFromDefaultStream);
+    }
+
+    @Override
+    public String getIndexSetId() {
+        return null;
+    }
+
+    @Override
+    public void setIndexSetId(String indexSetId) {
+    }
+
+    @Override
+    public IndexSet getIndexSet() {
+        return mock(IndexSet.class);
     }
 }

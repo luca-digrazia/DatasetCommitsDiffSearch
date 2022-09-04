@@ -28,10 +28,9 @@ import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.Date;
@@ -52,10 +51,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class MessageTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
     private Message message;
     private DateTime originalTimestamp;
     private MetricRegistry metricRegistry;
