@@ -240,24 +240,44 @@ public class CriticalPathComputer {
    * @return The component to be used for updating the time stats.
    */
   private CriticalPathComponent tryAddComponent(CriticalPathComponent newComponent) {
-    Action newAction = newComponent.getAction();
+    Action newAction = Preconditions.checkNotNull(newComponent.maybeGetAction(), newComponent);
     Artifact primaryOutput = newAction.getPrimaryOutput();
     CriticalPathComponent storedComponent =
         outputArtifactToComponent.putIfAbsent(primaryOutput, newComponent);
 
     if (storedComponent != null) {
-      Action oldAction = storedComponent.getAction();
-      if (!Actions.canBeShared(actionKeyContext, newAction, oldAction)) {
-        throw new IllegalStateException(
-            "Duplicate output artifact found for unsharable actions."
-                + "This can happen if a previous event registered the action.\n"
-                + "Old action: "
-                + oldAction
-                + "\n\nNew action: "
-                + newAction
-                + "\n\nArtifact: "
-                + primaryOutput
-                + "\n");
+      Action oldAction = storedComponent.maybeGetAction();
+      if (oldAction != null) {
+        if (!Actions.canBeShared(actionKeyContext, newAction, oldAction)) {
+          throw new IllegalStateException(
+              "Duplicate output artifact found for unsharable actions."
+                  + "This can happen if a previous event registered the action.\n"
+                  + "Old action: "
+                  + oldAction
+                  + "\n\nNew action: "
+                  + newAction
+                  + "\n\nArtifact: "
+                  + primaryOutput
+                  + "\n");
+        }
+      } else {
+        String mnemonic = storedComponent.getMnemonic();
+        String prettyPrint = storedComponent.prettyPrintAction();
+        if (!newAction.getMnemonic().equals(mnemonic)
+            || !newAction.prettyPrint().equals(prettyPrint)) {
+          throw new IllegalStateException(
+              "Duplicate output artifact found for unsharable actions."
+                  + "This can happen if a previous event registered the action.\n"
+                  + "Old action mnemonic and prettyPrint: "
+                  + mnemonic
+                  + ", "
+                  + prettyPrint
+                  + "\n\nNew action: "
+                  + newAction
+                  + "\n\nArtifact: "
+                  + primaryOutput
+                  + "\n");
+        }
       }
     } else {
       storedComponent = newComponent;
@@ -326,8 +346,9 @@ public class CriticalPathComputer {
   private void addArtifactDependency(CriticalPathComponent actionStats, Artifact input) {
     CriticalPathComponent depComponent = outputArtifactToComponent.get(input);
     if (depComponent != null) {
-      if (depComponent.isRunning()) {
-        checkCriticalPathInconsistency(input, depComponent.getAction(), actionStats);
+      Action action = depComponent.maybeGetAction();
+      if (depComponent.isRunning && action != null) {
+        checkCriticalPathInconsistency(input, action, actionStats);
         return;
       }
       actionStats.addDepInfo(depComponent);
