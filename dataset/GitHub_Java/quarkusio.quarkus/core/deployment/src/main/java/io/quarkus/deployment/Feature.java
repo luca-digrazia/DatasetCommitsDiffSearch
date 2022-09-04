@@ -18,8 +18,6 @@ public enum Feature {
     AMAZON_SQS,
     AMAZON_SES,
     AMAZON_KMS,
-    AMAZON_SSM,
-    APICURIO_REGISTRY_AVRO,
     ARTEMIS_CORE,
     ARTEMIS_JMS,
     CACHE,
@@ -44,7 +42,6 @@ public enum Feature {
     INFINISPAN_CLIENT,
     INFINISPAN_EMBEDDED,
     JAEGER,
-    JAXRS_CLIENT_REACTIVE,
     JDBC_DB2,
     JDBC_DERBY,
     JDBC_H2,
@@ -52,10 +49,8 @@ public enum Feature {
     JDBC_MARIADB,
     JDBC_MSSQL,
     JDBC_MYSQL,
-    JDBC_ORACLE,
     JGIT,
     JSCH,
-    KAFKA_CLIENT,
     KAFKA_STREAMS,
     KEYCLOAK_AUTHORIZATION,
     KOTLIN,
@@ -76,12 +71,8 @@ public enum Feature {
     OIDC,
     OIDC_CLIENT,
     OIDC_CLIENT_FILTER,
-    OIDC_CLIENT_REACTIVE_FILTER,
     OIDC_TOKEN_PROPAGATION,
     OPENSHIFT_CLIENT,
-    OPENTELEMETRY,
-    OPENTELEMETRY_JAEGER_EXPORTER,
-    OPENTELEMETRY_OTLP_EXPORTER,
     PICOCLI,
     QUARTZ,
     QUTE,
@@ -100,14 +91,11 @@ public enum Feature {
     RESTEASY_REACTIVE_QUTE,
     RESTEASY_REACTIVE_JSONB,
     RESTEASY_REACTIVE_JACKSON,
-    RESTEASY_REACTIVE_LINKS,
     REST_CLIENT,
     REST_CLIENT_JACKSON,
     REST_CLIENT_JAXB,
     REST_CLIENT_JSONB,
     REST_CLIENT_MUTINY,
-    REST_CLIENT_REACTIVE,
-    REST_CLIENT_REACTIVE_JACKSON,
     SCALA,
     SCHEDULER,
     SECURITY,
@@ -131,7 +119,6 @@ public enum Feature {
     SMALLRYE_REACTIVE_STREAMS_OPERATORS,
     SMALLRYE_REACTIVE_TYPE_CONVERTERS,
     SMALLRYE_GRAPHQL,
-    SMALLRYE_GRAPHQL_CLIENT,
     SPRING_DI,
     SPRING_WEB,
     SPRING_DATA_JPA,
@@ -143,8 +130,7 @@ public enum Feature {
     SPRING_SCHEDULED,
     SWAGGER_UI,
     TIKA,
-    WEBSOCKETS,
-    WEBSOCKETS_CLIENT,
+    UNDERTOW_WEBSOCKETS,
     VAULT,
     VERTX,
     VERTX_WEB,
@@ -152,7 +138,7 @@ public enum Feature {
     WEBJARS_LOCATOR;
 
     public String getName() {
-        return toString().toLowerCase().replace('_', '-');
+        return toString().toLowerCase().replace("_", "-");
     }
 
 }
