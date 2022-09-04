@@ -92,8 +92,11 @@ public class LoggingFactory {
     }
 
     private void hijackJDKLogging() {
-        SLF4JBridgeHandler.removeHandlersForRootLogger();
-        SLF4JBridgeHandler.install();
+        final java.util.logging.Logger root = java.util.logging.Logger.getLogger("");
+        for (java.util.logging.Handler handler : root.getHandlers()) {
+            root.removeHandler(handler);
+        }
+        root.addHandler(new SLF4JBridgeHandler());
     }
 
     private Logger configureLevels() {
