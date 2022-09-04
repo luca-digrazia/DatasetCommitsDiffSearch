@@ -56,10 +56,9 @@ public class TestCompletionValue implements SkyValue, UnshareableValue {
                 exclusiveTesting));
   }
 
-  /** Key for {@link TestCompletionValue} nodes. */
   @AutoCodec
   @AutoValue
-  public abstract static class TestCompletionKey implements SkyKey {
+  abstract static class TestCompletionKey implements SkyKey {
     private static final Interner<TestCompletionKey> interner = BlazeInterners.newWeakInterner();
 
     @AutoCodec.VisibleForSerialization
