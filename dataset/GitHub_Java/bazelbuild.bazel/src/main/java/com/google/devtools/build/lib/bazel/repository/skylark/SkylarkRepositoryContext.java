@@ -342,9 +342,12 @@ public class SkylarkRepositoryContext {
 
   // Create parent directories for the given path
   private void makeDirectories(Path path) throws IOException {
-    Path parent = path.getParentDirectory();
-    if (parent != null) {
-      parent.createDirectoryAndParents();
+    if (!path.isRootDirectory()) {
+      Path parent = path.getParentDirectory();
+      if (!parent.exists()) {
+        makeDirectories(path.getParentDirectory());
+        parent.createDirectory();
+      }
     }
   }
 
