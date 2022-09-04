@@ -202,6 +202,7 @@ final class Parser {
   //        | def_stmt
   //        | for_stmt
   //        | if_stmt
+  //        | load_stmt
   private void parseStatement(List<Statement> list) {
     if (token.kind == TokenKind.DEF) {
       list.add(parseDefStatement());
@@ -209,6 +210,8 @@ final class Parser {
       list.add(parseIfStatement());
     } else if (token.kind == TokenKind.FOR) {
       list.add(parseForStatement());
+    } else if (token.kind == TokenKind.LOAD) {
+      parseLoadStatement(list); // may add nothing
     } else {
       parseSimpleStatement(list);
     }
@@ -1063,20 +1066,19 @@ final class Parser {
   }
 
   // load '(' STRING (COMMA [IDENTIFIER EQUALS] STRING)+ COMMA? ')'
-  private Statement parseLoadStatement() {
+  private void parseLoadStatement(List<Statement> list) {
     int start = token.left;
     expect(TokenKind.LOAD);
     expect(TokenKind.LPAREN);
     if (token.kind != TokenKind.STRING) {
-      StringLiteral module = setLocation(new StringLiteral(""), token.left, token.right);
       expect(TokenKind.STRING);
-      return setLocation(new LoadStatement(module, ImmutableList.of()), start, token.right);
+      return;
     }
 
     StringLiteral importString = parseStringLiteral();
     if (token.kind == TokenKind.RPAREN) {
       syntaxError("expected at least one symbol to load");
-      return setLocation(new LoadStatement(importString, ImmutableList.of()), start, token.right);
+      return;
     }
     expect(TokenKind.COMMA);
 
@@ -1092,10 +1094,10 @@ final class Parser {
       parseLoadSymbol(bindings);
     }
 
-    LoadStatement stmt =
-        setLocation(new LoadStatement(importString, bindings.build()), start, token.right);
+    LoadStatement stmt = new LoadStatement(importString, bindings.build());
+    list.add(setLocation(stmt, start, token.right));
     expect(TokenKind.RPAREN);
-    return stmt;
+    expectAndRecover(TokenKind.NEWLINE);
   }
 
   /**
@@ -1148,7 +1150,6 @@ final class Parser {
 
   //     small_stmt ::= assign_stmt
   //                  | expr
-  //                  | load_stmt
   //                  | return_stmt
   //                  | BREAK | CONTINUE | PASS
   //     assign_stmt ::= expr ('=' | augassign) expr
@@ -1164,10 +1165,7 @@ final class Parser {
       int end = token.right;
       expect(kind);
       return setLocation(new FlowStatement(kind), start, end);
-    } else if (token.kind == TokenKind.LOAD) {
-      return parseLoadStatement();
     }
-
     Expression lhs = parseExpression();
 
     // lhs = rhs  or  lhs += rhs
