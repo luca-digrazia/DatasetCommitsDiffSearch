@@ -53,28 +53,31 @@ public class Cli {
      * Runs the command line interface given some arguments.
      *
      * @param arguments the command line arguments
-     * @return whether or not the command successfully executed
      * @throws Exception if something goes wrong
      */
-    public boolean run(String... arguments) throws Exception {
+    public int run(String... arguments) throws Exception {
         try {
             if (isFlag(HELP, arguments)) {
                 parser.printHelp(stdOut);
-            } else if (isFlag(VERSION, arguments)) {
-                parser.printVersion(stdOut);
-            } else {
-                final Namespace namespace = parser.parseArgs(arguments);
-                if (namespace.get("is-help") == null) {
-                    final Command command = commands.get(namespace.getString(COMMAND_NAME_ATTR));
-                    command.run(bootstrap, namespace);
-                }
+                return 0;
             }
-            return true;
+
+            if (isFlag(VERSION, arguments)) {
+                parser.printVersion(stdOut);
+                return 0;
+            }
+
+            final Namespace namespace = parser.parseArgs(arguments);
+            if (namespace.get("is-help") == null) {
+                final Command command = commands.get(namespace.getString(COMMAND_NAME_ATTR));
+                command.run(bootstrap, namespace);
+            }
+            return 0;
         } catch (ArgumentParserException e) {
             // TODO: 5/25/13 <coda> -- make ArgumentParser#handleError not depend on System.err
             stdErr.println(e.getMessage());
             e.getParser().printHelp(stdErr);
-            return false;
+            return 1;
         }
     }
 
