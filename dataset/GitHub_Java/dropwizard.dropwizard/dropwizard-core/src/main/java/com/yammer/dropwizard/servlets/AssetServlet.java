@@ -18,35 +18,35 @@ public class AssetServlet extends HttpServlet {
     private static final long serialVersionUID = 6393345594784987908L;
 
     private static class AssetLoader extends CacheLoader<String, byte[]> {
-        private final String resourcePath;
-        private final String uriPath;
+        private final String base;
 
-        private AssetLoader(String resourcePath, String uriPath) {
-            this.resourcePath = resourcePath;
-            this.uriPath = uriPath;
+        private AssetLoader(String base) {
+            this.base = base;
         }
 
         @Override
         public byte[] load(String key) throws Exception {
-            final String resource = key.substring(uriPath.length());
-            String fullResourcePath = this.resourcePath + resource;
-
-                return Resources.toByteArray(Resources.getResource(fullResourcePath.substring(1)));
+            final String path = URIUtil.canonicalPath(key);
+            if (path.startsWith(base)) {
+                return Resources.toByteArray(Resources.getResource(path.substring(1)));
+            } else {
+                throw new RuntimeException("nope");
+            }
         }
     }
     
     private final transient LoadingCache<String, byte[]> cache;
     private final transient MimeTypes mimeTypes;
 
-    public AssetServlet(String resourcePath, int maxCacheSize, String uriPath) {
-        this.cache = buildCache(resourcePath, maxCacheSize, uriPath);
+    public AssetServlet(String base, int maxCacheSize) {
+        this.cache = buildCache(base, maxCacheSize);
         this.mimeTypes = new MimeTypes();
     }
 
-    private static LoadingCache<String, byte[]> buildCache(String resourecePath, int maxCacheSize, String uriPath) {
+    private static LoadingCache<String, byte[]> buildCache(String base, int maxCacheSize) {
         return CacheBuilder.newBuilder()
                            .maximumSize(maxCacheSize)
-                           .build(new AssetLoader(resourecePath, uriPath));
+                           .build(new AssetLoader(base));
     }
 
     @Override
