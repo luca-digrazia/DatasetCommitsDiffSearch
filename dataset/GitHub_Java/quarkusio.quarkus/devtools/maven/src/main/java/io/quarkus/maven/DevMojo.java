@@ -349,7 +349,7 @@ public class DevMojo extends AbstractMojo {
             pb.directory(outputDirectory);
             Process p = pb.start();
 
-            //https://github.com/quarkusio/quarkus/issues/232
+            //https://github.com/jbossas/quarkus/issues/232
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -383,13 +383,8 @@ public class DevMojo extends AbstractMojo {
 
         if (mavenProject == null) {
             projectDirectory = localProject.getDir().toAbsolutePath().toString();
-            Path sourcePath = localProject.getSourcesSourcesDir().toAbsolutePath();
-            if (Files.isDirectory(sourcePath)) {
-                sourcePaths = Collections.singleton(
-                        sourcePath.toString());
-            } else {
-                sourcePaths = Collections.emptySet();
-            }
+            sourcePaths = Collections.singleton(
+                    localProject.getSourcesSourcesDir().toAbsolutePath().toString());
         } else {
             projectDirectory = mavenProject.getBasedir().getPath();
             sourcePaths = mavenProject.getCompileSourceRoots().stream()
