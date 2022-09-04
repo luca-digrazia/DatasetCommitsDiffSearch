@@ -19,14 +19,14 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.bazel.BazelRepositoryModule;
+import com.google.devtools.build.lib.bazel.repository.MavenDownloader;
+import com.google.devtools.build.lib.bazel.repository.MavenServerFunction;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
-import com.google.devtools.build.lib.bazel.repository.downloader.DownloadManager;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
-import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
 import com.google.devtools.build.lib.skyframe.ActionEnvironmentFunction;
@@ -93,8 +93,7 @@ public class BazelPackageLoader extends AbstractPackageLoader {
     public BazelPackageLoader buildImpl() {
       // Set up SkyFunctions and PrecomputedValues needed to make local repositories work correctly.
       RepositoryCache repositoryCache = new RepositoryCache();
-      HttpDownloader httpDownloader = new HttpDownloader();
-      DownloadManager downloadManager = new DownloadManager(repositoryCache, httpDownloader);
+      HttpDownloader httpDownloader = new HttpDownloader(repositoryCache);
       addExtraSkyFunctions(
           ImmutableMap.<SkyFunctionName, SkyFunction>builder()
               .put(
@@ -110,17 +109,17 @@ public class BazelPackageLoader extends AbstractPackageLoader {
               .put(
                   SkyFunctions.REPOSITORY_DIRECTORY,
                   new RepositoryDelegatorFunction(
-                      BazelRepositoryModule.repositoryRules(),
-                      new SkylarkRepositoryFunction(downloadManager),
+                      BazelRepositoryModule.repositoryRules(
+                          httpDownloader, new MavenDownloader(repositoryCache)),
+                      new SkylarkRepositoryFunction(httpDownloader),
                       isFetch,
                       ImmutableMap::of,
-                      directories,
-                      ManagedDirectoriesKnowledge.NO_MANAGED_DIRECTORIES))
+                      directories))
               .put(SkyFunctions.REPOSITORY, new RepositoryLoaderFunction())
+              .put(MavenServerFunction.NAME, new MavenServerFunction(directories))
               .build());
       addExtraPrecomputedValues(
           PrecomputedValue.injected(PrecomputedValue.ACTION_ENV, ImmutableMap.of()),
-          PrecomputedValue.injected(PrecomputedValue.REPO_ENV, ImmutableMap.of()),
           PrecomputedValue.injected(
               RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
               Suppliers.ofInstance(ImmutableMap.of())),

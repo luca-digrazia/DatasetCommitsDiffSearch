@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -91,7 +91,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
                 Arrays.stream(roots).map(Root::fromPath).collect(ImmutableList.toImmutableList()),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
             packageCacheOptions,
-            Options.getDefaults(StarlarkSemanticsOptions.class),
+            Options.getDefaults(SkylarkSemanticsOptions.class),
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
@@ -340,7 +340,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
                 ImmutableList.of(Root.fromPath(rootDirectory)),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
             packageCacheOptions,
-            Options.getDefaults(StarlarkSemanticsOptions.class),
+            Options.getDefaults(SkylarkSemanticsOptions.class),
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
             tsgm);
@@ -501,7 +501,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     String expectedMsg =
         "error loading package 'test/skylark': "
             + "Unable to load file '//test/skylark:bad_extension.bzl': file doesn't exist";
-    assertThat(errorInfo.getException()).hasMessageThat().isEqualTo(expectedMsg);
+    assertThat(errorInfo.getException()).hasMessage(expectedMsg);
   }
 
   @Test
@@ -526,8 +526,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     assertThat(result.hasError()).isTrue();
     ErrorInfo errorInfo = result.getError(skyKey);
     assertThat(errorInfo.getException())
-        .hasMessageThat()
-        .isEqualTo(
+        .hasMessage(
             "error loading package 'test/skylark': "
                 + "in /workspace/test/skylark/extension.bzl: "
                 + "Unable to load file '//test/skylark:bad_extension.bzl': file doesn't exist");
@@ -554,8 +553,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     ErrorInfo errorInfo = result.getError(skyKey);
     assertThat(errorInfo.getRootCauseOfException()).isEqualTo(skyKey);
     assertThat(errorInfo.getException())
-        .hasMessageThat()
-        .isEqualTo(
+        .hasMessage(
             "error loading package 'test/skylark': Encountered error while reading extension "
                 + "file 'test/skylark/extension.bzl': Symlink cycle");
   }
