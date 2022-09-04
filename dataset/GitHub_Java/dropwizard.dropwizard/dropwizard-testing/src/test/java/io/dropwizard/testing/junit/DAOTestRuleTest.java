@@ -1,6 +1,5 @@
 package io.dropwizard.testing.junit;
 
-import io.dropwizard.testing.app.TestEntity;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.junit.Rule;
@@ -10,7 +9,6 @@ import javax.validation.ConstraintViolationException;
 import java.io.Serializable;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class DAOTestRuleTest {
@@ -42,10 +40,9 @@ public class DAOTestRuleTest {
         assertThat(testEntity.getDescription()).isEqualTo("description");
     }
 
-    @Test
+    @Test(expected = ConstraintViolationException.class)
     public void transactionThrowsExceptionAsExpected() {
-        assertThatExceptionOfType(ConstraintViolationException.class).isThrownBy(()->
-            daoTestRule.inTransaction(() -> persist(new TestEntity(null))));
+        daoTestRule.inTransaction(() -> persist(new TestEntity(null)));
     }
 
     @Test

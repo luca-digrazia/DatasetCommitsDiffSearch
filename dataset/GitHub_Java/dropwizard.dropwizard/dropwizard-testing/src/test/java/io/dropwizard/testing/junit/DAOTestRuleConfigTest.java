@@ -1,9 +1,6 @@
 package io.dropwizard.testing.junit;
 
-import io.dropwizard.testing.app.TestEntity;
 import org.hibernate.Session;
-import org.hibernate.SessionFactory;
-import org.hibernate.cfg.AvailableSettings;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -20,20 +17,15 @@ public class DAOTestRuleConfigTest {
         .setHbm2DdlAuto("create")
         .setShowSql(true)
         .addEntityClass(TestEntity.class)
-        .setProperty(AvailableSettings.FORMAT_SQL, "true")
-        .customizeConfiguration(c -> c.setProperty("foobar", "baz"))
+        .setProperty("hibernate.format_sql", "true")
         .build();
 
     @Test
     public void explicitConfigCreatesSessionFactory() {
         // it yields a valid SessionFactory instance
-        final SessionFactory sessionFactory = database.getSessionFactory();
-        assertThat(sessionFactory).isNotNull();
-        assertThat(sessionFactory.getProperties())
-                .containsEntry(AvailableSettings.FORMAT_SQL, "true")
-                .containsEntry("foobar", "baz");
+        assertThat(database.getSessionFactory()).isNotNull();
 
-        final Session currentSession = sessionFactory.getCurrentSession();
+        final Session currentSession = database.getSessionFactory().getCurrentSession();
 
         // an instance of an entity contained in the package can be saved
         currentSession.saveOrUpdate(new TestEntity("foo"));
