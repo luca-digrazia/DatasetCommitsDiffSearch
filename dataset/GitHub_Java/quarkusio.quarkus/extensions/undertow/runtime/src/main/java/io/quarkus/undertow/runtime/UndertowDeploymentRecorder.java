@@ -28,7 +28,6 @@ import javax.servlet.ServletException;
 import org.jboss.logging.Logger;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufAllocator;
 import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
@@ -83,6 +82,7 @@ import io.undertow.util.AttachmentKey;
 import io.undertow.util.ImmediateAuthenticationMechanismFactory;
 import io.undertow.vertx.VertxHttpExchange;
 import io.vertx.core.Handler;
+import io.vertx.core.net.impl.PartialPooledByteBufAllocator;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -658,9 +658,9 @@ public class UndertowDeploymentRecorder {
         @Override
         public ByteBuf allocateBuffer(boolean direct) {
             if (direct) {
-                return ByteBufAllocator.DEFAULT.directBuffer(defaultBufferSize);
+                return PartialPooledByteBufAllocator.DEFAULT.directBuffer(defaultBufferSize);
             } else {
-                return ByteBufAllocator.DEFAULT.heapBuffer(defaultBufferSize);
+                return PartialPooledByteBufAllocator.DEFAULT.heapBuffer(defaultBufferSize);
             }
         }
 
@@ -672,9 +672,9 @@ public class UndertowDeploymentRecorder {
         @Override
         public ByteBuf allocateBuffer(boolean direct, int bufferSize) {
             if (direct) {
-                return ByteBufAllocator.DEFAULT.directBuffer(bufferSize);
+                return PartialPooledByteBufAllocator.DEFAULT.directBuffer(bufferSize);
             } else {
-                return ByteBufAllocator.DEFAULT.heapBuffer(bufferSize);
+                return PartialPooledByteBufAllocator.DEFAULT.heapBuffer(bufferSize);
             }
         }
 
