@@ -58,8 +58,6 @@ import io.quarkus.builder.BuildStep;
 import io.quarkus.builder.item.BuildItem;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.runner.bootstrap.AugmentActionImpl;
-import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.configuration.ProfileManager;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.RestAssuredURLManager;
@@ -95,7 +93,7 @@ public class QuarkusUnitTest
     private InMemoryLogHandler inMemoryLogHandler = new InMemoryLogHandler((r) -> false);
     private Consumer<List<LogRecord>> assertLogRecords;
 
-    private static final Timer timeoutTimer = new Timer("Test thread dump timer");
+    private Timer timeoutTimer;
     private volatile TimerTask timeoutTask;
     private Properties customApplicationProperties;
     private Runnable beforeAllCustomizer;
@@ -236,6 +234,7 @@ public class QuarkusUnitTest
         try {
             JavaArchive archive = getArchiveProducerOrDefault();
             Class<?> c = testClass;
+            archive.addClasses(c.getClasses());
             while (c != Object.class) {
                 archive.addClass(c);
                 c = c.getSuperclass();
@@ -340,8 +339,6 @@ public class QuarkusUnitTest
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        //set the right launch mode in the outer CL, used by the HTTP host config source
-        ProfileManager.setLaunchMode(LaunchMode.TEST);
         if (beforeAllCustomizer != null) {
             beforeAllCustomizer.run();
         }
@@ -363,6 +360,7 @@ public class QuarkusUnitTest
                 }
             }
         };
+        timeoutTimer = new Timer("Test thread dump timer");
         timeoutTimer.schedule(timeoutTask, 1000 * 60 * 5);
         if (logFileName != null) {
             PropertyTestUtil.setLogFileProperty(logFileName);
@@ -508,6 +506,8 @@ public class QuarkusUnitTest
 
     @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
+        actualTestClass = null;
+        actualTestInstance = null;
         if (assertLogRecords != null) {
             assertLogRecords.accept(inMemoryLogHandler.records);
         }
@@ -517,18 +517,22 @@ public class QuarkusUnitTest
         try {
             if (runningQuarkusApplication != null) {
                 runningQuarkusApplication.close();
+                runningQuarkusApplication = null;
             }
             if (afterUndeployListener != null) {
                 afterUndeployListener.run();
             }
             if (curatedApplication != null) {
                 curatedApplication.close();
+                curatedApplication = null;
             }
         } finally {
             System.clearProperty("test.url");
             Thread.currentThread().setContextClassLoader(originalClassLoader);
+            originalClassLoader = null;
             timeoutTask.cancel();
             timeoutTask = null;
+            timeoutTimer = null;
             if (deploymentDir != null) {
                 FileUtil.deleteDirectory(deploymentDir);
             }
