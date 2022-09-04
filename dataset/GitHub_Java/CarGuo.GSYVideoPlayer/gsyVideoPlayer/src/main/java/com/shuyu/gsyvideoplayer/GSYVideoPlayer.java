@@ -101,7 +101,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected int mSeekToInAdvance = -1; //// TODO: 2016/11/13 跳过广告
 
-    protected int mBuffterPoint;//缓存进度
 
     protected int mSeekTimePosition; //手动改变滑动的位置
 
@@ -232,7 +231,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
             HttpProxyCacheServer proxy = GSYVideoManager.getProxy(getContext().getApplicationContext(), cachePath);
             url = proxy.getProxyUrl(url);
             mCacheFile = (!url.startsWith("http"));
-            if (!mCacheFile && GSYVideoManager.instance() != null) {
+            if (!mCacheFile) {
                 proxy.registerCacheListener(GSYVideoManager.instance(), mOriginUrl);
             }
         }
@@ -255,7 +254,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
                     cancelProgressTimer();
                     GSYVideoManager.instance().releaseMediaPlayer();
                     releasePauseCoverAndBitmap();
-                    mBuffterPoint = 0;
                 }
                 if (mAudioManager != null) {
                     mAudioManager.abandonAudioFocus(onAudioFocusChangeListener);
@@ -838,7 +836,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         if (mCurrentState != CURRENT_STATE_NORMAL && mCurrentState != CURRENT_STATE_PREPAREING) {
             if (percent != 0) {
                 setTextAndProgress(percent);
-                mBuffterPoint = percent;
                 Debuger.printfLog("Net speed: " + getNetSpeedText() + " percent " + percent);
             }
             //循环清除进度
@@ -1224,13 +1221,4 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     public void setSeekOnStart(long seekOnStart) {
         this.mSeekOnStart = seekOnStart;
     }
-
-
-    /**
-     * 缓冲进度/缓存进度
-     */
-    public int getBuffterPoint() {
-        return mBuffterPoint;
-    }
-
 }
