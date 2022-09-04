@@ -3,16 +3,22 @@ package com.yammer.dropwizard;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.sun.jersey.spi.container.servlet.ServletContainer;
 import com.yammer.dropwizard.cli.Command;
 import com.yammer.dropwizard.cli.ConfiguredCommand;
 import com.yammer.dropwizard.cli.ServerCommand;
 import com.yammer.dropwizard.cli.UsagePrinter;
 import com.yammer.dropwizard.config.Configuration;
+import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.config.LoggingFactory;
+import com.yammer.dropwizard.json.Json;
+
 import org.codehaus.jackson.map.Module;
 
+import javax.annotation.CheckForNull;
 import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.List;
 import java.util.SortedMap;
@@ -25,8 +31,6 @@ import java.util.SortedMap;
  */
 @SuppressWarnings("EmptyMethod")
 public abstract class AbstractService<T extends Configuration> {
-    private static final Module[] NO_MODULES = new Module[0];
-
     static {
         // make sure spinning up Hibernate Validator doesn't yell at us
         LoggingFactory.bootstrap();
@@ -39,12 +43,13 @@ public abstract class AbstractService<T extends Configuration> {
     private final SortedMap<String, Command> commands;
 
     /**
-     * Creates a new service with the given name.
+     * Creates a new service with the given name. If name is {@code null} the service is named as
+     * the subclass by using {@link Class#getSimpleName()}.
      *
      * @param name    the service's name
      */
     protected AbstractService(String name) {
-        this.name = name;
+        this.name = (name == null) ? getClass().getSimpleName() : name;
         this.bundles = Lists.newArrayList();
         this.configuredBundles = Lists.newArrayList();
         this.modules = Lists.newArrayList();
@@ -55,6 +60,7 @@ public abstract class AbstractService<T extends Configuration> {
     /**
      * A simple reminder that this particular class isn't meant to be extended by non-DW classes.
      */
+    @SuppressWarnings("UnusedDeclaration")
     protected abstract void subclassServiceInsteadOfThis();
 
     public final String getName() {
@@ -69,7 +75,23 @@ public abstract class AbstractService<T extends Configuration> {
      */
     @SuppressWarnings("unchecked")
     public final Class<T> getConfigurationClass() {
-        return (Class<T>) ((ParameterizedType) getClass().getGenericSuperclass()).getActualTypeArguments()[0];
+        Type t = getClass();
+        while (t instanceof Class<?>) {
+            t = ((Class<?>) t).getGenericSuperclass();
+        }
+        // Similar to [Issue-89] (see {@link com.yammer.dropwizard.cli.ConfiguredCommand#getConfigurationClass})
+        if (t instanceof ParameterizedType) {
+            // should typically have one of type parameters (first one) that matches:
+            for (Type param : ((ParameterizedType) t).getActualTypeArguments()) {
+                if (param instanceof Class<?>) {
+                    final Class<?> cls = (Class<?>) param;
+                    if (Configuration.class.isAssignableFrom(cls)) {
+                        return (Class<T>) cls;
+                    }
+                }
+            }
+        }
+        throw new IllegalStateException("Can not figure out Configuration type parameterization for "+getClass().getName());
     }
 
     /**
@@ -187,7 +209,43 @@ public abstract class AbstractService<T extends Configuration> {
     public ImmutableList<Module> getJacksonModules() {
         return ImmutableList.copyOf(modules);
     }
+    
+    /**
+     * Returns the json environment wrapper that configures and calls into jackson
+     * @return an instanceof Json
+     */
+    public Json getJson() {
+        final Json json = new Json();
+        for (Module module : getJacksonModules()) {
+            json.registerModule(module);
+        }
+        return json;
+    }
 
+    /**
+     * Returns the Jersey servlet container used to serve HTTP requests. This implementation
+     * creates a new {@link ServletContainer} instance with the given resource configuration.
+     * Subclasses must either use the same {@code config} instance or delegate to it.
+     * <p>
+     * This method may be called before the service initialized with 
+     * {@link #initialize(Configuration, Environment)}; service implementations must not 
+     * assume the service has been initialized.
+     * <p>
+     * An implementation that chooses to return {@code null} is responsible for creating
+     * a container with the given config by other means during initialization and startup.
+     * 
+     *
+     * @param resourceConfig    the Jersey resource config to use for the container
+     * @param serviceConfig     the service configuration object
+     * @return a Jersey servlet container, or {@code null} if the Jersey container
+     *         will be created by other means 
+     */
+    @CheckForNull
+    public ServletContainer getJerseyContainer(DropwizardResourceConfig resourceConfig,
+                                               T serviceConfig) {
+        return new ServletContainer(resourceConfig);
+    }
+    
     private static boolean isHelp(String[] arguments) {
         return (arguments.length == 0) ||
                 ((arguments.length == 1) &&
