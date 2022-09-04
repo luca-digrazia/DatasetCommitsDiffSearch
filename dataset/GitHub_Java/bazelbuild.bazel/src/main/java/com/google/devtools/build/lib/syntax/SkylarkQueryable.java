@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 
 /**
  * Skylark values that support querying by other objects, i.e. `foo in object`.
@@ -23,12 +24,5 @@ import com.google.devtools.build.lib.events.Location;
 public interface SkylarkQueryable {
 
   /** Returns whether the key is in the object. */
-  boolean containsKey(Object key, Location loc) throws EvalException;
-
-  // Variant used when called directly from a Starlark thread.
-  // This is a temporary workaround to enable --incompatible_disallow_dict_lookup_unhashable_keys.
-  // TODO(adonovan): remove when that flag is removed.
-  default boolean containsKey(Object key, Location loc, Environment env) throws EvalException {
-    return this.containsKey(key, loc);
-  }
+  boolean containsKey(Object key, Location loc, StarlarkContext context) throws EvalException;
 }
