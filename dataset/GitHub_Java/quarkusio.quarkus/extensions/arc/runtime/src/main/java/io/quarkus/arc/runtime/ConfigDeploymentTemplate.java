@@ -16,6 +16,7 @@
 
 package io.quarkus.arc.runtime;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -38,8 +39,8 @@ public class ConfigDeploymentTemplate {
         for (Entry<String, Set<Class<?>>> entry : properties.entrySet()) {
             Set<Class<?>> propertyTypes = entry.getValue();
             for (Class<?> propertyType : propertyTypes) {
-                // For parameterized types, we only check if the property config exists without trying to convert it
-                if (propertyType.getTypeParameters().length > 0) {
+                // Copy SmallRye logic - for collections, we only check if the property config exists without trying to convert it
+                if (Collection.class.isAssignableFrom(propertyType)) {
                     propertyType = String.class;
                 }
                 if (!config.getOptionalValue(entry.getKey(), propertyType).isPresent()) {

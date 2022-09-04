@@ -16,7 +16,6 @@
 
 package io.quarkus.it.rest;
 
-import java.io.UnsupportedEncodingException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -305,8 +304,8 @@ public class TestResource {
 
     @POST
     @Path("/gzip")
-    public String gzip(byte[] message) throws UnsupportedEncodingException {
-        return "gzipped:" + new String(message, "UTF-8");
+    public String gzip(byte[] message) {
+        return "gzipped:" + new String(message);
     }
 
     @XmlRootElement
