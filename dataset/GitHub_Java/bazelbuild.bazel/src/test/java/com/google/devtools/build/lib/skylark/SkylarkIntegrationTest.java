@@ -337,8 +337,9 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "str",
         "\t\tstr.index(1)"
             + System.lineSeparator()
-            + "argument 'sub' has type 'int', but should be 'string'\n"
-            + "in call to builtin method string.index(sub, start, end)");
+            + "method string.index(sub: string, start: int, end: int or NoneType) is not "
+            + "applicable for arguments (int, int, NoneType): 'sub' is 'int', "
+            + "but should be 'string'");
   }
 
   @Test
@@ -526,7 +527,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
-        "  ctx.actions.write(output = ctx.outputs.executable, content = 'echo hello')",
+        "  ctx.file_action(output = ctx.outputs.executable, content = 'echo hello')",
         "  rf = ctx.runfiles(ctx.files.data)",
         "  return struct(runfiles = rf)",
         "",
@@ -682,7 +683,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test",
         "b",
         "in dependencies attribute of main_rule rule //test:b: "
-            + "'//test:a' does not have mandatory providers: 'some_provider'",
+            + "'//test:a' does not have mandatory provider 'some_provider'",
         "load('/test/skylark/extension', 'dependent_rule')",
         "load('/test/skylark/extension', 'main_rule')",
         "",
@@ -732,7 +733,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "def custom_rule_impl(ctx):",
         "  attr1 = ctx.files.attr1",
         "  output = ctx.outputs.o",
-        "  ctx.actions.run_shell(",
+        "  ctx.action(",
         "    inputs = attr1,",
         "    outputs = [output],",
         "    command = 'echo')",
@@ -762,7 +763,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
         "  files = [ctx.outputs.o]",
-        "  ctx.actions.run_shell(",
+        "  ctx.action(",
         "    outputs = files,",
         "    command = 'echo')",
         "  ftb = depset(files)",
@@ -797,7 +798,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
         "  files = [ctx.outputs.o]",
-        "  ctx.actions.run_shell(",
+        "  ctx.action(",
         "    outputs = files,",
         "    command = 'echo')",
         "  ftb = depset(files)",
@@ -842,7 +843,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "  files = [ctx.outputs.lbl, ctx.outputs.list, ctx.outputs.str]",
         "  print('==!=!=!=')",
         "  print(files)",
-        "  ctx.actions.run_shell(",
+        "  ctx.action(",
         "    outputs = files,",
         "    command = 'echo')",
         "  return struct(files = depset(files))",
@@ -886,7 +887,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
-        "  ctx.actions.run_shell(",
+        "  ctx.action(",
         "    outputs = [ctx.outputs.o],",
         "    command = 'echo')",
         "  return struct(runfiles = ctx.runfiles())",
@@ -961,12 +962,12 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
         "  files = [ctx.outputs.o]",
-        "  ctx.actions.run_shell(",
+        "  ctx.action(",
         "    outputs = files,",
         "    command = 'echo')",
         "  ftb = depset(files)",
         "  for i in ctx.outputs.out:",
-        "    ctx.actions.write(output=i, content='hi there')",
+        "    ctx.file_action(output=i, content='hi there')",
         "",
         "def output_func(attr1):",
         "  return {'o': attr1 + '.txt'}",
