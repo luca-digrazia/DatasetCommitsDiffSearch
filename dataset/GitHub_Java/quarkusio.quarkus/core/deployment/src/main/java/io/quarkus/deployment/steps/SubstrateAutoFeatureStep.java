@@ -16,8 +16,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
 import io.quarkus.deployment.ClassOutput;
@@ -41,10 +39,7 @@ public class SubstrateAutoFeatureStep {
             "initializeAtRunTime", void.class, Class.class, String.class);
     private static final MethodDescriptor RERUN_INITIALIZATION = ofMethod(RuntimeClassInitializationSupport.class,
             "rerunInitialization", void.class, Class.class, String.class);
-    static final String RUNTIME_REFLECTION = RuntimeReflection.class.getName();
-    static final String BEFORE_ANALYSIS_ACCESS = Feature.BeforeAnalysisAccess.class.getName();
-    static final String DYNAMIC_PROXY_REGISTRY = "com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry";
-    static final String LOCALIZATION_SUPPORT = "com.oracle.svm.core.jdk.LocalizationSupport";
+    static final String RUNTIME_REFLECTION = "org/graalvm/nativeimage/RuntimeReflection";
 
     @BuildStep
     SubstrateOutputBuildItem generateFeature(ClassOutputBuildItem output,
@@ -58,11 +53,12 @@ public class SubstrateAutoFeatureStep {
             List<ReflectiveClassBuildItem> reflectiveClassBuildItems,
             List<ServiceProviderBuildItem> serviceProviderBuildItems) {
         ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(output.getClassOutput(), true), GRAAL_AUTOFEATURE, null,
-                Object.class.getName(), Feature.class.getName());
-        file.addAnnotation("com.oracle.svm.core.annotate.AutomaticFeature");
+                Object.class.getName(), "org/graalvm/nativeimage/Feature");
+        file.addAnnotation("com/oracle/svm/core/annotate/AutomaticFeature");
 
         //MethodCreator afterReg = file.getMethodCreator("afterRegistration", void.class, "org.graalvm.nativeimage.Feature$AfterRegistrationAccess");
-        MethodCreator beforeAn = file.getMethodCreator("beforeAnalysis", "V", BEFORE_ANALYSIS_ACCESS);
+        MethodCreator beforeAn = file.getMethodCreator("beforeAnalysis", "V",
+                "org/graalvm/nativeimage/Feature$BeforeAnalysisAccess");
         TryBlock overallCatch = beforeAn.tryBlock();
         //TODO: at some point we are going to need to break this up, as if it get too big it will hit the method size limit
 
@@ -107,7 +103,7 @@ public class SubstrateAutoFeatureStep {
         }
 
         if (!proxies.isEmpty()) {
-            ResultHandle proxySupportClass = overallCatch.loadClass(DYNAMIC_PROXY_REGISTRY);
+            ResultHandle proxySupportClass = overallCatch.loadClass("com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry");
             ResultHandle proxySupport = overallCatch.invokeStaticMethod(
                     IMAGE_SINGLETONS_LOOKUP,
                     proxySupportClass);
@@ -120,7 +116,7 @@ public class SubstrateAutoFeatureStep {
                     overallCatch.writeArrayValue(array, i++, clazz);
 
                 }
-                overallCatch.invokeInterfaceMethod(ofMethod(DYNAMIC_PROXY_REGISTRY,
+                overallCatch.invokeInterfaceMethod(ofMethod("com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry",
                         "addProxyClass", void.class, Class[].class), proxySupport, array);
             }
         }
@@ -138,7 +134,7 @@ public class SubstrateAutoFeatureStep {
         }
 
         if (!resourceBundles.isEmpty()) {
-            ResultHandle locClass = overallCatch.loadClass(LOCALIZATION_SUPPORT);
+            ResultHandle locClass = overallCatch.loadClass("com.oracle.svm.core.jdk.LocalizationSupport");
 
             ResultHandle params = overallCatch.marshalAsArray(Class.class, overallCatch.loadClass(String.class));
             ResultHandle registerMethod = overallCatch.invokeVirtualMethod(
