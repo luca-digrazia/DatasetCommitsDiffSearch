@@ -13,338 +13,156 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
+import com.google.auto.value.AutoValue;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.util.Preconditions;
-
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-
+import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.skyframe.ToolchainContextKey;
 import javax.annotation.Nullable;
 
 /**
  * A dependency of a configured target through a label.
  *
- * <p>For static configurations: includes the target and the configuration of the dependency
- * configured target and any aspects that may be required, as well as the configurations for
- * these aspects.
- *
- * <p>For dynamic configurations: includes the target and the desired configuration transitions
- * that should be applied to produce the dependency's configuration. It's the caller's
- * responsibility to construct an actual configuration out of that. A set of aspects is also
- * included; the caller must also construct configurations for each of these.
+ * <p>All instances have an explicit configuration, which includes the target and the configuration
+ * of the dependency configured target and any aspects that may be required, as well as the
+ * configurations for these aspects and transition keys. {@link Dependency#getTransitionKeys}
+ * provides some more context on transition keys.
  *
  * <p>Note that the presence of an aspect here does not necessarily mean that it will be created.
  * They will be filtered based on the {@link TransitiveInfoProvider} instances their associated
- * configured targets have (we cannot do that here because the configured targets are not
- * available yet). No error or warning is reported in this case, because it is expected that rules
- * sometimes over-approximate the providers they supply in their definitions.
+ * configured targets have (we cannot do that here because the configured targets are not available
+ * yet). No error or warning is reported in this case, because it is expected that rules sometimes
+ * over-approximate the providers they supply in their definitions.
  */
+@AutoValue
 public abstract class Dependency {
+  /** Builder to assist in creating dependency instances. */
+  @AutoValue.Builder
+  public abstract static class Builder {
+    /** Sets the label of the target this dependency points to. */
+    public abstract Builder setLabel(Label label);
 
-  /**
-   * Creates a new {@link Dependency} with a null configuration, suitable for edges with no
-   * configuration in static configuration builds.
-   */
-  public static Dependency withNullConfiguration(Label label) {
-    return new NullConfigurationDependency(label);
-  }
+    /** Sets the configuration intended for this dependency. */
+    public abstract Builder setConfiguration(BuildConfiguration configuration);
 
-  /**
-   * Creates a new {@link Dependency} with the given configuration, suitable for static
-   * configuration builds.
-   *
-   * <p>The configuration must not be {@code null}.
-   *
-   * <p>A {@link Dependency} created this way will have no associated aspects.
-   */
-  public static Dependency withConfiguration(Label label, BuildConfiguration configuration) {
-    return new StaticConfigurationDependency(
-        label, configuration, ImmutableMap.<AspectDescriptor, BuildConfiguration>of());
-  }
-
-  /**
-   * Creates a new {@link Dependency} with the given configuration and aspects, suitable for
-   * static configuration builds. The configuration is also applied to all aspects.
-   *
-   * <p>The configuration and aspects must not be {@code null}.
-   */
-  public static Dependency withConfigurationAndAspects(
-      Label label, BuildConfiguration configuration, Set<AspectDescriptor> aspects) {
-    ImmutableMap.Builder<AspectDescriptor, BuildConfiguration> aspectBuilder =
-        new ImmutableMap.Builder<>();
-    for (AspectDescriptor aspect : aspects) {
-      aspectBuilder.put(aspect, configuration);
+    /** Explicitly set the configuration for this dependency to null. */
+    public Builder withNullConfiguration() {
+      return setConfiguration(null);
     }
-    return new StaticConfigurationDependency(label, configuration, aspectBuilder.build());
+
+    /** Add aspects to this Dependency. The same configuration is applied to all aspects. */
+    public abstract Builder setAspects(AspectCollection aspects);
+
+    /** Sets the keys of a configuration transition. */
+    public Builder setTransitionKey(String key) {
+      if (key.isEmpty()) {
+        // Ignore empty keys.
+        return this;
+      }
+      return setTransitionKeys(ImmutableList.of(key));
+    }
+
+    /** Sets the keys of a configuration transition. */
+    public abstract Builder setTransitionKeys(ImmutableList<String> keys);
+
+    /**
+     * Sets the {@link ToolchainContextKey} that this dependency should use for toolchain
+     * resolution.
+     */
+    public abstract Builder setToolchainContextKey(
+        @Nullable ToolchainContextKey toolchainContextKey);
+
+    // Not public.
+    abstract Dependency autoBuild();
+
+    /** Returns the full Dependency instance. */
+    public Dependency build() {
+      Dependency dependency = autoBuild();
+      if (dependency.getConfiguration() == null) {
+        Preconditions.checkState(
+            dependency.getAspects().equals(AspectCollection.EMPTY),
+            "Dependency with null Configuration cannot have aspects");
+      }
+      return dependency;
+    }
+
+    // Added to enable copy, below. Should not be accessible to other classes.
+    protected abstract Label getLabel();
+
+    @Nullable
+    protected abstract BuildConfiguration getConfiguration();
+
+    protected abstract AspectCollection getAspects();
+
+    protected abstract ImmutableList<String> getTransitionKeys();
+
+    /** Returns a copy of this Builder, with the values the same. */
+    public Builder copy() {
+      return Dependency.builder()
+          .setLabel(getLabel())
+          .setConfiguration(getConfiguration())
+          .setAspects(getAspects())
+          .setTransitionKeys(getTransitionKeys());
+    }
   }
 
-  /**
-   * Creates a new {@link Dependency} with the given configuration and aspects, suitable for
-   * storing the output of a dynamic configuration trimming step. The aspects each have their own
-   * configuration.
-   *
-   * <p>The aspects and configurations must not be {@code null}.
-   */
-  public static Dependency withConfiguredAspects(
-      Label label, BuildConfiguration configuration,
-      Map<AspectDescriptor, BuildConfiguration> aspectConfigurations) {
-    return new StaticConfigurationDependency(
-        label, configuration, ImmutableMap.copyOf(aspectConfigurations));
-  }
-
-  /**
-   * Creates a new {@link Dependency} with the given transition and aspects, suitable for dynamic
-   * configuration builds.
-   */
-  public static Dependency withTransitionAndAspects(
-      Label label, Attribute.Transition transition, Set<AspectDescriptor> aspects) {
-    return new DynamicConfigurationDependency(label, transition, ImmutableSet.copyOf(aspects));
-  }
-
-  protected final Label label;
-
-  /**
-   * Only the implementations below should extend this class. Use the factory methods above to
-   * create new Dependencies.
-   */
-  private Dependency(Label label) {
-    this.label = Preconditions.checkNotNull(label);
+  /** Returns a new {@link Builder} to create {@link Dependency} instances. */
+  public static Builder builder() {
+    return new AutoValue_Dependency.Builder()
+        .setAspects(AspectCollection.EMPTY)
+        .setTransitionKeys(ImmutableList.of());
   }
 
   /** Returns the label of the target this dependency points to. */
-  public Label getLabel() {
-    return label;
-  }
+  public abstract Label getLabel();
 
-  /**
-   * Returns true if this dependency specifies a static configuration, false if it specifies
-   * a dynamic transition.
-   */
-  public abstract boolean hasStaticConfiguration();
-
-  /**
-   * Returns the static configuration for the target this dependency points to.
-   *
-   * @throws IllegalStateException if {@link #hasStaticConfiguration} returns false.
-   */
+  /** Returns the explicit configuration intended for this dependency. */
   @Nullable
   public abstract BuildConfiguration getConfiguration();
-
-  /**
-   * Returns the dynamic transition to be applied to reach the target this dependency points to.
-   *
-   * @throws IllegalStateException if {@link #hasStaticConfiguration} returns true.
-   */
-  public abstract Attribute.Transition getTransition();
 
   /**
    * Returns the set of aspects which should be evaluated and combined with the configured target
    * pointed to by this dependency.
    *
-   * @see #getAspectConfigurations()
+   * @see #getAspectConfiguration(AspectDescriptor)
    */
-  public abstract ImmutableSet<AspectDescriptor> getAspects();
+  public abstract AspectCollection getAspects();
 
-  /**
-   * Returns the mapping from aspects to the static configurations they should be evaluated with.
-   *
-   * <p>The {@link Map#keySet()} of this map is equal to that returned by {@link #getAspects()}.
-   *
-   * @throws IllegalStateException if {@link #hasStaticConfiguration()} returns false.
-   */
-  public abstract ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations();
-
-  /**
-   * Implementation of a dependency with no configuration, suitable for static configuration
-   * builds of edges to source files or e.g. for visibility.
-   */
-  private static final class NullConfigurationDependency extends Dependency {
-    public NullConfigurationDependency(Label label) {
-      super(label);
-    }
-
-    @Override
-    public boolean hasStaticConfiguration() {
-      return true;
-    }
-
-    @Nullable
-    @Override
-    public BuildConfiguration getConfiguration() {
-      return null;
-    }
-
-    @Override
-    public Attribute.Transition getTransition() {
-      throw new IllegalStateException(
-          "A dependency with a static configuration does not have a transition.");
-    }
-
-    @Override
-    public ImmutableSet<AspectDescriptor> getAspects() {
-      return ImmutableSet.of();
-    }
-
-    @Override
-    public ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations() {
-      return ImmutableMap.of();
-    }
-
-    @Override
-    public int hashCode() {
-      return label.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof NullConfigurationDependency)) {
-        return false;
-      }
-      NullConfigurationDependency otherDep = (NullConfigurationDependency) other;
-      return label.equals(otherDep.label);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("NullConfigurationDependency{label=%s}", label);
-    }
+  /** Returns the configuration an aspect should be evaluated with. */
+  @Nullable
+  public BuildConfiguration getAspectConfiguration(AspectDescriptor aspect) {
+    return getConfiguration();
   }
 
   /**
-   * Implementation of a dependency with static configurations, suitable for static configuration
-   * builds.
+   * Returns the keys of a configuration transition, if any exist, associated with this dependency.
+   * See {@link ConfigurationTransition#apply} for more details. Normally, this returns an empty
+   * list, when there was no configuration transition in effect, or one with a single entry, when
+   * there was a specific configuration transition result that led to this. It may also return a
+   * list with multiple entries if the dependency has a null configuration, yet the outgoing edge
+   * has a split transition. In such cases all transition keys returned by the transition are tagged
+   * to the dependency.
    */
-  private static final class StaticConfigurationDependency extends Dependency {
-    private final BuildConfiguration configuration;
-    private final ImmutableMap<AspectDescriptor, BuildConfiguration> aspectConfigurations;
-
-    public StaticConfigurationDependency(
-        Label label, BuildConfiguration configuration,
-        ImmutableMap<AspectDescriptor, BuildConfiguration> aspects) {
-      super(label);
-      this.configuration = Preconditions.checkNotNull(configuration);
-      this.aspectConfigurations = Preconditions.checkNotNull(aspects);
-    }
-
-    @Override
-    public boolean hasStaticConfiguration() {
-      return true;
-    }
-
-    @Override
-    public BuildConfiguration getConfiguration() {
-      return configuration;
-    }
-
-    @Override
-    public Attribute.Transition getTransition() {
-      throw new IllegalStateException(
-          "A dependency with a static configuration does not have a transition.");
-    }
-
-    @Override
-    public ImmutableSet<AspectDescriptor> getAspects() {
-      return aspectConfigurations.keySet();
-    }
-
-    @Override
-    public ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations() {
-      return aspectConfigurations;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(label, configuration, aspectConfigurations);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof StaticConfigurationDependency)) {
-        return false;
-      }
-      StaticConfigurationDependency otherDep = (StaticConfigurationDependency) other;
-      return label.equals(otherDep.label)
-          && configuration.equals(otherDep.configuration)
-          && aspectConfigurations.equals(otherDep.aspectConfigurations);
-    }
-
-    @Override
-    public String toString() {
-      return String.format(
-          "StaticConfigurationDependency{label=%s, configuration=%s, aspectConfigurations=%s}",
-          label, configuration, aspectConfigurations);
-    }
-  }
+  public abstract ImmutableList<String> getTransitionKeys();
 
   /**
-   * Implementation of a dependency with a given configuration transition, suitable for dynamic
-   * configuration builds.
+   * Returns the {@link ToolchainContextKey} that this dependency should use for toolchain
+   * resolution.
    */
-  private static final class DynamicConfigurationDependency extends Dependency {
-    private final Attribute.Transition transition;
-    private final ImmutableSet<AspectDescriptor> aspects;
+  @Nullable
+  public abstract ToolchainContextKey getToolchainContextKey();
 
-    public DynamicConfigurationDependency(
-        Label label, Attribute.Transition transition, ImmutableSet<AspectDescriptor> aspects) {
-      super(label);
-      this.transition = Preconditions.checkNotNull(transition);
-      this.aspects = Preconditions.checkNotNull(aspects);
+  /** Returns the ConfiguredTargetKey needed to fetch this dependency. */
+  public ConfiguredTargetKey getConfiguredTargetKey() {
+    ConfiguredTargetKey.Builder configuredTargetKeyBuilder =
+        ConfiguredTargetKey.builder().setLabel(getLabel()).setConfiguration(getConfiguration());
+    if (getToolchainContextKey() != null) {
+      configuredTargetKeyBuilder.setToolchainContextKey(getToolchainContextKey());
     }
-
-    @Override
-    public boolean hasStaticConfiguration() {
-      return false;
-    }
-
-    @Override
-    public BuildConfiguration getConfiguration() {
-      throw new IllegalStateException(
-          "A dependency with a dynamic configuration transition does not have a configuration.");
-    }
-
-    @Override
-    public Attribute.Transition getTransition() {
-      return transition;
-    }
-
-    @Override
-    public ImmutableSet<AspectDescriptor> getAspects() {
-      return aspects;
-    }
-
-    @Override
-    public ImmutableMap<AspectDescriptor, BuildConfiguration> getAspectConfigurations() {
-      throw new IllegalStateException(
-          "A dependency with a dynamic configuration transition does not have aspect "
-          + "configurations.");
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(label, transition, aspects);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof DynamicConfigurationDependency)) {
-        return false;
-      }
-      DynamicConfigurationDependency otherDep = (DynamicConfigurationDependency) other;
-      return label.equals(otherDep.label)
-          && transition.equals(otherDep.transition)
-          && aspects.equals(otherDep.aspects);
-    }
-
-    @Override
-    public String toString() {
-      return String.format(
-          "DynamicConfigurationDependency{label=%s, transition=%s, aspects=%s}",
-          label, transition, aspects);
-    }
+    return configuredTargetKeyBuilder.build();
   }
 }
