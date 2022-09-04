@@ -45,13 +45,13 @@ import javax.validation.constraints.NotNull;
 public class Configuration {
     @Valid
     @NotNull
-    @JsonProperty
-    private HttpConfiguration http = new HttpConfiguration();
+    @JsonProperty("http")
+    private HttpConfiguration httpConfiguration = new HttpConfiguration();
 
     @Valid
     @NotNull
-    @JsonProperty
-    private LoggingConfiguration logging = new LoggingConfiguration();
+    @JsonProperty("logging")
+    private LoggingConfiguration loggingConfiguration = new LoggingConfiguration();
 
     /**
      * Returns the HTTP-specific section of the configuration file.
@@ -59,14 +59,14 @@ public class Configuration {
      * @return HTTP-specific configuration parameters
      */
     public HttpConfiguration getHttpConfiguration() {
-        return http;
+        return httpConfiguration;
     }
 
     /**
      * Sets the HTTP-specific section of the configuration file.
      */
     public void setHttpConfiguration(HttpConfiguration config) {
-        this.http = config;
+        this.httpConfiguration = config;
     }
 
     /**
@@ -75,21 +75,21 @@ public class Configuration {
      * @return logging-specific configuration parameters
      */
     public LoggingConfiguration getLoggingConfiguration() {
-        return logging;
+        return loggingConfiguration;
     }
 
     /**
      * Sets the logging-specific section of the configuration file.
      */
     public void setLoggingConfiguration(LoggingConfiguration config) {
-        this.logging = config;
+        this.loggingConfiguration = config;
     }
 
     @Override
     public String toString() {
         return Objects.toStringHelper(this)
-                      .add("http", http)
-                      .add("logging", logging)
+                      .add("http", httpConfiguration)
+                      .add("logging", loggingConfiguration)
                       .toString();
     }
 }
