@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.FsUtils;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,29 +30,28 @@ import org.junit.runners.JUnit4;
 public class FileValueTest {
   @Test
   public void testCodec() throws Exception {
-    SerializationTester serializationTester =
-        new SerializationTester(
+    new SerializationTester(
             // Assume we have adequate coverage for FileStateValue serialization.
             new FileValue.RegularFileValue(
-                FsUtils.TEST_ROOTED_PATH, FileStateValue.NONEXISTENT_FILE_STATE_NODE),
+                FsUtils.TEST_ROOT, FileStateValue.NONEXISTENT_FILE_STATE_NODE),
             new FileValue.DifferentRealPathFileValueWithStoredChain(
-                FsUtils.TEST_ROOTED_PATH,
+                FsUtils.TEST_ROOT,
                 FileStateValue.DIRECTORY_FILE_STATE_NODE,
-                ImmutableList.of(FsUtils.TEST_ROOTED_PATH)),
+                ImmutableList.of(FsUtils.TEST_ROOT)),
             new FileValue.DifferentRealPathFileValueWithoutStoredChain(
-                FsUtils.TEST_ROOTED_PATH, FileStateValue.DIRECTORY_FILE_STATE_NODE),
+                FsUtils.TEST_ROOT, FileStateValue.DIRECTORY_FILE_STATE_NODE),
             new FileValue.SymlinkFileValueWithStoredChain(
-                FsUtils.TEST_ROOTED_PATH,
+                FsUtils.TEST_ROOT,
                 new FileStateValue.RegularFileStateValue(
                     /*size=*/ 100, /*digest=*/ new byte[] {1, 2, 3, 4, 5}, /*contentsProxy=*/ null),
-                ImmutableList.of(FsUtils.TEST_ROOTED_PATH),
+                ImmutableList.of(FsUtils.TEST_ROOT),
                 PathFragment.create("somewhere/else")),
             new FileValue.SymlinkFileValueWithoutStoredChain(
-                FsUtils.TEST_ROOTED_PATH,
+                FsUtils.TEST_ROOT,
                 new FileStateValue.RegularFileStateValue(
                     /*size=*/ 100, /*digest=*/ new byte[] {1, 2, 3, 4, 5}, /*contentsProxy=*/ null),
-                PathFragment.create("somewhere/else")));
-    FsUtils.addDependencies(serializationTester);
-    serializationTester.runTests();
+                PathFragment.create("somewhere/else")))
+        .addDependency(FileSystem.class, FsUtils.TEST_FILESYSTEM)
+        .runTests();
   }
 }

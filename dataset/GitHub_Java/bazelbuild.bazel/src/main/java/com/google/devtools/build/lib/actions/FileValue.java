@@ -166,16 +166,16 @@ public abstract class FileValue implements SkyValue {
   public static FileValue value(
       ImmutableList<RootedPath> logicalChainDuringResolution,
       RootedPath originalRootedPath,
-      FileStateValue fileStateValueFromAncestors,
+      FileStateValue fileStateValue,
       RootedPath realRootedPath,
       FileStateValue realFileStateValue) {
     if (originalRootedPath.equals(realRootedPath)) {
       Preconditions.checkState(
-          fileStateValueFromAncestors.getType() != FileStateType.SYMLINK,
-          "originalRootedPath: %s, fileStateValueFromAncestors: %s, "
-              + "realRootedPath: %s, fileStateValueFromAncestors: %s",
+          fileStateValue.getType() != FileStateType.SYMLINK,
+          "originalRootedPath: %s, fileStateValue: %s, realRootedPath: %s, "
+              + "fileStateValueFromAncestors: %s",
           originalRootedPath,
-          fileStateValueFromAncestors,
+          fileStateValue,
           realRootedPath,
           realFileStateValue);
       Preconditions.checkState(
@@ -185,7 +185,7 @@ public abstract class FileValue implements SkyValue {
           "logicalChainDuringResolution: %s, originalRootedPath: %s",
           logicalChainDuringResolution,
           originalRootedPath);
-      return new RegularFileValue(originalRootedPath, fileStateValueFromAncestors);
+      return new RegularFileValue(originalRootedPath, fileStateValue);
     }
 
     boolean shouldStoreChain;
@@ -200,11 +200,11 @@ public abstract class FileValue implements SkyValue {
         shouldStoreChain = true;
         break;
       default:
-        throw new IllegalStateException(realFileStateValue.getType().toString());
+        throw new IllegalStateException(fileStateValue.getType().toString());
     }
 
-    if (fileStateValueFromAncestors.getType() == FileStateType.SYMLINK) {
-      PathFragment symlinkTarget = fileStateValueFromAncestors.getSymlinkTarget();
+    if (fileStateValue.getType() == FileStateType.SYMLINK) {
+      PathFragment symlinkTarget = fileStateValue.getSymlinkTarget();
       return shouldStoreChain
           ? new SymlinkFileValueWithStoredChain(
               realRootedPath, realFileStateValue, logicalChainDuringResolution, symlinkTarget)

@@ -408,6 +408,10 @@ public abstract class GlobFunctionTest {
     assertGlobMatches(false, pattern, expecteds);
   }
 
+  private void assertGlobWithoutDirsMatches(String pattern, String... expecteds) throws Exception {
+    assertGlobMatches(true, pattern, expecteds);
+  }
+
   private void assertGlobMatches(boolean excludeDirs, String pattern, String... expecteds)
       throws Exception {
     // The order requirement is not strictly necessary -- a change to GlobFunction semantics that
@@ -419,12 +423,7 @@ public abstract class GlobFunctionTest {
     assertThat(
             Iterables.transform(
                 runGlob(excludeDirs, pattern).getMatches(), Functions.toStringFunction()))
-        .containsExactlyElementsIn(ImmutableList.copyOf(expecteds))
-        .inOrder();
-  }
-
-  private void assertGlobWithoutDirsMatches(String pattern, String... expecteds) throws Exception {
-    assertGlobMatches(true, pattern, expecteds);
+        .containsExactlyElementsIn(ImmutableList.copyOf(expecteds)).inOrder();
   }
 
   private void assertGlobsEqual(String pattern1, String pattern2) throws Exception {
