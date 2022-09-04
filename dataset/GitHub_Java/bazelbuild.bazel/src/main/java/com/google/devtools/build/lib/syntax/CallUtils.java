@@ -14,18 +14,30 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.util.Pair;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
@@ -42,33 +54,9 @@ public final class CallUtils {
       cls = StringModule.class;
     }
     try {
-      return cache.get(new Key(cls, semantics));
+      return cache.get(Pair.of(cls, semantics));
     } catch (ExecutionException ex) {
       throw new IllegalStateException("cache error", ex);
-    }
-  }
-
-  // Key is a simple Pair<Class, StarlarkSemantics>.
-  private static final class Key {
-    final Class<?> cls;
-    final StarlarkSemantics semantics;
-
-    Key(Class<?> cls, StarlarkSemantics semantics) {
-      this.cls = cls;
-      this.semantics = semantics;
-    }
-
-    @Override
-    public boolean equals(Object that) {
-      return this == that
-          || (that instanceof Key
-              && this.cls.equals(((Key) that).cls)
-              && this.semantics.equals(((Key) that).semantics));
-    }
-
-    @Override
-    public int hashCode() {
-      return 31 * cls.hashCode() + semantics.hashCode();
     }
   }
 
@@ -81,18 +69,21 @@ public final class CallUtils {
   }
 
   // A cache of information derived from a SkylarkCallable-annotated class and a StarlarkSemantics.
-  private static final LoadingCache<Key, CacheValue> cache =
+  private static final LoadingCache<Pair<Class<?>, StarlarkSemantics>, CacheValue> cache =
       CacheBuilder.newBuilder()
           .build(
-              new CacheLoader<Key, CacheValue>() {
+              new CacheLoader<Pair<Class<?>, StarlarkSemantics>, CacheValue>() {
                 @Override
-                public CacheValue load(Key key) throws Exception {
+                public CacheValue load(Pair<Class<?>, StarlarkSemantics> key) throws Exception {
+                  Class<?> cls = key.first;
+                  StarlarkSemantics semantics = key.second;
+
                   MethodDescriptor selfCall = null;
                   ImmutableMap.Builder<String, MethodDescriptor> methods = ImmutableMap.builder();
                   Map<String, MethodDescriptor> fields = new HashMap<>();
 
                   // Sort methods by Java name, for determinism.
-                  Method[] classMethods = key.cls.getMethods();
+                  Method[] classMethods = cls.getMethods();
                   Arrays.sort(classMethods, Comparator.comparing(Method::getName));
                   for (Method method : classMethods) {
                     // Synthetic methods lead to false multiple matches
@@ -107,20 +98,19 @@ public final class CallUtils {
                     }
 
                     // enabled by semantics?
-                    if (!key.semantics.isFeatureEnabledBasedOnTogglingFlags(
+                    if (!semantics.isFeatureEnabledBasedOnTogglingFlags(
                         callable.enableOnlyWithFlag(), callable.disableWithFlag())) {
                       continue;
                     }
 
-                    MethodDescriptor descriptor =
-                        MethodDescriptor.of(method, callable, key.semantics);
+                    MethodDescriptor descriptor = MethodDescriptor.of(method, callable, semantics);
 
                     // self-call method?
                     if (callable.selfCall()) {
                       if (selfCall != null) {
                         throw new IllegalArgumentException(
                             String.format(
-                                "Class %s has two selfCall methods defined", key.cls.getName()));
+                                "Class %s has two selfCall methods defined", cls.getName()));
                       }
                       selfCall = descriptor;
                       continue;
@@ -136,7 +126,7 @@ public final class CallUtils {
                       throw new IllegalArgumentException(
                           String.format(
                               "Class %s declares two structField methods named %s",
-                              key.cls.getName(), callable.name()));
+                              cls.getName(), callable.name()));
                     }
                   }
 
@@ -150,7 +140,7 @@ public final class CallUtils {
 
   /**
    * Returns a map of methods and corresponding SkylarkCallable annotations of the methods of the
-   * objClass class reachable from Starlark. Elements are sorted by Java method name (which is not
+   * objClass class reachable from Skylark. Elements are sorted by Java method name (which is not
    * necessarily the same as Starlark attribute name).
    */
   // TODO(adonovan): eliminate sole use in skydoc.
@@ -190,7 +180,7 @@ public final class CallUtils {
   }
 
   /**
-   * Returns a set of the Starlark name of all Starlark callable methods for object of type {@code
+   * Returns a set of the Skylark name of all Skylark callable methods for object of type {@code
    * objClass}.
    */
   static ImmutableSet<String> getMethodNames(StarlarkSemantics semantics, Class<?> objClass) {
@@ -209,15 +199,284 @@ public final class CallUtils {
   }
 
   /**
-   * Returns a {@code selfCall=true} method for the given class under the given Starlark semantics,
-   * or null if no such method exists.
+   * Returns the annotation from the SkylarkCallable-annotated self-call method of the specified
+   * class, or null if not found.
    */
-  @Nullable
-  public static Method getSelfCallMethod(StarlarkSemantics semantics, Class<?> objClass) {
-    MethodDescriptor descriptor = getCacheValue(objClass, semantics).selfCall;
-    if (descriptor == null) {
-      return null;
+  public static SkylarkCallable getSelfCallAnnotation(Class<?> objClass) {
+    MethodDescriptor selfCall =
+        getSelfCallMethodDescriptor(StarlarkSemantics.DEFAULT_SEMANTICS, objClass);
+    return selfCall == null ? null : selfCall.getAnnotation();
+  }
+
+  /**
+   * Converts Starlark-defined arguments to an array of argument {@link Object}s that may be passed
+   * to a given callable-from-Starlark Java method.
+   *
+   * @param thread the Starlark thread for the call
+   * @param methodName the named of the called method
+   * @param call the syntax tree of the call expression
+   * @param method a descriptor for a java method callable from Starlark
+   * @param objClass the class of the java object on which to invoke this method
+   * @param positional a list of positional arguments
+   * @param named a list of named arguments, as alternating Strings/Objects. May contain dups.
+   * @return the array of arguments which may be passed to {@link MethodDescriptor#call}
+   * @throws EvalException if the given set of arguments are invalid for the given method. For
+   *     example, if any arguments are of unexpected type, or not all mandatory parameters are
+   *     specified by the user
+   */
+  // TODO(adonovan): move to BuiltinCallable
+  static Object[] convertStarlarkArgumentsToJavaMethodArguments(
+      StarlarkThread thread,
+      String methodName,
+      MethodDescriptor method,
+      Class<?> objClass,
+      Object[] positional,
+      Object[] named)
+      throws EvalException {
+    Preconditions.checkArgument(!method.isStructField(),
+        "struct field methods should be handled by DotExpression separately");
+
+    // TODO(adonovan): optimize and simplify this function and improve the error messages.
+    // In particular, don't build a map unless isAcceptsExtraArgs();
+    // instead, make two passes, the first over positional+named,
+    // the second over the vacant parameters.
+
+    LinkedHashMap<String, Object> kwargs = Maps.newLinkedHashMapWithExpectedSize(named.length / 2);
+    for (int i = 0; i < named.length; i += 2) {
+      String name = (String) named[i]; // safe
+      Object value = named[i + 1];
+      if (kwargs.put(name, value) != null) {
+        throw Starlark.errorf("duplicate argument '%s' in call to '%s'", name, methodName);
+      }
     }
-    return descriptor.getMethod();
+
+    ImmutableList<ParamDescriptor> parameters = method.getParameters();
+    // TODO(adonovan): opt: compute correct size and use an array.
+    final int extraArgsCount = 4; // *args, **kwargs, Location, StarlarkThread
+    List<Object> builder = new ArrayList<>(parameters.size() + extraArgsCount);
+
+    int argIndex = 0;
+
+    // Process parameters specified in callable.parameters()
+    // Positional parameters are always enumerated before non-positional parameters,
+    // And default-valued positional parameters are always enumerated after other positional
+    // parameters. These invariants are validated by the SkylarkCallable annotation processor.
+    // Index is used deliberately, since usage of iterators adds a significant overhead
+    for (int i = 0; i < parameters.size(); ++i) {
+      ParamDescriptor param = parameters.get(i);
+      SkylarkType type = param.getSkylarkType();
+      Object value;
+
+      if (param.isDisabledInCurrentSemantics()) {
+        value = evalDefault(param.getName(), param.getValueOverride());
+        builder.add(value);
+        continue;
+      }
+
+      Object namedValue = param.isNamed() ? kwargs.remove(param.getName()) : null;
+
+      if (argIndex < positional.length
+          && param.isPositional()) { // Positional args and params remain.
+        value = positional[argIndex];
+        if (!type.contains(value)) {
+          throw argumentMismatchException(
+              String.format(
+                  "expected value of type '%s' for parameter '%s'", type, param.getName()),
+              method,
+              objClass);
+        }
+        if (namedValue != null) {
+          throw argumentMismatchException(
+              String.format("got multiple values for keyword argument '%s'", param.getName()),
+              method,
+              objClass);
+        }
+        argIndex++;
+      } else { // No more positional arguments, or no more positional parameters.
+        if (namedValue != null) {
+          // Param specified by keyword argument.
+          value = namedValue;
+          if (!type.contains(value)) {
+            throw argumentMismatchException(
+                String.format(
+                    "expected value of type '%s' for parameter '%s'", type, param.getName()),
+                method,
+                objClass);
+          }
+        } else { // Param not specified by user. Use default value.
+          if (param.getDefaultValue().isEmpty()) {
+            throw unspecifiedParameterException(param, method, objClass, kwargs);
+          }
+          value = evalDefault(param.getName(), param.getDefaultValue());
+        }
+      }
+      if (value == Starlark.NONE && !param.isNoneable()) {
+        throw argumentMismatchException(
+            String.format("parameter '%s' cannot be None", param.getName()), method, objClass);
+      }
+      builder.add(value);
+    }
+
+    // *args
+    if (method.isAcceptsExtraArgs()) {
+      builder.add(Tuple.wrap(Arrays.copyOfRange(positional, argIndex, positional.length)));
+    } else if (argIndex < positional.length) {
+      throw argumentMismatchException(
+          String.format(
+              "expected no more than %s positional arguments, but got %s",
+              argIndex, positional.length),
+          method,
+          objClass);
+    }
+
+    // **kwargs
+    if (method.isAcceptsExtraKwargs()) {
+      builder.add(Dict.wrap(thread.mutability(), kwargs));
+    } else if (!kwargs.isEmpty()) {
+      throw unexpectedKeywordArgumentException(kwargs.keySet(), method, objClass, thread);
+    }
+
+    if (method.isUseLocation()) {
+      builder.add(thread.getCallerLocation());
+    }
+    if (method.isUseStarlarkThread()) {
+      builder.add(thread);
+    }
+    return builder.toArray();
+  }
+
+  private static EvalException unspecifiedParameterException(
+      ParamDescriptor param,
+      MethodDescriptor method,
+      Class<?> objClass,
+      Map<String, Object> kwargs) {
+    if (kwargs.containsKey(param.getName())) {
+      return argumentMismatchException(
+          String.format("parameter '%s' may not be specified by name", param.getName()),
+          method,
+          objClass);
+    } else {
+      return argumentMismatchException(
+          String.format("parameter '%s' has no default value", param.getName()),
+          method,
+          objClass);
+    }
+  }
+
+  private static EvalException unexpectedKeywordArgumentException(
+      Set<String> unexpectedKeywords,
+      MethodDescriptor method,
+      Class<?> objClass,
+      StarlarkThread thread) {
+    // Check if any of the unexpected keywords are for parameters which are disabled by the
+    // current semantic flags. Throwing an error with information about the misconfigured
+    // semantic flag is likely far more helpful.
+    for (ParamDescriptor param : method.getParameters()) {
+      if (param.isDisabledInCurrentSemantics() && unexpectedKeywords.contains(param.getName())) {
+        FlagIdentifier flagIdentifier = param.getFlagResponsibleForDisable();
+        // If the flag is True, it must be a deprecation flag. Otherwise it's an experimental flag.
+        if (thread.getSemantics().flagValue(flagIdentifier)) {
+          return new EvalException(
+              null,
+              String.format(
+                  "parameter '%s' is deprecated and will be removed soon. It may be "
+                      + "temporarily re-enabled by setting --%s=false",
+                  param.getName(), flagIdentifier.getFlagName()));
+        } else {
+          return new EvalException(
+              null,
+              String.format(
+                  "parameter '%s' is experimental and thus unavailable with the current "
+                      + "flags. It may be enabled by setting --%s",
+                  param.getName(), flagIdentifier.getFlagName()));
+        }
+      }
+    }
+
+    return argumentMismatchException(
+        String.format(
+            "unexpected keyword%s %s",
+            unexpectedKeywords.size() > 1 ? "s" : "",
+            Joiner.on(", ").join(Iterables.transform(unexpectedKeywords, s -> "'" + s + "'"))),
+        method,
+        objClass);
+  }
+
+  private static EvalException argumentMismatchException(
+      String errorDescription, MethodDescriptor methodDescriptor, Class<?> objClass) {
+    if (methodDescriptor.isSelfCall() || SkylarkInterfaceUtils.hasSkylarkGlobalLibrary(objClass)) {
+      return Starlark.errorf(
+          "%s, for call to function %s",
+          errorDescription, formatMethod(objClass, methodDescriptor));
+    } else {
+      return Starlark.errorf(
+          "%s, for call to method %s of '%s'",
+          errorDescription,
+          formatMethod(objClass, methodDescriptor),
+          EvalUtils.getDataTypeNameFromClass(objClass));
+    }
+  }
+
+  private static String formatMethod(Class<?> objClass, MethodDescriptor methodDescriptor) {
+    ImmutableList.Builder<String> argTokens = ImmutableList.builder();
+    // Skip first parameter ('self') for StringModule, as its a special case.
+    Iterable<ParamDescriptor> parameters =
+        objClass == StringModule.class
+            ? Iterables.skip(methodDescriptor.getParameters(), 1)
+            : methodDescriptor.getParameters();
+
+    for (ParamDescriptor paramDescriptor : parameters) {
+      if (!paramDescriptor.isDisabledInCurrentSemantics()) {
+        if (paramDescriptor.getDefaultValue().isEmpty()) {
+          argTokens.add(paramDescriptor.getName());
+        } else {
+          argTokens.add(paramDescriptor.getName() + " = " + paramDescriptor.getDefaultValue());
+        }
+      }
+    }
+    if (methodDescriptor.isAcceptsExtraArgs()) {
+      argTokens.add("*args");
+    }
+    if (methodDescriptor.isAcceptsExtraKwargs()) {
+      argTokens.add("**kwargs");
+    }
+    return methodDescriptor.getName() + "(" + Joiner.on(", ").join(argTokens.build()) + ")";
+  }
+
+  // A memoization of evalDefault, keyed by expression.
+  // This cache is manually maintained (instead of using LoadingCache),
+  // as default values may sometimes be recursively requested.
+  private static final ConcurrentHashMap<String, Object> defaultValueCache =
+      new ConcurrentHashMap<>();
+
+  // Evaluates the default value expression for a parameter.
+  private static Object evalDefault(String name, String expr) {
+    if (expr.isEmpty()) {
+      return Starlark.NONE;
+    }
+    Object x = defaultValueCache.get(expr);
+    if (x != null) {
+      return x;
+    }
+    try (Mutability mutability = Mutability.create("initialization")) {
+      // Note that this Starlark thread ignores command line flags.
+      StarlarkThread thread =
+          StarlarkThread.builder(mutability)
+              .useDefaultSemantics()
+              .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
+              .build();
+      thread.getGlobals().put("unbound", Starlark.UNBOUND);
+      x = EvalUtils.eval(ParserInput.fromLines(expr), thread);
+      defaultValueCache.put(expr, x);
+      return x;
+    } catch (Exception ex) {
+      if (ex instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      throw new IllegalArgumentException(
+          String.format(
+              "while evaluating default value %s of parameter %s: %s", expr, name, ex.getMessage()),
+          ex);
+    }
   }
 }

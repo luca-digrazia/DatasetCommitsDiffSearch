@@ -95,18 +95,12 @@ public final class StarlarkFunction extends BaseFunction {
     Object[] arguments =
         Starlark.matchSignature(
             getSignature(), this, getDefaultValues(), thread.mutability(), positional, named);
-
-    StarlarkThread.CallFrame fr = thread.frame(0);
     ImmutableList<String> names = getSignature().getParameterNames();
     for (int i = 0; i < names.size(); ++i) {
-      try {
-        fr.locals.put(names.get(i), arguments[i]);
-      } catch (Mutability.MutabilityException ex) {
-        throw new AssertionError(ex);
-      }
+      thread.updateLexical(names.get(i), arguments[i]);
     }
 
-    return Eval.execFunctionBody(fr, statements);
+    return Eval.execFunctionBody(thread, statements, isToplevel);
   }
 
   @Override

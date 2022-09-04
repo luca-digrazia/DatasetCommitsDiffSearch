@@ -30,11 +30,13 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -61,14 +63,6 @@ public abstract class AbstractConfiguredTarget
   private static final String DATA_RUNFILES_FIELD = "data_runfiles";
   private static final String DEFAULT_RUNFILES_FIELD = "default_runfiles";
 
-  /**
-   * The name of the key for the 'actions' synthesized provider.
-   *
-   * <p>If you respond to this key you are expected to return a list of actions belonging to this
-   * configured target.
-   */
-  public static final String ACTIONS_FIELD_NAME = "actions";
-
   // A set containing all field names which may be specially handled (and thus may not be
   // attributed to normal user-specified providers).
   private static final ImmutableSet<String> SPECIAL_FIELD_NAMES =
@@ -79,7 +73,7 @@ public abstract class AbstractConfiguredTarget
           DATA_RUNFILES_FIELD,
           FilesToRunProvider.SKYLARK_NAME,
           OutputGroupInfo.SKYLARK_NAME,
-          ACTIONS_FIELD_NAME);
+          RuleConfiguredTarget.ACTIONS_FIELD_NAME);
 
   public AbstractConfiguredTarget(Label label, BuildConfigurationValue.Key configurationKey) {
     this(label, configurationKey, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
@@ -142,7 +136,7 @@ public abstract class AbstractConfiguredTarget
     switch (name) {
       case LABEL_FIELD:
         return getLabel();
-      case ACTIONS_FIELD_NAME:
+      case RuleConfiguredTarget.ACTIONS_FIELD_NAME:
         // Depending on subclass, the 'actions' field will either be unsupported or of type
         // java.util.List, which needs to be converted to Sequence before being returned.
         Object result = get(name);
@@ -153,30 +147,32 @@ public abstract class AbstractConfiguredTarget
   }
 
   @Override
-  public final Object getIndex(StarlarkSemantics semantics, Object key) throws EvalException {
+  public final Object getIndex(Object key, Location loc) throws EvalException {
     if (!(key instanceof Provider)) {
-      throw Starlark.errorf(
+      throw new EvalException(loc, String.format(
           "Type Target only supports indexing by object constructors, got %s instead",
-          Starlark.type(key));
+          EvalUtils.getDataTypeName(key)));
     }
     Provider constructor = (Provider) key;
     Object declaredProvider = get(constructor.getKey());
     if (declaredProvider != null) {
       return declaredProvider;
     }
-    throw Starlark.errorf(
-        "%s%s doesn't contain declared provider '%s'",
-        Starlark.repr(this),
-        getRuleClassString().isEmpty() ? "" : " (rule '" + getRuleClassString() + "')",
-        constructor.getPrintableName());
+    throw new EvalException(
+        loc,
+        Starlark.format(
+            "%r%s doesn't contain declared provider '%s'",
+            this,
+            getRuleClassString().isEmpty() ? "" : " (rule '" + getRuleClassString() + "')",
+            constructor.getPrintableName()));
   }
 
   @Override
-  public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
+  public boolean containsKey(Object key, Location loc) throws EvalException {
     if (!(key instanceof Provider)) {
-      throw Starlark.errorf(
+      throw new EvalException(loc, String.format(
           "Type Target only supports querying by object constructors, got %s instead",
-          Starlark.type(key));
+          EvalUtils.getDataTypeName(key)));
     }
     return get(((Provider) key).getKey()) != null;
   }

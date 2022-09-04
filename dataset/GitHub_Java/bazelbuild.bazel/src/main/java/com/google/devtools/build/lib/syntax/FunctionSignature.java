@@ -13,11 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.StringCanonicalizer;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -54,45 +62,45 @@ import javax.annotation.Nullable;
  */
 @AutoCodec
 @AutoValue
-abstract class FunctionSignature {
+public abstract class FunctionSignature {
 
   // These abstract getters specify the actual parameter count fields to be defined by AutoValue.
 
   /** Number of mandatory positional parameters */
-  abstract int numMandatoryPositionals();
+  public abstract int numMandatoryPositionals();
 
   /** Number of optional positional parameters */
-  abstract int numOptionalPositionals();
+  public abstract int numOptionalPositionals();
 
   /** Number of mandatory named-only parameters. */
-  abstract int numMandatoryNamedOnly();
+  public abstract int numMandatoryNamedOnly();
 
   /** Number of optional named-only parameters */
-  abstract int numOptionalNamedOnly();
+  public abstract int numOptionalNamedOnly();
 
   /** True if function has variadic parameter, {@code def f(*args)}. */
-  abstract boolean hasVarargs();
+  public abstract boolean hasVarargs();
 
   /** True if function has residual keyword-argument parameter, {@code def f(**kwargs)}. */
-  abstract boolean hasKwargs();
+  public abstract boolean hasKwargs();
 
   /** Parameter names. */
-  abstract ImmutableList<String> getParameterNames();
+  public abstract ImmutableList<String> getParameterNames();
 
   // computed parameter counts
 
   /** Number of optional and mandatory positional parameters. */
-  int numPositionals() {
+  public int numPositionals() {
     return numMandatoryPositionals() + numOptionalPositionals();
   }
 
   /** Number of optional and mandatory named-only parameters. */
-  int numNamedOnly() {
+  public int numNamedOnly() {
     return numMandatoryNamedOnly() + numOptionalNamedOnly();
   }
 
   /** number of optional parameters. */
-  int numOptionals() {
+  public int numOptionals() {
     return numOptionalPositionals() + numOptionalNamedOnly();
   }
 
@@ -101,15 +109,29 @@ abstract class FunctionSignature {
   }
 
   /** total number of parameters */
-  int numParameters() {
+  public int numParameters() {
     return numPositionals() + numNamedOnly() + (hasStar() ? 1 : 0) + (hasKwargs() ? 1 : 0);
   }
+
+  private static final Interner<ImmutableList<String>> namesInterner =
+      BlazeInterners.newWeakInterner();
+
+  /** Intern a list of names. */
+  private static ImmutableList<String> names(List<String> names) {
+    return namesInterner.intern(
+        names.stream().map(StringCanonicalizer::intern).collect(toImmutableList()));
+  }
+
+  // Interner.
+  // Are there really a significant number of duplicates? Why??
+  private static final Interner<FunctionSignature> signatureInterner =
+      BlazeInterners.newWeakInterner();
 
   // TODO(adonovan): not a user-friendly API. Provide external callers with this function:
   //   FunctionSignature.parse("a, b=1, *, c, d=2, *args, **kwargs")
   // implemented by invoking the Starlark parser. (Most uses are in tests.)
   @AutoCodec.Instantiator
-  static FunctionSignature create(
+  public static FunctionSignature create(
       int numMandatoryPositionals,
       int numOptionalPositionals,
       int numMandatoryNamedOnly,
@@ -123,14 +145,17 @@ abstract class FunctionSignature {
             && 0 <= numMandatoryNamedOnly
             && 0 <= numOptionalNamedOnly);
 
-    return new AutoValue_FunctionSignature(
-        numMandatoryPositionals,
-        numOptionalPositionals,
-        numMandatoryNamedOnly,
-        numOptionalNamedOnly,
-        hasVarargs,
-        hasKwargs,
-        parameterNames);
+    FunctionSignature sig =
+        new AutoValue_FunctionSignature(
+            numMandatoryPositionals,
+            numOptionalPositionals,
+            numMandatoryNamedOnly,
+            numOptionalNamedOnly,
+            hasVarargs,
+            hasKwargs,
+            names(parameterNames));
+
+    return signatureInterner.intern(sig);
   }
 
   @Override
@@ -173,19 +198,19 @@ abstract class FunctionSignature {
       private boolean isMore = false;
       private int j = 0;
 
-      void comma() {
+      public void comma() {
         if (isMore) {
           printer.append(", ");
         }
         isMore = true;
       }
 
-      void mandatory(int i) {
+      public void mandatory(int i) {
         comma();
         printer.append(names.get(i));
       }
 
-      void optional(int i) {
+      public void optional(int i) {
         mandatory(i);
         if (defaultValuePrinter != null) {
           String str = defaultValuePrinter.print(j++);
@@ -225,6 +250,82 @@ abstract class FunctionSignature {
     return printer;
   }
 
+  /** Convert a list of Parameter into a FunctionSignature. */
+  static FunctionSignature fromParameters(Iterable<Parameter> parameters)
+      throws SignatureException {
+    int mandatoryPositionals = 0;
+    int optionalPositionals = 0;
+    int mandatoryNamedOnly = 0;
+    int optionalNamedOnly = 0;
+    boolean hasStarStar = false;
+    boolean hasStar = false;
+    @Nullable String star = null;
+    @Nullable String starStar = null;
+    ArrayList<String> params = new ArrayList<>();
+    // optional named-only parameters are kept aside to be spliced after the mandatory ones.
+    ArrayList<String> optionalNamedOnlyParams = new ArrayList<>();
+    boolean defaultRequired = false; // true after mandatory positionals and before star.
+    Set<String> paramNameSet = new HashSet<>(); // set of names, to avoid duplicates
+
+    for (Parameter param : parameters) {
+      if (hasStarStar) {
+        throw new SignatureException("illegal parameter after star-star parameter", param);
+      }
+      @Nullable String name = param.getName();
+      if (param.getName() != null) {
+        if (paramNameSet.contains(name)) {
+          throw new SignatureException("duplicate parameter name in function definition", param);
+        }
+        paramNameSet.add(name);
+      }
+      if (param instanceof Parameter.StarStar) {
+        hasStarStar = true;
+        starStar = name;
+      } else if (param instanceof Parameter.Star) {
+        if (hasStar) {
+          throw new SignatureException("duplicate star parameter in function definition", param);
+        }
+        hasStar = true;
+        defaultRequired = false;
+        if (param.getName() != null) {
+          star = name;
+        }
+      } else if (hasStar && param instanceof Parameter.Optional) {
+        optionalNamedOnly++;
+        optionalNamedOnlyParams.add(name);
+      } else {
+        params.add(name);
+        if (param instanceof Parameter.Optional) {
+          optionalPositionals++;
+          defaultRequired = true;
+        } else if (hasStar) {
+          mandatoryNamedOnly++;
+        } else if (defaultRequired) {
+          throw new SignatureException(
+              "a mandatory positional parameter must not follow an optional parameter", param);
+        } else {
+          mandatoryPositionals++;
+        }
+      }
+    }
+    params.addAll(optionalNamedOnlyParams);
+
+    if (star != null) {
+      params.add(star);
+    }
+    if (starStar != null) {
+      params.add(starStar);
+    }
+    return FunctionSignature.create(
+        mandatoryPositionals,
+        optionalPositionals,
+        mandatoryNamedOnly,
+        optionalNamedOnly,
+        star != null,
+        starStar != null,
+        ImmutableList.copyOf(params));
+  }
+
   /**
    * Constructs a function signature (with names) from signature description and names. This method
    * covers the general case. The number of optional named-only parameters is deduced from the other
@@ -237,7 +338,7 @@ abstract class FunctionSignature {
    * @param hasKwargs whether function accepts arbitrary named arguments
    * @param names an Array of String for the parameter names
    */
-  private static FunctionSignature of(
+  static FunctionSignature of(
       int numMandatoryPositionals,
       int numOptionalPositionals,
       int numMandatoryNamedOnly,
@@ -259,6 +360,60 @@ abstract class FunctionSignature {
         ImmutableList.copyOf(names));
   }
 
+  /**
+   * Constructs a function signature from mandatory positional argument names.
+   *
+   * @param names an Array of String for the positional parameter names
+   * @return a FunctionSignature
+   */
+  public static FunctionSignature of(String... names) {
+    return of(names.length, 0, 0, false, false, names);
+  }
+
+  /**
+   * Constructs a function signature from positional argument names.
+   *
+   * @param numMandatory an int for the number of mandatory positional parameters
+   * @param names an Array of String for the positional parameter names
+   * @return a FunctionSignature
+   */
+  public static FunctionSignature of(int numMandatory, String... names) {
+    return of(numMandatory, names.length - numMandatory, 0, false, false, names);
+  }
+
+  /**
+   * Constructs a function signature from named-only parameter names.
+   *
+   * @param numMandatory an int for the number of mandatory named-only parameters
+   * @param names an Array of String for the named-only parameter names
+   * @return a FunctionSignature
+   */
+  public static FunctionSignature namedOnly(int numMandatory, String... names) {
+    return of(0, 0, numMandatory, false, false, names);
+  }
+
+  /** Invalid signature from Parser or from SkylarkCallable annotation. */
+  static class SignatureException extends Exception {
+    private final Parameter parameter;
+
+    /** SignatureException from a message and a Parameter */
+    SignatureException(String message, Parameter parameter) {
+      super(message);
+      this.parameter = parameter;
+    }
+
+    /** Returns the parameter that caused the exception. */
+    Parameter getParameter() {
+      return parameter;
+    }
+  }
+
+  /** A ready-made signature to allow only keyword parameters and put them in a kwarg parameter */
+  public static final FunctionSignature KWARGS = of(0, 0, 0, false, true, "kwargs");
+
   /** A ready-made signature that accepts no arguments. */
-  static final FunctionSignature NOARGS = of(0, 0, 0, false, false);
+  public static final FunctionSignature NOARGS = of(0, 0, 0, false, false);
+
+  /** A ready-made signature that allows any arguments. */
+  public static final FunctionSignature ANY = of(0, 0, 0, true, true, "args", "kwargs");
 }

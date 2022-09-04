@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -27,7 +28,7 @@ import javax.annotation.Nullable;
  * metadata. This is needed because the annotation is sometimes in a superclass.
  *
  * <p>The annotation metadata is duplicated in this class to avoid usage of Java dynamic proxies
- * which are ~7× slower.
+ * which are ~7X slower.
  */
 final class MethodDescriptor {
   private final Method method;
@@ -37,11 +38,12 @@ final class MethodDescriptor {
   private final String doc;
   private final boolean documented;
   private final boolean structField;
-  private final ParamDescriptor[] parameters;
-  private final boolean extraPositionals;
-  private final boolean extraKeywords;
+  private final ImmutableList<ParamDescriptor> parameters;
+  private final ParamDescriptor extraPositionals;
+  private final ParamDescriptor extraKeywords;
   private final boolean selfCall;
   private final boolean allowReturnNones;
+  private final boolean useLocation;
   private final boolean useStarlarkThread;
   private final boolean useStarlarkSemantics;
 
@@ -52,11 +54,12 @@ final class MethodDescriptor {
       String doc,
       boolean documented,
       boolean structField,
-      ParamDescriptor[] parameters,
-      boolean extraPositionals,
-      boolean extraKeywords,
+      ImmutableList<ParamDescriptor> parameters,
+      ParamDescriptor extraPositionals,
+      ParamDescriptor extraKeywords,
       boolean selfCall,
       boolean allowReturnNones,
+      boolean useLocation,
       boolean useStarlarkThread,
       boolean useStarlarkSemantics) {
     this.method = method;
@@ -70,6 +73,7 @@ final class MethodDescriptor {
     this.extraKeywords = extraKeywords;
     this.selfCall = selfCall;
     this.allowReturnNones = allowReturnNones;
+    this.useLocation = useLocation;
     this.useStarlarkThread = useStarlarkThread;
     this.useStarlarkSemantics = useStarlarkSemantics;
   }
@@ -94,11 +98,12 @@ final class MethodDescriptor {
         annotation.structField(),
         Arrays.stream(annotation.parameters())
             .map(param -> ParamDescriptor.of(param, semantics))
-            .toArray(ParamDescriptor[]::new),
-        !annotation.extraPositionals().name().isEmpty(),
-        !annotation.extraKeywords().name().isEmpty(),
+            .collect(ImmutableList.toImmutableList()),
+        ParamDescriptor.of(annotation.extraPositionals(), semantics),
+        ParamDescriptor.of(annotation.extraKeywords(), semantics),
         annotation.selfCall(),
         annotation.allowReturnNones(),
+        annotation.useLocation(),
         annotation.useStarlarkThread(),
         annotation.useStarlarkSemantics());
   }
@@ -190,34 +195,38 @@ final class MethodDescriptor {
     return useStarlarkSemantics;
   }
 
+  /** @see SkylarkCallable#useLocation() */
+  boolean isUseLocation() {
+    return useLocation;
+  }
+
   /** @see SkylarkCallable#allowReturnNones() */
   boolean isAllowReturnNones() {
     return allowReturnNones;
   }
 
-  /** @return {@code true} if this method accepts extra arguments ({@code *args}) */
-  boolean acceptsExtraArgs() {
+  /** @see SkylarkCallable#extraPositionals() */
+  ParamDescriptor getExtraPositionals() {
     return extraPositionals;
   }
 
-  /** @see SkylarkCallable#extraKeywords() */
-  boolean acceptsExtraKwargs() {
+  ParamDescriptor getExtraKeywords() {
     return extraKeywords;
   }
 
-  /** @see SkylarkCallable#parameters() */
-  ParamDescriptor[] getParameters() {
-    return parameters;
+  /** @return {@code true} if this method accepts extra arguments ({@code *args}) */
+  boolean isAcceptsExtraArgs() {
+    return !getExtraPositionals().getName().isEmpty();
   }
 
-  /** Returns the index of the named parameter or -1 if not found. */
-  int getParameterIndex(String name) {
-    for (int i = 0; i < parameters.length; i++) {
-      if (parameters[i].getName().equals(name)) {
-        return i;
-      }
-    }
-    return -1;
+  /** @see SkylarkCallable#extraKeywords() */
+  boolean isAcceptsExtraKwargs() {
+    return !getExtraKeywords().getName().isEmpty();
+  }
+
+  /** @see SkylarkCallable#parameters() */
+  ImmutableList<ParamDescriptor> getParameters() {
+    return parameters;
   }
 
   /** @see SkylarkCallable#documented() */

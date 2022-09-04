@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Sta
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.StartDebuggingResponse;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Stepping;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Value;
-import com.google.devtools.build.lib.syntax.Debug;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Mutability;
@@ -51,7 +50,6 @@ import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.net.BindException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
@@ -96,21 +94,9 @@ public class SkylarkDebugServerTest {
         : ImmutableList.of();
   }
 
-  private static ServerSocket getServerSocket() throws IOException {
-    // For reasons only Apple knows, you cannot bind to IPv4-localhost when you run in a sandbox
-    // that only allows loopback traffic, but binding to IPv6-localhost works fine. This would
-    // however break on systems that don't support IPv6. So what we'll do is to try to bind to IPv6
-    // and if that fails, try again with IPv4.
-    try {
-      return new ServerSocket(0, 1, InetAddress.getByName("[::1]"));
-    } catch (BindException e) {
-      return new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
-    }
-  }
-
   @Before
   public void setUpServerAndClient() throws Exception {
-    ServerSocket serverSocket = getServerSocket();
+    ServerSocket serverSocket = new ServerSocket(0, 1, InetAddress.getByName(null));
     Future<SkylarkDebugServer> future =
         executor.submit(
             () ->
@@ -121,7 +107,7 @@ public class SkylarkDebugServerTest {
 
     server = future.get(10, TimeUnit.SECONDS);
     assertThat(server).isNotNull();
-    Debug.setDebugger(server);
+    EvalUtils.setDebugger(server);
   }
 
   @After

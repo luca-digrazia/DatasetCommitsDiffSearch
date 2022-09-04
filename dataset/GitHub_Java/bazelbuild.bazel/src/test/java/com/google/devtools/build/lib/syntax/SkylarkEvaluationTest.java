@@ -1115,8 +1115,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     // posOrNamed by name and three positional parameters, there is a conflict.
     new SkylarkTest()
         .update("mock", new Mock())
-        .testIfErrorContains(
-            "with_params() got multiple values for argument 'posOrNamed'",
+        .testIfErrorContains("got multiple values for keyword argument 'posOrNamed'",
             "mock.with_params(1, True, True, posOrNamed=True, named=True)");
   }
 
@@ -1124,20 +1123,17 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   public void testTooManyPositionalArgs() throws Exception {
     new SkylarkTest()
         .update("mock", new Mock())
-        .testIfErrorContains(
-            "with_params() accepts no more than 3 positional arguments but got 4",
+        .testIfErrorContains("expected no more than 3 positional arguments, but got 4",
             "mock.with_params(1, True, True, 'toomany', named=True)");
 
     new SkylarkTest()
         .update("mock", new Mock())
-        .testIfErrorContains(
-            "with_params() accepts no more than 3 positional arguments but got 5",
+        .testIfErrorContains("expected no more than 3 positional arguments, but got 5",
             "mock.with_params(1, True, True, 'toomany', 'alsotoomany', named=True)");
 
     new SkylarkTest()
         .update("mock", new Mock())
-        .testIfErrorContains(
-            "is_empty() accepts no more than 1 positional argument but got 2",
+        .testIfErrorContains("expected no more than 1 positional arguments, but got 2",
             "mock.is_empty('a', 'b')");
   }
 
@@ -1165,12 +1161,19 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "with_params() missing 1 required named argument: named", "mock.with_params(1, True)");
+            "parameter 'named' has no default value, for call to "
+                + "method with_params(pos1, pos2 = False, posOrNamed = False, named, "
+                + "optionalNamed = False, nonNoneable = \"a\", noneable = None, multi = None) "
+                + "of 'Mock'",
+            "mock.with_params(1, True)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "with_params() missing 1 required named argument: named",
+            "parameter 'named' has no default value, for call to "
+                + "method with_params(pos1, pos2 = False, posOrNamed = False, named, "
+                + "optionalNamed = False, nonNoneable = \"a\", noneable = None, multi = None) "
+                + "of 'Mock'",
             "mock.with_params(1, True, True)");
     new SkylarkTest()
         .update("mock", new Mock())
@@ -1188,28 +1191,30 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "with_params() got unexpected keyword argument 'posornamed' (did you mean"
-                + " 'posOrNamed'?)",
-            "mock.with_params(1, True, named=True, posornamed=True)");
-    new SkylarkTest()
-        .update("mock", new Mock())
-        .setUp("")
-        .testIfExactError(
-            "with_params() got unexpected keyword argument 'n'",
+            "unexpected keyword 'n', for call to "
+                + "method with_params(pos1, pos2 = False, posOrNamed = False, named, "
+                + "optionalNamed = False, nonNoneable = \"a\", noneable = None, multi = None) "
+                + "of 'Mock'",
             "mock.with_params(1, True, named=True, posOrNamed=True, n=2)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "in call to with_params(), parameter 'nonNoneable' cannot be None",
+            "parameter 'nonNoneable' cannot be None, for call to method "
+                + "with_params(pos1, pos2 = False, posOrNamed = False, named, "
+                + "optionalNamed = False, nonNoneable = \"a\", noneable = None, multi = None) "
+                + "of 'Mock'",
             "mock.with_params(1, True, True, named=True, optionalNamed=False, nonNoneable=None)");
 
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
-            "in call to with_params(), parameter 'multi' got value of type 'bool', want 'string or"
-                + " int or sequence of ints or NoneType'",
+            "expected value of type 'string or int or sequence of ints or NoneType' for parameter"
+                + " 'multi', for call to method "
+                + "with_params(pos1, pos2 = False, posOrNamed = False, named, "
+                + "optionalNamed = False, nonNoneable = \"a\", noneable = None, multi = None) "
+                + "of 'Mock'",
             "mock.with_params(1, True, named=True, multi=False)");
 
     // We do not enforce list item parameter type constraints.
@@ -1256,7 +1261,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .testIfErrorContains(
-            "in call to MockFn(), parameter 'pos' got value of type 'int', want 'string'",
+            "expected value of type 'string' for parameter 'pos', for call to function MockFn(pos)",
             "v = mock(1)");
   }
 
@@ -1468,7 +1473,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest("--incompatible_depset_union=false")
         .testExpression("str(depset([1, 3]) | depset([1, 2]))", "depset([1, 2, 3])")
         .testExpression("str(depset([1, 2]) | [1, 3])", "depset([1, 2, 3])")
-        .testIfExactError("unsupported binary operation: int | bool", "2 | False");
+        .testIfExactError("unsupported operand type(s) for |: 'int' and 'bool'", "2 | False");
   }
 
   @Test
@@ -1476,8 +1481,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .testIfErrorContains("not iterable", "list(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "max(depset([1, 2, 3]))")
-        .testIfErrorContains(
-            "unsupported binary operation: int in depset", "1 in depset([1, 2, 3])")
+        .testIfErrorContains("not iterable", "1 in depset([1, 2, 3])")
         .testIfErrorContains("not iterable", "sorted(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "tuple(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "[x for x in depset()]")
@@ -1649,10 +1653,11 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testPlusOnDictDeprecated() throws Exception {
     new SkylarkTest()
-        .testIfErrorContains("unsupported binary operation: dict + dict", "{1: 2} + {3: 4}");
+        .testIfErrorContains(
+            "unsupported operand type(s) for +: 'dict' and 'dict'", "{1: 2} + {3: 4}");
     new SkylarkTest()
         .testIfErrorContains(
-            "unsupported binary operation: dict + dict",
+            "unsupported operand type(s) for +: 'dict' and 'dict'",
             "def func():",
             "  d = {1: 2}",
             "  d += {3: 4}",
@@ -1857,8 +1862,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testListAnTupleConcatenationDoesNotWorkInSkylark() throws Exception {
-    new SkylarkTest()
-        .testIfExactError("unsupported binary operation: list + tuple", "[1, 2] + (3, 4)");
+    new SkylarkTest().testIfExactError("unsupported operand type(s) for +: 'list' and 'tuple'",
+        "[1, 2] + (3, 4)");
   }
 
   @Test
@@ -1961,7 +1966,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   public void testPrintBadKwargs() throws Exception {
     new SkylarkTest()
         .testIfErrorContains(
-            "print() got unexpected keyword argument 'end'", "print(end='x', other='y')");
+            "unexpected keywords 'end', 'other', for call to function print(sep = \" \", *args)",
+            "print(end='x', other='y')");
   }
 
   // Override tests in EvaluationTest incompatible with Skylark
@@ -2195,14 +2201,14 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testComprehensionsAreLocal() throws Exception {
-    // Regression test for https://github.com/bazelbuild/starlark/issues/92.
+  public void testListComprehensionsTemporarilyRebindGlobals() throws Exception {
+    // This test asserts the buggy behavior of https://github.com/bazelbuild/starlark/issues/92.
     exec(
-        "x = 1", // this global binding is not affected (even temporarily) by the comprehension
+        "x = 1", //
         "def f():",
         "  return x",
         "y = [f() for x in [2]][0]");
-    assertThat(lookup("y")).isEqualTo(1);
+    assertThat(lookup("y")).isEqualTo(2); // TODO(adonovan): should be 1!
   }
 
   @Test

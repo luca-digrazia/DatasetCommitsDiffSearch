@@ -23,35 +23,55 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
-/** A syntax-tree-walking evaluator for StarlarkFunction bodies. */
+/** A syntax-tree-walking evaluator. */
+// TODO(adonovan): make this class the sole locus of tree-based evaluation logic.
+// Make all its methods static, and thread the frame object explicitly.
+// The frame will hold the thread, the function, the locals, the result, and the debugger.
+// TODO(adonovan): combine Eval, StarlarkThread.CallFrame, and LexicalFrame.
 final class Eval {
 
-  private Eval() {} // uninstantiable
+  private static final AtomicReference<Debugger> debugger = new AtomicReference<>();
 
-  // ---- entry point ----
+  private final StarlarkThread thread;
+  private final Debugger dbg;
+  private Object result = Starlark.NONE;
+
+  // In a <toplevel> function, assignments to unresolved identifiers update the module.
+  private final boolean isToplevelFunction;
+
+  // ---- entry points ----
+
+  static void setDebugger(Debugger dbg) {
+    Debugger prev = debugger.getAndSet(dbg);
+    if (prev != null) {
+      prev.close();
+    }
+  }
 
   // Called from StarlarkFunction.fastcall.
-  static Object execFunctionBody(StarlarkThread.CallFrame fr, List<Statement> statements)
+  static Object execFunctionBody(
+      StarlarkThread thread, List<Statement> statements, boolean isToplevelFunction)
       throws EvalException, InterruptedException {
     checkInterrupt();
-    execStatements(fr, statements, /*indented=*/ false);
-    return fr.result;
+    Eval eval = new Eval(thread, isToplevelFunction);
+    eval.execStatements(statements, /*indented=*/ false);
+    return eval.result;
   }
 
-  private static StarlarkFunction fn(StarlarkThread.CallFrame fr) {
-    return (StarlarkFunction) fr.fn;
+  private Eval(StarlarkThread thread, boolean isToplevelFunction) {
+    this.thread = thread;
+    this.isToplevelFunction = isToplevelFunction;
+    this.dbg = debugger.get(); // capture value and use for lifetime of one Eval
   }
 
-  private static TokenKind execStatements(
-      StarlarkThread.CallFrame fr, List<Statement> statements, boolean indented)
+  private TokenKind execStatements(List<Statement> statements, boolean indented)
       throws EvalException, InterruptedException {
-    boolean isToplevelFunction = fn(fr).isToplevel;
-
     // Hot code path, good chance of short lists which don't justify the iterator overhead.
     for (int i = 0; i < statements.size(); i++) {
       Statement stmt = statements.get(i);
-      TokenKind flow = exec(fr, stmt);
+      TokenKind flow = exec(stmt);
       if (flow != TokenKind.PASS) {
         return flow;
       }
@@ -59,13 +79,13 @@ final class Eval {
       // Hack for SkylarkImportLookupFunction's "export" semantics.
       // We enable it only for statements outside any function (isToplevelFunction)
       // and outside any if- or for- statements (!indented).
-      if (isToplevelFunction && !indented && fr.thread.postAssignHook != null) {
+      if (isToplevelFunction && !indented && thread.postAssignHook != null) {
         if (stmt instanceof AssignmentStatement) {
           AssignmentStatement assign = (AssignmentStatement) stmt;
           for (Identifier id : Identifier.boundIdentifiers(assign.getLHS())) {
             String name = id.getName();
-            Object value = fn(fr).getModule().lookup(name);
-            fr.thread.postAssignHook.assign(name, value);
+            Object value = thread.moduleLookup(name);
+            thread.postAssignHook.assign(name, value);
           }
         }
       }
@@ -73,31 +93,25 @@ final class Eval {
     return TokenKind.PASS;
   }
 
-  private static void execAssignment(StarlarkThread.CallFrame fr, AssignmentStatement node)
-      throws EvalException, InterruptedException {
+  private void execAssignment(AssignmentStatement node) throws EvalException, InterruptedException {
     if (node.isAugmented()) {
-      execAugmentedAssignment(fr, node);
+      execAugmentedAssignment(node);
     } else {
-      Object rvalue = eval(fr, node.getRHS());
-      try {
-        assign(fr, node.getLHS(), rvalue);
-      } catch (EvalException ex) {
-        // TODO(adonovan): use location of = operator.
-        throw ex.ensureLocation(node.getStartLocation());
-      }
+      Object rvalue = eval(thread, node.getRHS());
+      // TODO(adonovan): use location of = operator.
+      assign(node.getLHS(), rvalue, thread, node.getStartLocation());
     }
   }
 
-  private static TokenKind execFor(StarlarkThread.CallFrame fr, ForStatement node)
-      throws EvalException, InterruptedException {
-    Object o = eval(fr, node.getCollection());
+  private TokenKind execFor(ForStatement node) throws EvalException, InterruptedException {
+    Object o = eval(thread, node.getCollection());
     Iterable<?> seq = Starlark.toIterable(o);
     EvalUtils.lock(o, node.getStartLocation());
     try {
       for (Object it : seq) {
-        assign(fr, node.getLHS(), it);
+        assign(node.getLHS(), it, thread, node.getLHS().getStartLocation());
 
-        switch (execStatements(fr, node.getBlock(), /*indented=*/ true)) {
+        switch (execStatements(node.getBlock(), /*indented=*/ true)) {
           case PASS:
           case CONTINUE:
             // Stay in loop.
@@ -113,16 +127,13 @@ final class Eval {
             throw new IllegalStateException("unreachable");
         }
       }
-    } catch (EvalException ex) {
-      throw ex.ensureLocation(node.getLHS().getStartLocation());
     } finally {
       EvalUtils.unlock(o, node.getStartLocation());
     }
     return TokenKind.PASS;
   }
 
-  private static void execDef(StarlarkThread.CallFrame fr, DefStatement node)
-      throws EvalException, InterruptedException {
+  private void execDef(DefStatement node) throws EvalException, InterruptedException {
     FunctionSignature sig = node.getSignature();
 
     // Evaluate default value expressions of optional parameters.
@@ -137,14 +148,14 @@ final class Eval {
       for (int i = sig.numMandatoryPositionals(), j = 0; i < sig.numParameters(); i++) {
         Expression expr = node.getParameters().get(i).getDefaultValue();
         if (expr != null) {
-          array[j++] = eval(fr, expr);
+          array[j++] = eval(thread, expr);
         }
       }
       defaults = Tuple.wrap(array);
     }
 
     updateAndExport(
-        fr,
+        thread,
         node.getIdentifier(),
         new StarlarkFunction(
             node.getIdentifier().getName(),
@@ -152,22 +163,20 @@ final class Eval {
             sig,
             defaults,
             node.getStatements(),
-            fn(fr).getModule()));
+            thread.getGlobals()));
   }
 
-  private static TokenKind execIf(StarlarkThread.CallFrame fr, IfStatement node)
-      throws EvalException, InterruptedException {
-    boolean cond = Starlark.truth(eval(fr, node.getCondition()));
+  private TokenKind execIf(IfStatement node) throws EvalException, InterruptedException {
+    boolean cond = Starlark.truth(eval(thread, node.getCondition()));
     if (cond) {
-      return execStatements(fr, node.getThenBlock(), /*indented=*/ true);
+      return execStatements(node.getThenBlock(), /*indented=*/ true);
     } else if (node.getElseBlock() != null) {
-      return execStatements(fr, node.getElseBlock(), /*indented=*/ true);
+      return execStatements(node.getElseBlock(), /*indented=*/ true);
     }
     return TokenKind.PASS;
   }
 
-  private static void execLoad(StarlarkThread.CallFrame fr, LoadStatement node)
-      throws EvalException {
+  private void execLoad(LoadStatement node) throws EvalException {
     for (LoadStatement.Binding binding : node.getBindings()) {
       Identifier orig = binding.getOriginalName();
 
@@ -180,7 +189,7 @@ final class Eval {
 
       // Load module.
       String moduleName = node.getImport().getValue();
-      StarlarkThread.Extension module = fr.thread.getExtension(moduleName);
+      StarlarkThread.Extension module = thread.getExtension(moduleName);
       if (module == null) {
         throw new EvalException(
             node.getImport().getStartLocation(),
@@ -205,127 +214,104 @@ final class Eval {
       // Define module-local variable.
       // TODO(adonovan): eventually the default behavior should be that
       // loads bind file-locally. Either way, the resolver should designate
-      // the proper scope of binding.getLocalName() and this should become
-      // simply assign(binding.getLocalName(), value).
-      try {
-        fr.locals.put(binding.getLocalName().getName(), value);
-      } catch (Mutability.MutabilityException ex) {
-        throw new AssertionError(ex);
-      }
+      // the proper scope of binding.getLocalName().
+      thread.updateUnresolved(binding.getLocalName().getName(), value);
     }
   }
 
-  private static TokenKind execReturn(StarlarkThread.CallFrame fr, ReturnStatement node)
-      throws EvalException, InterruptedException {
+  private TokenKind execReturn(ReturnStatement node) throws EvalException, InterruptedException {
     Expression ret = node.getReturnExpression();
     if (ret != null) {
-      fr.result = eval(fr, ret);
+      this.result = eval(thread, ret);
     }
     return TokenKind.RETURN;
   }
 
-  private static TokenKind exec(StarlarkThread.CallFrame fr, Statement st)
-      throws EvalException, InterruptedException {
-    if (fr.dbg != null) {
+  private TokenKind exec(Statement st) throws EvalException, InterruptedException {
+    if (dbg != null) {
       Location loc = st.getStartLocation();
-      fr.setLocation(loc);
-      fr.dbg.before(fr.thread, loc); // location is now redundant since it's in the thread
+      thread.setLocation(loc);
+      dbg.before(thread, loc); // location is now redundant since it's in the thread
     }
 
     try {
-      return execDispatch(fr, st);
+      return execDispatch(st);
     } catch (EvalException ex) {
       throw maybeTransformException(st, ex);
     }
   }
 
-  private static TokenKind execDispatch(StarlarkThread.CallFrame fr, Statement st)
-      throws EvalException, InterruptedException {
+  private TokenKind execDispatch(Statement st) throws EvalException, InterruptedException {
     switch (st.kind()) {
       case ASSIGNMENT:
-        execAssignment(fr, (AssignmentStatement) st);
+        execAssignment((AssignmentStatement) st);
         return TokenKind.PASS;
       case EXPRESSION:
-        eval(fr, ((ExpressionStatement) st).getExpression());
+        eval(thread, ((ExpressionStatement) st).getExpression());
         return TokenKind.PASS;
       case FLOW:
         return ((FlowStatement) st).getKind();
       case FOR:
-        return execFor(fr, (ForStatement) st);
+        return execFor((ForStatement) st);
       case DEF:
-        execDef(fr, (DefStatement) st);
+        execDef((DefStatement) st);
         return TokenKind.PASS;
       case IF:
-        return execIf(fr, (IfStatement) st);
+        return execIf((IfStatement) st);
       case LOAD:
-        execLoad(fr, (LoadStatement) st);
+        execLoad((LoadStatement) st);
         return TokenKind.PASS;
       case RETURN:
-        return execReturn(fr, (ReturnStatement) st);
+        return execReturn((ReturnStatement) st);
     }
     throw new IllegalArgumentException("unexpected statement: " + st.kind());
   }
 
   /**
    * Updates the environment bindings, and possibly mutates objects, so as to assign the given value
-   * to the given expression. May throw an EvalException without location.
+   * to the given expression. The expression must be valid for an {@code LValue}.
    */
-  private static void assign(StarlarkThread.CallFrame fr, Expression expr, Object value)
+  private void assign(Expression expr, Object value, StarlarkThread thread, Location loc)
       throws EvalException, InterruptedException {
     if (expr instanceof Identifier) {
-      assignIdentifier(fr, (Identifier) expr, value);
+      assignIdentifier((Identifier) expr, value, thread);
     } else if (expr instanceof IndexExpression) {
-      Object object = eval(fr, ((IndexExpression) expr).getObject());
-      Object key = eval(fr, ((IndexExpression) expr).getKey());
-      assignItem(object, key, value);
+      Object object = eval(thread, ((IndexExpression) expr).getObject());
+      Object key = eval(thread, ((IndexExpression) expr).getKey());
+      assignItem(object, key, value, loc);
     } else if (expr instanceof ListExpression) {
       ListExpression list = (ListExpression) expr;
-      assignList(fr, list.getElements(), value);
+      assignList(list.getElements(), value, thread, loc);
     } else {
       // Not possible for validated ASTs.
-      throw Starlark.errorf("cannot assign to '%s'", expr);
+      throw new EvalException(loc, "cannot assign to '" + expr + "'");
     }
   }
 
   /** Binds a variable to the given value in the environment. */
-  private static void assignIdentifier(StarlarkThread.CallFrame fr, Identifier ident, Object value)
+  private void assignIdentifier(Identifier ident, Object value, StarlarkThread thread)
       throws EvalException {
-    updateAndExport(fr, ident, value);
+    updateAndExport(thread, ident, value);
   }
 
   /** Updates a local or global binding. */
-  private static void updateAndExport(StarlarkThread.CallFrame fr, Identifier id, Object value)
+  private void updateAndExport(StarlarkThread thread, Identifier id, Object value)
       throws EvalException {
     ValidationEnvironment.Scope scope = id.getScope();
     // Legacy hack for incomplete identifier resolution.
     // Comprehension variables at top level (outside any function)
     // are resolves as Local, but they may not be resolved.
-    // In a <toplevel> function, assignments to unresolved identifiers update the module.
-    if (fn(fr).isToplevel) {
+    if (isToplevelFunction) {
       scope = ValidationEnvironment.Scope.Module;
     } else if (scope == null) {
       scope = ValidationEnvironment.Scope.Local;
     }
-    String name = id.getName();
     switch (scope) {
       case Local:
-        try {
-          fr.locals.put(name, value);
-        } catch (Mutability.MutabilityException ex) {
-          throw new AssertionError(ex);
-        }
+        thread.updateLexical(id.getName(), value);
         break;
       case Module:
-        // Updates a module binding and sets its 'exported' flag.
-        // (Only load bindings are not exported.
-        // But exportedBindings does at run time what should be done in the resolver.)
-        Module module = fn(fr).getModule();
-        try {
-          module.put(name, value);
-          module.exportedBindings.add(name);
-        } catch (Mutability.MutabilityException ex) {
-          throw new IllegalStateException(ex);
-        }
+        thread.updateModule(id.getName(), value);
         break;
       default:
         throw new IllegalStateException(scope.toString());
@@ -339,85 +325,84 @@ final class Eval {
    *
    * @throws EvalException if the object is not a list or dict
    */
-  private static void assignItem(Object object, Object key, Object value) throws EvalException {
+  @SuppressWarnings("unchecked")
+  private void assignItem(Object object, Object key, Object value, Location loc)
+      throws EvalException {
     if (object instanceof Dict) {
-      @SuppressWarnings("unchecked")
       Dict<Object, Object> dict = (Dict<Object, Object>) object;
-      dict.put(key, value, /*loc=*/ null);
+      dict.put(key, value, loc);
     } else if (object instanceof StarlarkList) {
-      @SuppressWarnings("unchecked")
       StarlarkList<Object> list = (StarlarkList<Object>) object;
-      int index = Starlark.toInt(key, "list index");
-      index = EvalUtils.getSequenceIndex(index, list.size());
-      list.set(index, value, /*loc=*/ null);
+      int index = EvalUtils.getSequenceIndex(key, list.size(), loc);
+      list.set(index, value, loc);
     } else {
-      throw Starlark.errorf(
-          "can only assign an element in a dictionary or a list, not in a '%s'",
-          Starlark.type(object));
+      throw new EvalException(
+          loc,
+          "can only assign an element in a dictionary or a list, not in a '"
+              + EvalUtils.getDataTypeName(object)
+              + "'");
     }
   }
 
   /**
-   * Recursively assigns an iterable value to a sequence of assignable expressions. May throw an
-   * EvalException without location.
+   * Recursively assigns an iterable value to a sequence of assignable expressions.
+   *
+   * @throws EvalException if the list literal has length 0, or if the value is not an iterable of
+   *     matching length
    */
-  private static void assignList(StarlarkThread.CallFrame fr, List<Expression> lhs, Object x)
+  private void assignList(List<Expression> lhs, Object x, StarlarkThread thread, Location loc)
       throws EvalException, InterruptedException {
     // TODO(adonovan): lock/unlock rhs during iteration so that
     // assignments fail when the left side aliases the right,
     // which is a tricky case in Python assignment semantics.
     int nrhs = Starlark.len(x);
     if (nrhs < 0) {
-      throw Starlark.errorf("type '%s' is not iterable", Starlark.type(x));
+      throw new EvalException(loc, "type '" + EvalUtils.getDataTypeName(x) + "' is not iterable");
     }
     Iterable<?> rhs = Starlark.toIterable(x); // fails if x is a string
     int len = lhs.size();
     if (len == 0) {
-      throw Starlark.errorf(
-          "lists or tuples on the left-hand side of assignments must have at least one item");
+      throw new EvalException(
+          loc, "lists or tuples on the left-hand side of assignments must have at least one item");
     }
     if (len != nrhs) {
-      throw Starlark.errorf(
-          "assignment length mismatch: left-hand side has length %d, but right-hand side evaluates"
-              + " to value of length %d",
-          len, nrhs);
+      throw new EvalException(
+          loc,
+          String.format(
+              "assignment length mismatch: left-hand side has length %d, but right-hand side"
+                  + " evaluates to value of length %d",
+              len, nrhs));
     }
     int i = 0;
     for (Object item : rhs) {
-      assign(fr, lhs.get(i), item);
+      assign(lhs.get(i), item, thread, loc);
       i++;
     }
   }
 
-  private static void execAugmentedAssignment(StarlarkThread.CallFrame fr, AssignmentStatement stmt)
+  private void execAugmentedAssignment(AssignmentStatement stmt)
       throws EvalException, InterruptedException {
     Expression lhs = stmt.getLHS();
     TokenKind op = stmt.getOperator();
     Expression rhs = stmt.getRHS();
-    // TODO(adonovan): don't materialize Locations before an error has occurred.
-    // (Requires syntax tree to record offsets and defer Location conversion.)
     Location loc = stmt.getStartLocation(); // TODO(adonovan): use operator location
 
     if (lhs instanceof Identifier) {
-      Object x = eval(fr, lhs);
-      Object y = eval(fr, rhs);
-      Object z = inplaceBinaryOp(fr, op, x, y, loc);
-      assignIdentifier(fr, (Identifier) lhs, z);
+      Object x = eval(thread, lhs);
+      Object y = eval(thread, rhs);
+      Object z = inplaceBinaryOp(op, x, y, thread, loc);
+      assignIdentifier((Identifier) lhs, z, thread);
     } else if (lhs instanceof IndexExpression) {
       // object[index] op= y
       // The object and key should be evaluated only once, so we don't use lhs.eval().
       IndexExpression index = (IndexExpression) lhs;
-      Object object = eval(fr, index.getObject());
-      Object key = eval(fr, index.getKey());
-      Object x = EvalUtils.index(fr.thread.mutability(), fr.thread.getSemantics(), object, key);
+      Object object = eval(thread, index.getObject());
+      Object key = eval(thread, index.getKey());
+      Object x = EvalUtils.index(object, key, thread, loc);
       // Evaluate rhs after lhs.
-      Object y = eval(fr, rhs);
-      Object z = inplaceBinaryOp(fr, op, x, y, loc);
-      try {
-        assignItem(object, key, z);
-      } catch (EvalException ex) {
-        throw ex.ensureLocation(loc);
-      }
+      Object y = eval(thread, rhs);
+      Object z = inplaceBinaryOp(op, x, y, thread, loc);
+      assignItem(object, key, z, loc);
     } else if (lhs instanceof ListExpression) {
       throw new EvalException(loc, "cannot perform augmented assignment on a list literal");
     } else {
@@ -427,8 +412,8 @@ final class Eval {
   }
 
   private static Object inplaceBinaryOp(
-      StarlarkThread.CallFrame fr, TokenKind op, Object x, Object y, Location location)
-      throws EvalException {
+      TokenKind op, Object x, Object y, StarlarkThread thread, Location location)
+      throws EvalException, InterruptedException {
     // list += iterable  behaves like  list.extend(iterable)
     // TODO(b/141263526): following Python, allow list+=iterable (but not list+iterable).
     if (op == TokenKind.PLUS && x instanceof StarlarkList && y instanceof StarlarkList) {
@@ -436,23 +421,42 @@ final class Eval {
       list.extend(y);
       return list;
     }
-    return EvalUtils.binaryOp(op, x, y, fr.thread, location);
+    return EvalUtils.binaryOp(op, x, y, thread, location);
   }
 
   // ---- expressions ----
 
-  private static Object eval(StarlarkThread.CallFrame fr, Expression expr)
+  /**
+   * Returns the result of evaluating this build-language expression in the specified environment.
+   * All BUILD language datatypes are mapped onto the corresponding Java types as follows:
+   *
+   * <pre>
+   *    int   -> Integer
+   *    float -> Double          (currently not generated by the grammar)
+   *    str   -> String
+   *    [...] -> List&lt;Object>    (mutable)
+   *    (...) -> List&lt;Object>    (immutable)
+   *    {...} -> Map&lt;Object, Object>
+   *    func  -> Function
+   * </pre>
+   *
+   * @return the result of evaluting the expression: a Java object corresponding to a datatype in
+   *     the BUILD language.
+   * @throws EvalException if the expression could not be evaluated.
+   * @throws InterruptedException may be thrown in a sub class.
+   */
+  private Object eval(StarlarkThread thread, Expression expr)
       throws EvalException, InterruptedException {
     // TODO(adonovan): don't push and pop all the time. We should only need the stack of function
     // call frames, and we should recycle them.
-    // TODO(adonovan): put the StarlarkThread into the Java thread-local store
+    // TODO(adonovan): put the StarlarkThread (Starlark thread) into the Java thread-local store
     // once only, in push, and undo this in pop.
     try {
       if (Callstack.enabled) {
         Callstack.push(expr);
       }
       try {
-        return doEval(fr, expr);
+        return doEval(thread, expr);
       } catch (EvalException ex) {
         throw maybeTransformException(expr, ex);
       }
@@ -463,56 +467,50 @@ final class Eval {
     }
   }
 
-  private static Object doEval(StarlarkThread.CallFrame fr, Expression expr)
+  private Object doEval(StarlarkThread thread, Expression expr)
       throws EvalException, InterruptedException {
     switch (expr.kind()) {
       case BINARY_OPERATOR:
         {
           BinaryOperatorExpression binop = (BinaryOperatorExpression) expr;
-          Object x = eval(fr, binop.getX());
+          Object x = eval(thread, binop.getX());
           // AND and OR require short-circuit evaluation.
           switch (binop.getOperator()) {
             case AND:
-              return Starlark.truth(x) ? eval(fr, binop.getY()) : x;
+              return Starlark.truth(x) ? eval(thread, binop.getY()) : x;
             case OR:
-              return Starlark.truth(x) ? x : eval(fr, binop.getY());
+              return Starlark.truth(x) ? x : eval(thread, binop.getY());
             default:
-              Object y = eval(fr, binop.getY());
+              Object y = eval(thread, binop.getY());
               // TODO(adonovan): use operator location
               return EvalUtils.binaryOp(
-                  binop.getOperator(), x, y, fr.thread, binop.getStartLocation());
+                  binop.getOperator(), x, y, thread, binop.getStartLocation());
           }
         }
 
       case COMPREHENSION:
-        return evalComprehension(fr, (Comprehension) expr);
+        return evalComprehension(thread, (Comprehension) expr);
 
       case CONDITIONAL:
         {
           ConditionalExpression cond = (ConditionalExpression) expr;
-          Object v = eval(fr, cond.getCondition());
-          return eval(fr, Starlark.truth(v) ? cond.getThenCase() : cond.getElseCase());
+          Object v = eval(thread, cond.getCondition());
+          return eval(thread, Starlark.truth(v) ? cond.getThenCase() : cond.getElseCase());
         }
 
       case DICT_EXPR:
         {
           DictExpression dictexpr = (DictExpression) expr;
-          Dict<Object, Object> dict = Dict.of(fr.thread.mutability());
+          Dict<Object, Object> dict = Dict.of(thread.mutability());
           for (DictExpression.Entry entry : dictexpr.getEntries()) {
-            Object k = eval(fr, entry.getKey());
-            Object v = eval(fr, entry.getValue());
+            Object k = eval(thread, entry.getKey());
+            Object v = eval(thread, entry.getValue());
             int before = dict.size();
-            try {
-              dict.put(k, v, /*loc=*/ null);
-            } catch (EvalException ex) {
-              // TODO(adonovan): use colon location
-              throw ex.ensureLocation(entry.getKey().getStartLocation());
-            }
+            Location loc = entry.getKey().getStartLocation(); // TODO(adonovan): use colon location
+            dict.put(k, v, loc);
             if (dict.size() == before) {
-              // TODO(adonovan): use colon location
               throw new EvalException(
-                  entry.getKey().getStartLocation(),
-                  "Duplicated key " + Starlark.repr(k) + " when creating dictionary");
+                  loc, "Duplicated key " + Starlark.repr(k) + " when creating dictionary");
             }
           }
           return dict;
@@ -521,12 +519,12 @@ final class Eval {
       case DOT:
         {
           DotExpression dot = (DotExpression) expr;
-          Object object = eval(fr, dot.getObject());
+          Object object = eval(thread, dot.getObject());
           String name = dot.getField().getName();
           try {
-            Object result = EvalUtils.getAttr(fr.thread, object, name);
+            Object result = EvalUtils.getAttr(thread, object, name);
             if (result == null) {
-              throw EvalUtils.getMissingAttrException(object, name, fr.thread.getSemantics());
+              throw EvalUtils.getMissingAttrException(object, name, thread.getSemantics());
             }
             return result;
           } catch (EvalException ex) {
@@ -539,7 +537,7 @@ final class Eval {
           checkInterrupt();
 
           CallExpression call = (CallExpression) expr;
-          Object fn = eval(fr, call.getFunction());
+          Object fn = eval(thread, call.getFunction());
 
           // StarStar and Star args are guaranteed to be last, if they occur.
           ImmutableList<Argument> arguments = call.getArguments();
@@ -564,7 +562,7 @@ final class Eval {
           Object[] positional = npos == 0 ? EMPTY : new Object[npos];
           for (i = 0; i < npos; i++) {
             Argument arg = arguments.get(i);
-            Object value = eval(fr, arg.getValue());
+            Object value = eval(thread, arg.getValue());
             positional[i] = value;
           }
 
@@ -572,18 +570,18 @@ final class Eval {
           Object[] named = n == npos ? EMPTY : new Object[2 * (n - npos)];
           for (int j = 0; i < n; i++) {
             Argument.Keyword arg = (Argument.Keyword) arguments.get(i);
-            Object value = eval(fr, arg.getValue());
+            Object value = eval(thread, arg.getValue());
             named[j++] = arg.getName();
             named[j++] = value;
           }
 
           // f(*args) -- varargs
           if (star != null) {
-            Object value = eval(fr, star.getValue());
+            Object value = eval(thread, star.getValue());
             if (!(value instanceof StarlarkIterable)) {
               throw new EvalException(
                   star.getStartLocation(),
-                  "argument after * must be an iterable, not " + Starlark.type(value));
+                  "argument after * must be an iterable, not " + EvalUtils.getDataTypeName(value));
             }
             // TODO(adonovan): opt: if value.size is known, preallocate (and skip if empty).
             ArrayList<Object> list = new ArrayList<>();
@@ -594,11 +592,11 @@ final class Eval {
 
           // f(**kwargs)
           if (starstar != null) {
-            Object value = eval(fr, starstar.getValue());
+            Object value = eval(thread, starstar.getValue());
             if (!(value instanceof Dict)) {
               throw new EvalException(
                   starstar.getStartLocation(),
-                  "argument after ** must be a dict, not " + Starlark.type(value));
+                  "argument after ** must be a dict, not " + EvalUtils.getDataTypeName(value));
             }
             Dict<?, ?> kwargs = (Dict<?, ?>) value;
             int j = named.length;
@@ -607,7 +605,7 @@ final class Eval {
               if (!(e.getKey() instanceof String)) {
                 throw new EvalException(
                     starstar.getStartLocation(),
-                    "keywords must be strings, not " + Starlark.type(e.getKey()));
+                    "keywords must be strings, not " + EvalUtils.getDataTypeName(e.getKey()));
               }
               named[j++] = e.getKey();
               named[j++] = e.getValue();
@@ -615,9 +613,9 @@ final class Eval {
           }
 
           Location loc = call.getStartLocation(); // TODO(adonovan): use call lparen
-          fr.setLocation(loc);
+          thread.setLocation(loc);
           try {
-            return Starlark.fastcall(fr.thread, fn, positional, named);
+            return Starlark.fastcall(thread, fn, positional, named);
           } catch (EvalException ex) {
             throw ex.ensureLocation(loc);
           }
@@ -629,31 +627,26 @@ final class Eval {
           String name = id.getName();
           if (id.getScope() == null) {
             // Legacy behavior, to be removed.
-            Object result = fr.locals.get(name);
-            if (result != null) {
-              return result;
+            Object result = thread.lookupUnresolved(name);
+            if (result == null) {
+              String error =
+                  ValidationEnvironment.createInvalidIdentifierException(
+                      id.getName(), thread.getVariableNames());
+              throw new EvalException(id.getStartLocation(), error);
             }
-            result = fn(fr).getModule().get(name);
-            if (result != null) {
-              return result;
-            }
-            String error =
-                ValidationEnvironment.createInvalidIdentifierException(
-                    name, fr.thread.getVariableNames());
-            throw new EvalException(id.getStartLocation(), error);
+            return result;
           }
 
           Object result;
           switch (id.getScope()) {
             case Local:
-              result = fr.locals.get(name);
+              result = thread.localLookup(name);
               break;
             case Module:
-              result = fn(fr).getModule().lookup(name);
+              result = thread.moduleLookup(name);
               break;
             case Universe:
-              // TODO(laurentlb): look only at universe.
-              result = fn(fr).getModule().get(name);
+              result = thread.universeLookup(name);
               break;
             default:
               throw new IllegalStateException(id.getScope().toString());
@@ -677,14 +670,10 @@ final class Eval {
       case INDEX:
         {
           IndexExpression index = (IndexExpression) expr;
-          Object object = eval(fr, index.getObject());
-          Object key = eval(fr, index.getKey());
-          try {
-            return EvalUtils.index(fr.thread.mutability(), fr.thread.getSemantics(), object, key);
-          } catch (EvalException ex) {
-            // TODO(adonovan): use location of lbracket token
-            throw ex.ensureLocation(index.getStartLocation());
-          }
+          Object object = eval(thread, index.getObject());
+          Object key = eval(thread, index.getKey());
+          // TODO(adonovan): use location of lbracket token
+          return EvalUtils.index(object, key, thread, index.getStartLocation());
         }
 
       case INTEGER_LITERAL:
@@ -696,26 +685,49 @@ final class Eval {
           int n = list.getElements().size();
           Object[] array = new Object[n];
           for (int i = 0; i < n; i++) {
-            array[i] = eval(fr, list.getElements().get(i));
+            array[i] = eval(thread, list.getElements().get(i));
           }
-          return list.isTuple()
-              ? Tuple.wrap(array)
-              : StarlarkList.wrap(fr.thread.mutability(), array);
+          return list.isTuple() ? Tuple.wrap(array) : StarlarkList.wrap(thread.mutability(), array);
         }
 
       case SLICE:
         {
           SliceExpression slice = (SliceExpression) expr;
-          Object x = eval(fr, slice.getObject());
-          Object start = slice.getStart() == null ? Starlark.NONE : eval(fr, slice.getStart());
-          Object stop = slice.getStop() == null ? Starlark.NONE : eval(fr, slice.getStop());
-          Object step = slice.getStep() == null ? Starlark.NONE : eval(fr, slice.getStep());
-          try {
-            return Starlark.slice(fr.thread.mutability(), x, start, stop, step);
-          } catch (EvalException ex) {
-            // TODO(adonovan): use lbracket location
-            throw ex.ensureLocation(slice.getStartLocation());
+          Object object = eval(thread, slice.getObject());
+          Object start = slice.getStart() == null ? Starlark.NONE : eval(thread, slice.getStart());
+          Object end = slice.getEnd() == null ? Starlark.NONE : eval(thread, slice.getEnd());
+          Object step = slice.getStep() == null ? Starlark.NONE : eval(thread, slice.getStep());
+          Location loc = slice.getStartLocation(); // TODO(adonovan): use lbracket location
+
+          // TODO(adonovan): move the rest into a public EvalUtils.slice() operator.
+
+          if (object instanceof Sequence) {
+            return ((Sequence<?>) object).getSlice(start, end, step, loc, thread.mutability());
           }
+
+          if (object instanceof String) {
+            String string = (String) object;
+            List<Integer> indices =
+                EvalUtils.getSliceIndices(start, end, step, string.length(), loc);
+            // TODO(adonovan): opt: optimize for common case, step=1.
+            char[] result = new char[indices.size()];
+            char[] original = string.toCharArray();
+            int resultIndex = 0;
+            for (int originalIndex : indices) {
+              result[resultIndex] = original[originalIndex];
+              ++resultIndex;
+            }
+            return new String(result);
+          }
+
+          throw new EvalException(
+              loc,
+              String.format(
+                  "type '%s' has no operator [:](%s, %s, %s)",
+                  EvalUtils.getDataTypeName(object),
+                  EvalUtils.getDataTypeName(start),
+                  EvalUtils.getDataTypeName(end),
+                  EvalUtils.getDataTypeName(step)));
         }
 
       case STRING_LITERAL:
@@ -724,20 +736,16 @@ final class Eval {
       case UNARY_OPERATOR:
         {
           UnaryOperatorExpression unop = (UnaryOperatorExpression) expr;
-          Object x = eval(fr, unop.getX());
-          try {
-            return EvalUtils.unaryOp(unop.getOperator(), x);
-          } catch (EvalException ex) {
-            throw ex.ensureLocation(unop.getStartLocation());
-          }
+          Object x = eval(thread, unop.getX());
+          return EvalUtils.unaryOp(unop.getOperator(), x, unop.getStartLocation());
         }
     }
     throw new IllegalArgumentException("unexpected expression: " + expr.kind());
   }
 
-  private static Object evalComprehension(StarlarkThread.CallFrame fr, Comprehension comp)
+  private Object evalComprehension(StarlarkThread thread, Comprehension comp)
       throws EvalException, InterruptedException {
-    final Dict<Object, Object> dict = comp.isDict() ? Dict.of(fr.thread.mutability()) : null;
+    final Dict<Object, Object> dict = comp.isDict() ? Dict.of(thread.mutability()) : null;
     final ArrayList<Object> list = comp.isDict() ? null : new ArrayList<>();
 
     // Save values of all variables bound in a 'for' clause
@@ -751,7 +759,7 @@ final class Eval {
         for (Identifier ident :
             Identifier.boundIdentifiers(((Comprehension.For) clause).getVars())) {
           String name = ident.getName();
-          Object value = fr.locals.get(ident.getName());
+          Object value = thread.localLookup(ident.getName());
           saved.add(name);
           saved.add(value);
         }
@@ -771,25 +779,22 @@ final class Eval {
           if (clause instanceof Comprehension.For) {
             Comprehension.For forClause = (Comprehension.For) clause;
 
-            Object iterable = eval(fr, forClause.getIterable());
+            Object iterable = eval(thread, forClause.getIterable());
             Location loc = comp.getStartLocation(); // TODO(adonovan): use location of 'for' token
             Iterable<?> listValue = Starlark.toIterable(iterable);
-            // TODO(adonovan): lock should not need loc.
             EvalUtils.lock(iterable, loc);
             try {
               for (Object elem : listValue) {
-                assign(fr, forClause.getVars(), elem);
+                assign(forClause.getVars(), elem, thread, loc);
                 execClauses(index + 1);
               }
-            } catch (EvalException ex) {
-              throw ex.ensureLocation(loc);
             } finally {
               EvalUtils.unlock(iterable, loc);
             }
 
           } else {
             Comprehension.If ifClause = (Comprehension.If) clause;
-            if (Starlark.truth(eval(fr, ifClause.getCondition()))) {
+            if (Starlark.truth(eval(thread, ifClause.getCondition()))) {
               execClauses(index + 1);
             }
           }
@@ -799,17 +804,12 @@ final class Eval {
         // base case: evaluate body and add to result.
         if (dict != null) {
           DictExpression.Entry body = (DictExpression.Entry) comp.getBody();
-          Object k = eval(fr, body.getKey());
+          Object k = eval(thread, body.getKey());
           EvalUtils.checkHashable(k);
-          Object v = eval(fr, body.getValue());
-          try {
-            dict.put(k, v, /*loc=*/ null);
-          } catch (EvalException ex) {
-            // TODO(adonovan): use colon location
-            throw ex.ensureLocation(comp.getStartLocation());
-          }
+          Object v = eval(thread, body.getValue());
+          dict.put(k, v, comp.getStartLocation()); // TODO(adonovan): use colon location
         } else {
-          list.add(eval(fr, ((Expression) comp.getBody())));
+          list.add(eval(thread, ((Expression) comp.getBody())));
         }
       }
     }
@@ -820,18 +820,10 @@ final class Eval {
     for (int i = 0; i != saved.size(); ) {
       String name = (String) saved.get(i++);
       Object value = saved.get(i++);
-      try {
-        if (value != null) {
-          fr.locals.put(name, value);
-        } else {
-          fr.locals.remove(name);
-        }
-      } catch (Mutability.MutabilityException ex) {
-        throw new IllegalStateException(ex);
-      }
+      thread.updateInternal(name, value);
     }
 
-    return comp.isDict() ? dict : StarlarkList.copyOf(fr.thread.mutability(), list);
+    return comp.isDict() ? dict : StarlarkList.copyOf(thread.mutability(), list);
   }
 
   private static final Object[] EMPTY = {};

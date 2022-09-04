@@ -39,22 +39,20 @@ public class StarlarkThreadDebuggingTest {
   // Executes the definition of a trivial function f in the specified thread,
   // and returns the function value.
   private static StarlarkFunction defineFunc(StarlarkThread thread) throws Exception {
-    Module module = thread.getGlobals();
-    EvalUtils.exec(ParserInput.fromLines("def f(): pass"), module, thread);
+    EvalUtils.exec(ParserInput.fromLines("def f(): pass"), thread);
     return (StarlarkFunction) thread.getGlobals().lookup("f");
   }
 
   @Test
   public void testListFramesEmptyStack() throws Exception {
     StarlarkThread thread = newStarlarkThread();
-    assertThat(Debug.getCallStack(thread)).isEmpty();
-    assertThat(thread.getCallStack()).isEmpty();
+    assertThat(thread.listFrames()).isEmpty();
   }
 
   @Test
   public void testListFramesFromBuiltin() throws Exception {
     // f is a built-in that captures the stack using the Debugger API.
-    Object[] result = {null, null};
+    Object[] result = {null};
     StarlarkCallable f =
         new StarlarkCallable() {
           @Override
@@ -63,9 +61,9 @@ public class StarlarkThreadDebuggingTest {
           }
 
           @Override
-          public Object fastcall(StarlarkThread thread, Object[] positional, Object[] named) {
-            result[0] = Debug.getCallStack(thread);
-            result[1] = thread.getCallStack();
+          public Object fastcall(
+              StarlarkThread thread, Location loc, Object[] positional, Object[] named) {
+            result[0] = thread.listFrames();
             return Starlark.NONE;
           }
 
@@ -82,10 +80,9 @@ public class StarlarkThreadDebuggingTest {
 
     // Set up global environment.
     StarlarkThread thread = newStarlarkThread();
-    Module module = thread.getGlobals();
-    module.put("a", 1);
-    module.put("b", 2);
-    module.put("f", f);
+    thread.getGlobals().put("a", 1);
+    thread.getGlobals().put("b", 2);
+    thread.getGlobals().put("f", f);
 
     // Execute a small file that calls f.
     ParserInput input =
@@ -94,32 +91,32 @@ public class StarlarkThreadDebuggingTest {
                 + "  f()\n"
                 + "g(4, 5, 6)",
             "main.star");
-    EvalUtils.exec(input, module, thread);
+    EvalUtils.exec(input, thread);
 
     @SuppressWarnings("unchecked")
-    ImmutableList<Debug.Frame> stack = (ImmutableList<Debug.Frame>) result[0];
+    ImmutableList<DebugFrame> stack = (ImmutableList<DebugFrame>) result[0];
 
     // Check the stack captured by f.
     // We compare printed string forms, as it gives more informative assertion failures.
     StringBuilder buf = new StringBuilder();
-    for (Debug.Frame fr : stack) {
+    for (DebugFrame fr : stack) {
       buf.append(
           String.format(
-              "%s @ %s local=%s\n", fr.getFunction().getName(), fr.getLocation(), fr.getLocals()));
+              "%s @ %s local=%s global=%s\n",
+              fr.functionName(), fr.location(), fr.lexicalFrameBindings(), fr.globalBindings()));
     }
     assertThat(buf.toString())
         .isEqualTo(
-            ""
-                // location is start of g(4, 5, 6) call:
-                + "<toplevel> @ main.star:3:1 local={}\n"
+            // location is "current PC" in f.
+            // Observe that the globals (module) of g is still in force,
+            // even though logically a built-in such as f has no module.
+            "f @ builtin:12 local={} global={a=1, b=2, f=<debug function>, g=g(a, y, z)}\n"
                 // location is start of "f()" call:
-                + "g @ main.star:2:3 local={a=4, y=5, z=6}\n"
-                // location is "current PC" in f.
-                + "f @ builtin:12 local={}\n");
-
-    // Same, with "lite" stack API.
-    assertThat(result[1].toString()) // an ImmutableList<StarlarkThread.CallStackEntry>
-        .isEqualTo("[<toplevel>@main.star:3:1, g@main.star:2:3, f@builtin:12]");
+                + "g @ main.star:2:3 local={a=4, y=5, z=6} global={a=1, b=2, f=<debug function>,"
+                + " g=g(a, y, z)}\n"
+                // location is start of g(4, 5, 6) call:
+                + "<toplevel> @ main.star:3:1 local={} global={a=1, b=2, f=<debug function>,"
+                + " g=g(a, y, z)}\n");
 
     // TODO(adonovan): more tests:
     // - a stack containing functions defined in different modules.
@@ -212,46 +209,37 @@ public class StarlarkThreadDebuggingTest {
   @Test
   public void testEvaluateVariableInScope() throws Exception {
     StarlarkThread thread = newStarlarkThread();
-    Module module = thread.getGlobals();
-    module.put("a", 1);
+    thread.getGlobals().put("a", 1);
 
-    Object a =
-        EvalUtils.execAndEvalOptionalFinalExpression(ParserInput.fromLines("a"), module, thread);
+    Object a = EvalUtils.execAndEvalOptionalFinalExpression(ParserInput.fromLines("a"), thread);
     assertThat(a).isEqualTo(1);
   }
 
   @Test
   public void testEvaluateVariableNotInScopeFails() throws Exception {
     StarlarkThread thread = newStarlarkThread();
-    Module module = thread.getGlobals();
-    module.put("a", 1);
+    thread.getGlobals().put("a", 1);
 
     SyntaxError e =
         assertThrows(
             SyntaxError.class,
-            () ->
-                EvalUtils.execAndEvalOptionalFinalExpression(
-                    ParserInput.fromLines("b"), module, thread));
+            () -> EvalUtils.execAndEvalOptionalFinalExpression(ParserInput.fromLines("b"), thread));
+
     assertThat(e).hasMessageThat().isEqualTo("name 'b' is not defined");
   }
 
   @Test
   public void testEvaluateExpressionOnVariableInScope() throws Exception {
     StarlarkThread thread = newStarlarkThread();
-    Module module = thread.getGlobals();
-    module.put("a", "string");
+    thread.getGlobals().put("a", "string");
 
     assertThat(
             EvalUtils.execAndEvalOptionalFinalExpression(
-                ParserInput.fromLines("a.startswith('str')"), module, thread))
+                ParserInput.fromLines("a.startswith('str')"), thread))
         .isEqualTo(true);
     EvalUtils.exec(
-        EvalUtils.parseAndValidate(ParserInput.fromLines("a = 1"), module, thread.getSemantics()),
-        module,
-        thread);
-    assertThat(
-            EvalUtils.execAndEvalOptionalFinalExpression(
-                ParserInput.fromLines("a"), module, thread))
+        EvalUtils.parseAndValidateSkylark(ParserInput.fromLines("a = 1"), thread), thread);
+    assertThat(EvalUtils.execAndEvalOptionalFinalExpression(ParserInput.fromLines("a"), thread))
         .isEqualTo(1);
   }
 }

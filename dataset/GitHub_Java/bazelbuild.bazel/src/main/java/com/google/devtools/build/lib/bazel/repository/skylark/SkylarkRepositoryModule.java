@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.packages.Type.STRING;
 import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 
-import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.packages.SkylarkExportable;
 import com.google.devtools.build.lib.packages.WorkspaceFactoryHelper;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryModuleApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.DebugFrame;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
@@ -66,6 +66,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       Boolean configure,
       Boolean remotable,
       String doc,
+      Location loc,
       StarlarkThread thread)
       throws EvalException {
     BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("repository_rule");
@@ -103,7 +104,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
         (Label) thread.getGlobals().getLabel(), thread.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
-    return new RepositoryRuleFunction(builder, thread.getCallerLocation(), implementation);
+    return new RepositoryRuleFunction(builder, loc, implementation);
   }
 
   // RepositoryRuleFunction is the result of repository_rule(...).
@@ -156,7 +157,8 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
 
     @Override
-    public Object call(StarlarkThread thread, Tuple<Object> args, Dict<String, Object> kwargs)
+    public Object call(
+        StarlarkThread thread, Location loc, Tuple<Object> args, Dict<String, Object> kwargs)
         throws EvalException, InterruptedException {
       if (!args.isEmpty()) {
         throw new EvalException(null, "unexpected positional arguments");
@@ -187,7 +189,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       }
       try {
         RuleClass ruleClass = builder.build(ruleClassName, ruleClassName);
-        PackageContext context = PackageFactory.getContext(thread);
+        PackageContext context = PackageFactory.getContext(thread, loc);
         Package.Builder packageBuilder = context.getBuilder();
 
         // TODO(adonovan): is this safe? Check.
@@ -201,14 +203,13 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
                 .append(" (rule definition at ")
                 .append(ruleClassDefinitionLocation.toString())
                 .append("):");
-        for (StarlarkThread.CallStackEntry frame : Lists.reverse(thread.getCallStack())) {
-          callStack.append("\n - ").append(frame.location);
+        for (DebugFrame frame : thread.listFrames()) {
+          callStack.append("\n - ").append(frame.location().toString());
         }
 
         WorkspaceFactoryHelper.addMainRepoEntry(
             packageBuilder, externalRepoName, thread.getSemantics());
 
-        Location loc = thread.getCallerLocation();
         WorkspaceFactoryHelper.addRepoMappings(packageBuilder, kwargs, externalRepoName, loc);
 
         Rule rule =
@@ -221,16 +222,17 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
                 callStack.toString());
         return rule;
       } catch (InvalidRuleException | NameConflictException | LabelSyntaxException e) {
-        throw Starlark.errorf("%s", e.getMessage());
+        throw new EvalException(loc, e.getMessage());
       }
     }
   }
 
   @Override
-  public void failWithIncompatibleUseCcConfigureFromRulesCc(StarlarkThread thread)
-      throws EvalException {
+  public void failWithIncompatibleUseCcConfigureFromRulesCc(
+      Location location, StarlarkThread thread) throws EvalException {
     if (thread.getSemantics().incompatibleUseCcConfigureFromRulesCc()) {
-      throw Starlark.errorf(
+      throw new EvalException(
+          location,
           "Incompatible flag "
               + "--incompatible_use_cc_configure_from_rules_cc has been flipped. Please use "
               + "cc_configure and related logic from https://github.com/bazelbuild/rules_cc. "

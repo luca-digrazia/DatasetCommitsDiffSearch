@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Bre
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Error;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.PauseReason;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Value;
-import com.google.devtools.build.lib.syntax.Debug;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.ParserInput;
@@ -234,10 +233,9 @@ final class ThreadHandler {
         throw new DebugRequestException(
             String.format("Thread %s is not paused or does not exist.", threadId));
       }
-      return Debug.getCallStack(thread.thread).stream()
+      return thread.thread.listFrames().stream()
           .map(frame -> DebugEventHelper.getFrameProto(thread.objectMap, frame))
-          .collect(toImmutableList())
-          .reverse();
+          .collect(toImmutableList());
     }
   }
 
@@ -298,7 +296,7 @@ final class ThreadHandler {
       servicingEvalRequest.set(true);
 
       ParserInput input = ParserInput.create(content, "<debug eval>");
-      Object x = EvalUtils.execAndEvalOptionalFinalExpression(input, thread.getGlobals(), thread);
+      Object x = EvalUtils.execAndEvalOptionalFinalExpression(input, thread);
       return x != null ? x : Starlark.NONE;
     } finally {
       servicingEvalRequest.set(false);

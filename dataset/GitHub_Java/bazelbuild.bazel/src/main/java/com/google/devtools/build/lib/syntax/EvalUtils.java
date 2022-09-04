@@ -101,7 +101,7 @@ public final class EvalUtils {
             return ((Comparable<Object>) o1).compareTo(o2);
           } catch (ClassCastException e) {
             throw new ComparisonException(
-                "Cannot compare " + Starlark.type(o1) + " with " + Starlark.type(o2));
+                "Cannot compare " + getDataTypeName(o1) + " with " + getDataTypeName(o2));
           }
         }
       };
@@ -116,7 +116,7 @@ public final class EvalUtils {
       // Object.hashCode within a try/catch, and requiring all
       // unhashable Starlark values to throw a particular unchecked exception
       // with a helpful error message.
-      throw Starlark.errorf("unhashable type: '%s'", Starlark.type(x));
+      throw Starlark.errorf("unhashable type: '%s'", EvalUtils.getDataTypeName(x));
     }
   }
 
@@ -217,6 +217,10 @@ public final class EvalUtils {
         Depset set = (Depset) object;
         return "depset of " + set.getContentType() + "s";
       }
+      if (object instanceof SelectorList) {
+        SelectorList list = (SelectorList) object;
+        return "select of " + getDataTypeNameFromClass(list.getType());
+      }
     }
     return getDataTypeNameFromClass(object.getClass());
   }
@@ -282,43 +286,139 @@ public final class EvalUtils {
 
   /**
    * Resolves a positive or negative index to an index in the range [0, length), or throws
-   * EvalException if it is out of range. If the index is negative, it counts backward from length.
+   * EvalException if it is out-of-range. If the index is negative, it counts backward from
+   * length.
    */
-  static int getSequenceIndex(int index, int length) throws EvalException {
+  public static int getSequenceIndex(int index, int length, Location loc)
+      throws EvalException {
     int actualIndex = index;
     if (actualIndex < 0) {
       actualIndex += length;
     }
     if (actualIndex < 0 || actualIndex >= length) {
-      throw Starlark.errorf(
-          "index out of range (index is %d, but sequence has %d elements)", index, length);
+      throw new EvalException(
+          loc,
+          "index out of range (index is " + index + ", but sequence has " + length + " elements)");
     }
     return actualIndex;
   }
 
   /**
-   * Returns the effective index denoted by a user-supplied integer. First, if the integer is
-   * negative, the length of the sequence is added to it, so an index of -1 represents the last
-   * element of the sequence. Then, the integer is "clamped" into the inclusive interval [0,
-   * length].
+   * Performs index resolution after verifying that the given object has index type.
    */
-  static int toIndex(int index, int length) {
+  public static int getSequenceIndex(Object index, int length, Location loc)
+      throws EvalException {
+    if (!(index instanceof Integer)) {
+      throw new EvalException(loc, "indices must be integers, not " + getDataTypeName(index));
+    }
+    return getSequenceIndex(((Integer) index).intValue(), length, loc);
+  }
+
+  /**
+   * Resolves a positive or negative index to an integer that can denote the left or right boundary
+   * of a slice. If reverse is false, the slice has positive stride (i.e., its elements are in their
+   * normal order) and the result is guaranteed to be in range [0, length + 1). If reverse is true,
+   * the slice has negative stride and the result is in range [-1, length). In either case, if the
+   * index is negative, it counts backward from length. Note that an input index of -1 represents
+   * the last element's position, while an output integer of -1 represents the imaginary position
+   * to the left of the first element.
+   */
+  public static int clampRangeEndpoint(int index, int length, boolean reverse) {
     if (index < 0) {
       index += length;
     }
-
-    if (index < 0) {
-      return 0;
-    } else if (index > length) {
-      return length;
+    if (!reverse) {
+      return Math.max(Math.min(index, length), 0);
     } else {
-      return index;
+      return Math.max(Math.min(index, length - 1), -1);
     }
+  }
+
+  /**
+   * Resolves a positive or negative index to an integer that can denote the boundary for a
+   * slice with positive stride.
+   */
+  public static int clampRangeEndpoint(int index, int length) {
+    return clampRangeEndpoint(index, length, false);
+  }
+
+  /**
+   * Calculates the indices of the elements that should be included in the slice [start:end:step]
+   * of a sequence with the given length. Each of start, end, and step must be supplied, and step
+   * may not be 0.
+   */
+  public static List<Integer> getSliceIndices(int start, int end, int step, int length) {
+    if (step == 0) {
+      throw new IllegalArgumentException("Slice step cannot be zero");
+    }
+    start = clampRangeEndpoint(start, length, step < 0);
+    end = clampRangeEndpoint(end, length, step < 0);
+    // precise computation is slightly more involved, but since it can overshoot only by a single
+    // element it's fine
+    final int expectedMaxSize = Math.abs(start - end) / Math.abs(step) + 1;
+    ImmutableList.Builder<Integer> indices = ImmutableList.builderWithExpectedSize(expectedMaxSize);
+    for (int current = start; step > 0 ? current < end : current > end; current += step) {
+      indices.add(current);
+    }
+    return indices.build();
+  }
+
+  /**
+   * Calculates the indices of the elements in a slice, after validating the arguments and replacing
+   * Starlark.NONE with default values. Throws an EvalException if a bad argument is given.
+   */
+  public static List<Integer> getSliceIndices(
+      Object startObj, Object endObj, Object stepObj, int length, Location loc)
+      throws EvalException {
+    int start;
+    int end;
+    int step;
+
+    if (stepObj == Starlark.NONE) {
+      step = 1;
+    } else if (stepObj instanceof Integer) {
+      step = ((Integer) stepObj).intValue();
+    } else {
+      throw new EvalException(
+          loc, String.format("slice step must be an integer, not '%s'", stepObj));
+    }
+    if (step == 0) {
+      throw new EvalException(loc, "slice step cannot be zero");
+    }
+
+    if (startObj == Starlark.NONE) {
+      start = (step > 0) ? 0 : length - 1;
+    } else if (startObj instanceof Integer) {
+      start = ((Integer) startObj).intValue();
+    } else {
+      throw new EvalException(
+          loc, String.format("slice start must be an integer, not '%s'", startObj));
+    }
+    if (endObj == Starlark.NONE) {
+      // If step is negative, can't use -1 for end since that would be converted
+      // to the rightmost element's position.
+      end = (step > 0) ? length : -length - 1;
+    } else if (endObj instanceof Integer) {
+      end = ((Integer) endObj).intValue();
+    } else {
+      throw new EvalException(loc, String.format("slice end must be an integer, not '%s'", endObj));
+    }
+
+    return getSliceIndices(start, end, step, length);
   }
 
   /** @return true if x is Java null or Skylark None */
   public static boolean isNullOrNone(Object x) {
     return x == null || x == Starlark.NONE;
+  }
+
+  /**
+   * Installs a global hook that causes subsequently executed Starlark threads to notify the
+   * debugger of important events. Closes any previously set debugger. Call {@code
+   * setDebugger(null)} to disable debugging.
+   */
+  public static void setDebugger(Debugger dbg) {
+    Eval.setDebugger(dbg);
   }
 
   /** Returns the named field or method of value {@code x}, or null if not found. */
@@ -366,48 +466,49 @@ public final class EvalUtils {
       suffix = SpellChecker.didYouMean(name, CallUtils.getFieldNames(semantics, object));
     }
     return Starlark.errorf(
-        "'%s' value has no field or method '%s'%s", Starlark.type(object), name, suffix);
+        "'%s' value has no field or method '%s'%s", getDataTypeName(object), name, suffix);
   }
 
   /** Evaluates an eager binary operation, {@code x op y}. (Excludes AND and OR.) */
   static Object binaryOp(TokenKind op, Object x, Object y, StarlarkThread thread, Location location)
-      throws EvalException {
+      throws EvalException, InterruptedException {
     try {
       switch (op) {
         case PLUS:
           return plus(x, y, thread, location);
 
         case PIPE:
-          return pipe(thread.getSemantics(), x, y);
+          return pipe(x, y, thread, location);
 
         case AMPERSAND:
-          return and(x, y);
+          return and(x, y, location);
 
         case CARET:
-          return xor(x, y);
+          return xor(x, y, location);
 
         case GREATER_GREATER:
-          return rightShift(x, y);
+          return rightShift(x, y, location);
 
         case LESS_LESS:
-          return leftShift(x, y);
+          return leftShift(x, y, location);
 
         case MINUS:
-          return minus(x, y);
+          return minus(x, y, location);
 
         case STAR:
-          return star(thread.mutability(), x, y);
+          return mult(x, y, thread, location);
 
         case SLASH:
-          throw Starlark.errorf(
-              "The `/` operator is not allowed. Please use the `//` operator for integer"
-                  + " division.");
+          throw new EvalException(
+              location,
+              "The `/` operator is not allowed. Please use the `//` operator for integer "
+                  + "division.");
 
         case SLASH_SLASH:
-          return slash(x, y);
+          return divide(x, y, location);
 
         case PERCENT:
-          return percent(x, y);
+          return percent(x, y, location);
 
         case EQUALS_EQUALS:
           return x.equals(y);
@@ -416,43 +517,41 @@ public final class EvalUtils {
           return !x.equals(y);
 
         case LESS:
-          return compare(x, y) < 0;
+          return compare(x, y, location) < 0;
 
         case LESS_EQUALS:
-          return compare(x, y) <= 0;
+          return compare(x, y, location) <= 0;
 
         case GREATER:
-          return compare(x, y) > 0;
+          return compare(x, y, location) > 0;
 
         case GREATER_EQUALS:
-          return compare(x, y) >= 0;
+          return compare(x, y, location) >= 0;
 
         case IN:
-          return in(thread.getSemantics(), x, y);
+          return in(x, y, thread, location);
 
         case NOT_IN:
-          return !in(thread.getSemantics(), x, y);
+          return !in(x, y, thread, location);
 
         default:
           throw new AssertionError("Unsupported binary operator: " + op);
       }
-    } catch (ArithmeticException ex) {
-      throw new EvalException(null, ex.getMessage());
+    } catch (ArithmeticException e) {
+      throw new EvalException(location, e.getMessage());
     }
   }
 
   /** Implements comparison operators. */
-  private static int compare(Object x, Object y) throws EvalException {
+  private static int compare(Object x, Object y, Location location) throws EvalException {
     try {
       return SKYLARK_COMPARATOR.compare(x, y);
     } catch (ComparisonException e) {
-      throw new EvalException(null, e.getMessage());
+      throw new EvalException(location, e);
     }
   }
 
   /** Implements 'x + y'. */
-  // StarlarkThread is needed for Mutability and Semantics.
-  // Location is exposed to Selector{List,Value} and Concatter.
   static Object plus(Object x, Object y, StarlarkThread thread, Location location)
       throws EvalException {
     // int + int
@@ -487,7 +586,7 @@ public final class EvalUtils {
       if (concatter != null && concatter.equals(robj.getConcatter())) {
         return concatter.concat(lobj, robj, location);
       } else {
-        throw unknownBinaryOperator(x, y, TokenKind.PLUS);
+        throw unknownBinaryOperator(x, y, TokenKind.PLUS, location);
       }
     }
 
@@ -503,16 +602,18 @@ public final class EvalUtils {
       }
       return Depset.unionOf((Depset) x, y);
     }
-    throw unknownBinaryOperator(x, y, TokenKind.PLUS);
+    throw unknownBinaryOperator(x, y, TokenKind.PLUS, location);
   }
 
   /** Implements 'x | y'. */
-  private static Object pipe(StarlarkSemantics semantics, Object x, Object y) throws EvalException {
+  private static Object pipe(Object x, Object y, StarlarkThread thread, Location location)
+      throws EvalException {
     if (x instanceof Integer && y instanceof Integer) {
       return ((Integer) x) | ((Integer) y);
     } else if (x instanceof Depset) {
-      if (semantics.incompatibleDepsetUnion()) {
-        throw Starlark.errorf(
+      if (thread.getSemantics().incompatibleDepsetUnion()) {
+        throw new EvalException(
+            location,
             "`|` operator on a depset is forbidden. See "
                 + "https://docs.bazel.build/versions/master/skylark/depsets.html for "
                 + "recommendations. Use --incompatible_depset_union=false "
@@ -520,19 +621,20 @@ public final class EvalUtils {
       }
       return Depset.unionOf((Depset) x, y);
     }
-    throw unknownBinaryOperator(x, y, TokenKind.PIPE);
+    throw unknownBinaryOperator(x, y, TokenKind.PIPE, location);
   }
 
   /** Implements 'x - y'. */
-  private static Object minus(Object x, Object y) throws EvalException {
+  private static Object minus(Object x, Object y, Location location) throws EvalException {
     if (x instanceof Integer && y instanceof Integer) {
       return Math.subtractExact((Integer) x, (Integer) y);
     }
-    throw unknownBinaryOperator(x, y, TokenKind.MINUS);
+    throw unknownBinaryOperator(x, y, TokenKind.MINUS, location);
   }
 
   /** Implements 'x * y'. */
-  private static Object star(Mutability mu, Object x, Object y) throws EvalException {
+  private static Object mult(Object x, Object y, StarlarkThread thread, Location location)
+      throws EvalException {
     Integer number = null;
     Object otherFactor = null;
 
@@ -550,20 +652,20 @@ public final class EvalUtils {
       } else if (otherFactor instanceof String) {
         return Strings.repeat((String) otherFactor, Math.max(0, number));
       } else if (otherFactor instanceof Tuple) {
-        return ((Tuple<?>) otherFactor).repeat(number, mu);
+        return ((Tuple<?>) otherFactor).repeat(number, thread.mutability());
       } else if (otherFactor instanceof StarlarkList) {
-        return ((StarlarkList<?>) otherFactor).repeat(number, mu);
+        return ((StarlarkList<?>) otherFactor).repeat(number, thread.mutability());
       }
     }
-    throw unknownBinaryOperator(x, y, TokenKind.STAR);
+    throw unknownBinaryOperator(x, y, TokenKind.STAR, location);
   }
 
   /** Implements 'x // y'. */
-  private static Object slash(Object x, Object y) throws EvalException {
+  private static Object divide(Object x, Object y, Location location) throws EvalException {
     // int / int
     if (x instanceof Integer && y instanceof Integer) {
       if (y.equals(0)) {
-        throw Starlark.errorf("integer division by zero");
+        throw new EvalException(location, "integer division by zero");
       }
       // Integer division doesn't give the same result in Java and in Python 2 with
       // negative numbers.
@@ -572,15 +674,15 @@ public final class EvalUtils {
       // We want to follow Python semantics, so we use float division and round down.
       return (int) Math.floor(Double.valueOf((Integer) x) / (Integer) y);
     }
-    throw unknownBinaryOperator(x, y, TokenKind.SLASH_SLASH);
+    throw unknownBinaryOperator(x, y, TokenKind.SLASH_SLASH, location);
   }
 
   /** Implements 'x % y'. */
-  private static Object percent(Object x, Object y) throws EvalException {
+  private static Object percent(Object x, Object y, Location location) throws EvalException {
     // int % int
     if (x instanceof Integer && y instanceof Integer) {
       if (y.equals(0)) {
-        throw Starlark.errorf("integer modulo by zero");
+        throw new EvalException(location, "integer modulo by zero");
       }
       // Python and Java implement division differently, wrt negative numbers.
       // In Python, sign of the result is the sign of the divisor.
@@ -602,84 +704,96 @@ public final class EvalUtils {
           return Starlark.formatWithList(pattern, (Tuple) y);
         }
         return Starlark.format(pattern, y);
-      } catch (IllegalFormatException ex) {
-        throw new EvalException(null, ex.getMessage());
+      } catch (IllegalFormatException e) {
+        throw new EvalException(location, e.getMessage());
       }
     }
-    throw unknownBinaryOperator(x, y, TokenKind.PERCENT);
+    throw unknownBinaryOperator(x, y, TokenKind.PERCENT, location);
   }
 
   /** Implements 'x & y'. */
-  private static Object and(Object x, Object y) throws EvalException {
+  private static Object and(Object x, Object y, Location location) throws EvalException {
     if (x instanceof Integer && y instanceof Integer) {
       return (Integer) x & (Integer) y;
     }
-    throw unknownBinaryOperator(x, y, TokenKind.AMPERSAND);
+    throw unknownBinaryOperator(x, y, TokenKind.AMPERSAND, location);
   }
 
   /** Implements 'x ^ y'. */
-  private static Object xor(Object x, Object y) throws EvalException {
+  private static Object xor(Object x, Object y, Location location) throws EvalException {
     if (x instanceof Integer && y instanceof Integer) {
       return (Integer) x ^ (Integer) y;
     }
-    throw unknownBinaryOperator(x, y, TokenKind.CARET);
+    throw unknownBinaryOperator(x, y, TokenKind.CARET, location);
   }
 
   /** Implements 'x >> y'. */
-  private static Object rightShift(Object x, Object y) throws EvalException {
+  private static Object rightShift(Object x, Object y, Location location) throws EvalException {
     if (x instanceof Integer && y instanceof Integer) {
       if ((Integer) y < 0) {
-        throw Starlark.errorf("negative shift count: %s", y);
+        throw new EvalException(location, "negative shift count: " + y);
       } else if ((Integer) y >= Integer.SIZE) {
         return ((Integer) x < 0) ? -1 : 0;
       }
       return (Integer) x >> (Integer) y;
     }
-    throw unknownBinaryOperator(x, y, TokenKind.GREATER_GREATER);
+    throw unknownBinaryOperator(x, y, TokenKind.GREATER_GREATER, location);
   }
 
   /** Implements 'x << y'. */
-  private static Object leftShift(Object x, Object y) throws EvalException {
+  private static Object leftShift(Object x, Object y, Location location) throws EvalException {
     if (x instanceof Integer && y instanceof Integer) {
       if ((Integer) y < 0) {
-        throw Starlark.errorf("negative shift count: %s", y);
+        throw new EvalException(location, "negative shift count: " + y);
       }
       Integer result = (Integer) x << (Integer) y;
-      if (!rightShift(result, y).equals(x)) {
+      if (!rightShift(result, y, location).equals(x)) {
         throw new ArithmeticException("integer overflow");
       }
       return result;
     }
-    throw unknownBinaryOperator(x, y, TokenKind.LESS_LESS);
+    throw unknownBinaryOperator(x, y, TokenKind.LESS_LESS, location);
   }
 
   /** Implements 'x in y'. */
-  private static boolean in(StarlarkSemantics semantics, Object x, Object y) throws EvalException {
+  private static boolean in(Object x, Object y, StarlarkThread thread, Location location)
+      throws EvalException {
     if (y instanceof SkylarkQueryable) {
-      return ((SkylarkQueryable) y).containsKey(semantics, x);
+      return ((SkylarkQueryable) y).containsKey(x, location, thread);
     } else if (y instanceof String) {
       if (x instanceof String) {
         return ((String) y).contains((String) x);
       } else {
-        throw Starlark.errorf(
-            "'in <string>' requires string as left operand, not '%s'", Starlark.type(x));
+        throw new EvalException(
+            location,
+            "'in <string>' requires string as left operand, not '" + getDataTypeName(x) + "'");
       }
     } else {
-      throw Starlark.errorf(
-          "unsupported binary operation: %s in %s (right operand must be string, sequence, or"
-              + " dict)",
-          Starlark.type(x), Starlark.type(y));
+      throw new EvalException(
+          location,
+          "argument of type '"
+              + getDataTypeName(y)
+              + "' is not iterable. "
+              + "in operator only works on lists, tuples, dicts and strings.");
     }
   }
 
   /** Returns an exception signifying incorrect types for the given operator. */
-  private static EvalException unknownBinaryOperator(Object x, Object y, TokenKind op) {
-    return Starlark.errorf(
-        "unsupported binary operation: %s %s %s", Starlark.type(x), op, Starlark.type(y));
+  private static EvalException unknownBinaryOperator(
+      Object x, Object y, TokenKind op, Location location) {
+    // NB: this message format is identical to that used by CPython 2.7.6 or 3.4.0,
+    // though python raises a TypeError.
+    // TODO(adonovan): make error more concise: "unsupported binary op: list + int".
+    return new EvalException(
+        location,
+        String.format(
+            "unsupported operand type(s) for %s: '%s' and '%s'",
+            op, getDataTypeName(x), getDataTypeName(y)));
   }
 
   /** Evaluates a unary operation. */
-  static Object unaryOp(TokenKind op, Object x) throws EvalException {
+  static Object unaryOp(TokenKind op, Object x, Location loc)
+      throws EvalException, InterruptedException {
     switch (op) {
       case NOT:
         return !Starlark.truth(x);
@@ -690,7 +804,7 @@ public final class EvalUtils {
             return Math.negateExact((Integer) x);
           } catch (ArithmeticException e) {
             // Fails for -MIN_INT.
-            throw new EvalException(null, e.getMessage());
+            throw new EvalException(loc, e.getMessage());
           }
         }
         break;
@@ -710,7 +824,8 @@ public final class EvalUtils {
       default:
         /* fall through */
     }
-    throw Starlark.errorf("unsupported unary operation: %s%s", op, Starlark.type(x));
+    throw new EvalException(
+        loc, String.format("unsupported unary operation: %s%s", op, getDataTypeName(x)));
   }
 
   /**
@@ -718,22 +833,23 @@ public final class EvalUtils {
    *
    * @throws EvalException if {@code object} is not a sequence or mapping.
    */
-  static Object index(Mutability mu, StarlarkSemantics semantics, Object object, Object key)
-      throws EvalException {
+  public static Object index(Object object, Object key, StarlarkThread thread, Location loc)
+      throws EvalException, InterruptedException {
     if (object instanceof SkylarkIndexable) {
-      Object result = ((SkylarkIndexable) object).getIndex(semantics, key);
+      Object result = ((SkylarkIndexable) object).getIndex(key, loc);
       // TODO(bazel-team): We shouldn't have this fromJava call here. If it's needed at all,
       // it should go in the implementations of SkylarkIndexable#getIndex that produce non-Skylark
       // values.
-      return result == null ? null : Starlark.fromJava(result, mu);
+      return result == null ? null : Starlark.fromJava(result, thread.mutability());
     } else if (object instanceof String) {
       String string = (String) object;
-      int index = Starlark.toInt(key, "string index");
-      index = getSequenceIndex(index, string.length());
+      int index = getSequenceIndex(key, string.length(), loc);
       return string.substring(index, index + 1);
     } else {
-      throw Starlark.errorf(
-          "type '%s' has no operator [](%s)", Starlark.type(object), Starlark.type(key));
+      throw new EvalException(
+          loc,
+          String.format(
+              "type '%s' has no operator [](%s)", getDataTypeName(object), getDataTypeName(key)));
     }
   }
 

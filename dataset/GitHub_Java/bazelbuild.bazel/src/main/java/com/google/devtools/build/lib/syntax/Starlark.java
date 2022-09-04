@@ -30,7 +30,8 @@ import javax.annotation.Nullable;
  * The Starlark class defines the most important entry points, constants, and functions needed by
  * all clients of the Starlark interpreter.
  */
-// TODO(adonovan): move these here: equal, compare, getattr, index, parse, exec, eval, and so on.
+// TODO(adonovan): move these here:
+// equal, compare, getattr, index, slice, parse, exec, eval, and so on.
 public final class Starlark {
 
   private Starlark() {} // uninstantiable
@@ -155,7 +156,7 @@ public final class Starlark {
     if (x instanceof StarlarkIterable) {
       return (Iterable<?>) x;
     }
-    throw errorf("type '%s' is not iterable", type(x));
+    throw errorf("type '%s' is not iterable", EvalUtils.getDataTypeName(x));
   }
 
   /**
@@ -194,11 +195,6 @@ public final class Starlark {
     }
   }
 
-  /** Returns the name of the type of a value as if by the Starlark expression {@code type(x)}. */
-  public static String type(Object x) {
-    return EvalUtils.getDataTypeName(x, false);
-  }
-
   /** Returns the string form of a value as if by the Starlark expression {@code str(x)}. */
   public static String str(Object x) {
     return Printer.getPrinter().str(x).toString();
@@ -217,100 +213,6 @@ public final class Starlark {
   /** Returns a string formatted as if by the Starlark expression {@code pattern % arguments}. */
   public static String formatWithList(String pattern, List<?> arguments) {
     return Printer.getPrinter().formatWithList(pattern, arguments).toString();
-  }
-
-  /** Returns a slice of a sequence as if by the Starlark operation {@code x[start:stop:step]}. */
-  public static Object slice(
-      Mutability mu, Object x, Object startObj, Object stopObj, Object stepObj)
-      throws EvalException {
-    int n;
-    if (x instanceof String) {
-      n = ((String) x).length();
-    } else if (x instanceof Sequence) {
-      n = ((Sequence) x).size();
-    } else {
-      throw errorf("invalid slice operand: %s", type(x));
-    }
-
-    int start;
-    int stop;
-    int step;
-
-    // step
-    if (stepObj == NONE) {
-      step = 1;
-    } else {
-      step = toInt(stepObj, "slice step");
-      if (step == 0) {
-        throw errorf("slice step cannot be zero");
-      }
-    }
-
-    // start, stop
-    if (step > 0) {
-      // positive stride: default indices are [0:n].
-      if (startObj == NONE) {
-        start = 0;
-      } else {
-        start = EvalUtils.toIndex(toInt(startObj, "start index"), n);
-      }
-
-      if (stopObj == NONE) {
-        stop = n;
-      } else {
-        stop = EvalUtils.toIndex(toInt(stopObj, "stop index"), n);
-      }
-
-      if (stop < start) {
-        stop = start; // => empty result
-      }
-
-    } else {
-      // negative stride: default indices are effectively [n-1:-1],
-      // though to get this effect using explicit indices requires
-      // [n-1:-1-n:-1] because of the treatment of negative values.
-      if (startObj == NONE) {
-        start = n - 1;
-      } else {
-        start = toInt(startObj, "start index");
-        if (start < 0) {
-          start += n;
-        }
-        if (start >= n) {
-          start = n - 1;
-        }
-      }
-
-      if (stopObj == NONE) {
-        stop = -1;
-      } else {
-        stop = toInt(stopObj, "stop index");
-        if (stop < 0) {
-          stop += n;
-        }
-        if (stop < -1) {
-          stop = -1;
-        }
-      }
-
-      if (start < stop) {
-        start = stop; // => empty result
-      }
-    }
-
-    // slice operation
-    if (x instanceof String) {
-      return StringModule.slice((String) x, start, stop, step);
-    } else {
-      return ((Sequence<?>) x).getSlice(mu, start, stop, step);
-    }
-  }
-
-  static int toInt(Object x, String name) throws EvalException {
-    if (x instanceof Integer) {
-      return (Integer) x;
-    }
-    throw errorf("got %s for %s, want int", type(x), name);
   }
 
   /**
@@ -347,7 +249,7 @@ public final class Starlark {
       MethodDescriptor desc =
           CallUtils.getSelfCallMethodDescriptor(thread.getSemantics(), fn.getClass());
       if (desc == null) {
-        throw errorf("'%s' object is not callable", type(fn));
+        throw Starlark.errorf("'%s' object is not callable", EvalUtils.getDataTypeName(fn));
       }
       callable = new BuiltinCallable(fn, desc.getName(), desc);
     }
@@ -371,32 +273,26 @@ public final class Starlark {
     return new EvalException(null, String.format(format, args));
   }
 
-  /** Equivalent to {@code addMethods(env, v, DEFAULT_SEMANTICS)}. */
-  public static void addMethods(ImmutableMap.Builder<String, Object> env, Object v) {
-    addMethods(env, v, StarlarkSemantics.DEFAULT_SEMANTICS);
-  }
-
   /**
    * Adds to the environment {@code env} all {@code StarlarkCallable}-annotated fields and methods
-   * of value {@code v}, filtered by the given semantics. The class of {@code v} must have or
-   * inherit a {@code SkylarkModule} or {@code SkylarkGlobalLibrary} annotation.
+   * of value {@code v}. The class of {@code v} must have or inherit a {@code SkylarkModule} or
+   * {@code SkylarkGlobalLibrary} annotation.
    */
-  public static void addMethods(
-      ImmutableMap.Builder<String, Object> env, Object v, StarlarkSemantics semantics) {
+  public static void addMethods(ImmutableMap.Builder<String, Object> env, Object v) {
     Class<?> cls = v.getClass();
     if (!SkylarkInterfaceUtils.hasSkylarkGlobalLibrary(cls)
         && SkylarkInterfaceUtils.getSkylarkModule(cls) == null) {
       throw new IllegalArgumentException(
           cls.getName() + " is annotated with neither @SkylarkGlobalLibrary nor @SkylarkModule");
     }
+    // TODO(adonovan): logically this should be a parameter.
+    StarlarkSemantics semantics = StarlarkSemantics.DEFAULT_SEMANTICS;
     for (String name : CallUtils.getMethodNames(semantics, v.getClass())) {
-      // We use the 2-arg (desc=null) BuiltinCallable constructor instead of passing
-      // the descriptor that CallUtils.getMethod would return,
-      // because most calls to addMethods pass DEFAULT_SEMANTICS,
-      // which is probably incorrect for the call.
+      // We pass desc=null instead of the descriptor that CallUtils.getMethod would
+      // return because DEFAULT_SEMANTICS is probably incorrect for the call.
       // The effect is that the default semantics determine which methods appear in
       // env, but the thread's semantics determine which method calls succeed.
-      env.put(name, new BuiltinCallable(v, name));
+      env.put(name, new BuiltinCallable(v, name, /*desc=*/ null));
     }
   }
 
