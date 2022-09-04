@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkAttrModuleApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -117,7 +118,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
     Attribute.Builder<?> builder = Attribute.attr(name, type).setDoc(doc);
 
     Object defaultValue = arguments.get(DEFAULT_ARG);
-    if (!Starlark.isNullOrNone(defaultValue)) {
+    if (!EvalUtils.isNullOrNone(defaultValue)) {
       if (defaultValue instanceof StarlarkFunction) {
         // Computed attribute. Non label type attributes already caused a type check error.
         StarlarkCallbackHelper callback =

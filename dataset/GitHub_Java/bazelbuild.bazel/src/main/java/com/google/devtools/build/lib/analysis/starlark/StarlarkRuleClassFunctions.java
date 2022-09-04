@@ -705,7 +705,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
         if (attr.hasAnalysisTestTransition()) {
           if (!builder.isAnalysisTest()) {
             throw new EvalException(
-                definitionLocation,
+                getLocation(),
                 "Only rule definitions with analysis_test=True may have attributes with "
                     + "analysis_test_transition transitions");
           }
@@ -717,12 +717,11 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
             || name.equals(FunctionSplitTransitionAllowlist.LEGACY_ATTRIBUTE_NAME)) {
           if (!BuildType.isLabelType(attr.getType())) {
             throw new EvalException(
-                definitionLocation,
-                "_allowlist_function_transition attribute must be a label type");
+                getLocation(), "_allowlist_function_transition attribute must be a label type");
           }
           if (attr.getDefaultValueUnchecked() == null) {
             throw new EvalException(
-                definitionLocation,
+                getLocation(),
                 "_allowlist_function_transition attribute must have a default value");
           }
           Label defaultLabel = (Label) attr.getDefaultValueUnchecked();
@@ -741,7 +740,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
                       .getName()
                       .equals(FunctionSplitTransitionAllowlist.LEGACY_LABEL.getName()))) {
             throw new EvalException(
-                definitionLocation,
+                getLocation(),
                 "_allowlist_function_transition attribute ("
                     + defaultLabel
                     + ") does not have the expected value "
@@ -756,7 +755,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
       if (hasStarlarkDefinedTransition) {
         if (!hasFunctionTransitionAllowlist) {
           throw new EvalException(
-              definitionLocation,
+              getLocation(),
               String.format(
                   "Use of Starlark transition without allowlist attribute"
                       + " '_allowlist_function_transition'. See Starlark transitions documentation"
@@ -766,7 +765,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
       } else {
         if (hasFunctionTransitionAllowlist) {
           throw new EvalException(
-              definitionLocation,
+              getLocation(),
               String.format(
                   "Unused function-based split transition allowlist: %s %s",
                   builder.getRuleDefinitionEnvironmentLabel(), builder.getType()));
@@ -776,7 +775,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
       try {
         this.ruleClass = builder.build(ruleClassName, starlarkLabel + "%" + ruleClassName);
       } catch (IllegalArgumentException | IllegalStateException ex) {
-        throw new EvalException(definitionLocation, ex);
+        throw new EvalException(getLocation(), ex);
       }
 
       this.builder = null;

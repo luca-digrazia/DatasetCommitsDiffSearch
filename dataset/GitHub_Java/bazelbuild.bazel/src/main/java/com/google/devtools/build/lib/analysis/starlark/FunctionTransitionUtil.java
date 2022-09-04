@@ -238,28 +238,18 @@ public class FunctionTransitionUtil {
       StarlarkDefinedConfigTransition starlarkTransition)
       throws EvalException {
     BuildOptions buildOptions = buildOptionsToTransition.clone();
-    // The names and values of options that are different after this transition.
     HashMap<String, Object> convertedNewValues = new HashMap<>();
     for (Map.Entry<String, Object> entry : newValues.entrySet()) {
       String optionName = entry.getKey();
       Object optionValue = entry.getValue();
 
       if (!optionName.startsWith(COMMAND_LINE_OPTION_PREFIX)) {
-        Object oldValue =
-            buildOptions.getStarlarkOptions().get(Label.parseAbsoluteUnchecked(optionName));
-        if ((oldValue == null && optionValue != null)
-            || (oldValue != null && optionValue == null)
-            || (oldValue != null && !oldValue.equals(optionValue))) {
-          // TODO(bazel-team): Figure out if we need to create a whole new build options every
-          // time. Can we just keep track of the running changes and actually build a new build
-          // options after this loop?
-          buildOptions =
-              BuildOptions.builder()
-                  .merge(buildOptions)
-                  .addStarlarkOption(Label.parseAbsoluteUnchecked(optionName), optionValue)
-                  .build();
-          convertedNewValues.put(optionName, optionValue);
-        }
+        buildOptions =
+            BuildOptions.builder()
+                .merge(buildOptions)
+                .addStarlarkOption(Label.parseAbsoluteUnchecked(optionName), optionValue)
+                .build();
+        convertedNewValues.put(optionName, optionValue);
       } else {
         optionName = optionName.substring(COMMAND_LINE_OPTION_PREFIX.length());
 
@@ -308,15 +298,8 @@ public class FunctionTransitionUtil {
           } else {
             throw Starlark.errorf("Invalid value type for option '%s'", optionName);
           }
-
-          Object oldValue = field.get(options);
-          if ((oldValue == null && convertedValue != null)
-              || (oldValue != null && convertedValue == null)
-              || (oldValue != null && !oldValue.equals(convertedValue))) {
-            field.set(options, convertedValue);
-            convertedNewValues.put(entry.getKey(), convertedValue);
-          }
-
+          field.set(options, convertedValue);
+          convertedNewValues.put(entry.getKey(), convertedValue);
         } catch (IllegalArgumentException e) {
           throw Starlark.errorf(
               "IllegalArgumentError for option '%s': %s", optionName, e.getMessage());
@@ -359,11 +342,6 @@ public class FunctionTransitionUtil {
   // makes it so that two configurations that are the same in value may hash differently.
   private static void updateOutputDirectoryNameFragment(
       Set<String> changedOptions, Map<String, OptionInfo> optionInfoMap, BuildOptions toOptions) {
-    // Return without doing anything if this transition hasn't changed any option values.
-    if (changedOptions.isEmpty()) {
-      return;
-    }
-
     CoreOptions buildConfigOptions = toOptions.get(CoreOptions.class);
     Set<String> updatedAffectedByStarlarkTransition =
         new TreeSet<>(buildConfigOptions.affectedByStarlarkTransition);

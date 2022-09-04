@@ -37,6 +37,8 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringChunk;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringValueParser;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -51,8 +53,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Starlark;
 
 /**
  * Provides access to features supported by a specific toolchain.
@@ -498,8 +498,14 @@ public class CcToolchainFeatures {
       return true;
     }
     for (WithFeatureSet featureSet : withFeatureSets) {
-      if (enabledFeatureNames.containsAll(featureSet.getFeatures())
-          && featureSet.getNotFeatures().stream().noneMatch(enabledFeatureNames::contains)) {
+      boolean negativeMatch =
+          featureSet
+              .getNotFeatures()
+              .stream()
+              .anyMatch(notFeature -> enabledFeatureNames.contains(notFeature));
+      boolean positiveMatch = enabledFeatureNames.containsAll(featureSet.getFeatures());
+
+      if (!negativeMatch && positiveMatch) {
         return true;
       }
     }

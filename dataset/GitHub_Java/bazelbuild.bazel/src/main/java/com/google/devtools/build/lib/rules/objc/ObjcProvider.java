@@ -35,23 +35,22 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider.WithLegacyStarlarkName;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.ObjcProviderApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /**
  * A provider that provides all compiling and linking information in the transitive closure of its
@@ -254,13 +253,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   /** Linking information from cc dependencies. */
   public static final Key<LibraryToLink> CC_LIBRARY =
       new Key<>(LINK_ORDER, "cc_library", LibraryToLink.class);
-
-  /** Linkstamps from cc dependencies. */
-  // This key exists only to facilitate passing linkstamp data from ObjcLibrary's input CcInfos to
-  // its output CcInfo. Other consumers should look at ObjcLibrary's output CcInfo rather than the
-  // data behind this key.
-  static final Key<CcLinkingContext.Linkstamp> LINKSTAMP =
-      new Key<>(STABLE_ORDER, "linkstamp", CcLinkingContext.Linkstamp.class);
 
   /**
    * Linking options from dependencies.
@@ -629,8 +621,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
           CC_LIBRARY,
           // Flag enum is not exposed to Starlark.
           FLAG,
-          // Linkstamp is not exposed to Starlark. See commentary at its definition.
-          LINKSTAMP,
           // CppModuleMap is not exposed to Starlark.
           TOP_LEVEL_MODULE_MAP);
 
@@ -655,7 +645,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
           INCLUDE_SYSTEM,
           IQUOTE,
           LINKOPT,
-          LINKSTAMP,
           LINK_INPUTS,
           SDK_DYLIB,
           SDK_FRAMEWORK,
@@ -1202,8 +1191,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     void addElementsFromStarlark(Key<?> key, Object starlarkToAdd) throws EvalException {
       NestedSet<?> toAdd = ObjcProviderStarlarkConverters.convertToJava(key, starlarkToAdd);
       if (DEPRECATED_KEYS.contains(key)) {
-        if (getStarlarkSemantics()
-            .getBool(BuildLanguageOptions.INCOMPATIBLE_OBJC_PROVIDER_REMOVE_COMPILE_INFO)) {
+        if (getStarlarkSemantics().incompatibleObjcProviderRemoveCompileInfo()) {
           if (!KEYS_FOR_DIRECT.contains(key)) {
             throw Starlark.errorf(
                 AppleStarlarkCommon.DEPRECATED_KEY_ERROR, key.getStarlarkKeyName());

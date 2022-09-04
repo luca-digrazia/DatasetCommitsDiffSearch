@@ -88,12 +88,12 @@ final class StringModule implements StarlarkValue {
   // TODO(adonovan): opt: avoid this function, as String.substring now allocates a copy (!)
   private static String pythonSubstring(String str, int start, Object end, String what)
       throws EvalException {
-    if (start == 0 && Starlark.isNullOrNone(end)) {
+    if (start == 0 && EvalUtils.isNullOrNone(end)) {
       return str;
     }
     start = EvalUtils.toIndex(start, str.length());
     int stop;
-    if (Starlark.isNullOrNone(end)) {
+    if (EvalUtils.isNullOrNone(end)) {
       stop = str.length();
     } else if (end instanceof Integer) {
       stop = EvalUtils.toIndex((Integer) end, str.length());

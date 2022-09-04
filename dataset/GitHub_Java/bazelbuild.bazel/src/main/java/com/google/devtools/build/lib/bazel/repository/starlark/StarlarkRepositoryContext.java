@@ -394,7 +394,7 @@ public class StarlarkRepositoryContext
   }
 
   boolean isRemotable() {
-    Object remotable = rule.getAttr("$remotable");
+    Object remotable = rule.getAttributeContainer().getAttr("$remotable");
     if (remotable != null) {
       return (Boolean) remotable;
     }

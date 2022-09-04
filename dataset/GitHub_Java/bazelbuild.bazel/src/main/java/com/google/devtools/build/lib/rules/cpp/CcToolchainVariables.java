@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
@@ -40,7 +41,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.Stack;
 import javax.annotation.Nullable;
 
@@ -446,9 +446,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
   }
 
-  abstract Set<String> getVariableKeys();
-
-  abstract void addVariablesToMap(Map<String, Object> variablesMap);
+  abstract Map<String, Object> getVariablesMap();
 
   @Nullable
   abstract VariableValue getNonStructuredVariable(String name);
@@ -1278,10 +1276,10 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
      */
     public Builder addAllNonTransitive(CcToolchainVariables variables) {
       SetView<String> intersection =
-          Sets.intersection(variables.getVariableKeys(), variablesMap.keySet());
+          Sets.intersection(variables.getVariablesMap().keySet(), variablesMap.keySet());
       Preconditions.checkArgument(
           intersection.isEmpty(), "Cannot overwrite existing variables: %s", intersection);
-      variables.addVariablesToMap(variablesMap);
+      this.variablesMap.putAll(variables.getVariablesMap());
       return this;
     }
 
@@ -1293,7 +1291,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
             o instanceof String ? new StringValue((String) o) : (VariableValue) o;
         return new SingleVariables(parent, variablesMap.keySet().iterator().next(), variableValue);
       }
-      return new MapVariables(parent, variablesMap);
+      return new MapVariables(parent, ImmutableSortedMap.copyOf(variablesMap));
     }
   }
 
@@ -1309,52 +1307,20 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
   @AutoCodec
   static class MapVariables extends CcToolchainVariables {
     private static final Interner<MapVariables> INTERNER = BlazeInterners.newWeakInterner();
-    private static final Interner<ImmutableMap<String, Integer>> KEY_INTERNER =
-        BlazeInterners.newWeakInterner();
 
     @Nullable private final CcToolchainVariables parent;
+    private final ImmutableMap<String, Object> variablesMap;
 
-    /**
-     * This is a slightly interesting data structure that's necessary to optimize for memory
-     * consumption. The premise is that a lot of compilations use the exact same variable keys, just
-     * with different values. Thus, it is important to store the keys separately so that they can be
-     * interned while storing the values in a compact way. keyToIndex maps from a variable name to
-     * the index of the corresponding value in values.
-     */
-    private final ImmutableMap<String, Integer> keyToIndex;
-
-    /** The values belonging to the keys stored in keyToIndex. */
-    private final ImmutableList<Object> values;
-
-    private MapVariables(CcToolchainVariables parent, Map<String, Object> variablesMap) {
+    private MapVariables(CcToolchainVariables parent, ImmutableMap<String, Object> variablesMap) {
       this.parent = parent;
-      ImmutableMap.Builder<String, Integer> keyBuilder = ImmutableMap.builder();
-      ImmutableList.Builder<Object> valuesBuilder = ImmutableList.builder();
-      int index = 0;
-      for (String key : ImmutableList.sortedCopyOf(variablesMap.keySet())) {
-        keyBuilder.put(key, index++);
-        valuesBuilder.add(variablesMap.get(key));
-      }
-      this.keyToIndex = KEY_INTERNER.intern(keyBuilder.build());
-      this.values = valuesBuilder.build();
-    }
-
-    private MapVariables(
-        CcToolchainVariables parent,
-        ImmutableMap<String, Integer> keyToIndex,
-        ImmutableList<Object> values) {
-      this.parent = parent;
-      this.keyToIndex = keyToIndex;
-      this.values = values;
+      this.variablesMap = variablesMap;
     }
 
     @AutoCodec.Instantiator
     @VisibleForSerialization
     static MapVariables create(
-        CcToolchainVariables parent,
-        ImmutableMap<String, Integer> keyToIndex,
-        ImmutableList<Object> values) {
-      return INTERNER.intern(new MapVariables(parent, keyToIndex, values));
+        CcToolchainVariables parent, ImmutableMap<String, Object> variablesMap) {
+      return INTERNER.intern(new MapVariables(parent, variablesMap));
     }
 
     @Override
@@ -1363,21 +1329,14 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
 
     @Override
-    Set<String> getVariableKeys() {
-      return keyToIndex.keySet();
-    }
-
-    @Override
-    void addVariablesToMap(Map<String, Object> variablesMap) {
-      for (Map.Entry<String, Integer> entry : keyToIndex.entrySet()) {
-        variablesMap.put(entry.getKey(), values.get(entry.getValue()));
-      }
+    Map<String, Object> getVariablesMap() {
+      return variablesMap;
     }
 
     @Override
     VariableValue getNonStructuredVariable(String name) {
-      if (keyToIndex.containsKey(name)) {
-        Object o = values.get(keyToIndex.get(name));
+      if (variablesMap.containsKey(name)) {
+        Object o = variablesMap.get(name);
         if (o instanceof String) {
           return new StringValue((String) o);
         }
@@ -1413,13 +1372,12 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
       if (this.parent != that.parent) {
         return false;
       }
-      return Objects.equals(this.keyToIndex, that.keyToIndex)
-          && Objects.equals(this.values, that.values);
+      return Objects.equals(this.variablesMap, that.variablesMap);
     }
 
     @Override
     public int hashCode() {
-      return 31 * Objects.hash(keyToIndex, values) + System.identityHashCode(parent);
+      return 31 * Objects.hashCode(variablesMap) + System.identityHashCode(parent);
     }
   }
 
@@ -1447,13 +1405,8 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     }
 
     @Override
-    Set<String> getVariableKeys() {
-      return ImmutableSet.of(name);
-    }
-
-    @Override
-    void addVariablesToMap(Map<String, Object> variablesMap) {
-      variablesMap.put(name, variableValue);
+    Map<String, Object> getVariablesMap() {
+      return ImmutableMap.of(name, variableValue);
     }
 
     @Override

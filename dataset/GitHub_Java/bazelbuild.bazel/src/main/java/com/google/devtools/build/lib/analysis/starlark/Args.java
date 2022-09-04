@@ -28,23 +28,22 @@ import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.starlarkbuildapi.CommandLineArgsApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkCallable;
-import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.syntax.Location;
 
 /**
  * Implementation of the {@code Args} Starlark type, which, in a builder-like pattern, encapsulates
@@ -57,9 +56,8 @@ public abstract class Args implements CommandLineArgsApi {
   }
 
   @Override
-  public void checkHashable() throws EvalException {
-    // Even a frozen Args is not hashable.
-    throw Starlark.errorf("unhashable type: '%s'", Starlark.type(this));
+  public boolean isHashable() {
+    return false; // even a frozen Args is not hashable
   }
 
   @Override
@@ -73,9 +71,6 @@ public abstract class Args implements CommandLineArgsApi {
       printer.append(Joiner.on(" ").join(build().arguments()));
     } catch (CommandLineExpansionException e) {
       printer.append("Cannot expand command line: " + e.getMessage());
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      printer.append("Interrupted while expanding command line: " + e.getMessage());
     }
   }
 
@@ -240,31 +235,15 @@ public abstract class Args implements CommandLineArgsApi {
   private static class MutableArgs extends Args implements StarlarkValue, Mutability.Freezable {
     private final Mutability mutability;
     private final StarlarkCustomCommandLine.Builder commandLine;
-
     private final List<NestedSet<?>> potentialDirectoryArtifacts = new ArrayList<>();
     private final Set<Artifact> directoryArtifacts = new HashSet<>();
-    /**
-     * If true, flag names and values will be grouped with '=', e.g.
-     *
-     * <pre>
-     *  --a=b
-     *  --noc
-     *  --d=e
-     * </pre>
-     *
-     * Further, if this is true, the ParamFileInfo will be marked 'flagsOnly', so that positional
-     * parameters stay on the command line and the param file contains only flags.
-     */
-    private boolean flagPerLine = false;
-
-    // May be set explicitly once -- if unset defaults to ParameterFileType.SHELL_QUOTED.
-    private ParameterFileType parameterFileType = null;
+    private ParameterFileType parameterFileType = ParameterFileType.SHELL_QUOTED;
     private String flagFormatString;
     private boolean alwaysUseParamFile;
 
     @Override
     public ParameterFileType getParameterFileType() {
-      return parameterFileType == null ? ParameterFileType.SHELL_QUOTED : parameterFileType;
+      return parameterFileType;
     }
 
     @Override
@@ -273,11 +252,10 @@ public abstract class Args implements CommandLineArgsApi {
       if (flagFormatString == null) {
         return null;
       } else {
-        return ParamFileInfo.builder(getParameterFileType())
+        return ParamFileInfo.builder(parameterFileType)
             .setFlagFormatString(flagFormatString)
             .setUseAlways(alwaysUseParamFile)
             .setCharset(StandardCharsets.UTF_8)
-            .setFlagsOnly(flagPerLine)
             .build();
       }
     }
@@ -298,7 +276,6 @@ public abstract class Args implements CommandLineArgsApi {
         validateArgName(argNameOrValue);
         argName = (String) argNameOrValue;
       }
-      commandLine.recordArgStart();
       if (argName != null) {
         commandLine.add(argName);
       }
@@ -326,7 +303,6 @@ public abstract class Args implements CommandLineArgsApi {
         throws EvalException {
       Starlark.checkMutable(this);
       final String argName;
-      commandLine.recordArgStart();
       if (values == Starlark.UNBOUND) {
         values = argNameOrValue;
         validateValues(values);
@@ -338,7 +314,7 @@ public abstract class Args implements CommandLineArgsApi {
       addVectorArg(
           values,
           argName,
-          validateMapEach(mapEach),
+          mapEach != Starlark.NONE ? (StarlarkCallable) mapEach : null,
           formatEach != Starlark.NONE ? (String) formatEach : null,
           beforeEach != Starlark.NONE ? (String) beforeEach : null,
           /* joinWith= */ null,
@@ -349,31 +325,6 @@ public abstract class Args implements CommandLineArgsApi {
           terminateWith != Starlark.NONE ? (String) terminateWith : null,
           thread.getCallerLocation());
       return this;
-    }
-
-    @Nullable
-    private static StarlarkCallable validateMapEach(Object fn) throws EvalException {
-      if (fn == Starlark.NONE) {
-        return null;
-      }
-      if (fn instanceof StarlarkFunction) {
-        StarlarkFunction sfn = (StarlarkFunction) fn;
-        // Reject non-global functions, because arbitrary closures may cause large
-        // analysis-phase data structures to remain live into the execution phase.
-        // We require that the function is "global" as opposed to "not a closure"
-        // because a global function may be closure if it refers to load bindings.
-        // This unfortunately disallows such trivially safe non-global
-        // functions as "lambda x: x".
-        // See https://github.com/bazelbuild/bazel/issues/12701.
-        if (sfn.getModule().getGlobal(sfn.getName()) != sfn) {
-          throw Starlark.errorf(
-              "to avoid unintended retention of analysis data structures, "
-                  + "the map_each function (declared at %s) must be declared "
-                  + "by a top-level def statement",
-              sfn.getLocation());
-        }
-      }
-      return (StarlarkCallable) fn;
     }
 
     @Override
@@ -391,7 +342,6 @@ public abstract class Args implements CommandLineArgsApi {
         throws EvalException {
       Starlark.checkMutable(this);
       final String argName;
-      commandLine.recordArgStart();
       if (values == Starlark.UNBOUND) {
         values = argNameOrValue;
         validateValues(values);
@@ -403,7 +353,7 @@ public abstract class Args implements CommandLineArgsApi {
       addVectorArg(
           values,
           argName,
-          validateMapEach(mapEach),
+          mapEach != Starlark.NONE ? (StarlarkCallable) mapEach : null,
           formatEach != Starlark.NONE ? (String) formatEach : null,
           /* beforeEach= */ null,
           joinWith,
@@ -465,7 +415,8 @@ public abstract class Args implements CommandLineArgsApi {
     private void validateArgName(Object argName) throws EvalException {
       if (!(argName instanceof String)) {
         throw Starlark.errorf(
-            "expected value of type 'string' for arg name, got '%s'", Starlark.type(argName));
+            "expected value of type 'string' for arg name, got '%s'",
+            argName.getClass().getSimpleName());
       }
     }
 
@@ -473,7 +424,7 @@ public abstract class Args implements CommandLineArgsApi {
       if (!(values instanceof Sequence || values instanceof Depset)) {
         throw Starlark.errorf(
             "expected value of type 'sequence or depset' for values, got '%s'",
-            Starlark.type(values));
+            values.getClass().getSimpleName());
       }
     }
 
@@ -527,31 +478,19 @@ public abstract class Args implements CommandLineArgsApi {
     @Override
     public CommandLineArgsApi setParamFileFormat(String format) throws EvalException {
       Starlark.checkMutable(this);
-      if (this.parameterFileType != null) {
-        throw Starlark.errorf("set_param_file_format() may only be called once");
-      }
       final ParameterFileType parameterFileType;
-      final boolean flagPerLine;
       switch (format) {
         case "shell":
           parameterFileType = ParameterFileType.SHELL_QUOTED;
-          flagPerLine = false;
           break;
         case "multiline":
           parameterFileType = ParameterFileType.UNQUOTED;
-          flagPerLine = false;
-          break;
-        case "flag_per_line":
-          parameterFileType = ParameterFileType.UNQUOTED;
-          flagPerLine = true;
           break;
         default:
           throw Starlark.errorf(
-              "Invalid value for parameter \"format\": Expected one of \"shell\", \"multiline\","
-                  + " \"flag_per_line\"");
+              "Invalid value for parameter \"format\": Expected one of \"shell\", \"multiline\"");
       }
       this.parameterFileType = parameterFileType;
-      this.flagPerLine = flagPerLine;
       return this;
     }
 
@@ -562,7 +501,7 @@ public abstract class Args implements CommandLineArgsApi {
 
     @Override
     public CommandLine build() {
-      return commandLine.build(flagPerLine);
+      return commandLine.build();
     }
 
     @Override
