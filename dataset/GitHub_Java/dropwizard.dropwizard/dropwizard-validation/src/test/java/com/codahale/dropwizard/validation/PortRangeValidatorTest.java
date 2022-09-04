@@ -52,7 +52,15 @@ public class PortRangeValidatorTest {
         example.port = -1;
 
         assertThat(ConstraintViolations.format(validator.validate(example)))
-                .containsOnly("port must be between 1 and 65535 (was -1)");
+                .containsOnly("port must be between 1025 and 65535 (was -1)");
+    }
+
+    @Test
+    public void rejectsPrivilegedPorts() throws Exception {
+        example.port = 80;
+
+        assertThat(ConstraintViolations.format(validator.validate(example)))
+                .containsOnly("port must be between 1025 and 65535 (was 80)");
     }
 
     @Test
