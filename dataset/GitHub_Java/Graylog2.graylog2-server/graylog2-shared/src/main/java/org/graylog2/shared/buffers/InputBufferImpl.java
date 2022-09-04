@@ -1,41 +1,46 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.buffers;
 
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.InstrumentedThreadFactory;
+import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Inject;
-import com.google.inject.Provider;
-import com.lmax.disruptor.ExceptionHandler;
 import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.journal.RawMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
+import javax.inject.Provider;
 import javax.inject.Singleton;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+
+import static com.codahale.metrics.MetricRegistry.name;
+import static org.graylog2.shared.metrics.MetricUtils.constantGauge;
+import static org.graylog2.shared.metrics.MetricUtils.safelyRegister;
 
 
 @Singleton
@@ -43,51 +48,72 @@ public class InputBufferImpl implements InputBuffer {
     private static final Logger LOG = LoggerFactory.getLogger(InputBufferImpl.class);
 
     private final RingBuffer<RawMessageEvent> ringBuffer;
+    private final Meter incomingMessages;
 
     @Inject
     public InputBufferImpl(MetricRegistry metricRegistry,
                            BaseConfiguration configuration,
-                           Provider<DirectMessageHandler> directMessageHandlerProvider) {
+                           Provider<DirectMessageHandler> directMessageHandlerProvider,
+                           Provider<RawMessageEncoderHandler> rawMessageEncoderHandlerProvider,
+                           Provider<JournallingMessageHandler> spoolingMessageHandlerProvider) {
         final Disruptor<RawMessageEvent> disruptor = new Disruptor<>(
                 RawMessageEvent.FACTORY,
-                configuration.getRingSize(),
+                configuration.getInputBufferRingSize(),
                 executorService(metricRegistry),
                 ProducerType.MULTI,
-                configuration.getProcessorWaitStrategy());
+                configuration.getInputBufferWaitStrategy());
+        disruptor.handleExceptionsWith(new LoggingExceptionHandler(LOG));
 
-        disruptor.handleExceptionsWith(new ExceptionHandler() {
-            @Override
-            public void handleEventException(Throwable ex, long sequence, Object event) {
-                LOG.error("", ex);
+        final int numberOfHandlers = configuration.getInputbufferProcessors();
+        if (configuration.isMessageJournalEnabled()) {
+            LOG.info("Message journal is enabled.");
+
+            final RawMessageEncoderHandler[] handlers = new RawMessageEncoderHandler[numberOfHandlers];
+            for (int i = 0 ; i < numberOfHandlers; i++) {
+                handlers[i] = rawMessageEncoderHandlerProvider.get();
             }
-
-            @Override
-            public void handleOnStartException(Throwable ex) {
-                LOG.error("", ex);
+            disruptor.handleEventsWithWorkerPool(handlers)
+                    .then(spoolingMessageHandlerProvider.get());
+        } else{
+            LOG.info("Message journal is disabled.");
+            final DirectMessageHandler[] handlers = new DirectMessageHandler[numberOfHandlers];
+            for (int i = 0; i < numberOfHandlers; i++) {
+                handlers[i] = directMessageHandlerProvider.get();
             }
+            disruptor.handleEventsWithWorkerPool(handlers);
+        }
 
+        ringBuffer = disruptor.start();
+
+        incomingMessages = metricRegistry.meter(name(InputBufferImpl.class, "incomingMessages"));
+        safelyRegister(metricRegistry, GlobalMetricNames.INPUT_BUFFER_USAGE, new Gauge<Long>() {
             @Override
-            public void handleOnShutdownException(Throwable ex) {
-                LOG.error("", ex);
+            public Long getValue() {
+                return InputBufferImpl.this.getUsage();
             }
         });
-        disruptor.handleEventsWithWorkerPool(directMessageHandlerProvider.get()); // TODO switch implementation + count based on config
-        ringBuffer = disruptor.start();
+        safelyRegister(metricRegistry, GlobalMetricNames.INPUT_BUFFER_SIZE, constantGauge(ringBuffer.getBufferSize()));
+
+        LOG.info("Initialized {} with ring size <{}> and wait strategy <{}>, running {} parallel message handlers.",
+                 this.getClass().getSimpleName(),
+                 configuration.getInputBufferRingSize(),
+                 configuration.getInputBufferWaitStrategy().getClass().getSimpleName(),
+                 numberOfHandlers);
     }
 
     public void insert(RawMessage message) {
         ringBuffer.publishEvent(RawMessageEvent.TRANSLATOR, message);
+        incomingMessages.mark();
+    }
+
+    @Override
+    public long getUsage() {
+        return ringBuffer.getBufferSize() - ringBuffer.remainingCapacity();
     }
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
-        return new InstrumentedExecutorService(Executors.newCachedThreadPool(
-                threadFactory(metricRegistry)), metricRegistry);
-    }
-
-    private ThreadFactory threadFactory(MetricRegistry metricRegistry) {
-        return new InstrumentedThreadFactory(
-                new ThreadFactoryBuilder().setNameFormat("inputbufferprocessor-%d").build(),
-                metricRegistry);
+        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("inputbufferprocessor-%d").build();
+        return new InstrumentedExecutorService(Executors.newCachedThreadPool(threadFactory), metricRegistry, name(this.getClass(), "executor-service"));
     }
 
 }
