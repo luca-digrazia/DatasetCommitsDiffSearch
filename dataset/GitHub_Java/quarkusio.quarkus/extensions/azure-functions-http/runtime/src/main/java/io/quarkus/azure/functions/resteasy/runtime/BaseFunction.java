@@ -25,7 +25,7 @@ import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.util.ReferenceCountUtil;
 import io.quarkus.netty.runtime.virtual.VirtualClientConnection;
 import io.quarkus.runtime.Application;
-import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
+import io.quarkus.vertx.web.runtime.VertxWebRecorder;
 
 public class BaseFunction {
     private static final Logger log = Logger.getLogger("io.quarkus.azure");
@@ -38,7 +38,7 @@ public class BaseFunction {
         PrintWriter errorWriter = new PrintWriter(error, true);
         if (Application.currentApplication() == null) { // were we already bootstrapped?  Needed for mock azure unit testing.
             try {
-                Class appClass = Class.forName("io.quarkus.runner.ApplicationImpl");
+                Class appClass = Class.forName("io.quarkus.runner.ApplicationImpl1");
                 String[] args = {};
                 Application app = (Application) appClass.newInstance();
                 app.start(args);
@@ -56,7 +56,7 @@ public class BaseFunction {
     }
 
     protected HttpResponseMessage dispatch(HttpRequestMessage<Optional<byte[]>> request) {
-        VirtualClientConnection connection = VirtualClientConnection.connect(VertxHttpRecorder.VIRTUAL_HTTP);
+        VirtualClientConnection connection = VirtualClientConnection.connect(VertxWebRecorder.VIRTUAL_HTTP);
         try {
             return nettyDispatch(connection, request);
         } catch (Exception e) {
