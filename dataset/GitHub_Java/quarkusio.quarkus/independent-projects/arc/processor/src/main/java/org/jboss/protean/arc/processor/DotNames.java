@@ -47,7 +47,6 @@ import javax.interceptor.AroundInvoke;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InterceptorBinding;
 
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.protean.arc.ComputingCache;
 
@@ -115,41 +114,9 @@ public final class DotNames {
         return DotName.createComponentized(prefixName, local);
     }
 
-    /**
-     * 
-     * @param clazz
-     * @return the simple name for the given top-level or nested class
-     */
-    public static String simpleName(ClassInfo clazz) {
-        switch (clazz.nestingType()) {
-            case TOP_LEVEL:
-                return simpleName(clazz.name());
-            case INNER:
-                // Nested class
-                // com.foo.Foo$Bar -> Bar
-                return clazz.simpleName();
-            default:
-                throw new IllegalStateException("Unsupported nesting type: " + clazz);
-        }
-    }
-    
-    /**
-     * @param dotName
-     * @see #simpleName(String)
-     */
     public static String simpleName(DotName dotName) {
-        return simpleName(dotName.toString());
-    }
-
-    /**
-     * Note that "$" is a valid character for class names so we cannot detect a nested class here. Therefore, this method would return "Foo$Bar" for the
-     * parameter "com.foo.Foo$Bar". Use {@link #simpleName(ClassInfo)} when you need to distinguish the nested classes.
-     * 
-     * @param name
-     * @return the simple name
-     */
-    public static String simpleName(String name) {
-        return name.contains(".") ? name.substring(name.lastIndexOf(".") + 1, name.length()) : name;
+        String local = dotName.local();
+        return local.contains(".") ? Types.convertNested(local.substring(local.lastIndexOf(".") + 1, local.length())) : Types.convertNested(local);
     }
 
     public static String packageName(DotName dotName) {
