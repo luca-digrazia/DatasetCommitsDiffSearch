@@ -22,7 +22,6 @@ package org.graylog2.periodical;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Maps;
-import com.mongodb.BasicDBObject;
 import org.elasticsearch.action.bulk.BulkItemResponse;
 import org.graylog2.Core;
 import org.graylog2.indexer.DeadLetter;
@@ -39,14 +38,25 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class DeadLetterThread extends Periodical {
+public class DeadLetterThread implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(DeadLetterThread.class);
 
+    private final Core core;
+
+    public DeadLetterThread(final Core core) {
+        this.core = core;
+
+        core.metrics().register(MetricRegistry.name(DeadLetterThread.class, "queueSize"), new Gauge<Integer>() {
+            @Override
+            public Integer getValue() {
+                return core.getIndexer().getDeadLetterQueue().size();
+            }
+        });
+    }
+
     @Override
     public void run() {
-        verifyIndices();
-
         // Poll queue forever.
         while(true) {
             List<DeadLetter> items;
@@ -55,23 +65,20 @@ public class DeadLetterThread extends Periodical {
             } catch (InterruptedException ignored) { continue; /* daemon thread */ }
 
             for (DeadLetter item : items) {
+                // Try to write the failed message to MongoDB.
                 boolean written = false;
+                try {
+                    Message message = item.getMessage();
 
-                // Try to write the failed message to MongoDB if enabled.
-                if (core.getConfiguration().isDeadLettersEnabled()) {
-                    try {
-                        Message message = item.getMessage();
+                    Map<String, Object> doc = Maps.newHashMap();
+                    doc.put("letter_id", item.getId());
+                    doc.put("timestamp", Tools.iso8601());
+                    doc.put("message", message.toElasticSearchObject());
 
-                        Map<String, Object> doc = Maps.newHashMap();
-                        doc.put("letter_id", item.getId());
-                        doc.put("timestamp", Tools.iso8601());
-                        doc.put("message", message.toElasticSearchObject());
-
-                        new PersistedDeadLetter(doc, core).saveWithoutValidation();
-                        written = true;
-                    } catch(Exception e) {
-                        LOG.error("Could not write message to dead letter queue.", e);
-                    }
+                    new PersistedDeadLetter(doc, core).saveWithoutValidation();
+                    written = true;
+                } catch(Exception e) {
+                    LOG.error("Could not write message to dead letter queue.", e);
                 }
 
                 // Write failure to index_failures.
@@ -93,61 +100,6 @@ public class DeadLetterThread extends Periodical {
                 }
             }
         }
-    }
-
-    private void verifyIndices() {
-        core.getMongoConnection().getDatabase().getCollection(IndexFailure.COLLECTION).ensureIndex(new BasicDBObject("timestamp", 1));
-        core.getMongoConnection().getDatabase().getCollection(IndexFailure.COLLECTION).ensureIndex(new BasicDBObject("letter_id", 1));
-
-        core.getMongoConnection().getDatabase().getCollection(PersistedDeadLetter.COLLECTION).ensureIndex(new BasicDBObject("timestamp", 1));
-        core.getMongoConnection().getDatabase().getCollection(PersistedDeadLetter.COLLECTION).ensureIndex(new BasicDBObject("letter_id", 1));
-    }
-
-    @Override
-    public boolean runsForever() {
-        return true;
-    }
-
-    @Override
-    public boolean stopOnGracefulShutdown() {
-        return false;
-    }
-
-    @Override
-    public boolean masterOnly() {
-        return false;
-    }
-
-    @Override
-    public boolean startOnThisNode() {
-        return true;
-    }
-
-    @Override
-    public boolean isDaemon() {
-        return true;
-    }
-
-    @Override
-    public int getInitialDelaySeconds() {
-        return 0;
-    }
-
-    @Override
-    public int getPeriodSeconds() {
-        return 0;
-    }
-
-    @Override
-    public void initialize(final Core core) {
-        this.core = core;
-
-        core.metrics().register(MetricRegistry.name(DeadLetterThread.class, "queueSize"), new Gauge<Integer>() {
-            @Override
-            public Integer getValue() {
-                return core.getIndexer().getDeadLetterQueue().size();
-            }
-        });
     }
 
 }
