@@ -60,7 +60,7 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkMutable;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.nio.charset.StandardCharsets;
@@ -81,17 +81,17 @@ import javax.annotation.Nullable;
 
 public class SkylarkActionFactory implements SkylarkValue {
   private final SkylarkRuleContext context;
-  private final SkylarkSemantics skylarkSemantics;
+  private final SkylarkSemanticsOptions skylarkSemanticsOptions;
   private RuleContext ruleContext;
   /** Counter for actions.run_shell helper scripts. Every script must have a unique name. */
   private int runShellOutputCounter = 0;
 
   public SkylarkActionFactory(
       SkylarkRuleContext context,
-      SkylarkSemantics skylarkSemantics,
+      SkylarkSemanticsOptions skylarkSemanticsOptions,
       RuleContext ruleContext) {
     this.context = context;
-    this.skylarkSemantics = skylarkSemantics;
+    this.skylarkSemanticsOptions = skylarkSemanticsOptions;
     this.ruleContext = ruleContext;
   }
 
@@ -861,7 +861,7 @@ public class SkylarkActionFactory implements SkylarkValue {
             + "args.add(foo_deps)\n"
             + "args.add(\"--bar\")\n"
             + "args.add(bar_deps, join_with=\",\")\n"
-            + "ctx.actions.run(\n"
+            + "ctx.run(\n"
             + "  arguments = [args],\n"
             + "  ...\n"
             + ")\n"
@@ -1106,7 +1106,7 @@ public class SkylarkActionFactory implements SkylarkValue {
 
     private Args(
         @Nullable Mutability mutability,
-        SkylarkSemantics skylarkSemantics,
+        SkylarkSemanticsOptions skylarkSemantics,
         EventHandler eventHandler) {
       this.mutability = mutability != null ? mutability : Mutability.IMMUTABLE;
       this.commandLine = new SkylarkCustomCommandLine.Builder(skylarkSemantics, eventHandler);
