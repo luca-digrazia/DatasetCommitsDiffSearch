@@ -24,7 +24,6 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
-import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -65,18 +64,6 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     return new File(path.toString());
   }
 
-  /**
-   * Returns a {@link java.nio.file.Path} representing the same path as provided {@code path}.
-   *
-   * <p>Note: while it's possible to use {@link #getIoFile(Path)} in combination with {@link
-   * File#toPath()} to achieve essentially the same, using this method is preferable because it
-   * avoids extra allocations and does not lose track of the underlying Java filesystem, which is
-   * useful for some in-memory filesystem implementations like JimFS.
-   */
-  protected java.nio.file.Path getNioPath(Path path) {
-    return Paths.get(path.toString());
-  }
-
   private LinkOption[] linkOpts(boolean followSymlinks) {
     return followSymlinks ? NO_LINK_OPTION : NOFOLLOW_LINKS_OPTION;
   }
@@ -109,10 +96,10 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
 
   @Override
   protected boolean exists(Path path, boolean followSymlinks) {
-    java.nio.file.Path nioPath = getNioPath(path);
+    File file = getIoFile(path);
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      return Files.exists(nioPath, linkOpts(followSymlinks));
+      return Files.exists(file.toPath(), linkOpts(followSymlinks));
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_STAT, path.toString());
     }
@@ -274,9 +261,9 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   @Override
   protected void createSymbolicLink(Path linkPath, PathFragment targetFragment)
       throws IOException {
-    java.nio.file.Path nioPath = getNioPath(linkPath);
+    File file = getIoFile(linkPath);
     try {
-      Files.createSymbolicLink(nioPath, Paths.get(targetFragment.getPathString()));
+      Files.createSymbolicLink(file.toPath(), new File(targetFragment.getPathString()).toPath());
     } catch (java.nio.file.FileAlreadyExistsException e) {
       throw new IOException(linkPath + ERR_FILE_EXISTS);
     } catch (java.nio.file.AccessDeniedException e) {
@@ -288,17 +275,17 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
 
   @Override
   protected PathFragment readSymbolicLink(Path path) throws IOException {
-    java.nio.file.Path nioPath = getNioPath(path);
+    File file = getIoFile(path);
     long startTime = Profiler.nanoTimeMaybe();
     try {
-      String link = Files.readSymbolicLink(nioPath).toString();
+      String link = Files.readSymbolicLink(file.toPath()).toString();
       return PathFragment.create(link);
     } catch (java.nio.file.NotLinkException e) {
       throw new NotASymlinkException(path);
     } catch (java.nio.file.NoSuchFileException e) {
       throw new FileNotFoundException(path + ERR_NO_SUCH_FILE_OR_DIR);
     } finally {
-      profiler.logSimpleTask(startTime, ProfilerTask.VFS_READLINK, nioPath);
+      profiler.logSimpleTask(startTime, ProfilerTask.VFS_READLINK, file.getPath());
     }
   }
 
@@ -413,11 +400,11 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
    */
   @Override
   protected FileStatus stat(final Path path, final boolean followSymlinks) throws IOException {
-    java.nio.file.Path nioPath = getNioPath(path);
+    File file = getIoFile(path);
     final BasicFileAttributes attributes;
     try {
-      attributes =
-          Files.readAttributes(nioPath, BasicFileAttributes.class, linkOpts(followSymlinks));
+      attributes = Files.readAttributes(
+          file.toPath(), BasicFileAttributes.class, linkOpts(followSymlinks));
     } catch (java.nio.file.FileSystemException e) {
       throw new FileNotFoundException(path + ERR_NO_SUCH_FILE_OR_DIR);
     }
