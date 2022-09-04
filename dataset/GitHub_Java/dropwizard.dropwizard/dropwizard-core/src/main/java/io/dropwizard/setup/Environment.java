@@ -5,6 +5,8 @@ import com.codahale.metrics.SharedMetricRegistries;
 import com.codahale.metrics.health.HealthCheckRegistry;
 import com.codahale.metrics.health.SharedHealthCheckRegistries;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.setup.JerseyContainerHolder;
 import io.dropwizard.jersey.setup.JerseyEnvironment;
@@ -12,15 +14,12 @@ import io.dropwizard.jersey.setup.JerseyServletContainer;
 import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.setup.ServletEnvironment;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import io.dropwizard.validation.InjectValidatorFeature;
 
 import javax.annotation.Nullable;
 import javax.servlet.Servlet;
 import javax.validation.Validator;
-import javax.validation.ValidatorFactory;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import static java.util.Objects.requireNonNull;
@@ -89,11 +88,7 @@ public class Environment {
                 .workQueue(new ArrayBlockingQueue<>(1))
                 .minThreads(1)
                 .maxThreads(4)
-                .threadFactory(r -> {
-                    final Thread thread = Executors.defaultThreadFactory().newThread(r);
-                    thread.setDaemon(true);
-                    return thread;
-                })
+                .threadFactory(new ThreadFactoryBuilder().setDaemon(true).build())
                 .rejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy())
                 .build();
 
@@ -109,19 +104,6 @@ public class Environment {
             SharedHealthCheckRegistries.setDefault("default", healthCheckRegistry);
         } catch (IllegalStateException ignored) {
         }
-    }
-
-    /**
-     * Creates an environment and enables injecting validator feature.
-     */
-    public Environment(String name,
-                       ObjectMapper objectMapper,
-                       ValidatorFactory validatorFactory,
-                       MetricRegistry metricRegistry,
-                       @Nullable ClassLoader classLoader,
-                       HealthCheckRegistry healthCheckRegistry) {
-        this(name, objectMapper, validatorFactory.getValidator(), metricRegistry, classLoader, healthCheckRegistry);
-        this.jerseyEnvironment.register(new InjectValidatorFeature(validatorFactory));
     }
 
     /**
