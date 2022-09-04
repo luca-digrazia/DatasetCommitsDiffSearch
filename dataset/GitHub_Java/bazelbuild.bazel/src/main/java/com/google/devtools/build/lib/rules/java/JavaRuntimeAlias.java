@@ -39,13 +39,11 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
+    TransitiveInfoCollection runtime = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
     // Sadly, we can't use an AliasConfiguredTarget here because we need to be prepared for the case
     // when --javabase is not a label. For the time being.
-    TransitiveInfoCollection runtime = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
-    JavaRuntimeInfo javaRuntimeInfo = JavaRuntimeInfo.from(runtime, ruleContext);
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addNativeDeclaredProvider(javaRuntimeInfo)
-        .addNativeDeclaredProvider(new JavaRuntimeToolchainInfo(javaRuntimeInfo))
+        .addNativeDeclaredProvider(runtime.get(JavaRuntimeInfo.PROVIDER))
         .addNativeDeclaredProvider(runtime.get(TemplateVariableInfo.PROVIDER))
         .addProvider(RunfilesProvider.class, runtime.getProvider(RunfilesProvider.class))
         .setFilesToBuild(runtime.getProvider(FileProvider.class).getFilesToBuild())
@@ -60,7 +58,7 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
       return builder
-          .requiresConfigurationFragments(JavaConfiguration.class)
+          .requiresConfigurationFragments(JavaConfiguration.class, Jvm.class)
           .removeAttribute("licenses")
           .removeAttribute("distribs")
           .add(attr(":jvm", LABEL)
