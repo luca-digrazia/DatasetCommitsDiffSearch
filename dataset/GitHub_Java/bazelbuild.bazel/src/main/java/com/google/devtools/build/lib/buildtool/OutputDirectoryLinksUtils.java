@@ -17,15 +17,11 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.flogger.GoogleLogger;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConvenienceSymlinks;
 import com.google.devtools.build.lib.analysis.config.ConvenienceSymlinks.OutputSymlink;
 import com.google.devtools.build.lib.analysis.config.ConvenienceSymlinks.SymlinkDefinition;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.ConvenienceSymlink;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.ConvenienceSymlink.Action;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions.ConvenienceSymlinksMode;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
@@ -42,7 +38,6 @@ import java.util.function.Function;
 
 /** Static utilities for managing output directory symlinks. */
 public final class OutputDirectoryLinksUtils {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   // Static utilities class.
   private OutputDirectoryLinksUtils() {}
@@ -98,36 +93,29 @@ public final class OutputDirectoryLinksUtils {
    *
    * <p>A warning is emitted if a symlink would resolve to multiple destinations, or if a filesystem
    * mutation operation fails.
-   *
-   * @return a list of {@link ConvenienceSymlink} messages describing what was created and
-   *     destroyed.
    */
-  static ImmutableList<ConvenienceSymlink> createOutputDirectoryLinks(
+  static void createOutputDirectoryLinks(
       Iterable<SymlinkDefinition> symlinkDefinitions,
       BuildRequestOptions buildRequestOptions,
       String workspaceName,
       Path workspace,
-      BlazeDirectories directories,
+      Path execRoot,
+      Path outputPath,
       EventHandler eventHandler,
       Set<BuildConfiguration> targetConfigs,
       Function<BuildOptions, BuildConfiguration> configGetter,
       String productName) {
-    Path execRoot = directories.getExecRoot(workspaceName);
-    Path outputPath = directories.getOutputPath(workspaceName);
-    Path outputBase = directories.getOutputBase();
     String symlinkPrefix = buildRequestOptions.getSymlinkPrefix(productName);
     ConvenienceSymlinksMode mode = buildRequestOptions.experimentalConvenienceSymlinks;
-    if (NO_CREATE_SYMLINKS_PREFIX.equals(symlinkPrefix)) {
-      return ImmutableList.of();
+    if (mode == ConvenienceSymlinksMode.IGNORE || NO_CREATE_SYMLINKS_PREFIX.equals(symlinkPrefix)) {
+      return;
     }
 
-    ImmutableList.Builder<ConvenienceSymlink> convenienceSymlinksBuilder = ImmutableList.builder();
     List<String> failures = new ArrayList<>();
     List<String> ambiguousLinks = new ArrayList<>();
     Set<String> createdLinks = new LinkedHashSet<>();
     String workspaceBaseName = workspace.getBaseName();
     RepositoryName repositoryName = RepositoryName.createFromValidStrippedName(workspaceName);
-    boolean logOnly = mode == ConvenienceSymlinksMode.LOG_ONLY;
 
     for (SymlinkDefinition symlink : getAllLinkDefinitions(symlinkDefinitions)) {
       String linkName = symlink.getLinkName(symlinkPrefix, productName, workspaceBaseName);
@@ -136,7 +124,7 @@ public final class OutputDirectoryLinksUtils {
         continue;
       }
       if (mode == ConvenienceSymlinksMode.CLEAN) {
-        removeLink(workspace, linkName, failures, convenienceSymlinksBuilder, logOnly);
+        removeLink(workspace, linkName, failures);
       } else {
         Set<Path> candidatePaths =
             symlink.getLinkPaths(
@@ -147,16 +135,9 @@ public final class OutputDirectoryLinksUtils {
                 outputPath,
                 execRoot);
         if (candidatePaths.size() == 1) {
-          createLink(
-              workspace,
-              linkName,
-              outputBase,
-              Iterables.getOnlyElement(candidatePaths),
-              failures,
-              convenienceSymlinksBuilder,
-              logOnly);
+          createLink(workspace, linkName, Iterables.getOnlyElement(candidatePaths), failures);
         } else {
-          removeLink(workspace, linkName, failures, convenienceSymlinksBuilder, logOnly);
+          removeLink(workspace, linkName, failures);
           // candidatePaths can be empty if the symlink decided not to be created. This can happen
           // if the symlink is disabled by a flag, or it intercepts an error while computing its
           // target path. In that case, don't trigger a warning about an ambiguous link.
@@ -179,7 +160,6 @@ public final class OutputDirectoryLinksUtils {
                   "cleared convenience symlink(s) %s because their destinations would be ambiguous",
                   Joiner.on(", ").join(ambiguousLinks))));
     }
-    return convenienceSymlinksBuilder.build();
   }
 
   public static PathPrettyPrinter getPathPrettyPrinter(
@@ -223,11 +203,7 @@ public final class OutputDirectoryLinksUtils {
     String workspaceBaseName = workspace.getBaseName();
     for (SymlinkDefinition link : getAllLinkDefinitions(symlinkDefinitions)) {
       removeLink(
-          workspace,
-          link.getLinkName(symlinkPrefix, productName, workspaceBaseName),
-          failures,
-          ImmutableList.builder(),
-          false);
+          workspace, link.getLinkName(symlinkPrefix, productName, workspaceBaseName), failures);
     }
 
     FileSystemUtils.removeDirectoryAndParents(workspace, PathFragment.create(symlinkPrefix));
@@ -239,44 +215,9 @@ public final class OutputDirectoryLinksUtils {
   }
 
   /**
-   * Creates a symlink and outputs a {@link ConvenienceSymlink} entry.
-   *
-   * <p>The symlink is created at path {@code name}, relative to {@code base}, creating directories
-   * as needed; it points to {@code target}. Any filesystem errors are appended to {@code failures}.
-   *
-   * <p>A {@code ConvenienceSymlink} entry is added to {@code symlinksBuilder} describing the
-   * symlink. {@code outputBase} is used to determine the relative target path for this entry.
-   *
-   * <p>If {@code logOnly} is true, the {@code ConvenienceSymlink} entry is added but no actual
-   * filesystem operations are performed.
-   *
-   * @return true iff there were no filesystem errors.
+   * Helper to createOutputDirectoryLinks that creates a symlink from base + name to target.
    */
-  private static boolean createLink(
-      Path base,
-      String name,
-      Path outputBase,
-      Path target,
-      List<String> failures,
-      ImmutableList.Builder<ConvenienceSymlink> symlinksBuilder,
-      boolean logOnly) {
-    // Usually the symlink target falls under the output base, and the path in the BEP event should
-    // be relative to that output base. In rare cases where the symlink points elsewhere, use the
-    // absolute path as a fallback.
-    String targetForEvent =
-        target.startsWith(outputBase)
-            ? target.relativeTo(outputBase).getPathString()
-            : target.getPathString();
-    symlinksBuilder.add(
-        ConvenienceSymlink.newBuilder()
-            .setPath(name)
-            .setTarget(targetForEvent)
-            .setAction(Action.CREATE)
-            .build());
-    if (logOnly) {
-      return true;
-    }
-    Path link = base.getRelative(name);
+  private static boolean createLink(Path base, String name, Path target, List<String> failures) {
     try {
       FileSystemUtils.createDirectoryAndParents(target);
     } catch (IOException e) {
@@ -285,7 +226,7 @@ public final class OutputDirectoryLinksUtils {
       return false;
     }
     try {
-      FileSystemUtils.ensureSymbolicLink(link, target);
+      FileSystemUtils.ensureSymbolicLink(base.getRelative(name), target);
     } catch (IOException e) {
       failures.add(String.format("cannot create symbolic link %s -> %s:  %s",
           name, target.getPathString(), e.getMessage()));
@@ -296,37 +237,13 @@ public final class OutputDirectoryLinksUtils {
   }
 
   /**
-   * Deletes a symlink and outputs a {@link ConvenienceSymlink} entry.
-   *
-   * <p>The symlink to be deleted is at path {@code name}, relative to {@code base}. Any filesystem
-   * errors are appended to {@code failures}.
-   *
-   * <p>A {@code ConvenienceSymlink} entry is added to {@code symlinksBuilder} describing the
-   * symlink to be deleted.
-   *
-   * <p>If {@code logOnly} is true, the {@code ConvenienceSymlink} entry is added but no actual
-   * filesystem operations are performed.
-   *
-   * @return true iff there were no filesystem errors.
+   * Helper to removeOutputDirectoryLinks that removes one of the Blaze convenience symbolic links.
    */
-  private static boolean removeLink(
-      Path base,
-      String name,
-      List<String> failures,
-      ImmutableList.Builder<ConvenienceSymlink> symlinksBuilder,
-      boolean logOnly) {
-    symlinksBuilder.add(
-        ConvenienceSymlink.newBuilder().setPath(name).setAction(Action.DELETE).build());
-    if (logOnly) {
-      return true;
-    }
+  private static boolean removeLink(Path base, String name, List<String> failures) {
     Path link = base.getRelative(name);
     try {
       if (link.isSymbolicLink()) {
-        // TODO(b/146885821): Consider also removing empty ancestor directories, to allow for
-        //  cleaning up directories generated by --symlink_prefix=dir1/dir2/...
-        //  Might be undesireable since it could also remove manually-created directories.
-        logger.atFinest().log("Removing %s", link);
+        ExecutionTool.logger.finest("Removing " + link);
         link.delete();
       }
       return true;
