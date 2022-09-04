@@ -2669,10 +2669,10 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    manifest = 'AndroidManifest.xml',",
         "    multidex = 'legacy')");
 
-    ConfiguredTargetAndData a = getConfiguredTargetAndData("//java/a:a");
+    ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     Artifact intermediateJar =
         artifactByPath(
-            ImmutableList.of(getCompressedUnsignedApk(a.getConfiguredTarget())),
+            ImmutableList.of(getCompressedUnsignedApk(a)),
             ".apk",
             ".dex.zip",
             ".dex.zip",
@@ -2683,7 +2683,7 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         args,
         ImmutableList.of(
             "-include",
-            a.getConfiguration().getBinFragment(RepositoryName.MAIN)
+            targetConfig.getBinFragment(RepositoryName.MAIN)
                 + "/java/a/proguard/a/main_dex_a_proguard.cfg"));
   }
 
@@ -2989,10 +2989,9 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               resource_files = ['res/values/strings.xml'],",
         "               )");
-    ConfiguredTargetAndData r = getConfiguredTargetAndData("//java/android/resources:r");
-    assertThat(
-            getFirstArtifactEndingWith(getFilesToBuild(r.getConfiguredTarget()), ".apk").getRoot())
-        .isEqualTo(r.getConfiguration().getBinDirectory(RepositoryName.MAIN));
+    ConfiguredTarget r = getConfiguredTarget("//java/android/resources:r");
+    assertThat(getFirstArtifactEndingWith(getFilesToBuild(r), ".apk").getRoot())
+        .isEqualTo(getTargetConfiguration().getBinDirectory(RepositoryName.MAIN));
   }
 
   @Test
@@ -3927,15 +3926,13 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro', 'proguard-spec1.pro',",
         "                                 'proguard-spec2.pro'])");
-    ConfiguredTargetAndData binary =
-        getConfiguredTargetAndData("//java/com/google/android/hello:b");
     checkProguardUse(
-        binary.getConfiguredTarget(),
+        "//java/com/google/android/hello:b",
         "b_proguard.jar",
         false,
         null,
         /*splitOptimizationPass=*/ false,
-        binary.getConfiguration().getBinFragment(RepositoryName.MAIN)
+        targetConfig.getBinFragment(RepositoryName.MAIN)
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars.jar");
   }
 
@@ -4074,7 +4071,7 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               proguard_specs = ['proguard-spec.pro'],",
         "               proguard_generate_mapping = 1)");
     checkProguardUse(
-        getConfiguredTarget("//java/com/google/android/hello:b"),
+        "//java/com/google/android/hello:b",
         "b_proguard.jar",
         true,
         null,
@@ -4131,7 +4128,7 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro'])");
     checkProguardUse(
-        getConfiguredTarget("//java/com/google/android/hello:b"),
+        "//java/com/google/android/hello:b",
         "b_proguard.jar",
         false,
         null,
@@ -4162,7 +4159,7 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro'])");
     checkProguardUse(
-        getConfiguredTarget("//java/com/google/android/hello:b"),
+        "//java/com/google/android/hello:b",
         "b_proguard.jar",
         false,
         null,
@@ -4256,17 +4253,15 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro', 'proguard-spec1.pro',",
         "                                 'proguard-spec2.pro'])");
-    ConfiguredTargetAndData binary =
-        getConfiguredTargetAndData("//java/com/google/android/hello:b");
+    ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:b");
     SpawnAction action =
         (SpawnAction)
             actionsTestUtil()
-                .getActionForArtifactEndingWith(
-                    getFilesToBuild(binary.getConfiguredTarget()), "_proguard.jar");
+                .getActionForArtifactEndingWith(getFilesToBuild(binary), "_proguard.jar");
 
     checkProguardLibJars(
         action,
-        binary.getConfiguration().getBinFragment(RepositoryName.MAIN)
+        targetConfig.getBinFragment(RepositoryName.MAIN)
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars.jar");
   }
 
@@ -4284,17 +4279,15 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               manifest = 'AndroidManifest.xml',",
         "               proguard_specs = ['proguard-spec.pro', 'proguard-spec1.pro',",
         "                                 'proguard-spec2.pro'])");
-    ConfiguredTargetAndData binary =
-        getConfiguredTargetAndData("//java/com/google/android/hello:b");
+    ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android/hello:b");
     SpawnAction action =
         (SpawnAction)
             actionsTestUtil()
-                .getActionForArtifactEndingWith(
-                    getFilesToBuild(binary.getConfiguredTarget()), "_proguard.jar");
+                .getActionForArtifactEndingWith(getFilesToBuild(binary), "_proguard.jar");
 
     checkProguardLibJars(
         action,
-        binary.getConfiguration().getBinFragment(RepositoryName.MAIN)
+        targetConfig.getBinFragment(RepositoryName.MAIN)
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars_filtered.jar");
   }
 
@@ -4489,7 +4482,7 @@ public abstract class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    ],",
         "    manifest = 'AndroidManifest.xml')");
     checkProguardUse(
-        getConfiguredTarget("//java/foo:abin"),
+        "//java/foo:abin",
         "abin_proguard.jar",
         /*expectMapping=*/ false,
         /*passes=*/ null,
