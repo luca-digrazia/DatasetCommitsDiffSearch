@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
+import com.google.devtools.build.lib.runtime.BlazeOptionHandler.RcChunkOfArgs;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -162,7 +163,6 @@ public class BlazeOptionHandlerTest {
     structuredArgs.put("c0:windows", new RcChunkOfArgs("rc1", ImmutableList.of("command_windows")));
     structuredArgs.put("c0:macos", new RcChunkOfArgs("rc1", ImmutableList.of("command_macos")));
     structuredArgs.put("c0:freebsd", new RcChunkOfArgs("rc1", ImmutableList.of("command_freebsd")));
-    structuredArgs.put("c0:openbsd", new RcChunkOfArgs("rc1", ImmutableList.of("command_openbsd")));
     structuredArgs.put(
         "c0:platform_config",
         new RcChunkOfArgs("rc1", ImmutableList.of("--enable_platform_specific_config")));
@@ -328,9 +328,6 @@ public class BlazeOptionHandlerTest {
       case FREEBSD:
         assertThat(parser.getResidue()).containsExactly("command_freebsd");
         break;
-      case OPENBSD:
-        assertThat(parser.getResidue()).containsExactly("command_openbsd");
-        break;
       default:
         assertThat(parser.getResidue()).isEmpty();
     }
@@ -355,9 +352,6 @@ public class BlazeOptionHandlerTest {
         break;
       case FREEBSD:
         assertThat(parser.getResidue()).containsExactly("command_freebsd");
-        break;
-      case OPENBSD:
-        assertThat(parser.getResidue()).containsExactly("command_openbsd");
         break;
       default:
         assertThat(parser.getResidue()).isEmpty();

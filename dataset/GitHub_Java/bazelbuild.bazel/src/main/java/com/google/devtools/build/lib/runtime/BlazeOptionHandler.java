@@ -246,7 +246,8 @@ public final class BlazeOptionHandler {
       return ExitCode.SUCCESS;
     }
     try {
-      StarlarkOptionsParser.newStarlarkOptionsParser(env, optionsParser).parse(eventHandler);
+      StarlarkOptionsParser.newStarlarkOptionsParser(env, optionsParser)
+          .parse(commandAnnotation, eventHandler);
     } catch (OptionsParsingException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
       return ExitCode.PARSING_FAILURE;
