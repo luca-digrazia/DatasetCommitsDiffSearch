@@ -41,9 +41,10 @@ import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.ClassCreator;
@@ -194,14 +195,15 @@ public class SmallRyeReactiveMessagingProcessor {
                         new BeanClassAnnotationExclusion(io.quarkus.smallrye.reactivemessaging.deployment.DotNames.OUTGOING)));
     }
 
-    @BuildStep(loadsApplicationClasses = true)
+    @BuildStep
     @Record(STATIC_INIT)
     public void build(SmallRyeReactiveMessagingRecorder recorder, RecorderContext recorderContext,
             BeanContainerBuildItem beanContainer,
             List<MediatorBuildItem> mediatorMethods,
             List<EmitterBuildItem> emitterFields,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            DeploymentClassLoaderBuildItem deploymentClassLoaderBuildItem) {
 
         List<QuarkusMediatorConfiguration> configurations = new ArrayList<>(mediatorMethods.size());
 
@@ -230,7 +232,7 @@ public class SmallRyeReactiveMessagingProcessor {
 
             try {
                 QuarkusMediatorConfiguration mediatorConfiguration = QuarkusMediatorConfigurationUtil.create(methodInfo, bean,
-                        generatedInvokerName, recorderContext, Thread.currentThread().getContextClassLoader());
+                        generatedInvokerName, recorderContext, deploymentClassLoaderBuildItem.getClassLoader());
                 configurations.add(mediatorConfiguration);
             } catch (IllegalArgumentException e) {
                 throw new DeploymentException(e); // needed to pass the TCK
