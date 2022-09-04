@@ -317,7 +317,7 @@ public class AmqpTransport extends ThrottleableTransport {
                             "Heartbeat timeout",
                             ConnectionFactory.DEFAULT_HEARTBEAT,
                             "Heartbeat interval in seconds (use 0 to disable heartbeat)",
-                            ConfigurationField.Optional.OPTIONAL
+                            ConfigurationField.Optional.NOT_OPTIONAL
                     )
             );
 
