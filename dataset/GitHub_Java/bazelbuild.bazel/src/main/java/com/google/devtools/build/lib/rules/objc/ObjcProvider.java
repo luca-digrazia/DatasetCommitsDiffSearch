@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.xcode.xcodegen.proto.XcodeGenProtos.TargetControl;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -129,6 +130,17 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
    */
   public static final Key<Artifact> FORCE_LOAD_LIBRARY =
       new Key<>(LINK_ORDER, "force_load_library", Artifact.class);
+
+  /**
+   * Libraries to pass with -force_load flags when setting the linkopts in Xcodegen. This is needed
+   * in addition to {@link #FORCE_LOAD_LIBRARY} because that one, contains a mixture of import
+   * archives (which are not built by Xcode) and built-from-source library archives (which are built
+   * by Xcode). Archives that are built by Xcode are placed directly under
+   * {@code BUILT_PRODUCTS_DIR} while those not built by Xcode appear somewhere in the Bazel
+   * workspace under {@code WORKSPACE_ROOT}.
+   */
+  public static final Key<String> FORCE_LOAD_FOR_XCODEGEN =
+      new Key<>(LINK_ORDER, "force_load_for_xcodegen", String.class);
 
   /**
    * Contains all header files. These may be either public or private headers.
@@ -451,6 +463,8 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
   static final ImmutableList<Key<?>> KEYS_NOT_IN_SKYLARK = ImmutableList.<Key<?>>of(
       // LibraryToLink not exposed to skylark.
       CC_LIBRARY,
+      // Xcodegen is deprecated.
+      FORCE_LOAD_FOR_XCODEGEN,
       // Flag enum is not exposed to skylark.
       FLAG,
       // Bundle not exposed to skylark.
@@ -666,7 +680,13 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
    */
   private static Predicate<Artifact> notContainedIn(
       final HashSet<Artifact> linkedLibraryArtifacts) {
-    return libraryToLink -> !linkedLibraryArtifacts.contains(libraryToLink);
+    return new Predicate<Artifact>() {
+
+      @Override
+      public boolean apply(Artifact libraryToLink) {
+        return !linkedLibraryArtifacts.contains(libraryToLink);
+      }
+    };
   }
 
   /**
@@ -678,7 +698,13 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
    */
   private static Predicate<LibraryToLink> ccLibraryNotYetLinked(
       final HashSet<Artifact> linkedLibraryArtifacts) {
-    return libraryToLink -> !linkedLibraryArtifacts.contains(libraryToLink.getArtifact());
+    return new Predicate<LibraryToLink>() {
+
+      @Override
+      public boolean apply(LibraryToLink libraryToLink) {
+        return !linkedLibraryArtifacts.contains(libraryToLink.getArtifact());
+      }
+    };
   }
 
   @SuppressWarnings("unchecked")
@@ -722,7 +748,9 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
     private final Map<Key<?>, NestedSetBuilder<?>> strictDependencyItems = new HashMap<>();
 
     private static void maybeAddEmptyBuilder(Map<Key<?>, NestedSetBuilder<?>> set, Key<?> key) {
-      set.computeIfAbsent(key, k -> new NestedSetBuilder<>(k.order));
+      if (!set.containsKey(key)) {
+        set.put(key, new NestedSetBuilder<>(key.order));
+      }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
