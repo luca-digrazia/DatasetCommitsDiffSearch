@@ -14,13 +14,14 @@
 
 package com.google.devtools.build.lib.buildtool.util;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Throwables.throwIfUnchecked;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -29,7 +30,6 @@ import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -41,13 +41,18 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil.DummyWorkspaceStatusActionContext;
+import com.google.devtools.build.lib.bugreport.BugReport;
+import com.google.devtools.build.lib.bugreport.BugReporter;
+import com.google.devtools.build.lib.bugreport.Crash;
+import com.google.devtools.build.lib.bugreport.CrashContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
@@ -59,9 +64,11 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.exec.BinTools;
-import com.google.devtools.build.lib.exec.ExecutorBuilder;
+import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
 import com.google.devtools.build.lib.includescanning.IncludeScanningModule;
 import com.google.devtools.build.lib.integration.util.IntegrationMock;
+import com.google.devtools.build.lib.network.ConnectivityStatusProvider;
+import com.google.devtools.build.lib.network.NoOpConnectivityModule;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
@@ -73,6 +80,9 @@ import com.google.devtools.build.lib.runtime.BlazeServerStartupOptions;
 import com.google.devtools.build.lib.runtime.BlazeWorkspace;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
+import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.Spawn;
+import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -94,6 +104,7 @@ import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.util.io.RecordingOutErr;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -102,10 +113,13 @@ import com.google.devtools.build.lib.vfs.util.FileSystems;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import javax.annotation.concurrent.GuardedBy;
 import org.junit.After;
 import org.junit.Before;
 
@@ -129,20 +143,23 @@ public abstract class BuildIntegrationTestCase {
     }
 
     @Override
-    public ActionExecutionException toActionExecutionException(
-        String messagePrefix, boolean verboseFailures, Action action) {
-      return new ActionExecutionException(messagePrefix + getMessage(), getCause(), action, true);
+    protected FailureDetail getFailureDetail(String message) {
+      return FailureDetail.newBuilder()
+          .setSpawn(Spawn.newBuilder().setCode(Code.NON_ZERO_EXIT))
+          .setMessage(message)
+          .build();
     }
   }
 
   protected FileSystem fileSystem;
-  protected EventCollectionApparatus events = new EventCollectionApparatus();
+  protected EventCollectionApparatus events = createEvents();
   protected OutErr outErr = OutErr.SYSTEM_OUT_ERR;
   protected Path testRoot;
   protected ServerDirectories serverDirectories;
   protected BlazeDirectories directories;
   protected MockToolsConfig mockToolsConfig;
   protected BinTools binTools;
+  private BugReporter bugReporter = BugReporter.defaultInstance();
 
   protected BlazeRuntimeWrapper runtimeWrapper;
   protected Path outputBase;
@@ -151,18 +168,24 @@ public abstract class BuildIntegrationTestCase {
   private Path workspace;
   protected RecordingExceptionHandler subscriberException = new RecordingExceptionHandler();
 
+  protected EventCollectionApparatus createEvents() {
+    return new EventCollectionApparatus();
+  }
+
   @Before
   public final void createFilesAndMocks() throws Exception  {
     runPriorToBeforeMethods();
     events.setFailFast(false);
     // TODO(mschaller): This will ignore any attempt by Blaze modules to provide a filesystem;
     // consider something better.
-    this.fileSystem = createFileSystem();
+    FileSystem nativeFileSystem = createFileSystem();
+    this.fileSystem = createFileSystemForBuildArtifacts(nativeFileSystem);
     this.testRoot = createTestRoot(fileSystem);
 
-    outputBase = testRoot.getRelative(outputBaseName);
+    outputBase = fileSystem.getPath(testRoot.getRelative(outputBaseName).asFragment());
     outputBase.createDirectoryAndParents();
-    workspace = testRoot.getRelative(getDesiredWorkspaceRelative());
+    workspace =
+        nativeFileSystem.getPath(testRoot.getRelative(getDesiredWorkspaceRelative()).asFragment());
     beforeCreatingWorkspace(workspace);
     workspace.createDirectoryAndParents();
     serverDirectories = createServerDirectories();
@@ -205,6 +228,35 @@ public abstract class BuildIntegrationTestCase {
     setupOptions();
   }
 
+  /**
+   * Configures the server to record bug reports using the returned {@link RecordingBugReporter}.
+   *
+   * <p>The server is reinitialized so that this change is picked up.
+   */
+  protected final RecordingBugReporter recordBugReportsAndReinitialize() throws Exception {
+    RecordingBugReporter recordingBugReporter = new RecordingBugReporter();
+    setCustomBugReporterAndReinitialize(recordingBugReporter);
+    return recordingBugReporter;
+  }
+
+  /**
+   * Configures the server to record bug reports using the given {@link BugReporter}.
+   *
+   * <p>The server is reinitialized so that this change is picked up.
+   */
+  protected final void setCustomBugReporterAndReinitialize(BugReporter bugReporter)
+      throws Exception {
+    this.bugReporter = checkNotNull(bugReporter);
+    reinitializeAndPreserveOptions();
+  }
+
+  protected final void reinitializeAndPreserveOptions() throws Exception {
+    List<String> options = runtimeWrapper.getOptions();
+    createFilesAndMocks();
+    runtimeWrapper.resetOptions();
+    runtimeWrapper.addOptions(options);
+  }
+
   protected void runPriorToBeforeMethods() throws Exception {
     // Allows tests such as SkyframeIntegrationInvalidationTest to execute code before all @Before
     // methods are being run.
@@ -218,6 +270,7 @@ public abstract class BuildIntegrationTestCase {
     }
     LoggingUtil.installRemoteLoggerForTesting(null);
     testRoot.deleteTreesBelow(); // (comment out during debugging)
+    Thread.interrupted(); // If there was a crash in test case, main thread was interrupted.
   }
 
   /**
@@ -268,7 +321,15 @@ public abstract class BuildIntegrationTestCase {
   }
 
   protected FileSystem createFileSystem() throws Exception {
-    return FileSystems.getNativeFileSystem();
+    return FileSystems.getNativeFileSystem(getDigestHashFunction());
+  }
+
+  protected FileSystem createFileSystemForBuildArtifacts(FileSystem fileSystem) {
+    return fileSystem;
+  }
+
+  protected DigestHashFunction getDigestHashFunction() {
+    return DigestHashFunction.SHA256;
   }
 
   protected Path createTestRoot(FileSystem fileSystem) {
@@ -283,6 +344,10 @@ public abstract class BuildIntegrationTestCase {
     AnalysisMock.get().setupMockClient(mockToolsConfig);
   }
 
+  protected FileSystem getFileSystem() {
+    return fileSystem;
+  }
+
   protected BlazeModule getBuildInfoModule() {
     return new BlazeModule() {
       @Override
@@ -293,9 +358,12 @@ public abstract class BuildIntegrationTestCase {
       }
 
       @Override
-      public void executorInit(
-          CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
-        builder.addActionContext(new DummyWorkspaceStatusActionContext());
+      public void registerActionContexts(
+          ModuleActionContextRegistry.Builder registryBuilder,
+          CommandEnvironment env,
+          BuildRequest buildRequest) {
+        registryBuilder.register(
+            WorkspaceStatusAction.Context.class, new DummyWorkspaceStatusActionContext());
       }
     };
   }
@@ -311,29 +379,51 @@ public abstract class BuildIntegrationTestCase {
     return TestRuleModule.getModule();
   }
 
-  private BlazeModule getNoResolvedFileModule() {
+  /** Gets a module to set up the strategies. */
+  protected BlazeModule getStrategyModule() {
+    return TestStrategyModule.getModule();
+  }
+
+  private static BlazeModule getNoResolvedFileModule() {
     return new BlazeModule() {
       @Override
       public ImmutableList<Injected> getPrecomputedValues() {
         return ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.absent()));
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()));
       }
     };
   }
 
+  /**
+   * Gets a module that returns a connectivity status.
+   *
+   * @return a Blaze module that implements {@link ConnectivityStatusProvider}
+   */
+  protected BlazeModule getConnectivityModule() {
+    return new NoOpConnectivityModule();
+  }
+
   protected BlazeRuntime.Builder getRuntimeBuilder() throws Exception {
-    OptionsParser startupOptionsParser = OptionsParser.newOptionsParser(getStartupOptionClasses());
+    OptionsParser startupOptionsParser =
+        OptionsParser.builder().optionsClasses(getStartupOptionClasses()).build();
     startupOptionsParser.parse(getStartupOptions());
+    BlazeModule connectivityModule = getConnectivityModule();
+    checkState(
+        connectivityModule instanceof ConnectivityStatusProvider,
+        "Module returned by getConnectivityModule() does not implement ConnectivityStatusProvider");
     return new BlazeRuntime.Builder()
         .setFileSystem(fileSystem)
         .setProductName(TestConstants.PRODUCT_NAME)
+        .setBugReporter(bugReporter)
         .setStartupOptionsProvider(startupOptionsParser)
+        .addBlazeModule(connectivityModule)
         .addBlazeModule(getNoResolvedFileModule())
         .addBlazeModule(getSpawnModule())
         .addBlazeModule(new IncludeScanningModule())
         .addBlazeModule(getBuildInfoModule())
-        .addBlazeModule(getRulesModule());
+        .addBlazeModule(getRulesModule())
+        .addBlazeModule(getStrategyModule());
   }
 
   protected List<String> getStartupOptions() {
@@ -360,13 +450,17 @@ public abstract class BuildIntegrationTestCase {
 
     runtimeWrapper.addOptions("--experimental_extended_sanity_checks");
     runtimeWrapper.addOptions(TestConstants.PRODUCT_SPECIFIC_FLAGS);
+    // TODO(rosica): Remove this once g3 is migrated.
+    runtimeWrapper.addOptions("--noincompatible_use_specific_tool_files");
+    // TODO(rosica): Remove this once g3 is migrated.
+    runtimeWrapper.addOptions("--noincompatible_make_thinlto_command_lines_standalone");
   }
 
   protected void resetOptions() {
     runtimeWrapper.resetOptions();
   }
 
-  protected void addOptions(String... args) throws Exception {
+  protected void addOptions(String... args) {
     runtimeWrapper.addOptions(args);
   }
 
@@ -378,10 +472,8 @@ public abstract class BuildIntegrationTestCase {
     ActionAnalysisMetadata action = getActionGraph().getGeneratingAction(artifact);
 
     if (action != null) {
-      Preconditions.checkState(
-          action instanceof Action,
-          "%s is not a proper Action object",
-          action.prettyPrint());
+      checkState(
+          action instanceof Action, "%s is not a proper Action object", action.prettyPrint());
       return (Action) action;
     } else {
       return null;
@@ -410,7 +502,7 @@ public abstract class BuildIntegrationTestCase {
   protected Iterable<Artifact> getArtifacts(String target)
       throws LabelSyntaxException, NoSuchPackageException, NoSuchTargetException,
           InterruptedException, TransitionException, InvalidConfigurationException {
-    return getFilesToBuild(getConfiguredTarget(target));
+    return getFilesToBuild(getConfiguredTarget(target)).toList();
   }
 
   /**
@@ -430,7 +522,7 @@ public abstract class BuildIntegrationTestCase {
 
   protected ConfiguredTarget getConfiguredTarget(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config)
-      throws TransitionException, InvalidConfigurationException {
+      throws TransitionException, InvalidConfigurationException, InterruptedException {
     return getSkyframeExecutor().getConfiguredTargetForTesting(eventHandler, label, config);
   }
 
@@ -463,7 +555,7 @@ public abstract class BuildIntegrationTestCase {
    * If they used multiple different configurations, or if none of them had a configuration, then
    * falls back to the base top-level configuration.
    */
-  protected BuildConfiguration getTargetConfiguration() throws InterruptedException {
+  protected BuildConfiguration getTargetConfiguration() {
     BuildConfiguration baseConfiguration =
         Iterables.getOnlyElement(getConfigurationCollection().getTargetConfigurations());
     BuildResult result = getResult();
@@ -502,14 +594,6 @@ public abstract class BuildIntegrationTestCase {
     events.setOutErr(this.outErr);
     runtimeWrapper.executeBuild(Arrays.asList(targets));
     return runtimeWrapper.getLastResult();
-  }
-
-  /**
-   * Create a BuildRequest for the specified list of targets, using the
-   * currently-installed request options.
-   */
-  protected BuildRequest createRequest(String... targets) throws Exception {
-    return createNewRequest("BuildIntegrationTestCase", targets);
   }
 
   /**
@@ -582,7 +666,7 @@ public abstract class BuildIntegrationTestCase {
       String... arguments)
       throws ExecException, InterruptedException {
     if (workingDirectory == null) {
-      workingDirectory = directories.getWorkspace();
+      workingDirectory = fileSystem.getPath(directories.getWorkspace().asFragment());
     }
     List<String> argv = Lists.newArrayList(arguments);
     argv.add(0, executable.toString());
@@ -618,9 +702,15 @@ public abstract class BuildIntegrationTestCase {
     return path;
   }
 
-  /** Equivalent to {@code ln -s <target> <relativeLinkPath>}. */
-  protected void createSymlink(String target, String relativeLinkPath) throws IOException {
-    getWorkspace().getRelative(relativeLinkPath).createSymbolicLink(PathFragment.create(target));
+  /**
+   * Creates folders on the path to {@code relativeLinkPath} and a symlink to {@code target} at
+   * {@code relativeLinkPath} (equivalent to {@code ln -s <target> <relativeLinkPath>}).
+   */
+  protected Path createSymlink(String target, String relativeLinkPath) throws IOException {
+    Path path = getWorkspace().getRelative(relativeLinkPath);
+    path.getParentDirectory().createDirectoryAndParents();
+    path.createSymbolicLink(PathFragment.create(target));
+    return path;
   }
 
   /**
@@ -635,24 +725,15 @@ public abstract class BuildIntegrationTestCase {
   }
 
   /**
-   * Fork/exec/wait the specified command.  A utility method for subclasses.
-   */
-  protected String exec(String... argv) throws CommandException {
-    return new String(new Command(argv).execute().getStdout());
-  }
-
-  /**
-   * Performs a local direct spawn execution given spawn information broken out
-   * into individual arguments. Directs standard out/err to {@code outErr}.
+   * Performs a local direct spawn execution given spawn information broken out into individual
+   * arguments. Directs standard out/err to {@code outErr}.
    *
    * @param workingDirectory the directory from which to execute the subprocess
-   * @param environment the environment map to provide to the subprocess. If
-   *        null, the environment is inherited from the parent process.
+   * @param environment the environment map to provide to the subprocess. If null, the environment
+   *     is inherited from the parent process.
    * @param argv the argument vector including the command itself
-   * @param outErr the out+err stream pair to receive stdout and stderr from the
-   *        subprocess
-   * @throws ExecException if any kind of abnormal termination or command
-   *         exception occurs
+   * @param outErr the out+err stream pair to receive stdout and stderr from the subprocess
+   * @throws ExecException if any kind of abnormal termination or command exception occurs
    */
   public static void execute(
       Path workingDirectory,
@@ -660,7 +741,7 @@ public abstract class BuildIntegrationTestCase {
       List<String> argv,
       FileOutErr outErr,
       boolean verboseFailures)
-      throws ExecException {
+      throws ExecException, InterruptedException {
     Command command =
         new CommandBuilder()
             .addArgs(argv)
@@ -691,14 +772,13 @@ public abstract class BuildIntegrationTestCase {
   }
 
   /**
-   * Given a collection of Artifacts, returns a corresponding set of strings of
-   * the form "<root> <relpath>", such as "bin x/libx.a".  Such strings make
-   * assertions easier to write.
+   * Given a collection of Artifacts, returns a corresponding set of strings of the form "<root>
+   * <relpath>", such as "bin x/libx.a". Such strings make assertions easier to write.
    *
    * <p>The returned set preserves the order of the input.
    */
-  protected Set<String> artifactsToStrings(Iterable<Artifact> artifacts) {
-    return AnalysisTestUtil.artifactsToStrings(getConfigurationCollection(), artifacts);
+  protected Set<String> artifactsToStrings(NestedSet<Artifact> artifacts) {
+    return AnalysisTestUtil.artifactsToStrings(getConfigurationCollection(), artifacts.toList());
   }
 
   protected ActionsTestUtil actionsTestUtil() {
@@ -745,7 +825,7 @@ public abstract class BuildIntegrationTestCase {
 
   protected ConfiguredTargetAndData getConfiguredTargetAndTarget(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration config)
-      throws TransitionException, InvalidConfigurationException {
+      throws TransitionException, InvalidConfigurationException, InterruptedException {
     return getSkyframeExecutor().getConfiguredTargetAndDataForTesting(eventHandler, label, config);
   }
 
@@ -783,5 +863,42 @@ public abstract class BuildIntegrationTestCase {
       }
     }
     fail("didn't find expected error: \"" + expectedError + "\"");
+  }
+
+  /** {@link BugReporter} that stores bug reports for later inspection. */
+  protected static class RecordingBugReporter implements BugReporter {
+    @GuardedBy("this")
+    private final List<Throwable> exceptions = new ArrayList<>();
+
+    @Override
+    public synchronized void sendBugReport(
+        Throwable exception, List<String> args, String... values) {
+      exceptions.add(exception);
+    }
+
+    @Override
+    public void handleCrash(Crash crash, CrashContext ctx) {
+      // Unexpected: try to crash JVM.
+      BugReport.handleCrash(crash, ctx);
+    }
+
+    public synchronized ImmutableList<Throwable> getExceptions() {
+      return ImmutableList.copyOf(exceptions);
+    }
+
+    public synchronized Throwable getFirstCause() {
+      assertThat(exceptions).isNotEmpty();
+      Throwable first = exceptions.get(0);
+      assertThat(first).hasCauseThat().isNotNull();
+      return first.getCause();
+    }
+
+    public synchronized void assertNoExceptions() {
+      assertThat(exceptions).isEmpty();
+    }
+
+    public synchronized void clear() {
+      exceptions.clear();
+    }
   }
 }

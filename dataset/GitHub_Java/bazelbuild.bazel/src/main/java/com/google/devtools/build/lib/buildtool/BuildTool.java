@@ -380,10 +380,6 @@ public class BuildTool {
     }
   }
 
-  public BuildResult processRequest(BuildRequest request, TargetValidator validator) {
-    return processRequest(request, validator, /* postBuildCallback= */ null);
-  }
-
   /**
    * The crux of the build system. Builds the targets specified in the request using the specified
    * Executor.
@@ -400,32 +396,18 @@ public class BuildTool {
    * @param request the build request that this build tool is servicing, which specifies various
    *     options; during this method's execution, the actualTargets and successfulTargets fields of
    *     the request object are populated
-   * @param validator an optional target validator
-   * @param postBuildCallback an optional callback called after the build has been completed
-   *     successfully
+   * @param validator target validator
    * @return the result as a {@link BuildResult} object
    */
-  public BuildResult processRequest(
-      BuildRequest request, TargetValidator validator, PostBuildCallback postBuildCallback) {
+  public BuildResult processRequest(BuildRequest request, TargetValidator validator) {
     BuildResult result = new BuildResult(request.getStartTime());
     maybeSetStopOnFirstFailure(request, result);
     int startSuspendCount = suspendCount();
     Throwable crash = null;
     DetailedExitCode detailedExitCode = null;
     try {
-      try (SilentCloseable c = Profiler.instance().profile("buildTargets")) {
-        buildTargets(request, result, validator);
-      }
+      buildTargets(request, result, validator);
       detailedExitCode = DetailedExitCode.success();
-      if (postBuildCallback != null) {
-        try (SilentCloseable c = Profiler.instance().profile("postBuildCallback.process")) {
-          result.setPostBuildCallbackFailureDetail(
-              postBuildCallback.process(result.getSuccessfulTargets()));
-        } catch (InterruptedException e) {
-          detailedExitCode =
-              InterruptedFailureDetails.detailedExitCode("post build callback interrupted");
-        }
-      }
     } catch (BuildFailedException e) {
       if (!e.isErrorAlreadyShown()) {
         // The actual error has not already been reported by the Builder.
@@ -506,9 +488,7 @@ public class BuildTool {
             CrashFailureDetails.detailedExitCodeForThrowable(
                 new IllegalStateException("Unspecified DetailedExitCode"));
       }
-      try (SilentCloseable c = Profiler.instance().profile("stopRequest")) {
-        stopRequest(result, crash, detailedExitCode, startSuspendCount);
-      }
+      stopRequest(result, crash, detailedExitCode, startSuspendCount);
     }
 
     return result;
