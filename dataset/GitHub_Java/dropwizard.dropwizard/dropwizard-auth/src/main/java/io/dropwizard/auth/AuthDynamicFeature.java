@@ -3,7 +3,6 @@ package io.dropwizard.auth;
 import org.glassfish.jersey.server.filter.RolesAllowedDynamicFeature;
 import org.glassfish.jersey.server.model.AnnotatedMethod;
 
-import javax.annotation.Nullable;
 import javax.annotation.security.DenyAll;
 import javax.annotation.security.PermitAll;
 import javax.annotation.security.RolesAllowed;
@@ -12,7 +11,6 @@ import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.core.FeatureContext;
 import java.lang.annotation.Annotation;
-import java.util.Optional;
 
 /**
  * A {@link DynamicFeature} that registers the provided auth filter
@@ -35,16 +33,11 @@ public class AuthDynamicFeature implements DynamicFeature {
 
     private final Class<? extends ContainerRequestFilter> authFilterClass;
 
-    // We suppress the null away checks, as adding `@Nullable` to the auth
-    // filter fields, causes Jersey to try and resolve the fields to a concrete
-    // type (which subsequently fails).
-    @SuppressWarnings("NullAway")
     public AuthDynamicFeature(ContainerRequestFilter authFilter) {
         this.authFilter = authFilter;
         this.authFilterClass = null;
     }
 
-    @SuppressWarnings("NullAway")
     public AuthDynamicFeature(Class<? extends ContainerRequestFilter> authFilterClass) {
         this.authFilter = null;
         this.authFilterClass = authFilterClass;
@@ -54,26 +47,7 @@ public class AuthDynamicFeature implements DynamicFeature {
     public void configure(ResourceInfo resourceInfo, FeatureContext context) {
         final AnnotatedMethod am = new AnnotatedMethod(resourceInfo.getResourceMethod());
         final Annotation[][] parameterAnnotations = am.getParameterAnnotations();
-        final Class<?>[] parameterTypes = am.getParameterTypes();
-
-        // First, check for any @Auth annotations on the method.
-        for (int i = 0; i < parameterAnnotations.length; i++) {
-            for (final Annotation annotation : parameterAnnotations[i]) {
-                if (annotation instanceof Auth) {
-                    // Optional auth requires that a concrete AuthFilter be provided.
-                    if (parameterTypes[i].equals(Optional.class) && authFilter != null) {
-                        context.register(new WebApplicationExceptionCatchingFilter(authFilter));
-                        return;
-                    } else {
-                        registerAuthFilter(context);
-                        return;
-                    }
-                }
-            }
-        }
-
-        // Second, check for any authorization annotations on the class or method.
-        // Note that @DenyAll shouldn't be attached to classes.
+        //@DenyAll shouldn't be attached to classes
         final boolean annotationOnClass = (resourceInfo.getResourceClass().getAnnotation(RolesAllowed.class) != null) ||
             (resourceInfo.getResourceClass().getAnnotation(PermitAll.class) != null);
         final boolean annotationOnMethod = am.isAnnotationPresent(RolesAllowed.class) || am.isAnnotationPresent(DenyAll.class) ||
@@ -81,6 +55,15 @@ public class AuthDynamicFeature implements DynamicFeature {
 
         if (annotationOnClass || annotationOnMethod) {
             registerAuthFilter(context);
+        } else {
+            for (Annotation[] annotations : parameterAnnotations) {
+                for (Annotation annotation : annotations) {
+                    if (annotation instanceof Auth) {
+                        registerAuthFilter(context);
+                        return;
+                    }
+                }
+            }
         }
     }
 
