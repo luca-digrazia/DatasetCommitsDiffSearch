@@ -203,7 +203,7 @@ public class NinjaLexerTest {
     assertTokenBytes(lexer, NinjaToken.PIPE2, null);
     assertTokenBytes(lexer, NinjaToken.COLON, null);
     assertTokenBytes(lexer, NinjaToken.EQUALS, null);
-    assertTokenBytes(lexer, NinjaToken.TEXT, " ");
+    assertTokenBytes(lexer, NinjaToken.EOF, null);
     assertThat(lexer.hasNextToken()).isFalse();
   }
 

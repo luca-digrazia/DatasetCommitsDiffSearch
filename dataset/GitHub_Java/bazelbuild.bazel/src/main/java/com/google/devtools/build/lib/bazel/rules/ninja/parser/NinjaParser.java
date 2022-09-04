@@ -135,7 +135,6 @@ public class NinjaParser implements DeclarationConsumer {
       case NEWLINE:
       case PIPE:
       case PIPE2:
-      case PIPE_AT:
       case TEXT:
       case VARIABLE:
         throw new UnsupportedOperationException(token.name() + UNSUPPORTED_TOKEN_MESSAGE);
