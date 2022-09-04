@@ -1,21 +1,10 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc.processor;
 
-package org.jboss.quarkus.arc.processor;
-
+import io.quarkus.arc.impl.ComputingCache;
+import io.quarkus.gizmo.BytecodeCreator;
+import io.quarkus.gizmo.ClassOutput;
+import io.quarkus.gizmo.MethodDescriptor;
+import io.quarkus.gizmo.ResultHandle;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -23,17 +12,11 @@ import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
-import org.jboss.quarkus.arc.ComputingCache;
-import org.jboss.protean.gizmo.BytecodeCreator;
-import org.jboss.protean.gizmo.ClassOutput;
-import org.jboss.protean.gizmo.MethodDescriptor;
-import org.jboss.protean.gizmo.ResultHandle;
 
 /**
  *
@@ -45,11 +28,12 @@ class AnnotationLiteralProcessor {
 
     AnnotationLiteralProcessor(boolean shared, Predicate<DotName> applicationClassPredicate) {
         this.cache = shared ? new ComputingCache<>(key -> {
-            return new Literal(AnnotationLiteralGenerator.generatedSharedName(key.annotationName), applicationClassPredicate.test(key.annotationName), 
+            return new Literal(AnnotationLiteralGenerator.generatedSharedName(key.annotationName),
+                    applicationClassPredicate.test(key.annotationName),
                     key.annotationClass.methods()
-                    .stream()
-                    .filter(m -> !m.name().equals(Methods.CLINIT) && !m.name().equals(Methods.INIT))
-                    .collect(Collectors.toList()));
+                            .stream()
+                            .filter(m -> !m.name().equals(Methods.CLINIT) && !m.name().equals(Methods.INIT))
+                            .collect(Collectors.toList()));
         }) : null;
     }
 
@@ -67,11 +51,13 @@ class AnnotationLiteralProcessor {
      * @param classOutput
      * @param annotationClass
      * @param annotationInstance
-     * @param targetPackage
+     * @param targetPackage Target package is only used if annotation literals are not shared
      * @return an annotation literal result handle
      */
-    ResultHandle process(BytecodeCreator bytecode, ClassOutput classOutput, ClassInfo annotationClass, AnnotationInstance annotationInstance,
+    ResultHandle process(BytecodeCreator bytecode, ClassOutput classOutput, ClassInfo annotationClass,
+            AnnotationInstance annotationInstance,
             String targetPackage) {
+        Objects.requireNonNull(annotationClass, "Annotation class not available: " + annotationInstance);
         if (cache != null) {
             Literal literal = cache.getValue(new Key(annotationInstance.name(), annotationClass));
 
@@ -87,18 +73,24 @@ class AnnotationLiteralProcessor {
                     value = method.defaultValue();
                 }
                 if (value == null) {
-                    throw new NullPointerException("Value not set for " + method);
+                    throw new IllegalStateException(String.format(
+                            "Value is not set for %s.%s(). Most probably an older version of Jandex was used to index an application dependency. Make sure that Jandex 2.1+ is used.",
+                            method.declaringClass().name(), method.name()));
                 }
-                ResultHandle retValue = AnnotationLiteralGenerator.loadValue(bytecode, value, annotationClass, method);
+                ResultHandle retValue = AnnotationLiteralGenerator.loadValue(literal.className, bytecode, value,
+                        annotationClass, method);
                 constructorParams[iterator.previousIndex()] = retValue;
             }
             return bytecode
                     .newInstance(MethodDescriptor.ofConstructor(literal.className,
-                            literal.constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()), constructorParams);
+                            literal.constructorParams.stream().map(m -> m.returnType().name().toString()).toArray()),
+                            constructorParams);
         } else {
-            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage, DotNames.simpleName(annotationClass),
+            String literalClassName = AnnotationLiteralGenerator.generatedLocalName(targetPackage,
+                    DotNames.simpleName(annotationClass),
                     Hashes.sha1(annotationInstance.toString()));
-            AnnotationLiteralGenerator.createAnnotationLiteral(classOutput, annotationClass, annotationInstance, literalClassName);
+            AnnotationLiteralGenerator.createAnnotationLiteral(classOutput, annotationClass, annotationInstance,
+                    literalClassName);
             return bytecode.newInstance(MethodDescriptor.ofConstructor(literalClassName));
         }
     }
@@ -108,7 +100,7 @@ class AnnotationLiteralProcessor {
         final String className;
 
         final boolean isApplicationClass;
-        
+
         final List<MethodInfo> constructorParams;
 
         public Literal(String className, boolean isApplicationClass, List<MethodInfo> constructorParams) {
@@ -122,7 +114,7 @@ class AnnotationLiteralProcessor {
     static class Key {
 
         final DotName annotationName;
-        
+
         final ClassInfo annotationClass;
 
         public Key(DotName name, ClassInfo annotationClass) {
