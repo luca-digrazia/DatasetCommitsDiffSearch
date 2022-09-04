@@ -16,7 +16,6 @@ import android.view.WindowManager;
 import android.widget.TextView;
 
 import com.facebook.stetho.common.Predicate;
-import com.facebook.stetho.common.UncheckedCallable;
 import com.facebook.stetho.common.Util;
 import com.facebook.stetho.common.android.HandlerUtil;
 import com.facebook.stetho.common.android.ViewUtil;
@@ -64,27 +63,6 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
     mInspectModeHandler = new InspectModeHandler();
   }
 
-  // ThreadBound implementation
-  @Override
-  public boolean checkThreadAccess() {
-    return HandlerUtil.checkThreadAccess(mHandler);
-  }
-
-  @Override
-  public void verifyThreadAccess() {
-    HandlerUtil.verifyThreadAccess(mHandler);
-  }
-
-  @Override
-  public <V> V postAndWait(UncheckedCallable<V> c) {
-    return HandlerUtil.postAndWait(mHandler, c);
-  }
-
-  @Override
-  public void postAndWait(Runnable r) {
-    HandlerUtil.postAndWait(mHandler, r);
-  }
-
   // DOMProvider implementation
   @Override
   public void dispose() {
@@ -98,23 +76,22 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
   }
 
   @Override
-  public Object getRootElement() {
-    verifyThreadAccess();
+  public boolean postAndWait(Runnable r) {
+    return HandlerUtil.postAndWait(mHandler, r);
+  }
 
+  @Override
+  public Object getRootElement() {
     return mDOMRoot;
   }
 
   @Override
   public NodeDescriptor getNodeDescriptor(Object element) {
-    verifyThreadAccess();
-
     return getDescriptor(element);
   }
 
   @Override
   public void highlightElement(Object element, int color) {
-    verifyThreadAccess();
-
     View highlightingView = getHighlightingView(element);
     if (highlightingView == null) {
       mHighlighter.clearHighlight();
@@ -125,15 +102,11 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
 
   @Override
   public void hideHighlight() {
-    verifyThreadAccess();
-
     mHighlighter.clearHighlight();
   }
 
   @Override
   public void setInspectModeEnabled(boolean enabled) {
-    verifyThreadAccess();
-
     if (enabled) {
       mInspectModeHandler.enable();
     } else {
@@ -221,6 +194,20 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
   }
 
   private final class InspectModeHandler {
+    private final Runnable mEnableOnUiThreadRunnable = new Runnable() {
+      @Override
+      public void run() {
+        enableOnUiThread();
+      }
+    };
+
+    private final Runnable mDisableOnUiThreadRunnable = new Runnable() {
+      @Override
+      public void run() {
+        disableOnUiThread();
+      }
+    };
+
     private final Predicate<View> mViewSelector = new Predicate<View>() {
       @Override
       public boolean apply(View view) {
@@ -231,10 +218,12 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
     private List<View> mOverlays;
 
     public void enable() {
-      verifyThreadAccess();
+      mHandler.post(mEnableOnUiThreadRunnable);
+    }
 
+    private void enableOnUiThread() {
       if (mOverlays != null) {
-        disable();
+        disableOnUiThread();
       }
 
       mOverlays = new ArrayList<View>();
@@ -260,8 +249,10 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
     }
 
     public void disable() {
-      verifyThreadAccess();
+      mHandler.post(mDisableOnUiThreadRunnable);
+    }
 
+    private void disableOnUiThread() {
       if (mOverlays == null) {
         return;
       }

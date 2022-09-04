@@ -83,13 +83,7 @@ public final class ViewUtil {
         final View child = viewGroup.getChildAt(i);
 
         if (ViewUtil.isTransformedPointInView(viewGroup, child, x, y, localPoint)) {
-          View childResult = hitTestImpl(
-              child,
-              localPoint.x,
-              localPoint.y,
-              viewSelector,
-              allowViewGroupResult);
-
+          View childResult = hitTest(child, localPoint.x, localPoint.y, viewSelector);
           if (childResult != null) {
             return childResult;
           }
