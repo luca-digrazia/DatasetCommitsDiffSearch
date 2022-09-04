@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_BRIDGE;
@@ -11,6 +27,7 @@ import io.quarkus.arc.InitializedInterceptor;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableInterceptor;
 import io.quarkus.arc.InjectableReferenceProvider;
+import io.quarkus.arc.LazyValue;
 import io.quarkus.arc.Subclass;
 import io.quarkus.arc.processor.BeanInfo.InterceptionInfo;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
@@ -152,8 +169,7 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
-                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -199,7 +215,7 @@ public class BeanGenerator extends AbstractGenerator {
         implementCreate(classOutput, beanCreator, bean, providerTypeName, baseName, Collections.emptyMap(),
                 Collections.emptyMap(), reflectionRegistration,
                 targetPackage, isApplicationClass);
-        implementGet(bean, beanCreator, providerTypeName, baseName);
+        implementGet(bean, beanCreator, providerTypeName);
 
         implementGetTypes(beanCreator, beanTypes.getFieldDescriptor());
         if (!BuiltinScope.isDefault(bean.getScope())) {
@@ -216,9 +232,6 @@ public class BeanGenerator extends AbstractGenerator {
         }
         implementGetBeanClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
-        }
 
         beanCreator.close();
         return classOutput.getResources();
@@ -254,8 +267,7 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
-                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -278,7 +290,7 @@ public class BeanGenerator extends AbstractGenerator {
         implementCreate(classOutput, beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField,
                 interceptorToProviderField,
                 reflectionRegistration, targetPackage, isApplicationClass);
-        implementGet(bean, beanCreator, providerTypeName, baseName);
+        implementGet(bean, beanCreator, providerTypeName);
 
         implementGetTypes(beanCreator, beanTypes.getFieldDescriptor());
         if (!BuiltinScope.isDefault(bean.getScope())) {
@@ -295,9 +307,6 @@ public class BeanGenerator extends AbstractGenerator {
         }
         implementGetBeanClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
-        }
 
         beanCreator.close();
         return classOutput.getResources();
@@ -348,8 +357,7 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
-                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -372,7 +380,7 @@ public class BeanGenerator extends AbstractGenerator {
         implementCreate(classOutput, beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField,
                 Collections.emptyMap(),
                 reflectionRegistration, targetPackage, isApplicationClass);
-        implementGet(bean, beanCreator, providerTypeName, baseName);
+        implementGet(bean, beanCreator, providerTypeName);
 
         implementGetTypes(beanCreator, beanTypes.getFieldDescriptor());
         if (!BuiltinScope.isDefault(bean.getScope())) {
@@ -387,9 +395,6 @@ public class BeanGenerator extends AbstractGenerator {
         }
         implementGetBeanClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
-        }
 
         beanCreator.close();
         return classOutput.getResources();
@@ -430,8 +435,7 @@ public class BeanGenerator extends AbstractGenerator {
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, getProxyTypeName(bean, baseName))
-                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         FieldCreator stereotypes = null;
         if (!bean.getStereotypes().isEmpty()) {
@@ -449,7 +453,7 @@ public class BeanGenerator extends AbstractGenerator {
         implementCreate(classOutput, beanCreator, bean, providerTypeName, baseName, Collections.emptyMap(),
                 Collections.emptyMap(), reflectionRegistration,
                 targetPackage, isApplicationClass);
-        implementGet(bean, beanCreator, providerTypeName, baseName);
+        implementGet(bean, beanCreator, providerTypeName);
 
         implementGetTypes(beanCreator, beanTypes.getFieldDescriptor());
         if (!BuiltinScope.isDefault(bean.getScope())) {
@@ -464,9 +468,6 @@ public class BeanGenerator extends AbstractGenerator {
         }
         implementGetBeanClass(bean, beanCreator);
         implementGetName(bean, beanCreator);
-        if (bean.isDefaultBean()) {
-            implementIsDefaultBean(bean, beanCreator);
-        }
 
         beanCreator.close();
         return classOutput.getResources();
@@ -651,12 +652,19 @@ public class BeanGenerator extends AbstractGenerator {
         }
 
         if (bean.getScope().isNormal()) {
-            // this.proxy = new Bar_ClientProxy(this)
-            String proxyTypeName = getProxyTypeName(bean, baseName);
-            constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), "proxy", proxyTypeName),
-                    constructor.getThis(),
-                    constructor.newInstance(
+            // this.proxy = new LazyValue(() -> new Bar_ClientProxy(this))
+            String proxyTypeName = getPackageName(bean) + "." + baseName + ClientProxyGenerator.CLIENT_PROXY_SUFFIX;
+            FunctionCreator func = constructor.createFunction(Supplier.class);
+            BytecodeCreator funcBytecode = func.getBytecode();
+            funcBytecode
+                    .returnValue(funcBytecode.newInstance(
                             MethodDescriptor.ofConstructor(proxyTypeName, beanCreator.getClassName()), constructor.getThis()));
+
+            ResultHandle proxyHandle = constructor.newInstance(MethodDescriptor.ofConstructor(LazyValue.class, Supplier.class),
+                    func.getInstance());
+            constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), "proxy", LazyValue.class.getName()),
+                    constructor.getThis(),
+                    proxyHandle);
         }
 
         return constructor;
@@ -1309,7 +1317,7 @@ public class BeanGenerator extends AbstractGenerator {
      * @param providerTypeName
      * @see InjectableReferenceProvider#get(CreationalContext)
      */
-    protected void implementGet(BeanInfo bean, ClassCreator beanCreator, String providerTypeName, String baseName) {
+    protected void implementGet(BeanInfo bean, ClassCreator beanCreator, String providerTypeName) {
 
         MethodCreator get = beanCreator.getMethodCreator("get", providerTypeName, CreationalContext.class)
                 .setModifiers(ACC_PUBLIC);
@@ -1337,9 +1345,8 @@ public class BeanGenerator extends AbstractGenerator {
         } else if (bean.getScope().isNormal()) {
             // return proxy.get()
             ResultHandle proxy = get.readInstanceField(
-                    FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_PROXY, getProxyTypeName(bean, baseName)),
-                    get.getThis());
-            get.returnValue(proxy);
+                    FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_PROXY, LazyValue.class.getName()), get.getThis());
+            get.returnValue(get.invokeVirtualMethod(MethodDescriptors.LAZY_VALUE_GET, proxy));
         } else {
             ResultHandle instance = get.invokeVirtualMethod(
                     MethodDescriptor.ofMethod(beanCreator.getClassName(), "create", providerTypeName, CreationalContext.class),
@@ -1415,13 +1422,6 @@ public class BeanGenerator extends AbstractGenerator {
                         getAlternativePriority.load(bean.getAlternativePriority())));
     }
 
-    protected void implementIsDefaultBean(BeanInfo bean, ClassCreator beanCreator) {
-        MethodCreator isDefaultBean = beanCreator.getMethodCreator("isDefaultBean", boolean.class)
-                .setModifiers(ACC_PUBLIC);
-        isDefaultBean
-                .returnValue(isDefaultBean.load(bean.isDefaultBean()));
-    }
-
     protected void implementGetStereotypes(BeanInfo bean, ClassCreator beanCreator, FieldDescriptor stereotypesField) {
         MethodCreator getStereotypes = beanCreator.getMethodCreator("getStereotypes", Set.class).setModifiers(ACC_PUBLIC);
         getStereotypes.returnValue(getStereotypes.readInstanceField(stereotypesField, getStereotypes.getThis()));
@@ -1438,10 +1438,6 @@ public class BeanGenerator extends AbstractGenerator {
                     .setModifiers(ACC_PUBLIC);
             getName.returnValue(getName.load(bean.getName()));
         }
-    }
-
-    private String getProxyTypeName(BeanInfo bean, String baseName) {
-        return getPackageName(bean) + "." + baseName + ClientProxyGenerator.CLIENT_PROXY_SUFFIX;
     }
 
     private ResultHandle wrapCurrentInjectionPoint(ClassOutput classOutput, ClassCreator beanCreator, BeanInfo bean,
