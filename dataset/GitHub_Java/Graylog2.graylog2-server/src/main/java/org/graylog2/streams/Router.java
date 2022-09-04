@@ -20,12 +20,12 @@
 
 package org.graylog2.streams;
 
-import org.apache.log4j.Logger;
-import org.graylog2.messagehandlers.gelf.GELFMessage;
-import org.graylog2.streams.matchers.StreamRuleMatcherIF;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.bson.types.ObjectId;
+import org.graylog2.Log;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
+import org.graylog2.streams.matchers.StreamRuleMatcherIF;
 
 /**
  * Router.java: Mar 16, 2011 9:40:24 PM
@@ -36,26 +36,20 @@ import java.util.List;
  */
 public class Router {
 
-    private static final Logger LOG = Logger.getLogger(Router.class);
-
     // Hidden.
     private Router() { }
 
-    public static List<Stream> route(GELFMessage msg) {
-        ArrayList<Stream> matches = new ArrayList<Stream>();
+    public static List<ObjectId> route(GELFMessage msg) {
+        ArrayList<ObjectId> matches = new ArrayList<ObjectId>();
         ArrayList<Stream> streams = null;
         try {
             streams = Stream.fetchAll();
         } catch (Exception e) {
-            LOG.error("Could not fetch streams: " + e.getMessage(), e);
+            Log.emerg("Could not fetch streams: " + e.toString());
         }
 
         for (Stream stream : streams) {
             boolean missed = false;
-
-            if (stream.getStreamRules().isEmpty()) {
-                continue;
-            }
 
             for (StreamRule rule : stream.getStreamRules()) {
                 try {
@@ -65,13 +59,13 @@ public class Router {
                         break;
                     }
                 } catch (InvalidStreamRuleTypeException e) {
-                    LOG.warn("Invalid stream rule type. Skipping matching for this rule. " + e.getMessage(), e);
+                    Log.warn("Invalid stream rule type. Skipping matching for this rule. " + e.toString());
                 }
             }
 
             // All rules were matched.
             if (!missed) {
-                matches.add(stream);
+                matches.add(stream.getId());
             }
         }
 
