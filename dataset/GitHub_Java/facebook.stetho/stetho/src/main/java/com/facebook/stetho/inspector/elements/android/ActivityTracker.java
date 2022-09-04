@@ -20,8 +20,6 @@ import com.facebook.stetho.common.Util;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
-
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -41,14 +39,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public final class ActivityTracker {
   private static final ActivityTracker sInstance = new ActivityTracker();
 
-  /**
-   * Use {@link WeakReference} here to silence a false positive from LeakCanary:
-   *   https://github.com/facebook/stetho/issues/319#issuecomment-285699813
-   */
   @GuardedBy("Looper.getMainLooper()")
-  private final ArrayList<WeakReference<Activity>> mActivities = new ArrayList<>();
-  private final List<WeakReference<Activity>> mActivitiesUnmodifiable =
-      Collections.unmodifiableList(mActivities);
+  private final ArrayList<Activity> mActivities = new ArrayList<>();
+  private final List<Activity> mActivitiesUnmodifiable = Collections.unmodifiableList(mActivities);
 
   private final List<Listener> mListeners = new CopyOnWriteArrayList<>();
 
@@ -98,7 +91,7 @@ public final class ActivityTracker {
   public void add(Activity activity) {
     Util.throwIfNull(activity);
     Util.throwIfNot(Looper.myLooper() == Looper.getMainLooper());
-    mActivities.add(new WeakReference<>(activity));
+    mActivities.add(activity);
     for (Listener listener : mListeners) {
       listener.onActivityAdded(activity);
     }
@@ -107,40 +100,15 @@ public final class ActivityTracker {
   public void remove(Activity activity) {
     Util.throwIfNull(activity);
     Util.throwIfNot(Looper.myLooper() == Looper.getMainLooper());
-    if (removeFromWeakList(mActivities, activity)) {
+    if (mActivities.remove(activity)) {
       for (Listener listener : mListeners) {
         listener.onActivityRemoved(activity);
       }
     }
   }
 
-  private static <T> boolean removeFromWeakList(ArrayList<WeakReference<T>> haystack, T needle) {
-    for (int i = 0, N = haystack.size(); i < N; i++) {
-      T hay = haystack.get(i).get();
-      if (hay == needle) {
-        haystack.remove(i);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  public List<WeakReference<Activity>> getActivitiesView() {
+  public List<Activity> getActivitiesView() {
     return mActivitiesUnmodifiable;
-  }
-
-  @Nullable
-  public Activity tryGetTopActivity() {
-    if (mActivitiesUnmodifiable.isEmpty()) {
-      return null;
-    }
-    for (int i = mActivitiesUnmodifiable.size() - 1; i >= 0; i--) {
-      Activity activity = mActivitiesUnmodifiable.get(i).get();
-      if (activity != null) {
-        return activity;
-      }
-    }
-    return null;
   }
 
   public interface Listener {
