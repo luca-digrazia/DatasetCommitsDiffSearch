@@ -75,32 +75,21 @@ public class InputBufferImpl implements InputBuffer {
                 LOG.error("", ex);
             }
         });
-        final int numberOfHandlers = configuration.getInputbufferProcessors();
         if (configuration.isMessageJournalEnabled()) {
             LOG.info("Message journal is enabled.");
-
-            final RawMessageEncoderHandler[] handlers = new RawMessageEncoderHandler[numberOfHandlers];
-            for (int i = 0 ; i < numberOfHandlers; i++) {
-                handlers[i] = rawMessageEncoderHandlerProvider.get();
-            }
-            disruptor.handleEventsWithWorkerPool(handlers)
+            disruptor.handleEventsWithWorkerPool(rawMessageEncoderHandlerProvider.get()) // TODO count based on config
                     .then(spoolingMessageHandlerProvider.get());
         } else{
             LOG.info("Message journal is disabled.");
-            final DirectMessageHandler[] handlers = new DirectMessageHandler[numberOfHandlers];
-            for (int i = 0; i < numberOfHandlers; i++) {
-                handlers[i] = directMessageHandlerProvider.get();
-            }
-            disruptor.handleEventsWithWorkerPool(handlers);
+            disruptor.handleEventsWithWorkerPool(directMessageHandlerProvider.get()); // TODO count based on config
         }
 
         ringBuffer = disruptor.start();
 
-        LOG.info("Initialized {} with ring size <{}> and wait strategy <{}>, running {} parallel message handlers.",
+        LOG.info("Initialized {} with ring size <{}> and wait strategy <{}>.",
                 this.getClass().getSimpleName(),
                 configuration.getInputBufferRingSize(),
-                configuration.getInputBufferWaitStrategy().getClass().getSimpleName(),
-                numberOfHandlers);
+                configuration.getInputBufferWaitStrategy().getClass().getSimpleName());
     }
 
     public void insert(RawMessage message) {
