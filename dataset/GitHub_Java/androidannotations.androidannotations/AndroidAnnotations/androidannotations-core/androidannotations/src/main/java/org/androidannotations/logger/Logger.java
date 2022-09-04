@@ -77,7 +77,7 @@ public class Logger {
 		return level.isGreaterOrEquals(loggerContext.getCurrentLevel());
 	}
 
-	private void log(Level level, String message, Element element, AnnotationMirror annotationMirror, Throwable thr, Object... args) {
+	public void log(Level level, String message, Element element, AnnotationMirror annotationMirror, Throwable thr, Object... args) {
 		if (!isLoggable(level)) {
 			return;
 		}
