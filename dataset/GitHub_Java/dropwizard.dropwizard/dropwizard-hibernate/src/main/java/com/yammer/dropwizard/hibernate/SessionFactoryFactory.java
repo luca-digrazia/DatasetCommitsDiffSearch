@@ -39,7 +39,7 @@ public class SessionFactoryFactory {
                                                            dbConfig.getProperties(),
                                                            entities);
         final ManagedSessionFactory managedFactory = new ManagedSessionFactory(factory, dataSource);
-        environment.getLifecycleEnvironment().manage(managedFactory);
+        environment.manage(managedFactory);
         return managedFactory;
     }
 
