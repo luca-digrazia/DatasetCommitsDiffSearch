@@ -37,6 +37,9 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import org.jboss.builder.BuildChainBuilder;
+import org.jboss.builder.BuildContext;
+import org.jboss.builder.BuildStep;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -53,9 +56,6 @@ import org.opentest4j.TestAbortedException;
 import io.quarkus.bootstrap.BootstrapClassLoaderFactory;
 import io.quarkus.bootstrap.BootstrapException;
 import io.quarkus.bootstrap.util.PropertyUtils;
-import io.quarkus.builder.BuildChainBuilder;
-import io.quarkus.builder.BuildContext;
-import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.QuarkusClassWriter;
 import io.quarkus.deployment.builditem.TestAnnotationBuildItem;
@@ -91,6 +91,7 @@ public class QuarkusTestExtension
         try {
             appCl = BootstrapClassLoaderFactory.newInstance()
                     .setAppClasses(appClassLocation)
+                    .addToClassPath(testClassLocation)
                     .setParent(getClass().getClassLoader())
                     .setOffline(PropertyUtils.getBooleanOrNull(BootstrapClassLoaderFactory.PROP_OFFLINE))
                     .setLocalProjectsDiscovery(
@@ -286,11 +287,10 @@ public class QuarkusTestExtension
         if (state == null) {
             TestResourceManager testResourceManager = new TestResourceManager(extensionContext.getRequiredTestClass());
             try {
-                Map<String, String> systemProps = testResourceManager.start();
+                testResourceManager.start();
 
                 if (substrateTest) {
                     NativeImageLauncher launcher = new NativeImageLauncher(extensionContext.getRequiredTestClass());
-                    launcher.addSystemProperties(systemProps);
                     try {
                         launcher.start();
                     } catch (IOException e) {
