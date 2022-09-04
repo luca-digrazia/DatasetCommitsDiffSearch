@@ -39,7 +39,8 @@ import static org.junit.Assert.*;
  * @author Haifeng
  */
 public class RandomForestTest {
-    long[] seeds = MathEx.seeds(19650218L, 256).limit(200).toArray();
+
+    long[] seeds = LongStream.generate(() -> MathEx.probablePrime(19650218L, 256)).limit(200).toArray();
 
     public RandomForestTest() {
     }
@@ -106,7 +107,7 @@ public class RandomForestTest {
         int error = Error.apply(PenDigits.y, prediction);
 
         System.out.println("Error = " + error);
-        assertEquals(183, error);
+        assertEquals(185, error);
     }
 
     @Test
@@ -118,7 +119,7 @@ public class RandomForestTest {
         int error = Error.apply(BreastCancer.y, prediction);
 
         System.out.println("Error = " + error);
-        assertEquals(22, error);
+        assertEquals(27, error);
     }
 
     @Test
@@ -162,7 +163,7 @@ public class RandomForestTest {
         int error = Error.apply(USPS.testy, prediction);
 
         System.out.println("Error = " + error);
-        assertEquals(149, error);
+        assertEquals(152, error);
 
         System.out.println("----- Progressive Accuracy -----");
         int[][] test = model.test(USPS.test);

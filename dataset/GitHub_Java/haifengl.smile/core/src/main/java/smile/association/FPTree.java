@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,15 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.association;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 import smile.sort.QuickSort;
+import smile.math.MathEx;
 
 /**
  * FP-tree data structure used in FP-growth (frequent pattern growth)
@@ -67,7 +67,7 @@ public class FPTree {
         HashMap<Integer, Node> children = null;
 
         /**
-         * Constructs the root node.
+         * Constructor.
          */
         Node() {
         }
@@ -179,7 +179,7 @@ public class FPTree {
         public int compareTo(HeaderTableItem o) {
             // Since we want to sort into descending order, we return the
             // reversed signum here.
-            return Integer.compare(o.count, count);
+            return o.count - count;
         }
     }
 
@@ -197,7 +197,7 @@ public class FPTree {
      * item sets. No other nodes should use it as a parent node even if they
      * are root's children nodes.
      */
-    Node root = new Node();
+    Node root = null;
     /**
      * The support of single items.
      */
@@ -224,45 +224,24 @@ public class FPTree {
     int[] order;
 
     /**
-     * Constructor.
-     *
-     * @param minSupport the required minimum support of item sets in terms of frequency.
-     * @param itemSupport the frequency of single items.
-     */
-    FPTree(int minSupport, int[] itemSupport) {
-        this.itemSupport = itemSupport;
-        this.minSupport = minSupport;
-        init();
-    }
-
-    /**
-     * Constructor.
+     * Constructor. This is two-step construction of FP-tree. The user first
+     * scans the database to obtains the frequency of single items and calls
+     * this constructor. Then the user add item sets to the FP-tree by
+     * {@link #add(int[])} during the second scan of the database. In this way,
+     * we don't need load the database into the main memory.
      * 
-     * @param minSupport the required minimum support of item sets in terms of frequency.
-     * @param itemsets the item sets.
+     * @param frequency the frequency of single items.
+     * @param minSupport the required minimum support of item sets in terms of
+     * frequency.
      */
-    FPTree(int minSupport, Stream<int[]> itemsets) {
-        this.itemSupport = freq(itemsets);
+    public FPTree(int[] frequency, int minSupport) {
+        this.itemSupport = frequency;
         this.minSupport = minSupport;
-        init();
-    }
 
-    /**
-     * Constructor.
-     *
-     * @param minSupport the required minimum support of item sets in terms of percentage.
-     * @param itemsets the item sets.
-     */
-    FPTree(double minSupport, Stream<int[]> itemsets) {
-        this.itemSupport = freq(itemsets);
-        this.minSupport = (int) Math.round(minSupport * numTransactions);
-        init();
-    }
-
-    /** Initialize the FP-tree after the first scan of data. */
-    private void init() {
-        numItems = itemSupport.length;
-        for (int f : itemSupport) {
+        root = new Node();
+        
+        numItems = frequency.length;
+        for (int f : frequency) {
             if (f >= minSupport) {
                 numFreqItems++;
             }
@@ -274,9 +253,9 @@ public class FPTree {
         // sort a large array.
         headerTable = new HeaderTableItem[numFreqItems];
         for (int i = 0, j = 0; i < numItems; i++) {
-            if (itemSupport[i] >= minSupport) {
+            if (frequency[i] >= minSupport) {
                 HeaderTableItem header = new HeaderTableItem(i);
-                header.count = itemSupport[i];
+                header.count = frequency[i];                        
                 headerTable[j++] = header;
             }
         }
@@ -290,99 +269,42 @@ public class FPTree {
     }
 
     /**
-     * Returns the frequency of single items.
-     * @param itemsets the transaction database.
-     * @return the frequency of single items
+     * Constructor. This is a one-step construction of FP-tree if the database
+     * is available in main memory.
+     * @param itemsets the item set database. Each row is a item set, which
+     * may have different length. The item identifiers have to be in [0, n),
+     * where n is the number of items. Item set should NOT contain duplicated
+     * items. Note that it is reordered after the call.
+     * @param minSupport the required minimum support of item sets in terms
+     * of frequency.
      */
-    private int[] freq(Stream<int[]> itemsets) {
-        int n = Integer.parseInt(System.getProperty("smile.arm.items", "65536"));
-        int[] f = new int[n];
-        itemsets.forEach(itemset -> {
-            numTransactions++;
-            for (int i : itemset) f[i]++;
-        });
-        while (f[--n] == 0);
-        return Arrays.copyOf(f, n+1);
+    public FPTree(int[][] itemsets, int minSupport) {
+        this(freq(MathEx.max(itemsets)+1, Arrays.stream(itemsets)), minSupport);
+
+        // Add each itemset into to the FP-tree.
+        for (int[] itemset : itemsets) {
+            add(itemset);
+        }
     }
     
     /**
-     * One-step construction of FP-tree if the database is available as stream.
-     * @param minSupport the required minimum support of item sets in terms
-     * of frequency.
-     * @param supplier a supplier provides an itemset stream. For example, a code block to
-     *                 open a file and parse lines into a stream of itemsets.
-     *                 This function will be called twice.
-     * @return a full built FP-tree.
+     * Returns the frequency of single items.
+     * @param n the number of items.
+     * @param itemsets the transaction database.
+     * @return the frequency of single items
      */
-    public static FPTree of(int minSupport, Supplier<Stream<int[]>> supplier) {
-        FPTree tree = new FPTree(minSupport, supplier.get());
-        tree.add(supplier.get());
-        return tree;
+    public static int[] freq(int n, Stream<int[]> itemsets) {
+        int[] f = new int[n];
+        itemsets.forEach(itemset -> { for (int i : itemset) f[i]++; });
+        return f;
     }
-
-    /**
-     * One-step construction of FP-tree if the database is available as stream.
-     * @param minSupport the required minimum support of item sets in terms
-     *                   of percentage.
-     * @param supplier a supplier provides an itemset stream. For example, a code block to
-     *                 open a file and parse lines into a stream of itemsets.
-     *                 This function will be called twice.
-     * @return a full built FP-tree.
-     */
-    public static FPTree of(double minSupport, Supplier<Stream<int[]>> supplier) {
-        FPTree tree = new FPTree(minSupport, supplier.get());
-        tree.add(supplier.get());
-        return tree;
-    }
-
-    /**
-     * One-step construction of FP-tree if the database is available in main memory.
-     * @param itemsets the item set database. Each row is a item set, which
-     *                 may have different length. The item identifiers have to be in [0, n),
-     *                 where n is the number of items. Item set should NOT contain duplicated
-     *                 items. Note that it is reordered after the call.
-     * @param minSupport the required minimum support of item sets in terms
-     *                   of frequency.
-     */
-    public static FPTree of(int minSupport, int[][] itemsets) {
-        FPTree tree = new FPTree(minSupport, Arrays.stream(itemsets));
-        tree.add(Arrays.stream(itemsets));
-        return tree;
-    }
-
-    /**
-     * One-step construction of FP-tree if the database is available in main memory.
-     * @param itemsets the item set database. Each row is a item set, which
-     *                 may have different length. The item identifiers have to be in [0, n),
-     *                 where n is the number of items. Item set should NOT contain duplicated
-     *                 items. Note that it is reordered after the call.
-     * @param minSupport the required minimum support of item sets in terms
-     *                   of percentage.
-     */
-    public static FPTree of(double minSupport, int[][] itemsets) {
-        FPTree tree = new FPTree(minSupport, Arrays.stream(itemsets));
-        tree.add(Arrays.stream(itemsets));
-        return tree;
-    }
-
+    
     /**
      * Returns the number transactions in the database.
+     * @return the number transactions in the database
      */
     public int size() {
         return numTransactions;
-    }
-
-    /**
-     * Returns the required minimum support of item sets in terms
-     * of frequency.
-     */
-    public int minSupport() {
-        return minSupport;
-    }
-
-    /** Adds a stream of item sets into the FP-tree. */
-    private void add(Stream<int[]> itemsets) {
-        itemsets.forEach(this::add);
     }
 
     /**
@@ -390,7 +312,9 @@ public class FPTree {
      * @param itemset an item set, which should NOT contain duplicated items.
      * Note that it is reordered after the call.
      */
-    private void add(int[] itemset) {
+    public void add(int[] itemset) {
+        numTransactions++;
+        
         int m = 0;
         int t = itemset.length;
         int[] o = new int[t];
@@ -431,7 +355,7 @@ public class FPTree {
      * @param itemset an item set.
      * @param support the support/frequency of the item set.
      */
-    void add(int index, int end, int[] itemset, int support) {
+    public void add(int index, int end, int[] itemset, int support) {
         root.add(index, end, itemset, support);
     }
 }

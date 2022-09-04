@@ -17,9 +17,6 @@
 
 package smile.classification;
 
-import java.util.Properties;
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
@@ -88,7 +85,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      */
     private final double[][] mu;
     /**
-     * The class label encoder.
+     * The class label encoder;
      */
     private final ClassLabel labels;
 
@@ -123,30 +120,6 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
         for (int i = 0; i < k; i++) {
             scaling.atx(mu[i], this.mu[i]);
         }
-    }
-
-    /**
-     * Learn Fisher's linear discriminant.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static FLD fit(Formula formula, DataFrame data) {
-        return fit(formula, data, new Properties());
-    }
-
-    /**
-     * Learn Fisher's linear discriminant.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static FLD fit(Formula formula, DataFrame data, Properties prop) {
-        int L = Integer.valueOf(prop.getProperty("smile.fld.dimension", "-1"));
-        double tol = Double.valueOf(prop.getProperty("smile.fld.tolerance", "1E-4"));
-        double[][] x = formula.x(data).toArray();
-        int[] y = formula.y(data).toIntArray();
-        return fit(x, y, L, tol);
     }
 
     /**
@@ -253,7 +226,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
 
         DenseMatrix StInvSb = U.abmm(UB);
         StInvSb.setSymmetric(true);
-        DenseMatrix scaling = StInvSb.eigen().getEigenVectors().submat(0, 0, p, L);
+        DenseMatrix scaling = StInvSb.eigen().getEigenVectors().submat(0, 0, p-1, L-1);
 
         return scaling;
     }
@@ -265,12 +238,13 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
 
         int n = x.length;
         double sqrtn = Math.sqrt(n);
+        DenseMatrix X = Matrix.of(x);
 
-        DenseMatrix X = Matrix.zeros(p, n);
-        for (int i = 0; i < n; i++) {
-            double[] xi = x[i];
-            for (int j = 0; j < p; j++) {
-                X.set(j, i, (xi[j] - mean[j]) / sqrtn);
+        for (int j = 0; j < p; j++) {
+            double mj = mean[j];
+            for (int i = 0; i < n; i++) {
+                double xij = (X.get(i, j) - mj) / sqrtn;
+                X.set(i, j, xij);
             }
         }
 
@@ -281,12 +255,11 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        DenseMatrix M = Matrix.zeros(p, k);
+        DenseMatrix M = Matrix.of(mu);
         for (int i = 0; i < k; i++) {
-            double pi = Math.sqrt(priori[i]);
-            double[] mui = mu[i];
+            double pi = priori[i];
             for (int j = 0; j < p; j++) {
-                M.set(j, i, pi * mui[j]);
+                M.mul(i, j, pi);
             }
         }
 
@@ -295,35 +268,23 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
         double[] s = svd.getSingularValues();
 
         tol = tol * tol;
-        DenseMatrix UTM = U.atbmm(M);
+        DenseMatrix UT = U.transpose();
         for (int i = 0; i < n; i++) {
-            // Since the rank of St is only n - k, there are some singular values of 0.
-            double si = 0.0;
-            if (s[i] > tol) {
-                si = 1.0 / Math.sqrt(s[i]);
+            if (s[i] < tol) {
+                throw new IllegalArgumentException("The covariance matrix is close to singular.");
             }
 
-            for (int j = 0; j < k; j++) {
-                UTM.mul(i, j, si);
+            double si = 1.0 / Math.sqrt(s[i]);
+            for (int j = 0; j < n; j++) {
+                UT.mul(i, j, si);
             }
         }
 
-        DenseMatrix StInvM = U.abmm(UTM);
-        DenseMatrix U2 = U.atbmm(StInvM.svd(true).getU().submat(0, 0, p+1, L));
+        DenseMatrix StInv= U.abmm(UT);
+        DenseMatrix StInvM = StInv.abmm(M);
+        svd = StInvM.svd(true);
+        DenseMatrix scaling = StInv.abmm(svd.getU()).submat(0, 0, n-1, L-1);
 
-        for (int i = 0; i < n; i++) {
-            // Since the rank of St is only n - k, there are some singular values of 0.
-            double si = 0.0;
-            if (s[i] > tol) {
-                si = 1.0 / Math.sqrt(s[i]);
-            }
-
-            for (int j = 0; j < L; j++) {
-                U2.mul(i, j, si);
-            }
-        }
-
-        DenseMatrix scaling = U.abmm(U2);
         return scaling;
     }
 

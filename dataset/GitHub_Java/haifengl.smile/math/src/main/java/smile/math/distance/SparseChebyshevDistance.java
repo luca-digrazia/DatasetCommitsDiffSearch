@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.math.distance;
 
@@ -62,17 +62,20 @@ public class SparseChebyshevDistance implements Metric<SparseArray> {
         while (a != null && b != null) {
             if (a.i < b.i) {
                 double d = Math.abs(a.x);
-                if (dist < d) dist = d;
+                if (dist < d)
+                    dist = d;
 
                 a = iterX.hasNext() ? iterX.next() : null;
             } else if (a.i > b.i) {
                 double d = Math.abs(b.x);
-                if (dist < d) dist = d;
+                if (dist < d)
+                    dist = d;
 
                 b = iterY.hasNext() ? iterY.next() : null;
             } else {
                 double d = Math.abs(a.x - b.x);
-                if (dist < d) dist = d;
+                if (dist < d)
+                    dist = d;
 
                 a = iterX.hasNext() ? iterX.next() : null;
                 b = iterY.hasNext() ? iterY.next() : null;
@@ -81,14 +84,16 @@ public class SparseChebyshevDistance implements Metric<SparseArray> {
 
         while (a != null) {
             double d = Math.abs(a.x);
-            if (dist < d) dist = d;
+            if (dist < d)
+                dist = d;
 
             a = iterX.hasNext() ? iterX.next() : null;
         }
 
         while (b != null) {
             double d = Math.abs(b.x);
-            if (dist < d) dist = d;
+            if (dist < d)
+                dist = d;
 
             b = iterY.hasNext() ? iterY.next() : null;
         }

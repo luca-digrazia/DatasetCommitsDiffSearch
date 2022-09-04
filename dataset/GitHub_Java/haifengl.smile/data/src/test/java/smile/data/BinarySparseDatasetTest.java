@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.data;
 
@@ -68,7 +68,7 @@ public class BinarySparseDatasetTest {
             SparseMatrix sm = data.toMatrix();
             assertEquals(990002, sm.nrows());
             assertEquals(41271, sm.ncols());
-            assertEquals(8018988, sm.size());
+            assertEquals(8018988, sm.length());
             assertEquals(1, sm.get(0, 1), 1E-16);
             assertEquals(1, sm.get(0, 2), 1E-16);
             assertEquals(1, sm.get(0, 3), 1E-16);

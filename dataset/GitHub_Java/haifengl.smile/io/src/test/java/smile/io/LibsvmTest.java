@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.io;
 
@@ -55,8 +55,9 @@ public class LibsvmTest {
     @Test(expected = Test.None.class)
     public void testParseNG20() throws Exception {
         System.out.println("NG20");
-        Dataset<Instance<SparseArray>> train = Read.libsvm(smile.util.Paths.getTestData("libsvm/news20.dat"));
-        Dataset<Instance<SparseArray>> test  = Read.libsvm(smile.util.Paths.getTestData("libsvm/news20.t.dat"));
+        DatasetReader reader = new DatasetReader();
+        Dataset<Instance<SparseArray>> train = reader.libsvm(smile.util.Paths.getTestData("libsvm/news20.dat"));
+        Dataset<Instance<SparseArray>> test  = reader.libsvm(smile.util.Paths.getTestData("libsvm/news20.t.dat"));
 
         assertEquals(15935, train.size());
         assertEquals(1, train.get(0).label());
@@ -93,7 +94,8 @@ public class LibsvmTest {
     @Test(expected = Test.None.class)
     public void testParseGlass() throws Exception {
         System.out.println("glass");
-        Dataset<Instance<SparseArray>> train = Read.libsvm(smile.util.Paths.getTestData("libsvm/glass.txt"));
+        DatasetReader reader = new DatasetReader();
+        Dataset<Instance<SparseArray>> train = reader.libsvm(smile.util.Paths.getTestData("libsvm/glass.txt"));
 
         assertEquals(214, train.size());
         assertEquals(9, train.get(0).x().size());

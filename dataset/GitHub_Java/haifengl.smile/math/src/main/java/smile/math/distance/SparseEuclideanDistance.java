@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.distance;
 
@@ -22,7 +22,11 @@ import java.util.Iterator;
 import smile.util.SparseArray;
 
 /**
- * Euclidean distance on sparse arrays.
+ * Euclidean distance. Use getInstance() to get the standard unweighted
+ * Euclidean distance. Or create an instance with a specified
+ * weight vector. For float or double arrays, missing values (i.e. NaN)
+ * are also handled. Also support sparse arrays of which zeros are excluded
+ * to save space.
  *
  * @author Haifeng Li
  */

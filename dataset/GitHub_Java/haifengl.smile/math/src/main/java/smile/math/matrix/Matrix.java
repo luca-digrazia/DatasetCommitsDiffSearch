@@ -178,13 +178,12 @@ public interface Matrix extends Serializable {
 
     /**
      * Returns the string representation of matrix.
-     * @param m the number of rows to print.
-     * @param n the number of columns to print.
+     * @param full Print the full matrix if true. Otherwise only print top left 7 x 7 submatrix.
      */
-    default String toString(int m, int n) {
+    default String toString(boolean full) {
         StringBuilder sb = new StringBuilder();
-        m = Math.min(m, nrows());
-        n = Math.min(n, ncols());
+        int m = full ? nrows() : Math.min(7, nrows());
+        int n = full ? ncols() : Math.min(7, ncols());
 
         String newline = n < ncols() ? "...\n" : "\n";
 
@@ -350,6 +349,7 @@ public interface Matrix extends Serializable {
             return Lanczos.eigen(this, k, kappa, maxIter);
         }
     }
+
 
     /**
      * Find k largest approximate singular triples of a matrix by the

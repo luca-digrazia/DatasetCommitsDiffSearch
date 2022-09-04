@@ -22,8 +22,6 @@ import smile.math.MathEx;
 import smile.util.SparseArray;
 import smile.stat.distribution.Distribution;
 
-import java.util.Arrays;
-
 /**
  * Naive Bayes classifier for document classification in NLP.
  * A naive Bayes classifier is a simple probabilistic
@@ -74,7 +72,6 @@ import java.util.Arrays;
  *
  * <h2>References</h2>
  * <ol>
- * <li> Rennie, Jason D., et al. Tackling the poor assumptions of naive Bayes text classifiers. ICML, 2003.</li>
  * <li> Christopher D. Manning, Prabhakar Raghavan, and Hinrich Schutze. Introduction to Information Retrieval, Chapter 13, 2009.</li>
  * <li> Kevin P. Murphy. Machina Learning A Probability Perspective, Chapter 3, 2012.</li>
  * </ol>
@@ -96,53 +93,24 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
      */
     public enum Model {
         /**
-         * The document multinomial model generates one term from the
-         * vocabulary in each position of the document.
+         * The document multinomial model generates one term from the vocabulary
+         * in each position of the document.
          */
         MULTINOMIAL,
 
         /**
-         * The document Bernoulli model generates an indicator for each
-         * term of the vocabulary, either indicating presence of the term
-         * in the document or indicating absence.
+         * The document Bernoulli model generates an indicator for each term of
+         * the vocabulary, either indicating presence of the term in the
+         * document or indicating absence.
          */
         BERNOULLI,
 
         /**
-         * The document Polya Urn model is similar to MULTINOMIAL but
-         * different in the conditional probability update during learning.
-         * It simply add twice for what is seen in training data instead of
-         * one time.
+         * The document Polya Urn model is similar to MULTINOMIAL but different
+         * in the conditional probability update during learning.
+         * It simply add twice for what is seen in training data instead of one time.
          */
-        POLYAURN,
-
-        /**
-         * Complement Naive Bayes.
-         * To deal with skewed training data, CNB estimates parameters
-         * of a class c using data from all classes except c. CNB’s estimates
-         * may be more effective because each uses a more even amount of
-         * training data per class, which will lessen the bias in the weight
-         * estimates.
-         */
-        CNB,
-
-        /**
-         * Weight-normalized Complement Naive Bayes.
-         * In practice, it is often the case that weights tend to lean toward
-         * one class or the other. When the magnitude of Naive Bayes’ weight
-         * vector is larger in one class than the others, the larger magnitude
-         * class may be preferred. To correct for the fact that some classes
-         * have greater dependencies, WCNB normalizes the weight vectors.
-         */
-        WCNB,
-
-        /**
-         * Transformed Weight-normalized Complement Naive Bayes. Before feeding
-         * into WCNB, TWCNB transforms term frequencies including TF transform,
-         * IDF transform, and length normalization. Because of IDF, TWCNB
-         * supports only batch mode.
-         */
-        TWCNB
+        POLYAURN
     }
 
     /**
@@ -178,25 +146,25 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
      */
     private boolean fixedPriori;
     /**
-     * The total number of documents.
+     * The total number of instances.
      */
     private int n;
     /**
-     * The number of documents in each class.
+     * The number of instances in each class.
      */
     private int[] nc;
     /**
-     * The number of terms per class.
+     * The number of terms of each class.
      */
     private int[] nt;
     /**
-     * The number of each term per class.
+     * The number of each term in each class.
      */
     private int[][] ntc;
     /**
      * The log conditional probabilities for document classification.
      */
-    private double[][] logcondprob;
+    private double[][] condprob;
     /**
      * The class label encoder.
      */
@@ -255,7 +223,7 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
         nc = new int[k];
         nt = new int[k];
         ntc = new int[k][p];
-        logcondprob = new double[k][p];
+        condprob = new double[k][p];
     }
 
     /**
@@ -320,7 +288,7 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
         nc = new int[k];
         nt = new int[k];
         ntc = new int[k][p];
-        logcondprob = new double[k][p];
+        condprob = new double[k][p];
     }
 
     /**
@@ -345,16 +313,8 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             return;
         }
 
-        if (model == Model.TWCNB) {
-            throw new UnsupportedOperationException("TWCNB supports only batch learning");
-        }
-
-        y = labels.id(y);
         switch (model) {
             case MULTINOMIAL:
-            case CNB:
-            case WCNB:
-            case TWCNB:
                 for (int i = 0; i < p; i++) {
                     ntc[y][i] += x[i];
                     nt[y] += x[i];
@@ -375,15 +335,10 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
                     }
                 }
                 break;
-
-            default:
-                // we should never reach here
-                throw new IllegalStateException("Unknown model: " + model);
         }
 
         n++;
         nc[y]++;
-
         update();
     }
 
@@ -401,16 +356,8 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             return;
         }
 
-        if (model == Model.TWCNB) {
-            throw new UnsupportedOperationException("TWCNB supports only batch learning");
-        }
-
-        y = labels.id(y);
         switch (model) {
             case MULTINOMIAL:
-            case CNB:
-            case WCNB:
-            case TWCNB:
                 for (SparseArray.Entry e : x) {
                     ntc[y][e.i] += e.x;
                     nt[y] += e.x;
@@ -431,98 +378,37 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
                     }
                 }
                 break;
-
-            default:
-                // we should never reach here
-                throw new IllegalStateException("Unknown model: " + model);
         }
 
         n++;
         nc[y]++;
-
         update();
     }
 
     /**
-     * Batch learning of naive Bayes classifier on sequences,
+     * Online learning of naive Bayes classifier on sequences,
      * which are modeled as a bag of words. Note that this method is NOT
      * applicable for naive Bayes classifier with general generation model.
      *
      * @param x training instances.
      * @param y training labels.
      */
-    @Override
     public void update(int[][] x, int[] y) {
         switch (model) {
             case MULTINOMIAL:
-            case CNB:
-            case WCNB:
                 for (int i = 0; i < x.length; i++) {
                     if (!isGoodInstance(x[i])) {
                         logger.info("Skip updating the model with a sample without any feature word");
                         continue;
                     }
 
-                    int yi = labels.id(y[i]);
                     for (int j = 0; j < p; j++) {
-                        ntc[yi][j] += x[i][j];
-                        nt[yi] += x[i][j];
+                        ntc[y[i]][j] += x[i][j];
+                        nt[y[i]] += x[i][j];
                     }
 
                     n++;
-                    nc[yi]++;
-                }
-                break;
-
-            case TWCNB:
-                // The number of documents where the term occurs.
-                int[] ni = new int[p];
-                // The transformed term frequency in a document.
-                double[] d = new double[p];
-
-                for (int[] doc : x) {
-                    for (int i = 0; i < p; i++) {
-                        if (doc[i] > 0) ni[i]++;
-                    }
-                }
-
-                // The number of (good) documents.
-                double N = 0;
-                for (int[] xi : x) {
-                    if (isGoodInstance(xi)) N++;
-                }
-
-                for (int i = 0; i < x.length; i++) {
-                    int[] xi = x[i];
-                    if (!isGoodInstance(xi)) continue;
-
-                    Arrays.fill(d, 0.0);
-                    for (int t = 0; t < p; t++) {
-                        if (xi[t] > 0) {
-                            d[t] = Math.log(1 + xi[t]) * Math.log(N / ni[t]);
-                        }
-                    }
-
-                    MathEx.unitize2(d);
-
-                    int yi = y[i];
-                    for (int t = 0; t < p; t++) {
-                        logcondprob[yi][t] += d[t];
-                    }
-                }
-
-                double[] rsum = MathEx.rowSums(logcondprob);
-                double[] csum = MathEx.colSums(logcondprob);
-                double sum = MathEx.sum(csum);
-
-                for (int c = 0; c < k; c++) {
-                    for (int t = 0; t < p; t++) {
-                        logcondprob[c][t] = Math.log((csum[t] - logcondprob[c][t] + sigma) / (sum - rsum[c] + sigma * p));
-                    }
-                }
-
-                for (int c = 0; c < k; c++) {
-                    MathEx.unitize1(logcondprob[c]);
+                    nc[y[i]]++;
                 }
                 break;
 
@@ -533,14 +419,13 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
                         continue;
                     }
 
-                    int yi = labels.id(y[i]);
                     for (int j = 0; j < p; j++) {
-                        ntc[yi][j] += x[i][j] * 2;
-                        nt[yi] += x[i][j] * 2;
+                        ntc[y[i]][j] += x[i][j] * 2;
+                        nt[y[i]] += x[i][j] * 2;
                     }
 
                     n++;
-                    nc[yi]++;
+                    nc[y[i]]++;
                 }
                 break;
 
@@ -551,148 +436,16 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
                         continue;
                     }
 
-                    int yi = labels.id(y[i]);
                     for (int j = 0; j < p; j++) {
                         if (x[i][j] > 0) {
-                            ntc[yi][j]++;
+                            ntc[y[i]][j]++;
                         }
                     }
 
                     n++;
-                    nc[yi]++;
+                    nc[y[i]]++;
                 }
                 break;
-
-            default:
-                // we should never reach here
-                throw new IllegalStateException("Unknown model: " + model);
-        }
-
-        update();
-    }
-
-    /**
-     * Batch learning of naive Bayes classifier on sequences,
-     * which are modeled as a bag of words. Note that this method is NOT
-     * applicable for naive Bayes classifier with general generation model.
-     *
-     * @param x training instances.
-     * @param y training labels.
-     */
-    public void update(SparseArray[] x, int[] y) {
-        switch (model) {
-            case MULTINOMIAL:
-            case CNB:
-            case WCNB:
-                for (int i = 0; i < x.length; i++) {
-                    if (!isGoodInstance(x[i])) {
-                        logger.info("Skip updating the model with a sample without any feature word");
-                        continue;
-                    }
-
-                    int yi = labels.id(y[i]);
-                    for (SparseArray.Entry e : x[i]) {
-                        ntc[yi][e.i] += e.x;
-                        nt[yi] += e.x;
-                    }
-
-                    n++;
-                    nc[yi]++;
-                }
-                break;
-
-            case TWCNB:
-                // The number of documents where the term occurs.
-                int[] ni = new int[p];
-                // The transformed term frequency in a document.
-                double[] d = new double[p];
-
-                for (SparseArray doc : x) {
-                    for (SparseArray.Entry e : doc) {
-                        if (e.x > 0) ni[e.i]++;
-                    }
-                }
-
-                // The number of (good) documents.
-                double N = 0;
-                for (SparseArray xi : x) {
-                    if (isGoodInstance(xi)) N++;
-                }
-
-                for (int i = 0; i < x.length; i++) {
-                    SparseArray xi = x[i];
-                    if (!isGoodInstance(xi)) continue;
-
-                    Arrays.fill(d, 0.0);
-                    for (SparseArray.Entry e : xi) {
-                        if (e.x > 0) {
-                            d[e.i] = Math.log(1 + e.x) * Math.log(N / ni[e.i]);
-                        }
-                    }
-
-                    MathEx.unitize2(d);
-
-                    int yi = y[i];
-                    for (int t = 0; t < p; t++) {
-                        logcondprob[yi][t] += d[t];
-                    }
-                }
-
-                double[] rsum = MathEx.rowSums(logcondprob);
-                double[] csum = MathEx.colSums(logcondprob);
-                double sum = MathEx.sum(csum);
-
-                for (int c = 0; c < k; c++) {
-                    for (int t = 0; t < p; t++) {
-                        logcondprob[c][t] = Math.log((csum[t] - logcondprob[c][t] + sigma) / (sum - rsum[c] + sigma * p));
-                    }
-                }
-
-                for (int c = 0; c < k; c++) {
-                    MathEx.unitize1(logcondprob[c]);
-                }
-                break;
-
-            case POLYAURN:
-                for (int i = 0; i < x.length; i++) {
-                    if (!isGoodInstance(x[i])) {
-                        logger.info("Skip updating the model with a sample without any feature word");
-                        continue;
-                    }
-
-                    int yi = labels.id(y[i]);
-                    for (SparseArray.Entry e : x[i]) {
-                        ntc[yi][e.i] += e.x * 2;
-                        nt[yi] += e.x * 2;
-                    }
-
-                    n++;
-                    nc[yi]++;
-                }
-                break;
-
-            case BERNOULLI:
-                for (int i = 0; i < x.length; i++) {
-                    if (!isGoodInstance(x[i])) {
-                        logger.info("Skip updating the model with a sample without any feature word");
-                        continue;
-                    }
-
-                    int yi = labels.id(y[i]);
-                    for (SparseArray.Entry e : x[i]) {
-                        if (e.x > 0) {
-                            ntc[yi][e.i]++;
-                        }
-                    }
-
-                    n++;
-                    nc[yi]++;
-                }
-                break;
-
-            default:
-                // we should never reach here
-                throw new IllegalStateException("Unknown model: " + model);
         }
 
         update();
@@ -713,7 +466,7 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             case POLYAURN:
                 for (int c = 0; c < k; c++) {
                     for (int t = 0; t < p; t++) {
-                        logcondprob[c][t] = Math.log((ntc[c][t] + sigma) / (nt[c] + sigma * p));
+                        condprob[c][t] = (ntc[c][t] + sigma) / (nt[c] + sigma * p);
                     }
                 }
                 break;
@@ -721,37 +474,10 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             case BERNOULLI:
                 for (int c = 0; c < k; c++) {
                     for (int t = 0; t < p; t++) {
-                        logcondprob[c][t] = Math.log((ntc[c][t] + sigma) / (nc[c] + sigma * 2));
+                        condprob[c][t] = (ntc[c][t] + sigma) / (nc[c] + sigma * 2);
                     }
                 }
                 break;
-
-            case CNB:
-            case WCNB:
-                long ntsum = MathEx.sum(nt);
-                long[] ntcsum = MathEx.colSums(ntc);
-
-                for (int c = 0; c < k; c++) {
-                    for (int t = 0; t < p; t++) {
-                        logcondprob[c][t] = Math.log((ntcsum[t] - ntc[c][t] + sigma) / (ntsum - nt[c] + sigma * p));
-                    }
-                }
-
-                if (model == Model.WCNB) {
-                    for (int c = 0; c < k; c++) {
-                        MathEx.unitize1(logcondprob[c]);
-                    }
-                }
-                break;
-
-
-            case TWCNB:
-                // nop
-                break;
-
-            default:
-                // we should never reach here
-                throw new IllegalStateException("Unknown model: " + model);
         }
     }
 
@@ -763,15 +489,15 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
      */
     @Override
     public int predict(int[] x) {
-        return predict(x, new double[k]);
+        return predict(x, null);
     }
 
     /**
      * Predict the class of an instance.
      *
      * @param x the instance to be classified.
-     * @return the predicted class label. If the instance is of all zeros,
-     *         returns Integer.MIN_VALUE.
+     * @return the predicted class label. If the instance is of all zeros, return
+     * returns Integer.MIN_VALUE.
      */
     @Override
     public int predict(int[] x, double[] posteriori) {
@@ -779,52 +505,54 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             return Integer.MIN_VALUE;
         }
 
+        if (posteriori == null) {
+            posteriori = new double[k];
+        }
+
         for (int i = 0; i < k; i++) {
-            double logprob;
+            double logprob = Math.log(priori[i]);
 
             switch (model) {
                 case MULTINOMIAL:
                 case POLYAURN:
-                    logprob = Math.log(priori[i]);
                     for (int j = 0; j < p; j++) {
                         if (x[j] > 0) {
-                            logprob += x[j] * logcondprob[i][j];
+                            logprob += x[j] * Math.log(condprob[i][j]);
                         }
                     }
                     break;
 
                 case BERNOULLI:
-                    logprob = Math.log(priori[i]);
                     for (int j = 0; j < p; j++) {
                         if (x[j] > 0) {
-                            logprob += logcondprob[i][j];
+                            logprob += Math.log(condprob[i][j]);
                         } else {
-                            logprob += Math.log(1.0 - Math.exp(logcondprob[i][j]));
+                            logprob += Math.log(1.0 - condprob[i][j]);
                         }
                     }
                     break;
-
-                case CNB:
-                case WCNB:
-                case TWCNB:
-                    logprob = 0.0;
-                    for (int j = 0; j < p; j++) {
-                        if (x[j] > 0) {
-                            logprob -= x[j] * logcondprob[i][j];
-                        }
-                    }
-                    break;
-
-                default:
-                    // we should never reach here
-                    throw new IllegalStateException("Unknown model: " + model);
             }
 
             posteriori[i] = logprob;
         }
 
-        MathEx.softmax(posteriori);
-        return MathEx.whichMax(posteriori);
+        return label(posteriori);
+    }
+
+    /** Returns the class label with maximal posteriori. */
+    private int label(double[] posteriori) {
+        double Z = 0.0;
+        double max = MathEx.max(posteriori);
+        for (int i = 0; i < k; i++) {
+            posteriori[i] = Math.exp(posteriori[i] - max);
+            Z += posteriori[i];
+        }
+
+        for (int i = 0; i < k; i++) {
+            posteriori[i] /= Z;
+        }
+
+        return labels.label(MathEx.whichMax(posteriori));
     }
 
     /**
@@ -862,7 +590,7 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
      * returns -1 if the instance does not contain any feature words.
      */
     public int predict(SparseArray x) {
-        return predict(x, new double[k]);
+        return predict(x, null);
     }
 
     /**
@@ -878,51 +606,37 @@ public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifi
             return Integer.MIN_VALUE;
         }
 
+        if (posteriori == null) {
+            posteriori = new double[k];
+        }
+
         for (int i = 0; i < k; i++) {
-            double logprob;
+            double logprob = Math.log(priori[i]);
 
             switch (model) {
                 case MULTINOMIAL:
                 case POLYAURN:
-                    logprob = Math.log(priori[i]);
                     for (SparseArray.Entry e : x) {
                         if (e.x > 0) {
-                            logprob += e.x * logcondprob[i][e.i];
+                            logprob += e.x * Math.log(condprob[i][e.i]);
                         }
                     }
                     break;
 
                 case BERNOULLI:
-                    logprob = Math.log(priori[i]);
                     for (SparseArray.Entry e : x) {
                         if (e.x > 0) {
-                            logprob += logcondprob[i][e.i];
+                            logprob += Math.log(condprob[i][e.i]);
                         } else {
-                            logprob += Math.log(1.0 - Math.exp(logcondprob[i][e.i]));
+                            logprob += Math.log(1.0 - condprob[i][e.i]);
                         }
                     }
                     break;
-
-                case CNB:
-                case WCNB:
-                case TWCNB:
-                    logprob = 0.0;
-                    for (SparseArray.Entry e : x) {
-                        if (e.x > 0) {
-                            logprob -= e.x * logcondprob[i][e.i];
-                        }
-                    }
-                    break;
-
-                default:
-                    // we should never reach here
-                    throw new IllegalStateException("Unknown model: " + model);
             }
 
             posteriori[i] = logprob;
         }
 
-        MathEx.softmax(posteriori);
-        return MathEx.whichMax(posteriori);
+        return label(posteriori);
     }
 }

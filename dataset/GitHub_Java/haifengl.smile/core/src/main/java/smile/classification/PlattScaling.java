@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,14 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
 import java.io.Serializable;
-import static java.lang.Math.abs;
-import static java.lang.Math.exp;
-import static java.lang.Math.log;
+import static java.lang.Math.*;
 
 /**
  * Platt scaling or Platt calibration is a way of transforming the outputs
@@ -29,7 +27,7 @@ import static java.lang.Math.log;
  * machines, but can be applied to other classification models.
  * Platt scaling works by fitting a logistic regression model to
  * a classifier's scores.
- * <p>
+ *
  * Platt suggested using the Levenberg–Marquardt algorithm to optimize
  * the parameters, but a Newton algorithm was later proposed that should
  * be more numerically stable, which is implemented in this class.
@@ -58,21 +56,6 @@ public class PlattScaling implements Serializable {
     public PlattScaling(double alpha, double beta) {
         this.alpha = alpha;
         this.beta = beta;
-    }
-
-    /**
-     * Returns the posterior probability estimate P(y = 1 | x).
-     *
-     * @param y the binary classifier output score.
-     * @return the estimated probability.
-     */
-    public double scale(double y) {
-        double fApB = y * alpha + beta;
-
-        if (fApB >= 0)
-            return exp(-fApB) / (1.0 + exp(-fApB));
-        else
-            return 1.0 / (1 + exp(fApB));
     }
 
     /**
@@ -200,19 +183,73 @@ public class PlattScaling implements Serializable {
     }
 
     /**
-     * Fits Platt Scaling to estimate posteriori probabilities.
+     * Returns the posterior probability estimate P(y = 1 | x).
      *
-     * @param model the binary-class model to fit Platt scaling.
-     * @param x training samples.
-     * @param y training labels.
+     * @param y the binary classifier output score.
+     * @return the estimated probability.
      */
-    public  static <T> PlattScaling fit(Classifier<T> model, T[] x, int[] y) {
-        int n = y.length;
-        double[] scores = new double[n];
-        for (int i = 0; i < n; i++) {
-            scores[i] = model.f(x[i]);
+    public double predict(double y) {
+        double fApB = y * alpha + beta;
+
+        if (fApB >= 0)
+            return exp(-fApB) / (1.0 + exp(-fApB));
+        else
+            return 1.0 / (1 + exp(fApB));
+    }
+
+    /**
+     * Estimates the multiclass probabilies.
+     */
+    public static void multiclass(int k, double[][] r, double[] p) {
+        double[][] Q = new double[k][k];
+        double[] Qp = new double[k];
+        double pQp, eps = 0.005 / k;
+
+        for (int t = 0; t < k; t++) {
+            p[t] = 1.0 / k;  // Valid if k = 1
+            Q[t][t] = 0;
+            for (int j = 0; j < t; j++) {
+                Q[t][t] += r[j][t] * r[j][t];
+                Q[t][j] = Q[j][t];
+            }
+            for (int j = t + 1; j < k; j++) {
+                Q[t][t] += r[j][t] * r[j][t];
+                Q[t][j] = -r[j][t] * r[t][j];
+            }
         }
 
-        return fit(scores, y);
+        int iter = 0;
+        int maxIter = max(100, k);
+        for (; iter < maxIter; iter++) {
+            // stopping condition, recalculate QP,pQP for numerical accuracy
+            pQp = 0;
+            for (int t = 0; t < k; t++) {
+                Qp[t] = 0;
+                for (int j = 0; j < k; j++)
+                    Qp[t] += Q[t][j] * p[j];
+                pQp += p[t] * Qp[t];
+            }
+            double max_error = 0;
+            for (int t = 0; t < k; t++) {
+                double error = abs(Qp[t] - pQp);
+                if (error > max_error)
+                    max_error = error;
+            }
+            if (max_error < eps) break;
+
+            for (int t = 0; t < k; t++) {
+                double diff = (-Qp[t] + pQp) / Q[t][t];
+                p[t] += diff;
+                pQp = (pQp + diff * (diff * Q[t][t] + 2 * Qp[t])) / (1 + diff) / (1 + diff);
+                for (int j = 0; j < k; j++) {
+                    Qp[j] = (Qp[j] + diff * Q[t][j]) / (1 + diff);
+                    p[j] /= (1 + diff);
+                }
+            }
+        }
+
+        if (iter >= maxIter) {
+            logger.warn("Reaches maximal iterations");
+        }
     }
 }

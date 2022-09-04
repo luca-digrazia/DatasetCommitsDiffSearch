@@ -24,8 +24,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
-import java.util.stream.LongStream;
-
 import smile.sort.QuickSelect;
 import smile.sort.QuickSort;
 import smile.sort.Sort;
@@ -486,15 +484,6 @@ public class MathEx {
         }
 
         return seed;
-    }
-
-    /**
-     * Returns a stream of prime numbers to be used as RNG seeds.
-     * @param n the returned value should be greater than n.
-     * @param k a parameter that determines the accuracy of the primality test
-     */
-    public static LongStream seeds(long n, int k) {
-        return LongStream.generate(() -> probablePrime(n, k, seedRNG));
     }
 
     /**

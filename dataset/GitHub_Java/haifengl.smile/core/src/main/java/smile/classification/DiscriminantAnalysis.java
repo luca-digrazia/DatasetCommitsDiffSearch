@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,27 +13,22 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
 import smile.math.MathEx;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
-import smile.util.IntSet;
 
-/**
- * Common functions for various discriminant analysis.
- *
- * @author Haifeng Li
- */
+/** Common functions for various discriminant analysis. */
 class DiscriminantAnalysis {
     /** The number of classes. */
     int k;
     /** The class labels in [0, k). */
     int[] y;
     /** The original class labels. */
-    IntSet labels;
+    ClassLabel labels;
     /** The number of instances in each class. */
     int[] ni;
     /** The priori probabilities. */
@@ -49,7 +44,7 @@ class DiscriminantAnalysis {
      * @param mean the mean vector of all samples.
      * @param mu the mean vectors of each class.
      */
-    public DiscriminantAnalysis(ClassLabels codec, double[] priori, double[] mean, double[][] mu) {
+    public DiscriminantAnalysis(ClassLabel.Result codec, double[] priori, double[] mean, double[][] mu) {
         this.k = codec.k;
         this.ni = codec.ni;
         this.y = codec.y;
@@ -80,7 +75,7 @@ class DiscriminantAnalysis {
         int n = x.length;
 
         // class label set.
-        ClassLabels codec = ClassLabels.fit(y);
+        ClassLabel.Result codec = ClassLabel.fit(y);
         int k = codec.k;
         y = codec.y;
         int[] ni = codec.ni;
