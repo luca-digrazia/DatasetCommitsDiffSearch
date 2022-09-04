@@ -29,7 +29,7 @@ import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.SkylarkNativeAspect;
-import com.google.devtools.build.lib.rules.proto.ProtoInfo;
+import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 
 /**
@@ -69,11 +69,11 @@ public class ObjcProtoAspect extends SkylarkNativeAspect implements ConfiguredAs
     if (attributes.isObjcProtoLibrary()) {
 
       // Gather up all the dependency protos depended by this target.
-      Iterable<ProtoInfo> protoInfos =
-          ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoInfo.class);
+      Iterable<ProtoSourcesProvider> protoProviders =
+          ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoSourcesProvider.class);
 
-      for (ProtoInfo protoInfo : protoInfos) {
-        aspectObjcProtoProvider.addProtoGroup(protoInfo.getTransitiveProtoSources());
+      for (ProtoSourcesProvider protoProvider : protoProviders) {
+        aspectObjcProtoProvider.addProtoGroup(protoProvider.getTransitiveProtoSources());
       }
 
       NestedSet<Artifact> portableProtoFilters =
@@ -82,11 +82,13 @@ public class ObjcProtoAspect extends SkylarkNativeAspect implements ConfiguredAs
 
       // If this target does not provide filters but specifies direct proto_library dependencies,
       // generate a filter file only for those proto files.
-      if (Iterables.isEmpty(portableProtoFilters) && !Iterables.isEmpty(protoInfos)) {
+      if (Iterables.isEmpty(portableProtoFilters) && !Iterables.isEmpty(protoProviders)) {
         Artifact generatedFilter =
             ProtobufSupport.getGeneratedPortableFilter(ruleContext, ruleContext.getConfiguration());
         ProtobufSupport.registerPortableFilterGenerationAction(
-            ruleContext, generatedFilter, protoInfos);
+            ruleContext,
+            generatedFilter,
+            protoProviders);
         portableProtoFilters = NestedSetBuilder.create(Order.STABLE_ORDER, generatedFilter);
       }
 

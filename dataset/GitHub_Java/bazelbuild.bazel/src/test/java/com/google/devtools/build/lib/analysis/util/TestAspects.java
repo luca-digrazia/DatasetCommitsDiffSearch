@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -422,9 +421,7 @@ public class TestAspects {
       ImmutableCollection<String> baz = aspectParameters.getAttribute("baz");
       if (baz != null) {
         try {
-          builder.add(
-              attr("$dep", LABEL)
-                  .value(Label.parseAbsolute(baz.iterator().next(), ImmutableMap.of())));
+          builder.add(attr("$dep", LABEL).value(Label.parseAbsolute(baz.iterator().next())));
         } catch (LabelSyntaxException e) {
           throw new IllegalStateException();
         }

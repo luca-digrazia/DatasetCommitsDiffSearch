@@ -26,9 +26,8 @@ import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.InfoInterface;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -85,7 +84,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
         if (ruleContext.hasErrors()) {
           return null;
-        } else if (!(aspectSkylarkObject instanceof StructImpl)
+        } else if (!(aspectSkylarkObject instanceof Info)
             && !(aspectSkylarkObject instanceof Iterable)) {
           ruleContext.ruleError(
               String.format(
@@ -115,7 +114,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     if (aspectSkylarkObject instanceof Iterable) {
       addDeclaredProviders(builder, (Iterable) aspectSkylarkObject);
     } else {
-      StructImpl struct = (StructImpl) aspectSkylarkObject;
+      Info struct = (Info) aspectSkylarkObject;
       Location loc = struct.getCreationLoc();
       for (String field : struct.getFieldNames()) {
         if (field.equals("output_groups")) {
@@ -147,10 +146,10 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     int i = 0;
     for (Object o : aspectSkylarkObject) {
       Location loc = skylarkAspect.getImplementation().getLocation();
-      InfoInterface declaredProvider =
+      Info declaredProvider =
           SkylarkType.cast(
               o,
-              InfoInterface.class,
+              Info.class,
               loc,
               "A return value of an aspect implementation function should be "
                   + "a sequence of declared providers, instead got a %s at index %d",

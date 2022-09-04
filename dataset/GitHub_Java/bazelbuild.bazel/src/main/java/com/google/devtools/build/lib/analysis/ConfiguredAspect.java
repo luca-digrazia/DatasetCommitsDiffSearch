@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.InfoInterface;
+import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -124,7 +124,7 @@ public final class ConfiguredAspect {
     }
   }
 
-  public InfoInterface get(Provider.Key key) {
+  public Info get(Provider.Key key) {
     return providers.getProvider(key);
   }
 
@@ -237,7 +237,7 @@ public final class ConfiguredAspect {
       return this;
     }
 
-    public Builder addSkylarkDeclaredProvider(InfoInterface declaredProvider)
+    public Builder addSkylarkDeclaredProvider(Info declaredProvider)
         throws EvalException {
       Provider constructor = declaredProvider.getProvider();
       if (!constructor.isExported()) {
@@ -248,11 +248,11 @@ public final class ConfiguredAspect {
       return this;
     }
 
-    private void addDeclaredProvider(InfoInterface declaredProvider) {
+    private void addDeclaredProvider(Info declaredProvider) {
       providers.put(declaredProvider);
     }
 
-    public Builder addNativeDeclaredProvider(InfoInterface declaredProvider) {
+    public Builder addNativeDeclaredProvider(Info declaredProvider) {
       Provider constructor = declaredProvider.getProvider();
       Preconditions.checkState(constructor.isExported());
       addDeclaredProvider(declaredProvider);
