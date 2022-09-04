@@ -15,8 +15,8 @@
 package com.google.devtools.build.lib.rules.config;
 
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -38,7 +38,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Printer;
 import java.util.List;
 import java.util.Optional;
 
@@ -113,7 +113,7 @@ public class ConfigFeatureFlag implements RuleConfiguredTargetFactory {
       ruleContext.attributeError(
           "allowed_values",
           "cannot contain duplicates, but contained multiple of "
-              + Starlark.repr(duplicates.build()));
+              + Printer.repr(duplicates.build()));
     }
 
     Optional<String> defaultValue =
@@ -124,9 +124,9 @@ public class ConfigFeatureFlag implements RuleConfiguredTargetFactory {
       ruleContext.attributeError(
           "default_value",
           "must be one of "
-              + Starlark.repr(values.asList())
+              + Printer.repr(values.asList())
               + ", but was "
-              + Starlark.repr(defaultValue.get()));
+              + Printer.repr(defaultValue.get()));
     }
 
     if (ruleContext.hasErrors()) {
@@ -144,9 +144,9 @@ public class ConfigFeatureFlag implements RuleConfiguredTargetFactory {
       // TODO(b/140635901): When configurationError is available, use that instead.
       ruleContext.ruleError(
           "value must be one of "
-              + Starlark.repr(values.asList())
+              + Printer.repr(values.asList())
               + ", but was "
-              + Starlark.repr(configuredValue.get()));
+              + Printer.repr(configuredValue.get()));
       return null;
     }
 
