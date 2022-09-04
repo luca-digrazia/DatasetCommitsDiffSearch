@@ -128,19 +128,17 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
   }
 
   @Override
-  public synchronized void handle(Event event) {
+  public void handle(Event event) {
     if (terminalClosed) {
       return;
     }
     if (!eventMask.contains(event.getKind())) {
-      handleFollowUpEvents(event);
       return;
     }
     if (trySpecial
         && !EventKind.ERRORS_AND_WARNINGS_AND_OUTPUT.contains(event.getKind())
         && skipUntil.isAfter(Instant.now())) {
       // Short-circuit here to avoid wiping out previous terminal contents.
-      handleFollowUpEvents(event);
       return;
     }
 
@@ -237,18 +235,8 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
       logger.warning("Terminal was closed during build: " + e);
       terminalClosed = true;
     }
-    handleFollowUpEvents(event);
   }
-
-  private void handleFollowUpEvents(Event event) {
-    if (event.getStdErr() != null) {
-      handle(Event.of(EventKind.STDERR, null, event.getStdErr()));
-    }
-    if (event.getStdOut() != null) {
-      handle(Event.of(EventKind.STDOUT, null, event.getStdOut()));
-    }
-  }
-
+  
   private String getExtraMessage() {
     synchronized (messageIterator) {
       if (messageIterator.hasNext()) {

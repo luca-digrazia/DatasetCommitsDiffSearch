@@ -14,13 +14,13 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.OutErr;
 import java.io.PrintStream;
 import java.util.Arrays;
@@ -47,10 +47,6 @@ public abstract class BugReport {
 
   private static AtomicBoolean alreadyHandlingCrash = new AtomicBoolean(false);
 
-  private static final boolean IN_TEST =
-      System.getenv("TEST_TMPDIR") != null
-          && System.getenv("ENABLE_BUG_REPORT_LOGGING_IN_TEST") == null;
-
   public static void setRuntime(BlazeRuntime newRuntime) {
     Preconditions.checkNotNull(newRuntime);
     Preconditions.checkState(runtime == null, "runtime already set: %s, %s", runtime, newRuntime);
@@ -69,11 +65,6 @@ public abstract class BugReport {
    * @param values Additional string values to clarify the exception.
    */
   public static void sendBugReport(Throwable exception, List<String> args, String... values) {
-    if (IN_TEST) {
-      Throwables.throwIfUnchecked(exception);
-      throw new IllegalStateException(
-          "Bug reports in tests should crash: " + args + ", " + Arrays.toString(values), exception);
-    }
     if (!versionInfo.isReleasedBlaze()) {
       logger.info("(Not a released binary; not logged.)");
       return;
@@ -96,7 +87,7 @@ public abstract class BugReport {
    * halts the runtime in that case.
    */
   public static void handleCrash(Throwable throwable, String... args) {
-    int exitCode = getExitCodeForThrowable(throwable).getNumericExitCode();
+    int exitCode = getExitCodeForThrowable(throwable);
     try {
       if (alreadyHandlingCrash.compareAndSet(false, true)) {
         try {
@@ -140,10 +131,10 @@ public abstract class BugReport {
   }
 
   /** Get exit code corresponding to throwable. */
-  public static ExitCode getExitCodeForThrowable(Throwable throwable) {
+  public static int getExitCodeForThrowable(Throwable throwable) {
     return (Throwables.getRootCause(throwable) instanceof OutOfMemoryError)
-        ? ExitCode.OOM_ERROR
-        : ExitCode.BLAZE_INTERNAL_ERROR;
+        ? ExitCode.OOM_ERROR.getNumericExitCode()
+        : ExitCode.BLAZE_INTERNAL_ERROR.getNumericExitCode();
   }
 
   private static void printThrowableTo(OutErr outErr, Throwable e) {

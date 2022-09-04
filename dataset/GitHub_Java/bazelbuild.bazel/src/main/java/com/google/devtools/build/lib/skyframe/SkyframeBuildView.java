@@ -296,11 +296,7 @@ public final class SkyframeBuildView {
       if (cause instanceof ActionConflictException) {
         ((ActionConflictException) cause).reportTo(eventHandler);
       }
-      if (errorInfo.getException() != null) {
-        throw new ViewCreationFailedException(errorMsg, errorInfo.getException());
-      } else {
-        throw new ViewCreationFailedException(errorMsg);
-      }
+      throw new ViewCreationFailedException(errorMsg);
     }
 
     boolean hasLoadingError = false;
@@ -509,6 +505,8 @@ public final class SkyframeBuildView {
    * Returns the host configuration trimmed to the same fragments as the input configuration. If
    * the input is null, returns the top-level host configuration.
    *
+   * <p>For static configurations, this unconditionally returns the (sole) top-level configuration.
+   *
    * <p>This may only be called after {@link #setTopLevelHostConfiguration} has set the
    * correct host configuration at the top-level.
    */
@@ -533,7 +531,7 @@ public final class SkyframeBuildView {
     Set<Class<? extends BuildConfiguration.Fragment>> fragmentClasses =
         config.trimConfigurations()
             ? config.fragmentClasses()
-            : ruleClassProvider.getAllFragments();
+            : ((ConfiguredRuleClassProvider) ruleClassProvider).getAllFragments();
     BuildConfiguration hostConfig = hostConfigurationCache.get(fragmentClasses);
     if (hostConfig != null) {
       return hostConfig;
