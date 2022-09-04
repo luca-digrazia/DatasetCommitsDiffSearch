@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.actions.OutputBaseSupplier;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.TestAction;
@@ -51,7 +50,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -116,11 +115,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
   @Test
   public void testCodec() throws Exception {
-    new SerializationTester(outOne, outOneFileOne)
+    ObjectCodecTester.newBuilder(Artifact.CODEC)
+        .addSubjects(outOne, outOneFileOne)
         .addDependency(FileSystem.class, scratch.getFileSystem())
-        .addDependency(
-            OutputBaseSupplier.class, () -> scratch.getFileSystem().getPath(TestUtils.tmpDir()))
-        .runTests();
+        .buildAndRunTests();
   }
 
   /** Simple smoke test. If this isn't passing, something is very wrong... */

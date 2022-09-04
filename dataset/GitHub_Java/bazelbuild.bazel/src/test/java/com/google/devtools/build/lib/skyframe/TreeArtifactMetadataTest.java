@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
@@ -229,7 +228,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
       differencer.inject(
           ImmutableMap.of(
               ALL_OWNER,
-              new BasicActionLookupValue(
+              new ActionLookupValue(
                   Actions.filterSharedActionsAndThrowActionConflict(
                       actionKeyContext, ImmutableList.copyOf(actions)),
                   false)));
@@ -274,8 +273,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
       return new ActionExecutionValue(
           fileData,
           ImmutableMap.of(output, treeArtifactValue),
-          ImmutableMap.<Artifact, FileArtifactValue>of(),
-          /*outputSymlinks=*/ null);
+          ImmutableMap.<Artifact, FileArtifactValue>of());
     }
 
     @Override

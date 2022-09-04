@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 
@@ -25,18 +26,24 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 public class CoverageReportValue extends ActionLookupValue {
 
   // There should only ever be one CoverageReportValue value in the graph.
-  @AutoCodec public static final CoverageReportKey COVERAGE_REPORT_KEY = new CoverageReportKey();
+  public static final CoverageReportKey COVERAGE_REPORT_KEY = CoverageReportKey.INSTANCE;
 
   CoverageReportValue(GeneratingActions generatingActions, boolean removeActionsAfterEvaluation) {
     super(generatingActions, removeActionsAfterEvaluation);
   }
 
+  @AutoCodec(strategy = AutoCodec.Strategy.SINGLETON)
   static class CoverageReportKey extends ActionLookupKey {
+    static final CoverageReportKey INSTANCE = new CoverageReportKey();
+    static final ObjectCodec<CoverageReportKey> CODEC =
+        new CoverageReportValue_CoverageReportKey_AutoCodec();
+
     private CoverageReportKey() {}
 
     @Override
     public SkyFunctionName functionName() {
       return SkyFunctions.COVERAGE_REPORT;
     }
+
   }
 }

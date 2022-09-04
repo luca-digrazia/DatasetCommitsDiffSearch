@@ -260,17 +260,15 @@ public final class AspectFunction implements SkyFunction {
 
     ConfiguredTarget associatedTarget = baseConfiguredTargetValue.getConfiguredTarget();
 
-    ConfiguredTargetAndData associatedConfiguredTargetAndData;
+    ConfiguredTargetAndTarget associatedConfiguredTargetAndTarget;
     Package targetPkg =
         ((PackageValue)
                 env.getValue(PackageValue.key(associatedTarget.getLabel().getPackageIdentifier())))
             .getPackage();
     try {
-      associatedConfiguredTargetAndData =
-          new ConfiguredTargetAndData(
-              associatedTarget,
-              targetPkg.getTarget(associatedTarget.getLabel().getName()),
-              associatedTarget.getConfiguration());
+      associatedConfiguredTargetAndTarget =
+          new ConfiguredTargetAndTarget(
+              associatedTarget, targetPkg.getTarget(associatedTarget.getLabel().getName()));
     } catch (NoSuchTargetException e) {
       throw new IllegalStateException("Name already verified", e);
     }
@@ -278,7 +276,7 @@ public final class AspectFunction implements SkyFunction {
     if (baseConfiguredTargetValue.getConfiguredTarget().getProvider(AliasProvider.class) != null) {
       return createAliasAspect(
           env,
-          associatedConfiguredTargetAndData.getTarget(),
+          associatedConfiguredTargetAndTarget.getTarget(),
           aspect,
           key,
           baseConfiguredTargetValue.getConfiguredTarget());
@@ -309,14 +307,14 @@ public final class AspectFunction implements SkyFunction {
         env.getListener()
             .handle(
                 Event.error(
-                    associatedConfiguredTargetAndData.getTarget().getLocation(), e.getMessage()));
+                    associatedConfiguredTargetAndTarget.getTarget().getLocation(), e.getMessage()));
 
         throw new AspectFunctionException(
             new AspectCreationException(e.getMessage(), associatedTarget.getLabel()));
       }
     }
-    associatedConfiguredTargetAndData =
-        associatedConfiguredTargetAndData.fromConfiguredTarget(associatedTarget);
+    associatedConfiguredTargetAndTarget =
+        associatedConfiguredTargetAndTarget.fromConfiguredTarget(associatedTarget);
     aspectPathBuilder.add(aspect);
 
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
@@ -331,13 +329,13 @@ public final class AspectFunction implements SkyFunction {
     // will be present this way.
     TargetAndConfiguration originalTargetAndAspectConfiguration =
         new TargetAndConfiguration(
-            associatedConfiguredTargetAndData.getTarget(), aspectConfiguration);
+            associatedConfiguredTargetAndTarget.getTarget(), aspectConfiguration);
     ImmutableList<Aspect> aspectPath = aspectPathBuilder.build();
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
       ImmutableMap<Label, ConfigMatchingProvider> configConditions =
           ConfiguredTargetFunction.getConfigConditions(
-              associatedConfiguredTargetAndData.getTarget(),
+              associatedConfiguredTargetAndTarget.getTarget(),
               env,
               resolver,
               originalTargetAndAspectConfiguration,
@@ -358,8 +356,9 @@ public final class AspectFunction implements SkyFunction {
                 String.format(
                     "aspect %s applied to %s",
                     aspect.getDescriptor().getDescription(),
-                    associatedConfiguredTargetAndData.getTarget().toString()),
+                    associatedConfiguredTargetAndTarget.getTarget().toString()),
                 requiredToolchains,
+                aspectConfiguration,
                 key.getAspectConfigurationKey());
       } catch (ToolchainContextException e) {
         // TODO(katre): better error handling
@@ -369,7 +368,7 @@ public final class AspectFunction implements SkyFunction {
         return null;
       }
 
-      OrderedSetMultimap<Attribute, ConfiguredTargetAndData> depValueMap;
+      OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> depValueMap;
       try {
         depValueMap =
             ConfiguredTargetFunction.computeDependencies(
@@ -400,7 +399,7 @@ public final class AspectFunction implements SkyFunction {
           aspectPath,
           aspect,
           aspectFactory,
-          associatedConfiguredTargetAndData,
+          associatedConfiguredTargetAndTarget,
           aspectConfiguration,
           configConditions,
           toolchainContext,
@@ -525,11 +524,11 @@ public final class AspectFunction implements SkyFunction {
       ImmutableList<Aspect> aspectPath,
       Aspect aspect,
       ConfiguredAspectFactory aspectFactory,
-      ConfiguredTargetAndData associatedTarget,
+      ConfiguredTargetAndTarget associatedTarget,
       BuildConfiguration aspectConfiguration,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ToolchainContext toolchainContext,
-      OrderedSetMultimap<Attribute, ConfiguredTargetAndData> directDeps,
+      OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> directDeps,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution)
       throws AspectFunctionException, InterruptedException {
 

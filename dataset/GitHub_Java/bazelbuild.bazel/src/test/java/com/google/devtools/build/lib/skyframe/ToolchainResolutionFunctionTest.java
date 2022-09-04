@@ -23,42 +23,34 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
-import com.google.devtools.build.lib.actions.util.InjectedActionLookupKey;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
 /** Tests for {@link ToolchainResolutionValue} and {@link ToolchainResolutionFunction}. */
 @RunWith(JUnit4.class)
 public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final ConfiguredTargetKey LINUX_CTKEY = Mockito.mock(ConfiguredTargetKey.class);
-
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final ConfiguredTargetKey MAC_CTKEY = Mockito.mock(ConfiguredTargetKey.class);
-
-  static {
-    Mockito.when(LINUX_CTKEY.functionName())
-        .thenReturn(InjectedActionLookupKey.INJECTED_ACTION_LOOKUP);
-    Mockito.when(MAC_CTKEY.functionName())
-        .thenReturn(InjectedActionLookupKey.INJECTED_ACTION_LOOKUP);
-  }
+  private static final ConfiguredTargetKey LINUX_CTKEY =
+      ConfiguredTargetKey.of(Label.parseAbsoluteUnchecked("//linux:key"), null, false);
+  private static final ConfiguredTargetKey MAC_CTKEY =
+      ConfiguredTargetKey.of(Label.parseAbsoluteUnchecked("//mac:key"), null, false);
 
   private static ConfiguredTargetValue createConfiguredTargetValue(
       ConfiguredTarget configuredTarget) {
-    return new NonRuleConfiguredTargetValue(
-        configuredTarget, GeneratingActions.EMPTY, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
+    return new ConfiguredTargetValue(
+        configuredTarget,
+        GeneratingActions.EMPTY,
+        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        /*removeActionsAfterEvaluation=*/ false);
   }
 
   private EvaluationResult<ToolchainResolutionValue> invokeToolchainResolution(SkyKey key)
@@ -96,7 +88,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
 
     ToolchainResolutionValue toolchainResolutionValue = result.get(key);
     assertThat(toolchainResolutionValue.availableToolchainLabels())
-        .containsExactly(MAC_CTKEY, makeLabel("//toolchain:toolchain_2_impl"));
+        .containsExactly(macPlatform, makeLabel("//toolchain:toolchain_2_impl"));
   }
 
   @Test
@@ -126,9 +118,9 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
     ToolchainResolutionValue toolchainResolutionValue = result.get(key);
     assertThat(toolchainResolutionValue.availableToolchainLabels())
         .containsExactly(
-            LINUX_CTKEY,
+            linuxPlatform,
             makeLabel("//extra:extra_toolchain_impl"),
-            MAC_CTKEY,
+            macPlatform,
             makeLabel("//toolchain:toolchain_2_impl"));
   }
 
@@ -154,28 +146,37 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
     new EqualsTester()
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                ImmutableMap.of(LINUX_CTKEY, makeLabel("//test:toolchain_impl_1"))),
+                ImmutableMap.<PlatformInfo, Label>builder()
+                    .put(linuxPlatform, makeLabel("//test:toolchain_impl_1"))
+                    .build()),
             ToolchainResolutionValue.create(
-                ImmutableMap.of(LINUX_CTKEY, makeLabel("//test:toolchain_impl_1"))))
+                ImmutableMap.<PlatformInfo, Label>builder()
+                    .put(linuxPlatform, makeLabel("//test:toolchain_impl_1"))
+                    .build()))
         // Different execution platform, same label.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                ImmutableMap.of(MAC_CTKEY, makeLabel("//test:toolchain_impl_1"))))
+                ImmutableMap.<PlatformInfo, Label>builder()
+                    .put(macPlatform, makeLabel("//test:toolchain_impl_1"))
+                    .build()))
         // Same execution platform, different label.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                ImmutableMap.of(LINUX_CTKEY, makeLabel("//test:toolchain_impl_2"))))
+                ImmutableMap.<PlatformInfo, Label>builder()
+                    .put(linuxPlatform, makeLabel("//test:toolchain_impl_2"))
+                    .build()))
         // Different execution platform, different label.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                ImmutableMap.of(MAC_CTKEY, makeLabel("//test:toolchain_impl_2"))))
+                ImmutableMap.<PlatformInfo, Label>builder()
+                    .put(macPlatform, makeLabel("//test:toolchain_impl_2"))
+                    .build()))
         // Multiple execution platforms.
         .addEqualityGroup(
             ToolchainResolutionValue.create(
-                ImmutableMap.<ConfiguredTargetKey, Label>builder()
-                    .put(LINUX_CTKEY, makeLabel("//test:toolchain_impl_1"))
-                    .put(MAC_CTKEY, makeLabel("//test:toolchain_impl_1"))
-                    .build()))
-        .testEquals();
+                ImmutableMap.<PlatformInfo, Label>builder()
+                    .put(linuxPlatform, makeLabel("//test:toolchain_impl_1"))
+                    .put(macPlatform, makeLabel("//test:toolchain_impl_1"))
+                    .build()));
   }
 }

@@ -15,28 +15,31 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
-import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 
 /**
  * Value that stores expanded actions from ActionTemplate.
  */
-public final class ActionTemplateExpansionValue extends BasicActionLookupValue {
-  ActionTemplateExpansionValue(GeneratingActions generatingActions) {
-    super(generatingActions);
+public final class ActionTemplateExpansionValue extends ActionLookupValue {
+  ActionTemplateExpansionValue(
+      GeneratingActions generatingActions, boolean removeActionsAfterEvaluation) {
+    super(generatingActions, removeActionsAfterEvaluation);
   }
 
   static ActionTemplateExpansionKey key(ActionLookupKey actionLookupKey, int actionIndex) {
     return ActionTemplateExpansionKey.of(actionLookupKey, actionIndex);
   }
 
-  /** Key for {@link ActionTemplateExpansionValue} nodes. */
   @AutoCodec
-  public static final class ActionTemplateExpansionKey extends ActionLookupKey {
+  static final class ActionTemplateExpansionKey extends ActionLookupKey {
+    static final ObjectCodec<ActionTemplateExpansionKey> CODEC =
+        new ActionTemplateExpansionValue_ActionTemplateExpansionKey_AutoCodec();
     private static final Interner<ActionTemplateExpansionKey> interner =
         BlazeInterners.newWeakInterner();
 

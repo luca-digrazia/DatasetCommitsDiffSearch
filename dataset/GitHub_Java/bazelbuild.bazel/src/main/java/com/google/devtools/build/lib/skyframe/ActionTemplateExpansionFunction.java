@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -24,7 +26,6 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
-import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue.ActionTemplateExpansionKey;
@@ -44,9 +45,12 @@ import javax.annotation.Nullable;
  */
 public class ActionTemplateExpansionFunction implements SkyFunction {
   private final ActionKeyContext actionKeyContext;
+  private final Supplier<Boolean> removeActionsAfterEvaluation;
 
-  ActionTemplateExpansionFunction(ActionKeyContext actionKeyContext) {
+  ActionTemplateExpansionFunction(
+      ActionKeyContext actionKeyContext, Supplier<Boolean> removeActionsAfterEvaluation) {
     this.actionKeyContext = actionKeyContext;
+    this.removeActionsAfterEvaluation = Preconditions.checkNotNull(removeActionsAfterEvaluation);
   }
 
   @Override
@@ -55,9 +59,7 @@ public class ActionTemplateExpansionFunction implements SkyFunction {
     ActionTemplateExpansionKey key = (ActionTemplateExpansionKey) skyKey.argument();
     ActionLookupValue value = (ActionLookupValue) env.getValue(key.getActionLookupKey());
     if (value == null) {
-      // Because of the phase boundary separating analysis and execution, all needed
-      // ActionLookupValues must have already been evaluated, so a missing ActionLookupValue is
-      // unexpected. However, we tolerate this case.
+      // Shouldn't actually happen in practice, but tolerate.
       return null;
     }
     ActionTemplate<?> actionTemplate = value.getActionTemplate(key.getActionIndex());
@@ -90,7 +92,7 @@ public class ActionTemplateExpansionFunction implements SkyFunction {
       throw new ActionTemplateExpansionFunctionException(e);
     }
 
-    return new ActionTemplateExpansionValue(generatingActions);
+    return new ActionTemplateExpansionValue(generatingActions, removeActionsAfterEvaluation.get());
   }
 
   /** Exception thrown by {@link ActionTemplateExpansionFunction}. */
