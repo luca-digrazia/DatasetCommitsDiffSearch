@@ -56,13 +56,9 @@ public final class OutputDirectoryLinksUtils {
    * <p>The order of the result indicates precedence for {@link PathPrettyPrinter}.
    */
   private static final ImmutableList<SymlinkDefinition> getAllLinkDefinitions(
-      Iterable<SymlinkDefinition> symlinkDefinitions, boolean includeProductOut) {
-    // TODO(mitchellhyang): Remove the boolean parameter "includeProductOut" after the flag
-    //  "--experimental_no_product_name_out_symlink" has been removed. We should avoid adding new
-    //  parameters to this method. However, in this case, without the "includeProductOut", callers
-    //  such as the pretty printer may print out false information.
+      Iterable<SymlinkDefinition> symlinkDefinitions) {
     ImmutableList.Builder<SymlinkDefinition> builder = ImmutableList.builder();
-    builder.addAll(ConvenienceSymlinks.getStandardLinkDefinitions(includeProductOut));
+    builder.addAll(ConvenienceSymlinks.getStandardLinkDefinitions());
     builder.addAll(symlinkDefinitions);
     return builder.build();
   }
@@ -133,9 +129,7 @@ public final class OutputDirectoryLinksUtils {
     RepositoryName repositoryName = RepositoryName.createFromValidStrippedName(workspaceName);
     boolean logOnly = mode == ConvenienceSymlinksMode.LOG_ONLY;
 
-    for (SymlinkDefinition symlink :
-        getAllLinkDefinitions(
-            symlinkDefinitions, !buildRequestOptions.experimentalNoProductNameOutSymlink)) {
+    for (SymlinkDefinition symlink : getAllLinkDefinitions(symlinkDefinitions)) {
       String linkName = symlink.getLinkName(symlinkPrefix, productName, workspaceBaseName);
       if (!createdLinks.add(linkName)) {
         // already created a link by this name
@@ -193,10 +187,9 @@ public final class OutputDirectoryLinksUtils {
       String symlinkPrefix,
       String productName,
       Path workspaceDirectory,
-      Path workingDirectory,
-      boolean omitProductOut) {
+      Path workingDirectory) {
     return new PathPrettyPrinter(
-        getAllLinkDefinitions(symlinkDefinitions, !omitProductOut),
+        getAllLinkDefinitions(symlinkDefinitions),
         symlinkPrefix,
         productName,
         workspaceDirectory,
@@ -228,9 +221,7 @@ public final class OutputDirectoryLinksUtils {
     List<String> failures = new ArrayList<>();
 
     String workspaceBaseName = workspace.getBaseName();
-    // Defaulting includeProductOut here to true since we want to remove all possible symlinks.
-    for (SymlinkDefinition link :
-        getAllLinkDefinitions(symlinkDefinitions, /*includeProductOut=*/ true)) {
+    for (SymlinkDefinition link : getAllLinkDefinitions(symlinkDefinitions)) {
       removeLink(
           workspace,
           link.getLinkName(symlinkPrefix, productName, workspaceBaseName),

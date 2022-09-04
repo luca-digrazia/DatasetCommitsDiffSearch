@@ -35,9 +35,6 @@ import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionPolicy;
-import com.google.devtools.build.lib.server.FailureDetails.DynamicExecution;
-import com.google.devtools.build.lib.server.FailureDetails.DynamicExecution.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
@@ -112,7 +109,7 @@ public class LegacyDynamicSpawnStrategy implements SpawnStrategy {
     abstract ImmutableList<SpawnResult> spawnResults();
   }
 
-  private static final ImmutableSet<String> DISABLED_MNEMONICS_FOR_WORKERS =
+  private static final ImmutableSet<String> WORKER_BLACKLISTED_MNEMONICS =
       ImmutableSet.of("JavaDeployJar");
 
   private final ExecutorService executorService;
@@ -145,7 +142,7 @@ public class LegacyDynamicSpawnStrategy implements SpawnStrategy {
         && !options.availabilityInfoExempt.contains(spawn.getMnemonic())) {
       if (spawn.getExecutionInfo().containsKey(ExecutionRequirements.REQUIRES_DARWIN)
           && !spawn.getExecutionInfo().containsKey(ExecutionRequirements.REQUIREMENTS_SET)) {
-        String message =
+        throw new EnvironmentalExecException(
             String.format(
                 "The following spawn was missing Xcode-related execution requirements. Please"
                     + " let the Bazel team know if you encounter this issue. You can work around"
@@ -159,9 +156,7 @@ public class LegacyDynamicSpawnStrategy implements SpawnStrategy {
                 spawn.getMnemonic(),
                 spawn.getToolFiles(),
                 spawn.getExecutionPlatform(),
-                spawn.getExecutionInfo());
-        throw new EnvironmentalExecException(
-            createFailureDetail(message, Code.XCODE_RELATED_PREREQ_UNMET));
+                spawn.getExecutionInfo()));
       }
     }
     ExecutionPolicy executionPolicy = getExecutionPolicy.apply(spawn);
@@ -352,7 +347,7 @@ public class LegacyDynamicSpawnStrategy implements SpawnStrategy {
   }
 
   private static boolean supportsWorkers(Spawn spawn) {
-    return (!DISABLED_MNEMONICS_FOR_WORKERS.contains(spawn.getMnemonic())
+    return (!WORKER_BLACKLISTED_MNEMONICS.contains(spawn.getMnemonic())
         && Spawns.supportsWorkers(spawn));
   }
 
@@ -406,13 +401,6 @@ public class LegacyDynamicSpawnStrategy implements SpawnStrategy {
     }
     throw new RuntimeException(
         "executorCreated not yet called or no default dynamic_remote_strategy set");
-  }
-
-  private static FailureDetail createFailureDetail(String message, Code detailedCode) {
-    return FailureDetail.newBuilder()
-        .setMessage(message)
-        .setDynamicExecution(DynamicExecution.newBuilder().setCode(detailedCode))
-        .build();
   }
 
   private abstract static class DynamicExecutionCallable
