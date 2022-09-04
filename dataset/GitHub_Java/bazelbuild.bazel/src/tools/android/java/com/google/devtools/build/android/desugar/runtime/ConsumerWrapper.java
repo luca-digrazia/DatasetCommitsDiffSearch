@@ -81,7 +81,7 @@ public final class ConsumerWrapper<T> implements Consumer<T> {
         resultListener != null ? new ConsumerWrapper<Bundle>(resultListener) : null);
   }
 
-  public static void requestDirectActions(
+  public final void requestDirectActions(
       VoiceInteractionSession receiver,
       VoiceInteractionSession.ActivityId activityId,
       CancellationSignal cancellationSignal,
