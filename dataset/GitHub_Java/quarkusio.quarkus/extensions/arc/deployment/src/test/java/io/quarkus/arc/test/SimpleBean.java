@@ -21,13 +21,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.inject.Provider;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import io.quarkus.runtime.StartupEvent;
 
 @ApplicationScoped
 public class SimpleBean {
-    
+
     static final String DEFAULT = "bar";
 
     private final AtomicReference<StartupEvent> startupEvent = new AtomicReference<StartupEvent>();
@@ -39,10 +41,14 @@ public class SimpleBean {
     @Inject
     @ConfigProperty(name = "unconfigured")
     Optional<String> fooOptional;
-    
+
     @Inject
     @ConfigProperty(name = "simpleBean.baz")
     Optional<String> bazOptional;
+
+    @Inject
+    @ConfigProperty(name = "simpleBean.baz")
+    Provider<String> bazProvider;
 
     void onStart(@Observes StartupEvent event) {
         startupEvent.set(event);
@@ -63,7 +69,9 @@ public class SimpleBean {
     Optional<String> getBazOptional() {
         return bazOptional;
     }
-    
+
+    public Provider<String> getBazProvider() {
+        return bazProvider;
+    }
+
 }
-
-
