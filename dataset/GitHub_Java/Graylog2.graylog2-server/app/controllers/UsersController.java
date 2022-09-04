@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package controllers;
 
@@ -172,7 +172,7 @@ public class UsersController extends AuthenticatedController {
         User user = userService.load(username);
         if (user != null) {
             Map<String, Object> result = Maps.newHashMap();
-            result.put("preferences", user.getPreferences());
+            result.put("preferences", initDefaultPreferences(user.getPreferences()));
             // TODO: there is more than preferences
             return ok(Json.toJson(result));
         } else {
@@ -196,6 +196,18 @@ public class UsersController extends AuthenticatedController {
         }
     }
 
+    private Map<String, Object> initDefaultPreferences(Map<String, Object> preferences) {
+        Map<String, Object> effectivePreferences = Maps.newHashMap();
+        // TODO: Move defaults into a static map once we have more preferences
+        effectivePreferences.put("updateUnfocussed", false);
+        effectivePreferences.put("disableExpensiveUpdates", false);
+        effectivePreferences.put("enableSmartSearch", false);
+        if (preferences != null) {
+            effectivePreferences.putAll(preferences);
+        }
+        return effectivePreferences;
+    }
+
     private Map<String, Object> normalizePreferences(Map<String, Object> preferences) {
         Map<String, Object> normalizedPreferences = Maps.newHashMap();
         // TODO: Move types into a static map once we have more preferences
@@ -205,8 +217,6 @@ public class UsersController extends AuthenticatedController {
             } else if (preference.getKey().equals("disableExpensiveUpdates")) {
                 normalizedPreferences.put(preference.getKey(), asBoolean(preference.getValue()));
             } else if (preference.getKey().equals("enableSmartSearch")) {
-                normalizedPreferences.put(preference.getKey(), asBoolean(preference.getValue()));
-            } else if (preference.getKey().equals("enableNewWidgets")) {
                 normalizedPreferences.put(preference.getKey(), asBoolean(preference.getValue()));
             }
         }
@@ -345,8 +355,8 @@ public class UsersController extends AuthenticatedController {
             @Override
             public boolean apply(@Nullable String input) {
                 return (input != null) &&
-                        !(input.startsWith(STREAMS_READ.getPermission()) || input.startsWith(STREAMS_EDIT.getPermission()) ||
-                                input.startsWith(DASHBOARDS_READ.getPermission()) || input.startsWith(DASHBOARDS_EDIT.getPermission()));
+                        !(input.startsWith(STREAMS_READ) || input.startsWith(STREAMS_EDIT) ||
+                                input.startsWith(DASHBOARDS_READ) || input.startsWith(DASHBOARDS_EDIT));
             }
         }));
         for (String streampermission : formData.streampermissions) {
