@@ -14,30 +14,25 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi;
 
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import javax.annotation.Nullable;
 
-/** Returns information about executables produced by a target and the files needed to run it. */
-@SkylarkModule(name = "FilesToRunProvider", doc = "", category = SkylarkModuleCategory.PROVIDER)
-public interface FilesToRunProviderApi<FileT extends FileApi> {
+/**
+ * A node in the build dependency graph, identified by a Label.
+ */
+@SkylarkModule(name = "target", doc = "", documented = false)
+public interface TargetApi {
 
-  @SkylarkCallable(
-    name = "executable",
-    doc = "The main executable or None if it does not exist.",
-    structField = true,
-    allowReturnNones = true
-  )
-  @Nullable
-  public FileT getExecutable();
+  /**
+   * Returns the label of this target.  (e.g. "//foo:bar")
+   */
+  @SkylarkCallable(name = "label", documented = false)
+  Label getLabel();
 
-  @SkylarkCallable(
-    name = "runfiles_manifest",
-    doc = "The runfiles manifest or None if it does not exist.",
-    structField = true,
-    allowReturnNones = true
-  )
-  @Nullable
-  public FileT getRunfilesManifest();
+  /**
+   * Returns the name of this rule (relative to its owning package).
+   */
+  @SkylarkCallable(name = "name", documented = false)
+  String getName();
 }
