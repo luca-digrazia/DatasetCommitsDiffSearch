@@ -202,9 +202,8 @@ public class AppleSkylarkCommon {
   @SkylarkCallable(
     name = IosDeviceProvider.SKYLARK_NAME,
     doc =
-        "[NOTE: This is deprecated and will be removed in the future. Use the new Skylark testing "
-            + "rules instead.] Returns the provider constructor for IosDeviceProvider. Use this as "
-            + "a key to access the attributes exposed by ios_device.",
+        "Returns the provider constructor for IosDeviceProvider. Use this as a key to access the "
+            + "attributes exposed by ios_device.",
     structField = true
   )
   public ClassObjectConstructor getIosDeviceProviderConstructor() {
