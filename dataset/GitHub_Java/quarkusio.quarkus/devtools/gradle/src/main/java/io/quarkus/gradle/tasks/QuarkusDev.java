@@ -238,7 +238,7 @@ public class QuarkusDev extends QuarkusTask {
             StringBuilder classPathManifest = new StringBuilder();
 
             final AppModel appModel;
-            final AppModelResolver modelResolver = extension().getAppModelResolver();
+            final AppModelResolver modelResolver = extension().resolveAppModel();
             try {
                 final AppArtifact appArtifact = extension.getAppArtifact();
                 appArtifact.setPath(extension.outputDirectory().toPath());
