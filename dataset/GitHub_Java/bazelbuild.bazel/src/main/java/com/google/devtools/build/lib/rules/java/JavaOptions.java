@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
@@ -56,14 +55,6 @@ public class JavaOptions extends FragmentOptions {
   public static class JavaOptimizationModeConverter extends EnumConverter<JavaOptimizationMode> {
     public JavaOptimizationModeConverter() {
       super(JavaOptimizationMode.class, "Java optimization strategy");
-    }
-  }
-
-  /** Converter for the --java_optimization_mode option. */
-  public static class OneVersionEnforcementLevelConverter
-      extends EnumConverter<OneVersionEnforcementLevel> {
-    public OneVersionEnforcementLevelConverter() {
-      super(OneVersionEnforcementLevel.class, "Enforcement level for Java One Version violations");
     }
   }
 
@@ -426,15 +417,13 @@ public class JavaOptions extends FragmentOptions {
 
   @Option(
     name = "experimental_one_version_enforcement",
-    defaultValue = "OFF",
-    converter = OneVersionEnforcementLevelConverter.class,
+    defaultValue = "false",
     optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     help =
         "When enabled, enforce that a java_binary rule can't contain more than one version "
-            + "of the same class file on the classpath. This enforcement can break the build, or "
-            + "can just result in warnings."
+            + "of the same class file on the classpath"
   )
-  public OneVersionEnforcementLevel enforceOneVersion;
+  public boolean enforceOneVersion;
 
   @Override
   public FragmentOptions getHost(boolean fallback) {
