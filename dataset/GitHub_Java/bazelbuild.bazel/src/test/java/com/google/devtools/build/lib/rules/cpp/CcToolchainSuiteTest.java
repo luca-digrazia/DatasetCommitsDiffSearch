@@ -243,8 +243,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     useConfiguration(
         "--crosstool_top=//cc:suite", "--cpu=ppc", "--host_cpu=ppc", "--compiler=compiler");
     Action action = getGeneratingAction(getConfiguredTarget("//a:a"), "a/ao");
-    assertThat(ActionsTestUtil.baseArtifactNames(action.getInputs()))
-        .contains("tools_Scpp_Ccrosstool");
+    assertThat(ActionsTestUtil.baseArtifactNames(action.getInputs())).contains("linux-marker");
 
     NestedSet<Artifact> suiteFiles = getFilesToBuild(getConfiguredTarget("//cc:suite"));
     assertThat(ActionsTestUtil.baseArtifactNames(suiteFiles))
