@@ -83,8 +83,7 @@ public class KeywordSearchResource extends SearchResource {
     public String histogramKeyword(
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
             @ApiParam(title = "interval", description = "Histogram interval / bucket size. (year, quarter, month, week, day, hour or minute)", required = true) @QueryParam("interval") String interval,
-            @ApiParam(title = "keyword", description = "Range keyword", required = true) @QueryParam("keyword") String keyword,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
+            @ApiParam(title = "keyword", description = "Range keyword", required = true) @QueryParam("keyword") String keyword) {
         checkQueryAndInterval(query, interval);
         interval = interval.toUpperCase();
         validateInterval(interval);
@@ -94,7 +93,6 @@ public class KeywordSearchResource extends SearchResource {
                     core.getIndexer().searches().histogram(
                             query,
                             Indexer.DateHistogramInterval.valueOf(interval),
-                            filter,
                             buildKeywordTimeRange(keyword)
                     )
             ));
@@ -114,13 +112,12 @@ public class KeywordSearchResource extends SearchResource {
             @ApiParam(title = "field", description = "Message field of to return terms of", required = true) @QueryParam("field") String field,
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
             @ApiParam(title = "size", description = "Maximum number of terms to return", required = false) @QueryParam("size") int size,
-            @ApiParam(title = "keyword", description = "Range keyword", required = true) @QueryParam("keyword") String keyword,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
+            @ApiParam(title = "keyword", description = "Range keyword", required = true) @QueryParam("keyword") String keyword) {
         checkQueryAndField(query, field);
 
         try {
             return json(buildTermsResult(
-                    core.getIndexer().searches().terms(field, size, query, filter, buildKeywordTimeRange(keyword))
+                    core.getIndexer().searches().terms(field, size, query, buildKeywordTimeRange(keyword))
             ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);
@@ -140,13 +137,12 @@ public class KeywordSearchResource extends SearchResource {
     public String statsKeyword(
             @ApiParam(title = "field", description = "Message field of numeric type to return statistics for", required = true) @QueryParam("field") String field,
             @ApiParam(title = "query", description = "Query (Lucene syntax)", required = true) @QueryParam("query") String query,
-            @ApiParam(title = "keyword", description = "Range keyword", required = true) @QueryParam("keyword") String keyword,
-            @ApiParam(title = "filter", description = "Filter", required = false) @QueryParam("filter") String filter) {
+            @ApiParam(title = "keyword", description = "Range keyword", required = true) @QueryParam("keyword") String keyword) {
         checkQueryAndField(query, field);
 
         try {
             return json(buildFieldStatsResult(
-                    fieldStats(field, query, filter, buildKeywordTimeRange(keyword))
+                    fieldStats(field, query, buildKeywordTimeRange(keyword))
             ));
         } catch (IndexHelper.InvalidRangeFormatException e) {
             LOG.warn("Invalid timerange parameters provided. Returning HTTP 400.", e);

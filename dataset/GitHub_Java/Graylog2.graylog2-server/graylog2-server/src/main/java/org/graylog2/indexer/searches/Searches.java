@@ -65,21 +65,12 @@ public class Searches {
 	}
 
     public CountResult count(String query, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
-        return count(query, range, null);
-    }
-
-    public CountResult count(String query, TimeRange range, String filter) throws IndexHelper.InvalidRangeFormatException {
         Set<String> indices = IndexHelper.determineAffectedIndices(server, range);
 
-        SearchRequest request;
-        if (filter == null) {
-            request = standardSearchRequest(query, indices, range).request();
-        } else {
-            request = filteredSearchRequest(query, filter, indices, range).request();
-        }
-        request.searchType(SearchType.COUNT);
+        SearchRequestBuilder srb = standardSearchRequest(query, indices, range);
+        srb.setSearchType(SearchType.COUNT);
 
-        SearchResponse r = c.search(request).actionGet();
+        SearchResponse r = c.search(srb.request()).actionGet();
         return new CountResult(r.getHits().getTotalHits(), r.getTookInMillis());
     }
 
@@ -254,10 +245,6 @@ public class Searches {
     }
 
     private SearchRequestBuilder standardSearchRequest(String query, Set<String> indices, int limit, int offset, TimeRange range, SortOrder sort) throws IndexHelper.InvalidRangeFormatException {
-        if (query == null || query.trim().isEmpty()) {
-            query = "*";
-        }
-
         SearchRequestBuilder srb = c.prepareSearch();
         srb.setIndices(indices.toArray(new String[]{}));
         srb.setQuery(queryString(query));
