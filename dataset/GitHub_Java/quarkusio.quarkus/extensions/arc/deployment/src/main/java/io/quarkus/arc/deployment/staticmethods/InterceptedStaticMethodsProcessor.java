@@ -170,13 +170,12 @@ public class InterceptedStaticMethodsProcessor {
         String initAllMethodName = "init_static_intercepted_methods";
         for (Entry<DotName, List<InterceptedStaticMethodBuildItem>> entry : interceptedStaticMethodsMap.entrySet()) {
 
-            String packageName = DotNames.internalPackageNameWithTrailingSlash(entry.getKey());
-            String intializerName = packageName.replace("/", ".") + entry.getKey().withoutPackagePrefix()
-                    + INITIALIZER_CLASS_SUFFIX;
+            String packageName = DotNames.packageName(entry.getKey());
+            String intializerName = packageName + "." + entry.getKey().withoutPackagePrefix() + INITIALIZER_CLASS_SUFFIX;
             initializers.put(entry.getKey(), intializerName);
 
             ClassCreator initializer = ClassCreator.builder().classOutput(classOutput)
-                    .className(intializerName).setFinal(true).build();
+                    .className(intializerName.replace('.', '/')).setFinal(true).build();
 
             List<String> initMethods = new ArrayList<>();
             for (InterceptedStaticMethodBuildItem interceptedStaticMethod : entry.getValue()) {

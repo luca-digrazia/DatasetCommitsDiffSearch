@@ -127,7 +127,6 @@ public class ArcProcessor {
     public ContextRegistrationPhaseBuildItem initialize(
             ArcConfig arcConfig,
             BeanArchiveIndexBuildItem beanArchiveIndex,
-            CombinedIndexBuildItem combinedIndex,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             List<AnnotationsTransformerBuildItem> annotationTransformers,
             List<InjectionPointTransformerBuildItem> injectionPointTransformers,
@@ -194,8 +193,7 @@ public class ArcProcessor {
                 }
             }
         });
-        builder.setBeanArchiveIndex(index);
-        builder.setApplicationIndex(combinedIndex.getIndex());
+        builder.setIndex(index);
         List<BeanDefiningAnnotation> beanDefiningAnnotations = additionalBeanDefiningAnnotations.stream()
                 .map((s) -> new BeanDefiningAnnotation(s.getName(), s.getDefaultScope())).collect(Collectors.toList());
         beanDefiningAnnotations.add(new BeanDefiningAnnotation(ADDITIONAL_BEAN, null));
@@ -261,25 +259,6 @@ public class ArcProcessor {
         }
         for (UnremovableBeanBuildItem exclusion : removalExclusions) {
             builder.addRemovalExclusion(exclusion.getPredicate());
-        }
-        // unremovable beans specified in application.properties
-        if (arcConfig.unremovableTypes.isPresent()) {
-            List<Predicate<ClassInfo>> classPredicates = initClassPredicates(arcConfig.unremovableTypes.get());
-            builder.addRemovalExclusion(new Predicate<BeanInfo>() {
-                @Override
-                public boolean test(BeanInfo beanInfo) {
-                    ClassInfo beanClass = beanInfo.getImplClazz();
-                    if (beanClass != null) {
-                        // if any of the predicates match, we make the given bean unremovable
-                        for (Predicate<ClassInfo> predicate : classPredicates) {
-                            if (predicate.test(beanClass)) {
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                }
-            });
         }
         if (testClassPredicate.isPresent()) {
             builder.addRemovalExclusion(new Predicate<BeanInfo>() {
@@ -389,7 +368,12 @@ public class ArcProcessor {
             configurator.getValues().forEach(ObserverConfigurator::done);
         }
 
-        Consumer<BytecodeTransformer> bytecodeTransformerConsumer = new BytecodeTransformerConsumer(bytecodeTransformer);
+        Consumer<BytecodeTransformer> bytecodeTransformerConsumer = new Consumer<BytecodeTransformer>() {
+            @Override
+            public void accept(BytecodeTransformer t) {
+                bytecodeTransformer.produce(new BytecodeTransformerBuildItem(t.getClassToTransform(), t.getVisitorFunction()));
+            }
+        };
         observerRegistrationPhase.getBeanProcessor().initialize(bytecodeTransformerConsumer);
         return new ValidationPhaseBuildItem(observerRegistrationPhase.getBeanProcessor().validate(bytecodeTransformerConsumer),
                 observerRegistrationPhase.getBeanProcessor());
@@ -398,7 +382,7 @@ public class ArcProcessor {
     // PHASE 5 - generate resources and initialize the container
     @BuildStep
     @Record(STATIC_INIT)
-    public BeanContainerBuildItem generateResources(ArcConfig config, ArcRecorder recorder, ShutdownContextBuildItem shutdown,
+    public BeanContainerBuildItem generateResources(ArcRecorder recorder, ShutdownContextBuildItem shutdown,
             ValidationPhaseBuildItem validationPhase,
             List<ValidationPhaseBuildItem.ValidationErrorBuildItem> validationErrors,
             List<BeanContainerListenerBuildItem> beanContainerListenerBuildItems,
@@ -407,8 +391,7 @@ public class ArcProcessor {
             BuildProducer<ReflectiveFieldBuildItem> reflectiveFields,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             LiveReloadBuildItem liveReloadBuildItem,
-            BuildProducer<GeneratedResourceBuildItem> generatedResource,
-            BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformer) throws Exception {
+            BuildProducer<GeneratedResourceBuildItem> generatedResource) throws Exception {
 
         for (ValidationErrorBuildItem validationError : validationErrors) {
             for (Throwable error : validationError.getValues()) {
@@ -424,8 +407,6 @@ public class ArcProcessor {
             liveReloadBuildItem.setContextObject(ExistingClasses.class, existingClasses);
         }
 
-        Consumer<BytecodeTransformer> bytecodeTransformerConsumer = new BytecodeTransformerConsumer(bytecodeTransformer);
-
         long start = System.currentTimeMillis();
         List<ResourceOutput.Resource> resources = beanProcessor.generateResources(new ReflectionRegistration() {
             @Override
@@ -437,8 +418,7 @@ public class ArcProcessor {
             public void registerField(FieldInfo fieldInfo) {
                 reflectiveFields.produce(new ReflectiveFieldBuildItem(fieldInfo));
             }
-        }, existingClasses.existingClasses, bytecodeTransformerConsumer,
-                config.shouldEnableBeanRemoval() && config.detectUnusedFalsePositives);
+        }, existingClasses.existingClasses);
         for (ResourceOutput.Resource resource : resources) {
             switch (resource.getType()) {
                 case JAVA_CLASS:
@@ -468,7 +448,10 @@ public class ArcProcessor {
         ArcContainer container = recorder.getContainer(shutdown);
         BeanContainer beanContainer = recorder.initBeanContainer(container,
                 beanContainerListenerBuildItems.stream().map(BeanContainerListenerBuildItem::getBeanContainerListener)
-                        .collect(Collectors.toList()));
+                        .collect(Collectors.toList()),
+                beanProcessor.getBeanDeployment().getRemovedBeans().stream().flatMap(b -> b.getTypes().stream())
+                        .map(t -> t.name().toString())
+                        .collect(Collectors.toSet()));
 
         return new BeanContainerBuildItem(beanContainer);
 
@@ -500,11 +483,11 @@ public class ArcProcessor {
         return new CustomScopeAnnotationsBuildItem(names);
     }
 
-    private List<Predicate<ClassInfo>> initClassPredicates(List<String> types) {
+    private List<Predicate<ClassInfo>> initClassPredicates(List<String> selectedAlternatives) {
         final String packMatch = ".*";
         final String packStarts = ".**";
         List<Predicate<ClassInfo>> predicates = new ArrayList<>();
-        for (String val : types) {
+        for (String val : selectedAlternatives) {
             if (val.endsWith(packMatch)) {
                 // Package matches
                 final String pack = val.substring(0, val.length() - packMatch.length());
@@ -600,19 +583,5 @@ public class ArcProcessor {
      */
     static class ExistingClasses {
         Set<String> existingClasses = new HashSet<>();
-    }
-
-    private static class BytecodeTransformerConsumer implements Consumer<BytecodeTransformer> {
-
-        private final BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformer;
-
-        public BytecodeTransformerConsumer(BuildProducer<BytecodeTransformerBuildItem> bytecodeTransformer) {
-            this.bytecodeTransformer = bytecodeTransformer;
-        }
-
-        @Override
-        public void accept(BytecodeTransformer t) {
-            bytecodeTransformer.produce(new BytecodeTransformerBuildItem(t.getClassToTransform(), t.getVisitorFunction()));
-        }
     }
 }
