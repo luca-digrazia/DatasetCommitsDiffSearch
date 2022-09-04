@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.smallrye.jwt.deployment;
 
 import java.security.interfaces.RSAPublicKey;
@@ -24,7 +40,7 @@ import io.quarkus.elytron.security.deployment.SecurityRealmBuildItem;
 import io.quarkus.elytron.security.runtime.AuthConfig;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.smallrye.jwt.runtime.JWTAuthContextInfoGroup;
-import io.quarkus.smallrye.jwt.runtime.SmallRyeJwtRecorder;
+import io.quarkus.smallrye.jwt.runtime.SmallRyeJwtTemplate;
 import io.quarkus.smallrye.jwt.runtime.auth.ClaimAttributes;
 import io.quarkus.smallrye.jwt.runtime.auth.ElytronJwtCallerPrincipal;
 import io.quarkus.smallrye.jwt.runtime.auth.JWTAuthMethodExtension;
@@ -82,7 +98,7 @@ class SmallRyeJwtProcessor {
 
     /**
      * If the configuration specified a deployment local key resource, register it with substrate
-     *
+     * 
      * @return SubstrateResourceBuildItem
      */
     @BuildStep
@@ -100,7 +116,7 @@ class SmallRyeJwtProcessor {
     /**
      * Configure a TokenSecurityRealm if enabled
      *
-     * @param recorder - jwt runtime recorder
+     * @param template - jwt runtime template
      * @param securityRealm - producer used to register the TokenSecurityRealm
      * @param container - the BeanContainer for creating CDI beans
      * @param reflectiveClasses - producer to register classes for reflection
@@ -110,7 +126,7 @@ class SmallRyeJwtProcessor {
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     @SuppressWarnings({ "unchecked", "rawtypes" })
-    AuthConfigBuildItem configureFileRealmAuthConfig(SmallRyeJwtRecorder recorder,
+    AuthConfigBuildItem configureFileRealmAuthConfig(SmallRyeJwtTemplate template,
             BuildProducer<ObjectSubstitutionBuildItem> objectSubstitution,
             BuildProducer<SecurityRealmBuildItem> securityRealm,
             BeanContainerBuildItem container,
@@ -121,8 +137,8 @@ class SmallRyeJwtProcessor {
                     PublicKeyProxy.class, PublicKeySubstitution.class);
             ObjectSubstitutionBuildItem pkSub = new ObjectSubstitutionBuildItem(pkHolder);
             objectSubstitution.produce(pkSub);
-            // Have the runtime recorder create the TokenSecurityRealm and create the build item
-            RuntimeValue<SecurityRealm> realm = recorder.createTokenRealm(container.getValue());
+            // Have the runtime template create the TokenSecurityRealm and create the build item
+            RuntimeValue<SecurityRealm> realm = template.createTokenRealm(container.getValue());
             AuthConfig authConfig = new AuthConfig();
             authConfig.setAuthMechanism(config.authMechanism);
             authConfig.setRealmName(config.realmName);
@@ -140,39 +156,37 @@ class SmallRyeJwtProcessor {
     /**
      * Create the JwtIdentityManager
      *
-     * @param recorder - jwt runtime recorder
+     * @param template - jwt runtime template
      * @param securityDomain - the previously created TokenSecurityRealm
      * @param identityManagerProducer - producer for the identity manager
      */
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void configureIdentityManager(SmallRyeJwtRecorder recorder, SecurityDomainBuildItem securityDomain,
+    void configureIdentityManager(SmallRyeJwtTemplate template, SecurityDomainBuildItem securityDomain,
             BuildProducer<IdentityManagerBuildItem> identityManagerProducer) {
-        if (config.enabled) {
-            IdentityManager identityManager = recorder.createIdentityManager(securityDomain.getSecurityDomain());
-            identityManagerProducer.produce(new IdentityManagerBuildItem(identityManager));
-        }
+        IdentityManager identityManager = template.createIdentityManager(securityDomain.getSecurityDomain());
+        identityManagerProducer.produce(new IdentityManagerBuildItem(identityManager));
     }
 
     /**
      * Register the MP-JWT authentication servlet extension
      *
-     * @param recorder - jwt runtime recorder
+     * @param template - jwt runtime template
      * @param container - the BeanContainer for creating CDI beans
      * @return servlet extension build item
      */
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    ServletExtensionBuildItem registerJwtAuthExtension(SmallRyeJwtRecorder recorder, BeanContainerBuildItem container) {
+    ServletExtensionBuildItem registerJwtAuthExtension(SmallRyeJwtTemplate template, BeanContainerBuildItem container) {
         log.debugf("registerJwtAuthExtension");
-        ServletExtension authExt = recorder.createAuthExtension(config.authMechanism, container.getValue());
+        ServletExtension authExt = template.createAuthExtension(config.authMechanism, container.getValue());
         ServletExtensionBuildItem sebi = new ServletExtensionBuildItem(authExt);
         return sebi;
     }
 
     /**
      * Register the SHA256withRSA signature provider
-     *
+     * 
      * @return JCAProviderBuildItem for SHA256withRSA signature provider
      */
     @BuildStep
