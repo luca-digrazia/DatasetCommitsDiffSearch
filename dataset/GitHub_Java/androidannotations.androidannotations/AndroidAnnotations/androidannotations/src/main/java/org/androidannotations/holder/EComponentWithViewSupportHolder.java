@@ -55,7 +55,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 	private JBlock onViewChangedBody;
 	private JBlock onViewChangedBodyBeforeFindViews;
 	private JVar onViewChangedHasViewsParam;
-	protected Map<String, FoundHolder> foundHolders = new HashMap<String, FoundHolder>();
+	private Map<String, FoundViewHolder> foundViewsHolders = new HashMap<String, FoundViewHolder>();
 	protected JMethod findNativeFragmentById;
 	protected JMethod findSupportFragmentById;
 	protected JMethod findNativeFragmentByTag;
@@ -108,13 +108,13 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 
 	public void assignFindViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
 		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
-		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
+		FoundViewHolder foundViewHolder = foundViewsHolders.get(idRefString);
 
 		JBlock block = getOnViewChangedBody();
 		JExpression assignExpression;
 
 		if (foundViewHolder != null) {
-			assignExpression = foundViewHolder.getOrCastRef(viewClass);
+			assignExpression = foundViewHolder.getView(viewClass);
 		} else {
 			assignExpression = findViewById(idRef);
 			if (viewClass != null && viewClass != classes().VIEW) {
@@ -124,7 +124,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 					codeModelHelper.addSuppressWarnings(onViewChanged, "unchecked");
 				}
 			}
-			foundHolders.put(idRefString, new FoundViewHolder(this, viewClass, fieldRef, block));
+			foundViewsHolders.put(idRefString, new FoundViewHolder(this, viewClass, fieldRef, block));
 		}
 
 		block.assign(fieldRef, assignExpression);
@@ -132,10 +132,10 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 
 	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, JClass viewClass) {
 		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
-		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
+		FoundViewHolder foundViewHolder = foundViewsHolders.get(idRefString);
 		if (foundViewHolder == null) {
 			foundViewHolder = createFoundViewAndIfNotNullBlock(idRef, viewClass);
-			foundHolders.put(idRefString, foundViewHolder);
+			foundViewsHolders.put(idRefString, foundViewHolder);
 		}
 		return foundViewHolder;
 	}
@@ -280,5 +280,4 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 
 		return new OnSeekBarChangeListenerHolder(this, onSeekbarChangeListenerClass);
 	}
-
 }
