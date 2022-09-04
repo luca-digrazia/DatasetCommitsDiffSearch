@@ -20,10 +20,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -31,10 +27,17 @@ import javax.annotation.Nullable;
 /**
  * A dependency of a configured target through a label.
  *
- * <p>All instances have an explicit configuration, which includes the target and the configuration
- * of the dependency configured target and any aspects that may be required, as well as the
- * configurations for these aspects and transition keys. {@link Dependency#getTransitionKeys}
- * provides some more context on transition keys.
+ * <p>The dep's configuration can be specified in one of two ways:
+ *
+ * <p>Explicit configurations: includes the target and the configuration of the dependency
+ * configured target and any aspects that may be required, as well as the configurations for these
+ * aspects and transition keys. {@link Dependency#getTransitionKeys} provides some more context on
+ * transition keys.
+ *
+ * <p>Configuration transitions: includes the target and the desired configuration transitions that
+ * should be applied to produce the dependency's configuration. It's the caller's responsibility to
+ * construct an actual configuration out of that. A set of aspects is also included; the caller must
+ * also construct configurations for each of these.
  *
  * <p>Note that the presence of an aspect here does not necessarily mean that it will be created.
  * They will be filtered based on the {@link TransitiveInfoProvider} instances their associated
@@ -43,68 +46,110 @@ import javax.annotation.Nullable;
  * over-approximate the providers they supply in their definitions.
  */
 public abstract class Dependency {
-  /** Builder to assist in creating dependency instances. */
-  public static class Builder {
-    private Label label;
-    private BuildConfiguration configuration;
-    private AspectCollection aspects = AspectCollection.EMPTY;
-    private List<String> transitionKeys = new ArrayList<>();
 
-    public Builder setLabel(Label label) {
-      this.label = Preconditions.checkNotNull(label);
-      return this;
-    }
-
-    public Builder setConfiguration(BuildConfiguration configuration) {
-      this.configuration = configuration;
-      return this;
-    }
-
-    /** Explicitly set the configuration for this dependency to null. */
-    public Builder withNullConfiguration() {
-      return setConfiguration(null);
-    }
-
-    /** Add aspects to this Dependency. The same configuration is applied to all aspects. */
-    public Builder setAspects(AspectCollection aspects) {
-      this.aspects = aspects;
-      return this;
-    }
-
-    public Builder addTransitionKey(String key) {
-      this.transitionKeys.add(key);
-      return this;
-    }
-
-    public Builder addTransitionKeys(Collection<String> keys) {
-      this.transitionKeys = new ArrayList<>(keys);
-      return this;
-    }
-
-    /** Returns the full Dependency instance. */
-    public Dependency build() {
-      if (configuration == null) {
-        Preconditions.checkState(aspects.equals(AspectCollection.EMPTY));
-        return new NullConfigurationDependency(label, ImmutableList.copyOf(transitionKeys));
-      }
-
-      // Use the target configuration for all aspects with none of their own.
-      Map<AspectDescriptor, BuildConfiguration> aspectConfigurations = new HashMap<>();
-      for (AspectDescriptor aspect : aspects.getAllAspects()) {
-        aspectConfigurations.put(aspect, configuration);
-      }
-      return new ExplicitConfigurationDependency(
-          label,
-          configuration,
-          aspects,
-          ImmutableMap.copyOf(aspectConfigurations),
-          ImmutableList.copyOf(transitionKeys));
-    }
+  /**
+   * Creates a new {@link Dependency} with a null configuration, suitable for edges with no
+   * configuration.
+   */
+  public static Dependency withNullConfiguration(Label label) {
+    return new NullConfigurationDependency(label, ImmutableList.of());
   }
 
-  /** Returns a new {@link Builder} to create {@link Dependency} instances. */
-  public static Builder builder() {
-    return new Builder();
+  /**
+   * Creates a new {@link Dependency} with a null configuration and transition keys, used when edges
+   * with a split transition were resolved to null configuration targets.
+   */
+  public static Dependency withNullConfigurationAndTransitionKeys(
+      Label label, ImmutableList<String> transitionKeys) {
+    return new NullConfigurationDependency(label, transitionKeys);
+  }
+
+  /**
+   * Creates a new {@link Dependency} with the given explicit configuration. Should only be used for
+   * dependency with no configuration changes.
+   *
+   * <p>The configuration must not be {@code null}.
+   *
+   * <p>A {@link Dependency} created this way will have no associated aspects.
+   */
+  public static Dependency withConfiguration(Label label, BuildConfiguration configuration) {
+    return new ExplicitConfigurationDependency(
+        label,
+        configuration,
+        AspectCollection.EMPTY,
+        ImmutableMap.<AspectDescriptor, BuildConfiguration>of(),
+        ImmutableList.of());
+  }
+
+  /**
+   * Creates a new {@link Dependency} with the given configuration and aspects. The configuration is
+   * also applied to all aspects. Should only be used for dependency with no configuration changes.
+   *
+   * <p>The configuration and aspects must not be {@code null}.
+   */
+  public static Dependency withConfigurationAndAspects(
+      Label label, BuildConfiguration configuration, AspectCollection aspects) {
+    ImmutableMap.Builder<AspectDescriptor, BuildConfiguration> aspectBuilder =
+        new ImmutableMap.Builder<>();
+    for (AspectDescriptor aspect : aspects.getAllAspects()) {
+      aspectBuilder.put(aspect, configuration);
+    }
+    return new ExplicitConfigurationDependency(
+        label, configuration, aspects, aspectBuilder.build(), ImmutableList.of());
+  }
+
+  /**
+   * Creates a new {@link Dependency} with the given configuration, aspects, and transition key. The
+   * configuration is also applied to all aspects. This should be preferred over {@link
+   * Dependency#withConfigurationAndAspects} if the {@code configuration} was derived from a {@link
+   * ConfigurationTransition}, and so there is a corresponding transition key.
+   *
+   * <p>The configuration and aspects must not be {@code null}.
+   */
+  public static Dependency withConfigurationAspectsAndTransitionKey(
+      Label label,
+      BuildConfiguration configuration,
+      AspectCollection aspects,
+      @Nullable String transitionKey) {
+    ImmutableMap.Builder<AspectDescriptor, BuildConfiguration> aspectBuilder =
+        new ImmutableMap.Builder<>();
+    for (AspectDescriptor aspect : aspects.getAllAspects()) {
+      aspectBuilder.put(aspect, configuration);
+    }
+    return new ExplicitConfigurationDependency(
+        label,
+        configuration,
+        aspects,
+        aspectBuilder.build(),
+        transitionKey == null ? ImmutableList.of() : ImmutableList.of(transitionKey));
+  }
+
+  /**
+   * Creates a new {@link Dependency} with the given configuration and aspects, suitable for storing
+   * the output of a configuration trimming step. The aspects each have their own configuration.
+   * Should only be used for dependency with no configuration changes.
+   *
+   * <p>The aspects and configurations must not be {@code null}.
+   */
+  public static Dependency withConfiguredAspects(
+      Label label,
+      BuildConfiguration configuration,
+      AspectCollection aspects,
+      Map<AspectDescriptor, BuildConfiguration> aspectConfigurations) {
+    return new ExplicitConfigurationDependency(
+        label,
+        configuration,
+        aspects,
+        ImmutableMap.copyOf(aspectConfigurations),
+        ImmutableList.of());
+  }
+
+  /**
+   * Creates a new {@link Dependency} with the given transition and aspects.
+   */
+  public static Dependency withTransitionAndAspects(
+      Label label, ConfigurationTransition transition, AspectCollection aspects) {
+    return new ConfigurationTransitionDependency(label, transition, aspects);
   }
 
   protected final Label label;
@@ -123,10 +168,25 @@ public abstract class Dependency {
   }
 
   /**
+   * Returns true if this dependency specifies an explicit configuration, false if it specifies
+   * a configuration transition.
+   */
+  public abstract boolean hasExplicitConfiguration();
+
+  /**
    * Returns the explicit configuration intended for this dependency.
+   *
+   * @throws IllegalStateException if {@link #hasExplicitConfiguration} returns false.
    */
   @Nullable
   public abstract BuildConfiguration getConfiguration();
+
+  /**
+   * Returns the configuration transition to apply to reach the target this dependency points to.
+   *
+   * @throws IllegalStateException if {@link #hasExplicitConfiguration} returns true.
+   */
+  public abstract ConfigurationTransition getTransition();
 
   /**
    * Returns the set of aspects which should be evaluated and combined with the configured target
@@ -136,7 +196,11 @@ public abstract class Dependency {
    */
   public abstract AspectCollection getAspects();
 
-  /** Returns the configuration an aspect should be evaluated with. */
+  /**
+   * Returns the configuration an aspect should be evaluated with
+   **
+   * @throws IllegalStateException if {@link #hasExplicitConfiguration()} returns false.
+   */
   public abstract BuildConfiguration getAspectConfiguration(AspectDescriptor aspect);
 
   /**
@@ -147,6 +211,8 @@ public abstract class Dependency {
    * multiple entries if the dependency has a null configuration, yet the outgoing edge has a split
    * transition. In such cases all transition keys returned by the transition are tagged to the
    * dependency.
+   *
+   * @throws IllegalStateException if {@link #hasExplicitConfiguration()} returns false.
    */
   public abstract ImmutableList<String> getTransitionKeys();
 
@@ -162,10 +228,21 @@ public abstract class Dependency {
       this.transitionKeys = Preconditions.checkNotNull(transitionKeys);
     }
 
+    @Override
+    public boolean hasExplicitConfiguration() {
+      return true;
+    }
+
     @Nullable
     @Override
     public BuildConfiguration getConfiguration() {
       return null;
+    }
+
+    @Override
+    public ConfigurationTransition getTransition() {
+      throw new IllegalStateException(
+          "This dependency has an explicit configuration, not a transition.");
     }
 
     @Override
@@ -226,8 +303,19 @@ public abstract class Dependency {
     }
 
     @Override
+    public boolean hasExplicitConfiguration() {
+      return true;
+    }
+
+    @Override
     public BuildConfiguration getConfiguration() {
       return configuration;
+    }
+
+    @Override
+    public ConfigurationTransition getTransition() {
+      throw new IllegalStateException(
+          "This dependency has an explicit configuration, not a transition.");
     }
 
     @Override
@@ -267,6 +355,77 @@ public abstract class Dependency {
       return String.format(
           "%s{label=%s, configuration=%s, aspectConfigurations=%s}",
           getClass().getSimpleName(), label, configuration, aspectConfigurations);
+    }
+  }
+
+  /**
+   * Implementation of a dependency with a given configuration transition.
+   */
+  private static final class ConfigurationTransitionDependency extends Dependency {
+    private final ConfigurationTransition transition;
+    private final AspectCollection aspects;
+
+    public ConfigurationTransitionDependency(
+        Label label, ConfigurationTransition transition, AspectCollection aspects) {
+      super(label);
+      this.transition = Preconditions.checkNotNull(transition);
+      this.aspects = Preconditions.checkNotNull(aspects);
+    }
+
+    @Override
+    public boolean hasExplicitConfiguration() {
+      return false;
+    }
+
+    @Override
+    public BuildConfiguration getConfiguration() {
+      throw new IllegalStateException(
+          "This dependency has a transition, not an explicit configuration.");
+    }
+
+    @Override
+    public ConfigurationTransition getTransition() {
+      return transition;
+    }
+
+    @Override
+    public AspectCollection getAspects() {
+      return aspects;
+    }
+
+    @Override
+    public BuildConfiguration getAspectConfiguration(AspectDescriptor aspect) {
+      throw new IllegalStateException(
+          "This dependency has a transition, not an explicit aspect configuration.");
+    }
+
+    @Override
+    public ImmutableList<String> getTransitionKeys() {
+      throw new IllegalStateException(
+          "This dependency has a transition, not an explicit configuration.");
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(label, transition, aspects);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (!(other instanceof ConfigurationTransitionDependency)) {
+        return false;
+      }
+      ConfigurationTransitionDependency otherDep = (ConfigurationTransitionDependency) other;
+      return label.equals(otherDep.label)
+          && transition.equals(otherDep.transition)
+          && aspects.equals(otherDep.aspects);
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "%s{label=%s, transition=%s, aspects=%s}",
+          getClass().getSimpleName(), label, transition, aspects);
     }
   }
 }
