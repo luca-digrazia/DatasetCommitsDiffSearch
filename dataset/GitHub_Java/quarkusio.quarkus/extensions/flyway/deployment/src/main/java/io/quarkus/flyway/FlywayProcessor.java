@@ -45,6 +45,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -77,6 +78,13 @@ class FlywayProcessor {
     }
 
     @BuildStep
+    void scannerTransformer(BuildProducer<BytecodeTransformerBuildItem> transformers) {
+        transformers
+                .produce(new BytecodeTransformerBuildItem(true, ScannerTransformer.FLYWAY_SCANNER_CLASS_NAME,
+                        new ScannerTransformer()));
+    }
+
+    @BuildStep
     IndexDependencyBuildItem indexFlyway() {
         return new IndexDependencyBuildItem("org.flywaydb", "flyway-core");
     }
@@ -98,7 +106,7 @@ class FlywayProcessor {
         List<String> applicationMigrations = discoverApplicationMigrations(getMigrationLocations(dataSourceNames));
         recorder.setApplicationMigrationFiles(applicationMigrations);
 
-        Set<Class<? extends JavaMigration>> javaMigrationClasses = new HashSet<>();
+        Set<Class<?>> javaMigrationClasses = new HashSet<>();
         addJavaMigrations(combinedIndexBuildItem.getIndex().getAllKnownImplementors(JAVA_MIGRATION), context,
                 reflectiveClassProducer, javaMigrationClasses);
         recorder.setApplicationMigrationClasses(javaMigrationClasses);
@@ -106,15 +114,13 @@ class FlywayProcessor {
         resourceProducer.produce(new NativeImageResourceBuildItem(applicationMigrations.toArray(new String[0])));
     }
 
-    @SuppressWarnings("unchecked")
     private void addJavaMigrations(Collection<ClassInfo> candidates, RecorderContext context,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer,
-            Set<Class<? extends JavaMigration>> javaMigrationClasses) {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer, Set<Class<?>> javaMigrationClasses) {
         for (ClassInfo javaMigration : candidates) {
             if (Modifier.isAbstract(javaMigration.flags())) {
                 continue;
             }
-            javaMigrationClasses.add((Class<JavaMigration>) context.classProxy(javaMigration.name().toString()));
+            javaMigrationClasses.add(context.classProxy(javaMigration.name().toString()));
             reflectiveClassProducer.produce(new ReflectiveClassBuildItem(false, false, javaMigration.name().toString()));
         }
     }
