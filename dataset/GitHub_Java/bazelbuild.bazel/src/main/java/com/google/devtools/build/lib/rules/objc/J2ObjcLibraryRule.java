@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.RuleClass.ToolchainTransitionMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
@@ -86,7 +85,6 @@ public class J2ObjcLibraryRule implements RuleDefinition {
         .setImplicitOutputsFunction(CompilationSupport.FULLY_LINKED_LIB)
         .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
-        .useToolchainTransition(ToolchainTransitionMode.ENABLED)
         .build();
   }
 
@@ -98,6 +96,7 @@ public class J2ObjcLibraryRule implements RuleDefinition {
         .ancestors(
             J2ObjcLibraryBaseRule.class,
             ObjcRuleClasses.CrosstoolRule.class,
+            ObjcRuleClasses.LibtoolRule.class,
             ObjcRuleClasses.XcrunRule.class)
         .build();
   }
