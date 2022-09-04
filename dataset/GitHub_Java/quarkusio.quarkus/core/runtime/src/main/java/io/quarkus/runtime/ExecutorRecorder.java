@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import org.jboss.logging.Logger;
@@ -27,20 +26,56 @@ public class ExecutorRecorder {
     public ExecutorRecorder() {
     }
 
+    /**
+     * In dev mode for now we need the executor to last for the life of the app, as it is used by Undertow. This will likely
+     * change
+     */
+    static volatile CleanableExecutor devModeExecutor;
+
     private static volatile Executor current;
 
     public ExecutorService setupRunTime(ShutdownContext shutdownContext, ThreadPoolConfig threadPoolConfig,
-            LaunchMode launchMode, ThreadFactory threadFactory) {
-        final EnhancedQueueExecutor underlying = createExecutor(threadPoolConfig, threadFactory);
+            LaunchMode launchMode) {
+        if (devModeExecutor != null) {
+            current = devModeExecutor;
+            return devModeExecutor;
+        }
+        final EnhancedQueueExecutor underlying = createExecutor(threadPoolConfig);
         ExecutorService executor;
         Runnable shutdownTask = createShutdownTask(threadPoolConfig, underlying);
-        shutdownContext.addLastShutdownTask(shutdownTask);
-        executor = underlying;
+        if (launchMode == LaunchMode.DEVELOPMENT) {
+            devModeExecutor = new CleanableExecutor(underlying);
+            shutdownContext.addShutdownTask(new Runnable() {
+                @Override
+                public void run() {
+                    devModeExecutor.clean();
+                }
+            });
+            executor = devModeExecutor;
+        } else {
+            shutdownContext.addLastShutdownTask(shutdownTask);
+            executor = underlying;
+        }
         if (threadPoolConfig.prefill) {
             underlying.prestartAllCoreThreads();
         }
         current = executor;
         return executor;
+    }
+
+    public static ExecutorService createDevModeExecutorForFailedStart(ThreadPoolConfig config) {
+        EnhancedQueueExecutor underlying = createExecutor(config);
+        Runnable task = createShutdownTask(config, underlying);
+        devModeExecutor = new CleanableExecutor(underlying);
+        Runtime.getRuntime().addShutdownHook(new Thread(task, "Executor shutdown thread"));
+        current = devModeExecutor;
+        return devModeExecutor;
+    }
+
+    static void shutdownDevMode() {
+        if (devModeExecutor != null) {
+            devModeExecutor.shutdown();
+        }
     }
 
     private static Runnable createShutdownTask(ThreadPoolConfig threadPoolConfig, EnhancedQueueExecutor executor) {
@@ -124,11 +159,9 @@ public class ExecutorRecorder {
         };
     }
 
-    private static EnhancedQueueExecutor createExecutor(ThreadPoolConfig threadPoolConfig, ThreadFactory threadFactory) {
-        if (threadFactory == null) {
-            threadFactory = new JBossThreadFactory(new ThreadGroup("executor"), Boolean.TRUE, null,
-                    "executor-thread-%t", JBossExecutors.loggingExceptionHandler("org.jboss.executor.uncaught"), null);
-        }
+    private static EnhancedQueueExecutor createExecutor(ThreadPoolConfig threadPoolConfig) {
+        final JBossThreadFactory threadFactory = new JBossThreadFactory(new ThreadGroup("executor"), Boolean.TRUE, null,
+                "executor-thread-%t", JBossExecutors.loggingExceptionHandler("org.jboss.executor.uncaught"), null);
         final EnhancedQueueExecutor.Builder builder = new EnhancedQueueExecutor.Builder()
                 .setRegisterMBean(false)
                 .setHandoffExecutor(JBossExecutors.rejectingExecutor())
