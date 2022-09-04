@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
+import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
@@ -28,6 +29,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.analysis.ArtifactsToOwnerLabels;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -125,6 +127,7 @@ public class IncludeScanningModule extends BlazeModule {
   /**
    * Implementation of {@link CppIncludeExtractionContext}.
    */
+  @ExecutionStrategy(contextType = CppIncludeExtractionContext.class)
   public static final class CppIncludeExtractionContextImpl implements CppIncludeExtractionContext {
     private final CommandEnvironment env;
 
@@ -141,6 +144,7 @@ public class IncludeScanningModule extends BlazeModule {
   /**
    * SwigIncludeScanningContextImpl implements SwigIncludeScanningContext.
    */
+  @ExecutionStrategy(contextType = SwigIncludeScanningContext.class)
   public static final class SwigIncludeScanningContextImpl implements SwigIncludeScanningContext {
     private final CommandEnvironment env;
     private final Supplier<SpawnIncludeScanner> spawnScannerSupplier;
@@ -217,10 +221,10 @@ public class IncludeScanningModule extends BlazeModule {
    */
   public static class IncludeScanningActionContextProvider extends ActionContextProvider {
     private final CommandEnvironment env;
+    private final ImmutableList<ActionContext> strategies;
     private final BuildRequest buildRequest;
 
     private final Supplier<SpawnIncludeScanner> spawnScannerSupplier;
-    private final boolean useAsyncIncludeScanner;
     private IncludeScannerSupplierImpl includeScannerSupplier;
     private ExecutorService includePool;
 
@@ -237,23 +241,19 @@ public class IncludeScanningModule extends BlazeModule {
               env.getExecRoot(),
               options.experimentalRemoteExtractionThreshold));
       this.spawnScannerSupplier = spawnScannerSupplier;
-      useAsyncIncludeScanner = options.useAsyncIncludeScanner;
+      this.strategies =
+          ImmutableList.of(
+              new CppIncludeExtractionContextImpl(env),
+              new SwigIncludeScanningContextImpl(
+                  env, spawnScannerSupplier, () -> includePool, options.useAsyncIncludeScanner),
+              new CppIncludeScanningContextImpl(() -> includeScannerSupplier));
+
       env.getEventBus().register(this);
     }
 
     @Override
-    public void registerActionContexts(ActionContextCollector collector) {
-      collector
-          .forType(CppIncludeExtractionContext.class)
-          .registerContext(new CppIncludeExtractionContextImpl(env));
-      collector
-          .forType(SwigIncludeScanningContext.class)
-          .registerContext(
-              new SwigIncludeScanningContextImpl(
-                  env, spawnScannerSupplier, () -> includePool, useAsyncIncludeScanner));
-      collector
-          .forType(CppIncludeScanningContext.class)
-          .registerContext(new CppIncludeScanningContextImpl(() -> includeScannerSupplier));
+    public Iterable<ActionContext> getActionContexts() {
+      return strategies;
     }
 
     @Override
@@ -276,7 +276,7 @@ public class IncludeScanningModule extends BlazeModule {
     }
 
     @Override
-    public void executorCreated() throws ExecutorInitException {
+    public void executorCreated(Iterable<ActionContext> usedContexts) throws ExecutorInitException {
       IncludeScanningOptions options = buildRequest.getOptions(IncludeScanningOptions.class);
       int threads = options.includeScanningParallelism;
       if (threads > 0) {
