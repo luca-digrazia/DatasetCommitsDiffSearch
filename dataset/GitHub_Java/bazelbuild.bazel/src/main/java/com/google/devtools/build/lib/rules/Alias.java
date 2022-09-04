@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -30,6 +29,7 @@ import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProviderImpl;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /**
@@ -38,7 +38,7 @@ import com.google.devtools.build.lib.util.FileTypeSet;
 public class Alias implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     ConfiguredTarget actual = (ConfiguredTarget) ruleContext.getPrerequisite("actual", Mode.TARGET);
     return new AliasConfiguredTarget(
         ruleContext,
@@ -55,7 +55,7 @@ public class Alias implements RuleConfiguredTargetFactory {
    */
   public static class AliasRule implements RuleDefinition {
     @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
           /*<!-- #BLAZE_RULE(alias).ATTRIBUTE(actual) -->
           The target this alias refers to. It does not need to be a rule, it can also be an input
@@ -104,10 +104,7 @@ public class Alias implements RuleConfiguredTargetFactory {
 
   <ul>
     <li>
-      Tests are not run if their alias is mentioned on the command line. To define an alias
-      that runs the referenced test, use a <a href="#test_suite"><code>test_suite</code></a>
-      rule with a single target in its <a href="#test_suite.tests"><code>tests</code></a>
-      attribute.
+      Tests are not run if their alias is mentioned on the command line
     </li>
     <li>
       When defining environment groups, the aliases to <code>environment</code> rules are not
