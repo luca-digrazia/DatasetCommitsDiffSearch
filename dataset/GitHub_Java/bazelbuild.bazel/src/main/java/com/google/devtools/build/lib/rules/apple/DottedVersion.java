@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ComparisonChain;
@@ -23,8 +22,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.DottedVersionApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.ArrayList;
 import java.util.Objects;
 import java.util.regex.Matcher;
@@ -70,57 +72,16 @@ import javax.annotation.Nullable;
  *
  * <p>This class is immutable and can safely be shared among threads.
  */
+@SkylarkModule(
+  name = "DottedVersion",
+  category = SkylarkModuleCategory.NONE,
+  doc =
+      "A value representing a version with multiple components, separated by periods, such as "
+          + "1.2.3.4."
+)
 @Immutable
 @AutoCodec
-public final class DottedVersion implements DottedVersionApi<DottedVersion> {
-  /** Wrapper class for {@link DottedVersion} whose {@link #equals(Object)} method is string
-   * equality.
-   *
-   * <p>This is necessary because Bazel assumes that
-   * {@link com.google.devtools.build.lib.analysis.config.FragmentOptions} that are equal yield
-   * fragments that are the same. However, this does not hold if the options hold a
-   * {@link DottedVersion} because trailing zeroes are not considered significant when comparing
-   * them, but they do matter in configuration fragments (for example, they end up in output
-   * directory names)</p>
-   * */
-  @Immutable
-  public static final class Option {
-    private final DottedVersion version;
-
-    private Option(DottedVersion version) {
-      this.version = Preconditions.checkNotNull(version);
-    }
-
-    public DottedVersion get() {
-      return version;
-    }
-
-    @Override
-    public int hashCode() {
-      return version.stringRepresentation.hashCode();
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-
-      if (!(o instanceof Option)) {
-        return false;
-      }
-
-      return version.stringRepresentation.equals(((Option) o).version.stringRepresentation);
-    }
-  }
-
-  public static DottedVersion maybeUnwrap(DottedVersion.Option option) {
-    return option != null ? option.get() : null;
-  }
-
-  public static Option option(DottedVersion version) {
-    return version == null ? null : new Option(version);
-  }
+public final class DottedVersion implements Comparable<DottedVersion>, SkylarkValue {
   private static final Splitter DOT_SPLITTER = Splitter.on('.');
   private static final Pattern COMPONENT_PATTERN = Pattern.compile("(\\d+)(?:([a-z]+)(\\d*))?");
   private static final String ILLEGAL_VERSION =
@@ -212,34 +173,14 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
     return 0;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "compare_to",
+      doc =
+          "Compares based on most significant (first) not-matching version component. "
+              + "So, for example, 1.2.3 < 1.2.4"
+  )
   public int compareTo_skylark(DottedVersion other) {
     return compareTo(other);
-  }
-
-  /**
-   * Returns the string representation of this dotted version, padded or truncated to the specified
-   * number of components.
-   *
-   * <p>For example, a dotted version of "7.3.0" will return "7" if one is requested, "7.3" if two
-   * are requested, "7.3.0" if three are requested, and "7.3.0.0" if four are requested.
-   *
-   * @param numComponents a positive number of dot-separated numbers that should be present in the
-   *     returned string representation
-   */
-  public String toStringWithComponents(int numComponents) {
-    Preconditions.checkArgument(numComponents > 0,
-        "Can't serialize as a version with %s components", numComponents);
-    ImmutableList.Builder<Component> stringComponents = ImmutableList.builder();
-    if (numComponents <= components.size()) {
-      stringComponents.addAll(components.subList(0, numComponents));
-    } else {
-      stringComponents.addAll(components);
-      for (int i = components.size(); i < numComponents; i++) {
-        stringComponents.add(ZERO_COMPONENT);
-      }
-    }
-    return Joiner.on('.').join(stringComponents.build());
   }
 
   /**
@@ -257,7 +198,14 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
    *     the returned string representation
    */
   public String toStringWithMinimumComponents(int numMinComponents) {
-    return toStringWithComponents(Math.max(this.numOriginalComponents, numMinComponents));
+    ImmutableList.Builder<Component> stringComponents = ImmutableList.builder();
+    stringComponents.addAll(components);
+    int numComponents = Math.max(this.numOriginalComponents, numMinComponents);
+    int zeroesToPad = numComponents - components.size();
+    for (int i = 0; i < zeroesToPad; i++) {
+      stringComponents.add(ZERO_COMPONENT);
+    }
+    return Joiner.on('.').join(stringComponents.build());
   }
 
   /**

@@ -116,7 +116,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "  attrs = {'flag': attr.label()},",
         ")",
         "def _flag_propagating_wrapper_impl(ctx):",
-        "  return [config_common.FeatureFlagInfo(value='hello')]",
+        "  return struct(providers = [config_common.FeatureFlagInfo(value='hello')])",
         "flag_propagating_wrapper = rule(",
         "  implementation = _flag_propagating_wrapper_impl,",
         ")");
@@ -381,7 +381,7 @@ public final class ConfigFeatureFlagTest extends SkylarkTestCase {
         "    default_value = 'default',",
         ")");
     assertThat(getConfiguredTarget("//test:top")).isNull();
-    // TODO(b/140635901): when configurationError is implemented, switch to testing for that
+    // TODO(mstaib): when configurationError is implemented, switch to testing for that
     assertContainsEvent(
         "in config_feature_flag rule //test:flag: "
             + "value must be one of [\"configured\", \"default\", \"other\"], but was \"invalid\"");

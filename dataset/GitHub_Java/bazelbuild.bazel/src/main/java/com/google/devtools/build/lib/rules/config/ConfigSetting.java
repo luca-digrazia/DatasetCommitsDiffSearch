@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.config;
 
 import static com.google.devtools.build.lib.analysis.platform.PlatformInfo.DuplicateConstraintException.formatError;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultiset;
@@ -42,24 +41,20 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationOptionDetails;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions.SelectRestriction;
 import com.google.devtools.build.lib.analysis.config.TransitiveOptionDetails;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.platform.ConstraintSettingInfo;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses.ConfigSettingRule;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.Collection;
@@ -110,7 +105,10 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
                 ConfigSettingRule.CONSTRAINT_VALUES_ATTRIBUTE, Mode.DONT_CHECK));
 
     // Get the target platform
-    PlatformInfo targetPlatform = ruleContext.getToolchainContext().targetPlatform();
+    Iterable<PlatformInfo> targetPlatforms =
+        PlatformProviderUtils.platforms(
+            ruleContext.getPrerequisites(
+                ConfigSettingRule.TARGET_PLATFORMS_ATTRIBUTE, Mode.DONT_CHECK));
 
     // Check that this config_setting contains at least one of {values, define_values,
     // constraint_values}
@@ -129,7 +127,7 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
         ConfigFeatureFlagMatch.fromAttributeValueAndPrerequisites(
             userDefinedFlagSettings, flagValues, ruleContext);
 
-    boolean constraintValuesMatch = targetPlatform.constraints().containsAll(constraintValues);
+    boolean constraintValuesMatch = matchesConstraints(constraintValues, targetPlatforms);
 
     if (ruleContext.hasErrors()) {
       return null;
@@ -173,33 +171,6 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
     return true;
   }
 
-  private static RepositoryName getToolsRepository(RuleContext ruleContext) {
-    try {
-      return RepositoryName.create(
-          ruleContext.attributes().get(ConfigSettingRule.TOOLS_REPOSITORY_ATTRIBUTE, Type.STRING));
-    } catch (LabelSyntaxException ex) {
-      throw new IllegalStateException(ex);
-    }
-  }
-
-  /**
-   * Returns whether the given label falls under the {@code //tools} package (including subpackages)
-   * of the tools repository.
-   */
-  @VisibleForTesting
-  static boolean isUnderToolsPackage(Label label, RepositoryName toolsRepository) {
-    PackageIdentifier packageId = label.getPackageIdentifier();
-    if (!packageId.getRepository().equals(toolsRepository)) {
-      return false;
-    }
-    try {
-      return packageId.getPackageFragment().subFragment(0, 1).equals(PathFragment.create("tools"));
-    } catch (IndexOutOfBoundsException e) {
-      // Top-level package (//).
-      return false;
-    }
-  }
-
   /**
    * User error when value settings can't be properly parsed.
    */
@@ -229,13 +200,13 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Given a list of [flagName, flagValue] pairs for native Blaze flags, returns true if flagName ==
-   * flagValue for every item in the list under this configuration, false otherwise.
+   * Given a list of [flagName, flagValue] pairs for native Blaze flags, returns true if
+   * flagName == flagValue for every item in the list under this configuration, false otherwise.
    */
-  private static boolean matchesConfig(
+  private boolean matchesConfig(
       Collection<Map.Entry<String, String>> expectedSettings,
       TransitiveOptionDetails options,
-      RuleContext ruleContext) {
+      RuleErrorConsumer errors) {
     // Rather than returning fast when we find a mismatch, continue looking at the other flags
     // to check they're indeed valid flag specifications.
     boolean foundMismatch = false;
@@ -250,35 +221,13 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
       String expectedRawValue = setting.getValue();
       int previousOptionCount = optionsCount.add(optionName, 1);
 
-      Class<? extends FragmentOptions> optionClass = options.getOptionClass(optionName);
+      Class<? extends OptionsBase> optionClass = options.getOptionClass(optionName);
       if (optionClass == null) {
-        ruleContext.attributeError(
+        errors.attributeError(
             ConfigSettingRule.SETTINGS_ATTRIBUTE,
             String.format(PARSE_ERROR_MESSAGE + "unknown option: '%s'", optionName));
         foundMismatch = true;
         continue;
-      }
-
-      SelectRestriction selectRestriction = options.getSelectRestriction(optionName);
-      if (selectRestriction != null) {
-        boolean underToolsPackage =
-            isUnderToolsPackage(ruleContext.getRule().getLabel(), getToolsRepository(ruleContext));
-        if (!(selectRestriction.isVisibleWithinToolsPackage() && underToolsPackage)) {
-          String errorMessage =
-              String.format("option '%s' cannot be used in a config_setting", optionName);
-          if (selectRestriction.isVisibleWithinToolsPackage()) {
-            errorMessage +=
-                String.format(
-                    " (it is whitelisted to %s//tools/... only)",
-                    getToolsRepository(ruleContext).getDefaultCanonicalForm());
-          }
-          if (selectRestriction.getErrorMessage() != null) {
-            errorMessage += ". " + selectRestriction.getErrorMessage();
-          }
-          ruleContext.attributeError(ConfigSettingRule.SETTINGS_ATTRIBUTE, errorMessage);
-          foundMismatch = true;
-          continue;
-        }
       }
 
       OptionsParser parser;
@@ -286,8 +235,9 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
         parser = OptionsParser.newOptionsParser(optionClass);
         parser.parse("--" + optionName + "=" + expectedRawValue);
       } catch (OptionsParsingException ex) {
-        ruleContext.attributeError(
-            ConfigSettingRule.SETTINGS_ATTRIBUTE, PARSE_ERROR_MESSAGE + ex.getMessage());
+        errors.attributeError(
+            ConfigSettingRule.SETTINGS_ATTRIBUTE,
+            PARSE_ERROR_MESSAGE + ex.getMessage());
         foundMismatch = true;
         continue;
       }
@@ -356,6 +306,33 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
 
     // Multi-value list:
     return actualList.contains(expectedSingleValue);
+  }
+
+  private boolean matchesConstraints(
+      Iterable<ConstraintValueInfo> expected, Iterable<PlatformInfo> targetPlatforms) {
+    // config_setting didn't specify any constraint values
+    if (Iterables.isEmpty(expected)) {
+      return true;
+    }
+
+    // TODO(jcater): re-evaluate this for multiple target platforms.
+    PlatformInfo targetPlatform = Iterables.getOnlyElement(targetPlatforms);
+    // config_setting DID specify constraint_value(s) but no target platforms are set
+    // in the configuration.
+    if (Iterables.isEmpty(targetPlatform.constraints())) {
+      return false;
+    }
+
+    // For every constraint in the attr check if it is (1)set aka non-null and
+    // (2)set correctly in the platform.
+    for (ConstraintValueInfo constraint : expected) {
+      ConstraintSettingInfo setting = constraint.constraint();
+      ConstraintValueInfo targetValue = targetPlatform.getConstraint(setting);
+      if (targetValue == null || !constraint.equals(targetValue)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   private static final class ConfigFeatureFlagMatch {
