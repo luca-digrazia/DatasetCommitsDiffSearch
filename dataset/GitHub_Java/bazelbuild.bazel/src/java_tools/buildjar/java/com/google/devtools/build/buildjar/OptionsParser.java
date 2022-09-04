@@ -83,8 +83,7 @@ public final class OptionsParser {
 
   private String ruleKind;
   private String targetLabel;
-  private String injectingRuleKind;
-
+  
   private boolean testOnly;
 
   /**
@@ -219,9 +218,6 @@ public final class OptionsParser {
           break;
         case "--target_label":
           targetLabel = getArgument(argQueue, arg);
-          break;
-        case "--injecting_rule_kind":
-          injectingRuleKind = getArgument(argQueue, arg);
           break;
         case "--testonly":
           testOnly = true;
@@ -528,11 +524,7 @@ public final class OptionsParser {
   public String getTargetLabel() {
     return targetLabel;
   }
-
-  public String getInjectingRuleKind() {
-    return injectingRuleKind;
-  }
-
+  
   public boolean testOnly() {
     return testOnly;
   }
