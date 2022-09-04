@@ -30,13 +30,15 @@ import java.util.Objects;
  * <p>Two {@link RootedPath}s are considered equal iff they have equal roots and equal relative
  * paths.
  *
- * <p>TODO(bazel-team): use an opaque root representation so as to not expose the absolute path to
- * clients via #asPath or #getRoot.
+ * <p>TODO(bazel-team): refactor Artifact to use this instead of Root. TODO(bazel-team): use an
+ * opaque root representation so as to not expose the absolute path to clients via #asPath or
+ * #getRoot.
  */
 public class RootedPath implements Serializable {
 
   private final Root root;
   private final PathFragment rootRelativePath;
+  private final Path path;
 
   /** Constructs a {@link RootedPath} from a {@link Root} and path fragment relative to the root. */
   private RootedPath(Root root, PathFragment rootRelativePath) {
@@ -46,7 +48,8 @@ public class RootedPath implements Serializable {
         rootRelativePath,
         root);
     this.root = root;
-    this.rootRelativePath = rootRelativePath;
+    this.rootRelativePath = rootRelativePath.normalize();
+    this.path = root.getRelative(this.rootRelativePath);
   }
 
   /** Returns a rooted path representing {@code rootRelativePath} relative to {@code root}. */
@@ -87,7 +90,11 @@ public class RootedPath implements Serializable {
   }
 
   public Path asPath() {
-    return root.getRelative(rootRelativePath);
+    // Ideally, this helper method would not be needed. But Skyframe's FileFunction and
+    // DirectoryListingFunction need to do filesystem operations on the absolute path and
+    // Path#getRelative(relPath) is O(relPath.segmentCount()). Therefore we precompute the absolute
+    // path represented by this relative path.
+    return path;
   }
 
   public Root getRoot() {

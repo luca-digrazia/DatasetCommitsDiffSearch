@@ -17,9 +17,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodecAdapter;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.FsUtils;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
-import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import org.junit.Test;
@@ -32,7 +32,10 @@ public class GlobDescriptorTest {
 
   @Test
   public void testSerialization() throws Exception {
-    new SerializationTester(
+    ObjectCodecTester.newBuilder(
+            GlobDescriptor.getCodec(
+                new InjectingObjectCodecAdapter<>(Root.CODEC, () -> FsUtils.TEST_FILESYSTEM)))
+        .addSubjects(
             GlobDescriptor.create(
                 PackageIdentifier.create("@foo", PathFragment.create("//bar")),
                 Root.fromPath(FsUtils.TEST_FILESYSTEM.getPath("/packageRoot")),
@@ -45,13 +48,8 @@ public class GlobDescriptorTest {
                 PathFragment.create("anotherSubdir"),
                 "pattern",
                 /*excludeDirs=*/ true))
-        .addDependency(FileSystem.class, FsUtils.TEST_FILESYSTEM)
-        .setVerificationFunction(GlobDescriptorTest::verifyEquivalent)
-        .runTests();
-  }
-
-  private static void verifyEquivalent(GlobDescriptor orig, GlobDescriptor deserialized) {
-    assertThat(deserialized).isSameInstanceAs(orig);
+        .verificationFunction((orig, deserialized) -> assertThat(deserialized).isSameAs(orig))
+        .buildAndRunTests();
   }
 
   @Test
@@ -70,7 +68,7 @@ public class GlobDescriptorTest {
         original.getSubdir(),
         original.getPattern(),
         original.excludeDirs());
-    assertThat(sameCopy).isSameInstanceAs(original);
+    assertThat(sameCopy).isSameAs(original);
 
     GlobDescriptor diffCopy = GlobDescriptor.create(
         original.getPackageId(),
