@@ -29,12 +29,10 @@ import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Reporter;
@@ -44,11 +42,10 @@ import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionPolicy;
 import com.google.devtools.build.lib.exec.util.FakeOwner;
-import com.google.devtools.build.lib.remote.DigestUtil.ActionKey;
+import com.google.devtools.build.lib.remote.Digests.ActionKey;
 import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -83,11 +80,10 @@ public class RemoteSpawnCacheTest {
       };
 
   private FileSystem fs;
-  private DigestUtil digestUtil;
   private Path execRoot;
   private SimpleSpawn simpleSpawn;
   private FakeActionInputFileCache fakeFileCache;
-  @Mock private AbstractRemoteActionCache remoteCache;
+  @Mock private RemoteActionCache remoteCache;
   private RemoteSpawnCache cache;
   private FileOutErr outErr;
 
@@ -138,7 +134,7 @@ public class RemoteSpawnCacheTest {
 
         @Override
         public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
-          return new SpawnInputExpander(execRoot, /*strict*/ false)
+          return new SpawnInputExpander(/*strict*/ false)
               .getInputMapping(simpleSpawn, SIMPLE_ARTIFACT_EXPANDER, fakeFileCache, "workspace");
         }
 
@@ -151,8 +147,7 @@ public class RemoteSpawnCacheTest {
   @Before
   public final void setUp() throws Exception {
     MockitoAnnotations.initMocks(this);
-    fs = new InMemoryFileSystem(new JavaClock(), HashFunction.SHA256);
-    digestUtil = new DigestUtil(HashFunction.SHA256);
+    fs = new InMemoryFileSystem();
     execRoot = fs.getPath("/exec/root");
     FileSystemUtils.createDirectoryAndParents(execRoot);
     fakeFileCache = new FakeActionInputFileCache(execRoot);
@@ -177,14 +172,7 @@ public class RemoteSpawnCacheTest {
     reporter.addHandler(eventHandler);
     cache =
         new RemoteSpawnCache(
-            execRoot,
-            options,
-            remoteCache,
-            "build-req-id",
-            "command-id",
-            false,
-            reporter,
-            digestUtil);
+            execRoot, options, remoteCache, "build-req-id", "command-id", false, reporter);
     fakeFileCache.createScratchInput(simpleSpawn.getInputFiles().get(0), "xyz");
   }
 
@@ -262,45 +250,6 @@ public class RemoteSpawnCacheTest {
     entry.store(result, outputFiles);
     verify(remoteCache)
         .upload(any(ActionKey.class), any(Path.class), eq(outputFiles), eq(outErr), eq(true));
-  }
-
-  @Test
-  public void noCacheSpawns() throws Exception {
-    // Checks that spawns that have mayBeCached false are not looked up in the remote cache,
-    // and also that their result is not uploaded to the remote cache. The artifacts, however,
-    // are uploaded.
-    SimpleSpawn uncacheableSpawn = new SimpleSpawn(
-        new FakeOwner("foo", "bar"),
-        /*arguments=*/ ImmutableList.of(),
-        /*environment=*/ ImmutableMap.of(),
-        ImmutableMap.of(ExecutionRequirements.NO_CACHE, ""),
-        /*inputs=*/ ImmutableList.of(),
-        /*outputs=*/ ImmutableList.<ActionInput>of(),
-        ResourceSet.ZERO);
-    CacheHandle entry = cache.lookup(uncacheableSpawn, simplePolicy);
-    verify(remoteCache, never())
-        .getCachedActionResult(any(ActionKey.class));
-    assertThat(entry.hasResult()).isFalse();
-    SpawnResult result = new SpawnResult.Builder().setExitCode(0).setStatus(Status.SUCCESS).build();
-    ImmutableList<Path> outputFiles = ImmutableList.of(fs.getPath("/random/file"));
-    entry.store(result, outputFiles);
-    verify(remoteCache)
-        .upload(any(ActionKey.class), any(Path.class), eq(outputFiles), eq(outErr), eq(false));
-  }
-
-  @Test
-  public void noCacheSpawnsNoResultStore() throws Exception {
-    // Only successful action results are uploaded to the remote cache. The artifacts, however,
-    // are uploaded regardless.
-    CacheHandle entry = cache.lookup(simpleSpawn, simplePolicy);
-    verify(remoteCache).getCachedActionResult(any(ActionKey.class));
-    assertThat(entry.hasResult()).isFalse();
-    SpawnResult result =
-        new SpawnResult.Builder().setExitCode(1).setStatus(Status.NON_ZERO_EXIT).build();
-    ImmutableList<Path> outputFiles = ImmutableList.of(fs.getPath("/random/file"));
-    entry.store(result, outputFiles);
-    verify(remoteCache)
-        .upload(any(ActionKey.class), any(Path.class), eq(outputFiles), eq(outErr), eq(false));
   }
 
   @Test
