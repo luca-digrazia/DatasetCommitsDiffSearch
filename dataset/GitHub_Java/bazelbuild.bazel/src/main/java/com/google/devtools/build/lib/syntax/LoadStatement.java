@@ -107,4 +107,11 @@ public final class LoadStatement extends Statement {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    for (Identifier symbol : symbolMap.keySet()) {
+      env.declare(symbol.getName(), getLocation());
+    }
+  }
 }
