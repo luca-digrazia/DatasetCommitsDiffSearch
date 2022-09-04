@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
-import com.google.devtools.build.lib.rules.cpp.FdoSupport.FdoMode;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import org.junit.Test;
@@ -41,6 +40,7 @@ public class CcToolchainProviderTest {
             null,
             null,
             null,
+            null,
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
@@ -63,10 +63,10 @@ public class CcToolchainProviderTest {
             ImmutableList.<Artifact>of(),
             NestedSetBuilder.<Pair<String, String>>emptySet(Order.COMPILE_ORDER),
             null,
+            null,
             ImmutableMap.<String, String>of(),
             ImmutableList.<PathFragment>of(),
-            null,
-            FdoMode.OFF);
+            null);
 
     CcToolchainProvider b =
         new CcToolchainProvider(
@@ -74,6 +74,7 @@ public class CcToolchainProviderTest {
             null,
             null,
             null,
+            null,
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
@@ -96,10 +97,10 @@ public class CcToolchainProviderTest {
             ImmutableList.<Artifact>of(),
             NestedSetBuilder.<Pair<String, String>>emptySet(Order.COMPILE_ORDER),
             null,
+            null,
             ImmutableMap.<String, String>of(),
             ImmutableList.<PathFragment>of(),
-            null,
-            FdoMode.OFF);
+            null);
 
     new EqualsTester()
         .addEqualityGroup(a)

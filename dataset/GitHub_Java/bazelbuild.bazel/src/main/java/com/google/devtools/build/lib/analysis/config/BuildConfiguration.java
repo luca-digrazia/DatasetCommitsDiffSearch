@@ -173,9 +173,10 @@ public class BuildConfiguration implements BuildEvent {
       return ImmutableMap.of();
     }
 
-    /** Return set of features enabled by this configuration. */
-    public ImmutableSet<String> configurationEnabledFeatures(
-        RuleContext ruleContext, ImmutableSet<String> disabledFeatures) {
+    /**
+     * Return set of features enabled by this configuration.
+     */
+    public ImmutableSet<String> configurationEnabledFeatures(RuleContext ruleContext) {
       return ImmutableSet.of();
     }
 
@@ -664,16 +665,6 @@ public class BuildConfiguration implements BuildEvent {
     public boolean collectCodeCoverage;
 
     @Option(
-        name = "experimental_java_coverage",
-        defaultValue = "false",
-        category = "testing",
-        documentationCategory  = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags =  { OptionEffectTag.AFFECTS_OUTPUTS },
-        help = "If true Bazel will use a new way of computing code coverage for java targets."
-    )
-    public boolean experimentalJavaCoverage;
-
-    @Option(
       name = "coverage_support",
       converter = LabelConverter.class,
       defaultValue = "@bazel_tools//tools/test:coverage_support",
@@ -767,9 +758,18 @@ public class BuildConfiguration implements BuildEvent {
       defaultValue = "true",
       category = "semantics",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      deprecationWarning = "This flag is a no-op and fileset dependencies are always checked "
-        + "to ensure correctness of builds.",
-      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS }
+      deprecationWarning = "Setting this to false is unsupported and will go away soon as it leads "
+          + "to incorrect results. Please contact kush@ with your use case if you need "
+          + "to continue setting this flag to false. If you're setting this to true then stop "
+          + "setting this flag to stop this warning.",
+      effectTags = { OptionEffectTag.AFFECTS_OUTPUTS },
+      help =
+          "If false, fileset targets will, whenever possible, create "
+              + "symlinks to directories instead of creating one symlink for each "
+              + "file inside the directory. Disabling this will significantly "
+              + "speed up fileset builds, but targets that depend on filesets will "
+              + "not be rebuilt if files are added, removed or modified in a "
+              + "subdirectory which has not been traversed."
     )
     public boolean checkFilesetDependenciesRecursively;
 
@@ -1281,10 +1281,6 @@ public class BuildConfiguration implements BuildEvent {
   public void reportInvalidOptions(EventHandler reporter) {
     for (Fragment fragment : fragments.values()) {
       fragment.reportInvalidOptions(reporter, this.buildOptions);
-    }
-
-    if (OS.getCurrent() == OS.WINDOWS && runfilesEnabled()) {
-      reporter.handle(Event.error("building runfiles is not supported on Windows"));
     }
 
     if (options.outputDirectoryName != null) {
@@ -1873,6 +1869,10 @@ public class BuildConfiguration implements BuildEvent {
     return options.legacyExternalRunfiles;
   }
 
+  public boolean getCheckFilesetDependenciesRecursively() {
+    return options.checkFilesetDependenciesRecursively;
+  }
+
   public boolean getSkyframeNativeFileset() {
     return options.skyframeNativeFileset;
   }
@@ -1915,10 +1915,6 @@ public class BuildConfiguration implements BuildEvent {
           + "ctx.coverage_instrumented</code></a> function.")
   public boolean isCodeCoverageEnabled() {
     return options.collectCodeCoverage;
-  }
-
-  public boolean isExperimentalJavaCoverage() {
-    return options.experimentalJavaCoverage;
   }
 
   public boolean isLLVMCoverageMapFormatEnabled() {
