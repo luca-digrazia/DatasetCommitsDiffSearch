@@ -8,7 +8,6 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.net.URI;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
@@ -42,19 +41,14 @@ public class DevModeMain implements Closeable {
     public static void main(String... args) throws Exception {
 
         try (InputStream devModeCp = DevModeMain.class.getClassLoader().getResourceAsStream(DEV_MODE_CONTEXT)) {
-            DevModeContext context;
-            try {
-                context = (DevModeContext) new ObjectInputStream(new DataInputStream(devModeCp)).readObject();
-            } catch (Exception e) {
-                throw new RuntimeException(
-                        "Unable to deserialize the dev mode context. Does the Quarkus plugin version match the version of Quarkus that is in use?",
-                        e);
-            }
+            DevModeContext context = (DevModeContext) new ObjectInputStream(new DataInputStream(devModeCp)).readObject();
             try (DevModeMain devModeMain = new DevModeMain(context)) {
                 devModeMain.start();
 
                 LockSupport.park();
             }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -103,9 +97,6 @@ public class DevModeMain implements Closeable {
 
                 }
             }
-
-            copyDotEnvFile();
-
             Properties buildSystemProperties = new Properties();
             buildSystemProperties.putAll(context.getBuildSystemProperties());
             bootstrapBuilder.setBuildSystemProperties(buildSystemProperties);
@@ -116,36 +107,6 @@ public class DevModeMain implements Closeable {
             log.error("Quarkus dev mode failed to start in curation phase", t);
             throw new RuntimeException(t);
             //System.exit(1);
-        }
-    }
-
-    // copies the .env file to the directory where the process is running
-    // this is done because for the .env file to take effect, it needs to be
-    // in the same directory as the running process
-    private void copyDotEnvFile() {
-        File projectDir = context.getProjectDir();
-        if (projectDir == null) { // this is the case for QuarkusDevModeTest
-            return;
-        }
-        Path currentDir = Paths.get("").toAbsolutePath().normalize();
-        Path dotEnvPath = projectDir.toPath().resolve(".env");
-        if (Files.exists(dotEnvPath)) {
-            try {
-                Path link = currentDir.resolve(".env");
-                silentDeleteFile(link);
-                // create a symlink to ensure that user updates to the file have the expected effect in dev-mode
-                Files.createSymbolicLink(link, dotEnvPath);
-            } catch (IOException e) {
-                log.warn("Unable to copy .env file");
-            }
-        }
-    }
-
-    private void silentDeleteFile(Path path) {
-        try {
-            Files.delete(path);
-        } catch (IOException ignored) {
-
         }
     }
 
