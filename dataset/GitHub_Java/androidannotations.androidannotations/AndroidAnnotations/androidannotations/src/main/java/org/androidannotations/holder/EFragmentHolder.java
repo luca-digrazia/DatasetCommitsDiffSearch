@@ -66,7 +66,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private InstanceStateHolder instanceStateHolder;
 	private OnActivityResultHolder onActivityResultHolder;
 	private ReceiverRegistrationHolder<EFragmentHolder> receiverRegistrationHolder;
-	private PreferencesHolder preferencesHolder;
 	private JBlock onCreateOptionsMenuMethodBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
 	private JVar onCreateOptionsMenuMenuParam;
@@ -87,7 +86,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		instanceStateHolder = new InstanceStateHolder(this);
 		onActivityResultHolder = new OnActivityResultHolder(this);
 		receiverRegistrationHolder = new ReceiverRegistrationHolder<EFragmentHolder>(this);
-		preferencesHolder = new PreferencesHolder(this);
 		setOnCreate();
 		setOnViewCreated();
 		setFragmentBuilder();
@@ -566,20 +564,5 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	@Override
 	public JBlock getPreferenceScreenInitializationBlock() {
 		return getOnCreateAfterSuperBlock();
-	}
-
-	@Override
-	public JBlock getAddPreferencesFromResourceBlock() {
-		return preferencesHolder.getAddPreferencesFromResourceBlock();
-	}
-
-	@Override
-	public void assignFindPreferenceByKey(JFieldRef idRef, JClass preferenceClass, JFieldRef fieldRef) {
-		preferencesHolder.assignFindPreferenceByKey(idRef, preferenceClass, fieldRef);
-	}
-
-	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, JClass preferenceClass) {
-		return preferencesHolder.getFoundPreferenceHolder(idRef, preferenceClass);
 	}
 }
