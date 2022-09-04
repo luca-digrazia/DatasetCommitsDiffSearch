@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
@@ -33,8 +32,6 @@ import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAsp
 import com.google.devtools.build.lib.analysis.PlatformSemantics;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
-import com.google.devtools.build.lib.analysis.ToolchainResolver;
-import com.google.devtools.build.lib.analysis.ToolchainResolver.UnloadedToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -129,7 +126,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
   private final RuleClassProvider ruleClassProvider;
   private final Semaphore cpuBoundSemaphore;
   private final BuildOptions defaultBuildOptions;
-  @Nullable private final ConfiguredTargetProgressReceiver configuredTargetProgress;
   /**
    * Indicates whether the set of packages transitively loaded for a given {@link
    * ConfiguredTargetValue} will be needed for package root resolution later in the build. If not,
@@ -145,8 +141,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       Semaphore cpuBoundSemaphore,
       boolean storeTransitivePackagesForPackageRootResolution,
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
-      BuildOptions defaultBuildOptions,
-      @Nullable ConfiguredTargetProgressReceiver configuredTargetProgress) {
+      BuildOptions defaultBuildOptions) {
     this.buildViewProvider = buildViewProvider;
     this.ruleClassProvider = ruleClassProvider;
     this.cpuBoundSemaphore = cpuBoundSemaphore;
@@ -154,7 +149,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         storeTransitivePackagesForPackageRootResolution;
     this.shouldUnblockCpuWorkWhenFetchingDeps = shouldUnblockCpuWorkWhenFetchingDeps;
     this.defaultBuildOptions = defaultBuildOptions;
-    this.configuredTargetProgress = configuredTargetProgress;
   }
 
   @Override
@@ -235,7 +229,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
 
-    UnloadedToolchainContext unloadedToolchainContext = null;
+    ToolchainContext toolchainContext = null;
 
     // TODO(janakr): this acquire() call may tie up this thread indefinitely, reducing the
     // parallelism of Skyframe. This is a strict improvement over the prior state of the code, in
@@ -278,12 +272,13 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
           // Collect local (target, rule) constraints for filtering out execution platforms.
           ImmutableSet<Label> execConstraintLabels = getExecutionPlatformConstraints(rule);
-          unloadedToolchainContext =
-              new ToolchainResolver(env, configuredTargetKey.getConfigurationKey())
-                  .setTargetDescription(rule.toString())
-                  .setRequiredToolchainTypes(requiredToolchains)
-                  .setExecConstraintLabels(execConstraintLabels)
-                  .resolve();
+          toolchainContext =
+              ToolchainUtil.createToolchainContext(
+                  env,
+                  rule.toString(),
+                  requiredToolchains,
+                  execConstraintLabels,
+                  configuredTargetKey.getConfigurationKey());
           if (env.valuesMissing()) {
             return null;
           }
@@ -298,9 +293,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               ctgValue,
               ImmutableList.<Aspect>of(),
               configConditions,
-              unloadedToolchainContext == null
+              toolchainContext == null
                   ? ImmutableSet.of()
-                  : unloadedToolchainContext.resolvedToolchainLabels(),
+                  : toolchainContext.resolvedToolchainLabels(),
               ruleClassProvider,
               view.getHostConfiguration(configuration),
               transitivePackagesForPackageRootResolution,
@@ -317,9 +312,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       Preconditions.checkNotNull(depValueMap);
 
       // Load the requested toolchains into the ToolchainContext, now that we have dependencies.
-      ToolchainContext toolchainContext = null;
-      if (unloadedToolchainContext != null) {
-        toolchainContext = unloadedToolchainContext.load(depValueMap);
+      if (toolchainContext != null) {
+        toolchainContext.resolveToolchains(depValueMap);
       }
 
       ConfiguredTargetValue ans =
@@ -332,23 +326,16 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               configConditions,
               toolchainContext,
               transitivePackagesForPackageRootResolution);
-      if (configuredTargetProgress != null) {
-        configuredTargetProgress.doneConfigureTarget();
-      }
       return ans;
     } catch (DependencyEvaluationException e) {
       if (e.getCause() instanceof ConfiguredValueCreationException) {
         ConfiguredValueCreationException cvce = (ConfiguredValueCreationException) e.getCause();
 
         // Check if this is caused by an unresolved toolchain, and report it as such.
-        if (unloadedToolchainContext != null) {
-          UnloadedToolchainContext finalUnloadedToolchainContext = unloadedToolchainContext;
+        if (toolchainContext != null) {
           Set<Label> toolchainDependencyErrors =
-              Streams.stream(cvce.getRootCauses())
-                  .map(Cause::getLabel)
-                  .filter(l -> finalUnloadedToolchainContext.resolvedToolchainLabels().contains(l))
-                  .collect(ImmutableSet.toImmutableSet());
-
+              toolchainContext.filterToolchainLabels(
+                  Iterables.transform(cvce.getRootCauses(), Cause::getLabel));
           if (!toolchainDependencyErrors.isEmpty()) {
             env.getListener()
                 .handle(

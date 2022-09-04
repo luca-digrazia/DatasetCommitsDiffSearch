@@ -66,10 +66,9 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
       fail("Expected srcs lookup to fail since the returned type is a SelectorList and not a list");
     } catch (IllegalArgumentException e) {
       assertThat(e)
+          .hasCauseThat()
           .hasMessageThat()
-          .isEqualTo(
-              "wrong type for attribute \"srcs\" in sh_binary rule //x:myrule: "
-                  + "expected list(label), is SelectorList");
+          .containsMatch(".*SelectorList cannot be cast to .*java\\.util\\.List");
     }
   }
 
@@ -100,10 +99,9 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
       fail("Expected label visitation to fail since one attribute is configurable");
     } catch (IllegalArgumentException e) {
       assertThat(e)
+          .hasCauseThat()
           .hasMessageThat()
-          .isEqualTo(
-              "wrong type for attribute \"srcs\" in sh_binary rule //x:myrule: "
-                  + "expected list(label), is SelectorList");
+          .containsMatch(".*SelectorList cannot be cast to .*java\\.util\\.List");
     }
   }
 

@@ -85,11 +85,6 @@ public class DelegatingAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public Collection<DepEdge> visitLabels(Attribute attribute) throws InterruptedException {
-    return delegate.visitLabels(attribute);
-  }
-
-  @Override
   public String getPackageDefaultHdrsCheck() {
     return delegate.getPackageDefaultHdrsCheck();
   }

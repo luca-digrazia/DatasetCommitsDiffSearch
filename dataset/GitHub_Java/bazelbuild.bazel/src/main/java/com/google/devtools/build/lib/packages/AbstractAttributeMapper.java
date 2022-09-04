@@ -165,7 +165,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public Collection<DepEdge> visitLabels() {
+  public Collection<DepEdge> visitLabels() throws InterruptedException {
     List<DepEdge> edges = new ArrayList<>();
     Type.LabelVisitor<Attribute> visitor =
         (label, attribute) -> {
@@ -187,7 +187,8 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   }
 
   /** Visits all labels reachable from the given attribute. */
-  protected void visitLabels(Attribute attribute, Type.LabelVisitor<Attribute> visitor) {
+  protected void visitLabels(Attribute attribute, Type.LabelVisitor<Attribute> visitor)
+      throws InterruptedException {
     Type<?> type = attribute.getType();
     Object value = get(attribute.getName(), type);
     if (value != null) { // null values are particularly possible for computed defaults.
@@ -198,7 +199,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   @Override
   public final boolean isConfigurable(String attributeName) {
     Attribute attrDef = getAttributeDefinition(attributeName);
-    return attrDef != null && getSelectorList(attributeName, attrDef.getType()) != null;
+    return attrDef == null ? false : getSelectorList(attributeName, attrDef.getType()) != null;
   }
 
   public static <T> boolean isConfigurable(Rule rule, String attributeName, Type<T> type) {

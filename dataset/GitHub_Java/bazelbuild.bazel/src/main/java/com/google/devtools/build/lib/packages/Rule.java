@@ -20,6 +20,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.ListMultimap;
@@ -165,6 +166,13 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
   }
 
   /**
+   * Returns the build features that apply to this rule.
+   */
+  public ImmutableSet<String> getFeatures() {
+    return pkg.getFeatures();
+  }
+
+  /**
    * Returns true iff the outputs of this rule should be created beneath the
    * bin directory, false if beneath genfiles.  For most rule
    * classes, this is a constant, but for genrule, it is a property of the
@@ -192,6 +200,26 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    */
   public Collection<Attribute> getAttributes() {
     return ruleClass.getAttributes();
+  }
+
+  /**
+   * Returns true if this rule has any attributes that are configurable.
+   *
+   * <p>Note this is *not* the same as having attribute *types* that are configurable. For example,
+   * "deps" is configurable, in that one can write a rule that sets "deps" to a configuration
+   * dictionary. But if *this* rule's instance of "deps" doesn't do that, its instance
+   * of "deps" is not considered configurable.
+   *
+   * <p>In other words, this method signals which rules might have their attribute values
+   * influenced by the configuration.
+   */
+  public boolean hasConfigurableAttributes() {
+    for (Attribute attribute : getAttributes()) {
+      if (AbstractAttributeMapper.isConfigurable(this, attribute.getName(), attribute.getType())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -299,7 +327,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
   }
 
   /**
-   * See {@link #isAttributeValueExplicitlySpecified(String)}
+   * {@see #isAttributeValueExplicitlySpecified(String)}
    */
   @Override
   public boolean isAttributeValueExplicitlySpecified(Attribute attribute) {
@@ -376,7 +404,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
   }
 
   /** Returns a new List instance containing all direct dependencies (all types). */
-  public Collection<Label> getLabels() {
+  public Collection<Label> getLabels() throws InterruptedException {
     final List<Label> labels = Lists.newArrayList();
     AggregatingAttributeMapper.of(this)
         .visitLabels()
@@ -395,7 +423,8 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    *     label. The label will be contained in the result iff (the predicate returned {@code true}
    *     and the labels are not outputs)
    */
-  public Collection<Label> getLabels(BinaryPredicate<? super Rule, Attribute> predicate) {
+  public Collection<Label> getLabels(BinaryPredicate<? super Rule, Attribute> predicate)
+      throws InterruptedException {
     return ImmutableSortedSet.copyOf(getTransitions(predicate).values());
   }
 
@@ -409,7 +438,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    *     and the labels are not outputs)
    */
   public Multimap<Attribute, Label> getTransitions(
-      final BinaryPredicate<? super Rule, Attribute> predicate) {
+      final BinaryPredicate<? super Rule, Attribute> predicate) throws InterruptedException {
     final Multimap<Attribute, Label> transitions = HashMultimap.create();
     // TODO(bazel-team): move this to AttributeMap, too. Just like visitLabels, which labels should
     // be visited may depend on the calling context. We shouldn't implicitly decide this for
@@ -451,7 +480,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
     }
   }
 
-  private void populateOutputFilesInternal(
+  void populateOutputFilesInternal(
       EventHandler eventHandler, Package.Builder pkgBuilder, boolean performChecks)
       throws LabelSyntaxException, InterruptedException {
     Preconditions.checkState(outputFiles == null);
@@ -584,7 +613,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
     this.containsErrors = true;
   }
 
-  private void reportWarning(String message, EventHandler eventHandler) {
+  void reportWarning(String message, EventHandler eventHandler) {
     eventHandler.handle(Event.warn(location, message));
   }
 
@@ -672,7 +701,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
   // null-valued, with a packageFragment that is null...). The bug that prompted
   // the introduction of this code is #2210848 (NullPointerException in
   // Package.checkForConflicts() ).
-  void checkForNullLabels() {
+  void checkForNullLabels() throws InterruptedException {
     AggregatingAttributeMapper.of(this)
         .visitLabels()
         .forEach(depEdge -> checkForNullLabel(depEdge.getLabel(), depEdge.getAttribute()));
