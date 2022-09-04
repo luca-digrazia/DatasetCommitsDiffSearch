@@ -558,7 +558,6 @@ public class QuarkusProdModeTest
     @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
         rootLogger.setHandlers(originalHandlers);
-        inMemoryLogHandler.clearRecords();
 
         if (run) {
             RestAssuredURLManager.clearURL();
