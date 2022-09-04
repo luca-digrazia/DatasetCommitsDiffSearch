@@ -414,9 +414,6 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
             }
             if (bean.getDisposer() != null) {
                 for (InjectionPointInfo injectionPoint : bean.getDisposer().getInjection().injectionPoints) {
-                    if (BuiltinBean.resolvesTo(injectionPoint)) {
-                        continue;
-                    }
                     params.add(addBeansMethod.newInstance(
                             MethodDescriptors.MAP_VALUE_SUPPLIER_CONSTRUCTOR,
                             beanIdToBeanHandle, addBeansMethod.load(injectionPoint.getResolvedBean().getIdentifier())));
