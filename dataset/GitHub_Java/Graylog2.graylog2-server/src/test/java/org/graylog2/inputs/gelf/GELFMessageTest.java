@@ -20,17 +20,18 @@
 
 package org.graylog2.inputs.gelf;
 
+import org.graylog2.gelf.GELFMessage;
+import org.graylog2.gelf.GELFMessageChunk;
 import org.graylog2.TestHelper;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 /**
- *
  * @author lennart.koopmann
  */
 public class GELFMessageTest {
 
-    public final static String GELF_JSON = "{\"message\":\"foo\",\"host\":\"bar\",\"_lol_utf8\":\"ü\"}";
+    public final static String GELF_JSON = "{\"message\":\"foo\",\"host\":\"bar\",\"_lol_utf8\":\"\u00FC\"}";
 
     @Test
     public void testGetGELFTypeDetectsZLIBCompressedMessage() throws Exception {
@@ -39,7 +40,7 @@ public class GELFMessageTest {
         fakeData[1] = (byte) 0x9c;
 
         GELFMessage msg = new GELFMessage(fakeData);
-        assertEquals(GELFMessage.TYPE_ZLIB, msg.getGELFType());
+        assertEquals(GELFMessage.Type.ZLIB, msg.getGELFType());
     }
 
     @Test
@@ -49,7 +50,7 @@ public class GELFMessageTest {
         fakeData[1] = (byte) 0x8b;
 
         GELFMessage msg = new GELFMessage(fakeData);
-        assertEquals(GELFMessage.TYPE_GZIP, msg.getGELFType());
+        assertEquals(GELFMessage.Type.GZIP, msg.getGELFType());
     }
 
     @Test
@@ -59,17 +60,17 @@ public class GELFMessageTest {
         fakeData[1] = (byte) 0x0f;
 
         GELFMessage msg = new GELFMessage(fakeData);
-        assertEquals(GELFMessage.TYPE_CHUNKED, msg.getGELFType());
+        assertEquals(GELFMessage.Type.CHUNKED, msg.getGELFType());
     }
 
     @Test
     public void testGetGELFTypeDetectsUncompressedMessage() throws Exception {
         byte[] fakeData = new byte[20];
-        fakeData[0] = (byte) 0x1f;
-        fakeData[1] = (byte) 0x3c;
+        fakeData[0] = (byte) '{';
+        fakeData[1] = (byte) '\n';
 
         GELFMessage msg = new GELFMessage(fakeData);
-        assertEquals(GELFMessage.TYPE_UNCOMPRESSED, msg.getGELFType());
+        assertEquals(GELFMessage.Type.UNCOMPRESSED, msg.getGELFType());
     }
 
     @Test
@@ -87,30 +88,25 @@ public class GELFMessageTest {
     @Test
     public void testGetJSONFromUncompressedMessage() throws Exception {
         byte[] text = GELF_JSON.getBytes("UTF-8");
-        byte[] message = new byte[text.length+2];
-        message[0] = (byte) 0x1f;
-        message[1] = (byte) 0x3c;
 
-        // Copy text behind magic bytes identifying uncompressed message.
-        System.arraycopy(text, 0, message, 2, text.length);
-
-        GELFMessage msg = new GELFMessage(message);
+        GELFMessage msg = new GELFMessage(text);
         assertEquals(GELF_JSON, msg.getJSON());
     }
 
     @Test
-    public void testAsChunk() throws Exception {
+    public void testGelfMessageChunkCreation() throws Exception {
         String id = "foobar01";
         int seqNum = 1;
         int seqCnt = 5;
         byte[] data = TestHelper.gzipCompress(GELF_JSON);
 
         GELFMessage msg = new GELFMessage(TestHelper.buildGELFMessageChunk(id, seqNum, seqCnt, data));
+        GELFMessageChunk chunk = new GELFMessageChunk(msg);
         
-        assertEquals(TestHelper.toHex(id), msg.asChunk().getId());
-        assertEquals(seqNum, msg.asChunk().getSequenceNumber());
-        assertEquals(seqCnt, msg.asChunk().getSequenceCount());
-        assertArrayEquals(data, msg.asChunk().getData());
+        assertEquals(TestHelper.toHex(id), chunk.getId());
+        assertEquals(seqNum, chunk.getSequenceNumber());
+        assertEquals(seqCnt, chunk.getSequenceCount());
+        assertArrayEquals(data, chunk.getData());
     }
 
 }
