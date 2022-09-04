@@ -30,13 +30,10 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
@@ -47,7 +44,6 @@ import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -161,7 +157,6 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import org.junit.Before;
@@ -201,8 +196,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   private LoadingOptions customLoadingOptions = null;
   protected BuildConfigurationValue.Key targetConfigKey;
-
-  private ActionLogBufferPathGenerator actionLogBufferPathGenerator;
 
   @Before
   public final void initializeSkyframeExecutor() throws Exception {
@@ -279,9 +272,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     setUpSkyframe();
     // Also initializes ResourceManager.
     ResourceManager.instance().setAvailableResources(getStartingResources());
-    this.actionLogBufferPathGenerator =
-        new ActionLogBufferPathGenerator(
-            directories.getActionConsoleOutputDirectory(getExecRoot()));
   }
 
   public void initializeMockClient() throws IOException {
@@ -1998,28 +1988,5 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   public Path getExecRoot() {
     return directories.getExecRoot(ruleClassProvider.getRunfilesPrefix());
-  }
-
-  /** Creates instances of {@link ActionExecutionContext} consistent with test case. */
-  public class ActionExecutionContextBuilder {
-    private TreeMap<String, String> clientEnv = new TreeMap<>();
-    private ArtifactExpander artifactExpander = null;
-
-    public ActionExecutionContextBuilder setArtifactExpander(ArtifactExpander artifactExpander) {
-      this.artifactExpander = artifactExpander;
-      return this;
-    }
-
-    public ActionExecutionContext build() {
-      return new ActionExecutionContext(
-          new DummyExecutor(fileSystem, getExecRoot(), reporter),
-          /*actionInputFileCache=*/ null,
-          /*actionInputPrefetcher=*/ null,
-          actionKeyContext,
-          /*metadataHandler=*/ null,
-          actionLogBufferPathGenerator.generate(),
-          clientEnv,
-          artifactExpander);
-    }
   }
 }

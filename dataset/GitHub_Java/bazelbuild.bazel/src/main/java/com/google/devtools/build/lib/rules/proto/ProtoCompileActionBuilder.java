@@ -369,9 +369,9 @@ public class ProtoCompileActionBuilder {
             // A rule that concatenates the artifacts from ctx.deps.proto.transitive_descriptor_sets
             // provides similar results.
             "--descriptor_set_out=$(OUT)",
-            /* pluginExecutable= */ null,
-            /* runtime= */ null,
-            /* blacklistedProtos= */ NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER)),
+            null /* pluginExecutable */,
+            null /* runtime */,
+            NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER) /* blacklistedProtos */),
         outReplacement);
   }
 

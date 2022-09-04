@@ -940,7 +940,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "                deps = [':bar'])",
         "android_library(name = 'bar',",
         "                manifest = 'AndroidManifest.xml')");
-    Function<ValidatedAndroidData, Label> getLabel = ValidatedAndroidData::getLabel;
+    Function<ResourceContainer, Label> getLabel = ResourceContainer::getLabel;
     ConfiguredTarget foo = getConfiguredTarget("//java/apps/android:foo");
     assertThat(
             Iterables.transform(
@@ -1030,7 +1030,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     NestedSet<Artifact> filesToBuild = getFilesToBuild(target);
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(filesToBuild);
 
-    ValidatedAndroidData resources =
+    ResourceContainer resources =
         Iterables.getOnlyElement(
             target.get(AndroidResourcesInfo.PROVIDER).getDirectAndroidResources());
 
@@ -1147,7 +1147,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .isEqualTo(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 artifactClosure, "java/android/AndroidManifest.xml"));
-    ValidatedAndroidData resources =
+    ResourceContainer resources =
         getOnlyElement(
             getConfiguredTarget("//java/android:r")
                 .get(AndroidResourcesInfo.PROVIDER)
@@ -1179,7 +1179,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .isEqualTo(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 artifactClosure, "handwriting/AndroidManifest.xml"));
-    ValidatedAndroidData resources =
+    ResourceContainer resources =
         getOnlyElement(
             getConfiguredTarget("//research/handwriting/java/com/google/research/handwriting:r")
                 .get(AndroidResourcesInfo.PROVIDER)
@@ -1213,7 +1213,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         .isEqualTo(
             ActionsTestUtil.getFirstArtifactEndingWith(
                 artifactClosure, "java/android/AndroidManifest.xml"));
-    ValidatedAndroidData resources =
+    ResourceContainer resources =
         getOnlyElement(
             getConfiguredTarget("//java/android:r")
                 .get(AndroidResourcesInfo.PROVIDER)
