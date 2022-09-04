@@ -840,18 +840,19 @@ public class BuildViewTest extends BuildViewTestBase {
     Path badpkg2BuildFile =
         scratch.file("badpkg2/BUILD", "sh_library(name = 'bad-target')", "fail()");
     update(defaultFlags().with(Flag.KEEP_GOING), "//parent:foo");
-    // Each event string may contain stack traces and error messages with multiple file names.
-    assertContainsEventWithFrequency(badpkg1BuildFile.asFragment().getPathString(), 1);
-    assertContainsEventWithFrequency(badpkg2BuildFile.asFragment().getPathString(), 1);
+    assertThat(getFrequencyOfErrorsWithLocation(badpkg1BuildFile.asFragment(), eventCollector))
+        .isEqualTo(1);
+    assertThat(getFrequencyOfErrorsWithLocation(badpkg2BuildFile.asFragment(), eventCollector))
+        .isEqualTo(1);
   }
 
   @Test
-  public void testDepOnGoodTargetInBadPkgAndTransitiveCycle_notIncremental() throws Exception {
+  public void testDepOnGoodTargetInBadPkgAndTransitiveCycle_NotIncremental() throws Exception {
     runTestDepOnGoodTargetInBadPkgAndTransitiveCycle(/*incremental=*/false);
   }
 
   @Test
-  public void testDepOnGoodTargetInBadPkgAndTransitiveCycle_incremental() throws Exception {
+  public void testDepOnGoodTargetInBadPkgAndTransitiveCycle_Incremental() throws Exception {
     if (getInternalTestExecutionMode() != TestConstants.InternalTestExecutionMode.NORMAL) {
       // TODO(b/67412276): handle cycles properly.
       return;
@@ -864,7 +865,7 @@ public class BuildViewTest extends BuildViewTestBase {
    * in error.
    */
   @Test
-  public void testCycleReporting_targetCycleWhenPackageInError() throws Exception {
+  public void testCycleReporting_TargetCycleWhenPackageInError() throws Exception {
     if (getInternalTestExecutionMode() != TestConstants.InternalTestExecutionMode.NORMAL) {
       // TODO(b/67412276): handle cycles properly.
       return;
@@ -1253,7 +1254,7 @@ public class BuildViewTest extends BuildViewTestBase {
   }
 
   @Test
-  public void testNonTopLevelErrorsPrintedExactlyOnce_keepGoing() throws Exception {
+  public void testNonTopLevelErrorsPrintedExactlyOnce_KeepGoing() throws Exception {
     if (getInternalTestExecutionMode() != TestConstants.InternalTestExecutionMode.NORMAL) {
       // TODO(b/67651960): fix or justify disabling.
       return;
@@ -1270,7 +1271,7 @@ public class BuildViewTest extends BuildViewTestBase {
   }
 
   @Test
-  public void testNonTopLevelErrorsPrintedExactlyOnce_actionListener() throws Exception {
+  public void testNonTopLevelErrorsPrintedExactlyOnce_ActionListener() throws Exception {
     if (getInternalTestExecutionMode() != TestConstants.InternalTestExecutionMode.NORMAL) {
       // TODO(b/67651960): fix or justify disabling.
       return;
@@ -1290,7 +1291,7 @@ public class BuildViewTest extends BuildViewTestBase {
   }
 
   @Test
-  public void testNonTopLevelErrorsPrintedExactlyOnce_actionListener_keepGoing() throws Exception {
+  public void testNonTopLevelErrorsPrintedExactlyOnce_ActionListener_KeepGoing() throws Exception {
     if (getInternalTestExecutionMode() != TestConstants.InternalTestExecutionMode.NORMAL) {
       // TODO(b/67651960): fix or justify disabling.
       return;
@@ -1550,7 +1551,8 @@ public class BuildViewTest extends BuildViewTestBase {
 
     @Override
     @Test
-    public void testCycleReporting_targetCycleWhenPackageInError() {}
+    public void testCycleReporting_TargetCycleWhenPackageInError() {
+    }
 
     @Override
     @Test
