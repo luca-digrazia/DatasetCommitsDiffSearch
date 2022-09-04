@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictEx
 import com.google.devtools.build.lib.analysis.AspectResolver;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.Dependency;
@@ -56,7 +55,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
-import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
@@ -241,8 +239,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               resolver,
               ctgValue,
               transitivePackagesForPackageRootResolution,
-              transitiveLoadingRootCauses,
-              ((ConfiguredRuleClassProvider) ruleClassProvider).getTrimmingTransitionFactory());
+              transitiveLoadingRootCauses);
       if (env.valuesMissing()) {
         return null;
       }
@@ -432,8 +429,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
                   ? ImmutableSet.of()
                   : toolchainContext.getResolvedToolchainLabels(),
               transitiveLoadingRootCauses,
-              defaultBuildOptions,
-              ((ConfiguredRuleClassProvider) ruleClassProvider).getTrimmingTransitionFactory());
+              defaultBuildOptions);
     } catch (EvalException e) {
       // EvalException can only be thrown by computed Skylark attributes in the current rule.
       env.getListener().handle(Event.error(e.getLocation(), e.getMessage()));
@@ -510,8 +506,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       SkyframeDependencyResolver resolver,
       TargetAndConfiguration ctgValue,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution,
-      NestedSetBuilder<Label> transitiveLoadingRootCauses,
-      @Nullable RuleTransitionFactory trimmingTransitionFactory)
+      NestedSetBuilder<Label> transitiveLoadingRootCauses)
       throws DependencyEvaluationException, InterruptedException {
     if (!(target instanceof Rule)) {
       return NO_CONFIG_CONDITIONS;
@@ -538,7 +533,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     Collection<Dependency> configValueNames;
     try {
       configValueNames = resolver.resolveRuleLabels(
-          ctgValue, configLabelMap, transitiveLoadingRootCauses, trimmingTransitionFactory);
+          ctgValue, configLabelMap, transitiveLoadingRootCauses);
     } catch (InconsistentAspectOrderException e) {
       throw new DependencyEvaluationException(e);
     }
