@@ -33,10 +33,10 @@ import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.test.TestActionContext;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.TestStatus;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -92,9 +91,10 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
   }
 
   private class FakeActionExecutionContext extends ActionExecutionContext {
-    private final SpawnStrategy spawnActionContext;
+    private final SpawnActionContext spawnActionContext;
 
-    public FakeActionExecutionContext(FileOutErr fileOutErr, SpawnStrategy spawnActionContext) {
+    public FakeActionExecutionContext(
+        FileOutErr fileOutErr, SpawnActionContext spawnActionContext) {
       super(
           /*executor=*/ null,
           /*actionInputFileCache=*/ null,
@@ -108,8 +108,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
           /*topLevelFilesets=*/ ImmutableMap.of(),
           /*artifactExpander=*/ null,
           /*actionFileSystem=*/ null,
-          /*skyframeDepsResult=*/ null,
-          NestedSetExpander.DEFAULT);
+          /*skyframeDepsResult=*/ null);
       this.spawnActionContext = spawnActionContext;
     }
 
@@ -121,7 +120,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     @Override
     @Nullable
     public <T extends ActionContext> T getContext(Class<T> type) {
-      return SpawnStrategy.class.equals(type) ? type.cast(spawnActionContext) : null;
+      return SpawnActionContext.class.equals(type) ? type.cast(spawnActionContext) : null;
     }
 
     @Override
@@ -140,7 +139,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     }
   }
 
-  @Mock private SpawnStrategy spawnActionContext;
+  @Mock private SpawnActionContext spawnActionContext;
 
   private StoredEventHandler storedEvents = new StoredEventHandler();
 

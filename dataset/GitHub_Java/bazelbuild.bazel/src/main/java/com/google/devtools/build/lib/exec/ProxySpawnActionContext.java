@@ -15,20 +15,19 @@ package com.google.devtools.build.lib.exec;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /** Proxy that looks up the right SpawnActionContext for a spawn during {@link #exec}. */
-public final class ProxySpawnActionContext implements SpawnStrategy {
+public final class ProxySpawnActionContext implements SpawnActionContext {
 
   private final SpawnActionContextMaps spawnActionContextMaps;
 
@@ -36,7 +35,7 @@ public final class ProxySpawnActionContext implements SpawnStrategy {
    * Creates a new {@link ProxySpawnActionContext}.
    *
    * @param spawnActionContextMaps The {@link SpawnActionContextMaps} to use to decide which {@link
-   *     SpawnStrategy} should execute a given {@link Spawn} during {@link #exec}.
+   *     SpawnActionContext} should execute a given {@link Spawn} during {@link #exec}.
    */
   public ProxySpawnActionContext(SpawnActionContextMaps spawnActionContextMaps) {
     this.spawnActionContextMaps = spawnActionContextMaps;
@@ -51,18 +50,18 @@ public final class ProxySpawnActionContext implements SpawnStrategy {
   @Override
   public SpawnContinuation beginExecution(
       Spawn spawn, ActionExecutionContext actionExecutionContext) throws InterruptedException {
-    SpawnStrategy resolvedStrategy;
+    SpawnActionContext resolvedContext;
     try {
-      resolvedStrategy = resolveOne(spawn, actionExecutionContext);
+      resolvedContext = resolveOne(spawn, actionExecutionContext);
     } catch (ExecException e) {
       return SpawnContinuation.failedWithExecException(e);
     }
-    return resolvedStrategy.beginExecution(spawn, actionExecutionContext);
+    return resolvedContext.beginExecution(spawn, actionExecutionContext);
   }
 
-  private SpawnStrategy resolveOne(Spawn spawn, ActionExecutionContext actionExecutionContext)
+  private SpawnActionContext resolveOne(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws UserExecException {
-    List<SpawnStrategy> strategies = resolve(spawn, actionExecutionContext);
+    List<SpawnActionContext> strategies = resolve(spawn, actionExecutionContext);
 
     // Because the strategies are ordered by preference, we can execute the spawn with the best
     // possible one by simply filtering out the ones that can't execute it and then picking the
@@ -71,16 +70,16 @@ public final class ProxySpawnActionContext implements SpawnStrategy {
   }
 
   /**
-   * Returns the list of {@link SpawnStrategy}s that should be used to execute the given spawn.
+   * Returns the list of {@link SpawnActionContext}s that should be used to execute the given spawn.
    *
-   * @param spawn The spawn for which the correct {@link SpawnStrategy} should be determined.
+   * @param spawn The spawn for which the correct {@link SpawnActionContext} should be determined.
    * @param eventHandler An event handler that can be used to print messages while resolving the
-   *     correct {@link SpawnStrategy} for the given spawn.
+   *     correct {@link SpawnActionContext} for the given spawn.
    */
   @VisibleForTesting
-  public List<SpawnStrategy> resolve(Spawn spawn, ActionExecutionContext actionExecutionContext)
-      throws UserExecException {
-    List<SpawnStrategy> strategies =
+  public List<SpawnActionContext> resolve(
+      Spawn spawn, ActionExecutionContext actionExecutionContext) throws UserExecException {
+    List<SpawnActionContext> strategies =
         spawnActionContextMaps.getSpawnActionContexts(
             spawn, actionExecutionContext.getEventHandler());
 
@@ -103,7 +102,7 @@ public final class ProxySpawnActionContext implements SpawnStrategy {
   }
 
   @Override
-  public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+  public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
     return spawnActionContextMaps.getSpawnActionContexts(spawn, NullEventHandler.INSTANCE).stream()
         .anyMatch(spawnActionContext -> spawnActionContext.canExec(spawn, actionContextRegistry));
   }

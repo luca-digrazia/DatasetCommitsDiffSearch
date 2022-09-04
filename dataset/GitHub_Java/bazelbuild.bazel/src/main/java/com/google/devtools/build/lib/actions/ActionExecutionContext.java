@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetExpander;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -57,7 +56,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
   private final ActionInputPrefetcher actionInputPrefetcher;
   private final ActionKeyContext actionKeyContext;
   private final MetadataHandler metadataHandler;
-  private final boolean rewindingEnabled;
   private final LostInputsCheck lostInputsCheck;
   private final FileOutErr fileOutErr;
   private final ExtendedEventHandler eventHandler;
@@ -72,7 +70,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
   @Nullable private ImmutableList<FilesetOutputSymlink> outputSymlinks;
 
   private final ArtifactPathResolver pathResolver;
-  private final NestedSetExpander nestedSetExpander;
 
   private ActionExecutionContext(
       Executor executor,
@@ -80,7 +77,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       ActionInputPrefetcher actionInputPrefetcher,
       ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
-      boolean rewindingEnabled,
       LostInputsCheck lostInputsCheck,
       FileOutErr fileOutErr,
       ExtendedEventHandler eventHandler,
@@ -89,13 +85,11 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       @Nullable ArtifactExpander artifactExpander,
       @Nullable Environment env,
       @Nullable FileSystem actionFileSystem,
-      @Nullable Object skyframeDepsResult,
-      NestedSetExpander nestedSetExpander) {
+      @Nullable Object skyframeDepsResult) {
     this.actionInputFileCache = actionInputFileCache;
     this.actionInputPrefetcher = actionInputPrefetcher;
     this.actionKeyContext = actionKeyContext;
     this.metadataHandler = metadataHandler;
-    this.rewindingEnabled = rewindingEnabled;
     this.lostInputsCheck = lostInputsCheck;
     this.fileOutErr = fileOutErr;
     this.eventHandler = eventHandler;
@@ -109,7 +103,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
     this.pathResolver = ArtifactPathResolver.createPathResolver(actionFileSystem,
         // executor is only ever null in testing.
         executor == null ? null : executor.getExecRoot());
-    this.nestedSetExpander = nestedSetExpander;
   }
 
   public ActionExecutionContext(
@@ -118,7 +111,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       ActionInputPrefetcher actionInputPrefetcher,
       ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
-      boolean rewindingEnabled,
       LostInputsCheck lostInputsCheck,
       FileOutErr fileOutErr,
       ExtendedEventHandler eventHandler,
@@ -126,15 +118,13 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
       ArtifactExpander artifactExpander,
       @Nullable FileSystem actionFileSystem,
-      @Nullable Object skyframeDepsResult,
-      NestedSetExpander nestedSetExpander) {
+      @Nullable Object skyframeDepsResult) {
     this(
         executor,
         actionInputFileCache,
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        rewindingEnabled,
         lostInputsCheck,
         fileOutErr,
         eventHandler,
@@ -143,8 +133,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         artifactExpander,
         /*env=*/ null,
         actionFileSystem,
-        skyframeDepsResult,
-        nestedSetExpander);
+        skyframeDepsResult);
   }
 
   public static ActionExecutionContext forInputDiscovery(
@@ -153,21 +142,18 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
       ActionInputPrefetcher actionInputPrefetcher,
       ActionKeyContext actionKeyContext,
       MetadataHandler metadataHandler,
-      boolean rewindingEnabled,
       LostInputsCheck lostInputsCheck,
       FileOutErr fileOutErr,
       ExtendedEventHandler eventHandler,
       Map<String, String> clientEnv,
       Environment env,
-      @Nullable FileSystem actionFileSystem,
-      NestedSetExpander nestedSetExpander) {
+      @Nullable FileSystem actionFileSystem) {
     return new ActionExecutionContext(
         executor,
         actionInputFileCache,
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        rewindingEnabled,
         lostInputsCheck,
         fileOutErr,
         eventHandler,
@@ -176,8 +162,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         /*artifactExpander=*/ null,
         env,
         actionFileSystem,
-        /*skyframeDepsResult=*/ null,
-        nestedSetExpander);
+        /*skyframeDepsResult=*/ null);
   }
 
   public ActionInputPrefetcher getActionInputPrefetcher() {
@@ -208,10 +193,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
   @Nullable
   public FileSystem getActionFileSystem() {
     return actionFileSystem;
-  }
-
-  public boolean isRewindingEnabled() {
-    return rewindingEnabled;
   }
 
   public void checkForLostInputs() throws LostInputsActionExecutionException {
@@ -344,10 +325,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
     return actionKeyContext;
   }
 
-  public NestedSetExpander getNestedSetExpander() {
-    return nestedSetExpander;
-  }
-
   @Override
   public void close() throws IOException {
     fileOutErr.close();
@@ -367,7 +344,6 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        rewindingEnabled,
         lostInputsCheck,
         fileOutErr,
         eventHandler,
@@ -376,8 +352,7 @@ public class ActionExecutionContext implements Closeable, ActionContext.ActionCo
         artifactExpander,
         env,
         actionFileSystem,
-        skyframeDepsResult,
-        nestedSetExpander);
+        skyframeDepsResult);
   }
 
   /**

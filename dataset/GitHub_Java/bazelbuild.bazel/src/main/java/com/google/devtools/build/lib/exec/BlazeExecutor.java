@@ -77,10 +77,8 @@ public final class BlazeExecutor implements Executor {
       spawnActionContextMaps.debugPrintSpawnActionContextMaps(reporter);
     }
 
-    spawnActionContextMaps.notifyUsed();
-
     for (ActionContextProvider factory : contextProviders) {
-      factory.executorCreated();
+      factory.executorCreated(spawnActionContextMaps.allContexts());
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,30 +13,37 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.collect.ImmutableList;
 
 /**
  * A context that allows execution of {@link Spawn} instances.
  */
 @ActionContextMarker(name = "spawn")
-public interface SpawnActionContext extends Executor.ActionContext {
+public interface SpawnActionContext extends ActionContext {
 
   /**
-   * Executes the given spawn.
+   * Executes the given spawn and returns metadata about the execution. Implementations must
+   * guarantee that the first list entry represents the successful execution of the given spawn (if
+   * no execution was successful, the method must throw an exception instead). The list may contain
+   * further entries for (unsuccessful) retries as well as tree artifact management (which may
+   * require additional spawn executions).
    */
-  void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
+  ImmutableList<SpawnResult> exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException;
 
-  /** Returns the locality of running the spawn, i.e., "local". */
-  String strategyLocality(String mnemonic, boolean remotable);
-
   /**
-   * This implements a tri-state mode. There are three possible cases: (1) implementations of this
-   * class can unconditionally execute spawns locally, (2) they can follow whatever is set for the
-   * corresponding spawn (see {@link Spawn#isRemotable}), or (3) they can unconditionally execute
-   * spawns remotely, i.e., force remote execution.
-   *
-   * <p>Passing the spawns remotable flag to this method returns whether the spawn will actually be
-   * executed remotely.
+   * Executes the given spawn, possibly asynchronously, and returns a SpawnContinuation to represent
+   * the execution. Otherwise all requirements from {@link #exec} apply.
    */
-  boolean isRemotable(String mnemonic, boolean remotable);
+  default SpawnContinuation beginExecution(
+      Spawn spawn, ActionExecutionContext actionExecutionContext) throws InterruptedException {
+    try {
+      return SpawnContinuation.immediate(exec(spawn, actionExecutionContext));
+    } catch (ExecException e) {
+      return SpawnContinuation.failedWithExecException(e);
+    }
+  }
+
+  /** Returns whether this SpawnActionContext supports executing the given Spawn. */
+  boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry);
 }

@@ -37,16 +37,17 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.SandboxedSpawnStrategy;
+import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil.NullAction;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
+import com.google.devtools.build.lib.exec.SimpleActionContextProvider;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -116,7 +117,7 @@ public class DynamicSpawnStrategyTest {
    * <p>All the logic in here must be applicable to all tests. If any test needs to special-case
    * some aspect of this logic, then it must extend this subclass as necessary.
    */
-  private class MockSpawnStrategy implements SandboxedSpawnStrategy {
+  private class MockSpawnStrategy implements SandboxedSpawnActionContext {
     /** Identifier of this class for error reporting purposes. */
     private final String name;
 
@@ -194,7 +195,7 @@ public class DynamicSpawnStrategyTest {
     }
 
     @Override
-    public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+    public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
       return true;
     }
 
@@ -318,15 +319,24 @@ public class DynamicSpawnStrategyTest {
 
     ExecutorBuilder executorBuilder =
         new ExecutorBuilder()
-            .addActionContext(SpawnStrategy.class, localStrategy, "mock-local")
-            .addActionContext(SpawnStrategy.class, remoteStrategy, "mock-remote");
+            .addActionContextProvider(
+                new SimpleActionContextProvider<>(
+                    SpawnActionContext.class, localStrategy, "mock-local"))
+            .addActionContextProvider(
+                new SimpleActionContextProvider<>(
+                    SpawnActionContext.class, remoteStrategy, "mock-remote"));
 
     if (sandboxedStrategy != null) {
-      executorBuilder.addActionContext(SpawnStrategy.class, sandboxedStrategy, "mock-sandboxed");
+      executorBuilder.addActionContextProvider(
+          new SimpleActionContextProvider<>(
+              SpawnActionContext.class, sandboxedStrategy, "mock-sandboxed"));
     }
 
     new DynamicExecutionModule(executorService).initStrategies(executorBuilder, options);
-    SpawnActionContextMaps spawnActionContextMaps = executorBuilder.getSpawnActionContextMaps();
+    SpawnActionContextMaps spawnActionContextMaps =
+        executorBuilder
+            .getSpawnActionContextMapsBuilder()
+            .build(executorBuilder.getActionContextProviders());
 
     Executor executor =
         new BlazeExecutor(
@@ -337,7 +347,8 @@ public class DynamicSpawnStrategyTest {
             OptionsParser.builder()
                 .optionsClasses(ImmutableList.of(ExecutionOptions.class))
                 .build(),
-            spawnActionContextMaps);
+            spawnActionContextMaps,
+            executorBuilder.getActionContextProviders());
 
     ActionExecutionContext actionExecutionContext =
         ActionsTestUtil.createContext(
@@ -357,7 +368,7 @@ public class DynamicSpawnStrategyTest {
     checkState(optionalContext.isPresent(), "Expected module to register a dynamic strategy");
 
     return new AutoValue_DynamicSpawnStrategyTest_StrategyAndContext(
-        (SpawnStrategy) optionalContext.get(), actionExecutionContext);
+        (SpawnActionContext) optionalContext.get(), actionExecutionContext);
   }
 
   private static class NullActionWithMnemonic extends NullAction {
@@ -1018,7 +1029,7 @@ public class DynamicSpawnStrategyTest {
 
   @AutoValue
   abstract static class StrategyAndContext {
-    abstract SpawnStrategy strategy();
+    abstract SpawnActionContext strategy();
 
     abstract ActionExecutionContext context();
 

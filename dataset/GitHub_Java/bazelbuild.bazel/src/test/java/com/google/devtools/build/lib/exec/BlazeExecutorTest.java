@@ -19,11 +19,10 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.events.Event;
@@ -80,7 +79,7 @@ public class BlazeExecutorTest {
         .setReporter(reporter)
         .setOptionsParser(parser)
         .setExecution("fake", "fake")
-        .addStrategy(SpawnStrategy.class, new FakeSpawnStrategy(), "fake")
+        .addStrategy(SpawnActionContext.class, new FakeSpawnStrategy(), "fake")
         .build();
 
     Event event =
@@ -97,7 +96,7 @@ public class BlazeExecutorTest {
         .contains("\"fake\" = [" + strategy.getClass().getSimpleName() + "]");
   }
 
-  private static class FakeSpawnStrategy implements SpawnStrategy {
+  private static class FakeSpawnStrategy implements SpawnActionContext {
 
     @Override
     public ImmutableList<SpawnResult> exec(
@@ -106,7 +105,7 @@ public class BlazeExecutorTest {
     }
 
     @Override
-    public boolean canExec(Spawn spawn, ActionContext.ActionContextRegistry actionContextRegistry) {
+    public boolean canExec(Spawn spawn, ActionContextRegistry actionContextRegistry) {
       return false;
     }
   }
