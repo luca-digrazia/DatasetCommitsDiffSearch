@@ -164,6 +164,8 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     String mnemonic = spawn.getMnemonic();
     Executor executor = actionExecutionContext.getExecutor();
     EventHandler eventHandler = executor.getEventHandler();
+    executor.getEventBus().post(
+        ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "remote"));
 
     RemoteActionCache actionCache = null;
     RemoteWorkExecutor workExecutor = null;
@@ -189,12 +191,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       standaloneStrategy.exec(spawn, actionExecutionContext);
       return;
     }
-    if (workExecutor == null) {
-      execLocally(spawn, actionExecutionContext, actionCache, actionKey);
-      return;
-    }
-    executor.getEventBus().post(
-        ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "remote"));
 
     try {
       // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
@@ -226,6 +222,11 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
         } catch (CacheNotFoundException e) {
           acceptCachedResult = false; // Retry the action remotely and invalidate the results.
         }
+      }
+
+      if (workExecutor == null) {
+        execLocally(spawn, actionExecutionContext, actionCache, actionKey);
+        return;
       }
 
       // Upload the command and all the inputs into the remote cache.
