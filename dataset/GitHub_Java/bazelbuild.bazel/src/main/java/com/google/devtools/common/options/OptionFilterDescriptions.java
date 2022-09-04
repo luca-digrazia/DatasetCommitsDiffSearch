@@ -27,9 +27,7 @@ public class OptionFilterDescriptions {
     OptionDocumentationCategory.TOOLCHAIN,
     OptionDocumentationCategory.OUTPUT_SELECTION,
     OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    OptionDocumentationCategory.INPUT_STRICTNESS,
     OptionDocumentationCategory.SIGNING,
-    OptionDocumentationCategory.STARLARK_SEMANTICS,
     OptionDocumentationCategory.TESTING,
     OptionDocumentationCategory.QUERY,
     OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
@@ -67,16 +65,8 @@ public class OptionFilterDescriptions {
             "Options that let the user configure the intended output, affecting its value, as "
                 + "opposed to its existence")
         .put(
-            OptionDocumentationCategory.INPUT_STRICTNESS,
-            "Options that affect how strictly Bazel enforces valid build inputs (rule definitions, "
-                + " flag combinations, etc.)")
-        .put(
             OptionDocumentationCategory.SIGNING,
             "Options that affect the signing outputs of a build")
-        .put(
-            OptionDocumentationCategory.STARLARK_SEMANTICS,
-            "This option affects semantics of the Starlark language or the build API accessible to "
-                + "BUILD files, .bzl files, or WORKSPACE files.")
         .put(
             OptionDocumentationCategory.TESTING,
             "Options that govern the behavior of the test environment or test runner")
@@ -150,7 +140,7 @@ public class OptionFilterDescriptions {
             OptionEffectTag.TERMINAL_OUTPUT,
             "This option affects " + productName + "'s terminal output.")
         .put(
-            OptionEffectTag.ACTION_COMMAND_LINES,
+            OptionEffectTag.ACTION_OPTIONS,
             "This option changes the command line arguments of one or more build actions.")
         .put(
             OptionEffectTag.TEST_RUNNER,
@@ -174,9 +164,6 @@ public class OptionFilterDescriptions {
             OptionMetadataTag.DEPRECATED,
             "This option is deprecated. It might be that the feature it affects is deprecated, "
                 + "or that another method of supplying the information is preferred.")
-        .put(
-            OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
-            "This option is triggered by the expansion option --all_incompatible_changes.")
         .put(
             OptionMetadataTag.HIDDEN, // Here for completeness, these options are UNDOCUMENTED.
             "This option should not be used by a user, and should not be logged.")

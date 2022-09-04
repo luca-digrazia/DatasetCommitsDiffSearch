@@ -37,15 +37,6 @@ public class TestOptions extends OptionsBase {
   )
   public String testString;
 
-  @Option(
-    name = "test_string_null_by_default",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.NO_OP},
-    defaultValue = "null",
-    help = "a string-valued option that has the special string 'null' as its default."
-  )
-  public String testStringNullByDefault;
-
   /*
    * Repeated flags
    */
@@ -246,12 +237,45 @@ public class TestOptions extends OptionsBase {
   )
   public String testRecursiveImplicitRequirement;
 
+  public static final String TEST_EXPANSION_FUNCTION_ACCEPTED_VALUE = "valueA";
+  public static final String EXPANDED_D_EXPANSION_FUNCTION_VALUE = "expanded valueA";
+
+  /*
+   * Expansion function flags
+   */
+
+  /** Used for testing an expansion flag that requires a value. */
+  public static class TestExpansionFunction implements ExpansionFunction {
+    @Override
+    public ImmutableList<String> getExpansion(ExpansionContext expansionContext)
+        throws OptionsParsingException {
+      String value = expansionContext.getUnparsedValue();
+      if (value == null) {
+        throw new ExpansionNeedsValueException("Expansion value not set.");
+      } else if (value.equals(TEST_EXPANSION_FUNCTION_ACCEPTED_VALUE)) {
+        return ImmutableList.of("--expanded_d", EXPANDED_D_EXPANSION_FUNCTION_VALUE);
+      } else {
+        throw new OptionsParsingException("Unrecognized expansion value: " + value);
+      }
+    }
+  }
+
+  @Option(
+    name = "test_expansion_function",
+    defaultValue = "null",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.NO_OP},
+    expansionFunction = TestExpansionFunction.class,
+    help = "this is for testing expansion-by-function functionality."
+  )
+  public Void testExpansionFunction;
+
   public static final String EXPANDED_D_VOID_EXPANSION_FUNCTION_VALUE = "void expanded";
 
   /** Used for testing an expansion flag that doesn't requires a value. */
   public static class TestVoidExpansionFunction implements ExpansionFunction {
     @Override
-    public ImmutableList<String> getExpansion(IsolatedOptionsData optionsData) {
+    public ImmutableList<String> getExpansion(ExpansionContext expansionContext) {
       return ImmutableList.of("--expanded_d", EXPANDED_D_VOID_EXPANSION_FUNCTION_VALUE);
     }
   }
@@ -261,7 +285,7 @@ public class TestOptions extends OptionsBase {
     defaultValue = "null",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {
-      OptionEffectTag.ACTION_COMMAND_LINES,
+      OptionEffectTag.ACTION_OPTIONS,
       OptionEffectTag.TEST_RUNNER,
       OptionEffectTag.TERMINAL_OUTPUT
     },
@@ -279,9 +303,9 @@ public class TestOptions extends OptionsBase {
    */
   public static class ExpansionDependsOnOtherOptionDefinitions implements ExpansionFunction {
     @Override
-    public ImmutableList<String> getExpansion(IsolatedOptionsData optionsData) {
+    public ImmutableList<String> getExpansion(ExpansionContext context) {
       TreeSet<String> flags = new TreeSet<>();
-      for (Map.Entry<String, ?> entry : optionsData.getAllOptionDefinitions()) {
+      for (Map.Entry<String, ?> entry : context.getOptionsData().getAllOptionDefinitions()) {
         if (entry.getKey().startsWith("specialexp_")) {
           flags.add("--" + entry.getKey());
         }
@@ -299,6 +323,36 @@ public class TestOptions extends OptionsBase {
     help = "Expands to all options with a specific prefix."
   )
   public Void specialExp;
+
+  /**
+   * Defines an expansion function that adapts its expansion to the value assigned to the original
+   * expansion option.
+   */
+  public static class ExpansionDependsOnFlagValue implements ExpansionFunction {
+    @Override
+    public ImmutableList<String> getExpansion(ExpansionContext context)
+        throws OptionsParsingException {
+      String value = context.getUnparsedValue();
+      if (value == null) {
+        throw new ExpansionNeedsValueException("Expansion value not set.");
+      }
+      if (value.equals("foo_bar")) {
+        return ImmutableList.<String>of("--specialexp_foo", "--specialexp_bar");
+      }
+
+      throw new OptionsParsingException("Unexpected expansion argument: " + value);
+    }
+  }
+
+  @Option(
+    name = "dynamicexp",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.NO_OP},
+    defaultValue = "null",
+    expansionFunction = ExpansionDependsOnFlagValue.class,
+    help = "Expands depending on the value provided."
+  )
+  public Void variableExpansion;
 
   @Option(
     name = "specialexp_foo",

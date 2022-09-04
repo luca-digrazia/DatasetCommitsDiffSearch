@@ -100,15 +100,15 @@ public final class OptionsUsageTest {
   public void stringValue_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_string"))
         .isEqualTo(
-            "<dt id=\"flag--test_string\"><code><a href=\"#flag--test_string\">--test_string</a>"
-                + "=&lt;a string&gt</code> default: \"test string default\"</dt>\n"
+            "<dt><code><a name=\"flag--test_string\"></a>"
+                + "--test_string=&lt;a string&gt</code> default: \"test string default\"</dt>\n"
                 + "<dd>\n"
                 + "a string-valued option to test simple option operations\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_string"))
         .isEqualTo(
-            "<dt id=\"flag--test_string\"><code><a href=\"#flag--test_string\">--test_string</a>"
-                + "=&lt;a string&gt</code> default: \"test string default\"</dt>\n"
+            "<dt><code><a name=\"flag--test_string\"></a>"
+                + "--test_string=&lt;a string&gt</code> default: \"test string default\"</dt>\n"
                 + "<dd>\n"
                 + "a string-valued option to test simple option operations\n"
                 + "<br>Tags: \n"
@@ -149,17 +149,15 @@ public final class OptionsUsageTest {
   public void intValue_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("expanded_c"))
         .isEqualTo(
-            "<dt id=\"flag--expanded_c\"><code>"
-                + "<a href=\"#flag--expanded_c\">--expanded_c</a>"
-                + "=&lt;an integer&gt</code> default: \"12\"</dt>\n"
+            "<dt><code><a name=\"flag--expanded_c\"></a>"
+                + "--expanded_c=&lt;an integer&gt</code> default: \"12\"</dt>\n"
                 + "<dd>\n"
                 + "an int-value&#39;d flag used to test expansion logic\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("expanded_c"))
         .isEqualTo(
-            "<dt id=\"flag--expanded_c\"><code>"
-                + "<a href=\"#flag--expanded_c\">--expanded_c</a>"
-                + "=&lt;an integer&gt</code> default: \"12\"</dt>\n"
+            "<dt><code><a name=\"flag--expanded_c\"></a>"
+                + "--expanded_c=&lt;an integer&gt</code> default: \"12\"</dt>\n"
                 + "<dd>\n"
                 + "an int-value&#39;d flag used to test expansion logic\n"
                 + "<br>Tags: \n"
@@ -199,8 +197,8 @@ public final class OptionsUsageTest {
   public void booleanValue_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("expanded_a"))
         .isEqualTo(
-            "<dt id=\"flag--expanded_a\"><code><a href=\"#flag--expanded_a\">"
-                + "--[no]expanded_a</a></code> default: \"true\"</dt>\n"
+            "<dt><code><a name=\"flag--expanded_a\"></a>"
+                + "--[no]expanded_a</code> default: \"true\"</dt>\n"
                 + "<dd>\n"
                 + "A boolean flag with unknown effect to test tagless usage text.\n"
                 + "</dd>\n");
@@ -240,18 +238,16 @@ public final class OptionsUsageTest {
   public void multipleValue_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_multiple_string"))
         .isEqualTo(
-            "<dt id=\"flag--test_multiple_string\"><code>"
-                + "<a href=\"#flag--test_multiple_string\">--test_multiple_string</a>"
-                + "=&lt;a string&gt</code> "
+            "<dt><code><a name=\"flag--test_multiple_string\"></a>"
+                + "--test_multiple_string=&lt;a string&gt</code> "
                 + "multiple uses are accumulated</dt>\n"
                 + "<dd>\n"
                 + "a repeatable string-valued flag with its own unhelpful help text\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_multiple_string"))
         .isEqualTo(
-            "<dt id=\"flag--test_multiple_string\"><code>"
-                + "<a href=\"#flag--test_multiple_string\">--test_multiple_string</a>"
-                + "=&lt;a string&gt</code> "
+            "<dt><code><a name=\"flag--test_multiple_string\"></a>"
+                + "--test_multiple_string=&lt;a string&gt</code> "
                 + "multiple uses are accumulated</dt>\n"
                 + "<dd>\n"
                 + "a repeatable string-valued flag with its own unhelpful help text\n"
@@ -295,22 +291,20 @@ public final class OptionsUsageTest {
   public void customConverterValue_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_list_converters"))
         .isEqualTo(
-            "<dt id=\"flag--test_list_converters\"><code>"
-                + "<a href=\"#flag--test_list_converters\">--test_list_converters</a>"
-                + "=&lt;a list of strings&gt</code> "
+            "<dt><code><a name=\"flag--test_list_converters\"></a>"
+                + "--test_list_converters=&lt;a list of strings&gt</code> "
                 + "multiple uses are accumulated</dt>\n"
                 + "<dd>\n"
-                + "a repeatable flag that accepts lists, but doesn&#39;t want to have lists of "
+                + "a repeatable flag that accepts lists, but doesn&#39;t want to have lists of \n"
                 + "lists as a final type\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_list_converters"))
         .isEqualTo(
-            "<dt id=\"flag--test_list_converters\"><code>"
-                + "<a href=\"#flag--test_list_converters\">--test_list_converters</a>"
-                + "=&lt;a list of strings&gt</code> "
+            "<dt><code><a name=\"flag--test_list_converters\"></a>"
+                + "--test_list_converters=&lt;a list of strings&gt</code> "
                 + "multiple uses are accumulated</dt>\n"
                 + "<dd>\n"
-                + "a repeatable flag that accepts lists, but doesn&#39;t want to have lists of "
+                + "a repeatable flag that accepts lists, but doesn&#39;t want to have lists of \n"
                 + "lists as a final type\n"
                 + "<br>Tags: \n"
                 + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
@@ -354,37 +348,33 @@ public final class OptionsUsageTest {
   public void staticExpansionOption_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_expansion"))
         .isEqualTo(
-            "<dt id=\"flag--test_expansion\"><code><a href=\"#flag--test_expansion\">"
-                + "--test_expansion</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_expansion\"></a>"
+                + "--test_expansion</code></dt>\n"
                 + "<dd>\n"
                 + "this expands to an alphabet soup.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--noexpanded_a\">--noexpanded_a</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--expanded_b\">--expanded_b=false</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag--expanded_c\">--expanded_c</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag42\">42</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag--expanded_d\">--expanded_d</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flagbar\">bar</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--noexpanded_a</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_b=false</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_c</code><br/>\n"
+                + "&nbsp;&nbsp;<code>42</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_d</code><br/>\n"
+                + "&nbsp;&nbsp;<code>bar</code><br/>\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_expansion"))
         .isEqualTo(
-            "<dt id=\"flag--test_expansion\"><code><a href=\"#flag--test_expansion\">"
-                + "--test_expansion</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_expansion\"></a>"
+                + "--test_expansion</code></dt>\n"
                 + "<dd>\n"
                 + "this expands to an alphabet soup.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--noexpanded_a\">--noexpanded_a</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--expanded_b\">--expanded_b=false</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag--expanded_c\">--expanded_c</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag42\">42</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag--expanded_d\">--expanded_d</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flagbar\">bar</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--noexpanded_a</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_b=false</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_c</code><br/>\n"
+                + "&nbsp;&nbsp;<code>42</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_d</code><br/>\n"
+                + "&nbsp;&nbsp;<code>bar</code><br/>\n"
                 + "<br>Tags: \n"
                 + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
                 + "</dd>\n");
@@ -434,31 +424,28 @@ public final class OptionsUsageTest {
   public void recursiveExpansionOption_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_recursive_expansion_top_level"))
         .isEqualTo(
-            "<dt id=\"flag--test_recursive_expansion_top_level\"><code><a"
-                + " href=\"#flag--test_recursive_expansion_top_level\">--test_recursive_expansion_top_level</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_recursive_expansion_top_level\"></a>"
+                + "--test_recursive_expansion_top_level</code></dt>\n"
                 + "<dd>\n"
                 + "Lets the children do all the work.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_recursive_expansion_middle1\">--test_recursive_expansion_middle1</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_recursive_expansion_middle2\">--test_recursive_expansion_middle2</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_recursive_expansion_middle1</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_recursive_expansion_middle2</code><br/>\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_recursive_expansion_top_level"))
         .isEqualTo(
-            "<dt id=\"flag--test_recursive_expansion_top_level\"><code><a"
-                + " href=\"#flag--test_recursive_expansion_top_level\">--test_recursive_expansion_top_level</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_recursive_expansion_top_level\"></a>"
+                + "--test_recursive_expansion_top_level</code></dt>\n"
                 + "<dd>\n"
                 + "Lets the children do all the work.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_recursive_expansion_middle1\">--test_recursive_expansion_middle1</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_recursive_expansion_middle2\">--test_recursive_expansion_middle2</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_recursive_expansion_middle1</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_recursive_expansion_middle2</code><br/>\n"
                 + "<br>Tags: \n"
-                + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a></dd>\n");
+                + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
+                + "</dd>\n");
   }
 
   @Test
@@ -498,31 +485,28 @@ public final class OptionsUsageTest {
   public void expansionToMultipleValue_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_expansion_to_repeatable"))
         .isEqualTo(
-            "<dt id=\"flag--test_expansion_to_repeatable\"><code><a"
-                + " href=\"#flag--test_expansion_to_repeatable\">--test_expansion_to_repeatable</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_expansion_to_repeatable\"></a>"
+                + "--test_expansion_to_repeatable</code></dt>\n"
                 + "<dd>\n"
                 + "Go forth and multiply, they said.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_multiple_string\">--test_multiple_string=expandedFirstValue</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_multiple_string\">--test_multiple_string=expandedSecondValue</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_multiple_string=expandedFirstValue</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_multiple_string=expandedSecondValue</code><br/>\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_expansion_to_repeatable"))
         .isEqualTo(
-            "<dt id=\"flag--test_expansion_to_repeatable\"><code><a"
-                + " href=\"#flag--test_expansion_to_repeatable\">--test_expansion_to_repeatable</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_expansion_to_repeatable\"></a>"
+                + "--test_expansion_to_repeatable</code></dt>\n"
                 + "<dd>\n"
                 + "Go forth and multiply, they said.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_multiple_string\">--test_multiple_string=expandedFirstValue</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a"
-                + " href=\"#flag--test_multiple_string\">--test_multiple_string=expandedSecondValue</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_multiple_string=expandedFirstValue</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--test_multiple_string=expandedSecondValue</code><br/>\n"
                 + "<br>Tags: \n"
-                + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a></dd>\n");
+                + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
+                + "</dd>\n");
   }
 
   @Test
@@ -562,21 +546,74 @@ public final class OptionsUsageTest {
   public void implicitRequirementOption_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_implicit_requirement"))
         .isEqualTo(
-            "<dt id=\"flag--test_implicit_requirement\"><code>"
-                + "<a href=\"#flag--test_implicit_requirement\">--test_implicit_requirement</a>"
-                + "=&lt;a string&gt</code> "
+            "<dt><code><a name=\"flag--test_implicit_requirement\"></a>"
+                + "--test_implicit_requirement=&lt;a string&gt</code> "
                 + "default: \"direct implicit\"</dt>\n"
                 + "<dd>\n"
                 + "this option really needs that other one, isolation of purpose has failed.\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_implicit_requirement"))
         .isEqualTo(
-            "<dt id=\"flag--test_implicit_requirement\"><code>"
-                + "<a href=\"#flag--test_implicit_requirement\">--test_implicit_requirement</a>"
-                + "=&lt;a string&gt</code> "
+            "<dt><code><a name=\"flag--test_implicit_requirement\"></a>"
+                + "--test_implicit_requirement=&lt;a string&gt</code> "
                 + "default: \"direct implicit\"</dt>\n"
                 + "<dd>\n"
                 + "this option really needs that other one, isolation of purpose has failed.\n"
+                + "<br>Tags: \n"
+                + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
+                + "</dd>\n");
+  }
+
+  @Test
+  public void expansionFunctionOptionThatReadsUserValue_shortTerminalOutput() {
+    assertThat(getTerminalUsageWithoutTags("test_expansion_function", HelpVerbosity.SHORT))
+        .isEqualTo("  --test_expansion_function\n");
+    assertThat(getTerminalUsageWithoutTags("test_expansion_function", HelpVerbosity.SHORT))
+        .isEqualTo(getTerminalUsageWithTags("test_expansion_function", HelpVerbosity.SHORT));
+  }
+
+  @Test
+  public void expansionFunctionOptionThatReadsUserValue_mediumTerminalOutput() {
+    assertThat(getTerminalUsageWithoutTags("test_expansion_function", HelpVerbosity.MEDIUM))
+        .isEqualTo("  --test_expansion_function\n");
+    assertThat(getTerminalUsageWithoutTags("test_expansion_function", HelpVerbosity.MEDIUM))
+        .isEqualTo(getTerminalUsageWithTags("test_expansion_function", HelpVerbosity.MEDIUM));
+  }
+
+  @Test
+  public void expansionFunctionOptionThatReadsUserValue_longTerminalOutput() {
+    assertThat(getTerminalUsageWithoutTags("test_expansion_function", HelpVerbosity.LONG))
+        .isEqualTo(
+            "  --test_expansion_function\n"
+                + "    this is for testing expansion-by-function functionality.\n"
+                + "      Expands to unknown options.\n");
+    assertThat(getTerminalUsageWithTags("test_expansion_function", HelpVerbosity.LONG))
+        .isEqualTo(
+            "  --test_expansion_function\n"
+                + "    this is for testing expansion-by-function functionality.\n"
+                + "      Expands to unknown options.\n"
+                + "      Tags: no_op\n");
+  }
+
+  @Test
+  public void expansionFunctionOptionThatReadsUserValue_htmlOutput() {
+    assertThat(getHtmlUsageWithoutTags("test_expansion_function"))
+        .isEqualTo(
+            "<dt><code><a name=\"flag--test_expansion_function\"></a>"
+                + "--test_expansion_function</code></dt>\n"
+                + "<dd>\n"
+                + "this is for testing expansion-by-function functionality.\n"
+                + "<br/>\n"
+                + "Expands to unknown options.<br/>\n"
+                + "</dd>\n");
+    assertThat(getHtmlUsageWithTags("test_expansion_function"))
+        .isEqualTo(
+            "<dt><code><a name=\"flag--test_expansion_function\"></a>"
+                + "--test_expansion_function</code></dt>\n"
+                + "<dd>\n"
+                + "this is for testing expansion-by-function functionality.\n"
+                + "<br/>\n"
+                + "Expands to unknown options.<br/>\n"
                 + "<br>Tags: \n"
                 + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
                 + "</dd>\n");
@@ -617,31 +654,25 @@ public final class OptionsUsageTest {
   public void expansionFunctionOptionThatExpandsBasedOnOtherLoadedOptions_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("prefix_expansion"))
         .isEqualTo(
-            "<dt id=\"flag--prefix_expansion\"><code>"
-                + "<a href=\"#flag--prefix_expansion\">--prefix_expansion</a>"
-                + "</code></dt>\n"
+            "<dt><code><a name=\"flag--prefix_expansion\"></a>"
+                + "--prefix_expansion</code></dt>\n"
                 + "<dd>\n"
                 + "Expands to all options with a specific prefix.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--specialexp_bar\">--specialexp_bar</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--specialexp_foo\">--specialexp_foo</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--specialexp_bar</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--specialexp_foo</code><br/>\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("prefix_expansion"))
         .isEqualTo(
-            "<dt id=\"flag--prefix_expansion\"><code>"
-                + "<a href=\"#flag--prefix_expansion\">--prefix_expansion</a>"
-                + "</code></dt>\n"
+            "<dt><code><a name=\"flag--prefix_expansion\"></a>"
+                + "--prefix_expansion</code></dt>\n"
                 + "<dd>\n"
                 + "Expands to all options with a specific prefix.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--specialexp_bar\">--specialexp_bar</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code>"
-                + "<a href=\"#flag--specialexp_foo\">--specialexp_foo</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--specialexp_bar</code><br/>\n"
+                + "&nbsp;&nbsp;<code>--specialexp_foo</code><br/>\n"
                 + "<br>Tags: \n"
                 + "<a href=\"#effect_tag_NO_OP\"><code>no_op</code></a>"
                 + "</dd>\n");
@@ -675,38 +706,37 @@ public final class OptionsUsageTest {
             "  --test_void_expansion_function\n"
                 + "    Listing a ton of random tags to test the usage output.\n"
                 + "      Expands to: --expanded_d void expanded \n"
-                + "      Tags: action_command_lines, test_runner, terminal_output, experimental\n");
+                + "      Tags: action_options, test_runner, terminal_output, experimental\n");
   }
 
   @Test
   public void tagHeavyExpansionOption_htmlOutput() {
     assertThat(getHtmlUsageWithoutTags("test_void_expansion_function"))
         .isEqualTo(
-            "<dt id=\"flag--test_void_expansion_function\"><code><a"
-                + " href=\"#flag--test_void_expansion_function\">--test_void_expansion_function</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_void_expansion_function\"></a>"
+                + "--test_void_expansion_function</code></dt>\n"
                 + "<dd>\n"
                 + "Listing a ton of random tags to test the usage output.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag--expanded_d\">--expanded_d</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flagvoid expanded\">void"
-                + " expanded</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_d</code><br/>\n"
+                + "&nbsp;&nbsp;<code>void expanded</code><br/>\n"
                 + "</dd>\n");
     assertThat(getHtmlUsageWithTags("test_void_expansion_function"))
         .isEqualTo(
-            "<dt id=\"flag--test_void_expansion_function\"><code><a"
-                + " href=\"#flag--test_void_expansion_function\">--test_void_expansion_function</a></code></dt>\n"
+            "<dt><code><a name=\"flag--test_void_expansion_function\"></a>"
+                + "--test_void_expansion_function</code></dt>\n"
                 + "<dd>\n"
                 + "Listing a ton of random tags to test the usage output.\n"
                 + "<br/>\n"
                 + "Expands to:<br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flag--expanded_d\">--expanded_d</a></code><br/>\n"
-                + "&nbsp;&nbsp;<code><a href=\"#flagvoid expanded\">void"
-                + " expanded</a></code><br/>\n"
+                + "&nbsp;&nbsp;<code>--expanded_d</code><br/>\n"
+                + "&nbsp;&nbsp;<code>void expanded</code><br/>\n"
                 + "<br>Tags: \n"
-                + "<a href=\"#effect_tag_ACTION_COMMAND_LINES\"><code>action_command_lines</code></a>,"
-                + " <a href=\"#effect_tag_TEST_RUNNER\"><code>test_runner</code></a>, <a"
-                + " href=\"#effect_tag_TERMINAL_OUTPUT\"><code>terminal_output</code></a>, <a"
-                + " href=\"#metadata_tag_EXPERIMENTAL\"><code>experimental</code></a></dd>\n");
+                + "<a href=\"#effect_tag_ACTION_OPTIONS\"><code>action_options</code></a>, "
+                + "<a href=\"#effect_tag_TEST_RUNNER\"><code>test_runner</code></a>, "
+                + "<a href=\"#effect_tag_TERMINAL_OUTPUT\"><code>terminal_output</code></a>, "
+                + "<a href=\"#metadata_tag_EXPERIMENTAL\"><code>experimental</code></a>"
+                + "</dd>\n");
   }
 }
