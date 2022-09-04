@@ -84,14 +84,14 @@ public abstract class StringIndexerTest {
       for (int i = 0; i < ATTEMPTS; i++) {
         final String key = keyGenerator.apply(i);
         keys.add(key);
-        executor.execute(
-            () -> {
-              int index = indexer.getOrCreateIndex(key);
-              if (safeIndex.get() < index) {
-                safeIndex.set(index);
-              }
-              indexer.addString(key);
-            });
+        executor.execute(new Runnable() {
+          @Override
+          public void run() {
+            int index = indexer.getOrCreateIndex(key);
+            if (safeIndex.get() < index) { safeIndex.set(index); }
+            indexer.addString(key);
+          }
+        });
       }
     }
     try {
@@ -117,17 +117,26 @@ public abstract class StringIndexerTest {
 
   @Test
   public void concurrentAddChildNode() throws Exception {
-    assertConcurrentUpdates(from -> Strings.repeat("a", from + 1));
+    assertConcurrentUpdates(new Function<Integer, String>() {
+      @Override
+      public String apply(Integer from) { return Strings.repeat("a", from + 1); }
+    });
   }
 
   @Test
   public void concurrentSplitNodeSuffix() throws Exception {
-    assertConcurrentUpdates(from -> Strings.repeat("b", ATTEMPTS - from));
+    assertConcurrentUpdates(new Function<Integer, String>() {
+      @Override
+      public String apply(Integer from) { return Strings.repeat("b", ATTEMPTS - from); }
+    });
   }
 
   @Test
   public void concurrentAddBranch() throws Exception {
-    assertConcurrentUpdates(from -> String.format("%08o", from));
+    assertConcurrentUpdates(new Function<Integer, String>() {
+      @Override
+      public String apply(Integer from) { return String.format("%08o", from); }
+    });
   }
 
   @RunWith(JUnit4.class)

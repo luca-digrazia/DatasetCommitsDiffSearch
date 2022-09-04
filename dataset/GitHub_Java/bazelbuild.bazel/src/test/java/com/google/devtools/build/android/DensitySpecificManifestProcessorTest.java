@@ -155,7 +155,7 @@ public class DensitySpecificManifestProcessorTest {
       new DensitySpecificManifestProcessor(ImmutableList.of("xhdpi"),
           tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
       fail();
-    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
+    } catch (ManifestProcessingException e) {
       assertThat(e).hasMessageThat().contains("must be well-formed");
     }
   }
@@ -166,7 +166,7 @@ public class DensitySpecificManifestProcessorTest {
       new DensitySpecificManifestProcessor(ImmutableList.of("xhdpi"),
           tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
       fail();
-    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
+    } catch (ManifestProcessingException e) {
       assertThat(e).hasMessageThat().contains("Premature end of file.");
     }
   }
@@ -183,7 +183,7 @@ public class DensitySpecificManifestProcessorTest {
       new DensitySpecificManifestProcessor(ImmutableList.of("xhdpi"),
           tmp.resolve("manifest-filtered/AndroidManifest.xml")).process(manifest);
       fail();
-    } catch (AndroidManifestProcessor.ManifestProcessingException e) {
+    } catch (ManifestProcessingException e) {
       assertThat(e).hasMessageThat().contains("does not contain exactly one <manifest>");
     }
   }
@@ -191,7 +191,8 @@ public class DensitySpecificManifestProcessorTest {
   @Before
   public void setUpEnvironment() throws Exception {
     fs = Jimfs.newFileSystem();
-    tmp = Files.createTempDirectory(this.getClass().getSimpleName());
+    tmp = fs.getPath("/tmp");
+    Files.createDirectory(tmp);
   }
 
   @After

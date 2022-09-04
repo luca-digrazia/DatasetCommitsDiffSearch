@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.util;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -26,7 +25,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Collection;
-import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -128,25 +126,6 @@ public class DependencySetTest {
   }
 
   @Test
-  public void dotDParser_escapeDollar() throws Exception {
-    Path dotd =
-        scratch.file(
-            "/tmp/foo.d",
-            "hello.o: \\",
-            " /usr/local/blah/$$blah/$$hello.cc \\",
-            " /usr/local/blah/blah/hel$$$$lo.h \\",
-            " /usr/local/blah/$$blah/hello.h");
-
-    Set<Path> expected =
-        Sets.newHashSet(
-            fileSystem.getPath("/usr/local/blah/$blah/$hello.cc"),
-            fileSystem.getPath("/usr/local/blah/blah/hel$$lo.h"),
-            fileSystem.getPath("/usr/local/blah/$blah/hello.h"));
-
-    assertThat(newDependencySet().read(dotd).getDependencies()).containsExactlyElementsIn(expected);
-  }
-
-  @Test
   public void dotDParser_emptyFile() throws Exception {
     Path dotd = scratch.file("/tmp/empty.d");
     DependencySet depset = newDependencySet().read(dotd);
@@ -199,8 +178,12 @@ public class DependencySetTest {
     Path dotd = scratch.file("/tmp/foo.d");
     FileSystemUtils.writeContent(
         dotd, ("hello.o: \\\n " + file1).getBytes(Charset.forName("UTF-8")));
-    IOException e = assertThrows(IOException.class, () -> newDependencySet().read(dotd));
-    assertThat(e).hasMessageThat().contains("File does not end in a newline");
+    try {
+      newDependencySet().read(dotd);
+      fail();
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().contains("File does not end in a newline");
+    }
   }
 
   /*

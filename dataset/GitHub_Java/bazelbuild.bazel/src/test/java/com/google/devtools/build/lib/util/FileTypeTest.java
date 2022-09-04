@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.util;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.util.FileType.HasFilename;
@@ -176,9 +177,15 @@ public class FileTypeTest {
         filename("README.txt"),
         filename("archive.zip"));
 
-    assertThat(FileType.filter(unfiltered, TEXT::matches))
-        .containsExactly(unfiltered.get(0), unfiltered.get(2))
-        .inOrder();
+    Predicate<String> textFileTypeMatcher = new Predicate<String>() {
+      @Override
+      public boolean apply(String input) {
+        return TEXT.matches(input);
+      }
+    };
+
+    assertThat(FileType.filter(unfiltered, textFileTypeMatcher)).containsExactly(unfiltered.get(0),
+        unfiltered.get(2)).inOrder();
   }
 
   @Test

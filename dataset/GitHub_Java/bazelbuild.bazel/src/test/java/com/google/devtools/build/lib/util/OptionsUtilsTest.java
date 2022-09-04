@@ -17,16 +17,13 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.util.OptionsUtils.PathFragmentConverter;
 import com.google.devtools.build.lib.util.OptionsUtils.PathFragmentListConverter;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
-import com.google.devtools.common.options.OptionPriority.PriorityCategory;
+import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Test;
@@ -40,45 +37,33 @@ import org.junit.runners.JUnit4;
 public class OptionsUtilsTest {
 
   public static class IntrospectionExample extends OptionsBase {
-    @Option(
-      name = "alpha",
-      category = "one",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "alpha"
-    )
+    @Option(name = "alpha",
+            category = "one",
+            defaultValue = "alpha")
     public String alpha;
 
-    @Option(
-      name = "beta",
-      category = "one",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "beta"
-    )
+    @Option(name = "beta",
+            category = "one",
+            defaultValue = "beta")
     public String beta;
 
     @Option(
       name = "gamma",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
       defaultValue = "gamma"
     )
     public String gamma;
 
     @Option(
       name = "delta",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
       defaultValue = "delta"
     )
     public String delta;
 
     @Option(
       name = "echo",
-      metadataTags = {OptionMetadataTag.HIDDEN},
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
+      optionUsageRestrictions = OptionUsageRestrictions.HIDDEN,
       defaultValue = "echo"
     )
     public String echo;
@@ -97,8 +82,8 @@ public class OptionsUtilsTest {
   @Test
   public void asStringOfExplicitOptionsCorrectSortingByPriority() throws Exception {
     OptionsParser parser = OptionsParser.newOptionsParser(IntrospectionExample.class);
-    parser.parse(PriorityCategory.COMMAND_LINE, null, Arrays.asList("--alpha=no"));
-    parser.parse(PriorityCategory.COMPUTED_DEFAULT, null, Arrays.asList("--beta=no"));
+    parser.parse(OptionPriority.COMMAND_LINE, null, Arrays.asList("--alpha=no"));
+    parser.parse(OptionPriority.COMPUTED_DEFAULT, null, Arrays.asList("--beta=no"));
     assertThat(OptionsUtils.asShellEscapedString(parser)).isEqualTo("--beta=no --alpha=no");
     assertThat(OptionsUtils.asArgumentList(parser))
         .containsExactly("--beta=no", "--alpha=no")
@@ -106,36 +91,28 @@ public class OptionsUtilsTest {
   }
 
   public static class BooleanOpts extends OptionsBase {
-    @Option(
-      name = "b_one",
-      category = "xyz",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "true"
-    )
+    @Option(name = "b_one",
+        category = "xyz",
+        defaultValue = "true")
     public boolean bOne;
 
-    @Option(
-      name = "b_two",
-      category = "123", // Not printed in usage messages!
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false"
-    )
+    @Option(name = "b_two",
+        category = "123", // Not printed in usage messages!
+        defaultValue = "false")
     public boolean bTwo;
   }
 
   @Test
   public void asStringOfExplicitOptionsWithBooleans() throws Exception {
     OptionsParser parser = OptionsParser.newOptionsParser(BooleanOpts.class);
-    parser.parse(PriorityCategory.COMMAND_LINE, null, Arrays.asList("--b_one", "--nob_two"));
+    parser.parse(OptionPriority.COMMAND_LINE, null, Arrays.asList("--b_one", "--nob_two"));
     assertThat(OptionsUtils.asShellEscapedString(parser)).isEqualTo("--b_one --nob_two");
     assertThat(OptionsUtils.asArgumentList(parser))
         .containsExactly("--b_one", "--nob_two")
         .inOrder();
 
     parser = OptionsParser.newOptionsParser(BooleanOpts.class);
-    parser.parse(PriorityCategory.COMMAND_LINE, null, Arrays.asList("--b_one=true", "--b_two=0"));
+    parser.parse(OptionPriority.COMMAND_LINE, null, Arrays.asList("--b_one=true", "--b_two=0"));
     assertThat(parser.getOptions(BooleanOpts.class).bOne).isTrue();
     assertThat(parser.getOptions(BooleanOpts.class).bTwo).isFalse();
     assertThat(OptionsUtils.asShellEscapedString(parser)).isEqualTo("--b_one --nob_two");
@@ -147,8 +124,8 @@ public class OptionsUtilsTest {
   @Test
   public void asStringOfExplicitOptionsMultipleOptionsAreMultipleTimes() throws Exception {
     OptionsParser parser = OptionsParser.newOptionsParser(IntrospectionExample.class);
-    parser.parse(PriorityCategory.COMMAND_LINE, null, Arrays.asList("--alpha=one"));
-    parser.parse(PriorityCategory.COMMAND_LINE, null, Arrays.asList("--alpha=two"));
+    parser.parse(OptionPriority.COMMAND_LINE, null, Arrays.asList("--alpha=one"));
+    parser.parse(OptionPriority.COMMAND_LINE, null, Arrays.asList("--alpha=two"));
     assertThat(OptionsUtils.asShellEscapedString(parser)).isEqualTo("--alpha=one --alpha=two");
     assertThat(OptionsUtils.asArgumentList(parser))
         .containsExactly("--alpha=one", "--alpha=two")
@@ -165,10 +142,6 @@ public class OptionsUtilsTest {
 
   private List<PathFragment> convert(String input) throws Exception {
     return new PathFragmentListConverter().convert(input);
-  }
-
-  private PathFragment convertOne(String input) throws Exception {
-    return new PathFragmentConverter().convert(input);
   }
 
   @Test
@@ -188,21 +161,10 @@ public class OptionsUtilsTest {
 
   @Test
   public void multiplePaths() throws Exception {
-    assertThat(convert("~/foo:foo:/bar/baz:.:/tmp/bang"))
+    assertThat(convert("foo:/bar/baz:.:/tmp/bang"))
         .containsExactly(
-            fragment(System.getProperty("user.home") + "/foo"),
-            fragment("foo"),
-            fragment("/bar/baz"),
-            fragment("."),
-            fragment("/tmp/bang"))
+            fragment("foo"), fragment("/bar/baz"), fragment("."), fragment("/tmp/bang"))
         .inOrder();
-  }
-
-  @Test
-  public void singlePath() throws Exception {
-    assertThat(convertOne("foo")).isEqualTo(fragment("foo"));
-    assertThat(convertOne("foo/bar/baz")).isEqualTo(fragment("foo/bar/baz"));
-    assertThat(convertOne("~/foo")).isEqualTo(fragment(System.getProperty("user.home") + "/foo"));
   }
 
   @Test

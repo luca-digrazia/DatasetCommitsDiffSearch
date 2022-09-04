@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.bazel.rules.BazelToolchainType;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.ToolchainType;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
-import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.Before;
@@ -821,7 +821,7 @@ public class CcCommonTest extends BuildViewTestCase {
     CppLinkAction action =
         (CppLinkAction) getGeneratingAction(getOnlyElement(getFilesToBuild(target)));
     assertThat(action.getLinkCommandLine().getLinkopts()).containsExactly(
-        String.format("-Wl,@%s/a/a.lds", getTargetConfiguration().getGenfilesDirectory(
+        String.format("-Wl,@%s/genfiles/a/a.lds", getTargetConfiguration().getOutputDirectory(
             RepositoryName.MAIN).getExecPath().getPathString()));
   }
 

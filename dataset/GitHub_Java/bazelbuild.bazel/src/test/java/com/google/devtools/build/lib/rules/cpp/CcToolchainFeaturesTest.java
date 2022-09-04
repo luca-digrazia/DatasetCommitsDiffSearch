@@ -94,7 +94,7 @@ public class CcToolchainFeaturesTest {
   private Set<String> getEnabledFeatures(CcToolchainFeatures features,
       String... requestedFeatures) throws Exception {
     FeatureConfiguration configuration =
-        features.getFeatureConfiguration(specificationFor(requestedFeatures));
+        features.getFeatureConfiguration(assumptionsFor(requestedFeatures));
     ImmutableSet.Builder<String> enabledFeatures = ImmutableSet.builder();
     for (String feature : features.getActivatableNames()) {
       if (configuration.isEnabled(feature)) {
@@ -104,23 +104,23 @@ public class CcToolchainFeaturesTest {
     return enabledFeatures.build();
   }
 
-  private FeatureSpecification specificationFor(String... requestedFeatures) {
+  private FeatureSpecification assumptionsFor(String... requestedFeatures) {
     return FeatureSpecification.create(
         ImmutableSet.copyOf(requestedFeatures), ImmutableSet.<String>of());
   }
 
   @Test
   public void testUnconditionalFeature() throws Exception {
-    assertThat(buildFeatures("").getFeatureConfiguration(specificationFor("a")).isEnabled("a"))
+    assertThat(buildFeatures("").getFeatureConfiguration(assumptionsFor("a")).isEnabled("a"))
         .isFalse();
     assertThat(
             buildFeatures("feature { name: 'a' }")
-                .getFeatureConfiguration(specificationFor("b"))
+                .getFeatureConfiguration(assumptionsFor("b"))
                 .isEnabled("a"))
         .isFalse();
     assertThat(
             buildFeatures("feature { name: 'a' }")
-                .getFeatureConfiguration(specificationFor("a"))
+                .getFeatureConfiguration(assumptionsFor("a"))
                 .isEnabled("a"))
         .isTrue();
   }
@@ -128,7 +128,7 @@ public class CcToolchainFeaturesTest {
   @Test
   public void testUnsupportedAction() throws Exception {
     FeatureConfiguration configuration =
-        buildFeatures("").getFeatureConfiguration(specificationFor());
+        buildFeatures("").getFeatureConfiguration(assumptionsFor());
     assertThat(configuration.getCommandLine("invalid-action", createVariables())).isEmpty();
   }
 
@@ -158,7 +158,7 @@ public class CcToolchainFeaturesTest {
                 "     flag_group { flag: '-b-link' }",
                 "  }",
                 "}")
-            .getFeatureConfiguration(specificationFor("a", "b"));
+            .getFeatureConfiguration(assumptionsFor("a", "b"));
     List<String> commandLine = configuration.getCommandLine(
         CppCompileAction.CPP_COMPILE, createVariables());
     assertThat(commandLine).containsExactly("-a-c++-compile", "-b-c++-compile").inOrder();
@@ -186,26 +186,6 @@ public class CcToolchainFeaturesTest {
                 "     action: 'c++-compile'",
                 "     env_entry { key: 'dog', value: 'woof' }",
                 "  }",
-                "  env_set {",
-                "     action: 'c++-compile'",
-                "     with_feature: { feature: 'd' }",
-                "     env_entry { key: 'withFeature', value: 'value1' }",
-                "  }",
-                "  env_set {",
-                "     action: 'c++-compile'",
-                "     with_feature: { feature: 'e' }",
-                "     env_entry { key: 'withoutFeature', value: 'value2' }",
-                "  }",
-                "  env_set {",
-                "     action: 'c++-compile'",
-                "     with_feature: { not_feature: 'f' }",
-                "     env_entry { key: 'withNotFeature', value: 'value3' }",
-                "  }",
-                "  env_set {",
-                "     action: 'c++-compile'",
-                "     with_feature: { not_feature: 'g' }",
-                "     env_entry { key: 'withoutNotFeature', value: 'value4' }",
-                "  }",
                 "}",
                 "feature {",
                 "  name: 'c'",
@@ -213,21 +193,11 @@ public class CcToolchainFeaturesTest {
                 "     action: 'c++-compile'",
                 "     env_entry { key: 'doNotInclude', value: 'doNotIncludePlease' }",
                 "  }",
-                "}",
-                "feature { name: 'd' }",
-                "feature { name: 'e' }",
-                "feature { name: 'f' }",
-                "feature { name: 'g' }")
-            .getFeatureConfiguration(specificationFor("a", "b", "d", "f"));
+                "}")
+            .getFeatureConfiguration(assumptionsFor("a", "b"));
     Map<String, String> env = configuration.getEnvironmentVariables(
         CppCompileAction.CPP_COMPILE, createVariables());
-    assertThat(env)
-        .containsExactly(
-            "foo", "bar", "cat", "meow", "dog", "woof",
-            "withFeature", "value1", "withoutNotFeature", "value4")
-        .inOrder();
-    assertThat(env).doesNotContainEntry("withoutFeature", "value2");
-    assertThat(env).doesNotContainEntry("withNotFeature", "value3");
+    assertThat(env).containsExactly("foo", "bar", "cat", "meow", "dog", "woof").inOrder();
     assertThat(env).doesNotContainEntry("doNotInclude", "doNotIncludePlease");
   }
 
@@ -246,7 +216,7 @@ public class CcToolchainFeaturesTest {
                 "    " + groups,
                 "  }",
                 "}")
-            .getFeatureConfiguration(specificationFor("a"));
+            .getFeatureConfiguration(assumptionsFor("a"));
     return configuration.getCommandLine(CppCompileAction.CPP_COMPILE, variables);
   }
 
@@ -302,26 +272,14 @@ public class CcToolchainFeaturesTest {
     assertThat(getFlagParsingError("%{")).contains("expected variable name");
     assertThat(getFlagParsingError("%{}")).contains("expected variable name");
     assertThat(
-            getCommandLineForFlagGroups(
-                "flag_group{ iterate_over: 'v' flag: '%{v}' }",
+            getCommandLineForFlag(
+                "%{v}",
                 new Variables.Builder()
                     .addStringSequenceVariable("v", ImmutableList.<String>of())
                     .build()))
         .isEmpty();
     assertThat(getFlagExpansionError("%{v}", createVariables()))
         .contains("Invalid toolchain configuration: Cannot find variable named 'v'");
-  }
-
-  @Test
-  public void testLazySequenceExpansion() throws Exception {
-    assertThat(
-            getCommandLineForFlagGroups(
-                "flag_group { iterate_over: 'lazy' flag: '-lazy-%{lazy}' }",
-                new Variables.Builder()
-                    .addLazyStringSequenceVariable("lazy", () -> ImmutableList.of("a", "b", "c"))
-                    .build()))
-        .containsExactly("-lazy-a", "-lazy-b", "-lazy-c")
-        .inOrder();
   }
 
   private Variables createStructureSequenceVariables(String name, StructureBuilder... values) {
@@ -462,6 +420,19 @@ public class CcToolchainFeaturesTest {
                     .addStringSequenceVariable("other_sequence", ImmutableList.of("foo", "bar"))
                     .build()))
         .containsExactly("-Afirst -Bfoo", "-Afirst -Bbar", "-Asecond -Bfoo", "-Asecond -Bbar");
+  }
+
+  // <p>TODO(b/32655571): Get rid of this test once implicit iteration is not supported.
+  // It's there only to document a known limitation of the system.
+  @Test
+  public void testVariableLookupIsBrokenForImplicitStructFieldIteration() throws Exception {
+    assertThat(
+            getCommandLineForFlagGroups(
+                "flag_group { flag: '-A%{struct.sequence}' }",
+                createStructureVariables(
+                    "struct",
+                    new StructureBuilder().addField("sequence", ImmutableList.of("foo", "bar")))))
+        .containsExactly("-Afoo", "-Abar");
   }
 
   @Test
@@ -689,6 +660,18 @@ public class CcToolchainFeaturesTest {
   }
 
   @Test
+  public void testLegacyListVariableExpansion() throws Exception {
+    assertThat(getCommandLineForFlag("%{v}", createVariables("v", "1", "v", "2")))
+        .containsExactly("1", "2");
+    assertThat(getCommandLineForFlag("%{v1} %{v2}",
+        createVariables("v1", "a1", "v1", "a2", "v2", "b")))
+        .containsExactly("a1 b", "a2 b");
+    assertThat(getFlagExpansionError("%{v1} %{v2}",
+        createVariables("v1", "a1", "v1", "a2", "v2", "b1", "v2", "b2")))
+        .contains("'v1' and 'v2'");
+  }
+
+  @Test
   public void testListVariableExpansion() throws Exception {
     assertThat(
             getCommandLineForFlagGroups(
@@ -732,28 +715,42 @@ public class CcToolchainFeaturesTest {
   }
 
   @Test
+  public void testListVariableExpansionMixedWithImplicitlyAccessedListVariableWithinFlagGroupWorks()
+      throws Exception {
+    assertThat(
+            getCommandLineForFlagGroups(
+                "flag_group {"
+                    + "  iterate_over: 'v1'"
+                    + "  flag_group {"
+                    + "    flag: '-A%{v1} -B%{v2}'"
+                    + "  }"
+                    + "}",
+                createVariables("v1", "a1", "v1", "a2", "v2", "b1", "v2", "b2")))
+        .containsExactly("-Aa1 -Bb1", "-Aa1 -Bb2", "-Aa2 -Bb1", "-Aa2 -Bb2");
+  }
+
+  @Test
   public void testFlagGroupVariableExpansion() throws Exception {
-    assertThat(
-            getCommandLineForFlagGroups(
-                ""
-                    + "flag_group { iterate_over: 'v' flag: '-f' flag: '%{v}' }"
-                    + "flag_group { flag: '-end' }",
-                createVariables("v", "1", "v", "2")))
+    assertThat(getCommandLineForFlagGroups(
+        "flag_group { flag: '-f' flag: '%{v}' } flag_group { flag: '-end' }",
+        createVariables("v", "1", "v", "2")))
         .containsExactly("-f", "1", "-f", "2", "-end");
-    assertThat(
-            getCommandLineForFlagGroups(
-                ""
-                    + "flag_group { iterate_over: 'v' flag: '-f' flag: '%{v}' }"
-                    + "flag_group { iterate_over: 'v' flag: '%{v}' }",
-                createVariables("v", "1", "v", "2")))
+    assertThat(getCommandLineForFlagGroups(
+        "flag_group { flag: '-f' flag: '%{v}' } flag_group { flag: '%{v}' }",
+        createVariables("v", "1", "v", "2")))
         .containsExactly("-f", "1", "-f", "2", "1", "2");
-    assertThat(
-            getCommandLineForFlagGroups(
-                ""
-                    + "flag_group { iterate_over: 'v' flag: '-f' flag: '%{v}' } "
-                    + "flag_group { iterate_over: 'v' flag: '%{v}' }",
-                createVariables("v", "1", "v", "2")))
+    assertThat(getCommandLineForFlagGroups(
+        "flag_group { flag: '-f' flag: '%{v}' } flag_group { flag: '%{v}' }",
+        createVariables("v", "1", "v", "2")))
         .containsExactly("-f", "1", "-f", "2", "1", "2");
+    try {
+      getCommandLineForFlagGroups(
+          "flag_group { flag: '%{v1}' flag: '%{v2}' }",
+          createVariables("v1", "1", "v1", "2", "v2", "1", "v2", "2"));
+      fail("Expected ExpansionException");
+    } catch (ExpansionException e) {
+      assertThat(e).hasMessageThat().contains("'v1' and 'v2'");
+    }
   }
 
   private VariableValueBuilder createNestedSequence(int depth, int count, String prefix) {
@@ -783,17 +780,20 @@ public class CcToolchainFeaturesTest {
   @Test
   public void testFlagTreeVariableExpansion() throws Exception {
     String nestedGroup =
-        ""
-            + "flag_group {"
-            + "  iterate_over: 'v'"
+        "flag_group {"
             + "  flag_group { flag: '-a' }"
-            + "  flag_group { iterate_over: 'v' flag: '%{v}' }"
+            + "  flag_group {"
+            + "    flag: '%{v}'"
+            + "  }"
             + "  flag_group { flag: '-b' }"
             + "}";
     assertThat(getCommandLineForFlagGroups(nestedGroup, createNestedVariables("v", 1, 3)))
         .containsExactly(
             "-a", "00", "01", "02", "-b", "-a", "10", "11", "12", "-b", "-a", "20", "21", "22",
             "-b");
+
+    assertThat(getCommandLineForFlagGroups(nestedGroup, createNestedVariables("v", 0, 3)))
+        .containsExactly("-a", "0", "-b", "-a", "1", "-b", "-a", "2", "-b");
 
     try {
       getCommandLineForFlagGroups(nestedGroup, createNestedVariables("v", 2, 3));
@@ -993,29 +993,7 @@ public class CcToolchainFeaturesTest {
   }
 
   @Test
-  public void testFlagSetWithMissingVariableIsNotExpanded() throws Exception {
-    FeatureConfiguration configuration =
-        buildFeatures(
-                "feature {",
-                "  name: 'a'",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     expand_if_all_available: 'v'",
-                "     flag_group { flag: '%{v}' }",
-                "  }",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     flag_group { flag: 'unconditional' }",
-                "  }",
-                "}")
-            .getFeatureConfiguration(specificationFor("a"));
-
-    assertThat(configuration.getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("unconditional");
-  }
-
-  @Test
-  public void testOnlyFlagSetsWithAllVariablesPresentAreExpanded() throws Exception {
+  public void testSuppressionViaMissingBuildVariable() throws Exception {
     FeatureConfiguration configuration =
         buildFeatures(
                 "feature {",
@@ -1036,68 +1014,18 @@ public class CcToolchainFeaturesTest {
                 "     flag_group { flag: 'unconditional' }",
                 "  }",
                 "}")
-            .getFeatureConfiguration(specificationFor("a"));
+            .getFeatureConfiguration(assumptionsFor("a"));
 
+    assertThat(configuration.getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
+        .containsExactly("unconditional");
     assertThat(
             configuration.getCommandLine(CppCompileAction.CPP_COMPILE, createVariables("v", "1")))
         .containsExactly("1", "unconditional");
-  }
-
-  @Test
-  public void testOnlyInnerFlagSetIsIteratedWithSequenceVariable() throws Exception {
-    FeatureConfiguration configuration =
-        buildFeatures(
-                "feature {",
-                "  name: 'a'",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     expand_if_all_available: 'v'",
-                "     flag_group { iterate_over: 'v' flag: '%{v}' }",
-                "  }",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     expand_if_all_available: 'v'",
-                "     expand_if_all_available: 'w'",
-                "     flag_group { iterate_over: 'v' flag: '%{v}%{w}' }",
-                "  }",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     flag_group { flag: 'unconditional' }",
-                "  }",
-                "}")
-            .getFeatureConfiguration(specificationFor("a"));
-
     assertThat(
             configuration.getCommandLine(
                 CppCompileAction.CPP_COMPILE, createVariables("v", "1", "v", "2")))
         .containsExactly("1", "2", "unconditional")
         .inOrder();
-  }
-
-  @Test
-  public void testFlagSetsAreIteratedIndividuallyForSequenceVariables() throws Exception {
-    FeatureConfiguration configuration =
-        buildFeatures(
-                "feature {",
-                "  name: 'a'",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     expand_if_all_available: 'v'",
-                "     flag_group { iterate_over: 'v' flag: '%{v}' }",
-                "  }",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     expand_if_all_available: 'v'",
-                "     expand_if_all_available: 'w'",
-                "     flag_group { iterate_over: 'v' flag: '%{v}%{w}' }",
-                "  }",
-                "  flag_set {",
-                "     action: 'c++-compile'",
-                "     flag_group { flag: 'unconditional' }",
-                "  }",
-                "}")
-            .getFeatureConfiguration(specificationFor("a"));
-
     assertThat(
             configuration.getCommandLine(
                 CppCompileAction.CPP_COMPILE, createVariables("v", "1", "v", "2", "w", "3")))
@@ -1122,7 +1050,7 @@ public class CcToolchainFeaturesTest {
     assertThat(getEnabledFeatures(features, "b")).containsExactly("a", "b");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("b"))
+                .getFeatureConfiguration(assumptionsFor("b"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables("v", "1")))
         .containsExactly("-f", "1");
     byte[] serialized = TestUtils.serializeObject(features);
@@ -1131,7 +1059,7 @@ public class CcToolchainFeaturesTest {
     assertThat(getEnabledFeatures(deserialized, "b")).containsExactly("a", "b");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("b"))
+                .getFeatureConfiguration(assumptionsFor("b"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables("v", "1")))
         .containsExactly("-f", "1");
   }
@@ -1140,15 +1068,7 @@ public class CcToolchainFeaturesTest {
   public void testDefaultFeatures() throws Exception {
     CcToolchainFeatures features =
         buildFeatures("feature { name: 'a' }", "feature { name: 'b' enabled: true }");
-    assertThat(features.getDefaultFeaturesAndActionConfigs()).containsExactly("b");
-  }
-
-  @Test
-  public void testDefaultActionConfigs() throws Exception {
-    CcToolchainFeatures features =
-        buildFeatures("action_config { config_name: 'a' action_name: 'a'}",
-            "action_config { config_name: 'b' action_name: 'b' enabled: true }");
-    assertThat(features.getDefaultFeaturesAndActionConfigs()).containsExactly("b");
+    assertThat(features.getDefaultFeatures()).containsExactly("b");
   }
 
   @Test
@@ -1168,12 +1088,12 @@ public class CcToolchainFeaturesTest {
             "feature {name: 'b'}");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a", "b"))
+                .getFeatureConfiguration(assumptionsFor("a", "b"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .containsExactly("dummy_flag");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a"))
+                .getFeatureConfiguration(assumptionsFor("a"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .doesNotContain("dummy_flag");
   }
@@ -1196,17 +1116,17 @@ public class CcToolchainFeaturesTest {
             "feature {name: 'c'}");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a", "b", "c"))
+                .getFeatureConfiguration(assumptionsFor("a", "b", "c"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .containsExactly("dummy_flag");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a", "b"))
+                .getFeatureConfiguration(assumptionsFor("a", "b"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .doesNotContain("dummy_flag");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a"))
+                .getFeatureConfiguration(assumptionsFor("a"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .doesNotContain("dummy_flag");
   }
@@ -1232,63 +1152,17 @@ public class CcToolchainFeaturesTest {
             "feature {name: 'c2'}");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a", "b1", "c1", "b2", "c2"))
+                .getFeatureConfiguration(assumptionsFor("a", "b1", "c1", "b2", "c2"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .containsExactly("dummy_flag");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a", "b1", "c1"))
+                .getFeatureConfiguration(assumptionsFor("a", "b1", "c1"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .containsExactly("dummy_flag");
     assertThat(
             features
-                .getFeatureConfiguration(specificationFor("a", "b1", "b2"))
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-  }
-
-  @Test
-  public void testWithFeature_NotFeature() throws Exception {
-    CcToolchainFeatures features =
-        buildFeatures(
-            "feature {",
-            "  name: 'a'",
-            "  flag_set {",
-            "    with_feature { not_feature: 'x', not_feature: 'y', feature: 'z' }",
-            "    with_feature { not_feature: 'q' }",
-            "    action: 'c++-compile'",
-            "    flag_group {",
-            "      flag: 'dummy_flag'",
-            "    }",
-            "  }",
-            "}",
-            "feature {name: 'x'}",
-            "feature {name: 'y'}",
-            "feature {name: 'z'}",
-            "feature {name: 'q'}");
-    assertThat(
-            features
-                .getFeatureConfiguration(specificationFor("a"))
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration(specificationFor("a", "q"))
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration(specificationFor("a", "q", "z"))
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .containsExactly("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration(specificationFor("a", "q", "x", "z"))
-                .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
-        .doesNotContain("dummy_flag");
-    assertThat(
-            features
-                .getFeatureConfiguration(specificationFor("a", "q", "x", "y", "z"))
+                .getFeatureConfiguration(assumptionsFor("a", "b1", "b2"))
                 .getCommandLine(CppCompileAction.CPP_COMPILE, createVariables()))
         .doesNotContain("dummy_flag");
   }
@@ -1311,7 +1185,7 @@ public class CcToolchainFeaturesTest {
             "}");
 
     FeatureConfiguration featureConfiguration =
-        toolchainFeatures.getFeatureConfiguration(specificationFor("activates-action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("activates-action-a"));
 
     assertThat(featureConfiguration.actionIsConfigured("action-a")).isTrue();
   }
@@ -1334,12 +1208,11 @@ public class CcToolchainFeaturesTest {
             "}");
 
     FeatureConfiguration featureConfigurationWithoutAction =
-        toolchainFeatures.getFeatureConfiguration(specificationFor("requires-action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("requires-action-a"));
     assertThat(featureConfigurationWithoutAction.isEnabled("requires-action-a")).isFalse();
 
     FeatureConfiguration featureConfigurationWithAction =
-        toolchainFeatures.getFeatureConfiguration(
-            specificationFor("action-a", "requires-action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("action-a", "requires-action-a"));
     assertThat(featureConfigurationWithAction.isEnabled("requires-action-a")).isTrue();
   }
 
@@ -1358,7 +1231,7 @@ public class CcToolchainFeaturesTest {
                 "   name: 'activates-action-a'",
                 "   implies: 'action-a'",
                 "}")
-            .getFeatureConfiguration(specificationFor("activates-action-a"));
+            .getFeatureConfiguration(assumptionsFor("activates-action-a"));
     PathFragment crosstoolPath = PathFragment.create("crosstool/");
     PathFragment toolPath = configuration.getToolForAction("action-a").getToolPath(crosstoolPath);
     assertThat(toolPath.toString()).isEqualTo("crosstool/toolchain/a");
@@ -1379,16 +1252,12 @@ public class CcToolchainFeaturesTest {
             "     }",
             "  }",
             "  tool {",
-            "    tool_path: 'toolchain/feature-a-and-not-c'",
-            "    with_feature: {",
-            "      feature: 'feature-a'",
-            "      not_feature: 'feature-c'",
-            "    }",
+            "    tool_path: 'toolchain/feature-a'",
+            "    with_feature: { feature: 'feature-a' }",
             "  }",
             "  tool {",
-            "    tool_path: 'toolchain/feature-b-or-c'",
+            "    tool_path: 'toolchain/feature-b'",
             "    with_feature: { feature: 'feature-b' }",
-            "    with_feature: { feature: 'feature-c' }",
             "  }",
             "  tool {",
             "    tool_path: 'toolchain/default'",
@@ -1401,9 +1270,6 @@ public class CcToolchainFeaturesTest {
             "  name: 'feature-b'",
             "}",
             "feature {",
-            "  name: 'feature-c'",
-            "}",
-            "feature {",
             "  name: 'activates-action-a'",
             "  implies: 'action-a'",
             "}");
@@ -1412,47 +1278,27 @@ public class CcToolchainFeaturesTest {
 
     FeatureConfiguration featureAConfiguration =
         toolchainFeatures.getFeatureConfiguration(
-            specificationFor("feature-a", "activates-action-a"));
+            assumptionsFor("feature-a", "activates-action-a"));
     assertThat(
             featureAConfiguration
                 .getToolForAction("action-a")
                 .getToolPath(crosstoolPath)
                 .toString())
-        .isEqualTo("crosstool/toolchain/feature-a-and-not-c");
-
-    FeatureConfiguration featureAAndCConfiguration =
-        toolchainFeatures.getFeatureConfiguration(
-            specificationFor("feature-a", "feature-c", "activates-action-a"));
-    assertThat(
-            featureAAndCConfiguration
-                .getToolForAction("action-a")
-                .getToolPath(crosstoolPath)
-                .toString())
-        .isEqualTo("crosstool/toolchain/feature-b-or-c");
+        .isEqualTo("crosstool/toolchain/feature-a");
 
     FeatureConfiguration featureBConfiguration =
         toolchainFeatures.getFeatureConfiguration(
-            specificationFor("feature-b", "activates-action-a"));
+            assumptionsFor("feature-b", "activates-action-a"));
     assertThat(
             featureBConfiguration
                 .getToolForAction("action-a")
                 .getToolPath(crosstoolPath)
                 .toString())
-        .isEqualTo("crosstool/toolchain/feature-b-or-c");
-
-    FeatureConfiguration featureCConfiguration =
-        toolchainFeatures.getFeatureConfiguration(
-            specificationFor("feature-c", "activates-action-a"));
-    assertThat(
-            featureCConfiguration
-                .getToolForAction("action-a")
-                .getToolPath(crosstoolPath)
-                .toString())
-        .isEqualTo("crosstool/toolchain/feature-b-or-c");
+        .isEqualTo("crosstool/toolchain/feature-b");
 
     FeatureConfiguration featureAAndBConfiguration =
         toolchainFeatures.getFeatureConfiguration(
-            specificationFor("feature-a", "feature-b", "activates-action-a"));
+            assumptionsFor("feature-a", "feature-b", "activates-action-a"));
     assertThat(
             featureAAndBConfiguration
                 .getToolForAction("action-a")
@@ -1461,7 +1307,7 @@ public class CcToolchainFeaturesTest {
         .isEqualTo("crosstool/toolchain/features-a-and-b");
 
     FeatureConfiguration noFeaturesConfiguration =
-        toolchainFeatures.getFeatureConfiguration(specificationFor("activates-action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("activates-action-a"));
     assertThat(
             noFeaturesConfiguration
                 .getToolForAction("action-a")
@@ -1493,7 +1339,7 @@ public class CcToolchainFeaturesTest {
     PathFragment crosstoolPath = PathFragment.create("crosstool/");
 
     FeatureConfiguration noFeaturesConfiguration =
-        toolchainFeatures.getFeatureConfiguration(specificationFor("activates-action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("activates-action-a"));
 
     try {
       noFeaturesConfiguration.getToolForAction("action-a").getToolPath(crosstoolPath);
@@ -1519,7 +1365,7 @@ public class CcToolchainFeaturesTest {
             "}");
 
     FeatureConfiguration featureConfiguration =
-        toolchainFeatures.getFeatureConfiguration(specificationFor("action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("action-a"));
 
     assertThat(featureConfiguration.actionIsConfigured("action-a")).isTrue();
   }
@@ -1542,7 +1388,7 @@ public class CcToolchainFeaturesTest {
             "}");
 
     FeatureConfiguration featureConfiguration =
-        toolchainFeatures.getFeatureConfiguration(specificationFor("action-a"));
+        toolchainFeatures.getFeatureConfiguration(assumptionsFor("action-a"));
 
     assertThat(featureConfiguration.isEnabled("activated-feature")).isTrue();
   }
@@ -1596,7 +1442,7 @@ public class CcToolchainFeaturesTest {
                 "    flag_group {flag: 'foo'}",
                 "  }",
                 "}")
-            .getFeatureConfiguration(specificationFor("c++-compile"));
+            .getFeatureConfiguration(assumptionsFor("c++-compile"));
     List<String> commandLine =
         featureConfiguration.getCommandLine("c++-compile", createVariables());
     assertThat(commandLine).contains("foo");
@@ -1614,7 +1460,7 @@ public class CcToolchainFeaturesTest {
               "    flag_group {flag: 'foo'}",
               "  }",
               "}")
-          .getFeatureConfiguration(specificationFor("c++-compile"));
+          .getFeatureConfiguration(assumptionsFor("c++-compile"));
       fail("Should throw InvalidConfigurationException");
     } catch (InvalidConfigurationException e) {
       assertThat(e)
@@ -1667,41 +1513,6 @@ public class CcToolchainFeaturesTest {
       fail("Should throw CollidingProvidesException on collision, instead did not throw.");
     } catch (Exception e) {
       assertThat(e).hasMessageThat().contains("a b");
-    }
-  }
-
-  @Test
-  public void testErrorForNoMatchingArtifactNamePatternCategory() throws Exception {
-    try {
-      buildFeatures(
-          "artifact_name_pattern {",
-          "category_name: 'NONEXISTENT_CATEGORY'",
-          "pattern: 'some_pattern'}");
-      fail("Should throw InvalidConfigurationException.");
-    } catch (InvalidConfigurationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("Artifact category NONEXISTENT_CATEGORY not recognized");
-    }
-  }
-
-  @Test
-  public void testErrorForNoMatchingArtifactPatternForCategory() throws Exception {
-    try {
-      CcToolchainFeatures toolchainFeatures =
-          buildFeatures(
-              "artifact_name_pattern {",
-              "category_name: 'static_library'",
-              "pattern: 'some_pattern'}");
-      toolchainFeatures.getArtifactNameForCategory(ArtifactCategory.DYNAMIC_LIBRARY, "output_name");
-      fail("Should throw InvalidConfigurationException.");
-    } catch (InvalidConfigurationException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains(
-              String.format(
-                  CcToolchainFeatures.MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE,
-                  ArtifactCategory.DYNAMIC_LIBRARY.toString().toLowerCase()));
     }
   }
 }
