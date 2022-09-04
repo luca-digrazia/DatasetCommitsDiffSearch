@@ -133,10 +133,6 @@ import org.androidannotations.helper.AndroidManifestFinder;
 import org.androidannotations.helper.ErrorHelper;
 import org.androidannotations.helper.Option;
 import org.androidannotations.helper.TimeStats;
-import org.androidannotations.logger.Level;
-import org.androidannotations.logger.Logger;
-import org.androidannotations.logger.LoggerContext;
-import org.androidannotations.logger.LoggerFactory;
 import org.androidannotations.model.AndroidRes;
 import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
@@ -291,20 +287,16 @@ import org.androidannotations.validation.rest.RestValidator;
 @SupportedOptions({ TRACE_OPTION, ANDROID_MANIFEST_FILE_OPTION, RESOURCE_PACKAGE_NAME_OPTION })
 public class AndroidAnnotationProcessor extends AbstractProcessor {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(AndroidAnnotationProcessor.class);
-
 	private final Properties properties = new Properties();
 	private final Properties propertiesApi = new Properties();
 	private final TimeStats timeStats = new TimeStats();
 	private final ErrorHelper errorHelper = new ErrorHelper();
+
 	private Set<String> supportedAnnotationNames;
 
 	@Override
 	public synchronized void init(ProcessingEnvironment processingEnv) {
 		super.init(processingEnv);
-		LoggerContext.getInstance().setProcessingEnv(processingEnv);
-
-		LOGGER.warn("Initialize AndroidAnnotationProcessor with options {}", processingEnv.getOptions());
 
 		Messager messager = processingEnv.getMessager();
 
@@ -335,13 +327,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		timeStats.clear();
 		timeStats.start("Whole Processing");
 
-		Set<? extends Element> rootElements = roundEnv.getRootElements();
-		if (LOGGER.isLoggable(Level.TRACE)) {
-			LOGGER.trace("Start processing for {} annotations {} on {} elements {}", annotations.size(), annotations, rootElements.size(), rootElements);
-		} else {
-			LOGGER.info("Start processing for {} annotations on {} elements", annotations.size(), rootElements.size());
-		}
-
 		try {
 			checkApiAndCoreVersions();
 			processThrowing(annotations, roundEnv);
@@ -352,10 +337,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		}
 		timeStats.stop("Whole Processing");
 		timeStats.logStats();
-
-		LOGGER.info("Finish processing");
-
-		LoggerContext.getInstance().close();
 		return true;
 	}
 
@@ -660,8 +641,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 	private void handleException(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv, ProcessingException e) {
 		String errorMessage = errorHelper.getErrorMessage(processingEnv, e, getAAProcessorVersion());
-
-		LOGGER.error("Something went wront : {}", errorMessage);
 
 		Messager messager = processingEnv.getMessager();
 		messager.printMessage(Diagnostic.Kind.ERROR, errorMessage);

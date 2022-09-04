@@ -22,7 +22,6 @@ import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.GreenDroidConstants.GREENDROID_ACTIVITIES_LIST_CLASS;
 
-import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,6 +36,7 @@ import javax.lang.model.util.ElementFilter;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.api.SdkVersionHelper;
 import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.ModelConstants;
@@ -58,6 +58,7 @@ import com.sun.codemodel.JVar;
 
 public class EActivityProcessor implements GeneratingElementProcessor {
 
+	private static final int MIN_SDK_WITH_FRAGMENT_SUPPORT = 11;
 	private final IRClass rClass;
 	private List<TypeElement> greendroidActivityElements;
 
@@ -65,12 +66,14 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 	private final ProcessingEnvironment processingEnv;
 	private final APTCodeModelHelper aptCodeModelHelper;
+	private AndroidManifest androidManifest;
 
-	public EActivityProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public EActivityProcessor(ProcessingEnvironment processingEnv, IRClass rClass, AndroidManifest androidManifest) {
 		this.processingEnv = processingEnv;
+		this.rClass = rClass;
+		this.androidManifest = androidManifest;
 		annotationHelper = new AnnotationHelper(processingEnv);
 		aptCodeModelHelper = new APTCodeModelHelper();
-		this.rClass = rClass;
 
 		greendroidActivityElements = new ArrayList<TypeElement>();
 		for (String greendroidActivityName : GREENDROID_ACTIVITIES_LIST_CLASS) {
@@ -82,8 +85,8 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return EActivity.class;
+	public String getTarget() {
+		return EActivity.class.getName();
 	}
 
 	@Override
@@ -97,7 +100,7 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 		JDefinedClass generatedClass = codeModel._class(PUBLIC | FINAL, subActivityQualifiedName, ClassType.CLASS);
 
-		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
+		EBeanHolder holder = eBeansHolder.create(element, EActivity.class, generatedClass);
 
 		JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
 
@@ -137,7 +140,7 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 			holder.resetPreviousNotifier(onCreateBody, previousNotifier);
 
-			List<JFieldRef> fieldRefs = annotationHelper.extractAnnotationFieldRefs(holder, element, EActivity.class, rClass.get(Res.LAYOUT), false);
+			List<JFieldRef> fieldRefs = annotationHelper.extractAnnotationFieldRefs(holder, element, getTarget(), rClass.get(Res.LAYOUT), false);
 
 			JFieldRef contentViewId;
 			if (fieldRefs.size() == 1) {
@@ -202,8 +205,8 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 		}
 
-		aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder);
-
+		boolean addFragmentIntent = androidManifest.getMinSdkVersion() >= MIN_SDK_WITH_FRAGMENT_SUPPORT;
+		aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder, annotationHelper, addFragmentIntent);
 	}
 
 	private void setContentViewMethod(String setContentViewMethodName, JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
