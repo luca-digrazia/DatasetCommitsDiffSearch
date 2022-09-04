@@ -22,6 +22,8 @@ import java.util.stream.Stream;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.CDI;
 
+import org.jboss.invocation.proxy.ProxyConfiguration;
+import org.jboss.invocation.proxy.ProxyFactory;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -39,8 +41,6 @@ import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildException;
 import io.quarkus.builder.BuildStep;
 import io.quarkus.builder.item.BuildItem;
-import io.quarkus.deployment.proxy.ProxyConfiguration;
-import io.quarkus.deployment.proxy.ProxyFactory;
 import io.quarkus.runner.RuntimeRunner;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.test.common.PathTestHelper;
@@ -119,14 +119,16 @@ public class QuarkusUnitTest
             throws TestInstantiationException {
         try {
             Class testClass = extensionContext.getRequiredTestClass();
+            ProxyFactory<?> factory = new ProxyFactory<>(new ProxyConfiguration<>()
+                    .setProxyName(testClass.getName() + "$$QuarkusUnitTestProxy")
+                    .setClassLoader(testClass.getClassLoader())
+                    .setSuperClass(testClass));
 
-            ExtensionContext.Store store = extensionContext.getStore(ExtensionContext.Namespace.GLOBAL);
-            Object actualTestInstance = store.get(testClass.getName());
+            Object actualTestInstance = extensionContext.getStore(ExtensionContext.Namespace.GLOBAL).get(testClass.getName());
             if (actualTestInstance != null) { //happens if a deployment exception is expected
                 TestHTTPResourceManager.inject(actualTestInstance);
             }
-            ProxyFactory<?> proxyFactory = (ProxyFactory<?>) store.get(proxyFactoryKey(testClass));
-            return proxyFactory.newInstance(new InvocationHandler() {
+            return factory.newInstance(new InvocationHandler() {
                 @Override
                 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                     if (assertException != null) {
@@ -194,16 +196,6 @@ public class QuarkusUnitTest
         }
 
         Class<?> testClass = extensionContext.getRequiredTestClass();
-
-        if (store.get(proxyFactoryKey(testClass)) == null) {
-            ProxyFactory<?> factory = new ProxyFactory<>(new ProxyConfiguration<>()
-                    .setAnchorClass(testClass)
-                    .setProxyNameSuffix("$$QuarkusUnitTestProxy")
-                    .setClassLoader(testClass.getClassLoader())
-                    .setSuperClass((Class<Object>) testClass));
-            store.put(proxyFactoryKey(testClass), factory);
-        }
-
         try {
             deploymentDir = Files.createTempDirectory("quarkus-unit-test");
 
@@ -286,10 +278,6 @@ public class QuarkusUnitTest
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    private String proxyFactoryKey(Class<?> testClass) {
-        return testClass + "proxyFactory";
     }
 
     @Override
