@@ -263,11 +263,11 @@ public class DevConsoleProcessor {
         }
     }
 
-    @BuildStep
+    @BuildStep(onlyIf = IsDevelopment.class)
     @Record(ExecutionTime.STATIC_INIT)
     public HistoryHandlerBuildItem handler(BuildProducer<LogHandlerBuildItem> logHandlerBuildItemBuildProducer,
-            LogStreamRecorder recorder) {
-        RuntimeValue<Optional<HistoryHandler>> handler = recorder.handler();
+            LogStreamRecorder recorder, DevUIConfig devUiConfig) {
+        RuntimeValue<Optional<HistoryHandler>> handler = recorder.handler(devUiConfig.historySize);
         logHandlerBuildItemBuildProducer.produce(new LogHandlerBuildItem((RuntimeValue) handler));
         return new HistoryHandlerBuildItem(handler);
     }
@@ -305,37 +305,21 @@ public class DevConsoleProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     @Consume(LoggingSetupBuildItem.class)
     @BuildStep(onlyIf = IsDevelopment.class)
-    public void setupDevConsoleRoutes(
-            DevConsoleRecorder recorder,
-            LogStreamRecorder logStreamRecorder,
-            List<DevConsoleRouteBuildItem> routes,
+    public void setupDevConsoleRoutes(List<DevConsoleRouteBuildItem> routes,
+            BuildProducer<RouteBuildItem> routeBuildItemBuildProducer,
+            LogStreamRecorder recorder,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
             HistoryHandlerBuildItem historyHandlerBuildItem,
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
-            LaunchModeBuildItem launchModeBuildItem,
-            ShutdownContextBuildItem shutdownContext,
-            BuildProducer<RouteBuildItem> routeBuildItemBuildProducer) throws IOException {
+            LaunchModeBuildItem launchModeBuildItem) {
         if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
             return;
         }
 
-        // Add the static resources
-        AppArtifact devConsoleResourcesArtifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, "io.quarkus",
-                "quarkus-vertx-http-deployment");
-
-        Path devConsoleStaticResourcesDeploymentPath = WebJarUtil.copyResourcesForDevOrTest(curateOutcomeBuildItem,
-                launchModeBuildItem,
-                devConsoleResourcesArtifact, STATIC_RESOURCES_PATH);
-
-        routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
-                .route("dev/resources/*")
-                .handler(recorder.devConsoleHandler(devConsoleStaticResourcesDeploymentPath.toString(), shutdownContext))
-                .build());
-
         // Add the log stream
         routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
                 .route("dev/logstream")
-                .handler(logStreamRecorder.websocketHandler(historyHandlerBuildItem.value))
+                .handler(recorder.websocketHandler(historyHandlerBuildItem.value))
                 .build());
 
         for (DevConsoleRouteBuildItem i : routes) {
@@ -362,6 +346,29 @@ public class DevConsoleProcessor {
                 .route("dev")
                 .displayOnNotFoundPage("Dev UI")
                 .handler(new RedirectHandler())
+                .build());
+    }
+
+    @BuildStep(onlyIf = IsDevelopment.class)
+    @Record(ExecutionTime.RUNTIME_INIT)
+    public void deployStaticResources(DevConsoleRecorder recorder, CurateOutcomeBuildItem curateOutcomeBuildItem,
+            LaunchModeBuildItem launchMode, ShutdownContextBuildItem shutdownContext,
+            BuildProducer<RouteBuildItem> routeBuildItemBuildProducer,
+            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
+            LaunchModeBuildItem launchModeBuildItem) throws IOException {
+
+        if (launchModeBuildItem.getDevModeType().orElse(DevModeType.LOCAL) != DevModeType.LOCAL) {
+            return;
+        }
+        AppArtifact devConsoleResourcesArtifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, "io.quarkus",
+                "quarkus-vertx-http-deployment");
+
+        Path devConsoleStaticResourcesDeploymentPath = WebJarUtil.copyResourcesForDevOrTest(curateOutcomeBuildItem, launchMode,
+                devConsoleResourcesArtifact, STATIC_RESOURCES_PATH);
+
+        routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+                .route("dev/resources/*")
+                .handler(recorder.devConsoleHandler(devConsoleStaticResourcesDeploymentPath.toString(), shutdownContext))
                 .build());
     }
 
