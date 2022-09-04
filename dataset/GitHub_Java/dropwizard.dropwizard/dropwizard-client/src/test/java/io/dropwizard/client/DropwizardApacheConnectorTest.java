@@ -42,8 +42,8 @@ import static org.hamcrest.CoreMatchers.any;
 
 public class DropwizardApacheConnectorTest {
 
-    private static final int SLEEP_TIME_IN_MILLIS = 1000;
-    private static final int DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 500;
+    private static final int SLEEP_TIME_IN_MILLIS = 500;
+    private static final int DEFAULT_CONNECT_TIMEOUT_IN_MILLIS = 200;
     private static final int ERROR_MARGIN_IN_MILLIS = 300;
     private static final int INCREASE_IN_MILLIS = 100;
     private static final URI NON_ROUTABLE_ADDRESS = URI.create("http://10.255.255.1");
@@ -152,6 +152,18 @@ public class DropwizardApacheConnectorTest {
                         .get(Response.class)
                         .getStatus()
         ).isEqualTo(HttpStatus.SC_TEMPORARY_REDIRECT);
+    }
+
+    @Test
+    public void when_jersey_client_runtime_is_garbage_collected_apache_client_is_not_closed() {
+        for (int j = 0; j < 5; j++) {
+            System.gc(); // We actually want GC here
+            final String response = client.target(testUri + "/long_running")
+                    .property(ClientProperties.READ_TIMEOUT, SLEEP_TIME_IN_MILLIS * 2)
+                    .request()
+                    .get(String.class);
+            assertThat(response).isEqualTo("success");
+        }
     }
 
     @Path("/")
