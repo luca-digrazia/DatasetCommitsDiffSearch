@@ -34,6 +34,9 @@ public class AuditEventTypes implements PluginAuditEventTypes {
     public static final String ALERT_RECEIVER_DELETE = PREFIX + "alert_receiver:delete";
     public static final String ALERT_RECEIVER_UPDATE = PREFIX + "alert_receiver:update";
     public static final String AUTHENTICATION_PROVIDER_CONFIGURATION_UPDATE = PREFIX + "authentication_provider_configuration:update";
+    public static final String BLACKLIST_FILTER_CREATE = PREFIX + "blacklist_filter:create";
+    public static final String BLACKLIST_FILTER_DELETE = PREFIX + "blacklist_filter:delete";
+    public static final String BLACKLIST_FILTER_UPDATE = PREFIX + "blacklist_filter:update";
     public static final String CLUSTER_CONFIGURATION_CREATE = PREFIX + "cluster_configuration:create";
     public static final String CLUSTER_CONFIGURATION_DELETE = PREFIX + "cluster_configuration:delete";
     public static final String CLUSTER_CONFIGURATION_UPDATE = PREFIX + "cluster_configuration:update";
@@ -72,23 +75,11 @@ public class AuditEventTypes implements PluginAuditEventTypes {
     public static final String GROK_PATTERN_DELETE = PREFIX + "grok_pattern:delete";
     public static final String GROK_PATTERN_IMPORT_CREATE = PREFIX + "grok_pattern_import:create";
     public static final String GROK_PATTERN_UPDATE = PREFIX + "grok_pattern:update";
-    public static final String INDEX_SET_CREATE = PREFIX + "index_set:create";
-    public static final String INDEX_SET_DELETE= PREFIX + "index_set:delete";
-    public static final String INDEX_SET_UPDATE = PREFIX + "index_set:update";
     public static final String LDAP_CONFIGURATION_DELETE = PREFIX + "ldap_configuration:delete";
     public static final String LDAP_CONFIGURATION_UPDATE = PREFIX + "ldap_configuration:update";
     public static final String LDAP_GROUP_MAPPING_UPDATE = PREFIX + "ldap_group_mapping:update";
     public static final String LOAD_BALANCER_STATUS_UPDATE = PREFIX + "load_balancer_status:update";
     public static final String LOG_LEVEL_UPDATE = PREFIX + "log_level:update";
-    public static final String LOOKUP_ADAPTER_CREATE = PREFIX + "lut_adapter:create";
-    public static final String LOOKUP_ADAPTER_DELETE = PREFIX + "lut_adapter:delete";
-    public static final String LOOKUP_ADAPTER_UPDATE = PREFIX + "lut_adapter:update";
-    public static final String LOOKUP_CACHE_CREATE = PREFIX + "lut_cache:create";
-    public static final String LOOKUP_CACHE_DELETE = PREFIX + "lut_cache:delete";
-    public static final String LOOKUP_CACHE_UPDATE = PREFIX + "lut_cache:update";
-    public static final String LOOKUP_TABLE_CREATE = PREFIX + "lut_table:create";
-    public static final String LOOKUP_TABLE_DELETE = PREFIX + "lut_table:delete";
-    public static final String LOOKUP_TABLE_UPDATE = PREFIX + "lut_table:update";
     public static final String MESSAGE_DECORATOR_CREATE = PREFIX + "message_decorator:create";
     public static final String MESSAGE_DECORATOR_DELETE = PREFIX + "message_decorator:delete";
     public static final String MESSAGE_DECORATOR_UPDATE = PREFIX + "message_decorator:update";
@@ -147,7 +138,7 @@ public class AuditEventTypes implements PluginAuditEventTypes {
     public static final String USER_PREFERENCES_UPDATE = PREFIX + "user_preferences:update";
     public static final String USER_UPDATE = PREFIX + "user:update";
 
-    private static final ImmutableSet<String> EVENT_TYPES = ImmutableSet.<String>builder()
+    private static final Set<String> EVENT_TYPES = ImmutableSet.<String>builder()
             .add(ALARM_CALLBACK_CREATE)
             .add(ALARM_CALLBACK_DELETE)
             .add(ALARM_CALLBACK_UPDATE)
@@ -158,6 +149,9 @@ public class AuditEventTypes implements PluginAuditEventTypes {
             .add(ALERT_RECEIVER_DELETE)
             .add(ALERT_RECEIVER_UPDATE)
             .add(AUTHENTICATION_PROVIDER_CONFIGURATION_UPDATE)
+            .add(BLACKLIST_FILTER_CREATE)
+            .add(BLACKLIST_FILTER_DELETE)
+            .add(BLACKLIST_FILTER_UPDATE)
             .add(CLUSTER_CONFIGURATION_CREATE)
             .add(CLUSTER_CONFIGURATION_DELETE)
             .add(CLUSTER_CONFIGURATION_UPDATE)
@@ -196,23 +190,11 @@ public class AuditEventTypes implements PluginAuditEventTypes {
             .add(GROK_PATTERN_DELETE)
             .add(GROK_PATTERN_IMPORT_CREATE)
             .add(GROK_PATTERN_UPDATE)
-            .add(INDEX_SET_CREATE)
-            .add(INDEX_SET_DELETE)
-            .add(INDEX_SET_UPDATE)
             .add(LDAP_CONFIGURATION_DELETE)
             .add(LDAP_CONFIGURATION_UPDATE)
             .add(LDAP_GROUP_MAPPING_UPDATE)
             .add(LOAD_BALANCER_STATUS_UPDATE)
             .add(LOG_LEVEL_UPDATE)
-            .add(LOOKUP_ADAPTER_CREATE)
-            .add(LOOKUP_ADAPTER_DELETE)
-            .add(LOOKUP_ADAPTER_UPDATE)
-            .add(LOOKUP_CACHE_CREATE)
-            .add(LOOKUP_CACHE_DELETE)
-            .add(LOOKUP_CACHE_UPDATE)
-            .add(LOOKUP_TABLE_CREATE)
-            .add(LOOKUP_TABLE_DELETE)
-            .add(LOOKUP_TABLE_UPDATE)
             .add(MESSAGE_DECORATOR_CREATE)
             .add(MESSAGE_DECORATOR_DELETE)
             .add(MESSAGE_DECORATOR_UPDATE)
