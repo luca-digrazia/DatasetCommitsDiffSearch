@@ -69,15 +69,9 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
   @Test
   public void testConstraintValueLookup() throws Exception {
     ConfiguredTargetKey linuxKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//constraints:linux"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//constraints:linux"), targetConfigKey, false);
     ConfiguredTargetKey macKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//constraints:mac"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//constraints:mac"), targetConfigKey, false);
     GetConstraintValueInfoKey key =
         GetConstraintValueInfoKey.create(ImmutableList.of(linuxKey, macKey));
 
@@ -97,10 +91,7 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
     scratch.file("invalid/BUILD", "filegroup(name = 'not_a_constraint')");
 
     ConfiguredTargetKey targetKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//invalid:not_a_constraint"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//invalid:not_a_constraint"), targetConfigKey, false);
     GetConstraintValueInfoKey key = GetConstraintValueInfoKey.create(ImmutableList.of(targetKey));
 
     EvaluationResult<GetConstraintValueInfoValue> result = getConstraintValueInfo(key);
@@ -120,10 +111,7 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
   @Test
   public void testConstraintValueLookup_targetDoesNotExist() throws Exception {
     ConfiguredTargetKey targetKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//fake:missing"))
-            .setConfigurationKey(targetConfigKey)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//fake:missing"), targetConfigKey, false);
     GetConstraintValueInfoKey key = GetConstraintValueInfoKey.create(ImmutableList.of(targetKey));
 
     EvaluationResult<GetConstraintValueInfoValue> result = getConstraintValueInfo(key);
@@ -137,7 +125,7 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
         .hasErrorEntryForKeyThat(key)
         .hasExceptionThat()
         .hasMessageThat()
-        .contains("no such package 'fake': BUILD file not found");
+        .contains("no such package 'fake': BUILD file not found on package path");
   }
 
   // Calls ConstraintValueLookupUtil.getConstraintValueInfo.
