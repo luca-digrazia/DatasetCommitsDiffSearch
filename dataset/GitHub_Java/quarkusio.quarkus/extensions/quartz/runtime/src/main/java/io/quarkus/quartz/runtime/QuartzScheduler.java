@@ -26,7 +26,6 @@ import org.quartz.Job;
 import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
 import org.quartz.JobExecutionContext;
-import org.quartz.JobExecutionException;
 import org.quartz.ScheduleBuilder;
 import org.quartz.SchedulerException;
 import org.quartz.SchedulerFactory;
@@ -379,15 +378,11 @@ public class QuartzScheduler implements Scheduler {
         }
 
         @Override
-        public void execute(JobExecutionContext context) throws JobExecutionException {
+        public void execute(JobExecutionContext context) {
             QuartzTrigger trigger = new QuartzTrigger(context);
             ScheduledInvoker scheduledInvoker = invokers.get(context.getJobDetail().getKey().getName());
             if (scheduledInvoker != null) { // could be null from previous runs
-                try {
-                    scheduledInvoker.invoke(new QuartzScheduledExecution(trigger));
-                } catch (Exception e) {
-                    throw new JobExecutionException(e);
-                }
+                scheduledInvoker.invoke(new QuartzScheduledExecution(trigger));
             }
         }
     }
