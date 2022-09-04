@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
-import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.events.Location;
@@ -52,10 +51,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase,
-      RuleContext ruleContext,
-      AspectParameters parameters,
-      String toolsRepository)
+      ConfiguredTargetAndData ctadBase, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException, ActionConflictException {
     SkylarkRuleContext skylarkRuleContext = null;
     try (Mutability mutability = Mutability.create("aspect")) {
@@ -74,9 +70,6 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
           Environment.builder(mutability)
               .setSemantics(analysisEnv.getSkylarkSemantics())
               .setEventHandler(analysisEnv.getEventHandler())
-              .setStarlarkContext(
-                  new BazelStarlarkContext(
-                      toolsRepository, ruleContext.getRule().getPackage().getRepositoryMapping()))
               // NB: loading phase functions are not available: this is analysis already, so we do
               // *not* setLoadingPhase().
               .build();
