@@ -32,7 +32,6 @@ import com.google.cloud.tools.jib.api.RegistryImage;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
-import com.google.cloud.tools.jib.api.buildplan.Port;
 import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 
 import io.quarkus.bootstrap.util.ZipUtils;
@@ -238,9 +237,8 @@ public class JibProcessor {
         }
 
         try {
-            JibContainerBuilder jibContainerBuilder = Jib
-                    .from(toRegistryImage(ImageReference.parse(jibConfig.baseJvmImage), jibConfig.baseRegistryUsername,
-                            jibConfig.baseRegistryPassword))
+            return Jib.from(toRegistryImage(ImageReference.parse(jibConfig.baseJvmImage), jibConfig.baseRegistryUsername,
+                    jibConfig.baseRegistryPassword))
                     .addLayer(Collections.singletonList(componentsPath.resolve(JarResultBuildStep.LIB)), workDirInContainer)
                     .addLayer(Collections.singletonList(componentsPath.resolve(JarResultBuildStep.QUARKUS_RUN_JAR)),
                             workDirInContainer)
@@ -251,10 +249,6 @@ public class JibProcessor {
                     .setEnvironment(jibConfig.environmentVariables)
                     .setLabels(allLabels(jibConfig, containerImageLabels))
                     .setCreationTime(Instant.now());
-            for (int port : jibConfig.ports) {
-                jibContainerBuilder.addExposedPort(Port.tcp(port));
-            }
-            return jibContainerBuilder;
 
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -324,7 +318,7 @@ public class JibProcessor {
         }
         try {
             AbsoluteUnixPath workDirInContainer = AbsoluteUnixPath.get("/work");
-            JibContainerBuilder jibContainerBuilder = Jib
+            return Jib
                     .from(toRegistryImage(ImageReference.parse(jibConfig.baseNativeImage), containerImageConfig.username,
                             containerImageConfig.password))
                     .addFileEntriesLayer(FileEntriesLayer.builder()
@@ -336,10 +330,6 @@ public class JibProcessor {
                     .setEnvironment(jibConfig.environmentVariables)
                     .setLabels(allLabels(jibConfig, containerImageLabels))
                     .setCreationTime(Instant.now());
-            for (int port : jibConfig.ports) {
-                jibContainerBuilder.addExposedPort(Port.tcp(port));
-            }
-            return jibContainerBuilder;
         } catch (InvalidImageReferenceException e) {
             throw new RuntimeException(e);
         }
