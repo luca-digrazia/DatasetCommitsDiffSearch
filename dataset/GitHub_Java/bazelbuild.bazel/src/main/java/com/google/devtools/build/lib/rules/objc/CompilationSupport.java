@@ -304,6 +304,7 @@ public abstract class CompilationSupport {
   protected final IntermediateArtifacts intermediateArtifacts;
   protected final boolean useDeps;
   protected final Map<String, NestedSet<Artifact>> outputGroupCollector;
+  protected final CcToolchainProvider toolchain;
   protected final boolean isTestRule;
 
   /**
@@ -326,6 +327,7 @@ public abstract class CompilationSupport {
       CompilationAttributes compilationAttributes,
       boolean useDeps,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
+      CcToolchainProvider toolchain,
       boolean isTestRule) {
     this.ruleContext = ruleContext;
     this.buildConfiguration = buildConfiguration;
@@ -336,6 +338,18 @@ public abstract class CompilationSupport {
     this.useDeps = useDeps;
     this.isTestRule = isTestRule;
     this.outputGroupCollector = outputGroupCollector;
+    // TODO(b/62143697): Remove this check once all rules are using the crosstool support.
+    if (ruleContext
+        .attributes()
+        .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)) {
+      if (toolchain == null) {
+        toolchain =  CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
+      }
+      this.toolchain = toolchain;
+    } else {
+      // Since the rule context doesn't have a toolchain at all, ignore any provided override.
+      this.toolchain = null;
+    }
   }
 
   /** Builder for {@link CompilationSupport} */
@@ -347,6 +361,7 @@ public abstract class CompilationSupport {
     private boolean useDeps = true;
     private Map<String, NestedSet<Artifact>> outputGroupCollector;
     private boolean isObjcLibrary = false;
+    private CcToolchainProvider toolchain;
     private boolean isTestRule = false;
 
     /** Sets the {@link RuleContext} for the calling target. */
@@ -413,6 +428,17 @@ public abstract class CompilationSupport {
     }
 
     /**
+     * Sets {@link CcToolchainProvider} for the calling target.
+     *
+     * <p>This is needed if it can't correctly be inferred directly from the rule context. Setting
+     * to null causes the default to be used as if this was never called.
+     */
+    public Builder setToolchainProvider(CcToolchainProvider toolchain) {
+      this.toolchain = toolchain;
+      return this;
+    }
+
+    /**
      * Returns a {@link CompilationSupport} instance. This is either a {@link
      * CrosstoolCompilationSupport} or {@link LegacyCompilationSupport} depending on the value of
      * --experimental_objc_crosstool.
@@ -448,6 +474,7 @@ public abstract class CompilationSupport {
             compilationAttributes,
             useDeps,
             outputGroupCollector,
+            toolchain,
             isTestRule);
       } else {
         return new LegacyCompilationSupport(
@@ -457,6 +484,7 @@ public abstract class CompilationSupport {
             compilationAttributes,
             useDeps,
             outputGroupCollector,
+            toolchain,
             isTestRule);
       }
     }
@@ -478,7 +506,7 @@ public abstract class CompilationSupport {
         objcProvider,
         ExtraCompileArgs.NONE,
         ImmutableList.<PathFragment>of(),
-        maybeGetCcToolchain(),
+        toolchain,
         maybeGetFdoSupport());
   }
 
@@ -559,7 +587,7 @@ public abstract class CompilationSupport {
     return registerFullyLinkAction(
         objcProvider,
         outputArchive,
-        maybeGetCcToolchain(),
+        toolchain,
         maybeGetFdoSupport());
   }
 
@@ -617,7 +645,7 @@ public abstract class CompilationSupport {
         objcProvider,
         inputArtifacts,
         outputArchive,
-        maybeGetCcToolchain(),
+        toolchain,
         maybeGetFdoSupport());
   }
     
@@ -746,7 +774,7 @@ public abstract class CompilationSupport {
           common.getObjcProvider(),
           extraCompileArgs,
           priorityHeaders,
-          maybeGetCcToolchain(),
+          toolchain,
           maybeGetFdoSupport());
     }
     return this;
@@ -1419,18 +1447,6 @@ public abstract class CompilationSupport {
       objcHeaderThinningInfoByCommandLine.put(filteredArgumentsBuilder.build(), info);
     }
     return objcHeaderThinningInfoByCommandLine;
-  }
-
-  @Nullable
-  private CcToolchainProvider maybeGetCcToolchain() {
-    // TODO(rduan): Remove this check once all rules are using the crosstool support.
-    if (ruleContext
-        .attributes()
-        .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)) {
-      return CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
-    } else {
-      return null;
-    }
   }
 
   @Nullable

@@ -147,6 +147,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
       CompilationAttributes compilationAttributes,
       boolean useDeps,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
+      CcToolchainProvider toolchain,
       boolean isTestRule) {
     super(
         ruleContext,
@@ -155,6 +156,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
         compilationAttributes,
         useDeps,
         outputGroupCollector,
+        toolchain,
         isTestRule);
   }
 
