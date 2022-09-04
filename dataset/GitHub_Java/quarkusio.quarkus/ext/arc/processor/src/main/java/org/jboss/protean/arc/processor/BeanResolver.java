@@ -18,8 +18,6 @@ package org.jboss.protean.arc.processor;
 
 import static java.util.Collections.singletonList;
 import static org.jboss.jandex.Type.Kind.*;
-import static org.jboss.jandex.Type.Kind.CLASS;
-import static org.jboss.protean.arc.processor.DotNames.*;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -142,28 +140,28 @@ class BeanResolver {
 
     static boolean primitiveMatch(PrimitiveType.Primitive requiredType, Type beanType) {
         switch (requiredType) {
-            case INT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(INTEGER))
+            case INT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Integer.class.getName())))
                     || (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.INT);
 
-            case LONG: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(LONG))
+            case LONG: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Long.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.LONG);
 
-            case SHORT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(SHORT))
+            case SHORT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Short.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.SHORT);
 
-            case BYTE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(BYTE))
+            case BYTE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Byte.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.BYTE);
 
-            case FLOAT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(FLOAT))
+            case FLOAT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Float.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.FLOAT);
 
-            case DOUBLE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DOUBLE))
+            case DOUBLE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Double.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.DOUBLE);
 
-            case CHAR: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(CHARACTER))
+            case CHAR: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Character.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.CHAR);
 
-            case BOOLEAN: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(BOOLEAN))
+            case BOOLEAN: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DotName.createSimple(Boolean.class.getName())))
                     ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.BOOLEAN);
 
             default: throw new IllegalArgumentException("Not supported yet");
