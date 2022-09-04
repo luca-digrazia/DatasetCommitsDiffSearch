@@ -16,9 +16,8 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.BazelStarlarkEnvironment;
-import com.google.devtools.build.lib.packages.BazelStarlarkEnvironment.InjectionException;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.PackageFactory.InjectionException;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.skyframe.BzlLoadFunction.BzlLoadFailedException;
 import com.google.devtools.build.skyframe.RecordingSkyFunctionEnvironment;
@@ -37,7 +36,7 @@ import net.starlark.java.eval.StarlarkSemantics;
 // TODO(#11437): Update the design doc to change `@builtins` -> `@_builtins`.
 
 // TODO(#11437): Add support to StarlarkModuleCycleReporter to pretty-print cycles involving
-// @_builtins.
+// @_builtins. Blocked on us actually loading files from @_builtins.
 
 // TODO(#11437): Add tombstone feature: If a native symbol is a tombstone object, this signals to
 // StarlarkBuiltinsFunction that the corresponding symbol *must* be defined by @_builtins.
@@ -163,21 +162,14 @@ public class StarlarkBuiltinsFunction implements SkyFunction {
     // Apply declarations of exports.bzl to the native predeclared symbols.
     byte[] transitiveDigest = exportsValue.getTransitiveDigest();
     Module module = exportsValue.getModule();
-    BazelStarlarkEnvironment starlarkEnv = packageFactory.getBazelStarlarkEnvironment();
     try {
       ImmutableMap<String, Object> exportedToplevels = getDict(module, "exported_toplevels");
       ImmutableMap<String, Object> exportedRules = getDict(module, "exported_rules");
       ImmutableMap<String, Object> exportedToJava = getDict(module, "exported_to_java");
-      ImmutableMap<String, Object> predeclaredForBuildBzl =
-          starlarkEnv.createBuildBzlEnvUsingInjection(exportedToplevels, exportedRules);
-      ImmutableMap<String, Object> predeclaredForBuild =
-          starlarkEnv.createBuildEnvUsingInjection(exportedRules);
+      ImmutableMap<String, Object> predeclared =
+          packageFactory.createBuildBzlEnvUsingInjection(exportedToplevels, exportedRules);
       return StarlarkBuiltinsValue.create(
-          predeclaredForBuildBzl,
-          predeclaredForBuild,
-          exportedToJava,
-          transitiveDigest,
-          starlarkSemantics);
+          predeclared, exportedToJava, transitiveDigest, starlarkSemantics);
     } catch (EvalException | InjectionException ex) {
       throw BuiltinsFailedException.errorApplyingExports(ex);
     }
