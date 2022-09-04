@@ -18,7 +18,6 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth8.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
-import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstDerivedArtifactEndingWith;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MODULE_MAP;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.LIPO;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
@@ -1408,9 +1407,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     // If bin is indeed using the c++ backend, then its archive action should be a CppLinkAction.
     Action lipobinAction = lipoBinAction("//x:x");
-    Artifact bin = getFirstDerivedArtifactEndingWith(lipobinAction.getInputs(), "_bin");
+    Artifact bin = getFirstArtifactEndingWith(lipobinAction.getInputs(), "_bin");
     Action linkAction = getGeneratingAction(bin);
-    Artifact archive = getFirstDerivedArtifactEndingWith(linkAction.getInputs(), ".a");
+    Artifact archive = getFirstArtifactEndingWith(linkAction.getInputs(), ".a");
     Action archiveAction = getGeneratingAction(archive);
     assertThat(archiveAction).isInstanceOf(CppLinkAction.class);
   }
@@ -1421,9 +1420,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     // If bin is indeed using the c++ backend, then its archive action should be a CppLinkAction.
     Action lipobinAction = lipoBinAction("//x:x");
-    Artifact bin = getFirstDerivedArtifactEndingWith(lipobinAction.getInputs(), "_bin");
+    Artifact bin = getFirstArtifactEndingWith(lipobinAction.getInputs(), "_bin");
     Action linkAction = getGeneratingAction(bin);
-    Artifact archive = getFirstDerivedArtifactEndingWith(linkAction.getInputs(), ".a");
+    Artifact archive = getFirstArtifactEndingWith(linkAction.getInputs(), ".a");
     Action archiveAction = getGeneratingAction(archive);
     assertThat(archiveAction).isInstanceOf(CppLinkAction.class);
   }
