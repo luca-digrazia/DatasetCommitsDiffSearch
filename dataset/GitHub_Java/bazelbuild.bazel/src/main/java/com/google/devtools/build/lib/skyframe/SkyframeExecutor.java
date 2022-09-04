@@ -1071,7 +1071,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       boolean keepGoing)
       throws InvalidConfigurationException, InterruptedException {
     setConfigurationFactory(configurationFactory);
-    return createDynamicConfigurations(eventHandler, buildOptions, multiCpu);
+    if (buildOptions.get(BuildConfiguration.Options.class).useDynamicConfigurations
+        == BuildConfiguration.Options.DynamicConfigsMode.OFF) {
+      return createStaticConfigurations(eventHandler, buildOptions, multiCpu, keepGoing);
+    } else {
+      return createDynamicConfigurations(eventHandler, buildOptions, multiCpu);
+    }
   }
 
   /**
