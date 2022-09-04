@@ -17,8 +17,12 @@
 
 package smile.math.matrix;
 
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.DoubleBuffer;
+import java.nio.IntBuffer;
 import java.util.Arrays;
 
 import smile.math.MathEx;
@@ -39,17 +43,17 @@ import static smile.math.blas.UPLO.*;
  * @author Haifeng Li
  */
 public class Matrix extends DMatrix {
-    private static final long serialVersionUID = 3L;
+    private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Matrix.class);
 
     /**
      * The matrix storage.
      */
-    double[] A;
+    transient DoubleBuffer A;
     /**
      * The leading dimension.
      */
-    int ld;
+    transient int ld;
     /**
      * The number of rows.
      */
@@ -92,8 +96,56 @@ public class Matrix extends DMatrix {
         this.n = n;
         this.ld = ld(m);
 
-        A = new double[ld * n];
-        if (a != 0.0) Arrays.fill(A, a);
+        double[] array = new double[ld * n];
+        if (a != 0.0) Arrays.fill(array, a);
+        A = DoubleBuffer.wrap(array);
+    }
+
+    /**
+     * Constructor.
+     * @param m the number of rows.
+     * @param n the number of columns.
+     * @param A the array of matrix.
+     */
+    public Matrix(int m, int n, double[][] A) {
+        this(m, n);
+
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                set(i, j, A[i][j]);
+            }
+        }
+    }
+
+    /**
+     * Constructor.
+     * @param A the array of matrix.
+     */
+    public Matrix(double[][] A) {
+        this(A.length, A[0].length, A);
+    }
+
+    /**
+     * Constructor of a column vector/matrix with given array as the internal storage.
+     * @param A The array of column vector.
+     */
+    public Matrix(double[] A) {
+        this(A, 0, A.length);
+    }
+
+    /**
+     * Constructor of a column vector/matrix with given array as the internal storage.
+     * @param A The array of column vector.
+     * @param offset The offset of the subarray to be used; must be non-negative and
+     *               no larger than array.length.
+     * @param length The length of the subarray to be used; must be non-negative and
+     *               no larger than array.length - offset.
+     */
+    public Matrix(double[] A, int offset, int length) {
+        this.m = length;
+        this.n = 1;
+        this.ld = length;
+        this.A = DoubleBuffer.wrap(A, offset, length);
     }
 
     /**
@@ -103,7 +155,7 @@ public class Matrix extends DMatrix {
      * @param ld the leading dimension.
      * @param A the matrix storage.
      */
-    public Matrix(int m, int n, int ld, double[] A) {
+    public Matrix(int m, int n, int ld, DoubleBuffer A) {
         if (layout() == COL_MAJOR && ld < m) {
             throw new IllegalArgumentException(String.format("Invalid leading dimension for COL_MAJOR: %d < %d", ld, m));
         }
@@ -119,70 +171,72 @@ public class Matrix extends DMatrix {
     }
 
     /**
-     * Returns a matrix from a two-dimensional array.
-     * @param A the two-dimensional array.
+     * Creates a matrix.
+     * @param layout the matrix layout.
+     * @param m the number of rows.
+     * @param n the number of columns.
      * @return the matrix.
      */
-    public static Matrix of(double[][] A) {
-        int m = A.length;
-        int n = A[0].length;
-        Matrix matrix = new Matrix(m, n);
+    public static Matrix of(Layout layout, int m, int n) {
+        if (layout == COL_MAJOR) {
+            int ld = ld(m);
+            int size = ld * n;
+            return of(layout, m, n, ld, DoubleBuffer.allocate(size));
+        } else {
+            int ld = ld(n);
+            int size = ld * m;
+            return of(layout, m, n, ld, DoubleBuffer.allocate(size));
+        }
+    }
 
-        for (int i = 0; i < m; i++) {
-            for (int j = 0; j < n; j++) {
-                matrix.set(i, j, A[i][j]);
-            }
+    /**
+     * Creates a matrix.
+     * @param layout the matrix layout.
+     * @param m the number of rows.
+     * @param n the number of columns.
+     * @param ld the leading dimension.
+     * @param A the matrix storage.
+     * @return the matrix.
+     */
+    public static Matrix of(Layout layout, int m, int n, int ld, DoubleBuffer A) {
+        if (layout == COL_MAJOR && ld < m) {
+            throw new IllegalArgumentException(String.format("Invalid leading dimension for COL_MAJOR: %d < %d", ld, m));
         }
 
-        return matrix;
+        if (layout == ROW_MAJOR && ld < n) {
+            throw new IllegalArgumentException(String.format("Invalid leading dimension for ROW_MAJOR: %d < %d", ld, n));
+        }
+
+        if (layout == COL_MAJOR) {
+            return new Matrix(m, n, ld, A);
+        } else {
+            return new Matrix(m, n, ld, A) {
+                @Override
+                public Layout layout() {
+                    return ROW_MAJOR;
+                }
+
+                @Override
+                protected int index(int i , int j) {
+                    return i * ld + j + A.position();
+                }
+
+                @Override
+                public Matrix transpose() {
+                    return new Matrix(n, m, ld, A);
+                }
+            };
+        }
     }
 
     /**
-     * Returns a column vector/matrix.
-     * @param A the column vector.
-     * @return the column vector/matrix.
+     * Returns a random matrix of standard normal distribution.
+     * @param m the number of rows.
+     * @param n the number of columns.
+     * @return the matrix.
      */
-    public static Matrix column(double[] A) {
-        return column(A, 0, A.length);
-    }
-
-    /**
-     * Returns a column vector/matrix.
-     * @param A the column vector.
-     * @param offset the offset of the subarray to be used; must be non-negative and
-     *               no larger than array.length.
-     * @param length the length of the subarray to be used; must be non-negative and
-     *               no larger than array.length - offset.
-     * @return the column vector/matrix.
-     */
-    public static Matrix column(double[] A, int offset, int length) {
-        Matrix matrix = new Matrix(length, 1, length, new double[length]);
-        System.arraycopy(A, offset, matrix.A, 0, length);
-        return matrix;
-    }
-
-    /**
-     * Returns a row vector/matrix.
-     * @param A the row vector.
-     * @return the row vector/matrix.
-     */
-    public static Matrix row(double[] A) {
-        return row(A, 0, A.length);
-    }
-
-    /**
-     * Returns a row vector/matrix.
-     * @param A the row vector.
-     * @param offset the offset of the subarray to be used; must be non-negative and
-     *               no larger than array.length.
-     * @param length the length of the subarray to be used; must be non-negative and
-     *               no larger than array.length - offset.
-     * @return the row vector/matrix.
-     */
-    public static Matrix row(double[] A, int offset, int length) {
-        Matrix matrix = new Matrix(1, length, 1, new double[length]);
-        System.arraycopy(A, offset, matrix.A, 0, length);
-        return matrix;
+    public static Matrix randn(int m, int n) {
+        return rand(m, n, GaussianDistribution.getInstance());
     }
 
     /**
@@ -190,8 +244,8 @@ public class Matrix extends DMatrix {
      *
      * @param m the number of rows.
      * @param n the number of columns.
-     * @param distribution the distribution of random numbers.
-     * @return the random matrix.
+     * @param distribution the distribution of random number.
+     * @return the matrix.
      */
     public static Matrix rand(int m, int n, Distribution distribution) {
         Matrix matrix = new Matrix(m, n);
@@ -206,42 +260,13 @@ public class Matrix extends DMatrix {
     }
 
     /**
-     * Returns a random matrix of standard normal distribution.
-     * @param m the number of rows.
-     * @param n the number of columns.
-     * @return the random matrix.
-     */
-    public static Matrix randn(int m, int n) {
-        return rand(m, n, GaussianDistribution.getInstance());
-    }
-
-    /**
-     * Returns a uniformly distributed random matrix in [0, 1).
-     *
-     * @param m the number of rows.
-     * @param n the number of columns.
-     * @return the random matrix.
-     */
-    public static Matrix rand(int m, int n) {
-        Matrix matrix = new Matrix(m, n);
-
-        for (int j = 0; j < n; j++) {
-            for (int i = 0; i < m; i++) {
-                matrix.set(i, j, MathEx.random());
-            }
-        }
-
-        return matrix;
-    }
-
-    /**
-     * Returns a uniformly distributed random matrix in given range.
+     * Returns a random matrix of uniform distribution.
      *
      * @param m the number of rows.
      * @param n the number of columns.
      * @param lo the lower bound of uniform distribution.
      * @param hi the upper bound of uniform distribution.
-     * @return the random matrix.
+     * @return the matrix.
      */
     public static Matrix rand(int m, int n, double lo, double hi) {
         Matrix matrix = new Matrix(m, n);
@@ -258,7 +283,7 @@ public class Matrix extends DMatrix {
     /**
      * Returns an identity matrix.
      * @param n the number of rows/columns.
-     * @return the identity matrix.
+     * @return the matrix.
      */
     public static Matrix eye(int n) {
         return diag(n, 1.0);
@@ -268,7 +293,7 @@ public class Matrix extends DMatrix {
      * Returns an m-by-n identity matrix.
      * @param m the number of rows.
      * @param n the number of columns.
-     * @return the identity matrix.
+     * @return the matrix.
      */
     public static Matrix eye(int m, int n) {
         return diag(m, n, 1.0);
@@ -279,7 +304,7 @@ public class Matrix extends DMatrix {
      *
      * @param n the number of rows/columns.
      * @param diag the diagonal value.
-     * @return the diagonal matrix.
+     * @return the matrix.
      */
     public static Matrix diag(int n, double diag) {
         return diag(n, n, diag);
@@ -291,7 +316,7 @@ public class Matrix extends DMatrix {
      * @param m the number of rows.
      * @param n the number of columns.
      * @param diag the diagonal value.
-     * @return the diagonal matrix.
+     * @return the matrix.
      */
     public static Matrix diag(int m, int n, double diag) {
         Matrix D = new Matrix(m, n);
@@ -306,7 +331,7 @@ public class Matrix extends DMatrix {
      * Returns a square diagonal matrix.
      *
      * @param diag the diagonal elements.
-     * @return the diagonal matrix.
+     * @return the matrix.
      */
     public static Matrix diag(double[] diag) {
         int n = diag.length;
@@ -322,7 +347,7 @@ public class Matrix extends DMatrix {
      * from left to right is constant.
      *
      * @param a A[i, j] = a[i - j] for {@code i >= j} (or a[j - i] when {@code j > i})
-     * @return the Toeplitz matrix.
+     * @return the matrix.
      */
     public static Matrix toeplitz(double[] a) {
         int n = a.length;
@@ -348,11 +373,11 @@ public class Matrix extends DMatrix {
      *
      * @param kl {@code A[i, j] = kl[i - j]} for {@code i >  j}
      * @param ku {@code A[i, j] = ku[j - i]} for {@code i <= j}
-     * @return the Toeplitz matrix.
+     * @return the matrix.
      */
     public static Matrix toeplitz(double[] kl, double[] ku) {
         if (kl.length != ku.length - 1) {
-            throw new IllegalArgumentException(String.format("Invalid sub-diagonals and super-diagonals size: %d != %d - 1", kl.length, ku.length));
+            throw new IllegalArgumentException(String.format("Invalid subdiagonals and superdiagonals size: %d != %d - 1", kl.length, ku.length));
         }
 
         int n = kl.length;
@@ -402,6 +427,61 @@ public class Matrix extends DMatrix {
         return (((n * elementSize + 511) / 512) * 512 + 64) / elementSize;
     }
 
+    /**
+     * Customized object serialization.
+     * @param out the output stream.
+     * @throws IOException when fails to write to the stream.
+     */
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        // write default properties
+        out.defaultWriteObject();
+
+        // write buffer
+        if (layout() == COL_MAJOR) {
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i < m; i++) {
+                    out.writeDouble(get(i, j));
+                }
+            }
+        } else {
+            for (int i = 0; i < m; i++) {
+                for (int j = 0; j < n; j++) {
+                    out.writeDouble(get(i, j));
+                }
+            }
+        }
+    }
+
+    /**
+     * Customized object serialization.
+     * @param in the input stream.
+     * @throws IOException when fails to read the stream.
+     * @throws ClassNotFoundException when fails to load the class.
+     */
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        // read default properties
+        in.defaultReadObject();
+
+        // read buffer data
+        this.A = DoubleBuffer.wrap(new double[m * n]);
+
+        if (layout() == COL_MAJOR) {
+            this.ld = m;
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i < m; i++) {
+                    set(i, j, in.readDouble());
+                }
+            }
+        } else {
+            this.ld = n;
+            for (int i = 0; i < m; i++) {
+                for (int j = 0; j < n; j++) {
+                    set(i, j, in.readDouble());
+                }
+            }
+        }
+    }
+
     @Override
     public int nrow() {
         return m;
@@ -431,6 +511,14 @@ public class Matrix extends DMatrix {
      */
     public int ld() {
         return ld;
+    }
+
+    /**
+     * Returns true if the matrix is a submatrix (sharing the storage with larger matrix).
+     * @return true if the matrix is a submatrix.
+     */
+    public boolean isSubmatrix() {
+        return A.position() != 0 || A.limit() != A.capacity();
     }
 
     /**
@@ -489,15 +577,10 @@ public class Matrix extends DMatrix {
     /** Returns a deep copy of matrix. */
     @Override
     public Matrix clone() {
-        Matrix matrix;
-        if (layout() == COL_MAJOR) {
-            matrix = new Matrix(m, n, ld, A.clone());
-        } else {
-            matrix = new Matrix(m, n);
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    matrix.set(i, j, get(i, j));
-                }
+        Matrix matrix = new Matrix(m, n);
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                matrix.set(i, j, get(i, j));
             }
         }
 
@@ -545,7 +628,11 @@ public class Matrix extends DMatrix {
      */
     public double[] col(int j) {
         double[] x = new double[m];
-        System.arraycopy(A, index(0, j), x, 0, m);
+
+        for (int i = 0; i < m; i++) {
+            x[i] = get(i, j);
+        }
+
         return x;
     }
 
@@ -577,7 +664,9 @@ public class Matrix extends DMatrix {
 
         for (int j = 0; j < cols.length; j++) {
             int col = cols[j];
-            System.arraycopy(A, index(0, col), x.A, index(0, j), m);
+            for (int i = 0; i < m; i++) {
+                x.set(i, j, get(i, col));
+            }
         }
 
         return x;
@@ -585,6 +674,8 @@ public class Matrix extends DMatrix {
 
     /**
      * Returns the submatrix which top left at (i, j) and bottom right at (k, l).
+     * The content of the submatrix will be that of this matrix. Changes to this
+     * matrix's content will be visible in the submatrix, and vice versa.
      *
      * @param i the beginning row, inclusive.
      * @param j the beginning column, inclusive,
@@ -597,75 +688,35 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException(String.format("Invalid submatrix range (%d:%d, %d:%d) of %d x %d", i, k, j, l, m, n));
         }
 
-        Matrix sub = new Matrix(k - i + 1, l - j + 1);
-        for (int jj = j; jj <= l; jj++) {
-            for (int ii = i; ii <= k; ii++) {
-                sub.set(ii - i, jj - j, get(ii, jj));
-            }
-        }
+        int offset = index(i, j);
+        int length = index(k, l) - offset + 1;
+        DoubleBuffer B = DoubleBuffer.wrap(A.array(), offset, length);
 
-        return sub;
+        return of(layout(),k - i + 1, l - j + 1, ld, B);
     }
 
     /**
-     * Fills the matrix with a value.
+     * Fill the matrix with a value.
      * @param x the value.
      */
     public void fill(double x) {
-        Arrays.fill(A, x);
-    }
-
-    /**
-     * Returns the transpose of matrix. The transpose shares the storage
-     * with this matrix. Changes to this matrix's content will be visible
-     * in the transpose, and vice versa.
-     *
-     * @return the transpose of matrix.
-     */
-    public Matrix transpose() {
-        return transpose(true);
+        if (isSubmatrix()) {
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i < m; i++) {
+                    set(i, j, x);
+                }
+            }
+        } else {
+            Arrays.fill(A.array(), x);
+        }
     }
 
     /**
      * Returns the transpose of matrix.
-     * @param share if true, the transpose shares the storage with this matrix.
-     *              Changes to this matrix's content will be visible in the
-     *              transpose, and vice versa.
      * @return the transpose of matrix.
      */
-    public Matrix transpose(boolean share) {
-        Matrix matrix;
-        if (share) {
-            if (layout() == ROW_MAJOR) {
-                matrix = new Matrix(n, m, ld, A);
-            } else {
-                matrix = new Matrix(n, m, ld, A) {
-                    @Override
-                    public Layout layout() {
-                        return ROW_MAJOR;
-                    }
-
-                    @Override
-                    protected int index(int i, int j) {
-                        return i * ld + j;
-                    }
-                };
-            }
-        } else {
-            matrix = new Matrix(n, m);
-            for (int j = 0; j < m; j++) {
-                for (int i = 0; i < n; i++) {
-                    matrix.set(i, j, get(j, i));
-                }
-            }
-        }
-
-        if (m == n) {
-            matrix.uplo(uplo);
-            matrix.triangular(diag);
-        }
-
-        return matrix;
+    public Matrix transpose() {
+        return of(ROW_MAJOR, n, m, ld, A);
     }
 
     @Override
@@ -674,7 +725,7 @@ public class Matrix extends DMatrix {
             return false;
         }
 
-        return equals((Matrix) o, 1E-7);
+        return equals((Matrix) o, 1E-7f);
     }
 
     /**
@@ -689,18 +740,10 @@ public class Matrix extends DMatrix {
             return false;
         }
 
-        if (layout() == o.layout() && ld == o.ld) {
-            for (int i = 0; i < A.length; i++) {
-                if (!MathEx.isZero(A[i] - o.A[i], epsilon)) {
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                if (!MathEx.isZero(get(i, j) - o.get(i, j), epsilon)) {
                     return false;
-                }
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    if (!MathEx.isZero(get(i, j) - o.get(i, j), epsilon)) {
-                        return false;
-                    }
                 }
             }
         }
@@ -715,17 +758,17 @@ public class Matrix extends DMatrix {
      * @return the linearized index.
      */
     protected int index(int i , int j) {
-        return j * ld + i;
+        return j * ld + i + A.position();
     }
 
     @Override
     public double get(int i, int j) {
-        return A[index(i, j)];
+        return A.get(index(i, j));
     }
 
     @Override
     public Matrix set(int i, int j, double x) {
-        A[index(i, j)] = x;
+        A.put(index(i, j), x);
         return this;
     }
 
@@ -753,7 +796,10 @@ public class Matrix extends DMatrix {
      * @return the updated cell value.
      */
     public double add(int i, int j, double b) {
-        return A[index(i, j)] += b;
+        int k = index(i, j);
+        double y = A.get(k) + b;
+        A.put(k, y);
+        return y;
     }
 
     /**
@@ -764,7 +810,10 @@ public class Matrix extends DMatrix {
      * @return the updated cell value.
      */
     public double sub(int i, int j, double b) {
-        return A[index(i, j)] -= b;
+        int k = index(i, j);
+        double y = A.get(k) - b;
+        A.put(k, y);
+        return y;
     }
 
     /**
@@ -775,7 +824,10 @@ public class Matrix extends DMatrix {
      * @return the updated cell value.
      */
     public double mul(int i, int j, double b) {
-        return A[index(i, j)] *= b;
+        int k = index(i, j);
+        double y = A.get(k) * b;
+        A.put(k, y);
+        return y;
     }
 
     /**
@@ -786,7 +838,10 @@ public class Matrix extends DMatrix {
      * @return the updated cell value.
      */
     public double div(int i, int j, double b) {
-        return A[index(i, j)] /= b;
+        int k = index(i, j);
+        double y = A.get(k) / b;
+        A.put(k, y);
+        return y;
     }
 
     /**
@@ -795,8 +850,10 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix add(double b) {
-        for (int i = 0; i < A.length; i++) {
-            A[i] += b;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                add(i, j, b);
+            }
         }
 
         return this;
@@ -809,8 +866,10 @@ public class Matrix extends DMatrix {
      */
 
     public Matrix sub(double b) {
-        for (int i = 0; i < A.length; i++) {
-            A[i] -= b;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                sub(i, j, b);
+            }
         }
 
         return this;
@@ -822,8 +881,10 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix mul(double b) {
-        for (int i = 0; i < A.length; i++) {
-            A[i] *= b;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                mul(i, j, b);
+            }
         }
 
         return this;
@@ -835,8 +896,10 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix div(double b) {
-        for (int i = 0; i < A.length; i++) {
-            A[i] /= b;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                div(i, j, b);
+            }
         }
 
         return this;
@@ -868,7 +931,12 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix sub(int i, int j, double alpha, Matrix B) {
-        return add(i, j, -alpha, B);
+        for (int jj = 0; jj < B.n; jj++) {
+            for (int ii = 0; ii < B.m; ii++) {
+                sub(i+ii, j+jj, alpha * B.get(ii, jj));
+            }
+        }
+        return this;
     }
 
     /**
@@ -911,23 +979,7 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix add(Matrix B) {
-        if (m != B.m || n != B.n) {
-            throw new IllegalArgumentException("Matrix is not of same size.");
-        }
-
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] += B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    add(i, j, B.get(i, j));
-                }
-            }
-        }
-
-        return this;
+        return add(1.0, B);
     }
 
     /**
@@ -936,23 +988,7 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix sub(Matrix B) {
-        if (m != B.m || n != B.n) {
-            throw new IllegalArgumentException("Matrix is not of same size.");
-        }
-
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] -= B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    sub(i, j, B.get(i, j));
-                }
-            }
-        }
-
-        return this;
+        return sub(1.0, B);
     }
 
     /**
@@ -961,23 +997,7 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix mul(Matrix B) {
-        if (m != B.m || n != B.n) {
-            throw new IllegalArgumentException("Matrix is not of same size.");
-        }
-
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] *= B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    mul(i, j, B.get(i, j));
-                }
-            }
-        }
-
-        return this;
+        return mul(1.0, B);
     }
 
     /**
@@ -986,23 +1006,7 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix div(Matrix B) {
-        if (m != B.m || n != B.n) {
-            throw new IllegalArgumentException("Matrix is not of same size.");
-        }
-
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] /= B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    div(i, j, B.get(i, j));
-                }
-            }
-        }
-
-        return this;
+        return div(1.0, B);
     }
 
     /**
@@ -1016,18 +1020,11 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
 
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] += alpha * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    add(i, j, alpha * B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                add(i, j, alpha * B.get(i, j));
             }
         }
-
         return this;
     }
 
@@ -1038,7 +1035,16 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix sub(double alpha, Matrix B) {
-        return add(-alpha, B);
+        if (m != B.m || n != B.n) {
+            throw new IllegalArgumentException("Matrix is not of same size.");
+        }
+
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                sub(i, j, alpha * B.get(i, j));
+            }
+        }
+        return this;
     }
 
     /**
@@ -1052,18 +1058,11 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
 
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] *= alpha * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    mul(i, j, alpha * B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                mul(i, j, alpha * B.get(i, j));
             }
         }
-
         return this;
     }
 
@@ -1078,18 +1077,11 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix is not of same size.");
         }
 
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] /= alpha * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    div(i, j, alpha * B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                div(i, j, alpha * B.get(i, j));
             }
         }
-
         return this;
     }
 
@@ -1110,18 +1102,11 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix B is not of same size.");
         }
 
-        if (layout() == A.layout() && layout() == B.layout() && ld == A.ld && ld == B.ld) {
-            for (int i = 0; i < this.A.length; i++) {
-                this.A[i] = alpha * A.A[i] + beta * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, alpha * A.get(i, j) + beta * B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                set(i, j, alpha * A.get(i, j) + beta * B.get(i, j));
             }
         }
-
         return this;
     }
 
@@ -1153,18 +1138,11 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix B is not of same size.");
         }
 
-        if (layout() == A.layout() && layout() == B.layout() && ld == A.ld && ld == B.ld) {
-            for (int i = 0; i < this.A.length; i++) {
-                this.A[i] = alpha * A.A[i] * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, alpha * A.get(i, j) * B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                set(i, j, alpha * A.get(i, j) * B.get(i, j));
             }
         }
-
         return this;
     }
 
@@ -1184,18 +1162,11 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix B is not of same size.");
         }
 
-        if (layout() == A.layout() && layout() == B.layout() && ld == A.ld && ld == B.ld) {
-            for (int i = 0; i < this.A.length; i++) {
-                this.A[i] = alpha * A.A[i] / B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, alpha * A.get(i, j) / B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                set(i, j, alpha * A.get(i, j) / B.get(i, j));
             }
         }
-
         return this;
     }
 
@@ -1209,7 +1180,9 @@ public class Matrix extends DMatrix {
      */
     public double add(int i, int j, double alpha, double beta) {
         int k = index(i, j);
-        return A[k] = alpha * A[k] + beta;
+        double y = alpha * A.get(k) + beta;
+        A.put(k, y);
+        return y;
     }
 
     /**
@@ -1242,42 +1215,9 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException("Matrix B is not of same size.");
         }
 
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] = alpha * A[i] + beta * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, alpha * get(i, j) + beta * B.get(i, j));
-                }
-            }
-        }
-
-        return this;
-    }
-
-    /**
-     * Element-wise addition A = alpha * A + beta * B^2
-     * @param alpha the scalar alpha.
-     * @param beta the scalar beta.
-     * @param B the operand.
-     * @return this matrix.
-     */
-    public Matrix add2(double alpha, double beta, Matrix B) {
-        if (m != B.m || n != B.n) {
-            throw new IllegalArgumentException("Matrix B is not of same size.");
-        }
-
-        if (layout() == B.layout() && ld == B.ld) {
-            for (int i = 0; i < A.length; i++) {
-                A[i] = alpha * A[i] + beta * B.A[i] * B.A[i];
-            }
-        } else {
-            for (int j = 0; j < n; j++) {
-                for (int i = 0; i < m; i++) {
-                    set(i, j, alpha * get(i, j) + beta * B.get(i, j) * B.get(i, j));
-                }
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                set(i, j, alpha * get(i, j) + beta * B.get(i, j));
             }
         }
 
@@ -1297,9 +1237,9 @@ public class Matrix extends DMatrix {
         }
 
         if (isSymmetric() && x == y) {
-            BLAS.engine.syr(layout(), uplo, m, alpha, x, 1, A, ld);
+            BLAS.engine.syr(layout(), uplo, m, alpha, DoubleBuffer.wrap(x), 1, A, ld);
         } else {
-            BLAS.engine.ger(layout(), m, n, alpha, x, 1, y, 1, A, ld);
+            BLAS.engine.ger(layout(), m, n, alpha, DoubleBuffer.wrap(x), 1, DoubleBuffer.wrap(y), 1, A, ld);
         }
 
         return this;
@@ -1311,9 +1251,11 @@ public class Matrix extends DMatrix {
      * @return this matrix.
      */
     public Matrix replaceNaN(double x) {
-        for (int i = 0; i < A.length; i++) {
-            if (Double.isNaN(A[i])) {
-                A[i] = x;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                if (Double.isNaN(get(i, j))) {
+                    set(i, j, x);
+                }
             }
         }
 
@@ -1325,7 +1267,7 @@ public class Matrix extends DMatrix {
      * @return the sum of all elements.
      */
     public double sum() {
-        double s = 0.0;
+        double s = 0.0f;
         for (int j = 0; j < n; j++) {
             for (int i = 0; i < m; i++) {
                 s += get(i, j);
@@ -1340,9 +1282,9 @@ public class Matrix extends DMatrix {
      * @return L<sub>1</sub> matrix norm.
      */
     public double norm1() {
-        double f = 0.0;
+        double f = 0.0f;
         for (int j = 0; j < n; j++) {
-            double s = 0.0;
+            double s = 0.0f;
             for (int i = 0; i < m; i++) {
                 s += Math.abs(get(i, j));
             }
@@ -1414,8 +1356,15 @@ public class Matrix extends DMatrix {
             throw new IllegalArgumentException(String.format("Matrix: %d x %d, Vector: %d", m, n, x.length));
         }
 
-        double[] Ax = mv(x);
-        return MathEx.dot(x, Ax);
+        int n = x.length;
+        double s = 0.0f;
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < n; i++) {
+                s += get(i, j) * x[i] * x[j];
+            }
+        }
+
+        return s;
     }
 
     /**
@@ -1439,7 +1388,13 @@ public class Matrix extends DMatrix {
      * @return the mean of each row.
      */
     public double[] rowMeans() {
-        double[] x = rowSums();
+        double[] x = new double[m];
+
+        for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                x[i] += get(i, j);
+            }
+        }
 
         for (int i = 0; i < m; i++) {
             x[i] /= n;
@@ -1493,9 +1448,12 @@ public class Matrix extends DMatrix {
      * @return the mean of each column.
      */
     public double[] colMeans() {
-        double[] x = colSums();
+        double[] x = new double[n];
 
         for (int j = 0; j < n; j++) {
+            for (int i = 0; i < m; i++) {
+                x[j] += get(i, j);
+            }
             x[j] /= m;
         }
 
@@ -1510,8 +1468,8 @@ public class Matrix extends DMatrix {
         double[] x = new double[n];
 
         for (int j = 0; j < n; j++) {
-            double mu = 0.0;
-            double sumsq = 0.0;
+            double mu = 0.0f;
+            double sumsq = 0.0f;
             for (int i = 0; i < m; i++) {
                 double a = get(i, j);
                 mu += a;
@@ -1525,10 +1483,10 @@ public class Matrix extends DMatrix {
     }
 
     /**
-     * Standardizes the columns of matrix.
+     * Centers and scales the columns of matrix.
      * @return a new matrix with zero mean and unit variance for each column.
      */
-    public Matrix standardize() {
+    public Matrix scale() {
         double[] center = colMeans();
         double[] scale = colSds();
         return scale(center, scale);
@@ -1583,12 +1541,12 @@ public class Matrix extends DMatrix {
         Matrix inv = eye(n);
         int[] ipiv = new int[n];
         if (isSymmetric()) {
-            int info = LAPACK.engine.sysv(lu.layout(), uplo,  n, n, lu.A, lu.ld, ipiv, inv.A, inv.ld);
+            int info = LAPACK.engine.sysv(lu.layout(), uplo,  n, n, lu.A, lu.ld, IntBuffer.wrap(ipiv), inv.A, inv.ld);
             if (info != 0) {
                 throw new ArithmeticException("SYSV fails: " + info);
             }
         } else {
-            int info = LAPACK.engine.gesv(lu.layout(), n, n, lu.A, lu.ld, ipiv, inv.A, inv.ld);
+            int info = LAPACK.engine.gesv(lu.layout(), n, n, lu.A, lu.ld, IntBuffer.wrap(ipiv), inv.A, inv.ld);
             if (info != 0) {
                 throw new ArithmeticException("GESV fails: " + info);
             }
@@ -1610,7 +1568,6 @@ public class Matrix extends DMatrix {
      * @param y the operand.
      */
     public void mv(Transpose trans, double alpha, DoubleBuffer x, double beta, DoubleBuffer y) {
-        DoubleBuffer A = DoubleBuffer.wrap(this.A);
         if (uplo != null) {
             if (diag != null) {
                 if (alpha == 1.0 && beta == 0.0 && x == y) {
@@ -1628,33 +1585,21 @@ public class Matrix extends DMatrix {
 
     @Override
     public void mv(Transpose trans, double alpha, double[] x, double beta, double[] y) {
-        if (uplo != null) {
-            if (diag != null) {
-                if (alpha == 1.0 && beta == 0.0 && x == y) {
-                    BLAS.engine.trmv(layout(), uplo, trans, diag, m, A, ld, y, 1);
-                } else {
-                    BLAS.engine.gemv(layout(), trans, m, n, alpha, A, ld, x, 1, beta, y, 1);
-                }
-            } else {
-                BLAS.engine.symv(layout(), uplo, m, alpha, A, ld, x, 1, beta, y, 1);
-            }
-        } else {
-            BLAS.engine.gemv(layout(), trans, m, n, alpha, A, ld, x, 1, beta, y, 1);
-        }
+        mv(trans, alpha, DoubleBuffer.wrap(x), beta, DoubleBuffer.wrap(y));
     }
 
     @Override
     public void mv(double[] work, int inputOffset, int outputOffset) {
         DoubleBuffer xb = DoubleBuffer.wrap(work, inputOffset, n);
         DoubleBuffer yb = DoubleBuffer.wrap(work, outputOffset, m);
-        mv(NO_TRANSPOSE, 1.0, xb, 0.0, yb);
+        mv(NO_TRANSPOSE, 1.0f, xb, 0.0f, yb);
     }
 
     @Override
     public void tv(double[] work, int inputOffset, int outputOffset) {
         DoubleBuffer xb = DoubleBuffer.wrap(work, inputOffset, m);
         DoubleBuffer yb = DoubleBuffer.wrap(work, outputOffset, n);
-        mv(TRANSPOSE, 1.0, xb, 0.0, yb);
+        mv(TRANSPOSE, 1.0f, xb, 0.0f, yb);
     }
 
     /** Flips the transpose operation. */
@@ -1696,7 +1641,7 @@ public class Matrix extends DMatrix {
      */
     public Matrix ata() {
         Matrix C = new Matrix(n, n);
-        mm(TRANSPOSE, NO_TRANSPOSE, 1.0, this, 0.0, C);
+        mm(TRANSPOSE, NO_TRANSPOSE, 1.0f, this, 0.0f, C);
         C.uplo(LOWER);
         return C;
     }
@@ -1707,7 +1652,7 @@ public class Matrix extends DMatrix {
      */
     public Matrix aat() {
         Matrix C = new Matrix(m, m);
-        mm(NO_TRANSPOSE, TRANSPOSE, 1.0, this, 0.0, C);
+        mm(NO_TRANSPOSE, TRANSPOSE, 1.0f, this, 0.0f, C);
         C.uplo(LOWER);
         return C;
     }
@@ -1754,7 +1699,7 @@ public class Matrix extends DMatrix {
         }
 
         Matrix C = new Matrix(m, B.n);
-        mm(NO_TRANSPOSE, NO_TRANSPOSE, 1.0, B, 0.0, C);
+        mm(NO_TRANSPOSE, NO_TRANSPOSE, 1.0f, B, 0.0f, C);
         return C;
     }
 
@@ -1769,7 +1714,7 @@ public class Matrix extends DMatrix {
         }
 
         Matrix C = new Matrix(m, B.m);
-        mm(NO_TRANSPOSE, TRANSPOSE, 1.0, B, 0.0, C);
+        mm(NO_TRANSPOSE, TRANSPOSE, 1.0f, B, 0.0f, C);
         return C;
     }
 
@@ -1784,7 +1729,7 @@ public class Matrix extends DMatrix {
         }
 
         Matrix C = new Matrix(n, B.n);
-        mm(TRANSPOSE, NO_TRANSPOSE, 1.0, B, 0.0, C);
+        mm(TRANSPOSE, NO_TRANSPOSE, 1.0f, B, 0.0f, C);
         return C;
     }
 
@@ -1799,7 +1744,7 @@ public class Matrix extends DMatrix {
         }
 
         Matrix C = new Matrix(n, B.m);
-        mm(TRANSPOSE, TRANSPOSE, 1.0, B, 0.0, C);
+        mm(TRANSPOSE, TRANSPOSE, 1.0f, B, 0.0f, C);
         return C;
     }
 
@@ -1820,7 +1765,7 @@ public class Matrix extends DMatrix {
     public LU lu(boolean overwrite) {
         Matrix lu = overwrite ? this : clone();
         int[] ipiv = new int[Math.min(m, n)];
-        int info = LAPACK.engine.getrf(lu.layout(), lu.m, lu.n, lu.A, lu.ld, ipiv);
+        int info = LAPACK.engine.getrf(lu.layout(), lu.m, lu.n, lu.A, lu.ld, IntBuffer.wrap(ipiv));
         if (info < 0) {
             logger.error("LAPACK GETRF error code: {}", info);
             throw new ArithmeticException("LAPACK GETRF error code: " + info);
@@ -1878,7 +1823,7 @@ public class Matrix extends DMatrix {
     public QR qr(boolean overwrite) {
         Matrix qr = overwrite ? this : clone();
         double[] tau = new double[Math.min(m, n)];
-        int info = LAPACK.engine.geqrf(qr.layout(), qr.m, qr.n, qr.A, qr.ld, tau);
+        int info = LAPACK.engine.geqrf(qr.layout(), qr.m, qr.n, qr.A, qr.ld, DoubleBuffer.wrap(tau));
         if (info != 0) {
             logger.error("LAPACK GEQRF error code: {}", info);
             throw new ArithmeticException("LAPACK GEQRF error code: " + info);
@@ -1933,7 +1878,7 @@ public class Matrix extends DMatrix {
             Matrix U = new Matrix(m, k);
             Matrix VT = new Matrix(k, n);
 
-            int info = LAPACK.engine.gesdd(W.layout(), SVDJob.COMPACT, W.m, W.n, W.A, W.ld, s, U.A, U.ld, VT.A, VT.ld);
+            int info = LAPACK.engine.gesdd(W.layout(), SVDJob.COMPACT, W.m, W.n, W.A, W.ld, DoubleBuffer.wrap(s), U.A, U.ld, VT.A, VT.ld);
             if (info != 0) {
                 logger.error("LAPACK GESDD error code: {}", info);
                 throw new ArithmeticException("LAPACK GESDD error code: " + info);
@@ -1944,7 +1889,7 @@ public class Matrix extends DMatrix {
             Matrix U = new Matrix(1, 1);
             Matrix VT = new Matrix(1, 1);
 
-            int info = LAPACK.engine.gesdd(W.layout(), SVDJob.NO_VECTORS, W.m, W.n, W.A, W.ld, s, U.A, U.ld, VT.A, VT.ld);
+            int info = LAPACK.engine.gesdd(W.layout(), SVDJob.NO_VECTORS, W.m, W.n, W.A, W.ld, DoubleBuffer.wrap(s), U.A, U.ld, VT.A, VT.ld);
             if (info != 0) {
                 logger.error("LAPACK GESDD error code: {}", info);
                 throw new ArithmeticException("LAPACK GESDD error code: " + info);
@@ -1990,7 +1935,7 @@ public class Matrix extends DMatrix {
         Matrix eig = overwrite ? this : clone();
         if (isSymmetric()) {
             double[] w = new double[n];
-            int info = LAPACK.engine.syevd(eig.layout(), vr ? EVDJob.VECTORS : EVDJob.NO_VECTORS, eig.uplo, n, eig.A, eig.ld, w);
+            int info = LAPACK.engine.syevd(eig.layout(), vr ? EVDJob.VECTORS : EVDJob.NO_VECTORS, eig.uplo, n, eig.A, eig.ld, DoubleBuffer.wrap(w));
             if (info != 0) {
                 logger.error("LAPACK SYEV error code: {}", info);
                 throw new ArithmeticException("LAPACK SYEV error code: " + info);
@@ -2001,7 +1946,7 @@ public class Matrix extends DMatrix {
             double[] wi = new double[n];
             Matrix Vl = vl ? new Matrix(n, n) : new Matrix(1, 1);
             Matrix Vr = vr ? new Matrix(n, n) : new Matrix(1, 1);
-            int info = LAPACK.engine.geev(eig.layout(), vl ? EVDJob.VECTORS : EVDJob.NO_VECTORS, vr ? EVDJob.VECTORS : EVDJob.NO_VECTORS, n, eig.A, eig.ld, wr, wi, Vl.A, Vl.ld, Vr.A, Vr.ld);
+            int info = LAPACK.engine.geev(eig.layout(), vl ? EVDJob.VECTORS : EVDJob.NO_VECTORS, vr ? EVDJob.VECTORS : EVDJob.NO_VECTORS, n, eig.A, eig.ld, DoubleBuffer.wrap(wr), DoubleBuffer.wrap(wi), Vl.A, Vl.ld, Vr.A, Vr.ld);
             if (info != 0) {
                 logger.error("LAPACK GEEV error code: {}", info);
                 throw new ArithmeticException("LAPACK GEEV error code: " + info);
@@ -2064,10 +2009,6 @@ public class Matrix extends DMatrix {
          * The right singular vectors V.
          */
         public final Matrix V;
-        /**
-         * The submatrix U[:, 1:r], where r is the rank of matrix.
-         */
-        private transient Matrix Ur;
 
         /**
          * Constructor.
@@ -2180,7 +2121,7 @@ public class Matrix extends DMatrix {
                 throw new UnsupportedOperationException("The operation cannot be called on a partial SVD.");
             }
 
-            return (s[0] <= 0.0 || s[s.length - 1] <= 0.0) ? Double.POSITIVE_INFINITY : s[0] / s[s.length - 1];
+            return (s[0] <= 0.0f || s[s.length - 1] <= 0.0f) ? Double.POSITIVE_INFINITY : s[0] / s[s.length - 1];
         }
 
         /**
@@ -2251,7 +2192,7 @@ public class Matrix extends DMatrix {
             double[] sigma = new double[k];
             int r = rank();
             for (int i = 0; i < r; i++) {
-                sigma[i] = 1.0 / s[i];
+                sigma[i] = 1.0f / s[i];
             }
 
             return V.adb(NO_TRANSPOSE, TRANSPOSE, U, sigma);
@@ -2273,12 +2214,8 @@ public class Matrix extends DMatrix {
             }
 
             int r = rank();
-            if (Ur == null) {
-                Ur = r == U.ncol() ? U : U.submatrix(0, 0, m - 1, r - 1);
-            }
-
             double[] Utb = new double[s.length];
-            Ur.tv(b, Utb);
+            U.submatrix(0, 0, m-1, r-1).tv(b, Utb);
             for (int i = 0; i < r; i++) {
                 Utb[i] /= s[i];
             }
@@ -2576,9 +2513,9 @@ public class Matrix extends DMatrix {
          * @return the solution vector.
          */
         public double[] solve(double[] b) {
-            Matrix x = Matrix.column(b);
-            solve(x);
-            return x.A;
+            double[] x = b.clone();
+            solve(new Matrix(x));
+            return x;
         }
 
         /**
@@ -2604,7 +2541,7 @@ public class Matrix extends DMatrix {
                 throw new RuntimeException("The matrix is singular.");
             }
 
-            int ret = LAPACK.engine.getrs(lu.layout(), NO_TRANSPOSE, lu.n, B.n, lu.A, lu.ld, ipiv, B.A, B.ld);
+            int ret = LAPACK.engine.getrs(lu.layout(), NO_TRANSPOSE, lu.n, B.n, lu.A, lu.ld, IntBuffer.wrap(ipiv), B.A, B.ld);
             if (ret != 0) {
                 logger.error("LAPACK GETRS error code: {}", ret);
                 throw new ArithmeticException("LAPACK GETRS error code: " + ret);
@@ -2698,9 +2635,9 @@ public class Matrix extends DMatrix {
          * @return the solution vector.
          */
         public double[] solve(double[] b) {
-            Matrix x = Matrix.column(b);
-            solve(x);
-            return x.A;
+            double[] x = b.clone();
+            solve(new Matrix(x));
+            return x;
         }
 
         /**
@@ -2795,7 +2732,7 @@ public class Matrix extends DMatrix {
             int n = qr.n;
             int k = Math.min(m, n);
             Matrix Q = qr.clone();
-            int info = LAPACK.engine.orgqr(qr.layout(), m, n, k, Q.A, qr.ld, tau);
+            int info = LAPACK.engine.orgqr(qr.layout(), m, n, k, Q.A, qr.ld, DoubleBuffer.wrap(tau));
             if (info != 0) {
                 logger.error("LAPACK ORGRQ error code: {}", info);
                 throw new ArithmeticException("LAPACK ORGRQ error code: " + info);
@@ -2814,9 +2751,11 @@ public class Matrix extends DMatrix {
                 throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x 1", qr.m, qr.n, b.length));
             }
 
-            Matrix x = Matrix.column(b);
-            solve(x);
-            return Arrays.copyOf(x.A, qr.n);
+            double[] y = b.clone();
+            solve(new Matrix(y));
+            double[] x = new double[qr.n];
+            System.arraycopy(y, 0, x, 0, x.length);
+            return x;
         }
 
         /**
@@ -2834,7 +2773,7 @@ public class Matrix extends DMatrix {
             int n = qr.n;
             int k = Math.min(m, n);
 
-            int info = LAPACK.engine.ormqr(qr.layout(), LEFT, TRANSPOSE, B.nrow(), B.ncol(), k, qr.A, qr.ld, tau, B.A, B.ld);
+            int info = LAPACK.engine.ormqr(qr.layout(), LEFT, TRANSPOSE, B.nrow(), B.ncol(), k, qr.A, qr.ld, DoubleBuffer.wrap(tau), B.A, B.ld);
             if (info != 0) {
                 logger.error("LAPACK ORMQR error code: {}", info);
                 throw new IllegalArgumentException("LAPACK ORMQR error code: " + info);
