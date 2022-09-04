@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import java.util.ArrayList;
@@ -97,16 +81,10 @@ public class BeanInfo {
                     implClazz = target.asClass();
                     break;
                 case FIELD:
-                    Type fieldType = target.asField().type();
-                    if (fieldType.kind() != org.jboss.jandex.Type.Kind.PRIMITIVE) {
-                        implClazz = beanDeployment.getIndex().getClassByName(fieldType.name());
-                    }
+                    implClazz = beanDeployment.getIndex().getClassByName(target.asField().type().name());
                     break;
                 case METHOD:
-                    Type returnType = target.asMethod().returnType();
-                    if (returnType.kind() != org.jboss.jandex.Type.Kind.PRIMITIVE) {
-                        implClazz = beanDeployment.getIndex().getClassByName(returnType.name());
-                    }
+                    implClazz = beanDeployment.getIndex().getClassByName(target.asMethod().returnType().name());
                     break;
                 default:
                     break;
@@ -138,10 +116,6 @@ public class BeanInfo {
         return target;
     }
 
-    /**
-     *
-     * @return the impl class or null in case of a producer of a primitive type
-     */
     public ClassInfo getImplClazz() {
         return implClazz;
     }

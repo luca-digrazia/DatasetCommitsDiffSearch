@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.protean.arc.processor;
 
 import java.io.IOException;
@@ -30,7 +14,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
 
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.enterprise.inject.Any;
@@ -87,14 +70,11 @@ public class BeanProcessor {
 
     private final BuildContextImpl buildContext;
 
-    private final Predicate<DotName> applicationClassPredicate;
-
     private BeanProcessor(String name, IndexView index, Collection<DotName> additionalBeanDefiningAnnotations, ResourceOutput output,
-                          boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration, List<AnnotationsTransformer> annotationTransformers,
-                          Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
-                          List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate) {
+            boolean sharedAnnotationLiterals, ReflectionRegistration reflectionRegistration, List<AnnotationsTransformer> annotationTransformers,
+            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars, List<DeploymentEnhancer> deploymentEnhancers,
+            List<BeanDeploymentValidator> beanDeploymentValidators) {
         this.reflectionRegistration = reflectionRegistration;
-        this.applicationClassPredicate = applicationClassPredicate;
         Objects.requireNonNull(output);
         this.name = name;
         this.additionalBeanDefiningAnnotations = additionalBeanDefiningAnnotations;
@@ -152,11 +132,11 @@ public class BeanProcessor {
         beanDeployment.init();
 
         AnnotationLiteralProcessor annotationLiterals = new AnnotationLiteralProcessor(name, sharedAnnotationLiterals);
-        BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals, applicationClassPredicate);
-        ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator(applicationClassPredicate);
-        InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals, applicationClassPredicate);
-        SubclassGenerator subclassGenerator = new SubclassGenerator(applicationClassPredicate, annotationLiterals);
-        ObserverGenerator observerGenerator = new ObserverGenerator(annotationLiterals, applicationClassPredicate);
+        BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals);
+        ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator();
+        InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals);
+        SubclassGenerator subclassGenerator = new SubclassGenerator(annotationLiterals);
+        ObserverGenerator observerGenerator = new ObserverGenerator(annotationLiterals);
         AnnotationLiteralGenerator annotationLiteralsGenerator = new AnnotationLiteralGenerator();
 
         Map<BeanInfo, String> beanToGeneratedName = new HashMap<>();
@@ -261,12 +241,6 @@ public class BeanProcessor {
         private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
         private final List<DeploymentEnhancer> deploymentEnhancers = new ArrayList<>();
         private final List<BeanDeploymentValidator> beanDeploymentValidators = new ArrayList<>();
-        private Predicate<DotName> applicationClassPredicate = new Predicate<DotName>() {
-            @Override
-            public boolean test(DotName dotName) {
-                return true;
-            }
-        };
 
         public Builder setName(String name) {
             this.name = name;
@@ -323,14 +297,9 @@ public class BeanProcessor {
             return this;
         }
 
-        public Builder setApplicationClassPredicate(Predicate<DotName> applicationClassPredicate) {
-            this.applicationClassPredicate = applicationClassPredicate;
-            return this;
-        }
-
         public BeanProcessor build() {
             return new BeanProcessor(name, addBuiltinClasses(index), additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
-                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, deploymentEnhancers, beanDeploymentValidators, applicationClassPredicate);
+                    reflectionRegistration, annotationTransformers, resourceAnnotations, beanRegistrars, deploymentEnhancers, beanDeploymentValidators);
         }
 
     }
