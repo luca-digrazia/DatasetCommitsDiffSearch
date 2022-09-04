@@ -4,6 +4,8 @@ import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.TreeMap;
 
+import org.wildfly.common.Assert;
+
 import io.quarkus.deployment.AccessorFinder;
 import io.quarkus.gizmo.AssignableResultHandle;
 import io.quarkus.gizmo.BytecodeCreator;
@@ -93,12 +95,14 @@ public class MapConfigType extends CompoundConfigType {
     }
 
     void acceptConfigurationValueIntoLeaf(final LeafConfigType leafType, final NameIterator name, final SmallRyeConfig config) {
-        leafType.acceptConfigurationValueIntoMap(getOrCreate(name, config), name, config);
+        // leaf types directly into map values
+        throw Assert.unsupported();
     }
 
     void generateAcceptConfigurationValueIntoLeaf(final BytecodeCreator body, final LeafConfigType leafType,
             final ResultHandle name, final ResultHandle config) {
-        leafType.generateAcceptConfigurationValueIntoMap(body, generateGetOrCreate(body, name, config), name, config);
+        // leaf types directly into map values
+        throw Assert.unsupported();
     }
 
     public ResultHandle writeInitialization(final BytecodeCreator body, final AccessorFinder accessorFinder,
