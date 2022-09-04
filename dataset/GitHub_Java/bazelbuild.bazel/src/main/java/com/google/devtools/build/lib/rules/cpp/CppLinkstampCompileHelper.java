@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -64,7 +63,6 @@ public class CppLinkstampCompileHelper {
                     additionalLinkstampDefines,
                     buildInfoHeaderArtifacts,
                     featureConfiguration,
-                    ruleContext.getConfiguration().getOptions(),
                     cppConfiguration,
                     ccToolchainProvider,
                     needsPic,
@@ -136,7 +134,6 @@ public class CppLinkstampCompileHelper {
       Iterable<String> additionalLinkstampDefines,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       FeatureConfiguration featureConfiguration,
-      BuildOptions buildOptions,
       CppConfiguration cppConfiguration,
       CcToolchainProvider ccToolchainProvider,
       boolean needsPic,
@@ -150,8 +147,6 @@ public class CppLinkstampCompileHelper {
         ruleErrorConsumer,
         featureConfiguration,
         ccToolchainProvider,
-        buildOptions,
-        cppConfiguration,
         sourceFile.getExecPathString(),
         outputFile.getExecPathString(),
         /* gcnoFile= */ null,

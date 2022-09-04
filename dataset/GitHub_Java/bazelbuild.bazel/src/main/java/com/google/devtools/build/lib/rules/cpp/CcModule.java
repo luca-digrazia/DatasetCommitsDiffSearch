@@ -133,30 +133,14 @@ public class CcModule
 
   @Override
   public FeatureConfiguration configureFeatures(
-      Object ruleContextOrNone,
       CcToolchainProvider toolchain,
       SkylarkList<String> requestedFeatures,
       SkylarkList<String> unsupportedFeatures)
       throws EvalException {
-    SkylarkRuleContext ruleContext = nullIfNone(ruleContextOrNone, SkylarkRuleContext.class);
-    if (ruleContext == null
-        && toolchain
-            .getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas()
-            .requireCtxInConfigureFeatures()) {
-      throw new EvalException(
-          Location.BUILTIN,
-          "Incompatible flag --incompatible_require_ctx_in_configure_features has been flipped, "
-              + "and the mandatory parameter 'ctx' of cc_common.configure_features is missing. "
-              + "Please add 'ctx' as a named parameter. See "
-              + "https://github.com/bazelbuild/bazel/issues/7793 for details.");
-    }
     return CcCommon.configureFeaturesOrThrowEvalException(
         ImmutableSet.copyOf(requestedFeatures),
         ImmutableSet.copyOf(unsupportedFeatures),
-        toolchain,
-        ruleContext == null
-            ? toolchain.getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas()
-            : ruleContext.getRuleContext().getFragment(CppConfiguration.class));
+        toolchain);
   }
 
   @Override
@@ -920,8 +904,7 @@ public class CcModule
               featureNames,
               linkerToolPath,
               /* supportsEmbeddedRuntimes= */ false,
-              /* supportsInterfaceSharedLibraries= */ false,
-              skylarkRuleContext.getSkylarkSemantics().incompatibleDoNotSplitLinkingCmdline())) {
+              /* supportsInterfaceSharedLibraries= */ false)) {
         legacyFeaturesBuilder.add(new Feature(feature));
       }
       legacyFeaturesBuilder.addAll(
@@ -930,9 +913,7 @@ public class CcModule
               .filter(feature -> !feature.getName().equals(CppRuleClasses.DEFAULT_COMPILE_FLAGS))
               .collect(ImmutableList.toImmutableList()));
       for (CToolchain.Feature feature :
-          CppActionConfigs.getFeaturesToAppearLastInFeaturesList(
-              featureNames,
-              skylarkRuleContext.getSkylarkSemantics().incompatibleDoNotSplitLinkingCmdline())) {
+          CppActionConfigs.getFeaturesToAppearLastInFeaturesList(featureNames)) {
         legacyFeaturesBuilder.add(new Feature(feature));
       }
 

@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -69,7 +68,24 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testPresenceOfLegacyCompileFlags() throws Exception {
+    AnalysisMock.get().ccSupport().setupCrosstool(mockToolsConfig, "cxx_flag: '-foo'");
+    useConfiguration();
+
+    scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
+    scratch.file("x/bin.cc");
+
+    CcToolchainVariables variables = getCompileBuildVariables("//x:bin", "bin");
+
+    ImmutableList<String> copts =
+        CcToolchainVariables.toStringList(
+            variables, CompileBuildVariables.LEGACY_COMPILE_FLAGS.getVariableName());
+    assertThat(copts).contains("-foo");
+  }
+
+  @Test
   public void testPresenceOfConfigurationCompileFlags() throws Exception {
+    AnalysisMock.get().ccSupport().setupCrosstool(mockToolsConfig);
     useConfiguration("--copt=-foo");
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'], copts = ['-bar'],)");
@@ -81,10 +97,16 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
         CcToolchainVariables.toStringList(
             variables, CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName());
     assertThat(userCopts).containsAllIn(ImmutableList.<String>of("-foo", "-bar")).inOrder();
+
+    ImmutableList<String> legacyCopts =
+        CcToolchainVariables.toStringList(
+            variables, CompileBuildVariables.LEGACY_COMPILE_FLAGS.getVariableName());
+    assertThat(legacyCopts).doesNotContain("-foo");
   }
 
   @Test
   public void testPresenceOfUserCompileFlags() throws Exception {
+    AnalysisMock.get().ccSupport().setupCrosstool(mockToolsConfig);
     useConfiguration();
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'], copts = ['-foo'])");
@@ -96,6 +118,24 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
         CcToolchainVariables.toStringList(
             variables, CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName());
     assertThat(copts).contains("-foo");
+  }
+
+  @Test
+  public void testPresenceOfUnfilteredCompileFlags() throws Exception {
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCrosstool(mockToolsConfig, "unfiltered_cxx_flag: '--i_ll_live_forever'");
+    useConfiguration();
+
+    scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
+    scratch.file("x/bin.cc");
+
+    CcToolchainVariables variables = getCompileBuildVariables("//x:bin", "bin");
+
+    ImmutableList<String> unfilteredCompileFlags =
+        CcToolchainVariables.toStringList(
+            variables, CompileBuildVariables.UNFILTERED_COMPILE_FLAGS.getVariableName());
+    assertThat(unfilteredCompileFlags).contains("--i_ll_live_forever");
   }
 
   @Test
@@ -116,8 +156,7 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
   public void testPresenceOfSysrootBuildVariable() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig, CcToolchainConfig.builder().withSysroot("/usr/local/custom-sysroot"));
+        .setupCrosstool(mockToolsConfig, "builtin_sysroot: '/usr/local/custom-sysroot'");
     useConfiguration();
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
@@ -133,9 +172,7 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
   public void testPresenceOfPerObjectDebugFileBuildVariable() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.PER_OBJECT_DEBUG_INFO));
+        .setupCrosstool(mockToolsConfig, MockCcSupport.PER_OBJECT_DEBUG_INFO_CONFIGURATION);
     useConfiguration("--fission=yes");
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
@@ -153,9 +190,7 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
   public void testPresenceOfIsUsingFissionVariable() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.PER_OBJECT_DEBUG_INFO));
+        .setupCrosstool(mockToolsConfig, MockCcSupport.PER_OBJECT_DEBUG_INFO_CONFIGURATION);
     useConfiguration("--fission=yes");
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
@@ -173,15 +208,27 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
       throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
+        .setupCrosstool(
             mockToolsConfig,
-            CcToolchainConfig.builder()
-                .withFeatures(
-                    "fission_flags_for_lto_backend",
-                    CppRuleClasses.PER_OBJECT_DEBUG_INFO,
-                    CppRuleClasses.SUPPORTS_START_END_LIB,
-                    CppRuleClasses.THIN_LTO,
-                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES));
+            "feature {",
+            "  name: 'fission_flags_for_lto_backend'",
+            "  enabled: true",
+            "  flag_set {",
+            "    action: 'lto-backend'",
+            "    flag_group {",
+            "      expand_if_all_available: 'is_using_fission'",
+            "      flag: '-<IS_USING_FISSION>'",
+            "    }",
+            "    flag_group {",
+            "      expand_if_all_available: 'per_object_debug_info_file'",
+            "      flag: '-<PER_OBJECT_DEBUG_INFO_FILE>'",
+            "    }",
+            "  }",
+            "}",
+            MockCcSupport.PER_OBJECT_DEBUG_INFO_CONFIGURATION,
+            "supports_start_end_lib: true",
+            MockCcSupport.THIN_LTO_CONFIGURATION,
+            MockCcSupport.HOST_AND_NONHOST_CONFIGURATION);
     useConfiguration("--fission=yes", "--features=thin_lto");
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
@@ -222,11 +269,7 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
 
   @Test
   public void testPresenceOfPerObjectDebugFileBuildVariableUsingLegacyFields() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder().withFeatures(CppRuleClasses.PER_OBJECT_DEBUG_INFO));
+    AnalysisMock.get().ccSupport().setupCrosstool(mockToolsConfig, "supports_fission: true");
     useConfiguration("--fission=yes");
 
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
@@ -244,8 +287,18 @@ public class CompileBuildVariablesTest extends BuildViewTestCase {
   public void testPresenceOfMinOsVersionBuildVariable() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig, CcToolchainConfig.builder().withFeatures("min_os_version_flag"));
+        .setupCrosstool(
+            mockToolsConfig,
+            "feature {"
+                + "  name: 'min_os_version_flag'"
+                + "  flag_set {"
+                + "    action: 'c++-compile'"
+                + "    flag_group {"
+                + "      expand_if_all_available: 'minimum_os_version'"
+                + "      flag: '-DMIN_OS=%{minimum_os_version}'"
+                + "    }"
+                + "  }"
+                + "}");
     useConfiguration("--minimum_os_version=6");
     scratch.file("x/BUILD", "cc_binary(name = 'bin', srcs = ['bin.cc'])");
     scratch.file("x/bin.cc");
