@@ -1,6 +1,5 @@
 package io.quarkus.annotation.processor.generate_doc;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.regex.Matcher;
 
@@ -8,7 +7,6 @@ import io.quarkus.annotation.processor.Constants;
 
 final public class ConfigItem implements Comparable<ConfigItem> {
     private String type;
-    private List<String> acceptedValues;
     private String key;
     private String configDoc;
     private boolean withinAMap;
@@ -23,7 +21,6 @@ final public class ConfigItem implements Comparable<ConfigItem> {
     public String toString() {
         return "ConfigItem{" +
                 "type='" + type + '\'' +
-                ", acceptedValues=" + acceptedValues +
                 ", key='" + key + '\'' +
                 ", configDoc='" + configDoc + '\'' +
                 ", withinAMap=" + withinAMap +
@@ -35,16 +32,13 @@ final public class ConfigItem implements Comparable<ConfigItem> {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
+        if (this == o)
             return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
+        if (o == null || getClass() != o.getClass())
             return false;
-        }
         ConfigItem that = (ConfigItem) o;
         return withinAMap == that.withinAMap &&
                 Objects.equals(type, that.type) &&
-                Objects.equals(acceptedValues, that.acceptedValues) &&
                 Objects.equals(key, that.key) &&
                 Objects.equals(configDoc, that.configDoc) &&
                 Objects.equals(defaultValue, that.defaultValue) &&
@@ -54,11 +48,8 @@ final public class ConfigItem implements Comparable<ConfigItem> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, acceptedValues, key, configDoc, withinAMap, defaultValue, configPhase, javaDocSiteLink);
-    }
 
-    public boolean hasType() {
-        return type != null && !type.isEmpty();
+        return Objects.hash(type, key, configDoc, withinAMap, defaultValue, configPhase, javaDocSiteLink);
     }
 
     public String getType() {
@@ -67,18 +58,6 @@ final public class ConfigItem implements Comparable<ConfigItem> {
 
     public void setType(String type) {
         this.type = type;
-    }
-
-    public boolean hasAcceptedValues() {
-        return acceptedValues != null && !acceptedValues.isEmpty();
-    }
-
-    public List<String> getAcceptedValues() {
-        return acceptedValues;
-    }
-
-    public void setAcceptedValues(List<String> acceptedValues) {
-        this.acceptedValues = acceptedValues;
     }
 
     public String getKey() {
