@@ -853,7 +853,6 @@ public abstract class AndroidSkylarkData {
       ResourceApk resourceApk =
           AndroidLocalTestBase.buildResourceApk(
               ctx,
-              getAndroidSemantics(),
               rawManifest,
               AndroidResources.from(errorReporter, getFileProviders(resources), "resource_files"),
               AndroidAssets.from(
@@ -1158,7 +1157,6 @@ public abstract class AndroidSkylarkData {
       StampedAndroidManifest stampedManifest =
           rawManifest.mergeWithDeps(
               ctx,
-              getAndroidSemantics(),
               resourceDeps,
               manifestValues,
               ApplicationManifest.useLegacyMerging(

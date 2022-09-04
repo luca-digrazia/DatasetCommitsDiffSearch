@@ -74,8 +74,7 @@ public interface AndroidSemantics {
       throws InterruptedException;
 
   /** Given an Android {@code manifest}, returns a list of relevant Proguard specs. */
-  ImmutableList<Artifact> getProguardSpecsForManifest(
-      AndroidDataContext dataContext, Artifact manifest);
+  ImmutableList<Artifact> getProguardSpecsForManifest(RuleContext ruleContext, Artifact manifest);
 
   /**
    * Add coverage instrumentation to the Java compilation of an Android binary.
