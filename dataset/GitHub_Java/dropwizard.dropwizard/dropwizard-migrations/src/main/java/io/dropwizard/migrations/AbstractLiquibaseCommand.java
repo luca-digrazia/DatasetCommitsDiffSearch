@@ -3,15 +3,12 @@ package io.dropwizard.migrations;
 import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.Configuration;
 import io.dropwizard.cli.ConfiguredCommand;
+import io.dropwizard.db.PooledDataSourceFactory;
 import io.dropwizard.db.DatabaseConfiguration;
 import io.dropwizard.db.ManagedDataSource;
-import io.dropwizard.db.PooledDataSourceFactory;
 import io.dropwizard.setup.Bootstrap;
 import liquibase.Liquibase;
 import liquibase.database.Database;
-import liquibase.database.DatabaseConnection;
-import liquibase.database.DatabaseFactory;
-import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.LiquibaseException;
 import liquibase.exception.ValidationFailedException;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -22,17 +19,14 @@ import java.sql.SQLException;
 public abstract class AbstractLiquibaseCommand<T extends Configuration> extends ConfiguredCommand<T> {
     private final DatabaseConfiguration<T> strategy;
     private final Class<T> configurationClass;
-    private final String migrationsFileName;
 
     protected AbstractLiquibaseCommand(String name,
                                        String description,
                                        DatabaseConfiguration<T> strategy,
-                                       Class<T> configurationClass,
-                                       String migrationsFileName) {
+                                       Class<T> configurationClass) {
         super(name, description);
         this.strategy = strategy;
         this.configurationClass = configurationClass;
-        this.migrationsFileName = migrationsFileName;
     }
 
     @Override
@@ -75,21 +69,15 @@ public abstract class AbstractLiquibaseCommand<T extends Configuration> extends 
             throws SQLException, LiquibaseException {
         final CloseableLiquibase liquibase;
         final ManagedDataSource dataSource = dataSourceFactory.build(new MetricRegistry(), "liquibase");
-        final Database database = createDatabase(dataSource, namespace);
+
         final String migrationsFile = namespace.getString("migrations-file");
         if (migrationsFile == null) {
-            liquibase = new CloseableLiquibaseWithClassPathMigrationsFile(dataSource, database, migrationsFileName);
+            liquibase = new CloseableLiquibase(dataSource);
         } else {
-            liquibase = new CloseableLiquibaseWithFileSystemMigrationsFile(dataSource, database, migrationsFile);
+            liquibase = new CloseableLiquibase(dataSource, migrationsFile);
         }
 
-        return liquibase;
-    }
-
-    private Database createDatabase(ManagedDataSource dataSource, Namespace namespace) throws SQLException, LiquibaseException {
-        final DatabaseConnection conn = new JdbcConnection(dataSource.getConnection());
-        final Database database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(conn);
-
+        final Database database = liquibase.getDatabase();
         final String catalogName = namespace.getString("catalog");
         final String schemaName = namespace.getString("schema");
 
@@ -102,7 +90,7 @@ public abstract class AbstractLiquibaseCommand<T extends Configuration> extends 
             database.setOutputDefaultSchema(true);
         }
 
-        return database;
+        return liquibase;
     }
 
     protected abstract void run(Namespace namespace, Liquibase liquibase) throws Exception;

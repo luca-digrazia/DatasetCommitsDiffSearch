@@ -1,5 +1,7 @@
 package io.dropwizard.db;
 
-public interface DatabaseConfiguration<T> {
+import io.dropwizard.Configuration;
+
+public interface DatabaseConfiguration<T extends Configuration> {
     PooledDataSourceFactory getDataSourceFactory(T configuration);
 }
