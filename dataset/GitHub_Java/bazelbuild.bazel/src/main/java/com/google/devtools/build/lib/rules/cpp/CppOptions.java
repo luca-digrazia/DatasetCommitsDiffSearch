@@ -723,30 +723,22 @@ public class CppOptions extends FragmentOptions {
   public boolean disableLegacyCrosstoolFields;
 
   @Option(
-      name = "incompatible_linkopts_in_user_link_flags",
-      oldName = "experimental_linkopts_in_user_link_flags",
+      name = "experimental_linkopts_in_user_link_flags",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
           "If true, flags coming from --linkopt Bazel option will appear in user_link_flags "
-              + "crosstool variable, not in legacy_link_flags.")
+              + "crosstool variable.")
   public boolean enableLinkoptsInUserLinkFlags;
 
   @Option(
-      name = "incompatible_dont_emit_static_libgcc",
-      oldName = "experimental_dont_emit_static_libgcc",
+      name = "experimental_dont_emit_static_libgcc",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
           "If true, bazel will not add --static-libgcc to the linking command line, it will be "
               + "the responsibility of the C++ toolchain to append this flag.")

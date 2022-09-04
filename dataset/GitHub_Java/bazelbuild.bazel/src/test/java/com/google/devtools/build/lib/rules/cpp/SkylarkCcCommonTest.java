@@ -3053,11 +3053,17 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   @Test
   public void testFlagSet() throws Exception {
     loadCcToolchainConfigLib();
+    createFlagSetRule("one", /* actions= */ "[]", /* flagGroups= */ "[]", /* withFeatures= */ "[]");
+
+    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//one:a"));
+    assertThat(e)
+        .hasMessageThat()
+        .contains("actions parameter of flag_set must be a nonempty list");
 
     createFlagSetRule(
         "two", /* actions= */ "['a']", /* flagGroups= */ "[]", /* withFeatures= */ "None");
 
-    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//two:a"));
+    e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//two:a"));
     assertThat(e)
         .hasMessageThat()
         .contains("with_features parameter of flag_set should be a list, found NoneType");
@@ -3158,11 +3164,17 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     createCustomFlagSetRule(
         "one", /* actions= */ "[]", /* flagGroups= */ "[]", /* withFeatures= */ "[]");
 
-    ConfiguredTarget target = getConfiguredTarget("//one:a");
-    SkylarkInfo flagSet = (SkylarkInfo) target.getValue("flagset");
-    assertThat(flagSet).isNotNull();
-    FlagSet flagSetObject = CcModule.flagSetFromSkylark(flagSet);
-    assertThat(flagSetObject).isNotNull();
+    try {
+      ConfiguredTarget t = getConfiguredTarget("//one:a");
+      SkylarkInfo flagSetStruct = (SkylarkInfo) t.getValue("flagset");
+      assertThat(flagSetStruct).isNotNull();
+      CcModule.flagSetFromSkylark(flagSetStruct);
+      fail("Should have failed because 'actions' field is empty.");
+    } catch (EvalException ee) {
+      assertThat(ee)
+          .hasMessageThat()
+          .contains("'actions' field of flag_set must be a nonempty list");
+    }
 
     createCustomFlagSetRule(
         "two", /* actions= */ "['a']", /* flagGroups= */ "struct()", /* withFeatures= */ "[]");
@@ -3350,7 +3362,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
     createActionConfigRule(
         "eight",
-        /* actionName= */ "'actionname32_++-'",
+        /* actionName= */ "'actionname_++-'",
         /* enabled= */ "True",
         /* tools= */ "[tool(path = 'a/b/c')]",
         /* flagSets= */ "[flag_set(actions = ['a', 'b'])]",
@@ -3361,7 +3373,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     assertThat(actionConfigStruct).isNotNull();
     ActionConfig a = CcModule.actionConfigFromSkylark(actionConfigStruct);
     assertThat(a).isNotNull();
-    assertThat(a.getActionName()).isEqualTo("actionname32_++-");
+    assertThat(a.getActionName()).isEqualTo("actionname_++-");
     assertThat(a.getImplies()).containsExactly("a", "b").inOrder();
 
     createActionConfigRule(
@@ -3383,7 +3395,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
           .hasMessageThat()
           .contains(
               "An action_config's name must consist solely "
-                  + "of lowercase ASCII letters, digits, '_', '+', and '-', got 'Upper'");
+                  + "of lowercase ASCII letters, '_', '+', and '-', got 'Upper'");
     }
 
     createActionConfigRule(
@@ -3405,7 +3417,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
           .hasMessageThat()
           .contains(
               "An action_config's name must consist solely "
-                  + "of lowercase ASCII letters, digits, '_', '+', and '-', got 'white\tspace'");
+                  + "of lowercase ASCII letters, '_', '+', and '-', got 'white\tspace'");
     }
   }
 
@@ -3701,7 +3713,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
     createFeatureRule(
         "eight",
-        /* name= */ "'featurename32+-_'",
+        /* name= */ "'featurename+-_'",
         /* enabled= */ "True",
         /* flagSets= */ "[flag_set(actions = ['a'], flag_groups = [flag_group(flags = ['a'])])]",
         /* envSets= */ "[env_set(actions = ['a1'], "
@@ -3736,7 +3748,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
       assertThat(ee)
           .hasMessageThat()
           .contains(
-              "A feature's name must consist solely of lowercase ASCII letters, digits, "
+              "A feature's name must consist solely of lowercase ASCII letters, "
                   + "'_', '+', and '-', got 'UpperCase'");
     }
 
@@ -3761,7 +3773,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
           .hasMessageThat()
           .contains(
               "A feature's name must consist solely of "
-                  + "lowercase ASCII letters, digits, '_', '+', and '-', got 'white space");
+                  + "lowercase ASCII letters, '_', '+', and '-', got 'white space");
     }
   }
 
@@ -3944,28 +3956,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
       assertThat(ee)
           .hasMessageThat()
           .contains("Illegal argument: 'provides' is not of expected type list or NoneType");
-    }
-
-    createCustomFeatureRule(
-        "eight",
-        /* name= */ "'featurename'",
-        /* enabled= */ "True",
-        /* flagSets= */ "[flag_set()]",
-        /* envSets= */ "[]",
-        /* requires= */ "[]",
-        /* implies= */ "[]",
-        /* provides= */ "[]");
-
-    try {
-      ConfiguredTarget t = getConfiguredTarget("//eight:a");
-      SkylarkInfo featureStruct = (SkylarkInfo) t.getValue("f");
-      assertThat(featureStruct).isNotNull();
-      CcModule.featureFromSkylark(featureStruct);
-      fail("Should have failed because of empty 'actions' parameter in flag_set.");
-    } catch (EvalException ee) {
-      assertThat(ee)
-          .hasMessageThat()
-          .contains("A flag_set that belongs to a feature must have nonempty 'actions' parameter.");
     }
   }
 
