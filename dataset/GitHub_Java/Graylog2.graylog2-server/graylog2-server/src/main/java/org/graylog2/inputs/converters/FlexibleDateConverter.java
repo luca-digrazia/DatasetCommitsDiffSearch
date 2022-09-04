@@ -25,9 +25,6 @@ import org.joda.time.DateTimeZone;
 import java.util.List;
 import java.util.Map;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
-import static com.google.common.base.Strings.emptyToNull;
-
 public class FlexibleDateConverter extends Converter {
     private final DateTimeZone timeZone;
 
@@ -40,9 +37,7 @@ public class FlexibleDateConverter extends Converter {
     private static DateTimeZone buildTimeZone(Object timeZoneId) {
         if (timeZoneId instanceof String) {
             try {
-                final String timeZoneString = (String) timeZoneId;
-                final String zoneId = firstNonNull(emptyToNull(timeZoneString.trim()), "UTC");
-                return DateTimeZone.forID(zoneId);
+                return DateTimeZone.forID((String) timeZoneId);
             } catch (IllegalArgumentException e) {
                 return DateTimeZone.UTC;
             }
