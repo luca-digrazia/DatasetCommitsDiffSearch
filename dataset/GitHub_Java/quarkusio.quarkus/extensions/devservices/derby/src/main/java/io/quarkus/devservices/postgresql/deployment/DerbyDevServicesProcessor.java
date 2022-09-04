@@ -3,10 +3,8 @@ package io.quarkus.devservices.postgresql.deployment;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.net.InetAddress;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import org.apache.derby.drda.NetworkServerControl;
 
@@ -25,11 +23,9 @@ public class DerbyDevServicesProcessor {
         return new DevServicesDatasourceProviderBuildItem(DatabaseKind.DERBY, new DevServicesDatasourceProvider() {
             @Override
             public RunningDevServicesDatasource startDatabase(Optional<String> username, Optional<String> password,
-                    Optional<String> datasourceName, Optional<String> imageName, Map<String, String> additionalProperties,
-                    OptionalInt fixedExposedPort) {
+                    Optional<String> datasourceName, Optional<String> imageName, Map<String, String> additionalProperties) {
                 try {
-                    int port = fixedExposedPort.isPresent() ? fixedExposedPort.getAsInt() : 1527;
-                    NetworkServerControl server = new NetworkServerControl(InetAddress.getByName("localhost"), port);
+                    NetworkServerControl server = new NetworkServerControl();
                     server.start(new PrintWriter(System.out));
                     for (int i = 1; i <= NUMBER_OF_PINGS; i++) {
                         try {
@@ -56,7 +52,7 @@ public class DerbyDevServicesProcessor {
                         additionalArgs.append(i.getValue());
                     }
                     return new RunningDevServicesDatasource(
-                            "jdbc:derby://localhost:" + port + "/memory:" + datasourceName.orElse("quarkus") + ";create=true"
+                            "jdbc:derby://localhost:1527/memory:" + datasourceName.orElse("quarkus") + ";create=true"
                                     + additionalArgs.toString(),
                             null,
                             null,
@@ -64,8 +60,7 @@ public class DerbyDevServicesProcessor {
                                 @Override
                                 public void close() throws IOException {
                                     try {
-                                        NetworkServerControl server = new NetworkServerControl(
-                                                InetAddress.getByName("localhost"), port);
+                                        NetworkServerControl server = new NetworkServerControl();
                                         server.shutdown();
                                         System.out.println("[INFO] Derby database was shut down");
                                     } catch (Exception e) {
