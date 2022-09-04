@@ -1,9 +1,11 @@
 package com.codahale.dropwizard.cli;
 
 import com.codahale.dropwizard.Configuration;
+import com.codahale.dropwizard.config.LoggingConfiguration;
 import com.codahale.dropwizard.configuration.ConfigurationException;
 import com.codahale.dropwizard.configuration.ConfigurationFactory;
 import com.codahale.dropwizard.configuration.ConfigurationSourceProvider;
+import com.codahale.dropwizard.logging.LoggingFactory;
 import com.codahale.dropwizard.setup.Bootstrap;
 import com.codahale.dropwizard.util.Generics;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,7 +21,7 @@ import java.io.IOException;
  * into an instance of a {@link Configuration} subclass, which is then validated. If the
  * configuration is valid, the command is run.
  *
- * @param <T> the {@link Configuration} subclass which is loaded from the configuration file
+ * @param <T> the {@link com.codahale.dropwizard.Configuration} subclass which is loaded from the configuration file
  * @see Configuration
  */
 public abstract class ConfiguredCommand<T extends Configuration> extends Command {
@@ -45,7 +47,7 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
      */
     @Override
     public void configure(Subparser subparser) {
-        subparser.addArgument("file").nargs("?").help("application configuration file");
+        subparser.addArgument("file").nargs("?").help("service configuration file");
     }
 
     @Override
@@ -56,14 +58,18 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
                                                    getConfigurationClass(),
                                                    bootstrap.getObjectMapper());
         if (configuration != null) {
-            configuration.getLoggingFactory().configure(bootstrap.getMetricRegistry(),
-                                                        bootstrap.getApplication().getName());
+            final LoggingConfiguration logging = configuration.getLoggingConfiguration();
+            final LoggingFactory factory = new LoggingFactory(bootstrap.getService().getName(),
+                                                              logging.getOutputs(),
+                                                              logging.getLoggers(),
+                                                              logging.getLevel());
+            factory.configure(bootstrap.getMetricRegistry());
         }
         run((Bootstrap<T>) bootstrap, namespace, configuration);
     }
 
     /**
-     * Runs the command with the given {@link Bootstrap} and {@link Configuration}.
+     * Runs the command with the given {@link Bootstrap} and {@link com.codahale.dropwizard.Configuration}.
      *
      * @param bootstrap     the bootstrap bootstrap
      * @param namespace     the parsed command line namespace

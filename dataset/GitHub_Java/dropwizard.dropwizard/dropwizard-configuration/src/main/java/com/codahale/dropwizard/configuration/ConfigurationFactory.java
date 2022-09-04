@@ -18,8 +18,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 /**
  * A factory class for loading YAML configuration files, binding them to configuration objects, and
  * and validating their constraints. Allows for overriding configuration parameters from system
@@ -32,7 +30,6 @@ public class ConfigurationFactory<T> {
     private final String propertyPrefix;
     private final ObjectMapper mapper;
     private final Validator validator;
-    private final YAMLFactory yamlFactory;
 
     /**
      * Creates a new configuration factory for the given class.
@@ -51,7 +48,6 @@ public class ConfigurationFactory<T> {
         this.mapper = objectMapper.copy();
         mapper.enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
         this.validator = validator;
-        this.yamlFactory = new YAMLFactory();
     }
 
     /**
@@ -64,9 +60,9 @@ public class ConfigurationFactory<T> {
      * @throws ConfigurationException if there is an error validating the file
      */
     public T build(ConfigurationSourceProvider provider, String path) throws IOException, ConfigurationException {
-        try (InputStream input = provider.open(checkNotNull(path))) {
-            final JsonNode node = mapper.readTree(yamlFactory.createParser(input));
-            return build(node, path);
+        try (InputStream input = provider.open(path)) {
+            final JsonNode node = mapper.readTree(new YAMLFactory().createJsonParser(input));
+            return build(node, path != null ? path : "InputStream configuration");
         }
     }
 
@@ -90,10 +86,10 @@ public class ConfigurationFactory<T> {
      * @throws ConfigurationException if there is an error validating the file
      */
     public T build() throws IOException, ConfigurationException {
-        return build(JsonNodeFactory.instance.objectNode(), "default configuration");
+        return build(JsonNodeFactory.instance.objectNode(), "The default configuration");
     }
 
-    private T build(JsonNode node, String path) throws IOException, ConfigurationException {
+    private T build(JsonNode node, String filename) throws IOException, ConfigurationException {
         for (Map.Entry<Object, Object> pref : System.getProperties().entrySet()) {
             final String prefName = (String) pref.getKey();
             if (prefName.startsWith(propertyPrefix)) {
@@ -102,7 +98,7 @@ public class ConfigurationFactory<T> {
             }
         }
         final T config = mapper.readValue(new TreeTraversingParser(node), klass);
-        validate(path, config);
+        validate(filename, config);
         return config;
     }
 
@@ -129,10 +125,10 @@ public class ConfigurationFactory<T> {
         }
     }
 
-    private void validate(String path, T config) throws ConfigurationException {
+    private void validate(String file, T config) throws ConfigurationException {
         final Set<ConstraintViolation<T>> violations = validator.validate(config);
         if (!violations.isEmpty()) {
-            throw new ConfigurationException(path, violations);
+            throw new ConfigurationException(file, violations);
         }
     }
 }

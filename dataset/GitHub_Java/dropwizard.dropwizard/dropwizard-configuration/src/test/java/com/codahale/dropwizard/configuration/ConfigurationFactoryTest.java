@@ -68,9 +68,8 @@ public class ConfigurationFactoryTest {
         } catch (ConfigurationException e) {
             if ("en".equals(Locale.getDefault().getLanguage())) {
                 assertThat(e.getMessage())
-                        .endsWith(String.format(
-                                "factory-test-invalid.yml has the following errors:%n" +
-                                        "  * name must match \"[\\w]+[\\s]+[\\w]+\" (was Boop)%n"));
+                        .endsWith("factory-test-invalid.yml has the following errors:\n" +
+                                          "  * name must match \"[\\w]+[\\s]+[\\w]+\" (was Boop)\n");
             }
         }
     }
