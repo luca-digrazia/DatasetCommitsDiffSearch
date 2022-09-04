@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,13 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.validation.metric;
 
 /**
  * Matthews correlation coefficient. The MCC is in essence a correlation
- * coefficient between the observed and predicted binary classifications.
+ * coefficient between the observed and predicted binary classifications
  * It is considered as a balanced measure for binary classification,
  * even in unbalanced data sets. It  varies between -1 (perfect
  * disagreement) and +1 (perfect agreement). When it is 0,
