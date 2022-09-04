@@ -57,7 +57,9 @@ public class SeekBarProgressChangeHandler extends BaseAnnotationHandler<ECompone
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.ID, IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, valid);
@@ -69,6 +71,8 @@ public class SeekBarProgressChangeHandler extends BaseAnnotationHandler<ECompone
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, valid);
 
 		validatorHelper.hasSeekBarProgressChangeMethodParameters((ExecutableElement) element, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

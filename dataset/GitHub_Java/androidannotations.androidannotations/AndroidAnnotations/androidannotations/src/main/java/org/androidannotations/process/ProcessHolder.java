@@ -22,7 +22,6 @@ import java.sql.SQLException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,20 +45,15 @@ public class ProcessHolder {
 		 */
 		public final JClass RUNTIME_EXCEPTION = refClass(RuntimeException.class);
 		public final JClass EXCEPTION = refClass(Exception.class);
-		public final JClass THROWABLE = refClass(Throwable.class);
 		public final JClass CHAR_SEQUENCE = refClass(CharSequence.class);
 		public final JClass CLASS_CAST_EXCEPTION = refClass(ClassCastException.class);
 		public final JClass SERIALIZABLE = refClass(Serializable.class);
 		public final JClass STRING = refClass(String.class);
-		public final JClass STRING_BUILDER = refClass(StringBuilder.class);
 		public final JClass SYSTEM = refClass(System.class);
 		public final JClass INPUT_STREAM = refClass(InputStream.class);
 		public final JClass FILE_INPUT_STREAM = refClass(FileInputStream.class);
 		public final JClass SQL_EXCEPTION = refClass(SQLException.class);
 		public final JClass COLLECTIONS = refClass(Collections.class);
-		public final JClass THREAD = refClass(Thread.class);
-		public final JClass HASH_MAP = refClass(HashMap.class);
-		public final JClass LIST = refClass(List.class);
 
 		/*
 		 * Android
@@ -107,7 +101,6 @@ public class ProcessHolder {
 		public final JClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
 		public final JClass VIEW_SERVER = refClass(CanonicalNameConstants.VIEW_SERVER);
 		public final JClass PARCELABLE = refClass(CanonicalNameConstants.PARCELABLE);
-		public final JClass LOOPER = refClass(CanonicalNameConstants.LOOPER);
 
 		/*
 		 * Sherlock
@@ -147,7 +140,6 @@ public class ProcessHolder {
 		 */
 		public final JClass CONNECTION_SOURCE = refClass(CanonicalNameConstants.CONNECTION_SOURCE);
 		public final JClass OPEN_HELPER_MANAGER = refClass(CanonicalNameConstants.OPEN_HELPER_MANAGER);
-		public final JClass RUNTIME_EXCEPTION_DAO = refClass(CanonicalNameConstants.RUNTIME_EXCEPTION_DAO);
 		public final JClass DAO_MANAGER = refClass(CanonicalNameConstants.DAO_MANAGER);
 
 		/*
@@ -169,9 +161,7 @@ public class ProcessHolder {
 		public final JClass HTTP_HEADERS = refClass(CanonicalNameConstants.HTTP_HEADERS);
 		public final JClass MEDIA_TYPE = refClass(CanonicalNameConstants.MEDIA_TYPE);
 		public final JClass RESPONSE_ENTITY = refClass(CanonicalNameConstants.RESPONSE_ENTITY);
-		public final JClass HTTP_AUTHENTICATION = refClass(CanonicalNameConstants.HTTP_AUTHENTICATION);
-		public final JClass HTTP_BASIC_AUTHENTICATION = refClass(CanonicalNameConstants.HTTP_BASIC_AUTHENTICATION);
-		public final JClass REST_CLIENT_EXCEPTION = refClass(CanonicalNameConstants.REST_CLIENT_EXCEPTION);
+
 	}
 
 	private final Map<Element, GeneratedClassHolder> generatedClassHolders = new HashMap<Element, GeneratedClassHolder>();

@@ -37,13 +37,17 @@ public class EReceiverHandler extends BaseAnnotationHandler<EReceiverHolder> imp
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.extendsReceiver(element, valid);
 
 		validatorHelper.isNotFinal(element, valid);
 
 		final boolean NO_WARNING = false;
 		validatorHelper.componentRegistered(element, androidManifest, NO_WARNING, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

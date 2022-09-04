@@ -46,6 +46,10 @@ public class RoboGuiceHolder {
 		this.holder = holder;
 	}
 
+	public ProcessHolder.Classes classes() {
+		return holder.classes();
+	}
+
 	public JFieldVar getEventManagerField() {
 		if (eventManager == null) {
 			holder.setEventManagerField();

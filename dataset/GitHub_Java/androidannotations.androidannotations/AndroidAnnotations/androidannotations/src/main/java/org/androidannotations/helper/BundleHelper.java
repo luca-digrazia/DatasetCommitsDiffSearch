@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -77,10 +77,10 @@ public class BundleHelper {
 	private String methodNameToSave;
 	private String methodNameToRestore;
 
-	public BundleHelper(AnnotationHelper helper, TypeMirror element) {
+	public BundleHelper(AnnotationHelper helper, Element element) {
 		annotationHelper = helper;
 
-		String typeString = element.toString();
+		String typeString = element.asType().toString();
 		TypeElement elementType = annotationHelper.typeElementFromQualifiedName(typeString);
 
 		if (methodSuffixNameByTypeName.containsKey(typeString)) {
@@ -88,9 +88,9 @@ public class BundleHelper {
 			methodNameToSave = "put" + methodSuffixNameByTypeName.get(typeString);
 			methodNameToRestore = "get" + methodSuffixNameByTypeName.get(typeString);
 
-		} else if (element.getKind() == TypeKind.ARRAY) {
+		} else if (element.asType().getKind() == TypeKind.ARRAY) {
 
-			ArrayType arrayType = (ArrayType) element;
+			ArrayType arrayType = (ArrayType) element.asType();
 
 			boolean hasTypeArguments = false;
 			if (arrayType.getComponentType() instanceof DeclaredType) {
@@ -119,8 +119,9 @@ public class BundleHelper {
 		} else if (typeString.startsWith(CanonicalNameConstants.ARRAYLIST)) {
 
 			boolean hasTypeArguments = false;
-			if (element instanceof DeclaredType) {
-				DeclaredType declaredType = (DeclaredType) element;
+			TypeMirror elementAsType = element.asType();
+			if (elementAsType instanceof DeclaredType) {
+				DeclaredType declaredType = (DeclaredType) elementAsType;
 				List<? extends TypeMirror> typeArguments = declaredType.getTypeArguments();
 				if (typeArguments.size() == 1) {
 					TypeMirror typeArgument = typeArguments.get(0);
@@ -153,9 +154,10 @@ public class BundleHelper {
 
 		} else {
 
+			TypeMirror elementAsType = element.asType();
 			boolean hasTypeArguments = false;
-			if (element instanceof DeclaredType) {
-				DeclaredType declaredType = (DeclaredType) element;
+			if (elementAsType instanceof DeclaredType) {
+				DeclaredType declaredType = (DeclaredType) elementAsType;
 				typeString = declaredType.asElement().toString();
 				elementType = annotationHelper.typeElementFromQualifiedName(typeString);
 				hasTypeArguments = declaredType.getTypeArguments().size() > 0;

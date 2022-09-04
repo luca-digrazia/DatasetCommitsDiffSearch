@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +19,6 @@ import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.LongClick;
 
 import android.view.View;
-import android.widget.Button;
 
 @EActivity(R.layout.clickable_widgets)
 public class LongClicksHandledActivity extends EventsHandledAbstractActivity {
@@ -32,11 +31,6 @@ public class LongClicksHandledActivity extends EventsHandledAbstractActivity {
 	@LongClick
 	public void conventionButton() {
 		conventionButtonEventHandled = true;
-	}
-
-	@LongClick
-	public void buttonWithButtonArgument(Button button) {
-		viewArgument = button;
 	}
 
 	@LongClick

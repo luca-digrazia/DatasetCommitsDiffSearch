@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,9 +19,8 @@ import static org.fest.assertions.Assertions.assertThat;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
 
-@RunWith(RobolectricTestRunner.class)
+@RunWith(AndroidAnnotationsTestRunner.class)
 public class AwaitingResultActivityTest {
 
 	@Test
@@ -38,7 +37,6 @@ public class AwaitingResultActivityTest {
 				.isFalse();
 		assertThat(activity.onResultWithIntResultCodeCalled).isFalse();
 		assertThat(activity.onResultWithIntegerResultCodeCalled).isFalse();
-		assertThat(activity.onResultWithResultExtraCodeCalled).isFalse();
 	}
 
 	@Test
@@ -56,7 +54,6 @@ public class AwaitingResultActivityTest {
 				.isTrue();
 		assertThat(activity.onResultWithIntResultCodeCalled).isFalse();
 		assertThat(activity.onResultWithIntegerResultCodeCalled).isFalse();
-		assertThat(activity.onResultWithResultExtraCodeCalled).isFalse();
 	}
 
 	@Test
@@ -73,23 +70,6 @@ public class AwaitingResultActivityTest {
 				.isFalse();
 		assertThat(activity.onResultWithIntResultCodeCalled).isTrue();
 		assertThat(activity.onResultWithIntegerResultCodeCalled).isTrue();
-		assertThat(activity.onResultWithResultExtraCodeCalled).isFalse();
 	}
 
-	@Test
-	public void onlyForthRequestAnnotatedMethodAreCalled() {
-		AwaitingResultActivity_ activity = new AwaitingResultActivity_();
-
-		activity.onActivityResult(AwaitingResultActivity.FORTH_REQUEST, 0, null);
-
-		assertThat(activity.onResultCalled).isFalse();
-		assertThat(activity.onResultWithDataCalled).isFalse();
-		assertThat(activity.onActivityResultWithResultCodeAndDataCalled)
-				.isFalse();
-		assertThat(activity.onActivityResultWithDataAndResultCodeCalled)
-				.isFalse();
-		assertThat(activity.onResultWithIntResultCodeCalled).isFalse();
-		assertThat(activity.onResultWithIntegerResultCodeCalled).isFalse();
-		assertThat(activity.onResultWithResultExtraCodeCalled).isTrue();
-	}
 }

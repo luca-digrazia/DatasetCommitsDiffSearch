@@ -48,14 +48,20 @@ public class ItemLongClickHandler extends AbstractListenerHandler {
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
+		if (!super.validate(element, validatedElements)) {
+			valid.invalidate();
+		}
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
 		validatorHelper.param.zeroOrOneParameter(executableElement, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

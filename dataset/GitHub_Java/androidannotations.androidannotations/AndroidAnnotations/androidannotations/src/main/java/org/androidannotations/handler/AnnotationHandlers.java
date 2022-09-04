@@ -39,7 +39,6 @@ import org.androidannotations.holder.GeneratedClassHolder;
 import org.androidannotations.model.AndroidRes;
 import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
-import org.androidannotations.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
 
 public class AnnotationHandlers {
@@ -156,12 +155,6 @@ public class AnnotationHandlers {
 	public void setValidatedModel(AnnotationElements validatedModel) {
 		for (AnnotationHandler<?> annotationHandler : annotationHandlers) {
 			annotationHandler.setValidatedModel(validatedModel);
-		}
-	}
-
-	public void setProcessHolder(ProcessHolder processHolder) {
-		for (AnnotationHandler<?> annotationHandler : annotationHandlers) {
-			annotationHandler.setProcessHolder(processHolder);
 		}
 	}
 

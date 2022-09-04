@@ -42,14 +42,19 @@ public class FocusChangeHandler extends AbstractListenerHandler {
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
+		if (!super.validate(element, validatedElements)) {
+			valid.invalidate();
+		}
 
 		ExecutableElement executableElement = (ExecutableElement) element;
-
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
 		validatorHelper.param.hasZeroOrOneViewOrTwoViewBooleanParameters(executableElement, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

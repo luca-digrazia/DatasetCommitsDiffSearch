@@ -50,7 +50,9 @@ public class FromHtmlHandler extends BaseAnnotationHandler<EComponentWithViewSup
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
 
 		validatorHelper.hasViewByIdAnnotation(element, validatedElements, valid);
@@ -58,6 +60,8 @@ public class FromHtmlHandler extends BaseAnnotationHandler<EComponentWithViewSup
 		validatorHelper.extendsTextView(element, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.STRING, IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

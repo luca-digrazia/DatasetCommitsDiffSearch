@@ -48,7 +48,9 @@ public class EFragmentHandler extends BaseAnnotationHandler<EFragmentHolder> imp
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.LAYOUT, IdValidatorHelper.FallbackStrategy.ALLOW_NO_RES_ID, valid);
@@ -58,6 +60,8 @@ public class EFragmentHandler extends BaseAnnotationHandler<EFragmentHolder> imp
 		validatorHelper.hasEmptyConstructor(element, valid);
 
 		validatorHelper.extendsFragment(element, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

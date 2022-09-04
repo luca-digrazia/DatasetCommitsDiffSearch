@@ -35,12 +35,16 @@ public class HierarchyViewerSupportHandler extends BaseAnnotationHandler<EActivi
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.hasEActivity(element, validatedElements, valid);
 
 		validatorHelper.isDebuggable(element, androidManifest, valid);
 
 		validatorHelper.hasInternetPermission(element, androidManifest, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

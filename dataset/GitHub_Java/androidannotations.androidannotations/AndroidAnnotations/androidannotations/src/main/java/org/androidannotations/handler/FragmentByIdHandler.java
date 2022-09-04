@@ -54,7 +54,9 @@ public class FragmentByIdHandler extends BaseAnnotationHandler<EComponentWithVie
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
 
 		validatorHelper.extendsFragment(element, valid);
@@ -62,6 +64,8 @@ public class FragmentByIdHandler extends BaseAnnotationHandler<EComponentWithVie
 		validatorHelper.resIdsExist(element, IRClass.Res.ID, IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

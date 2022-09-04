@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,25 +22,25 @@ import static com.sun.codemodel.JMod.STATIC;
 import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 
+import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JAnnotationArrayMember;
-import com.sun.codemodel.JAnnotationUse;
+import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldVar;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
@@ -70,22 +70,26 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 		createConstructorAndBuilder();
 	}
 
-	private void addSuppressWarning() {
-		generatedClass.javadoc().append(SUPPRESS_WARNING_COMMENT);
+	@Override
+	protected void setGeneratedClass() throws Exception {
+		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
+		String generatedBeanQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
+		JClass annotatedComponent = codeModel().directClass(annotatedComponentQualifiedName);
 
-		Collection<JAnnotationUse> annotations = getGeneratedClass().annotations();
-		for (JAnnotationUse annotationUse : annotations) {
-			if (annotationUse.getAnnotationClass().fullName().equals(SuppressWarnings.class.getCanonicalName())) {
-				if (!Arrays.asList(getAnnotatedElement().getAnnotation(SuppressWarnings.class).value()).contains("unused")) {
-					JAnnotationArrayMember value = (JAnnotationArrayMember) annotationUse.getAnnotationMembers().get("value");
-					value.param("unused");
-				}
-
-				return;
-			}
+		int modifiers;
+		if (annotatedElement.getModifiers().contains(Modifier.ABSTRACT)) {
+			modifiers = JMod.PUBLIC | JMod.ABSTRACT;
+		} else {
+			modifiers = JMod.PUBLIC | JMod.FINAL;
 		}
 
+		generatedClass = codeModel()._class(modifiers, generatedBeanQualifiedName, ClassType.CLASS);
+		generatedClass._extends(annotatedComponent);
+	}
+
+	private void addSuppressWarning() {
 		generatedClass.annotate(SuppressWarnings.class).param("value", "unused");
+		generatedClass.javadoc().append(SUPPRESS_WARNING_COMMENT);
 	}
 
 	private void createConstructorAndBuilder() {
@@ -99,17 +103,14 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 		for (ExecutableElement userConstructor : constructors) {
 			JMethod copyConstructor = generatedClass.constructor(PUBLIC);
 			JMethod staticHelper = generatedClass.method(PUBLIC | STATIC, generatedClass._extends(), "build");
-
-			codeModelHelper.generifyStaticHelper(this, staticHelper, getAnnotatedElement());
-
 			JBlock body = copyConstructor.body();
 			JInvocation superCall = body.invoke("super");
 			JInvocation newInvocation = JExpr._new(generatedClass);
 			for (VariableElement param : userConstructor.getParameters()) {
 				String paramName = param.getSimpleName().toString();
-				JClass paramType = codeModelHelper.typeMirrorToJClass(param.asType(), this);
-				copyConstructor.param(paramType, paramName);
-				staticHelper.param(paramType, paramName);
+				String paramType = param.asType().toString();
+				copyConstructor.param(refClass(paramType), paramName);
+				staticHelper.param(refClass(paramType), paramName);
 				superCall.arg(JExpr.ref(paramName));
 				newInvocation.arg(JExpr.ref(paramName));
 			}

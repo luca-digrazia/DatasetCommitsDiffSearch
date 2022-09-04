@@ -89,7 +89,9 @@ public class SharedPrefHandler extends BaseAnnotationHandler<SharedPrefHolder> i
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		TypeElement typeElement = (TypeElement) element;
 
 		validatorHelper.isInterface(typeElement, valid);
@@ -104,6 +106,8 @@ public class SharedPrefHandler extends BaseAnnotationHandler<SharedPrefHolder> i
 				}
 			}
 		}
+
+		return valid.isValid();
 	}
 
 	@Override

@@ -21,13 +21,13 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.type.DeclaredType;
 
-public class TargetAnnotationHelper extends AnnotationHelper implements HasTarget {
+public class TargetAnnotationHelper extends AnnotationHelper {
 
-	private Class<? extends Annotation> target;
+	private String annotationName;
 
-	public TargetAnnotationHelper(ProcessingEnvironment processingEnv, Class<? extends Annotation> target) {
+	public TargetAnnotationHelper(ProcessingEnvironment processingEnv, String annotationName) {
 		super(processingEnv);
-		this.target = target;
+		this.annotationName = annotationName;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -37,28 +37,31 @@ public class TargetAnnotationHelper extends AnnotationHelper implements HasTarge
 
 	@SuppressWarnings("unchecked")
 	public <T> T extractAnnotationParameter(Element element, String methodName) {
-		return (T) extractAnnotationParameter(element, target, methodName);
+		return (T) extractAnnotationParameter(element, annotationName, methodName);
 	}
 
 	public DeclaredType extractAnnotationClassParameter(Element element) {
-		return extractAnnotationClassParameter(element, target);
+		return extractAnnotationClassParameter(element, annotationName);
 	}
 
-	@Override
-	public Class<? extends Annotation> getTarget() {
-		return target;
+	public String getTarget() {
+		return annotationName;
 	}
 
 	public String actionName() {
-		return actionName(target);
+		return actionName(annotationName);
 	}
 
-	public static String annotationName(Class<? extends Annotation> annotationClass) {
-		return "@" + annotationClass.getSimpleName();
+	public static String annotationName(String annotationName) {
+		return "@" + annotationName;
+	}
+
+	public static String annotationName(Class<? extends Annotation> annotation) {
+		return annotationName(annotation.getName());
 	}
 
 	public String annotationName() {
-		return annotationName(target);
+		return annotationName(annotationName);
 	}
 
 	/**
@@ -67,7 +70,7 @@ public class TargetAnnotationHelper extends AnnotationHelper implements HasTarge
 	 *            annotation name (ex: @Override)
 	 */
 	public void printAnnotationError(Element annotatedElement, String message) {
-		printAnnotationError(annotatedElement, target, String.format(message, annotationName()));
+		printAnnotationError(annotatedElement, annotationName, String.format(message, annotationName()));
 	}
 
 	/**
@@ -76,7 +79,7 @@ public class TargetAnnotationHelper extends AnnotationHelper implements HasTarge
 	 *            annotation name (ex: @Override)
 	 */
 	public void printAnnotationWarning(Element annotatedElement, String message) {
-		printAnnotationWarning(annotatedElement, target, String.format(message, annotationName()));
+		printAnnotationWarning(annotatedElement, annotationName, String.format(message, annotationName()));
 	}
 
 }

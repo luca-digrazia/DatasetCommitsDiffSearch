@@ -16,11 +16,8 @@
 package org.androidannotations.model;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
-
-import javax.lang.model.element.Element;
 
 import org.androidannotations.annotations.res.AnimationRes;
 import org.androidannotations.annotations.res.BooleanRes;
@@ -46,7 +43,8 @@ public enum AndroidRes {
 	STRING(Res.STRING, StringRes.class, "getString", "java.lang.String"), //
 	STRING_ARRAY(Res.ARRAY, StringArrayRes.class, "getStringArray", "java.lang.String[]"), //
 	ANIMATION(Res.ANIM, AnimationRes.class, "getAnimation", "android.content.res.XmlResourceParser", "android.view.animation.Animation"), //
-	HTML(Res.STRING, HtmlRes.class, "getString", "java.lang.CharSequence", "android.text.Spanned"), BOOLEAN(Res.BOOL, BooleanRes.class, "getBoolean", "java.lang.Boolean", "boolean"), //
+	HTML(Res.STRING, HtmlRes.class, "getString", "java.lang.CharSequence", "android.text.Spanned"), //
+	BOOLEAN(Res.BOOL, BooleanRes.class, "getBoolean", "java.lang.Boolean", "boolean"), //
 	COLOR_STATE_LIST(Res.COLOR, ColorStateListRes.class, "getColorStateList", "android.content.res.ColorStateList"), //
 	DIMENSION(Res.DIMEN, DimensionRes.class, "getDimension", "java.lang.Float", "float"), //
 	DIMENSION_PIXEL_OFFSET(Res.DIMEN, DimensionPixelOffsetRes.class, "getDimensionPixelOffset", "java.lang.Integer", "int"), //
@@ -60,13 +58,13 @@ public enum AndroidRes {
 	TEXT_ARRAY(Res.ARRAY, TextArrayRes.class, "getTextArray", "java.lang.CharSequence"), //
 	COLOR(Res.COLOR, ColorRes.class, "getColor", "int", "java.lang.Integer");
 
-	private final Class<? extends Annotation> target;
+	private final Class<? extends Annotation> annotationClass;
 	private final String resourceMethodName;
 	private final List<String> allowedTypes;
 	private final Res rInnerClass;
 
-	AndroidRes(Res rInnerClass, Class<? extends Annotation> target, String resourceMethodName, String... allowedTypes) {
-		this.target = target;
+	AndroidRes(Res rInnerClass, Class<? extends Annotation> annotationClass, String resourceMethodName, String... allowedTypes) {
+		this.annotationClass = annotationClass;
 		this.resourceMethodName = resourceMethodName;
 		this.allowedTypes = Arrays.asList(allowedTypes);
 		this.rInnerClass = rInnerClass;
@@ -76,8 +74,12 @@ public enum AndroidRes {
 		return rInnerClass;
 	}
 
-	public Class<? extends Annotation> getTarget() {
-		return target;
+	public Class<? extends Annotation> getAnnotationClass() {
+		return annotationClass;
+	}
+
+	public String getTarget() {
+		return annotationClass.getName();
 	}
 
 	public String getResourceMethodName() {
@@ -87,15 +89,4 @@ public enum AndroidRes {
 	public List<String> getAllowedTypes() {
 		return allowedTypes;
 	}
-
-	public int idFromElement(Element element) {
-		Annotation annotation = element.getAnnotation(target);
-		Method valueMethod = target.getMethods()[0];
-		try {
-			return (Integer) valueMethod.invoke(annotation);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
-
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -117,7 +117,7 @@ public class ModelExtractor {
 	private void addAncestorsElements(Set<TypeElement> elements, TypeElement typeElement) {
 		TypeMirror ancestorTypeMirror = typeElement.getSuperclass();
 
-		if (!isRootObjectClass(ancestorTypeMirror) && !isAndroidClass(ancestorTypeMirror) && ancestorTypeMirror instanceof DeclaredType) {
+		if (!isRootObjectClass(ancestorTypeMirror) && ancestorTypeMirror instanceof DeclaredType) {
 			DeclaredType ancestorDeclaredType = (DeclaredType) ancestorTypeMirror;
 			Element ancestorElement = ancestorDeclaredType.asElement();
 			if (ancestorElement instanceof TypeElement) {
@@ -129,10 +129,6 @@ public class ModelExtractor {
 
 	private boolean isRootObjectClass(TypeMirror typeMirror) {
 		return typeMirror.getKind() == TypeKind.NONE;
-	}
-
-	private boolean isAndroidClass(TypeMirror typeMirror) {
-		return typeMirror.toString().startsWith("android.");
 	}
 
 	private void extractRootElementsAnnotations(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv, AnnotationElementsHolder extractedModel) {

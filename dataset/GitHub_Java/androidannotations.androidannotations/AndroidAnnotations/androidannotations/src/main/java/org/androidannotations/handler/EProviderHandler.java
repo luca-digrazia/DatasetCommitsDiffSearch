@@ -37,12 +37,16 @@ public class EProviderHandler extends BaseAnnotationHandler<EProviderHolder> imp
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.extendsProvider(element, valid);
 
 		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.componentRegistered(element, androidManifest, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

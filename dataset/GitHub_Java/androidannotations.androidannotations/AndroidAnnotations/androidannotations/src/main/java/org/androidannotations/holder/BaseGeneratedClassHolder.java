@@ -19,6 +19,7 @@ import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PUBLIC;
 
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.helper.ModelConstants;
@@ -87,5 +88,10 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	@Override
 	public JDefinedClass definedClass(String fullyQualifiedClassName) {
 		return processHolder.definedClass(fullyQualifiedClassName);
+	}
+
+	@Override
+	public void generateApiClass(Element originatingElement, Class<?> apiClass) {
+		processHolder.generateApiClass(originatingElement, apiClass);
 	}
 }

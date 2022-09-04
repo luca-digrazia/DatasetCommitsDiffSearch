@@ -52,12 +52,16 @@ public class FragmentByTagHandler extends BaseAnnotationHandler<EComponentWithVi
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
 
 		validatorHelper.extendsFragment(element, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

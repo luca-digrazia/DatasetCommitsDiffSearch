@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,25 +20,18 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeMirror;
 
-import org.androidannotations.processing.EBeanHolder;
+import org.androidannotations.holder.EComponentHolder;
 
-/**
- * @author Eric Kok
- */
 public class HoloEverywhereHelper {
 
-	private final AnnotationHelper annotationHelper;
+	private EComponentHolder holder;
 
-	public HoloEverywhereHelper(AnnotationHelper annotationHelper) {
-		this.annotationHelper = annotationHelper;
+	public HoloEverywhereHelper(EComponentHolder holder) {
+		this.holder = holder;
 	}
 
-	/**
-	 * Checks whether the Activity extends one of the ActionBarSherlock Activity
-	 * types
-	 */
-	public boolean usesHoloEverywhere(EBeanHolder holder) {
-		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(holder.generatedClass._extends().fullName());
+	public boolean usesHoloEverywhere() {
+		TypeElement typeElement = holder.getAnnotatedElement();
 
 		TypeMirror superType;
 		while (!((superType = typeElement.getSuperclass()) instanceof NoType)) {

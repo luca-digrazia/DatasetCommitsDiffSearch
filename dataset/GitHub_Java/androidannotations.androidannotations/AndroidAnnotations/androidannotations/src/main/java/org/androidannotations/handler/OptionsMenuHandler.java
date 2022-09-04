@@ -49,10 +49,14 @@ public class OptionsMenuHandler extends BaseAnnotationHandler<HasOptionsMenu> {
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.hasEActivityOrEFragment(element, validatedElements, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.MENU, IdValidatorHelper.FallbackStrategy.NEED_RES_ID, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

@@ -30,7 +30,9 @@ public abstract class AbstractRunnableHandler extends BaseAnnotationHandler<ECom
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validatedElements, valid);
 
 		ExecutableElement executableElement = (ExecutableElement) element;
@@ -44,5 +46,7 @@ public abstract class AbstractRunnableHandler extends BaseAnnotationHandler<ECom
 		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.isNotSynchronized(element, valid);
+
+		return valid.isValid();
 	}
 }

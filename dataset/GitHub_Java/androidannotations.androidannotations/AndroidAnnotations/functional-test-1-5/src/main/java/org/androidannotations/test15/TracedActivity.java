@@ -45,7 +45,6 @@ public class TracedActivity extends Activity {
 	public boolean overloadedMethodInt = false;
 	public boolean overloadedMethodIntFLoat = false;
 
-	@Trace
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);

@@ -49,7 +49,9 @@ public class EActivityHandler extends BaseAnnotationHandler<EActivityHolder> imp
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.extendsActivity(element, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.LAYOUT, IdValidatorHelper.FallbackStrategy.ALLOW_NO_RES_ID, valid);
@@ -57,6 +59,8 @@ public class EActivityHandler extends BaseAnnotationHandler<EActivityHolder> imp
 		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.componentRegistered(element, androidManifest, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

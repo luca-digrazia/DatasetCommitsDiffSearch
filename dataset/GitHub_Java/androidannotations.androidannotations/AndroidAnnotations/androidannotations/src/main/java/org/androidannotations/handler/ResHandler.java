@@ -55,7 +55,9 @@ public class ResHandler extends BaseAnnotationHandler<EComponentHolder> {
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validatedElements, valid);
 
 		TypeMirror fieldTypeMirror = element.asType();
@@ -65,6 +67,8 @@ public class ResHandler extends BaseAnnotationHandler<EComponentHolder> {
 		validatorHelper.resIdsExist(element, androidRes.getRInnerClass(), IdValidatorHelper.FallbackStrategy.USE_ELEMENT_NAME, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

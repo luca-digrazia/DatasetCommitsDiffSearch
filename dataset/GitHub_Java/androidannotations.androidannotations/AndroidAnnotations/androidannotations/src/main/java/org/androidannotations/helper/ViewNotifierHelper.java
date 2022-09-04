@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,7 +20,6 @@ import static com.sun.codemodel.JExpr._null;
 import static com.sun.codemodel.JExpr._this;
 import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PRIVATE;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import org.androidannotations.api.view.HasViews;
 import org.androidannotations.api.view.OnViewChangedNotifier;
@@ -48,7 +47,7 @@ public class ViewNotifierHelper {
 	public JVar replacePreviousNotifier(JBlock block) {
 		JClass notifierClass = holder.refClass(OnViewChangedNotifier.class);
 		if (notifier == null) {
-			notifier = holder.getGeneratedClass().field(PRIVATE | FINAL, notifierClass, "onViewChangedNotifier" + generationSuffix(), _new(notifierClass));
+			notifier = holder.getGeneratedClass().field(PRIVATE | FINAL, notifierClass, "onViewChangedNotifier_", _new(notifierClass));
 			holder.getGeneratedClass()._implements(HasViews.class);
 		}
 		return block.decl(notifierClass, "previousNotifier", notifierClass.staticInvoke("replaceNotifier").arg(notifier));

@@ -21,6 +21,7 @@ import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.process.ProcessHolder;
@@ -139,5 +140,10 @@ public class InstanceStateHolder implements HasInstanceState {
 	@Override
 	public JDefinedClass definedClass(String fullyQualifiedClassName) {
 		return holder.definedClass(fullyQualifiedClassName);
+	}
+
+	@Override
+	public void generateApiClass(Element originatingElement, Class<?> apiClass) {
+		holder.generateApiClass(originatingElement, apiClass);
 	}
 }

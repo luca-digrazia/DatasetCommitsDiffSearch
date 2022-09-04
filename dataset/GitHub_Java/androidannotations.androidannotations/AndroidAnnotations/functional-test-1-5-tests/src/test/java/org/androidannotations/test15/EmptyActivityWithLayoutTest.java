@@ -27,10 +27,12 @@ public class EmptyActivityWithLayoutTest {
 	public void shouldHaveLayoutAfterCreate() {
 		EmptyActivityWithLayout_ activity = new EmptyActivityWithLayout_();
 
-		activity.onCreate(null);
-		activity.setContentView(R.layout.main);
+		assertThat(activity.findViewById(R.id.helloTextView)).isNull();
 
-		assertThat(activity.findViewById(R.id.helloTextView)).hasId(R.id.helloTextView);
+		activity.onCreate(null);
+
+		assertThat(activity.findViewById(R.id.helloTextView)).hasId(
+				R.id.helloTextView);
 	}
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,8 +22,9 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JPrimitiveType;
 import com.sun.codemodel.JVar;
 
-public class TextWatcherHolder extends GeneratedClassHolderDecorator<EComponentWithViewSupportHolder> {
+public class TextWatcherHolder {
 
+	private EComponentWithViewSupportHolder holder;
 	private JVar textViewVariable;
 	private JDefinedClass listenerClass;
 	private JBlock beforeTextChangedBody;
@@ -40,9 +41,9 @@ public class TextWatcherHolder extends GeneratedClassHolderDecorator<EComponentW
 	private JVar afterTextChangedEditableParam;
 
 	public TextWatcherHolder(EComponentWithViewSupportHolder holder, JVar viewVariable, JDefinedClass onTextChangeListenerClass) {
-		super(holder);
-		textViewVariable = viewVariable;
-		listenerClass = onTextChangeListenerClass;
+		this.holder = holder;
+		this.textViewVariable = viewVariable;
+		this.listenerClass = onTextChangeListenerClass;
 		createBeforeTextChanged();
 		createOnTextChanged();
 		createAfterTextChanged();

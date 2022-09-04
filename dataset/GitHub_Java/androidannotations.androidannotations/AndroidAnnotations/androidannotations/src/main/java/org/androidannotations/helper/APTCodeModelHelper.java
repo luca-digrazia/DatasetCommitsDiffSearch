@@ -28,7 +28,7 @@ import javax.lang.model.type.WildcardType;
 
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.holder.GeneratedClassHolder;
-import org.androidannotations.process.ProcessHolder.Classes;
+import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCatchBlock;
@@ -99,7 +99,7 @@ public class APTCodeModelHelper {
 		}
 	}
 
-	public JMethod overrideAnnotatedMethod(ExecutableElement executableElement, GeneratedClassHolder holder) {
+	public JMethod overrideAnnotatedMethod(ExecutableElement executableElement, EComponentHolder holder) {
 
 		String methodName = executableElement.getSimpleName().toString();
 
@@ -154,7 +154,7 @@ public class APTCodeModelHelper {
 		return null;
 	}
 
-	public void callSuperMethod(JMethod superMethod, GeneratedClassHolder holder, JBlock callBlock) {
+	public void callSuperMethod(JMethod superMethod, EComponentHolder holder, JBlock callBlock) {
 		JExpression activitySuper = holder.getGeneratedClass().staticRef("super");
 		JInvocation superCall = JExpr.invoke(activitySuper, superMethod);
 
@@ -214,23 +214,10 @@ public class APTCodeModelHelper {
 		throw new IllegalStateException("Unable to extract target name from JFieldRef");
 	}
 
-	public JTryBlock surroundWithTryCatch(EComponentHolder holder, JBlock block, JBlock content, String exceptionMessage) {
-		Classes classes = holder.classes();
-		JTryBlock tryBlock = block._try();
-		tryBlock.body().add(content);
-		JCatchBlock catchBlock = tryBlock._catch(classes.RUNTIME_EXCEPTION);
-		JVar exceptionParam = catchBlock.param("e");
-		JInvocation errorInvoke = classes.LOG.staticInvoke("e");
-		errorInvoke.arg(holder.getGeneratedClass().name());
-		errorInvoke.arg(exceptionMessage);
-		errorInvoke.arg(exceptionParam);
-		catchBlock.body().add(errorInvoke);
-		return tryBlock;
-	}
-
 	public JDefinedClass createDelegatingAnonymousRunnableClass(EComponentHolder holder, JMethod delegatedMethod) {
 
 		JCodeModel codeModel = holder.codeModel();
+		ProcessHolder.Classes classes = holder.classes();
 
 		JDefinedClass anonymousRunnableClass;
 		JBlock previousMethodBody = removeBody(delegatedMethod);
@@ -241,9 +228,20 @@ public class APTCodeModelHelper {
 		runMethod.annotate(Override.class);
 
 		JBlock runMethodBody = runMethod.body();
+		JTryBlock runTry = runMethodBody._try();
 
-		surroundWithTryCatch(holder, runMethodBody, previousMethodBody, "A runtime exception was thrown while executing code in a runnable");
+		runTry.body().add(previousMethodBody);
 
+		JCatchBlock runCatch = runTry._catch(classes.RUNTIME_EXCEPTION);
+		JVar exceptionParam = runCatch.param("e");
+
+		JInvocation errorInvoke = classes.LOG.staticInvoke("e");
+
+		errorInvoke.arg(holder.getGeneratedClass().name());
+		errorInvoke.arg("A runtime exception was thrown while executing code in a runnable");
+		errorInvoke.arg(exceptionParam);
+
+		runCatch.body().add(errorInvoke);
 		return anonymousRunnableClass;
 	}
 }

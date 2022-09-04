@@ -37,10 +37,14 @@ public class EViewHandler extends BaseAnnotationHandler<EViewHolder> implements 
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
+		IsValid valid = new IsValid();
+
 		validatorHelper.extendsView(element, valid);
 
 		validatorHelper.isNotFinal(element, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

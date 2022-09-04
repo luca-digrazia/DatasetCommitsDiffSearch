@@ -41,11 +41,12 @@ public class ProduceHandler extends BaseAnnotationHandler<EComponentHolder> {
 	}
 
 	@Override
-	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
 		if (!annotationHelper.enclosingElementHasEnhancedComponentAnnotation(element)) {
-			valid.invalidate();
-			return;
+			return false;
 		}
+
+		IsValid valid = new IsValid();
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
@@ -63,6 +64,8 @@ public class ProduceHandler extends BaseAnnotationHandler<EComponentHolder> {
 		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.param.zeroParameter(executableElement, valid);
+
+		return valid.isValid();
 	}
 
 	@Override

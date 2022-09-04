@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,7 +20,6 @@ import static com.sun.codemodel.JExpr._this;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import javax.lang.model.element.TypeElement;
 
@@ -48,7 +47,7 @@ public class EApplicationHolder extends EComponentHolder {
 	private void createSingleton() {
 		JClass annotatedComponent = generatedClass._extends();
 
-		staticInstanceField = generatedClass.field(PRIVATE | STATIC, annotatedComponent, "INSTANCE" + generationSuffix());
+		staticInstanceField = generatedClass.field(PRIVATE | STATIC, annotatedComponent, "INSTANCE_");
 		// Static singleton getter and setter
 		JMethod getInstance = generatedClass.method(PUBLIC | STATIC, annotatedComponent, GET_APPLICATION_INSTANCE);
 		getInstance.body()._return(staticInstanceField);
@@ -75,6 +74,6 @@ public class EApplicationHolder extends EComponentHolder {
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init_");
 	}
 }
