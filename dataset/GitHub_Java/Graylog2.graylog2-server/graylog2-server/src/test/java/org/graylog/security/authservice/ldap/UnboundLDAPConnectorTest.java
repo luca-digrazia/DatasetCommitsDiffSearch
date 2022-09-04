@@ -1,22 +1,21 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.security.authservice.ldap;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.unboundid.ldap.sdk.LDAPConnection;
 import com.unboundid.ldap.sdk.LDAPException;
@@ -32,9 +31,7 @@ import org.apache.directory.server.core.integ.AbstractLdapTestUnit;
 import org.apache.directory.server.core.integ.FrameworkRunner;
 import org.apache.directory.server.core.partition.impl.avl.AvlPartition;
 import org.apache.directory.server.ldap.LdapServer;
-import org.graylog.testing.ldap.LDAPTestUtils;
 import org.graylog2.ApacheDirectoryTestServiceFactory;
-import org.graylog2.security.TrustManagerProvider;
 import org.graylog2.security.encryption.EncryptedValue;
 import org.graylog2.security.encryption.EncryptedValueService;
 import org.junit.After;
@@ -44,12 +41,10 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
+import java.util.Collections;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 @RunWith(FrameworkRunner.class)
 @CreateLdapServer(transports = {
@@ -82,7 +77,7 @@ import static org.mockito.Mockito.mock;
                 @LoadSchema(name = "nis", enabled = true)
         }
 )
-@ApplyLdifFiles(LDAPTestUtils.BASE_LDIF)
+@ApplyLdifFiles("org/graylog/security/authservice/ldap/ldap-base.ldif")
 public class UnboundLDAPConnectorTest extends AbstractLdapTestUnit {
     private static final Set<String> ENABLED_TLS_PROTOCOLS = ImmutableSet.of("TLSv1.2", "TLSv1.3");
     private static final String ADMIN_DN = "uid=admin,ou=system";
@@ -98,17 +93,16 @@ public class UnboundLDAPConnectorTest extends AbstractLdapTestUnit {
     @Before
     public void setUp() throws Exception {
         final LdapServer server = getLdapServer();
-        final LDAPConnectorConfig.LDAPServer unreachableServer = LDAPConnectorConfig.LDAPServer.create("localhost", 9);
         final LDAPConnectorConfig.LDAPServer ldapServer = LDAPConnectorConfig.LDAPServer.create("localhost", server.getPort());
         final LDAPConnectorConfig connectorConfig = LDAPConnectorConfig.builder()
                 .systemUsername(ADMIN_DN)
                 .systemPassword(encryptedValueService.encrypt(ADMIN_PASSWORD))
                 .transportSecurity(LDAPTransportSecurity.NONE)
                 .verifyCertificates(false)
-                .serverList(ImmutableList.of(unreachableServer, ldapServer))
+                .serverList(Collections.singletonList(ldapServer))
                 .build();
 
-        connector = new UnboundLDAPConnector(10000, ENABLED_TLS_PROTOCOLS, mock(TrustManagerProvider.class), encryptedValueService);
+        connector = new UnboundLDAPConnector(10000, ENABLED_TLS_PROTOCOLS, (host) -> null, encryptedValueService);
         connection = connector.connect(connectorConfig);
     }
 
@@ -126,15 +120,17 @@ public class UnboundLDAPConnectorTest extends AbstractLdapTestUnit {
                 .userNameAttribute("uid")
                 .userFullNameAttribute("cn")
                 .build();
-        final LDAPUser entry = connector.searchUserByPrincipal(connection, searchConfig, "john").orElse(null);
+        final LDAPUser entry = connector.searchUser(connection, searchConfig, "john").orElse(null);
 
         assertThat(entry).isNotNull();
         assertThat(entry.dn())
                 .isNotNull()
                 .isEqualTo("cn=John Doe,ou=users,dc=example,dc=com");
-        assertThat(new String(Base64.getDecoder().decode(entry.base64UniqueId()), StandardCharsets.UTF_8))
-                .isNotBlank()
-                .matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+        assertThat(entry.uniqueId()).isNotBlank().matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+        assertThat(entry.entry().firstAttributeValue("entryUUID")).get().satisfies(value -> {
+            assertThat(value).isNotBlank().matches("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}");
+        });
+        assertThat(entry.entry().firstAttributeValue("entryUUID")).get().isEqualTo(entry.uniqueId());
     }
 
     @Test
