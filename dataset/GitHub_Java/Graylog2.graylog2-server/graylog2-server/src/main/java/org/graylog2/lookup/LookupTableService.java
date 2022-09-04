@@ -18,8 +18,6 @@ package org.graylog2.lookup;
 
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
-import com.google.common.util.concurrent.Service;
-
 import org.graylog2.lookup.dto.CacheDto;
 import org.graylog2.lookup.dto.DataAdapterDto;
 import org.graylog2.lookup.dto.LookupTableDto;
@@ -31,19 +29,16 @@ import org.graylog2.plugin.lookup.LookupResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.inject.Inject;
+import javax.inject.Singleton;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
 
 @Singleton
 public class LookupTableService {
@@ -53,7 +48,6 @@ public class LookupTableService {
     private final MongoLutCacheService cacheService;
     private final MongoLutDataAdapterService dataAdapterService;
     private final LookupTableCreator.Factory tableCreatorFactory;
-    private final ScheduledExecutorService scheduler;
 
     private final ConcurrentMap<String, LookupTable> lookupTables = new ConcurrentHashMap<>();
 
@@ -62,13 +56,11 @@ public class LookupTableService {
                               MongoLutCacheService cacheService,
                               MongoLutDataAdapterService dataAdapterService,
                               LookupTableCreator.Factory tableCreatorFactory,
-                              EventBus serverEventBus,
-                              @Named("daemonScheduler") ScheduledExecutorService scheduler) {
+                              EventBus serverEventBus) {
         this.mongoLutService = mongoLutService;
         this.cacheService = cacheService;
         this.dataAdapterService = dataAdapterService;
         this.tableCreatorFactory = tableCreatorFactory;
-        this.scheduler = scheduler;
 
         // Initialize all lookup tables before subscribing to events
         initialize();
@@ -78,47 +70,17 @@ public class LookupTableService {
     }
 
     private void activateTable(String name, @Nullable LookupTable existingTable, LookupTable newTable) {
-        // Always start the new data adapter before taking it live, if it is new
-        final LookupDataAdapter newAdapter = newTable.dataAdapter();
-        if (newAdapter.state() == Service.State.NEW) {
-            newAdapter.addListener(new Service.Listener() {
-                @Override
-                public void starting() {
-                    LOG.info("Adapter {} STARTING", newAdapter.id());
-                }
+        // Always start the new data adapter before taking it live, it's a no-op if the adapter is already started
+        newTable.dataAdapter().start();
 
-                @Override
-                public void running() {
-                    LOG.info("Adapter {} RUNNING", newAdapter.id());
-                    lookupTables.put(name, newTable);
+        lookupTables.put(name, newTable);
 
-                    if (existingTable != null) {
-                        // If the new table has a new data adapter, stop the old one to free up resources
-                        // This needs to happen after the new table is live
-                        final LookupDataAdapter existingAdapter = existingTable.dataAdapter();
-                        if (!Objects.equals(existingAdapter, newAdapter) && existingAdapter.isRunning()) {
-                            existingAdapter.stopAsync().awaitTerminated();
-                        }
-                    }
-                }
-
-                @Override
-                public void stopping(Service.State from) {
-                    LOG.info("Adapter {} FAILED, was {}", newAdapter.id(), from);
-                }
-
-                @Override
-                public void terminated(Service.State from) {
-                    LOG.info("Adapter {} TERMINATED, was {}", newAdapter.id(), from);
-                }
-
-                @Override
-                public void failed(Service.State from, Throwable failure) {
-                    LOG.info("Adapter {} FAILED, was {}", newAdapter.id(), from);
-                }
-            }, scheduler);
-
-            newAdapter.startAsync();
+        if (existingTable != null) {
+            // If the new table has a new data adapter, stop the old one to free up resources
+            // This needs to happen after the new table is live
+            if (!Objects.equals(existingTable.dataAdapter(), newTable.dataAdapter())) {
+                existingTable.dataAdapter().stop();
+            }
         }
     }
 
@@ -231,10 +193,6 @@ public class LookupTableService {
             LOG.warn("Lookup table <{}> does not exist", name);
         }
         return lookupTable;
-    }
-
-    public boolean hasTable(String name) {
-       return lookupTables.get(name) != null;
     }
 
     public static class Builder {
