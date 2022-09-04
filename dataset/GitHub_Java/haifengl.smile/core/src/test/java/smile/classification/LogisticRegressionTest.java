@@ -129,14 +129,6 @@ public class LogisticRegressionTest {
             }
             
             System.out.println("SGD-Iris Binary one more epoch...");
-            //
-            // permutate before sgd for better performance
-            //
-            int[] idx = new int[y.length];
-            for(int i = 0;i < y.length;i++) {
-            	idx[i] = i;
-            }
-            Math.permutate(idx);            
             for(int i = 0;i < y.length;i++) {
             	logit.learn(x[i], y[i]);
             }
@@ -233,17 +225,9 @@ public class LogisticRegressionTest {
             
             LogisticRegression logit = new LogisticRegression(x, y, 0.3, 1E-3, 1000);
             System.out.println("SGD-Segemnt one more epoch...");
-            logit.setLearningRate(1e-7);
-            //
-            // permutate before sgd for better performance
-            //
-            int[] idx = new int[y.length];
+            logit.setStep(1e-7);
             for(int i = 0;i < y.length;i++) {
-            	idx[i] = i;
-            }
-            Math.permutate(idx);            
-            for(int i = 0;i < y.length;i++) {
-            	logit.learn(x[idx[i]], y[idx[i]]);
+            	logit.learn(x[i], y[i]);
             }
             
             int error = 0;
@@ -313,16 +297,8 @@ public class LogisticRegressionTest {
             
             LogisticRegression logit = new LogisticRegression(x, y, 0.3, 1E-3, 1000);
             System.out.println("SGD-USPS one more epoch...");
-            //
-            // permutate before sgd for better performance
-            //
-            int[] idx = new int[y.length];
             for(int i = 0;i < y.length;i++) {
-            	idx[i] = i;
-            }
-            Math.permutate(idx);            
-            for(int i = 0;i < y.length;i++) {
-            	logit.learn(x[idx[i]], y[idx[i]]);
+            	logit.learn(x[i], y[i]);
             }
             
             int error = 0;
