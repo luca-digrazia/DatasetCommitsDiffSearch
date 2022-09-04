@@ -90,6 +90,7 @@ public class ClusterEventPeriodical extends Periodical {
             LOG.warn("The \"{}\" collection in MongoDB is capped which will cause problems. Please drop the collection.", COLLECTION_NAME);
         }
 
+        coll.createIndex(DBSort.asc("timestamp"));
         coll.createIndex(DBSort
                 .asc("timestamp")
                 .asc("producer")
