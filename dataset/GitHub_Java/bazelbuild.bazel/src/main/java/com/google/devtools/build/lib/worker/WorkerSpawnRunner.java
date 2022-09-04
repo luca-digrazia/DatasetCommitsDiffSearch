@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
-import com.google.devtools.build.lib.actions.SpawnMetrics;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.UserExecException;
@@ -130,20 +129,13 @@ final class WorkerSpawnRunner implements SpawnRunner {
       return fallbackRunner.exec(spawn, context);
     }
 
-    context.report(
-        ProgressStatus.SCHEDULING,
-        WorkerKey.makeWorkerTypeName(Spawns.supportsMultiplexWorkers(spawn)));
+    context.report(ProgressStatus.SCHEDULING, getName());
     return actuallyExec(spawn, context);
   }
 
   @Override
   public boolean canExec(Spawn spawn) {
     return Spawns.supportsWorkers(spawn) || Spawns.supportsMultiplexWorkers(spawn);
-  }
-
-  @Override
-  public boolean handlesCaching() {
-    return false;
   }
 
   private SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
@@ -216,12 +208,6 @@ final class WorkerSpawnRunner implements SpawnRunner {
             .setStatus(
                 exitCode == 0 ? SpawnResult.Status.SUCCESS : SpawnResult.Status.NON_ZERO_EXIT)
             .setWallTime(wallTime)
-            .setSpawnMetrics(
-                new SpawnMetrics.Builder()
-                    .setExecKind(SpawnMetrics.ExecKind.WORKER)
-                    .setTotalTime(wallTime)
-                    .setExecutionWallTime(wallTime)
-                    .build())
             .build();
     reporter.post(new SpawnExecutedEvent(spawn, result, startTime));
     return result;
@@ -372,7 +358,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
 
       try (ResourceHandle handle =
           resourceManager.acquireResources(owner, spawn.getLocalResources())) {
-        context.report(ProgressStatus.EXECUTING, WorkerKey.makeWorkerTypeName(key.getProxied()));
+        context.report(ProgressStatus.EXECUTING, getName());
         try {
           worker.prepareExecution(inputFiles, outputs, key.getWorkerFilesWithHashes().keySet());
         } catch (IOException e) {
