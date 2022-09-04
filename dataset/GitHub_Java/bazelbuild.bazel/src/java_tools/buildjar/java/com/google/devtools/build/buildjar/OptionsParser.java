@@ -18,7 +18,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.buildjar.javac.JavacOptions;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -70,6 +69,7 @@ public final class OptionsParser {
   private int fullClasspathLength = -1;
   private int reducedClasspathLength = -1;
 
+  private String sourceGenDir;
   private String generatedSourcesOutputJar;
   private String manifestProtoPath;
 
@@ -88,6 +88,9 @@ public final class OptionsParser {
   private String outputJar;
   @Nullable private String nativeHeaderOutput;
 
+  private String classDir;
+  private String tempDir;
+
   private final Map<String, List<String>> postProcessors = new LinkedHashMap<>();
 
   private boolean compressJar;
@@ -97,8 +100,6 @@ public final class OptionsParser {
 
   @Nullable private String profile;
 
-  @Nullable private final JavacOptions normalizer;
-
   /**
    * Constructs an {@code OptionsParser} from a list of command args. Sets the same JavacRunner for
    * both compilation and annotation processing.
@@ -107,19 +108,6 @@ public final class OptionsParser {
    * @throws InvalidCommandLineException on any command line error.
    */
   public OptionsParser(List<String> args) throws InvalidCommandLineException, IOException {
-    this(args, null);
-  }
-
-  /**
-   * Constructs an {@code OptionsParser} from a list of command args. Sets the same JavacRunner for
-   * both compilation and annotation processing.
-   *
-   * @param args the list of command line args.
-   * @throws InvalidCommandLineException on any command line error.
-   */
-  public OptionsParser(List<String> args, @Nullable JavacOptions normalizer)
-      throws InvalidCommandLineException, IOException {
-    this.normalizer = normalizer;
     processCommandlineArgs(expandArguments(args));
   }
 
@@ -161,6 +149,9 @@ public final class OptionsParser {
           break;
         case "--reduced_classpath_length":
           reducedClasspathLength = Integer.parseInt(getArgument(argQueue, arg));
+          break;
+        case "--sourcegendir":
+          sourceGenDir = getArgument(argQueue, arg);
           break;
         case "--generated_sources_output":
           generatedSourcesOutputJar = getArgument(argQueue, arg);
@@ -208,10 +199,13 @@ public final class OptionsParser {
           nativeHeaderOutput = getArgument(argQueue, arg);
           break;
         case "--classdir":
-        case "--gendir":
-        case "--sourcegendir":
+          classDir = getArgument(argQueue, arg);
+          break;
         case "--tempdir":
-          // TODO(bazel-team) - remove when Bazel no longer passes these flags to buildjar.
+          tempDir = getArgument(argQueue, arg);
+          break;
+        case "--gendir":
+          // TODO(bazel-team) - remove when Bazel no longer passes this flag to buildjar.
           getArgument(argQueue, arg);
           break;
         case "--post_processor":
@@ -363,7 +357,7 @@ public final class OptionsParser {
   }
 
   public List<String> getJavacOpts() {
-    return normalizer != null ? normalizer.normalize(javacOpts) : javacOpts;
+    return javacOpts;
   }
 
   public Set<String> directJars() {
@@ -396,6 +390,10 @@ public final class OptionsParser {
 
   public int reducedClasspathLength() {
     return reducedClasspathLength;
+  }
+
+  public String getSourceGenDir() {
+    return sourceGenDir;
   }
 
   public String getGeneratedSourcesOutputJar() {
@@ -449,6 +447,14 @@ public final class OptionsParser {
   @Nullable
   public String getNativeHeaderOutput() {
     return nativeHeaderOutput;
+  }
+
+  public String getClassDir() {
+    return classDir;
+  }
+
+  public String getTempDir() {
+    return tempDir;
   }
 
   public Map<String, List<String>> getPostProcessors() {

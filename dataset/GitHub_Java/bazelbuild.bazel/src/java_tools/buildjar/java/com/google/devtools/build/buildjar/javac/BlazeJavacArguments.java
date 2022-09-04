@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
 import java.nio.file.Path;
 import javax.annotation.Nullable;
+import javax.annotation.processing.Processor;
 
 /**
  * Arguments to a single compilation performed by {@link BlazeJavacMain}.
@@ -35,9 +36,6 @@ public abstract class BlazeJavacArguments {
 
   /** Javac options, not including location settings. */
   public abstract ImmutableList<String> javacOptions();
-
-  /** Blaze-specific Javac options. */
-  public abstract ImmutableList<String> blazeJavacOptions();
 
   /** The compilation classpath. */
   public abstract ImmutableList<Path> classPath();
@@ -59,6 +57,13 @@ public abstract class BlazeJavacArguments {
   /** The compiler plugins. */
   public abstract ImmutableList<BlazeJavaCompilerPlugin> plugins();
 
+  /**
+   * Annotation processor classes. In production builds, processors are specified by string class
+   * name in {@link javacOptions}; this is used for tests that instantate processors directly.
+   */
+  @Nullable
+  public abstract ImmutableList<Processor> processors();
+
   /** The class output directory (-d). */
   public abstract Path classOutput();
 
@@ -78,9 +83,9 @@ public abstract class BlazeJavacArguments {
         .classPath(ImmutableList.of())
         .bootClassPath(ImmutableList.of())
         .javacOptions(ImmutableList.of())
-        .blazeJavacOptions(ImmutableList.of())
         .sourceFiles(ImmutableList.of())
         .sourcePath(ImmutableList.of())
+        .processors(null)
         .sourceOutput(null)
         .builtinProcessors(ImmutableSet.of())
         .processorPath(ImmutableList.of())
@@ -103,11 +108,11 @@ public abstract class BlazeJavacArguments {
 
     Builder javacOptions(ImmutableList<String> javacOptions);
 
-    Builder blazeJavacOptions(ImmutableList<String> javacOptions);
-
     Builder sourcePath(ImmutableList<Path> sourcePath);
 
     Builder sourceFiles(ImmutableList<Path> sourceFiles);
+
+    Builder processors(ImmutableList<Processor> processors);
 
     Builder builtinProcessors(ImmutableSet<String> builtinProcessors);
 
