@@ -1,15 +1,20 @@
 package io.dropwizard.testing.junit;
 
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableMultimap;
+import io.dropwizard.Application;
+import io.dropwizard.servlets.tasks.PostBodyTask;
+import io.dropwizard.servlets.tasks.Task;
 import io.dropwizard.setup.Environment;
-import io.dropwizard.testing.app.DropwizardTestApplication;
-import io.dropwizard.testing.app.TestConfiguration;
-import org.assertj.core.api.Assertions;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
+import java.io.PrintWriter;
 
 import static io.dropwizard.testing.ResourceHelpers.resourceFilePath;
 import static org.hamcrest.core.Is.is;
@@ -20,7 +25,7 @@ public class DropwizardAppRuleTest {
 
     @ClassRule
     public static final DropwizardAppRule<TestConfiguration> RULE =
-        new DropwizardAppRule<>(DropwizardTestApplication.class, resourceFilePath("test-config.yaml"));
+            new DropwizardAppRule<>(TestApplication.class, resourceFilePath("test-config.yaml"));
 
     @Test
     public void canGetExpectedResourceOverHttp() {
@@ -38,23 +43,23 @@ public class DropwizardAppRuleTest {
 
     @Test
     public void returnsApplication() {
-        final DropwizardTestApplication application = RULE.getApplication();
+        final TestApplication application = RULE.getApplication();
         assertNotNull(application);
     }
 
     @Test
     public void returnsEnvironment() {
         final Environment environment = RULE.getEnvironment();
-        assertThat(environment.getName(), is("DropwizardTestApplication"));
+        assertThat(environment.getName(), is("TestApplication"));
     }
 
     @Test
     public void canPerformAdminTask() {
         final String response
-            = RULE.client().target("http://localhost:"
-            + RULE.getAdminPort() + "/tasks/hello?name=test_user")
-            .request()
-            .post(Entity.entity("", MediaType.TEXT_PLAIN), String.class);
+                = ClientBuilder.newClient().target("http://localhost:"
+                        + RULE.getAdminPort() + "/tasks/hello?name=test_user")
+                .request()
+                .post(Entity.entity("", MediaType.TEXT_PLAIN), String.class);
 
         assertThat(response, is("Hello has been said to test_user"));
     }
@@ -62,7 +67,7 @@ public class DropwizardAppRuleTest {
     @Test
     public void canPerformAdminTaskWithPostBody() {
         final String response
-            = RULE.client().target("http://localhost:"
+            = ClientBuilder.newClient().target("http://localhost:"
             + RULE.getAdminPort() + "/tasks/echo")
             .request()
             .post(Entity.entity("Custom message", MediaType.TEXT_PLAIN), String.class);
@@ -70,11 +75,56 @@ public class DropwizardAppRuleTest {
         assertThat(response, is("Custom message"));
     }
 
-    @Test
-    public void clientUsesJacksonMapperFromEnvironment() {
-        Assertions.assertThat(RULE.client().target("http://localhost:" + RULE.getLocalPort() + "/message")
-            .request()
-            .get(DropwizardTestApplication.MessageView.class).getMessage())
-            .contains("Yes, it's here");
+    public static class TestApplication extends Application<TestConfiguration> {
+        @Override
+        public void run(TestConfiguration configuration, Environment environment) throws Exception {
+            environment.jersey().register(new TestResource(configuration.getMessage()));
+            environment.admin().addTask(new HelloTask());
+            environment.admin().addTask(new EchoTask());
+        }
+    }
+
+    @Path("/")
+    public static class TestResource {
+
+        private final String message;
+
+        public TestResource(String message) {
+            this.message = message;
+        }
+
+        @Path("test")
+        @GET
+        public String test() {
+            return message;
+        }
+    }
+
+    public static class HelloTask extends Task {
+
+        public HelloTask() {
+            super("hello");
+        }
+
+        @Override
+        public void execute(ImmutableMultimap<String, String> parameters, PrintWriter output) throws Exception {
+            ImmutableCollection<String> names = parameters.get("name");
+            String name = !names.isEmpty() ? names.asList().get(0) : "Anonymous";
+            output.print("Hello has been said to " + name);
+            output.flush();
+        }
+    }
+
+    public static class EchoTask extends PostBodyTask {
+
+        public EchoTask() {
+            super("echo");
+        }
+
+        @Override
+        public void execute(ImmutableMultimap<String, String> parameters, String body, PrintWriter output) throws Exception {
+            output.print(body);
+            output.flush();
+        }
     }
 }

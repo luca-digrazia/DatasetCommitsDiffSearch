@@ -2,29 +2,24 @@ package io.dropwizard.server;
 
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Resources;
-import io.dropwizard.configuration.ConfigurationFactory;
+import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
-import io.dropwizard.jersey.DropwizardResourceConfig;
-import io.dropwizard.jetty.ConnectorFactory;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.logging.ConsoleAppenderFactory;
 import io.dropwizard.logging.FileAppenderFactory;
 import io.dropwizard.logging.SyslogAppenderFactory;
 import io.dropwizard.servlets.tasks.Task;
 import io.dropwizard.setup.Environment;
+import io.dropwizard.validation.BaseValidator;
 import org.eclipse.jetty.server.AbstractNetworkConnector;
 import org.eclipse.jetty.server.Server;
-import org.glassfish.jersey.server.ResourceConfig;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.validation.Validation;
 import javax.validation.Validator;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
@@ -35,22 +30,23 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
-import java.util.concurrent.CountDownLatch;
-
+import java.nio.charset.StandardCharsets;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 public class SimpleServerFactoryTest {
 
     private SimpleServerFactory http;
     private final ObjectMapper objectMapper = Jackson.newObjectMapper();
-    private Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+    private Validator validator = BaseValidator.newValidator();
+    private Environment environment = new Environment("testEnvironment", objectMapper, validator, new MetricRegistry(),
+            ClassLoader.getSystemClassLoader());
 
     @Before
     public void setUp() throws Exception {
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleAppenderFactory.class,
                 FileAppenderFactory.class, SyslogAppenderFactory.class, HttpConnectorFactory.class);
-        http = new ConfigurationFactory<>(SimpleServerFactory.class, validator, objectMapper, "dw")
+        http = (SimpleServerFactory) new YamlConfigurationFactory<>(ServerFactory.class, validator, objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/simple_server.yml").toURI()));
     }
 
@@ -78,8 +74,6 @@ public class SimpleServerFactoryTest {
 
     @Test
     public void testBuild() throws Exception {
-        final Environment environment = new Environment("testEnvironment", objectMapper, validator, new MetricRegistry(),
-                ClassLoader.getSystemClassLoader());
         environment.jersey().register(new TestResource());
         environment.admin().addTask(new TestTask());
 
@@ -95,12 +89,20 @@ public class SimpleServerFactoryTest {
         server.stop();
     }
 
+    @Test
+    public void testConfiguredEnvironment() {
+        http.configure(environment);
+
+        assertEquals(http.getAdminContextPath(), environment.getAdminContext().getContextPath());
+        assertEquals(http.getApplicationContextPath(), environment.getApplicationContext().getContextPath());
+    }
+
     private static String httpRequest(String requestMethod, String url) throws Exception {
         final HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
         connection.setRequestMethod(requestMethod);
         connection.connect();
         try (InputStream inputStream = connection.getInputStream()) {
-            return CharStreams.toString(new InputStreamReader(inputStream));
+            return CharStreams.toString(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
         }
     }
 

@@ -5,8 +5,6 @@ import org.junit.Test;
 
 import java.io.PrintWriter;
 
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
-
 public class PostBodyTaskTest {
     private final PostBodyTask task = new PostBodyTask("test") {
         @Override
@@ -15,10 +13,8 @@ public class PostBodyTaskTest {
         }
     };
 
-    @SuppressWarnings("deprecation")
-    @Test
+    @Test(expected = UnsupportedOperationException.class)
     public void throwsExceptionWhenCallingExecuteWithoutThePostBody() throws Exception {
-        assertThatExceptionOfType(UnsupportedOperationException.class).isThrownBy(() ->
-            task.execute(new ImmutableMultimap.Builder<String, String>().build(), new PrintWriter(System.out)));
+        task.execute(new ImmutableMultimap.Builder<String, String>().build(), new PrintWriter(System.out));
     }
 }
