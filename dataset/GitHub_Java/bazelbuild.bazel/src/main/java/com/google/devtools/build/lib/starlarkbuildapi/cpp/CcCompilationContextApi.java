@@ -126,10 +126,4 @@ public interface CcCompilationContextApi<FileT extends FileApi> extends Starlark
       documented = false,
       useStarlarkThread = true)
   Depset getStarlarkTransitiveCompilationPrerequisites(StarlarkThread thread) throws EvalException;
-
-  @StarlarkMethod(
-      name = "validation_artifacts",
-      doc = "Returns the set of validation artifacts.",
-      structField = true)
-  Depset getStarlarkValidationArtifacts();
 }

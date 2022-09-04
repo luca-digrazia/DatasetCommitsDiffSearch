@@ -6857,33 +6857,25 @@ public class StarlarkCcCommonTest extends BuildViewTestCase {
   public void testExpandedCcCompilationContextApiBlocked() throws Exception {
     scratch.file(
         "b/BUILD",
-        "load('//my_rules:rule.bzl', 'method_rule', 'param_rule')",
-        "param_rule(",
-        "  name = 'p',",
-        ")",
-        "method_rule(",
-        "  name = 'm',",
+        "load('//my_rules:rule.bzl', 'cc_compile_rule')",
+        "cc_compile_rule(",
+        "  name='b_lib',",
+        "  srcs = ['b_lib.cc'],",
         ")");
     scratch.file("my_rules/BUILD");
     scratch.file(
         "my_rules/rule.bzl",
-        "def _m_impl(ctx):",
+        "def _impl(ctx):",
         "  comp_context = cc_common.create_compilation_context()",
         "  comp_context.transitive_compilation_prerequisites()",
         "  return [CcInfo(compilation_context = comp_context)]",
-        "def _p_impl(ctx):",
-        "  comp_context = cc_common.create_compilation_context()",
-        "  comp_context = cc_common.create_compilation_context(textual_hdrs = ['dummy.h'])",
-        "  return [CcInfo(compilation_context = comp_context)]",
-        "method_rule = rule(",
-        "  implementation = _m_impl,",
-        ")",
-        "param_rule = rule(",
-        "  implementation = _p_impl,",
+        "cc_compile_rule = rule(",
+        "  implementation = _impl,",
+        "  attrs = {",
+        "    'srcs': attr.label_list(allow_files = ['.cc']),",
+        "  },",
         ")");
-    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//b:m"));
-    assertThat(e).hasMessageThat().contains("Rule in 'my_rules' cannot use private API");
-    e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//b:p"));
+    AssertionError e = assertThrows(AssertionError.class, () -> getConfiguredTarget("//b:b_lib"));
     assertThat(e).hasMessageThat().contains("Rule in 'my_rules' cannot use private API");
   }
 }
