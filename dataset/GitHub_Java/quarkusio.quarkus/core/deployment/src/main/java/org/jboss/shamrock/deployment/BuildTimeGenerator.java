@@ -25,7 +25,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.MissingResourceException;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -409,10 +408,7 @@ public class BuildTimeGenerator {
             }
             ResultHandle locSupport = beforeAn.invokeStaticMethod(MethodDescriptor.ofMethod("org.graalvm.nativeimage.ImageSingletons", "lookup", Object.class, Class.class), beforeAn.loadClass("com.oracle.svm.core.jdk.LocalizationSupport"));
             for (String i : resourceBundles) {
-                ExceptionTable et = beforeAn.addTryCatch();
                 beforeAn.invokeVirtualMethod(ofMethod("com.oracle.svm.core.jdk.LocalizationSupport", "addToCache", void.class, String.class), locSupport, beforeAn.load(i));
-                CatchBlockCreator c = et.addCatchClause(MissingResourceException.class);
-                et.complete();
             }
 
             int count = 0;
