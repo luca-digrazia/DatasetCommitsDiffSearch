@@ -1,63 +1,64 @@
 package org.androidannotations.helper;
 
 import java.io.BufferedReader;
-import java.io.CharArrayWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
+import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
-import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
-import javax.lang.model.util.Elements;
+import javax.lang.model.element.ExecutableElement;
 
+import org.androidannotations.AndroidAnnotationProcessor;
 import org.androidannotations.exception.ProcessingException;
 
 public class ErrorHelper {
 
-	public String getErrorMessage(ProcessingEnvironment processingEnv, ProcessingException e, String aaVersion) {
-		String errorMessage = "Unexpected error in AndroidAnnotations " + aaVersion + "!\n" //
-				+ "You should check if there is already an issue about it on https://github.com/excilys/androidannotations/search?q=" + urlEncodedErrorMessage(e) + "&type=Issues\n" //
-				+ "If none exists, please open a new one with the following content and tell us if you can reproduce it or not. Don't forget to give us as much information as you can (like parts of your code in failure).\n";
-		errorMessage += "Java version: " + getJavaCompilerVersion() + "\n";
-		errorMessage += "Javac processors options: " + annotationProcessorOptions(processingEnv) + "\n";
-		errorMessage += "Stacktrace: " + stackTraceToString(e.getCause());
-
-		Element element = e.getElement();
-		if (element != null) {
-			errorMessage += "Thrown from: " + elementContainer(element) + "\n";
-			errorMessage += "Element (" + element.getClass().getSimpleName() + "): " + elementFullString(processingEnv, element) + "\n";
+	public String getErrorMessage(ProcessingException e) {
+		String errorMessage = "Unexpected error. Please report an issue on AndroidAnnotations " + AndroidAnnotationProcessor.ANDROIDANNOTATION_VERSION + ", with the following content and tell us if you can reproduce it or not. The error was thrown on:\n";
+		if (e.getElement() != null) {
+			errorMessage += elementFullString(e.getElement()) + "\n";
 		}
-
+		errorMessage += "compiled with " + getJavaCompilerVersion() + "\n";
+		errorMessage += "with stacktrace: " + stackTraceToString(e.getCause());
 		return errorMessage;
 	}
 
-	private String elementFullString(ProcessingEnvironment processingEnv, Element element) {
-		Elements elementUtils = processingEnv.getElementUtils();
-		CharArrayWriter writer = new CharArrayWriter();
-		elementUtils.printElements(writer, element);
-		return writer.toString();
-	}
-
-	private String elementContainer(Element element) {
-		Element enclosingElement = element.getEnclosingElement();
-		return enclosingElement != null ? enclosingElement.toString() : "";
-	}
-
-	private String annotationProcessorOptions(ProcessingEnvironment processingEnv) {
-		Map<String, String> options = processingEnv.getOptions();
-		Set<Entry<String, String>> optionsEntries = options.entrySet();
-
+	private String elementFullString(Element element) {
 		String result = "";
-		for (Entry<String, String> optionEntry : optionsEntries) {
-			result += optionEntry.getKey() + "=" + optionEntry.getValue() + ", ";
+		List<? extends AnnotationMirror> annotations = element.getAnnotationMirrors();
+		for (AnnotationMirror annotation : annotations) {
+			result += annotationFullString(annotation) + "\n";
 		}
-		return result.length() > 2 ? result.substring(0, result.length() - 2) : result;
+		Element enclosingElement = element.getEnclosingElement();
+		if (enclosingElement != null) {
+			result += enclosingElement.toString() + ".";
+		}
+		return result + element.asType().toString();
+	}
+
+	private String annotationFullString(AnnotationMirror annotation) {
+		String result = annotation.toString();
+
+		Map<? extends ExecutableElement, ? extends AnnotationValue> fields = annotation.getElementValues();
+		if (fields != null) {
+			result += "(";
+			Set<? extends ExecutableElement> fieldKeys = fields.keySet();
+			int i = 0;
+			for (ExecutableElement fieldKey : fieldKeys) {
+				result += fieldKey.getSimpleName().toString() + "=" + fields.get(fieldKey).getValue().toString();
+				if (++i < fieldKeys.size()) {
+					result += ", ";
+				}
+			}
+			result += ")";
+		}
+		return result;
 	}
 
 	private String getJavaCompilerVersion() {
@@ -81,14 +82,6 @@ public class ErrorHelper {
 			}
 		}
 		return "unknown";
-	}
-
-	private String urlEncodedErrorMessage(Throwable e) {
-		try {
-			return URLEncoder.encode(e.getCause().getClass().getName(), "UTF-8");
-		} catch (UnsupportedEncodingException e1) {
-			return "";
-		}
 	}
 
 	private String stackTraceToString(Throwable e) {
