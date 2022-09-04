@@ -231,12 +231,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     }
 
     helper.createCompileAction(
-        classJar,
-        manifestProtoOutput,
-        genSourceJar,
-        outputDepsProto,
-        instrumentationMetadata,
-        /* nativeHeaderOutput= */ null);
+        classJar, manifestProtoOutput, genSourceJar, outputDepsProto, instrumentationMetadata);
     helper.createSourceJarAction(srcJar, genSourceJar);
 
     common.setClassPathFragment(

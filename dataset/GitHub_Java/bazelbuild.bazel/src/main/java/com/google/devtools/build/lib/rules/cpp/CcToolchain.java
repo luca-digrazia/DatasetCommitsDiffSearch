@@ -322,7 +322,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     if (toolchain != null) {
       try {
         toolchainInfo =
-            CppToolchainInfo.create(
+            new CppToolchainInfo(
                 toolchain,
                 cppConfiguration.getCrosstoolTopPathFragment(),
                 cppConfiguration.getCcToolchainRuleLabel());
@@ -524,6 +524,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             coverageEnvironment.build(),
             toolchainInfo.supportsInterfaceSharedObjects()
                 ? ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST)
+                : null,
+            ruleContext.attributes().has("$def_parser")
+                ? ruleContext.getPrerequisiteArtifact("$def_parser", Mode.HOST)
                 : null,
             getEnvironment(ruleContext),
             builtInIncludeDirectories,
