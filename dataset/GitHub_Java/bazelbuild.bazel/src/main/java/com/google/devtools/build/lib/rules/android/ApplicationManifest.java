@@ -293,15 +293,15 @@ public final class ApplicationManifest {
     return new ApplicationManifest(ruleContext, outputManifest);
   }
 
-  /** Packages up the manifest with assets from the rule and dependent resources. */
+  /** Packages up the manifest with assets from the rule and dependent resources.
+   * @throws InterruptedException */
   public ResourceApk packWithAssets(
       Artifact resourceApk,
       RuleContext ruleContext,
       ResourceDependencies resourceDeps,
       Artifact rTxt,
       boolean incremental,
-      Artifact proguardCfg)
-      throws InterruptedException {
+      Artifact proguardCfg) throws InterruptedException {
     LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
         .withAssets(
             AndroidCommon.getAssetDir(ruleContext),
@@ -336,7 +336,7 @@ public final class ApplicationManifest {
   }
 
   /** Packages up the manifest with resource and assets from the LocalResourceContainer. */
-  public ResourceApk packAarWithDataAndResources(
+  public ResourceApk packWithDataAndResources(
       RuleContext ruleContext,
       LocalResourceContainer data,
       ResourceDependencies resourceDeps,
@@ -344,8 +344,7 @@ public final class ApplicationManifest {
       Artifact symbols,
       Artifact manifestOut,
       Artifact mergedResources,
-      boolean alwaysExportManifest)
-      throws InterruptedException {
+      boolean alwaysExportManifest) throws InterruptedException {
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -378,70 +377,26 @@ public final class ApplicationManifest {
         null /* Artifact featureAfter */);
   }
 
-  /* Creates an incremental apk from assets and data. */
-  public ResourceApk packIncrementalBinaryWithDataAndResources(
-      RuleContext ruleContext,
-      Artifact resourceApk,
-      ResourceDependencies resourceDeps,
-      ResourceFilter resourceFilter,
-      List<String> uncompressedExtensions,
-      boolean crunchPng,
-      Artifact proguardCfg)
-      throws InterruptedException {
-    LocalResourceContainer data =
-        new LocalResourceContainer.Builder(ruleContext)
-            .withAssets(
-                AndroidCommon.getAssetDir(ruleContext),
-                ruleContext.getPrerequisitesIf(
-                    // TODO(bazel-team): Remove the ResourceType construct.
-                    ResourceType.ASSETS.getAttribute(), Mode.TARGET, FileProvider.class))
-            .withResources(
-                ruleContext.getPrerequisites("resource_files", Mode.TARGET, FileProvider.class))
-            .build();
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-    return createApk(
-        ruleContext,
-        false /* isLibrary */,
-        resourceDeps,
-        resourceFilter,
-        uncompressedExtensions,
-        crunchPng,
-        true,
-        ResourceContainer.builderFromRule(ruleContext)
-            .setAssetsAndResourcesFrom(data)
-            .setManifest(getManifest())
-            .setApk(resourceApk)
-            .build(),
-        data,
-        proguardCfg,
-        null, /* mainDexProguardCfg */
-        null, /* manifestOut */
-        null, /* mergedResources */
-        null, /* dataBindingInfoZip */
-        null, /* featureOf */
-        null /* featureAfter */);
-  }
-
   /** Packages up the manifest with resource and assets from the rule and dependent resources. */
   // TODO(bazel-team): this method calls for some refactoring, 15+ params including some nullables.
-  public ResourceApk packBinaryWithDataAndResources(
+  public ResourceApk packWithDataAndResources(
+      @Nullable Artifact resourceApk,
       RuleContext ruleContext,
-      Artifact resourceApk,
+      boolean isLibrary,
       ResourceDependencies resourceDeps,
       Artifact rTxt,
+      Artifact symbols,
       ResourceFilter resourceFilter,
       List<String> uncompressedExtensions,
       boolean crunchPng,
+      boolean incremental,
       Artifact proguardCfg,
       @Nullable Artifact mainDexProguardCfg,
       Artifact manifestOut,
       Artifact mergedResources,
       Artifact dataBindingInfoZip,
       @Nullable Artifact featureOf,
-      @Nullable Artifact featureAfter)
-      throws InterruptedException {
+      @Nullable Artifact featureAfter) throws InterruptedException {
     LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
         .withAssets(
             AndroidCommon.getAssetDir(ruleContext),
@@ -460,16 +415,17 @@ public final class ApplicationManifest {
     }
     return createApk(
         ruleContext,
-        false /* isLibrary */,
+        isLibrary,
         resourceDeps,
         resourceFilter,
         uncompressedExtensions,
         crunchPng,
-        false /* incremental */,
+        incremental,
         ResourceContainer.builderFromRule(ruleContext)
             .setAssetsAndResourcesFrom(data)
             .setManifest(getManifest())
             .setRTxt(rTxt)
+            .setSymbols(symbols)
             .setApk(resourceApk)
             .build(),
         data,
@@ -480,55 +436,6 @@ public final class ApplicationManifest {
         dataBindingInfoZip,
         featureOf,
         featureAfter);
-  }
-
-  public ResourceApk packLibraryWithDataAndResources(
-      RuleContext ruleContext,
-      @Nullable Artifact resourceApk,
-      ResourceDependencies resourceDeps,
-      Artifact rTxt,
-      Artifact symbols,
-      ResourceFilter resourceFilter,
-      Artifact manifestOut,
-      Artifact mergedResources,
-      Artifact dataBindingInfoZip)
-      throws InterruptedException {
-    LocalResourceContainer data =
-        new LocalResourceContainer.Builder(ruleContext)
-            .withAssets(
-                AndroidCommon.getAssetDir(ruleContext),
-                ruleContext.getPrerequisitesIf(
-                    // TODO(bazel-team): Remove the ResourceType construct.
-                    ResourceType.ASSETS.getAttribute(), Mode.TARGET, FileProvider.class))
-            .withResources(
-                ruleContext.getPrerequisites("resource_files", Mode.TARGET, FileProvider.class))
-            .build();
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-    return createApk(
-        ruleContext,
-        true /* isLibrary */,
-        resourceDeps,
-        resourceFilter,
-        ImmutableList.<String>of(),
-        false /* crunchPng */,
-        false /* incremental */,
-        ResourceContainer.builderFromRule(ruleContext)
-            .setAssetsAndResourcesFrom(data)
-            .setManifest(getManifest())
-            .setRTxt(rTxt)
-            .setSymbols(symbols)
-            .setApk(null)
-            .build(),
-        data,
-        null /* proguardCfg */,
-        null /* mainDexProguardCfg */,
-        manifestOut,
-        mergedResources,
-        dataBindingInfoZip,
-        null /* featureOf */,
-        null /* featureAfter */);
   }
 
   private ResourceApk createApk(
@@ -679,10 +586,9 @@ public final class ApplicationManifest {
 
   /**
    * Packages up the manifest with resources, and generates the R.java.
-   *
    * @throws InterruptedException
-   * @deprecated in favor of {@link ApplicationManifest#packBinaryWithDataAndResources} and {@link
-   *     ApplicationManifest#packLibraryWithDataAndResources}.
+   *
+   * @deprecated in favor of {@link ApplicationManifest#packWithDataAndResources}.
    */
   @Deprecated
   public ResourceApk packWithResources(
@@ -691,8 +597,7 @@ public final class ApplicationManifest {
       ResourceDependencies resourceDeps,
       boolean createSource,
       Artifact proguardCfg,
-      @Nullable Artifact mainDexProguardCfg)
-      throws InterruptedException {
+      @Nullable Artifact mainDexProguardCfg) throws InterruptedException {
 
     TransitiveInfoCollection resourcesPrerequisite =
         ruleContext.getPrerequisite("resources", Mode.TARGET);
