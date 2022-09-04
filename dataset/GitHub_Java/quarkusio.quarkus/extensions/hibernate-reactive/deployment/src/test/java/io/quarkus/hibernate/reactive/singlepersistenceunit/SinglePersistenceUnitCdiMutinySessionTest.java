@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.inject.Inject;
 
+import org.hibernate.SessionFactory;
 import org.hibernate.reactive.mutiny.Mutiny;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -22,22 +23,19 @@ public class SinglePersistenceUnitCdiMutinySessionTest {
                     .addAsResource("application.properties"));
 
     @Inject
-    Mutiny.Session session;
+    Mutiny.SessionFactory sessionFactory;
 
     @Test
     @ActivateRequestContext
     public void test() {
         DefaultEntity entity = new DefaultEntity("default");
 
-        DefaultEntity retrievedEntity = session.persist(entity)
-                .chain(() -> session.flush())
-                .invoke(() -> session.clear())
-                .chain(() -> session.find(DefaultEntity.class, entity.getId()))
+        DefaultEntity retrievedEntity = sessionFactory.withTransaction((session, tx) -> session.persist(entity))
+                .chain(() -> sessionFactory.withSession(session -> session.find(DefaultEntity.class, entity.getId())))
                 .await().indefinitely();
 
         assertThat(retrievedEntity)
                 .isNotSameAs(entity)
                 .returns(entity.getName(), DefaultEntity::getName);
     }
-
 }
