@@ -23,11 +23,15 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.skyframe.RecursivePkgValue.RecursivePkgKey;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import com.google.devtools.build.skyframe.ValueOrException;
 import java.util.Map;
 
 /**
@@ -103,7 +107,7 @@ abstract class RecursiveDirectoryTraversalFunction<
      *       cycle
      * </ol>
      */
-    void notePackageError(String noSuchPackageExceptionErrorMessage);
+    void notePackageError(NoSuchPackageException e);
   }
 
   /**
@@ -134,39 +138,47 @@ abstract class RecursiveDirectoryTraversalFunction<
     Map<SkyKey, SkyValue> subdirectorySkyValues;
     if (packageExistenceAndSubdirDeps.packageExists()) {
       PathFragment rootRelativePath = rootedPath.getRootRelativePath();
-      SkyKey packageErrorMessageKey =
-          PackageErrorMessageValue.key(
+      SkyKey packageKey =
+          PackageValue.key(
               PackageIdentifier.create(recursivePkgKey.getRepository(), rootRelativePath));
-      Map<SkyKey, SkyValue> dependentSkyValues =
-          env.getValues(Iterables.concat(childDeps, ImmutableList.of(packageErrorMessageKey)));
+      Map<SkyKey, ValueOrException<NoSuchPackageException>> dependentSkyValues =
+          env.getValuesOrThrow(
+              Iterables.concat(childDeps, ImmutableList.of(packageKey)),
+              NoSuchPackageException.class);
       if (env.valuesMissing()) {
         return null;
       }
-      PackageErrorMessageValue pkgErrorMessageValue =
-          (PackageErrorMessageValue) dependentSkyValues.get(packageErrorMessageKey);
-      switch (pkgErrorMessageValue.getResult()) {
-        case NO_ERROR:
-          consumer.notePackage(rootRelativePath);
-          break;
-        case ERROR:
+      try {
+        PackageValue pkgValue = (PackageValue) dependentSkyValues.get(packageKey).get();
+        if (pkgValue == null) {
+          return null;
+        }
+        Package pkg = pkgValue.getPackage();
+        if (pkg.containsErrors()) {
           env.getListener()
               .handle(Event.error("package contains errors: " + rootRelativePath.getPathString()));
-          consumer.notePackage(rootRelativePath);
-          break;
-        case NO_SUCH_PACKAGE_EXCEPTION:
-          // The package had errors, but don't fail-fast as there might be subpackages below the
-          // current directory.
-          String msg = pkgErrorMessageValue.getNoSuchPackageExceptionMessage();
-          env.getListener().handle(Event.error(msg));
-          consumer.notePackageError(msg);
-          break;
-        default:
-          throw new IllegalStateException(pkgErrorMessageValue.getResult().toString());
+        }
+        consumer.notePackage(rootRelativePath);
+      } catch (NoSuchPackageException e) {
+        // The package had errors, but don't fail-fast as there might be subpackages below the
+        // current directory.
+        env.getListener().handle(Event.error(e.getMessage()));
+        consumer.notePackageError(e);
+        if (env.valuesMissing()) {
+          return null;
+        }
       }
-      subdirectorySkyValues =
-          ImmutableMap.copyOf(
-              Maps.filterKeys(
-                  dependentSkyValues, Predicates.not(Predicates.equalTo(packageErrorMessageKey))));
+      ImmutableMap.Builder<SkyKey, SkyValue> subdirectoryBuilder = ImmutableMap.builder();
+      for (Map.Entry<SkyKey, ValueOrException<NoSuchPackageException>> entry :
+          Maps.filterKeys(dependentSkyValues, Predicates.not(Predicates.equalTo(packageKey)))
+              .entrySet()) {
+        try {
+          subdirectoryBuilder.put(entry.getKey(), entry.getValue().get());
+        } catch (NoSuchPackageException e) {
+          // ignored.
+        }
+      }
+      subdirectorySkyValues = subdirectoryBuilder.build();
     } else {
       subdirectorySkyValues = env.getValues(childDeps);
     }

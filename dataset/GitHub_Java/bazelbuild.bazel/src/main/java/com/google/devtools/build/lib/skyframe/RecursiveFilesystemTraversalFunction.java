@@ -133,7 +133,16 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
       }
 
       if (rootInfo.type.isFile()) {
-        return resultForFileRoot(traversal.path, rootInfo);
+        if (traversal.pattern == null
+            || traversal
+                .pattern
+                .matcher(rootInfo.realPath.getRootRelativePath().getPathString())
+                .matches()) {
+          // The root is a file or a symlink to one.
+          return resultForFileRoot(traversal.path, rootInfo);
+        } else {
+          return RecursiveFilesystemTraversalValue.EMPTY;
+        }
       }
 
       // Otherwise the root is a directory or a symlink to one.

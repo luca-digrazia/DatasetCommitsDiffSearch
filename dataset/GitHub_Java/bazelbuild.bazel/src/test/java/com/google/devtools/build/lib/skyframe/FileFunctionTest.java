@@ -129,11 +129,11 @@ public class FileFunctionTest {
     AtomicReference<PathPackageLocator> pkgLocatorRef = new AtomicReference<>(pkgLocator);
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(pkgRoot.asPath(), outputBase, outputBase),
+            new ServerDirectories(pkgRoot.asPath(), outputBase),
             pkgRoot.asPath(),
             TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper =
-        ExternalFilesHelper.createForTesting(pkgLocatorRef, externalFileAction, directories);
+        new ExternalFilesHelper(pkgLocatorRef, externalFileAction, directories);
     differencer = new SequencedRecordingDifferencer();
     MemoizingEvaluator evaluator =
         new InMemoryMemoizingEvaluator(
@@ -166,8 +166,8 @@ public class FileFunctionTest {
                     new WorkspaceFileFunction(
                         TestRuleClassProvider.getRuleClassProvider(),
                         TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
-                            .builder(directories)
-                            .build(TestRuleClassProvider.getRuleClassProvider()),
+                            .builder()
+                            .build(TestRuleClassProvider.getRuleClassProvider(), fs),
                         directories))
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction())
