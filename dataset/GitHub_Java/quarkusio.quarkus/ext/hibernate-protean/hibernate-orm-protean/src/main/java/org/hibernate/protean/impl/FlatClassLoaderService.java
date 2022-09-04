@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.hibernate.protean.impl;
 
 import java.io.IOException;
@@ -22,12 +6,13 @@ import java.lang.reflect.InvocationHandler;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ServiceLoader;
 
-import org.hibernate.AssertionFailure;
+import org.hibernate.boot.registry.classloading.internal.ClassLoaderServiceImpl;
 import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
@@ -50,7 +35,7 @@ public class FlatClassLoaderService implements ClassLoaderService {
 			return (Class<T>) Class.forName( className, false, getClassLoader() );
 		}
 		catch (ClassNotFoundException e) {
-			log.debugf( "Could not load class '%s' using Class.forName(String) and class loader %s", className , getClassLoader());
+			log.errorf( "Could not load class '%s' using Class.forName(String) and class loader %s", className , getClassLoader());
 		}
 		return null;
 	}
@@ -59,10 +44,10 @@ public class FlatClassLoaderService implements ClassLoaderService {
 	public URL locateResource(String name) {
 		URL resource = getClassLoader().getResource( name );
 		if ( resource == null ) {
-			log.debugf( "Loading of resource '%s' failed. Maybe that's ok, maybe you forgot to include this resource in the binary image? -H:IncludeResources=", name );
+			log.warnf( "Loading of resource '%s' failed. Maybe that's ok, maybe you forgot to include this resource in the binary image? -H:IncludeResources=", name );
 		}
 		else {
-			log.tracef( "Successfully loaded resource '%s'", name );
+			log.debugf( "Successfully loaded resource '%s'", name );
 		}
 		return resource;
 	}
@@ -71,10 +56,10 @@ public class FlatClassLoaderService implements ClassLoaderService {
 	public InputStream locateResourceStream(String name) {
 		InputStream resourceAsStream = getClassLoader().getResourceAsStream( name );
 		if ( resourceAsStream == null ) {
-			log.debugf( "Loading of resource '%s' failed. Maybe that's ok, maybe you forgot to include this resource in the binary image? -H:IncludeResources=", name );
+			log.warnf( "Loading of resource '%s' failed. Maybe that's ok, maybe you forgot to include this resource in the binary image? -H:IncludeResources=", name );
 		}
 		else {
-			log.tracef( "Successfully loaded resource '%s'", name );
+			log.debugf( "Successfully loaded resource '%s'", name );
 		}
 		return resourceAsStream;
 	}
@@ -106,7 +91,8 @@ public class FlatClassLoaderService implements ClassLoaderService {
 
 	//@Override : not present on all tested branches!
 	public <T> T generateProxy(InvocationHandler handler, Class... interfaces) {
-		throw new AssertionFailure( "Not implemented! generateProxy(InvocationHandler handler, Class... interfaces)" );
+		log.error( "Not implemented! generateProxy(InvocationHandler handler, Class... interfaces)" );
+		return null;
 	}
 
 	@Override
@@ -122,7 +108,7 @@ public class FlatClassLoaderService implements ClassLoaderService {
 
 	private ClassLoader getClassLoader() {
 		ClassLoader cl = Thread.currentThread().getContextClassLoader();
-		if (cl == null) {
+		if(cl == null) {
 			return FlatClassLoaderService.class.getClassLoader();
 		}
 		return cl;
