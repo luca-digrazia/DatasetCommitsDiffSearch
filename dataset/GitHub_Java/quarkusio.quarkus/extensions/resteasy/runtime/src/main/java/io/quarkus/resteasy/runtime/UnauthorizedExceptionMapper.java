@@ -13,8 +13,6 @@ import org.jboss.logging.Logger;
 import org.jboss.resteasy.core.ResteasyContext;
 
 import io.quarkus.security.UnauthorizedException;
-import io.quarkus.security.identity.CurrentIdentityAssociation;
-import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.security.ChallengeData;
 import io.quarkus.vertx.http.runtime.security.HttpAuthenticator;
 import io.vertx.ext.web.RoutingContext;
@@ -53,7 +51,6 @@ public class UnauthorizedExceptionMapper implements ExceptionMapper<Unauthorized
 
     @Override
     public Response toResponse(UnauthorizedException exception) {
-        SecurityIdentity identity = CurrentIdentityAssociation.current();
         if (HTTP_SERVLET_REQUEST != null) {
             Object httpServletRequest = ResteasyContext.getContextData(HTTP_SERVLET_REQUEST);
             if (httpServletRequest != null) {
