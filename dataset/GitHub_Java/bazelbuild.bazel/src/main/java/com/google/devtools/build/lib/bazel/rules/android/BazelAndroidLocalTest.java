@@ -70,19 +70,20 @@ public class BazelAndroidLocalTest extends AndroidLocalTestBase {
   }
 
   @Override
-  protected String addCoverageSupport(
+  protected String getMainClass(
       RuleContext ruleContext,
       JavaSemantics javaSemantics,
       JavaCompilationHelper helper,
       Artifact executable,
       Artifact instrumentationMetadata,
       JavaCompilationArtifacts.Builder javaArtifactsBuilder,
-      JavaTargetAttributes.Builder attributesBuilder,
-      String mainClass)
-      throws RuleErrorException {
+      JavaTargetAttributes.Builder attributesBuilder)
+      throws InterruptedException, RuleErrorException {
     // coverage does not yet work with android_local_test
-    ruleContext.throwWithRuleError("android_local_test does not yet support coverage");
-    return "";
+    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
+      ruleContext.throwWithRuleError("android_local_test does not yet support coverage");
+    }
+    return "com.google.testing.junit.runner.BazelTestRunner";
   }
 
   @Override
