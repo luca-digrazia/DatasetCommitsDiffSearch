@@ -49,7 +49,7 @@ public final class WindowsSandboxUtil {
     try {
       process =
           new SubprocessBuilder()
-              .setArgv(ImmutableList.of(binary.getPathString(), "-h"))
+              .setArgv(binary.getPathString(), "-h")
               .setStdout(StreamAction.STREAM)
               .redirectErrorStream(true)
               .setWorkingDirectory(new File("."))
