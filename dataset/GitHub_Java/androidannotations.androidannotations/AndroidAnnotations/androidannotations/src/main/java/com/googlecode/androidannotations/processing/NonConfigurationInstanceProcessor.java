@@ -45,7 +45,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class NonConfigurationInstanceProcessor implements DecoratingElementProcessor {
+public class NonConfigurationInstanceProcessor implements ElementProcessor {
 
 	private APTCodeModelHelper aptCodeModelHelper;
 	private AnnotationHelper annotationHelper;
@@ -61,7 +61,8 @@ public class NonConfigurationInstanceProcessor implements DecoratingElementProce
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) throws JClassAlreadyExistsException {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws JClassAlreadyExistsException {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
 		NonConfigurationHolder ncHolder = holder.nonConfigurationHolder;
 
@@ -70,7 +71,7 @@ public class NonConfigurationInstanceProcessor implements DecoratingElementProce
 			ncHolder = new NonConfigurationHolder();
 			holder.nonConfigurationHolder = ncHolder;
 
-			ncHolder.holderClass = holder.generatedClass._class(JMod.PRIVATE | JMod.STATIC, "NonConfigurationInstancesHolder");
+			ncHolder.holderClass = holder.eBean._class(JMod.PRIVATE | JMod.STATIC, "NonConfigurationInstancesHolder");
 
 			JFieldVar superNonConfigurationInstanceField = ncHolder.holderClass.field(PUBLIC | FINAL, Object.class, "superNonConfigurationInstance");
 
@@ -82,7 +83,7 @@ public class NonConfigurationInstanceProcessor implements DecoratingElementProce
 					.assign(_this().ref(superNonConfigurationInstanceField), superNonConfigurationInstanceParam);
 
 			TypeMirror fragmentActivityType = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY).asType();
-			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(holder.generatedClass._extends().fullName());
+			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(holder.eBean._extends().fullName());
 
 			String getLastNonConfigurationInstanceName = "getLastNonConfigurationInstance";
 			String onRetainNonConfigurationInstanceName = "onRetainNonConfigurationInstance";
@@ -100,7 +101,7 @@ public class NonConfigurationInstanceProcessor implements DecoratingElementProce
 
 			{
 				// getLastNonConfigurationInstance()
-				JMethod getLastNonConfigurationInstance = holder.generatedClass.method(PUBLIC, Object.class, getLastNonConfigurationInstanceName);
+				JMethod getLastNonConfigurationInstance = holder.eBean.method(PUBLIC, Object.class, getLastNonConfigurationInstanceName);
 
 				getLastNonConfigurationInstance.annotate(Override.class);
 				JBlock body = getLastNonConfigurationInstance.body();
@@ -114,7 +115,7 @@ public class NonConfigurationInstanceProcessor implements DecoratingElementProce
 
 			{
 				// onRetainNonConfigurationInstance()
-				JMethod onRetainNonConfigurationInstance = holder.generatedClass.method(PUBLIC, ncHolder.holderClass, onRetainNonConfigurationInstanceName);
+				JMethod onRetainNonConfigurationInstance = holder.eBean.method(PUBLIC, ncHolder.holderClass, onRetainNonConfigurationInstanceName);
 
 				onRetainNonConfigurationInstance.annotate(Override.class);
 				ncHolder.newHolder = _new(ncHolder.holderClass);
