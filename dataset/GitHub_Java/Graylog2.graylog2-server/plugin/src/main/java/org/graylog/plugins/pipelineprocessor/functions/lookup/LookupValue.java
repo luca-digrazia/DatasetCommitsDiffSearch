@@ -23,31 +23,25 @@ public class LookupValue extends AbstractFunction<Object> {
     @Inject
     public LookupValue(LookupTableService lookupTableService) {
         lookupTableParam = string("lookup_table", LookupTableService.Function.class)
-                .description("The existing lookup table to use to lookup the given key")
                 .transform(tableName -> lookupTableService.newBuilder().lookupTable(tableName).build())
                 .build();
-        keyParam = object("key")
-                .description("The key to lookup in the table")
-                .build();
-        defaultParam = object("default")
-                .description("The default that should be used if there is no lookup result")
-                .optional()
-                .build();
+        keyParam = object("key").build();
+        defaultParam = object("default").optional().build();
     }
 
     @Override
     public Object evaluate(FunctionArgs args, EvaluationContext context) {
         Object key = keyParam.required(args, context);
         if (key == null) {
-            return defaultParam.optional(args, context).orElse(null);
+            return defaultParam.optional(args, context);
         }
         LookupTableService.Function table = lookupTableParam.required(args, context);
         if (table == null) {
-            return defaultParam.optional(args, context).orElse(null);
+            return defaultParam.optional(args, context);
         }
         LookupResult result = table.lookup(key);
         if (result == null || result.isEmpty()) {
-            return defaultParam.optional(args, context).orElse(null);
+            return defaultParam.optional(args, context);
         }
         return result.singleValue();
     }
@@ -58,7 +52,7 @@ public class LookupValue extends AbstractFunction<Object> {
         return FunctionDescriptor.builder()
                 .name(NAME)
                 .description("Looks a value up in the named lookup table.")
-                .params(lookupTableParam, keyParam, defaultParam)
+                .params(lookupTableParam, keyParam)
                 .returnType(Object.class)
                 .build();
     }
