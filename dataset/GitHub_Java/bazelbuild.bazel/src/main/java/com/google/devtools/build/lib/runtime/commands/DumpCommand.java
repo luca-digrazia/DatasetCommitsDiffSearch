@@ -154,13 +154,14 @@ public class DumpCommand implements BlazeCommand {
     public boolean dumpRules;
 
     @Option(
-        name = "skylark_memory",
-        defaultValue = "null",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-        effectTags = {OptionEffectTag.BAZEL_MONITORING},
-        help =
-            "Dumps a pprof-compatible memory profile to the specified path. To learn more please"
-                + " see https://github.com/google/pprof.")
+      name = "skylark_memory",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
+      effectTags = {OptionEffectTag.BAZEL_MONITORING},
+      help =
+          "Dumps a pprof-compatible memory profile to the specified path."
+              + " To learn more please see <a href=https://github.com/google/pprof>pprof</a>."
+    )
     public String skylarkMemory;
 
     @Option(

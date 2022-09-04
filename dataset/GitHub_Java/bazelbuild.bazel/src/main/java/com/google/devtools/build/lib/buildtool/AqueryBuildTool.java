@@ -20,7 +20,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.query2.PostAnalysisQueryEnvironment;
 import com.google.devtools.build.lib.query2.PostAnalysisQueryEnvironment.TopLevelConfigurations;
-import com.google.devtools.build.lib.query2.aquery.ActionGraphProtoOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.aquery.ActionGraphProtoV2OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.aquery.ActionGraphQueryEnvironment;
 import com.google.devtools.build.lib.query2.aquery.AqueryActionFilter;
 import com.google.devtools.build.lib.query2.aquery.AqueryOptions;
@@ -34,17 +34,15 @@ import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.QueryRuntimeHelper;
 import com.google.devtools.build.lib.runtime.QueryRuntimeHelper.QueryRuntimeHelperException;
-import com.google.devtools.build.lib.server.FailureDetails.ActionQuery;
-import com.google.devtools.build.lib.server.FailureDetails.ActionQuery.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.actiongraph.v2.ActionGraphDump;
 import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler;
 import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler.OutputType;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.InvalidAqueryOutputFormatException;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
+import com.google.protobuf.TextFormat;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Collection;
@@ -74,35 +72,53 @@ public final class AqueryBuildTool extends PostAnalysisQueryBuildTool<Configured
               ? null
               : new PrintStream(queryRuntimeHelper.getOutputStreamForQueryOutput());
 
-      try (AqueryOutputHandler aqueryOutputHandler =
-          ActionGraphProtoOutputFormatterCallback.constructAqueryOutputHandler(
-              OutputType.fromString(aqueryOptions.outputFormat),
-              queryRuntimeHelper.getOutputStreamForQueryOutput(),
-              printStream)) {
-        ActionGraphDump actionGraphDump =
-            new ActionGraphDump(
-                aqueryOptions.includeCommandline,
-                aqueryOptions.includeArtifacts,
-                actionFilters,
-                aqueryOptions.includeParamFiles,
-                aqueryOutputHandler);
-        ((SequencedSkyframeExecutor) env.getSkyframeExecutor()).dumpSkyframeState(actionGraphDump);
-      } catch (InvalidAqueryOutputFormatException e) {
-        String message =
-            "--skyframe_state must be used with --output=proto|textproto|jsonproto. "
-                + e.getMessage();
-        env.getReporter().handle(Event.error(message));
-        return getFailureResult(message, Code.SKYFRAME_STATE_PREREQ_UNMET);
+      if (aqueryOptions.protoV2) {
+        AqueryOutputHandler aqueryOutputHandler =
+            ActionGraphProtoV2OutputFormatterCallback.constructAqueryOutputHandler(
+                OutputType.fromString(aqueryOptions.outputFormat),
+                queryRuntimeHelper.getOutputStreamForQueryOutput(),
+                printStream);
+        try {
+          ActionGraphDump actionGraphDump =
+              new ActionGraphDump(
+                  aqueryOptions.includeCommandline,
+                  aqueryOptions.includeArtifacts,
+                  actionFilters,
+                  aqueryOptions.includeParamFiles,
+                  aqueryOutputHandler);
+          ((SequencedSkyframeExecutor) env.getSkyframeExecutor())
+              .dumpSkyframeState(actionGraphDump);
+        } finally {
+          aqueryOutputHandler.close();
+        }
+      } else {
+        ActionGraphContainer actionGraphContainer =
+            ((SequencedSkyframeExecutor) env.getSkyframeExecutor())
+                .getActionGraphContainer(
+                    aqueryOptions.includeCommandline,
+                    actionFilters,
+                    aqueryOptions.includeParamFiles,
+                    aqueryOptions.includeArtifacts);
+
+        // Write the data.
+        if (OutputType.BINARY.formatName().equals(aqueryOptions.outputFormat)) {
+          actionGraphContainer.writeTo(printStream);
+        } else if (OutputType.TEXT.formatName().equals(aqueryOptions.outputFormat)) {
+          TextFormat.printer().print(actionGraphContainer, printStream);
+        } else {
+          throw new IllegalStateException(
+              "Unsupported output format "
+                  + aqueryOptions.outputFormat
+                  + ": --skyframe_state must be used with --output=proto or --output=textproto.");
+        }
       }
       return BlazeCommandResult.success();
     } catch (CommandLineExpansionException e) {
-      String message = "Error while parsing command: " + e.getMessage();
-      env.getReporter().handle(Event.error(message));
-      return getFailureResult(message, Code.COMMAND_LINE_EXPANSION_FAILURE);
+      env.getReporter().handle(Event.error("Error while parsing command: " + e.getMessage()));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     } catch (IOException e) {
-      String message = "Error while emitting output: " + e.getMessage();
-      env.getReporter().handle(Event.error(message));
-      return getFailureResult(message, Code.OUTPUT_FAILURE);
+      env.getReporter().handle(Event.error(e.getMessage()));
+      return BlazeCommandResult.exitCode(ExitCode.RUN_FAILURE);
     } catch (QueryRuntimeHelperException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
       return BlazeCommandResult.failureDetail(e.getFailureDetail());
@@ -130,7 +146,7 @@ public final class AqueryBuildTool extends PostAnalysisQueryBuildTool<Configured
             extraFunctions,
             topLevelConfigurations,
             hostConfiguration,
-            env.getRelativeWorkingDirectory(),
+            env.getRelativeWorkingDirectory().getPathString(),
             env.getPackageManager().getPackagePath(),
             () -> walkableGraph,
             aqueryOptions);
@@ -214,13 +230,5 @@ public final class AqueryBuildTool extends PostAnalysisQueryBuildTool<Configured
     AqueryActionFilterException(String message) {
       super(message);
     }
-  }
-
-  private static BlazeCommandResult getFailureResult(String message, Code detailedCode) {
-    return BlazeCommandResult.failureDetail(
-        FailureDetail.newBuilder()
-            .setMessage(message)
-            .setActionQuery(ActionQuery.newBuilder().setCode(detailedCode))
-            .build());
   }
 }

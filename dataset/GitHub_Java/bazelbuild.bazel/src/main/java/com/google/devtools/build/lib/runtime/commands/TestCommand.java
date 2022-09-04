@@ -39,10 +39,8 @@ import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSumm
 import com.google.devtools.build.lib.runtime.TestResultNotifier;
 import com.google.devtools.build.lib.runtime.TestSummaryPrinter.TestLogPathFormatter;
 import com.google.devtools.build.lib.runtime.UiOptions;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.TestCommand.Code;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionPriority.PriorityCategory;
@@ -122,25 +120,18 @@ public class TestCommand implements BlazeCommand {
       targets = TargetPatternsHelper.readFrom(env, options);
     } catch (TargetPatternsHelper.TargetPatternsHelperException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
-      return BlazeCommandResult.failureDetail(e.getFailureDetail());
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
-
-    BuildRequest.Builder builder =
-        BuildRequest.builder()
-            .setCommandName(getClass().getAnnotation(Command.class).name())
-            .setId(env.getCommandId())
-            .setOptions(options)
-            .setStartupOptions(runtime.getStartupOptionsProvider())
-            .setOutErr(env.getReporter().getOutErr())
-            .setTargets(targets)
-            .setStartTimeMillis(env.getCommandStartTime())
-            .setRunTests(true);
+    BuildRequest request = BuildRequest.create(
+        getClass().getAnnotation(Command.class).name(), options,
+        runtime.getStartupOptionsProvider(), targets,
+        env.getReporter().getOutErr(), env.getCommandId(), env.getCommandStartTime());
+    request.setRunTests();
     if (options.getOptions(CoreOptions.class).collectCodeCoverage
         && !options.containsExplicitOption(
             InstrumentationFilterSupport.INSTRUMENTATION_FILTER_FLAG)) {
-      builder.setNeedsInstrumentationFilter(true);
+      request.setNeedsInstrumentationFilter(true);
     }
-    BuildRequest request = builder.build();
 
     BuildResult buildResult = new BuildTool(env).processRequest(request, null);
 
@@ -150,16 +141,10 @@ public class TestCommand implements BlazeCommand {
       // This can happen if there were errors in the target parsing or loading phase
       // (original exitcode=BUILD_FAILURE) or if there weren't but --noanalyze was given
       // (original exitcode=SUCCESS).
-      String message = "Couldn't start the build. Unable to run tests";
-      env.getReporter().handle(Event.error(message));
+      env.getReporter().handle(Event.error("Couldn't start the build. Unable to run tests"));
       DetailedExitCode detailedExitCode =
           buildResult.getSuccess()
-              ? DetailedExitCode.of(
-                  FailureDetail.newBuilder()
-                      .setMessage(message)
-                      .setTestCommand(
-                          FailureDetails.TestCommand.newBuilder().setCode(Code.TEST_WITH_NOANALYZE))
-                      .build())
+              ? DetailedExitCode.justExitCode(ExitCode.PARSING_FAILURE)
               : buildResult.getDetailedExitCode();
       env.getEventBus()
           .post(
@@ -172,17 +157,12 @@ public class TestCommand implements BlazeCommand {
     // TODO(bazel-team): the check above shadows NO_TESTS_FOUND, but switching the conditions breaks
     // more tests
     if (testTargets.isEmpty()) {
-      String message = "No test targets were found, yet testing was requested";
-      env.getReporter().handle(Event.error(null, message));
+      env.getReporter().handle(Event.error(
+          null, "No test targets were found, yet testing was requested"));
 
       DetailedExitCode detailedExitCode =
           buildResult.getSuccess()
-              ? DetailedExitCode.of(
-                  FailureDetail.newBuilder()
-                      .setMessage(message)
-                      .setTestCommand(
-                          FailureDetails.TestCommand.newBuilder().setCode(Code.NO_TEST_TARGETS))
-                      .build())
+              ? DetailedExitCode.justExitCode(ExitCode.NO_TESTS_FOUND)
               : buildResult.getDetailedExitCode();
       env.getEventBus()
           .post(
@@ -193,11 +173,12 @@ public class TestCommand implements BlazeCommand {
       return BlazeCommandResult.detailedExitCode(detailedExitCode);
     }
 
-    DetailedExitCode testResults =
+    boolean buildSuccess = buildResult.getSuccess();
+    boolean testSuccess =
         analyzeTestResults(
             testTargets, buildResult.getSkippedTargets(), testListener, options, env, printer);
 
-    if (testResults.isSuccess() && !buildResult.getSuccess()) {
+    if (testSuccess && !buildSuccess) {
       // If all tests run successfully, test summary should include warning if
       // there were build errors not associated with the test targets.
       printer.printLn(AnsiTerminalPrinter.Mode.ERROR
@@ -206,8 +187,11 @@ public class TestCommand implements BlazeCommand {
     }
 
     DetailedExitCode detailedExitCode =
-        DetailedExitCode.DetailedExitCodeComparator.chooseMoreImportantWithFirstIfTie(
-            buildResult.getDetailedExitCode(), testResults);
+        buildSuccess
+            ? (testSuccess
+                ? DetailedExitCode.success()
+                : DetailedExitCode.justExitCode(ExitCode.TESTS_FAILED))
+            : buildResult.getDetailedExitCode();
     env.getEventBus()
         .post(
             new TestingCompleteEvent(
@@ -218,10 +202,10 @@ public class TestCommand implements BlazeCommand {
   }
 
   /**
-   * Analyzes test results and prints summary information. Returns a {@link DetailedExitCode}
-   * summarizing those test results.
+   * Analyzes test results and prints summary information. Returns true if and only if all tests
+   * were successful.
    */
-  private static DetailedExitCode analyzeTestResults(
+  private boolean analyzeTestResults(
       Collection<ConfiguredTarget> testTargets,
       Collection<ConfiguredTarget> skippedTargets,
       AggregatingTestListener listener,

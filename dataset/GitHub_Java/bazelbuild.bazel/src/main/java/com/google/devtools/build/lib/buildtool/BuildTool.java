@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.InterruptedFailureDetails;
@@ -281,7 +280,8 @@ public class BuildTool {
     maybeSetStopOnFirstFailure(request, result);
     int startSuspendCount = suspendCount();
     Throwable catastrophe = null;
-    DetailedExitCode detailedExitCode = null;
+    DetailedExitCode detailedExitCode =
+        DetailedExitCode.justExitCode(ExitCode.BLAZE_INTERNAL_ERROR);
     try {
       buildTargets(request, result, validator);
       detailedExitCode = DetailedExitCode.success();
@@ -335,15 +335,9 @@ public class BuildTool {
       reportExceptionError(e);
       result.setCatastrophe();
     } catch (Throwable throwable) {
-      detailedExitCode = CrashFailureDetails.detailedExitCodeForThrowable(throwable);
       catastrophe = throwable;
       Throwables.propagate(throwable);
     } finally {
-      if (detailedExitCode == null) {
-        detailedExitCode =
-            CrashFailureDetails.detailedExitCodeForThrowable(
-                new IllegalStateException("Unspecified DetailedExitCode"));
-      }
       stopRequest(result, catastrophe, detailedExitCode, startSuspendCount);
     }
 

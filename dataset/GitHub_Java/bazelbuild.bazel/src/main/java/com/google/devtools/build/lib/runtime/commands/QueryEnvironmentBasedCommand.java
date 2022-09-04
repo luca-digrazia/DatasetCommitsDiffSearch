@@ -16,13 +16,11 @@ package com.google.devtools.build.lib.runtime.commands;
 import static com.google.devtools.build.lib.packages.Rule.ALL_LABELS;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.common.UniverseScope;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
@@ -58,6 +56,7 @@ import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.TriState;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -174,7 +173,7 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
               env,
               options.getOptions(KeepGoingOption.class).keepGoing,
               !streamResults,
-              getUniverseScope(queryOptions),
+              queryOptions.universeScope,
               options.getOptions(LoadingPhaseThreadsOption.class).threads,
               settings,
               useGraphlessQuery)) {
@@ -200,28 +199,14 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
             if (queryEvalResult.getSuccess()) {
               return BlazeCommandResult.success();
             }
-            // The numerical exit code expected by query users in this case is always 3
-            // (corresponding to ExitCode.PARTIAL_ANALYSIS_FAILURE), which is why the command
-            // result returned here overrides any numerical code associated with the
-            // detailedExitCode in the eval result.
-            return BlazeCommandResult.detailedExitCode(
-                DetailedExitCode.of(
-                    ExitCode.PARTIAL_ANALYSIS_FAILURE,
-                    queryEvalResult.getDetailedExitCode().getFailureDetail()));
+            // TODO(b/138456686): query + keep_going partial failures require more refactoring for
+            //  detailed failure representations.
+            return BlazeCommandResult.exitCode(ExitCode.PARTIAL_ANALYSIS_FAILURE);
           });
     } catch (QueryRuntimeHelperException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
       return BlazeCommandResult.detailedExitCode(DetailedExitCode.of(e.getFailureDetail()));
     }
-  }
-
-  private static UniverseScope getUniverseScope(QueryOptions queryOptions) {
-    if (!queryOptions.universeScope.isEmpty()) {
-      return UniverseScope.fromUniverseScopeList(ImmutableList.copyOf(queryOptions.universeScope));
-    }
-    return queryOptions.inferUniverseScope
-        ? UniverseScope.INFER_FROM_QUERY_EXPRESSION
-        : UniverseScope.EMPTY;
   }
 
   protected abstract Either<BlazeCommandResult, QueryEvalResult> doQuery(
@@ -237,7 +222,7 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
       CommandEnvironment env,
       boolean keepGoing,
       boolean orderedResults,
-      UniverseScope universeScope,
+      List<String> universeScope,
       int loadingPhaseThreads,
       Set<Setting> settings,
       boolean useGraphlessQuery) {

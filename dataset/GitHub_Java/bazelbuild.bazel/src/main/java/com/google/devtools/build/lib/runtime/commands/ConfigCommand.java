@@ -41,11 +41,9 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.ConfigOptions;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommandOutputFormatter.JsonOutputFormatter;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommandOutputFormatter.TextOutputFormatter;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.ConfigCommand.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.common.options.EnumConverter;
@@ -124,22 +122,16 @@ public class ConfigCommand implements BlazeCommand {
   protected static class ConfigurationForOutput {
     final String skyKey;
     final String configHash;
-    final boolean isHost;
-    final boolean isExec;
     final List<FragmentForOutput> fragments;
     final List<FragmentOptionsForOutput> fragmentOptions;
 
     ConfigurationForOutput(
         String skyKey,
         String configHash,
-        boolean isHost,
-        boolean isExec,
         List<FragmentForOutput> fragments,
         List<FragmentOptionsForOutput> fragmentOptions) {
       this.skyKey = skyKey;
       this.configHash = configHash;
-      this.isHost = isHost;
-      this.isExec = isExec;
       this.fragments = fragments;
       this.fragmentOptions = fragmentOptions;
     }
@@ -332,9 +324,8 @@ public class ConfigCommand implements BlazeCommand {
         return reportConfigurationDiff(
             configurations.values(), configHash1, configHash2, outputFormatter, env);
       } else {
-        String message = "Too many config ids.";
-        env.getReporter().handle(Event.error(message));
-        return createFailureResult(message, Code.TOO_MANY_CONFIG_IDS);
+        env.getReporter().handle(Event.error("Too many config ids."));
+        return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
       }
     }
   }
@@ -448,8 +439,6 @@ public class ConfigCommand implements BlazeCommand {
     return new ConfigurationForOutput(
         skyKey.toString(),
         configHash,
-        config.isHostConfiguration(),
-        config.isExecConfiguration(),
         fragments.build().asList(),
         fragmentOptions.build().asList());
   }
@@ -513,7 +502,8 @@ public class ConfigCommand implements BlazeCommand {
   private BlazeCommandResult reportConfigurationIds(
       ConfigCommandOutputFormatter writer,
       ImmutableSortedSet<ConfigurationForOutput> configurations) {
-    writer.writeConfigurationIDs(configurations);
+    writer.writeConfigurationIDs(
+        configurations.stream().map(config -> config.configHash).collect(toList()));
     return BlazeCommandResult.success();
   }
 
@@ -532,9 +522,9 @@ public class ConfigCommand implements BlazeCommand {
         allConfigurations.stream().filter(entry -> entry.configHash.equals(configHash)).findFirst();
 
     if (!match.isPresent()) {
-      String message = String.format("No configuration found with id: %s", configHash);
-      env.getReporter().handle(Event.error(message));
-      return createFailureResult(message, Code.CONFIGURATION_NOT_FOUND);
+      env.getReporter()
+          .handle(Event.error(String.format("No configuration found with id: %s", configHash)));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
 
     writer.writeConfiguration(match.get());
@@ -562,16 +552,16 @@ public class ConfigCommand implements BlazeCommand {
         allConfigs.stream().filter(config -> config.checksum().equals(configHash1)).findFirst();
 
     if (!config1.isPresent()) {
-      String message = String.format("No configuration found with id: %s", configHash1);
-      env.getReporter().handle(Event.error(message));
-      return createFailureResult(message, Code.CONFIGURATION_NOT_FOUND);
+      env.getReporter()
+          .handle(Event.error(String.format("No configuration found with id: %s", configHash1)));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
     Optional<BuildConfiguration> config2 =
         allConfigs.stream().filter(config -> config.checksum().equals(configHash2)).findFirst();
     if (!config2.isPresent()) {
-      String message = String.format("No configuration found with id: %s", configHash2);
-      env.getReporter().handle(Event.error(message));
-      return createFailureResult(message, Code.CONFIGURATION_NOT_FOUND);
+      env.getReporter()
+          .handle(Event.error(String.format("No configuration found with id: %s", configHash2)));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
 
     Table<Class<? extends FragmentOptions>, String, Pair<Object, Object>> diffs =
@@ -667,13 +657,5 @@ public class ConfigCommand implements BlazeCommand {
 
   private static Pair<String, String> toNullableStringPair(Pair<Object, Object> pair) {
     return Pair.of(String.valueOf(pair.first), String.valueOf(pair.second));
-  }
-
-  private static BlazeCommandResult createFailureResult(String message, Code detailedCode) {
-    return BlazeCommandResult.failureDetail(
-        FailureDetail.newBuilder()
-            .setMessage(message)
-            .setConfigCommand(FailureDetails.ConfigCommand.newBuilder().setCode(detailedCode))
-            .build());
   }
 }

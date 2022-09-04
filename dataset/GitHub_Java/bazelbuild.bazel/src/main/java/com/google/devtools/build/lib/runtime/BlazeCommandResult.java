@@ -65,10 +65,6 @@ public final class BlazeCommandResult {
     return execDescription;
   }
 
-  public boolean isSuccess() {
-    return detailedExitCode.isSuccess();
-  }
-
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
@@ -89,6 +85,10 @@ public final class BlazeCommandResult {
 
   public static BlazeCommandResult success() {
     return new BlazeCommandResult(DetailedExitCode.success(), null, false);
+  }
+
+  public static BlazeCommandResult exitCode(ExitCode exitCode) {
+    return new BlazeCommandResult(DetailedExitCode.justExitCode(exitCode), null, false);
   }
 
   public static BlazeCommandResult failureDetail(FailureDetail failureDetail) {

@@ -56,11 +56,9 @@ import com.google.devtools.build.lib.runtime.UiOptions;
 import com.google.devtools.build.lib.runtime.commands.BuildCommand;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.sandbox.SandboxOptions;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
@@ -206,11 +204,7 @@ public class BlazeRuntimeWrapper {
         runtime
             .getWorkspace()
             .initCommand(
-                buildCommand.getAnnotation(Command.class),
-                optionsParser,
-                new ArrayList<>(),
-                0L,
-                0L);
+                buildCommand.getAnnotation(Command.class), optionsParser, new ArrayList<>());
     return env;
   }
 
@@ -291,8 +285,7 @@ public class BlazeRuntimeWrapper {
               /* execStartTimeNanos= */ 42,
               /* enabledCpuUsageProfiling= */ false,
               /* slimProfile= */ false,
-              /* includePrimaryOutput= */ false,
-              /* includeTargetLabel= */ false);
+              /* includePrimaryOutput= */ false);
       OutErr outErr = env.getReporter().getOutErr();
       System.setOut(new PrintStream(outErr.getOutputStream(), /*autoflush=*/ true));
       System.setErr(new PrintStream(outErr.getErrorStream(), /*autoflush=*/ true));
@@ -343,7 +336,16 @@ public class BlazeRuntimeWrapper {
       getSkyframeExecutor().setOutputService(outputService);
       env.setOutputServiceForTesting(outputService);
 
-      env.getEventBus().post(new CommandStartEvent());
+      env.getEventBus()
+          .post(
+              new CommandStartEvent(
+                  "build",
+                  env.getCommandId(),
+                  env.getBuildRequestId(),
+                  env.getClientEnv(),
+                  env.getWorkingDirectory(),
+                  env.getDirectories(),
+                  0));
 
       lastRequest = createRequest("build", targets);
       lastResult = new BuildResult(lastRequest.getStartTime());
@@ -370,7 +372,7 @@ public class BlazeRuntimeWrapper {
             null,
             success
                 ? DetailedExitCode.success()
-                : DetailedExitCode.of(createGenericDetailedFailure()),
+                : DetailedExitCode.justExitCode(ExitCode.BUILD_FAILURE),
             /*startSuspendCount=*/ 0);
         getSkyframeExecutor().notifyCommandComplete(env.getReporter());
       }
@@ -379,12 +381,6 @@ public class BlazeRuntimeWrapper {
       System.setErr(origSystemErr);
       Profiler.instance().stop();
     }
-  }
-
-  private static FailureDetail createGenericDetailedFailure() {
-    return FailureDetail.newBuilder()
-        .setSpawn(Spawn.newBuilder().setCode(Code.NON_ZERO_EXIT))
-        .build();
   }
 
   public BuildRequest createRequest(String commandName, List<String> targets) {
