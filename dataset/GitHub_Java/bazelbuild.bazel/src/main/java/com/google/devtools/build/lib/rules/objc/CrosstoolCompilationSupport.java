@@ -190,7 +190,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       throws InterruptedException {
     Preconditions.checkNotNull(ccToolchain);
     Preconditions.checkNotNull(fdoSupport);
-    PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());
+    PathFragment labelName = new PathFragment(ruleContext.getLabel().getName());
     String libraryIdentifier =
         ruleContext
             .getPackageDirectory()
