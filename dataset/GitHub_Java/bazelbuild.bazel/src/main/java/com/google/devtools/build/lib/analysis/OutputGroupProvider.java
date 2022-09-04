@@ -127,12 +127,17 @@ public final class OutputGroupProvider extends SkylarkClassObject
 
   @Nullable
   public static OutputGroupProvider get(TransitiveInfoCollection collection) {
-    return collection.getProvider(OutputGroupProvider.class);
+    return (OutputGroupProvider) collection.getProvider(OutputGroupProvider.class);
   }
 
   @Nullable
   public static OutputGroupProvider get(ConfiguredAspect aspect) {
-    return (OutputGroupProvider) aspect.get(SKYLARK_CONSTRUCTOR.getKey());
+    SkylarkProviders skylarkProviders = aspect.getProvider(SkylarkProviders.class);
+
+
+    return skylarkProviders != null
+        ? (OutputGroupProvider) skylarkProviders.getDeclaredProvider(SKYLARK_CONSTRUCTOR.getKey())
+        : null;
   }
 
 

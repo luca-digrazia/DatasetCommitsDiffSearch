@@ -132,6 +132,7 @@ public final class RuleConfiguredTargetBuilder {
 
       OutputGroupProvider outputGroupProvider = new OutputGroupProvider(outputGroups.build());
       addProvider(OutputGroupProvider.class, outputGroupProvider);
+      addSkylarkTransitiveInfo(OutputGroupProvider.SKYLARK_NAME, outputGroupProvider);
     }
 
     TransitiveInfoProviderMap providers = providersBuilder.build();
