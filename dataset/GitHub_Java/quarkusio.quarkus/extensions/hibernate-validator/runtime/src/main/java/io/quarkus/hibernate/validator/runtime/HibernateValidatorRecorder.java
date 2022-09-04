@@ -1,7 +1,6 @@
 package io.quarkus.hibernate.validator.runtime;
 
 import java.util.Set;
-import java.util.function.Supplier;
 
 import javax.validation.ClockProvider;
 import javax.validation.ConstraintValidatorFactory;
@@ -23,7 +22,6 @@ import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.BeanContainerListener;
-import io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyConfigSupport;
 import io.quarkus.runtime.LocalesBuildTimeConfig;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
@@ -34,8 +32,7 @@ public class HibernateValidatorRecorder {
     public BeanContainerListener initializeValidatorFactory(Set<Class<?>> classesToBeValidated,
             Set<String> detectedBuiltinConstraints,
             boolean hasXmlConfiguration, boolean jpaInClasspath,
-            ShutdownContext shutdownContext, LocalesBuildTimeConfig localesBuildTimeConfig,
-            HibernateValidatorBuildTimeConfig hibernateValidatorBuildTimeConfig) {
+            ShutdownContext shutdownContext, LocalesBuildTimeConfig localesBuildTimeConfig) {
         BeanContainerListener beanContainerListener = new BeanContainerListener() {
 
             @Override
@@ -103,14 +100,6 @@ public class HibernateValidatorRecorder {
 
                 // Hibernate Validator-specific configuration
 
-                configuration.failFast(hibernateValidatorBuildTimeConfig.failFast);
-                configuration.allowOverridingMethodAlterParameterConstraint(
-                        hibernateValidatorBuildTimeConfig.methodValidation.allowOverridingParameterConstraints);
-                configuration.allowParallelMethodsDefineParameterConstraints(
-                        hibernateValidatorBuildTimeConfig.methodValidation.allowParameterConstraintsOnParallelMethods);
-                configuration.allowMultipleCascadedValidationOnReturnValues(
-                        hibernateValidatorBuildTimeConfig.methodValidation.allowMultipleCascadedValidationOnReturnValues);
-
                 InstanceHandle<ScriptEvaluatorFactory> configuredScriptEvaluatorFactory = Arc.container()
                         .instance(ScriptEvaluatorFactory.class);
                 if (configuredScriptEvaluatorFactory.isAvailable()) {
@@ -143,15 +132,5 @@ public class HibernateValidatorRecorder {
         };
 
         return beanContainerListener;
-    }
-
-    public Supplier<ResteasyConfigSupport> resteasyConfigSupportSupplier(boolean jsonDefault) {
-        return new Supplier<ResteasyConfigSupport>() {
-
-            @Override
-            public ResteasyConfigSupport get() {
-                return new ResteasyConfigSupport(jsonDefault);
-            }
-        };
     }
 }

@@ -55,7 +55,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
-import io.quarkus.hibernate.validator.runtime.HibernateValidatorBuildTimeConfig;
 import io.quarkus.hibernate.validator.runtime.HibernateValidatorRecorder;
 import io.quarkus.hibernate.validator.runtime.ValidatorProvider;
 import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterceptor;
@@ -88,6 +87,8 @@ class HibernateValidatorProcessor {
     private static final DotName REPEATABLE = DotName.createSimple(Repeatable.class.getName());
 
     private static final Pattern BUILT_IN_CONSTRAINT_REPEATABLE_CONTAINER_PATTERN = Pattern.compile("\\$List$");
+
+    private LocalesBuildTimeConfig localesBuildTimeConfig;
 
     @BuildStep
     HotDeploymentWatchedFileBuildItem configFile() {
@@ -142,9 +143,7 @@ class HibernateValidatorProcessor {
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
             ShutdownContextBuildItem shutdownContext,
             List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations,
-            Capabilities capabilities,
-            LocalesBuildTimeConfig localesBuildTimeConfig,
-            HibernateValidatorBuildTimeConfig hibernateValidatorBuildTimeConfig) throws Exception {
+            Capabilities capabilities) throws Exception {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_VALIDATOR));
 
@@ -246,8 +245,7 @@ class HibernateValidatorProcessor {
                                 hasXmlConfiguration(),
                                 capabilities.isCapabilityPresent(Capabilities.HIBERNATE_ORM),
                                 shutdownContext,
-                                localesBuildTimeConfig,
-                                hibernateValidatorBuildTimeConfig)));
+                                localesBuildTimeConfig)));
     }
 
     @BuildStep
