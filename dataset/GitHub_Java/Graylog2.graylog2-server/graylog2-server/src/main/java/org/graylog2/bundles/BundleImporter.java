@@ -213,14 +213,13 @@ public class BundleImporter {
         final Configuration inputConfig = new Configuration(inputDescription.getConfiguration());
         final DateTime createdAt = DateTime.now(DateTimeZone.UTC);
 
-        final MessageInput messageInput = inputRegistry.create(inputDescription.getType(), inputConfig);
+        final MessageInput messageInput = inputRegistry.create(inputDescription.getType());
         messageInput.setTitle(inputDescription.getTitle());
         messageInput.setGlobal(inputDescription.isGlobal());
         messageInput.setCreatorUserId(userName);
         messageInput.setCreatedAt(createdAt);
 
-        messageInput.setConfiguration(inputConfig);
-        messageInput.checkConfiguration();
+        messageInput.checkConfiguration(inputConfig);
 
         // Don't run if exclusive and another instance is already running.
         if (messageInput.isExclusive() && inputRegistry.hasTypeRunning(messageInput.getClass())) {
@@ -234,7 +233,7 @@ public class BundleImporter {
         // Persist input.
         final String persistId = inputService.save(mongoInput);
         messageInput.setPersistId(persistId);
-        messageInput.initialize();
+        messageInput.initialize(inputConfig);
 
         addStaticFields(messageInput, inputDescription.getStaticFields());
         addExtractors(messageInput, inputDescription.getExtractors(), userName);
@@ -276,6 +275,8 @@ public class BundleImporter {
                 extractorDescription.getConditionType(),
                 extractorDescription.getConditionValue()
         );
+
+        messageInput.addExtractor(extractorId, extractor);
 
         org.graylog2.inputs.Input mongoInput = inputService.find(messageInput.getPersistId());
         inputService.addExtractor(mongoInput, extractor);
