@@ -22,13 +22,16 @@ package org.graylog2.indexer;
 import com.google.common.collect.Sets;
 import java.util.List;
 import java.util.Set;
-import org.graylog2.Tools;
+import org.elasticsearch.common.collect.Lists;
+import org.elasticsearch.index.query.FilterBuilder;
+import org.elasticsearch.index.query.FilterBuilders;
+import org.graylog2.plugin.Tools;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class IndexHelper {
-    
+
     public static Set<String> getOldestIndices(Set<String> indexNames, int count) {
         Set<String> r = Sets.newHashSet();
         
@@ -36,13 +39,46 @@ public class IndexHelper {
             return r;
         }
         
-        List<String> sorted = Tools.asSortedList(indexNames);
+        Set<Integer> numbers = Sets.newHashSet();
         
+        for (String indexName : indexNames) {
+            numbers.add(Deflector.extractIndexNumber(indexName));
+        }
+ 
+        List<String> sorted = prependPrefixes(getPrefix(indexNames), Tools.asSortedList(numbers));
+
         // Add last x entries to return set.
         r.addAll(sorted.subList(0, count));
         
         return r;
     }
-   
+
+    public static FilterBuilder getTimestampRangeFilter(int timerange) {
+    	if (timerange <= 0) {
+    		return null;
+    	}
+    	
+		String from = Tools.buildElasticSearchTimeFormat(Tools.getUTCTimestamp()-timerange);
+		return FilterBuilders.rangeFilter("timestamp").from(from);
+    }
+    
+    private static String getPrefix(Set<String> names) {
+        if (names.isEmpty()) {
+            return "";
+        }
+        
+        String name = (String) names.toArray()[0];
+        return name.substring(0, name.lastIndexOf("_"));
+    }
+    
+    private static List<String> prependPrefixes(String prefix, List<Integer> numbers) {
+        List<String> r = Lists.newArrayList();
+        
+        for (int number : numbers) {
+            r.add(prefix + "_" + number);
+        }
+        
+        return r;
+    }
     
 }
