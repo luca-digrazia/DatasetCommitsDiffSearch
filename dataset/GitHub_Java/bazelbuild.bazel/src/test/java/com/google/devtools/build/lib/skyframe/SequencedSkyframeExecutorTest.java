@@ -94,6 +94,7 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.BinTools;
+import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -197,7 +198,8 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                     KeepGoingOption.class,
                     BuildRequestOptions.class,
                     AnalysisOptions.class,
-                    CoreOptions.class))
+                    CoreOptions.class,
+                    ExecutionOptions.class))
             .build();
     options.parse("--jobs=20");
   }
@@ -1876,8 +1878,7 @@ public final class SequencedSkyframeExecutorTest extends BuildViewTestCase {
                         /*runTestsExclusively=*/ false,
                         false,
                         false,
-                        OutputGroupInfo.determineOutputGroups(
-                            ImmutableList.of(), OutputGroupInfo.ValidationMode.OUTPUT_GROUP)),
+                        OutputGroupInfo.determineOutputGroups(ImmutableList.of(), true)),
                     /* trustRemoteArtifacts= */ false));
     // The catastrophic exception should be propagated into the BuildFailedException whether or not
     // --keep_going is set.

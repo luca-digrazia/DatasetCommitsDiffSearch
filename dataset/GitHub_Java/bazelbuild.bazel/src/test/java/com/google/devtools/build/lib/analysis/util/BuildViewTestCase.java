@@ -1745,9 +1745,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected static ConfiguredAttributeMapper getMapperFromConfiguredTargetAndTarget(
       ConfiguredTargetAndData ctad) {
     return ConfiguredAttributeMapper.of(
-        (Rule) ctad.getTarget(),
-        ctad.getConfiguredTarget().getConfigConditions(),
-        ctad.getConfiguration().checksum());
+        (Rule) ctad.getTarget(), ctad.getConfiguredTarget().getConfigConditions());
   }
 
   private ConfiguredTargetKey makeConfiguredTargetKey(String label) {
@@ -1795,7 +1793,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected void assertContainsSelfEdgeEvent(String label) {
-    assertContainsEvent(Pattern.compile(label + " \\([a-f0-9]+\\) \\[self-edge\\]"));
+    assertContainsEvent(label + " [self-edge]");
   }
 
   protected NestedSet<Artifact> collectRunfiles(ConfiguredTarget target) {
