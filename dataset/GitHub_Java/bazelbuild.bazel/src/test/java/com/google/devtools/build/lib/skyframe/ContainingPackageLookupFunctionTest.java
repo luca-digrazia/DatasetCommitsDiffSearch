@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -77,9 +76,7 @@ public class ContainingPackageLookupFunctionTest extends FoundationTestCase {
     deletedPackages = new AtomicReference<>(ImmutableSet.<PackageIdentifier>of());
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(rootDirectory, outputBase),
-            rootDirectory,
-            analysisMock.getProductName());
+            rootDirectory, outputBase, rootDirectory, analysisMock.getProductName());
     ExternalFilesHelper externalFilesHelper =
         new ExternalFilesHelper(
             pkgLocator,
