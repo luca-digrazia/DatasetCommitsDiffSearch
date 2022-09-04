@@ -32,11 +32,9 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Scopes;
-import org.apache.log4j.Level;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.count.CountResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
@@ -89,9 +87,6 @@ public class ESTimestampFixup {
         @Parameter(names = {"-t", "--timeout"}, description = "ES scroll timeout in minutes")
         private int scrollTimeout = 1;
 
-        @Parameter(names = {"-d", "--debug"}, description = "Enable debug output")
-        private boolean debug = false;
-
         public boolean isFix() {
             return fix;
         }
@@ -119,10 +114,6 @@ public class ESTimestampFixup {
         public int getScrollTimeout() {
             return scrollTimeout;
         }
-
-        public boolean isDebug() {
-            return debug;
-        }
     }
 
     public static class Bindings extends AbstractModule {
@@ -143,12 +134,6 @@ public class ESTimestampFixup {
         final CommandLineOptions commandLineOptions = new CommandLineOptions();
         final JCommander jCommander = new JCommander(commandLineOptions, args);
         jCommander.setProgramName("graylog2-es-fixup");
-
-        if (commandLineOptions.isDebug()) {
-            org.apache.log4j.Logger.getLogger(ESTimestampFixup.class).setLevel(Level.DEBUG);
-        } else {
-            org.apache.log4j.Logger.getLogger(ESTimestampFixup.class).setLevel(Level.INFO);
-        }
 
         if (commandLineOptions.isHelp()) {
             jCommander.usage();
@@ -181,12 +166,6 @@ public class ESTimestampFixup {
         final Client client = node.client();
         final SearchRequestBuilder srb = client.prepareSearch();
 
-        final CountResponse countResponse = client.prepareCount(commandLineOptions.getIndicesArray()).execute().actionGet();
-        final long totalCount = countResponse.getCount();
-
-        long changedCount = 0;
-        long processedCount = 0;
-
         srb.setIndices(commandLineOptions.getIndicesArray());
         srb.setSearchType(SearchType.SCAN);
         srb.setScroll(TimeValue.timeValueMinutes(commandLineOptions.getScrollTimeout()));
@@ -199,10 +178,6 @@ public class ESTimestampFixup {
         final SearchRequest request = srb.request();
         final SearchResponse response = client.search(request).actionGet();
 
-        if (! commandLineOptions.isFix()) {
-            LOG.warn("Not executing update because '-F' command line flag not given!");
-        }
-
         while (true) {
             final SearchResponse r = client.prepareSearchScroll(response.getScrollId()).setScroll(TimeValue.timeValueMinutes(1)).execute().actionGet();
 
@@ -214,24 +189,20 @@ public class ESTimestampFixup {
             final BulkRequestBuilder bulk = client.prepareBulk();
 
             for (SearchHit hit : r.getHits()) {
-                processedCount++;
                 try {
-                    if (handleHit(hit, bulk)) {
-                        changedCount++;
-                    }
+                    handleHit(hit, bulk);
                 } catch (Exception e) {
                     LOG.error("Error handling document " + hit.getId(), e);
                 }
             }
 
             processBulk(bulk, commandLineOptions.isFix());
-            LOG.info("Changed {} of total {} documents ({}% checked)", changedCount, totalCount, String.format("%.2f", ((double) processedCount / totalCount) * 100));
         }
 
         stopEsNode();
     }
 
-    private boolean handleHit(SearchHit hit, BulkRequestBuilder bulk) {
+    private void handleHit(SearchHit hit, BulkRequestBuilder bulk) {
         if (hit.field("timestamp").value() instanceof Long) {
             LOG.debug("UPDATE {}/{}/{} (from {})", hit.getIndex(), hit.getType(), hit.getId(), hit.field("timestamp").value().getClass());
 
@@ -252,11 +223,7 @@ public class ESTimestampFixup {
                             .prepareIndex(hit.getIndex(), hit.getType(), hit.getId())
                             .setSource(source)
             );
-
-            return true;
         }
-
-        return false;
     }
 
     private void startEsNode() {
@@ -285,6 +252,8 @@ public class ESTimestampFixup {
             } else {
                 LOG.debug("No bulk actions to execute!");
             }
+        } else {
+            LOG.warn("Not executing update because '-F' command line flag not given!");
         }
     }
 
