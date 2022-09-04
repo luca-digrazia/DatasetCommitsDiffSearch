@@ -227,8 +227,7 @@ public abstract class ConstraintCollection
   }
 
   @Override
-  public boolean containsKey(Object key, Location loc, StarlarkContext context)
-      throws EvalException {
+  public boolean containsKey(Object key, Location loc) throws EvalException {
     ConstraintSettingInfo constraint = convertKey(key, loc);
     return has(constraint);
   }

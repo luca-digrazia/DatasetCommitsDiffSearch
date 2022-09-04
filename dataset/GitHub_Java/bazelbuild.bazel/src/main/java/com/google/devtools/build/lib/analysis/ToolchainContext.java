@@ -162,7 +162,7 @@ public abstract class ToolchainContext implements ToolchainContextApi {
       throws EvalException {
     Label toolchainTypeLabel = transformKey(key, loc);
 
-    if (!containsKey(key, loc, context)) {
+    if (!containsKey(key, loc)) {
       throw new EvalException(
           loc,
           String.format(
@@ -178,8 +178,7 @@ public abstract class ToolchainContext implements ToolchainContextApi {
   }
 
   @Override
-  public boolean containsKey(Object key, Location loc, StarlarkContext context)
-      throws EvalException {
+  public boolean containsKey(Object key, Location loc) throws EvalException {
     Label toolchainTypeLabel = transformKey(key, loc);
     Optional<Label> matching =
         toolchains().keySet().stream()
