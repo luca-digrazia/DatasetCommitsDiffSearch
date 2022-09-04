@@ -241,7 +241,6 @@ class Desugar {
 
   private final boolean outputJava7;
   private final boolean allowDefaultMethods;
-  private final boolean allowTryWithResources;
   private final boolean allowCallsToObjectsNonNull;
   private final boolean allowCallsToLongCompare;
   /** An instance of Desugar is expected to be used ONLY ONCE */
@@ -255,8 +254,6 @@ class Desugar {
     this.outputJava7 = options.minSdkVersion < 24;
     this.allowDefaultMethods =
         options.desugarInterfaceMethodBodiesIfNeeded || options.minSdkVersion >= 24;
-    this.allowTryWithResources =
-        !options.desugarTryWithResourcesIfNeeded || options.minSdkVersion >= 19;
     this.allowCallsToObjectsNonNull = options.minSdkVersion >= 19;
     this.allowCallsToLongCompare = options.minSdkVersion >= 19 && !options.alwaysRewriteLongCompare;
     this.used = false;
@@ -353,7 +350,9 @@ class Desugar {
   }
 
   private void copyThrowableExtensionClass(OutputFileProvider outputFileProvider) {
-    if (allowTryWithResources || options.desugarTryWithResourcesOmitRuntimeClasses) {
+    if (!outputJava7
+        || !options.desugarTryWithResourcesIfNeeded
+        || options.desugarTryWithResourcesOmitRuntimeClasses) {
       // try-with-resources statements are okay in the output jar.
       return;
     }
@@ -486,14 +485,15 @@ class Desugar {
       LambdaInfo lambdaClass,
       UnprefixingClassWriter writer) {
     ClassVisitor visitor = checkNotNull(writer);
-    if (!allowTryWithResources) {
-      visitor =
-          new TryWithResourcesRewriter(
-              visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
-    }
+
     if (outputJava7) {
       // null ClassReaderFactory b/c we don't expect to need it for lambda classes
       visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null);
+      if (options.desugarTryWithResourcesIfNeeded) {
+        visitor =
+            new TryWithResourcesRewriter(
+                visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
+      }
       if (options.desugarInterfaceMethodBodiesIfNeeded) {
         visitor =
             new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader, loader);
@@ -538,14 +538,15 @@ class Desugar {
       UnprefixingClassWriter writer,
       ImmutableSet<MethodInfo> lambdaMethodsUsedInInvokeDynamic) {
     ClassVisitor visitor = checkNotNull(writer);
-    if (!allowTryWithResources) {
-      visitor =
-          new TryWithResourcesRewriter(
-              visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
-    }
+
     if (!options.onlyDesugarJavac9ForLint) {
       if (outputJava7) {
         visitor = new Java7Compatibility(visitor, classpathReader);
+        if (options.desugarTryWithResourcesIfNeeded) {
+          visitor =
+              new TryWithResourcesRewriter(
+                  visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
+        }
         if (options.desugarInterfaceMethodBodiesIfNeeded) {
           visitor =
               new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader, loader);
@@ -561,6 +562,7 @@ class Desugar {
               lambdaMethodsUsedInInvokeDynamic,
               allowDefaultMethods);
     }
+
     if (!allowCallsToObjectsNonNull) {
       visitor = new ObjectsRequireNonNullMethodRewriter(visitor);
     }
