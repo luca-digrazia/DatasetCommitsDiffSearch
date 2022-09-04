@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryModule
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -58,7 +59,7 @@ public class FakeRepositoryModule implements RepositoryModuleApi {
       Boolean configure,
       Boolean remotable,
       String doc,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException {
     List<AttributeInfo> attrInfos;
@@ -82,7 +83,7 @@ public class FakeRepositoryModule implements RepositoryModuleApi {
     // Only the Builder is passed to RuleInfoWrapper as the rule name is not yet available.
     RuleInfo.Builder ruleInfo = RuleInfo.newBuilder().setDocString(doc).addAllAttribute(attrInfos);
 
-    ruleInfoList.add(new RuleInfoWrapper(functionIdentifier, loc, ruleInfo));
+    ruleInfoList.add(new RuleInfoWrapper(functionIdentifier, ast.getLocation(), ruleInfo));
     return functionIdentifier;
   }
 

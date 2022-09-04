@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import javax.annotation.Nullable;
 
@@ -54,7 +53,8 @@ public final class BuiltinCallable implements StarlarkCallable {
   }
 
   @Override
-  public Object fastcall(StarlarkThread thread, Location loc, Object[] positional, Object[] named)
+  public Object fastcall(
+      StarlarkThread thread, @Nullable FuncallExpression call, Object[] positional, Object[] named)
       throws EvalException, InterruptedException {
     MethodDescriptor desc =
         this.desc != null ? this.desc : getMethodDescriptor(thread.getSemantics());
@@ -72,7 +72,7 @@ public final class BuiltinCallable implements StarlarkCallable {
 
     Object[] javaArguments =
         CallUtils.convertStarlarkArgumentsToJavaMethodArguments(
-            thread, methodName, loc, desc, objValue.getClass(), positional, named);
+            thread, methodName, call, desc, objValue.getClass(), positional, named);
     return desc.call(objValue, javaArguments, thread.mutability());
   }
 

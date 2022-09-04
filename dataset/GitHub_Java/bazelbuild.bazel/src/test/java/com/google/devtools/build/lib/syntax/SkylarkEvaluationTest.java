@@ -304,12 +304,15 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         name = "with_extra",
         documented = false,
         useLocation = true,
+        useAst = true,
         useStarlarkThread = true,
         useStarlarkSemantics = true)
     public String withExtraInterpreterParams(
-        Location location, StarlarkThread thread, StarlarkSemantics sem) {
+        Location location, FuncallExpression func, StarlarkThread thread, StarlarkSemantics sem) {
       return "with_extra("
           + location.getStartLine()
+          + ", "
+          + func.getArguments().size()
           + ", "
           + (sem != null)
           + ")";
@@ -359,6 +362,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
               positional = false,
               named = true)
         },
+        useAst = true,
         useLocation = true,
         useStarlarkThread = true,
         useStarlarkSemantics = true)
@@ -372,6 +376,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         Object noneable,
         Object multi,
         Location location,
+        FuncallExpression func,
         StarlarkThread thread,
         StarlarkSemantics sem) {
       return "with_params_and_extra("
@@ -390,6 +395,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + (multi != Starlark.NONE ? ", " + multi : "")
           + ", "
           + location.getStartLine()
+          + ", "
+          + func.getArguments().size()
           + ", "
           + (sem != null)
           + ")";
@@ -1315,7 +1322,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.with_extra()")
-        .testLookup("v", "with_extra(1, true)");
+        .testLookup("v", "with_extra(1, 0, true)");
   }
 
   @Test
@@ -1331,7 +1338,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params_and_extra(1, True, named=True)")
-        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, true)");
+        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, 3, true)");
   }
 
   @Test
@@ -1958,7 +1965,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testNativeInfoAttrs() throws Exception {
+  public void testDirNativeInfo() throws Exception {
     new SkylarkTest()
         .update("mock", new NativeInfoMock())
         .testEval(
@@ -2087,7 +2094,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
           @Override
           public Object fastcall(
-              StarlarkThread thread, Location loc, Object[] positional, Object[] named) {
+              StarlarkThread thread, FuncallExpression call, Object[] positional, Object[] named) {
             return "fromValues";
           }
         };

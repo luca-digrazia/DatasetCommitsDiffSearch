@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.DebugFrame;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -50,6 +51,7 @@ import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.Tuple;
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * The Skylark module containing the definition of {@code repository_rule} function to define a
@@ -66,7 +68,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       Boolean configure,
       Boolean remotable,
       String doc,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException {
     BazelStarlarkContext.from(thread).checkLoadingOrWorkspacePhase("repository_rule");
@@ -89,7 +91,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
           castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
         Descriptor attrDescriptor = attr.getValue();
         AttributeValueSource source = attrDescriptor.getValueSource();
-        String attrName = source.convertToNativeName(attr.getKey());
+        String attrName = source.convertToNativeName(attr.getKey(), ast.getLocation());
         if (builder.contains(attrName)) {
           throw new EvalException(
               null,
@@ -104,7 +106,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
         (Label) thread.getGlobals().getLabel(), thread.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
-    return new RepositoryRuleFunction(builder, loc, implementation);
+    return new RepositoryRuleFunction(builder, ast.getLocation(), implementation);
   }
 
   // RepositoryRuleFunction is the result of repository_rule(...).
@@ -158,7 +160,10 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
 
     @Override
     public Object call(
-        StarlarkThread thread, Location loc, Tuple<Object> args, Dict<String, Object> kwargs)
+        StarlarkThread thread,
+        @Nullable FuncallExpression call,
+        Tuple<Object> args,
+        Dict<String, Object> kwargs)
         throws EvalException, InterruptedException {
       if (!args.isEmpty()) {
         throw new EvalException(null, "unexpected positional arguments");
@@ -189,7 +194,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       }
       try {
         RuleClass ruleClass = builder.build(ruleClassName, ruleClassName);
-        PackageContext context = PackageFactory.getContext(thread, loc);
+        PackageContext context = PackageFactory.getContext(thread, call.getLocation());
         Package.Builder packageBuilder = context.getBuilder();
 
         // TODO(adonovan): is this safe? Check.
@@ -203,14 +208,15 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
                 .append(" (rule definition at ")
                 .append(ruleClassDefinitionLocation.toString())
                 .append("):");
-        for (DebugFrame frame : thread.listFrames(loc)) {
+        for (DebugFrame frame : thread.listFrames(call.getLocation())) {
           callStack.append("\n - ").append(frame.location().toString());
         }
 
         WorkspaceFactoryHelper.addMainRepoEntry(
             packageBuilder, externalRepoName, thread.getSemantics());
 
-        WorkspaceFactoryHelper.addRepoMappings(packageBuilder, kwargs, externalRepoName, loc);
+        WorkspaceFactoryHelper.addRepoMappings(
+            packageBuilder, kwargs, externalRepoName, call.getLocation());
 
         Rule rule =
             WorkspaceFactoryHelper.createAndAddRepositoryRule(
@@ -218,11 +224,11 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
                 ruleClass,
                 null,
                 WorkspaceFactoryHelper.getFinalKwargs(kwargs),
-                loc,
+                call.getLocation(),
                 callStack.toString());
         return rule;
       } catch (InvalidRuleException | NameConflictException | LabelSyntaxException e) {
-        throw new EvalException(loc, e.getMessage());
+        throw new EvalException(call.getLocation(), e.getMessage());
       }
     }
   }

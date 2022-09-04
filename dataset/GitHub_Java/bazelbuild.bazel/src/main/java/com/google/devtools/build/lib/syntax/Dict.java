@@ -174,18 +174,19 @@ public final class Dict<K, V>
             noneable = true,
             doc = "a default value if the key is absent."),
       },
+      useLocation = true,
       useStarlarkThread = true)
-  public Object pop(Object key, Object defaultValue, StarlarkThread thread) throws EvalException {
+  public Object pop(Object key, Object defaultValue, Location loc, StarlarkThread thread)
+      throws EvalException {
     Object value = get(key);
     if (value != null) {
-      remove(key, /*loc=*/ null);
+      remove(key, loc);
       return value;
     }
     if (defaultValue != Starlark.UNBOUND) {
       return defaultValue;
     }
-    // TODO(adonovan): improve error; this ain't Python.
-    throw Starlark.errorf("KeyError: %s", Starlark.repr(key));
+    throw new EvalException(loc, Starlark.format("KeyError: %r", key));
   }
 
   @SkylarkCallable(
@@ -196,14 +197,15 @@ public final class Dict<K, V>
               + "as often used in set algorithms. "
               + "If the dictionary is empty, calling <code>popitem()</code> fails. "
               + "It is deterministic which pair is returned.",
+      useLocation = true,
       useStarlarkThread = true)
-  public Tuple<Object> popitem(StarlarkThread thread) throws EvalException {
+  public Tuple<Object> popitem(Location loc, StarlarkThread thread) throws EvalException {
     if (isEmpty()) {
-      throw Starlark.errorf("popitem(): dictionary is empty");
+      throw new EvalException(loc, "popitem(): dictionary is empty");
     }
     Object key = keySet().iterator().next();
     Object value = get(key);
-    remove(key, /*loc=*/ null);
+    remove(key, loc);
     return Tuple.pair(key, value);
   }
 
@@ -223,15 +225,16 @@ public final class Dict<K, V>
             named = true,
             noneable = true,
             doc = "a default value if the key is absent."),
-      })
+      },
+      useLocation = true)
   @SuppressWarnings("unchecked") // Cast of value to V
-  public Object setdefault(K key, Object defaultValue) throws EvalException {
+  public Object setdefault(K key, Object defaultValue, Location loc) throws EvalException {
     // TODO(adonovan): opt: use putIfAbsent to avoid hashing twice.
     Object value = get(key);
     if (value != null) {
       return value;
     }
-    put(key, (V) defaultValue, /*loc=*/ null);
+    put(key, (V) defaultValue, loc);
     return defaultValue;
   }
 
@@ -258,9 +261,10 @@ public final class Dict<K, V>
                     + "exactly two elements: key, value."),
       },
       extraKeywords = @Param(name = "kwargs", doc = "Dictionary of additional entries."),
+      useLocation = true,
       useStarlarkThread = true)
   @SuppressWarnings("unchecked")
-  public NoneType update(Object args, Dict<?, ?> kwargs, StarlarkThread thread)
+  public NoneType update(Object args, Dict<?, ?> kwargs, Location loc, StarlarkThread thread)
       throws EvalException {
     // TODO(adonovan): opt: don't materialize dict; call put directly.
 
@@ -268,9 +272,9 @@ public final class Dict<K, V>
     Dict<K, V> dict =
         args instanceof Dict
             ? (Dict<K, V>) args
-            : getDictFromArgs("update", args, thread.mutability());
+            : getDictFromArgs("update", args, loc, thread.mutability());
     dict = Dict.plus(dict, (Dict<K, V>) kwargs, thread.mutability());
-    putAll(dict, /*loc=*/ null);
+    putAll(dict, loc);
     return Starlark.NONE;
   }
 
@@ -418,9 +422,12 @@ public final class Dict<K, V>
     return contents.remove(key);
   }
 
-  @SkylarkCallable(name = "clear", doc = "Remove all items from the dictionary.")
-  public NoneType clearDict() throws EvalException {
-    clear(null);
+  @SkylarkCallable(
+      name = "clear",
+      doc = "Remove all items from the dictionary.",
+      useLocation = true)
+  public NoneType clearDict(Location loc) throws EvalException {
+    clear(loc);
     return Starlark.NONE;
   }
 
@@ -466,9 +473,11 @@ public final class Dict<K, V>
     if (obj instanceof Dict) {
       return ((Dict<?, ?>) obj).getContents(keyType, valueType, description);
     }
-    throw Starlark.errorf(
-        "%s is not of expected type dict or NoneType",
-        description == null ? Starlark.repr(obj) : String.format("'%s'", description));
+    throw new EvalException(
+        null,
+        String.format(
+            "%s is not of expected type dict or NoneType",
+            description == null ? Starlark.repr(obj) : String.format("'%s'", description)));
   }
 
   /**
@@ -540,14 +549,15 @@ public final class Dict<K, V>
   }
 
   @SuppressWarnings("unchecked")
-  static <K, V> Dict<K, V> getDictFromArgs(String funcname, Object args, @Nullable Mutability mu)
-      throws EvalException {
+  static <K, V> Dict<K, V> getDictFromArgs(
+      String funcname, Object args, Location loc, @Nullable Mutability mu) throws EvalException {
     Iterable<?> seq;
     try {
       seq = Starlark.toIterable(args);
     } catch (EvalException ex) {
-      throw Starlark.errorf(
-          "in %s, got %s, want iterable", funcname, EvalUtils.getDataTypeName(args));
+      throw new EvalException(
+          loc,
+          String.format("in %s, got %s, want iterable", funcname, EvalUtils.getDataTypeName(args)));
     }
     Dict<K, V> result = Dict.of(mu);
     int pos = 0;
@@ -556,20 +566,24 @@ public final class Dict<K, V>
       try {
         seq2 = Starlark.toIterable(item);
       } catch (EvalException ex) {
-        throw Starlark.errorf(
-            "in %s, dictionary update sequence element #%d is not iterable (%s)",
-            funcname, pos, EvalUtils.getDataTypeName(item));
+        throw new EvalException(
+            loc,
+            String.format(
+                "in %s, dictionary update sequence element #%d is not iterable (%s)",
+                funcname, pos, EvalUtils.getDataTypeName(item)));
       }
       // TODO(adonovan): opt: avoid unnecessary allocations and copies.
       // Why is there no operator to compute len(x), following the spec, without iterating??
       List<Object> pair = Lists.newArrayList(seq2);
       if (pair.size() != 2) {
-        throw Starlark.errorf(
-            "in %s, item #%d has length %d, but exactly two elements are required",
-            funcname, pos, pair.size());
+        throw new EvalException(
+            loc,
+            String.format(
+                "in %s, item #%d has length %d, but exactly two elements are required",
+                funcname, pos, pair.size()));
       }
       // These casts are lies
-      result.put((K) pair.get(0), (V) pair.get(1), null);
+      result.put((K) pair.get(0), (V) pair.get(1), loc);
       pos++;
     }
     return result;

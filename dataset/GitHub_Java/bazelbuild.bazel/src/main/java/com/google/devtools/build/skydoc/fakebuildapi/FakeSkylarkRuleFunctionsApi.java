@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -146,7 +147,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
       Object analysisTest,
       Object buildSetting,
       Object cfg,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread funcallThread)
       throws EvalException {
     ImmutableMap.Builder<String, FakeDescriptor> attrsMapBuilder = ImmutableMap.builder();
@@ -168,7 +169,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
     // Only the Builder is passed to RuleInfoWrapper as the rule name is not yet available.
     RuleInfo.Builder ruleInfo = RuleInfo.newBuilder().setDocString(doc).addAllAttribute(attrInfos);
 
-    ruleInfoList.add(new RuleInfoWrapper(functionIdentifier, loc, ruleInfo));
+    ruleInfoList.add(new RuleInfoWrapper(functionIdentifier, ast.getLocation(), ruleInfo));
 
     return functionIdentifier;
   }
@@ -199,7 +200,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
       Sequence<?> toolchains,
       String doc,
       Boolean applyToFiles,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread funcallThread)
       throws EvalException {
     FakeSkylarkAspect fakeAspect = new FakeSkylarkAspect();
@@ -232,7 +233,7 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
             .addAllAttribute(attrInfos)
             .addAllAspectAttribute(aspectAttrs);
 
-    aspectInfoList.add(new AspectInfoWrapper(fakeAspect, loc, aspectInfo));
+    aspectInfoList.add(new AspectInfoWrapper(fakeAspect, ast.getLocation(), aspectInfo));
 
     return fakeAspect;
   }

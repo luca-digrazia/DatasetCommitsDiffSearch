@@ -163,8 +163,10 @@ public final class CallUtils {
       throws EvalException, InterruptedException {
     MethodDescriptor desc = getCacheValue(x.getClass(), semantics).fields.get(fieldName);
     if (desc == null) {
-      throw Starlark.errorf(
-          "value of type %s has no .%s field", EvalUtils.getDataTypeName(x), fieldName);
+      throw new EvalException(
+          null,
+          String.format(
+              "value of type %s has no .%s field", EvalUtils.getDataTypeName(x), fieldName));
     }
     return desc.callField(x, Location.BUILTIN, semantics, /*mu=*/ null);
   }
@@ -248,7 +250,8 @@ public final class CallUtils {
       String name = (String) named[i]; // safe
       Object value = named[i + 1];
       if (kwargs.put(name, value) != null) {
-        throw Starlark.errorf("duplicate argument '%s' in call to '%s'", name, methodName);
+        throw new EvalException(
+            null, String.format("duplicate argument '%s' in call to '%s'", name, methodName));
       }
     }
 
