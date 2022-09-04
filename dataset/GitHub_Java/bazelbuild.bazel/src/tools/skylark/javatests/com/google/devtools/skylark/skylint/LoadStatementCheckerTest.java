@@ -59,8 +59,7 @@ public class LoadStatementCheckerTest {
             .toString();
     Truth.assertThat(errorMessage)
         .contains(
-            "3:1-3:23: load statement should be at the top of the file (after the docstring)"
-                + " [load-at-top]");
+            ":3:1: load statement should be at the top of the file (after the docstring)");
     errorMessage =
         findIssues(
                 "'''Docstring'''",
@@ -70,7 +69,6 @@ public class LoadStatementCheckerTest {
             .toString();
     Truth.assertThat(errorMessage)
         .contains(
-            "4:1-4:23: load statement should be at the top of the file (after the docstring)"
-                + " [load-at-top]");
+            ":4:1: load statement should be at the top of the file (after the docstring)");
   }
 }

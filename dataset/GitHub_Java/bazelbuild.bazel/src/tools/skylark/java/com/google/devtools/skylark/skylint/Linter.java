@@ -36,7 +36,6 @@ public class Linter {
   /** Map of all checks and their names. */
   private static final ImmutableMap<String, Check> nameToCheck =
       ImmutableMap.<String, Check>builder()
-          .put("bad-operation", BadOperationChecker::check)
           .put("control-flow", ControlFlowChecker::check)
           .put("docstring", DocstringChecker::check)
           .put("load", LoadStatementChecker::check)

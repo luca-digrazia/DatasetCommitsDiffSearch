@@ -22,8 +22,6 @@ import java.util.List;
 
 /** Checks that load statements are at the top of a file (after the docstring). */
 public class LoadStatementChecker {
-  private static final String LOAD_AT_TOP_CATEGORY = "load-at-top";
-
   private LoadStatementChecker() {}
 
   public static List<Issue> check(BuildFileAST ast) {
@@ -36,8 +34,7 @@ public class LoadStatementChecker {
       if (statement instanceof LoadStatement) {
         if (!loadStatementsExpected) {
           issues.add(
-              Issue.create(
-                  LOAD_AT_TOP_CATEGORY,
+              new Issue(
                   "load statement should be at the top of the file (after the docstring)",
                   statement.getLocation()));
         }
