@@ -298,6 +298,8 @@ public class ApkActionsBuilder {
       }
     }
 
+    ruleContext.registerAction(compressedApkActionBuilder.build(ruleContext));
+
     SpawnAction.Builder singleJarActionBuilder = new SpawnAction.Builder()
         .setMnemonic("ApkBuilder")
         .setProgressMessage(message)
@@ -323,15 +325,9 @@ public class ApkActionsBuilder {
           .addOutputArgument(extractedJavaResourceZip)
           .build(ruleContext));
 
-      if (ruleContext.getFragment(AndroidConfiguration.class).compressJavaResources()) {
-        compressedApkActionBuilder
-            .addArgument("--sources")
-            .addInputArgument(extractedJavaResourceZip);
-      } else {
-        singleJarActionBuilder
-            .addArgument("--sources")
-            .addInputArgument(extractedJavaResourceZip);
-      }
+      singleJarActionBuilder
+          .addArgument("--sources")
+          .addInputArgument(extractedJavaResourceZip);
     }
 
     if (nativeLibs.getName() != null) {
@@ -358,7 +354,6 @@ public class ApkActionsBuilder {
       }
     }
 
-    ruleContext.registerAction(compressedApkActionBuilder.build(ruleContext));
     ruleContext.registerAction(singleJarActionBuilder.build(ruleContext));
   }
 
