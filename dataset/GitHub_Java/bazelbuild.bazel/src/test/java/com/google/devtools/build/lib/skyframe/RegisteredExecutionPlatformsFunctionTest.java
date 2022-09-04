@@ -113,8 +113,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
         .containsAtLeast(
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_1"),
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_2"))
+            makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
 
@@ -140,8 +139,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
         .containsAtLeast(
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_1"),
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_2"))
+            makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
 
@@ -165,8 +163,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
         .containsAtLeast(
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_1"),
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_2"))
+            makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
 
@@ -193,8 +190,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     assertExecutionPlatformLabels(
             result.get(executionPlatformsKey), PackageIdentifier.createInMainRepo("extra"))
         .containsExactly(
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_1"),
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_2"))
+            makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
 
@@ -218,8 +214,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
         .containsAtLeast(
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_1"),
-            Label.parseAbsoluteUnchecked("//extra:execution_platform_2"))
+            makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
 
@@ -259,7 +254,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
         requestExecutionPlatformsFromSkyframe(executionPlatformsKey);
     assertThatEvaluationResult(result).hasNoError();
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
-        .contains(Label.parseAbsoluteUnchecked("//platform:execution_platform_1"));
+        .contains(makeLabel("//platform:execution_platform_1"));
 
     // Re-write the WORKSPACE.
     rewriteWorkspace("register_execution_platforms('//platform:execution_platform_2')");
@@ -268,7 +263,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     result = requestExecutionPlatformsFromSkyframe(executionPlatformsKey);
     assertThatEvaluationResult(result).hasNoError();
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
-        .contains(Label.parseAbsoluteUnchecked("//platform:execution_platform_2"));
+        .contains(makeLabel("//platform:execution_platform_2"));
   }
 
   @Test
@@ -276,12 +271,12 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
       throws ConstraintCollection.DuplicateConstraintException {
     ConfiguredTargetKey executionPlatformKey1 =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//test:executionPlatform1"))
+            .setLabel(makeLabel("//test:executionPlatform1"))
             .setConfigurationKey(null)
             .build();
     ConfiguredTargetKey executionPlatformKey2 =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//test:executionPlatform2"))
+            .setLabel(makeLabel("//test:executionPlatform2"))
             .setConfigurationKey(null)
             .build();
 
