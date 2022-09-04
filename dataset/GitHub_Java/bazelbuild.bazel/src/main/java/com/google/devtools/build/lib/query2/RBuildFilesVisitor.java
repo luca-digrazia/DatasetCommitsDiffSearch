@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.util.Collection;
 import java.util.Set;
+import java.util.function.Function;
 
 /** A helper class that computes 'rbuildfiles(<blah>)' via BFS. */
 public class RBuildFilesVisitor extends AbstractSkyKeyParallelVisitor<Target> {
@@ -38,15 +39,17 @@ public class RBuildFilesVisitor extends AbstractSkyKeyParallelVisitor<Target> {
   private static final SkyKey EXTERNAL_PACKAGE_KEY =
       PackageValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER);
   private final SkyQueryEnvironment env;
+  private final Uniquifier<SkyKey> resultUniquifier;
   private final QueryExpressionContext<Target> context;
-  protected final Uniquifier<SkyKey> resultUniquifier;
+  private final Function<SkyKey, Boolean> rdepFilter;
 
   public RBuildFilesVisitor(
       SkyQueryEnvironment env,
       Uniquifier<SkyKey> visitUniquifier,
       Uniquifier<SkyKey> resultUniquifier,
       QueryExpressionContext<Target> context,
-      Callback<Target> callback) {
+      Callback<Target> callback,
+      Function<SkyKey, Boolean> rdepFilter) {
     super(
         visitUniquifier,
         callback,
@@ -55,6 +58,7 @@ public class RBuildFilesVisitor extends AbstractSkyKeyParallelVisitor<Target> {
     this.env = env;
     this.resultUniquifier = resultUniquifier;
     this.context = context;
+    this.rdepFilter = rdepFilter;
   }
 
   @Override
@@ -72,8 +76,8 @@ public class RBuildFilesVisitor extends AbstractSkyKeyParallelVisitor<Target> {
         if (rdep.equals(EXTERNAL_PACKAGE_KEY)) {
           keysToVisitNext.add(rdep);
         }
-      } else {
-        processNonPackageRdepAndDetermineVisitations(rdep, keysToVisitNext, keysToUseForResult);
+      } else if (rdepFilter.apply(rdep)) {
+        keysToVisitNext.add(rdep);
       }
     }
     return new Visit(keysToUseForResult, keysToVisitNext);
@@ -90,18 +94,5 @@ public class RBuildFilesVisitor extends AbstractSkyKeyParallelVisitor<Target> {
   @Override
   protected Iterable<SkyKey> preprocessInitialVisit(Iterable<SkyKey> keys) {
     return keys;
-  }
-
-  protected void processNonPackageRdepAndDetermineVisitations(
-      SkyKey rdep, Set<SkyKey> keysToVisitNext, Set<SkyKey> keysToUseForResult)
-      throws QueryException {
-    // Packages may depend on the existence of subpackages, but these edges aren't
-    // relevant to rbuildfiles. They may also depend on files transitively through
-    // globs, but these cannot be included in load statements and so we don't traverse
-    // through these either.
-    if (!rdep.functionName().equals(SkyFunctions.PACKAGE_LOOKUP)
-        && !rdep.functionName().equals(SkyFunctions.GLOB)) {
-      keysToVisitNext.add(rdep);
-    }
   }
 }
