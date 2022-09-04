@@ -1552,9 +1552,8 @@ public final class PackageFactory {
    */
   private ClassObject newNativeModule() {
     ImmutableMap.Builder<String, Object> builder = new ImmutableMap.Builder<>();
-    Runtime.BuiltinRegistry builtins = Runtime.getBuiltinRegistry();
-    for (String nativeFunction : builtins.getFunctionNames(SkylarkNativeModule.class)) {
-      builder.put(nativeFunction, builtins.getFunction(SkylarkNativeModule.class, nativeFunction));
+    for (String nativeFunction : Runtime.getFunctionNames(SkylarkNativeModule.class)) {
+      builder.put(nativeFunction, Runtime.getFunction(SkylarkNativeModule.class, nativeFunction));
     }
     builder.putAll(ruleFunctions);
     builder.put("package", newPackageFunction(packageArguments));
