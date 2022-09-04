@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,8 +22,9 @@ import java.lang.annotation.Target;
 
 /**
  * <p>
- * Should be used on android.app.Fragment or android.support.v4.app.Fragment
- * classes to enable usage of AndroidAnnotations.
+ * Should be used on android.app.Fragment or link
+ * android.support.v4.app.Fragment classes to enable usage of
+ * AndroidAnnotations.
  * </p>
  * <p>
  * Your code related to injected beans should go in an {@link AfterInject}
@@ -107,19 +108,8 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface EFragment {
-
-	/**
-	 * The R.layout.* field which refer to the layout.
-	 * 
-	 * @return the id of the layout
-	 */
 	int value() default ResId.DEFAULT_VALUE;
 
-	/**
-	 * The resource name as a string which refer to the layout.
-	 * 
-	 * @return the resource name of the layout
-	 */
 	String resName() default "";
 
 	/**
