@@ -17,24 +17,25 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.util.List;
 
 /**
- * Command-line options for J2ObjC translation of Java source code to ObjC. These command line
- * options are used by Java rules that can be transpiled (specifically, J2ObjCAspects thereof).
+ * Command-line options for J2ObjC translation of Java source code to ObjC.
+ * These command line options are used by Java rules that can be transpiled
+ * (specifically, J2ObjCAspects thereof).
  */
-@AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
 public class J2ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "j2objc_translation_flags",
     converter = Converters.CommaSeparatedOptionListConverter.class,
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help = "Additional options to pass to the J2ObjC tool."
@@ -44,7 +45,8 @@ public class J2ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "j2objc_dead_code_removal",
     defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Whether to perform J2ObjC dead code removal to strip unused code from the final app "
@@ -55,8 +57,9 @@ public class J2ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "j2objc_dead_code_report",
     defaultValue = "null",
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     converter = LabelConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Allows J2ObjC to strip dead code reported by ProGuard. Takes a label that can "
@@ -67,6 +70,7 @@ public class J2ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "explicit_jre_deps",
     defaultValue = "true",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help = "This flag is a noop and will be removed."
@@ -76,6 +80,7 @@ public class J2ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "experimental_j2objc_header_map",
     defaultValue = "true",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help = "Whether to generate J2ObjC header map in parallel of J2ObjC transpilation."
