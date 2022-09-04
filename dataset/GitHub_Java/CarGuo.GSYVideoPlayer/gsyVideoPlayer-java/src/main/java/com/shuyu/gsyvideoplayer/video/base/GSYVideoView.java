@@ -325,10 +325,6 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
         if (getGSYVideoManager().listener() != null) {
             getGSYVideoManager().listener().onCompletion();
         }
-        if(mVideoAllCallBack != null) {
-            Debuger.printfLog("onStartPrepared");
-            mVideoAllCallBack.onStartPrepared(mOriginUrl, mTitle, this);
-        }
         getGSYVideoManager().setListener(this);
         getGSYVideoManager().setPlayTag(mPlayTag);
         getGSYVideoManager().setPlayPosition(mPlayPosition);
@@ -553,15 +549,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
 
         mHadPrepared = true;
 
-        if (mVideoAllCallBack != null && isCurrentMediaListener()) {
-            Debuger.printfLog("onPrepared");
-            mVideoAllCallBack.onPrepared(mOriginUrl, mTitle, this);
-        }
-
-        if (!mStartAfterPrepared) {
-            setStateAndUi(CURRENT_STATE_PAUSE);
-            return;
-        }
+        if (!mStartAfterPrepared) return;
 
         startAfterPrepared();
     }
@@ -770,6 +758,11 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
             }
 
             setStateAndUi(CURRENT_STATE_PLAYING);
+
+            if (mVideoAllCallBack != null && isCurrentMediaListener()) {
+                Debuger.printfLog("onPrepared");
+                mVideoAllCallBack.onPrepared(mOriginUrl, mTitle, this);
+            }
 
             if (getGSYVideoManager().getMediaPlayer() != null && mSeekOnStart > 0) {
                 getGSYVideoManager().getMediaPlayer().seekTo(mSeekOnStart);

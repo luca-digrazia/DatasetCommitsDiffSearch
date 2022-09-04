@@ -5,8 +5,8 @@ import android.media.AudioManager;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 
+import com.danikula.videocache.HttpProxyCacheServer;
 import com.example.gsyvideoplayer.video.manager.CustomManager;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoViewBridge;
 
 import java.io.File;
@@ -47,7 +47,7 @@ public class MultiSampleVideo extends SampleCoverVideo {
                         post(new Runnable() {
                             @Override
                             public void run() {
-                                //todo 判断如果不是外界造成的就不处理
+                                //DO NOTHING NO STOP
                             }
                         });
                         break;
@@ -55,7 +55,7 @@ public class MultiSampleVideo extends SampleCoverVideo {
                         post(new Runnable() {
                             @Override
                             public void run() {
-                                //todo 判断如果不是外界造成的就不处理
+                                //DO NOTHING NO STOP
                             }
                         });
                         break;
@@ -73,7 +73,6 @@ public class MultiSampleVideo extends SampleCoverVideo {
 
     @Override
     public GSYVideoViewBridge getGSYVideoManager() {
-        CustomManager.getCustomManager(getKey()).initContext(getContext().getApplicationContext());
         return CustomManager.getCustomManager(getKey());
     }
 
@@ -87,23 +86,17 @@ public class MultiSampleVideo extends SampleCoverVideo {
         CustomManager.releaseAllVideos(getKey());
     }
 
-
     @Override
-    protected int getFullId() {
-        return CustomManager.FULLSCREEN_ID;
-    }
-
-    @Override
-    protected int getSmallId() {
-        return CustomManager.SMALL_ID;
+    protected HttpProxyCacheServer getProxy(Context context, File file) {
+        return null;
     }
 
     public String getKey() {
         if (mPlayPosition == -22) {
-            Debuger.printfError(getClass().getSimpleName() + " used getKey() " + "******* PlayPosition never set. ********");
+            throw new IllegalStateException("PlayPosition never set.");
         }
         if (TextUtils.isEmpty(mPlayTag)) {
-            Debuger.printfError(getClass().getSimpleName() + " used getKey() " + "******* PlayTag never set. ********");
+            throw new IllegalStateException("PlayTag never set.");
         }
         return TAG + mPlayPosition + mPlayTag;
     }

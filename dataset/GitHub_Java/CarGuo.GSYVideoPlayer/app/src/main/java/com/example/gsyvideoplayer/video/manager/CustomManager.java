@@ -1,23 +1,21 @@
 package com.example.gsyvideoplayer.video.manager;
 
-import android.app.Activity;
 import android.content.Context;
 import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 
-import com.example.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.GSYVideoBaseManager;
-import com.shuyu.gsyvideoplayer.player.IPlayerManager;
-import com.shuyu.gsyvideoplayer.player.IjkPlayerManager;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
-import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import java.util.HashMap;
 import java.util.Map;
 
+import tv.danmaku.ijk.media.player.IjkLibLoader;
+
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
+import static com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer.FULLSCREEN_ID;
 
 /**
  * 多个播放的管理器
@@ -26,23 +24,17 @@ import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
 
 public class CustomManager extends GSYVideoBaseManager {
 
-    public static final int SMALL_ID = R.id.custom_small_id;
-
-    public static final int FULLSCREEN_ID = R.id.custom_full_id;
-
     public static String TAG = "GSYVideoManager";
 
     private static Map<String, CustomManager> sMap = new HashMap<>();
 
-
-    public CustomManager() {
-        init();
+    /***
+     * @param libLoader 是否使用外部动态加载so
+     * */
+    public CustomManager(IjkLibLoader libLoader) {
+        init(libLoader);
     }
 
-    @Override
-    protected IPlayerManager getPlayManager() {
-        return new IjkPlayerManager();
-    }
 
     /**
      * 退出全屏，主要用于返回键
@@ -95,18 +87,6 @@ public class CustomManager extends GSYVideoBaseManager {
 
 
     /**
-     * 恢复暂停状态
-     *
-     * @param seek 是否产生seek动作,直播设置为false
-     */
-    public void onResume(String key, boolean seek) {
-        if (getCustomManager(key).listener() != null) {
-            getCustomManager(key).listener().onVideoResume(seek);
-        }
-    }
-
-
-    /**
      * 单例管理器
      */
     public static synchronized Map<String, CustomManager> instance() {
@@ -122,7 +102,7 @@ public class CustomManager extends GSYVideoBaseManager {
         }
         CustomManager customManager = sMap.get(key);
         if (customManager == null) {
-            customManager = new CustomManager();
+            customManager = new CustomManager(null);
             sMap.put(key, customManager);
         }
         return customManager;
@@ -144,19 +124,6 @@ public class CustomManager extends GSYVideoBaseManager {
         }
     }
 
-    /**
-     * 恢复暂停状态
-     *
-     * @param seek 是否产生seek动作
-     */
-    public static void onResumeAll(boolean seek) {
-        if (sMap.size() > 0) {
-            for (Map.Entry<String, CustomManager> header : sMap.entrySet()) {
-                header.getValue().onResume(header.getKey(), seek);
-            }
-        }
-    }
-
     public static void clearAllVideo() {
         if (sMap.size() > 0) {
             for (Map.Entry<String, CustomManager> header : sMap.entrySet()) {
@@ -168,21 +135,5 @@ public class CustomManager extends GSYVideoBaseManager {
 
     public static void removeManager(String key) {
         sMap.remove(key);
-    }
-
-    /**
-     * 当前是否全屏状态
-     *
-     * @return 当前是否全屏状态， true代表是。
-     */
-    @SuppressWarnings("ResourceType")
-    public static boolean isFullState(Activity activity) {
-        ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(activity)).findViewById(Window.ID_ANDROID_CONTENT);
-        final View full = vp.findViewById(FULLSCREEN_ID);
-        GSYVideoPlayer gsyVideoPlayer = null;
-        if (full != null) {
-            gsyVideoPlayer = (GSYVideoPlayer) full;
-        }
-        return gsyVideoPlayer != null;
     }
 }

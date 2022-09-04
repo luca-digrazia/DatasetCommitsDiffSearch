@@ -10,8 +10,8 @@ import android.transition.Transition;
 
 import com.example.gsyvideoplayer.listener.OnTransitionListener;
 import com.example.gsyvideoplayer.video.EmptyControlVideo;
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
-import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -44,7 +44,7 @@ public class PlayEmptyControlActivity extends AppCompatActivity {
     }
 
     private void init() {
-        String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
+        String url = "https://res.exexm.com/cw_145225549855002";
 
         videoPlayer.setUp(url, true, "");
 
@@ -56,7 +56,6 @@ public class PlayEmptyControlActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        videoPlayer.onVideoPause();
     }
 
     @Override
@@ -68,6 +67,7 @@ public class PlayEmptyControlActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        videoPlayer.release();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
     }
@@ -75,8 +75,8 @@ public class PlayEmptyControlActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
         //释放所有
-        videoPlayer.setStandardVideoAllCallBack(null);
-        GSYVideoPlayer.releaseAllVideos();
+        videoPlayer.setVideoAllCallBack(null);
+        GSYVideoManager.releaseAllVideos();
         if (isTransition && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             super.onBackPressed();
         } else {

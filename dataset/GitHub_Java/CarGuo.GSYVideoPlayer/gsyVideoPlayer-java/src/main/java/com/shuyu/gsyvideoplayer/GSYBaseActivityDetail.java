@@ -113,11 +113,6 @@ public abstract class GSYBaseActivityDetail<T extends GSYBaseVideoPlayer> extend
     }
 
     @Override
-    public void onStartPrepared(String url, Object... objects) {
-
-    }
-
-    @Override
     public void onPrepared(String url, Object... objects) {
 
         if (orientationUtils == null) {

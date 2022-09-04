@@ -101,18 +101,8 @@ public final class MeasureHelper {
                         if (mVideoRotationDegree == 90 || mVideoRotationDegree == 270)
                             displayAspectRatio = 1.0f / displayAspectRatio;
                         break;
-                    case GSYVideoType.SCREEN_TYPE_18_9:
-                        displayAspectRatio = 18.0f / 9.0f;
-                        if (mVideoRotationDegree == 90 || mVideoRotationDegree == 270)
-                            displayAspectRatio = 1.0f / displayAspectRatio;
-                        break;
                     case GSYVideoType.SCREEN_TYPE_4_3:
                         displayAspectRatio = 4.0f / 3.0f;
-                        if (mVideoRotationDegree == 90 || mVideoRotationDegree == 270)
-                            displayAspectRatio = 1.0f / displayAspectRatio;
-                        break;
-                    case GSYVideoType.SCREEN_TYPE_CUSTOM:
-                        displayAspectRatio = GSYVideoType.getScreenScaleRatio();
                         if (mVideoRotationDegree == 90 || mVideoRotationDegree == 270)
                             displayAspectRatio = 1.0f / displayAspectRatio;
                         break;
@@ -131,8 +121,6 @@ public final class MeasureHelper {
                     case GSYVideoType.SCREEN_TYPE_DEFAULT:
                     case GSYVideoType.SCREEN_TYPE_16_9:
                     case GSYVideoType.SCREEN_TYPE_4_3:
-                    case GSYVideoType.SCREEN_TYPE_18_9:
-                    case GSYVideoType.SCREEN_TYPE_CUSTOM:
                         if (shouldBeWider) {
                             // too wide, fix width
                             width = widthSpecSize;
