@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -28,9 +29,6 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.UserExecException;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -63,7 +61,7 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
    */
   public ParameterFileWriteAction(ActionOwner owner, Artifact output, CommandLine commandLine,
       ParameterFileType type, Charset charset) {
-    this(owner, NestedSetBuilder.emptySet(Order.STABLE_ORDER), output, commandLine, type, charset);
+    this(owner, ImmutableList.<Artifact>of(), output, commandLine, type, charset);
   }
 
   /**
@@ -80,7 +78,7 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
   @AutoCodec.Instantiator
   public ParameterFileWriteAction(
       ActionOwner owner,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> inputs,
       Artifact output,
       CommandLine commandLine,
       ParameterFileType type,
@@ -89,7 +87,7 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
     this.commandLine = commandLine;
     this.type = type;
     this.charset = charset;
-    this.hasInputArtifactToExpand = !inputs.isEmpty();
+    this.hasInputArtifactToExpand = !Iterables.isEmpty(inputs);
   }
 
   @VisibleForTesting
@@ -100,10 +98,8 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
   /**
    * Returns the list of options written to the parameter file. Don't use this method outside tests
    * - the list is often huge, resulting in significant garbage collection overhead.
-   *
-   * <p>2019-01-10, @leba: Using this method for aquery since it's not performance-critical and the
-   * includeParamFile option is flag-guarded with warning regarding output size to user.
    */
+  @VisibleForTesting
   public Iterable<String> getArguments() throws CommandLineExpansionException {
     Preconditions.checkState(
         !hasInputArtifactToExpand,
@@ -118,6 +114,21 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     ParameterFile.writeParameterFile(out, getArguments(), type, charset);
     return new String(out.toByteArray(), charset);
+  }
+
+  // TODO(37444705): Remove method at end of migration.
+  @VisibleForTesting
+  @Deprecated
+  public Iterable<String> getContents() throws CommandLineExpansionException {
+    return getArguments();
+  }
+
+  // TODO(37444705): Remove method at end of migration.
+  @VisibleForTesting
+  @Deprecated
+  public Iterable<String> getContents(ArtifactExpander artifactExpander)
+      throws CommandLineExpansionException {
+    return commandLine.arguments(artifactExpander);
   }
 
   @Override
