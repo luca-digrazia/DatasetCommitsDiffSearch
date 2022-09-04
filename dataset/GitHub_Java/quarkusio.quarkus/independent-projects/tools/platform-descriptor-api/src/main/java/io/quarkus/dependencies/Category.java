@@ -4,12 +4,9 @@ import java.util.Map;
 
 public class Category {
 
-    public static final String MD_PINNED = "pinned";
-
     String id;
     String name;
-    String description;
-    
+
     Map<String, Object> metadata;
 
     public String getId() {
@@ -26,14 +23,6 @@ public class Category {
 
     public void setName(String name) {
         this.name = name;
-    }
-
-    public String getDescription() {
-        return name;
-    }
-
-    public void setDescription(String name) {
-        this.description = name;
     }
 
     public Map<String, Object> getMetadata() {
