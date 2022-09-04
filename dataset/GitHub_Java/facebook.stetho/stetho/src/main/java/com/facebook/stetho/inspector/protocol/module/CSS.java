@@ -173,7 +173,9 @@ public class CSS implements ChromeDevtoolsDomain {
 
     final String value;
     final String key;
-    if (request.text == null || !request.text.contains(":")) {
+    if ("/* undefined */".equals(request.text)) {
+      // This gets sent when a key is disabled. Chrome does not send the key which was disabled
+      // though so not much we can do here.
       key = null;
       value = null;
     } else {
