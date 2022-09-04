@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.runtime.BlazeCommandEventHandler;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -227,6 +226,7 @@ public class BuildRequest implements OptionsClassProvider {
       converter = Converters.CommaSeparatedOptionListConverter.class,
       allowMultiple = true,
       defaultValue = "",
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
       help =
           "Specifies which output groups of the top-level targets to build. If omitted, a default "
               + "set of output groups are built. When specified the default set is overridden."
@@ -311,14 +311,8 @@ public class BuildRequest implements OptionsClassProvider {
       name = "aspects",
       converter = Converters.CommaSeparatedOptionListConverter.class,
       defaultValue = "",
-      allowMultiple = true,
-      help =
-          "Comma-separated list of aspects to be applied to top-level targets. All aspects "
-              + "are applied to all top-level targets independently. Aspects are specified in "
-              + "the form <bzl-file-label>%<aspect_name>, "
-              + "for example '//tools:my_def.bzl%my_aspect', where 'my_aspect' is a top-level "
-              + "value from from a file tools/my_def.bzl"
-
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED, // for now
+      help = "List of top-level aspects"
     )
     public List<String> aspects;
 
@@ -422,7 +416,6 @@ public class BuildRequest implements OptionsClassProvider {
       ImmutableList.of(
           BuildRequestOptions.class,
           PackageCacheOptions.class,
-          SkylarkSemanticsOptions.class,
           LoadingOptions.class,
           BuildView.Options.class,
           ExecutionOptions.class);
