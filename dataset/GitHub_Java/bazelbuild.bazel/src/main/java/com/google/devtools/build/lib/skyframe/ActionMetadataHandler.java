@@ -44,6 +44,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,9 +56,9 @@ import javax.annotation.Nullable;
  * Cache provided by an {@link ActionExecutionFunction}, allowing Blaze to obtain data from the
  * graph and to inject data (e.g. file digests) back into the graph. The cache can be in one of two
  * modes. After construction it acts as a cache for input and output metadata for the purpose of
- * checking for an action cache hit. When {@link #discardOutputMetadata} is called, it switches to a
- * mode where it calls chmod on output files before statting them. This is done here to ensure that
- * the chmod always comes before the stat in order to ensure that the stat is up to date.
+ * checking for an action cache hit. When {@link #discardOutputMetadata} is called, it switches to
+ * a mode where it calls chmod on output files before statting them. This is done here to ensure
+ * that the chmod always comes before the stat in order to ensure that the stat is up to date.
  *
  * <p>Data for the action's inputs is injected into this cache on construction, using the Skyframe
  * graph as the source of truth.
@@ -70,11 +71,11 @@ import javax.annotation.Nullable;
  * TreeArtifactValue}s. Third, the {@link FilesystemValueChecker} uses it to determine the set of
  * output files to check for inter-build modifications. Because all these use cases are slightly
  * different, we must occasionally store two versions of the data for a value. See {@link
- * OutputStore#getAllAdditionalOutputData} for elaboration on the difference between these cases,
- * and see the javadoc for the various internal maps to see what is stored where.
+ * #getAdditionalOutputData} for elaboration on the difference between these cases, and see the
+ * javadoc for the various internal maps to see what is stored where.
  */
 @VisibleForTesting
-public final class ActionMetadataHandler implements MetadataHandler {
+public class ActionMetadataHandler implements MetadataHandler {
 
   /**
    * Data for input artifacts. Immutable.
@@ -84,17 +85,41 @@ public final class ActionMetadataHandler implements MetadataHandler {
   private final ActionInputMap inputArtifactData;
 
   /**
+   * {@link ArtifactFileMetadata} for each output Artifact. The value is {@link
+   * ArtifactFileMetadata#PLACEHOLDER} if the artifact's metadata is not fully captured in {@link
+   * #additionalOutputData}.
+   */
+  private final ConcurrentMap<Artifact, ArtifactFileMetadata> outputArtifactData =
+      new ConcurrentHashMap<>();
+
+  /**
    * Maps output TreeArtifacts to their contents. These maps are either injected or read
    * directly from the filesystem.
    * If the value is null, this means nothing was injected, and the output TreeArtifact
    * is to have its values read from disk instead.
    */
-  // TODO(b/115361150): Move this to OutputStore.
   private final ConcurrentMap<Artifact, Set<TreeFileArtifact>> outputDirectoryListings =
       new ConcurrentHashMap<>();
 
   /** Outputs that are to be omitted. */
   private final Set<Artifact> omittedOutputs = Sets.newConcurrentHashSet();
+
+  /**
+   * Contains RealArtifactValues when those values must be stored separately.
+   * See {@link #getAdditionalOutputData()} for details.
+   */
+  private final ConcurrentMap<Artifact, FileArtifactValue> additionalOutputData =
+      new ConcurrentHashMap<>();
+
+  /**
+   * Data for TreeArtifactValues, constructed from outputArtifactData and
+   * additionalOutputFileData.
+   */
+  private final ConcurrentMap<Artifact, TreeArtifactValue> outputTreeArtifactData =
+      new ConcurrentHashMap<>();
+
+  /** Tracks which Artifacts have had metadata injected. */
+  private final Set<Artifact> injectedFiles = Sets.newConcurrentHashSet();
 
   private final ImmutableSet<Artifact> outputs;
 
@@ -110,9 +135,6 @@ public final class ActionMetadataHandler implements MetadataHandler {
    * {@link #discardOutputMetadata}.
    */
   private final AtomicBoolean executionMode = new AtomicBoolean(false);
-
-  // TODO(b/115361150): Swap in a different output store when using ActionFS.
-  private final OutputStore store = new OutputStore();
 
   @VisibleForTesting
   public ActionMetadataHandler(
@@ -175,12 +197,12 @@ public final class ActionMetadataHandler implements MetadataHandler {
     } else if (artifact.isMiddlemanArtifact()) {
       // A middleman artifact's data was either already injected from the action cache checker using
       // #setDigestForVirtualArtifact, or it has the default middleman value.
-      value = store.getAdditionalOutputData(artifact);
+      value = additionalOutputData.get(artifact);
       if (value != null) {
         return metadataFromValue(value);
       }
       value = FileArtifactValue.DEFAULT_MIDDLEMAN;
-      store.putAdditionalOutputData(artifact, value);
+      additionalOutputData.put(artifact, value);
       return metadataFromValue(value);
     } else if (artifact.isTreeArtifact()) {
       TreeArtifactValue setValue = getTreeArtifactValue((SpecialArtifact) artifact);
@@ -192,12 +214,12 @@ public final class ActionMetadataHandler implements MetadataHandler {
       throw new FileNotFoundException(artifact + " not found");
     }
     // It's an ordinary artifact.
-    ArtifactFileMetadata fileMetadata = store.getArtifactData(artifact);
+    ArtifactFileMetadata fileMetadata = outputArtifactData.get(artifact);
     if (fileMetadata != null) {
       // Non-middleman artifacts should only have additionalOutputData if they have
       // outputArtifactData. We don't assert this because of concurrency possibilities, but at least
       // we don't check additionalOutputData unless we expect that we might see the artifact there.
-      value = store.getAdditionalOutputData(artifact);
+      value = additionalOutputData.get(artifact);
       // If additional output data is present for this artifact, we use it in preference to the
       // usual calculation.
       if (value != null) {
@@ -215,8 +237,8 @@ public final class ActionMetadataHandler implements MetadataHandler {
   }
 
   /**
-   * See {@link Outputstore#getAllAdditionalOutputData} for why we sometimes need to store
-   * additional data, even for normal (non-middleman) artifacts.
+   * See {@link #getAdditionalOutputData} for why we sometimes need to store additional data, even
+   * for normal (non-middleman) artifacts.
    */
   @Nullable
   private FileArtifactValue maybeStoreAdditionalData(
@@ -241,7 +263,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
     injectedDigest = injectedDigest != null || !isFile ? injectedDigest : data.getDigest();
     FileArtifactValue value = FileArtifactValue.create(artifact, artifactPathResolver, data,
         injectedDigest);
-    store.putAdditionalOutputData(artifact, value);
+    additionalOutputData.put(artifact, value);
     return metadataFromValue(value);
   }
 
@@ -249,17 +271,27 @@ public final class ActionMetadataHandler implements MetadataHandler {
   public void setDigestForVirtualArtifact(Artifact artifact, Md5Digest md5Digest) {
     Preconditions.checkArgument(artifact.isMiddlemanArtifact(), artifact);
     Preconditions.checkNotNull(md5Digest, artifact);
-    store.putAdditionalOutputData(
+    additionalOutputData.put(
         artifact, FileArtifactValue.createProxy(md5Digest.getDigestBytesUnsafe()));
   }
 
   private Set<TreeFileArtifact> getTreeArtifactContents(Artifact artifact) {
     Preconditions.checkArgument(artifact.isTreeArtifact(), artifact);
-    return outputDirectoryListings.computeIfAbsent(artifact, unused -> Sets.newConcurrentHashSet());
+    Set<TreeFileArtifact> contents = outputDirectoryListings.get(artifact);
+    if (contents == null) {
+      // Unfortunately, there is no such thing as a ConcurrentHashSet.
+      contents = Collections.newSetFromMap(new ConcurrentHashMap<TreeFileArtifact, Boolean>());
+      Set<TreeFileArtifact> oldContents = outputDirectoryListings.putIfAbsent(artifact, contents);
+      // Avoid a race condition.
+      if (oldContents != null) {
+        contents = oldContents;
+      }
+    }
+    return contents;
   }
 
   private TreeArtifactValue getTreeArtifactValue(SpecialArtifact artifact) throws IOException {
-    TreeArtifactValue value = store.getTreeArtifactData(artifact);
+    TreeArtifactValue value = outputTreeArtifactData.get(artifact);
     if (value != null) {
       return value;
     }
@@ -308,7 +340,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
       value = constructTreeArtifactValueFromFilesystem(artifact);
     }
 
-    store.putTreeArtifactData(artifact, value);
+    outputTreeArtifactData.put(artifact, value);
     return value;
   }
 
@@ -318,9 +350,9 @@ public final class ActionMetadataHandler implements MetadataHandler {
         Maps.newHashMapWithExpectedSize(contents.size());
 
     for (TreeFileArtifact treeFileArtifact : contents) {
-      FileArtifactValue cachedValue = store.getAdditionalOutputData(treeFileArtifact);
+      FileArtifactValue cachedValue = additionalOutputData.get(treeFileArtifact);
       if (cachedValue == null) {
-        ArtifactFileMetadata fileMetadata = store.getArtifactData(treeFileArtifact);
+        ArtifactFileMetadata fileMetadata = outputArtifactData.get(treeFileArtifact);
         // This is similar to what's present in getRealMetadataForArtifact, except
         // we get back the ArtifactFileMetadata, not the metadata.
         // We do not cache exceptions besides nonexistence here, because it is unlikely that the
@@ -338,11 +370,11 @@ public final class ActionMetadataHandler implements MetadataHandler {
           }
         }
 
-        // A minor hack: maybeStoreAdditionalData will force the data to be stored via
-        // store.putAdditionalOutputData.
+        // A minor hack: maybeStoreAdditionalData will force the data to be stored
+        // in additionalOutputData.
         maybeStoreAdditionalData(treeFileArtifact, fileMetadata, null);
         cachedValue = Preconditions.checkNotNull(
-            store.getAdditionalOutputData(treeFileArtifact), treeFileArtifact);
+            additionalOutputData.get(treeFileArtifact), treeFileArtifact);
       }
 
       values.put(treeFileArtifact, cachedValue);
@@ -366,9 +398,10 @@ public final class ActionMetadataHandler implements MetadataHandler {
     // If you're reading tree artifacts from disk while outputDirectoryListings are being injected,
     // something has gone terribly wrong.
     Object previousDirectoryListing =
-        outputDirectoryListings.put(artifact, Sets.newConcurrentHashSet());
+        outputDirectoryListings.put(artifact,
+            Collections.newSetFromMap(new ConcurrentHashMap<TreeFileArtifact, Boolean>()));
     Preconditions.checkState(previousDirectoryListing == null,
-        "Race condition while constructing TreeArtifactValue: %s, %s",
+        "Race condition while constructing TreArtifactValue: %s, %s",
         artifact, previousDirectoryListing);
     return constructTreeArtifactValue(ActionInputHelper.asTreeFileArtifacts(artifact, paths));
   }
@@ -392,8 +425,9 @@ public final class ActionMetadataHandler implements MetadataHandler {
     if (output instanceof Artifact) {
       final Artifact artifact = (Artifact) output;
       // We have to add the artifact to injectedFiles before calling constructArtifactFileMetadata
-      // to avoid duplicate chmod calls.
-      store.injectedFiles().add(artifact);
+      // to avoid
+      // duplicate chmod calls.
+      injectedFiles.add(artifact);
       ArtifactFileMetadata fileMetadata;
       try {
         // This call may do an unnecessary call to Path#getFastDigest to see if the digest is
@@ -451,7 +485,23 @@ public final class ActionMetadataHandler implements MetadataHandler {
         size,
         locationIndex);
 
-    store.injectRemoteFile(output, digest, size, locationIndex);
+    // TODO(shahan): there are a couple of things that could reduce memory usage
+    // 1. We might be able to skip creating an entry in `outputArtifactData` and only create
+    // the `FileArtifactValue`, but there are likely downstream consumers that expect it that
+    // would need to be cleaned up.
+    // 2. Instead of creating an `additionalOutputData` entry, we could add the extra
+    // `locationIndex` to `FileStateValue`.
+    injectOutputData(
+        output, new FileArtifactValue.RemoteFileArtifactValue(digest, size, locationIndex));
+  }
+
+  public void injectOutputData(Artifact output, FileArtifactValue artifactValue) {
+    injectedFiles.add(output);
+    // While `artifactValue` carries the important information, the control flow of `getMetadata`
+    // requires an entry in `outputArtifactData` to access `additionalOutputData`, so a
+    // `PLACEHOLDER` is added to `outputArtifactData`.
+    outputArtifactData.put(output, ArtifactFileMetadata.PLACEHOLDER);
+    additionalOutputData.put(output, artifactValue);
   }
 
   @Override
@@ -460,7 +510,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
     if (output instanceof Artifact) {
       Artifact artifact = (Artifact) output;
       Preconditions.checkState(omittedOutputs.add(artifact), artifact);
-      store.putAdditionalOutputData(artifact, FileArtifactValue.OMITTED_FILE_MARKER);
+      additionalOutputData.put(artifact, FileArtifactValue.OMITTED_FILE_MARKER);
     }
   }
 
@@ -474,16 +524,62 @@ public final class ActionMetadataHandler implements MetadataHandler {
   public void discardOutputMetadata() {
     boolean wasExecutionMode = executionMode.getAndSet(true);
     Preconditions.checkState(!wasExecutionMode);
-    Preconditions.checkState(store.injectedFiles().isEmpty(),
-        "Files cannot be injected before action execution: %s", store.injectedFiles());
+    Preconditions.checkState(injectedFiles.isEmpty(),
+        "Files cannot be injected before action execution: %s", injectedFiles);
     Preconditions.checkState(omittedOutputs.isEmpty(),
         "Artifacts cannot be marked omitted before action execution: %s", omittedOutputs);
+    outputArtifactData.clear();
     outputDirectoryListings.clear();
-    store.clear();
+    outputTreeArtifactData.clear();
+    additionalOutputData.clear();
   }
 
-  OutputStore getOutputStore() {
-    return store;
+  /** @return data for output files that was computed during execution. */
+  Map<Artifact, ArtifactFileMetadata> getOutputArtifactData() {
+    return outputArtifactData;
+  }
+
+  /**
+   * @return data for TreeArtifacts that was computed during execution. May contain copies of
+   * {@link TreeArtifactValue#MISSING_TREE_ARTIFACT}.
+   */
+  Map<Artifact, TreeArtifactValue> getOutputTreeArtifactData() {
+    return outputTreeArtifactData;
+  }
+
+  /**
+   * Returns data for any output files whose metadata was not computable from the corresponding
+   * entry in {@link #getOutputArtifactData}.
+   *
+   * <p>There are two bits to consider: the filesystem possessing fast digests and the execution
+   * service injecting metadata via {@link #injectRemoteFile} or {@link #injectDigest}.
+   *
+   * <ol>
+   *   <li>If the filesystem does not possess fast digests, then we will have additional output data
+   *       for practically every artifact, since we will need to store their digests.
+   *   <li>If we have a remote execution service injecting metadata, then we will just store that
+   *       metadata here, and put {@link ArtifactFileMetadata#PLACEHOLDER} objects into {@link
+   *       #outputArtifactData} if the filesystem supports fast digests, and the actual metadata if
+   *       the filesystem does not support fast digests.
+   *   <li>If the filesystem has fast digests <i>but</i> there is no remote execution injecting
+   *       metadata, then we will not store additional metadata here.
+   * </ol>
+   *
+   * <p>Note that this means that in the vastly common cases (Google-internal, where we have fast
+   * digests and remote execution, and Bazel, where there is often neither), this map is always
+   * populated. Locally executed actions are the exception to this rule inside Google.
+   *
+   * <p>Moreover, there are some artifacts that are always stored here. First, middleman artifacts
+   * have no corresponding {@link ArtifactFileMetadata}. Second, directories' metadata contain their
+   * mtimes, which the {@link ArtifactFileMetadata} does not expose, so that has to be stored
+   * separately.
+   *
+   * <p>Note that for files that need digests, we can't easily inject the digest in the {@link
+   * ArtifactFileMetadata} because it would complicate equality-checking on subsequent builds -- if
+   * our filesystem doesn't do fast digests, the comparison value would not have a digest.
+   */
+  Map<Artifact, FileArtifactValue> getAdditionalOutputData() {
+    return additionalOutputData;
   }
 
   /**
@@ -502,7 +598,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
     ArtifactFileMetadata value =
         fileMetadataFromArtifact(
             artifact, artifactPathResolver, statNoFollow, getTimestampGranularityMonitor(artifact));
-    store.putArtifactData(artifact, value);
+    outputArtifactData.put(artifact, value);
     return value;
   }
 
@@ -567,7 +663,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
   private void setPathReadOnlyAndExecutable(Artifact artifact) throws IOException {
     // If the metadata was injected, we assume the mode is set correct and bail out early to avoid
     // the additional overhead of resetting it.
-    if (store.injectedFiles().contains(artifact)) {
+    if (injectedFiles.contains(artifact)) {
       return;
     }
     Path path = artifactPathResolver.toPath(artifact);

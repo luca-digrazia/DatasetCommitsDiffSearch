@@ -752,7 +752,7 @@ public class FilesystemValueCheckerTest {
         ImmutableMap.<Artifact, FileArtifactValue>of(),
         /*outputSymlinks=*/ null,
         /*discoveredModules=*/ null,
-        /*actionDependsOnBuildId=*/ false);
+        /*notifyOnActionCacheHitAction=*/ false);
   }
 
   private ActionExecutionValue actionValueWithEmptyDirectory(Artifact emptyDir) {
@@ -765,7 +765,7 @@ public class FilesystemValueCheckerTest {
         ImmutableMap.<Artifact, FileArtifactValue>of(),
         /*outputSymlinks=*/ null,
         /*discoveredModules=*/ null,
-        /*actionDependsOnBuildId=*/ false);
+        /*notifyOnActionCacheHitAction=*/ false);
   }
 
   private ActionExecutionValue actionValueWithTreeArtifacts(List<TreeFileArtifact> contents) {
@@ -801,7 +801,7 @@ public class FilesystemValueCheckerTest {
         ImmutableMap.<Artifact, FileArtifactValue>of(),
         /*outputSymlinks=*/ null,
         /*discoveredModules=*/ null,
-        /*actionDependsOnBuildId=*/ false);
+        /*notifyOnActionCacheHitAction=*/ false);
   }
 
   @Test

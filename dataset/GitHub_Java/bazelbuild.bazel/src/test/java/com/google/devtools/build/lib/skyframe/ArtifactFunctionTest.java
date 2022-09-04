@@ -437,7 +437,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
           additionalOutputData,
           /*outputSymlinks=*/ null,
           /*discoveredModules=*/ null,
-          /*actionDependsOnBuildId=*/ false);
+          /*notifyOnActionCacheHitAction=*/ false);
     }
 
     @Override
