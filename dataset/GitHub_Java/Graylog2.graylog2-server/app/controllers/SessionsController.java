@@ -22,7 +22,7 @@ import com.google.gson.annotations.SerializedName;
 import com.google.inject.Inject;
 import lib.APIException;
 import lib.ServerNodes;
-import lib.Graylog2ServerUnavailableException;
+import lib.security.Graylog2ServerUnavailableException;
 import lib.security.RedirectAuthenticator;
 import models.LoginRequest;
 import models.UserService;
@@ -52,26 +52,18 @@ public class SessionsController extends BaseController {
 	@Inject
     RedirectAuthenticator authenticator;
 
-	public Result index(String destination) {
+	public Result index() {
         // Redirect if already logged in.
         String loggedInUserName = authenticator.getUsername(ctx());
         if (loggedInUserName != null) {
             log.debug("User {} already authenticated, redirecting to /", loggedInUserName);
-            if (destination != null && !destination.isEmpty()) {
-                return redirect(destination);
-            } else {
-                return redirect("/");
-            }
+            return redirect("/");
         }
         if (session("username") != null && !session("username").isEmpty()) {
-            if (destination != null && !destination.isEmpty()) {
-                return redirect(destination);
-            } else {
-                return redirect("/");
-            }
+            return redirect("/");
         }
         checkServerConnections();
-        return ok(views.html.sessions.login.render(userForm, !serverNodes.isConnected(), destination));
+        return ok(views.html.sessions.login.render(userForm, !serverNodes.isConnected()));
     }
 
     private void checkServerConnections() {
@@ -85,7 +77,7 @@ public class SessionsController extends BaseController {
 
 		if (loginRequest.hasErrors()) {
 			flash("error", "Please fill out all fields.");
-            return badRequest(views.html.sessions.login.render(loginRequest, !serverNodes.isConnected(), loginRequest.field("destination").value()));
+            return badRequest(views.html.sessions.login.render(loginRequest, !serverNodes.isConnected()));
 		}
 		
 		LoginRequest r = loginRequest.get();
@@ -100,11 +92,6 @@ public class SessionsController extends BaseController {
             final String cookieContent = Crypto.encryptAES(r.username + "\t" + sessionResponse.sessionId);
             Http.Context.current().session().put("sessionid", cookieContent);
 
-            // if we were redirected from somewhere else because the session had expired, redirect back to that page
-            // otherwise use the configured startpage (or skip it if that was requested)
-            if (r.destination != null && !r.destination.isEmpty()) {
-                return redirect(r.destination);
-            }
             // upon redirect, the auth layer will load the user with the given session and log the user in.
             if(r.noStartpage) {
                 return redirect(routes.SystemController.index(0));
@@ -122,7 +109,7 @@ public class SessionsController extends BaseController {
             flash("error", "Unable to reach Graylog2 Server.");
         } catch (AuthenticationException e) {
         }
-        return badRequest(views.html.sessions.login.render(loginRequest, !serverNodes.isConnected(), loginRequest.field("destination").value()));
+        return badRequest(views.html.sessions.login.render(loginRequest, !serverNodes.isConnected()));
 	}
 
     @Security.Authenticated(RedirectAuthenticator.class)
