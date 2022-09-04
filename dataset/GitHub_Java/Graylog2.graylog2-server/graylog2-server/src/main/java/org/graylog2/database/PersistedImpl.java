@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2013-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.database;
 
 import com.google.common.base.Objects;
@@ -24,11 +27,7 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -90,31 +89,5 @@ public abstract class PersistedImpl implements Persisted {
                 "fields=" + fields +
                 ", id=" + id +
                 '}';
-    }
-
-    public Map<String, Object> asMap() {
-        Map<String, Object> result = new HashMap<>();
-        for (Method method : this.getClass().getMethods()) {
-            if (method.getName().startsWith("get") && method.getParameterTypes().length == 0) {
-                final String fieldName = method.getName().substring(3).toLowerCase();
-                try {
-                    result.put(fieldName, method.invoke(this));
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        for (Field field : this.getClass().getFields()) {
-            if (!result.containsKey(field.getName())) {
-                try {
-                    result.put(field.getName(), field.get(this));
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        return result;
     }
 }
