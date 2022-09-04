@@ -28,7 +28,7 @@ import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToV
 
 import java.util.Optional;
 
-abstract class WidgetConfigBase implements WidgetConfigWithTimeRange {
+abstract class WidgetConfigBase implements WidgetConfig {
     static String TIMESTAMP_FIELD = "timestamp";
 
     Pivot valuesPivotForField(String field, int limit) {
@@ -41,7 +41,7 @@ abstract class WidgetConfigBase implements WidgetConfigWithTimeRange {
     Pivot timestampPivot(String interval) {
         return Pivot.timeBuilder()
                 .field(TIMESTAMP_FIELD)
-                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoIntervalFactory.of(interval, timerange())).build())
+                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoInterval.of(interval, timerange())).build())
                 .build();
     }
 

@@ -16,18 +16,21 @@
  */
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.dashboardwidgets;
 
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.AggregationWidget;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
 
 import java.util.Collections;
 import java.util.Optional;
 
-public interface WidgetConfigWithQueryAndStreams extends WidgetConfigWithTimeRange {
+public interface WidgetConfigWithQueryAndStreams extends WidgetConfig {
+    @JsonProperty
     String query();
 
+    @JsonProperty
     Optional<String> streamId();
 
-    default AggregationWidget.Builder createAggregationWidget(String id) {
-        final AggregationWidget.Builder viewWidgetBuilder = AggregationWidget.builder()
+    default ViewWidget.Builder createViewWidget(String id) {
+        final ViewWidget.Builder viewWidgetBuilder = ViewWidget.builder()
                 .id(id)
                 .query(query())
                 .timerange(timerange());

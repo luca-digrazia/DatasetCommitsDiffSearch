@@ -24,7 +24,6 @@ import com.google.auto.value.AutoValue;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.Widget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AggregationConfig;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Pivot;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Series;
@@ -58,18 +57,18 @@ public abstract class FieldChartConfig extends WidgetConfigBase implements Widge
         return Series.create(mapStatsFunction(valuetype()), field());
     }
 
-    public Set<ViewWidget> toViewWidgets(Widget widget, RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
         final AggregationConfig.Builder configBuilder = AggregationConfig.builder()
                 .rowPivots(Collections.singletonList(
                         Pivot.timeBuilder()
                                 .field(TIMESTAMP_FIELD)
-                                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoIntervalFactory.of(interval(), timerange())).build())
+                                .config(TimeHistogramConfig.builder().interval(ApproximatedAutoInterval.of(interval(), timerange())).build())
                                 .build()
                 ))
                 .series(Collections.singletonList(series()))
                 .visualization(visualization());
         return Collections.singleton(
-                createAggregationWidget(randomUUIDProvider.get())
+                createViewWidget(randomUUIDProvider.get())
                         .config(visualizationConfig().map(configBuilder::visualizationConfig).orElse(configBuilder).build())
                         .build()
         );

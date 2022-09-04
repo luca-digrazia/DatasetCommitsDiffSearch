@@ -37,8 +37,4 @@ class ViewService {
     public ObjectId save(View view) {
         return db.insert(view).getSavedId();
     }
-
-    public void remove(ObjectId viewId) { db.removeById(viewId); }
-
-    long count() { return db.count(); }
 }

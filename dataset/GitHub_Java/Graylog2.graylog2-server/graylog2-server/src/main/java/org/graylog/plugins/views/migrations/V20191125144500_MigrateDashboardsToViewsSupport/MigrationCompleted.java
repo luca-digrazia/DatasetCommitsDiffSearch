@@ -27,20 +27,17 @@ import java.util.Set;
 @AutoValue
 @JsonAutoDetect
 public abstract class MigrationCompleted {
-    private static final String FIELD_MIGRATED_DASHBOARD_IDS = "migrated_dashboard_ids";
-    private static final String FIELD_WIDGET_MIGRATION_IDS = "widget_migration_ids";
+    @JsonProperty("dashboard_to_view_migration_ids")
+    public abstract Map<String, String> dashboardToViewMigrationIds();
 
-    @JsonProperty(FIELD_MIGRATED_DASHBOARD_IDS)
-    public abstract Set<String> migratedDashboardIds();
-
-    @JsonProperty(FIELD_WIDGET_MIGRATION_IDS)
+    @JsonProperty("widget_migration_ids")
     public abstract Map<String, Set<String>> widgetMigrationIds();
 
     @JsonCreator
     static MigrationCompleted create(
-            @JsonProperty(FIELD_MIGRATED_DASHBOARD_IDS) Set<String> migratedDashboardIds,
-            @JsonProperty(FIELD_WIDGET_MIGRATION_IDS) Map<String, Set<String>> widgetMigrationIds
+            @JsonProperty("dashboard_to_view_migration_ids") Map<String, String> dashboardToViewMigrationIds,
+            @JsonProperty("widget_migration_ids") Map<String, Set<String>> widgetMigrationIds
     ) {
-        return new AutoValue_MigrationCompleted(migratedDashboardIds, widgetMigrationIds);
+        return new AutoValue_MigrationCompleted(dashboardToViewMigrationIds, widgetMigrationIds);
     }
 }

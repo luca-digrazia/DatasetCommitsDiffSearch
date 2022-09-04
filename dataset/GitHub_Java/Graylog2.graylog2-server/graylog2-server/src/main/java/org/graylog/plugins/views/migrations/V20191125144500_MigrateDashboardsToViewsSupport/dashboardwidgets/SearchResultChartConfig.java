@@ -23,7 +23,6 @@ import com.google.auto.value.AutoValue;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.Widget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AggregationConfig;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Pivot;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.Series;
@@ -47,16 +46,16 @@ public abstract class SearchResultChartConfig extends WidgetConfigBase implement
     }
 
     @Override
-    public Set<ViewWidget> toViewWidgets(Widget widget, RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
         return Collections.singleton(
-                createAggregationWidget(randomUUIDProvider.get())
+                createViewWidget(randomUUIDProvider.get())
                         .config(
                                 AggregationConfig.builder()
                                         .rowPivots(Collections.singletonList(
                                                 Pivot.timeBuilder()
                                                         .field(TIMESTAMP_FIELD)
                                                         .config(TimeHistogramConfig.builder()
-                                                                .interval(ApproximatedAutoIntervalFactory.of(interval(), timerange()))
+                                                                .interval(ApproximatedAutoInterval.of(interval(), timerange()))
                                                                 .build())
                                                         .build()
                                         ))
