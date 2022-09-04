@@ -38,7 +38,6 @@ import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.smallrye.metrics.ExtendedMetadata;
-import io.smallrye.metrics.ExtendedMetadataBuilder;
 import io.smallrye.metrics.MetricRegistries;
 import io.smallrye.metrics.TagsUtils;
 import io.smallrye.metrics.elementdesc.BeanInfo;
@@ -559,38 +558,28 @@ public class SmallRyeMetricsRecorder {
         if (!ImageInfo.inImageCode()) {
             MicrometerGCMetrics gcMetrics = new MicrometerGCMetrics();
 
-            registry.register(new ExtendedMetadataBuilder()
-                    .withName("jvm.gc.max.data.size")
-                    .withType(MetricType.GAUGE)
-                    .withUnit(MetricUnits.BYTES)
-                    .withDescription("Max size of old generation memory pool")
-                    .skipsScopeInOpenMetricsExportCompletely(true)
-                    .build(), new LambdaGauge(gcMetrics::getMaxDataSize));
-            registry.register(new ExtendedMetadataBuilder()
-                    .withName("jvm.gc.live.data.size")
-                    .withType(MetricType.GAUGE)
-                    .withUnit(MetricUnits.BYTES)
-                    .withDescription("Size of old generation memory pool after a full GC")
-                    .skipsScopeInOpenMetricsExportCompletely(true)
-                    .build(), new LambdaGauge(gcMetrics::getLiveDataSize));
-            registry.register(new ExtendedMetadataBuilder()
-                    .withName("jvm.gc.memory.promoted")
-                    .withType(MetricType.COUNTER)
-                    .withUnit(MetricUnits.BYTES)
-                    .withDescription(
-                            "Count of positive increases in the size of the old generation memory pool before GC to after GC")
-                    .skipsScopeInOpenMetricsExportCompletely(true)
-                    .withOpenMetricsKeyOverride("jvm_gc_memory_promoted_bytes_total")
-                    .build(), new LambdaCounter(gcMetrics::getPromotedBytes));
-            registry.register(new ExtendedMetadataBuilder()
-                    .withName("jvm.gc.memory.allocated")
-                    .withType(MetricType.COUNTER)
-                    .withUnit(MetricUnits.BYTES)
-                    .withDescription(
-                            "Incremented for an increase in the size of the young generation memory pool after one GC to before the next")
-                    .skipsScopeInOpenMetricsExportCompletely(true)
-                    .withOpenMetricsKeyOverride("jvm_gc_memory_allocated_bytes_total")
-                    .build(), new LambdaCounter(gcMetrics::getAllocatedBytes));
+            registry.register(new ExtendedMetadata("jvm.gc.max.data.size",
+                    MetricType.GAUGE,
+                    MetricUnits.BYTES,
+                    "Max size of old generation memory pool",
+                    true), new LambdaGauge(gcMetrics::getMaxDataSize));
+            registry.register(new ExtendedMetadata("jvm.gc.live.data.size",
+                    MetricType.GAUGE,
+                    MetricUnits.BYTES,
+                    "Size of old generation memory pool after a full GC",
+                    true), new LambdaGauge(gcMetrics::getLiveDataSize));
+            registry.register(new ExtendedMetadata("jvm.gc.memory.promoted",
+                    MetricType.COUNTER,
+                    MetricUnits.BYTES,
+                    "Count of positive increases in the size of the old generation memory pool before GC to after GC",
+                    true,
+                    "jvm_gc_memory_promoted_bytes_total"), new LambdaCounter(gcMetrics::getPromotedBytes));
+            registry.register(new ExtendedMetadata("jvm.gc.memory.allocated",
+                    MetricType.COUNTER,
+                    MetricUnits.BYTES,
+                    "Incremented for an increase in the size of the young generation memory pool after one GC to before the next",
+                    true,
+                    "jvm_gc_memory_allocated_bytes_total"), new LambdaCounter(gcMetrics::getAllocatedBytes));
 
             // start updating the metric values in a listener for GC events
             // Metrics that mimic the jvm.gc.pause timer will be registered lazily as GC events occur
@@ -603,41 +592,33 @@ public class SmallRyeMetricsRecorder {
         ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
 
         registry.register(
-                new ExtendedMetadataBuilder()
-                        .withName("jvm.threads.peak")
-                        .withType(MetricType.GAUGE)
-                        .withUnit("threads")
-                        .withDescription("The peak live thread count since the Java virtual machine started or peak was reset")
-                        .skipsScopeInOpenMetricsExportCompletely(true)
-                        .build(),
+                new ExtendedMetadata("jvm.threads.peak",
+                        MetricType.GAUGE,
+                        "threads",
+                        "The peak live thread count since the Java virtual machine started or peak was reset",
+                        true),
                 new LambdaGauge(threadBean::getPeakThreadCount));
         registry.register(
-                new ExtendedMetadataBuilder()
-                        .withName("jvm.threads.daemon")
-                        .withType(MetricType.GAUGE)
-                        .withUnit("threads")
-                        .withDescription("The current number of live daemon threads")
-                        .skipsScopeInOpenMetricsExportCompletely(true)
-                        .build(),
+                new ExtendedMetadata("jvm.threads.daemon",
+                        MetricType.GAUGE,
+                        "threads",
+                        "The current number of live daemon threads",
+                        true),
                 new LambdaGauge(threadBean::getDaemonThreadCount));
         registry.register(
-                new ExtendedMetadataBuilder()
-                        .withName("jvm.threads.live")
-                        .withType(MetricType.GAUGE)
-                        .withUnit("threads")
-                        .withDescription("The current number of live threads including both daemon and non-daemon threads")
-                        .skipsScopeInOpenMetricsExportCompletely(true)
-                        .build(),
+                new ExtendedMetadata("jvm.threads.live",
+                        MetricType.GAUGE,
+                        "threads",
+                        "The current number of live threads including both daemon and non-daemon threads",
+                        true),
                 new LambdaGauge(threadBean::getThreadCount));
 
         if (!ImageInfo.inImageCode()) {
-            ExtendedMetadata threadStatesMetadata = new ExtendedMetadataBuilder()
-                    .withName("jvm.threads.states")
-                    .withType(MetricType.GAUGE)
-                    .withUnit("threads")
-                    .withDescription("The current number of threads having a particular state")
-                    .skipsScopeInOpenMetricsExportCompletely(true)
-                    .build();
+            ExtendedMetadata threadStatesMetadata = new ExtendedMetadata("jvm.threads.states",
+                    MetricType.GAUGE,
+                    "threads",
+                    "The current number of threads having a particular state",
+                    true);
             for (Thread.State state : Thread.State.values()) {
                 registry.register(threadStatesMetadata,
                         new LambdaGauge(() -> getThreadStateCount(threadBean, state)),
@@ -654,36 +635,29 @@ public class SmallRyeMetricsRecorder {
                         new Tag("area", area) };
 
                 registry.register(
-                        new ExtendedMetadataBuilder()
-                                .withName("jvm.memory.used")
-                                .withType(MetricType.GAUGE)
-                                .withUnit("bytes")
-                                .withDescription("The amount of used memory")
-                                .skipsScopeInOpenMetricsExportCompletely(true)
-                                .build(),
+                        new ExtendedMetadata("jvm.memory.used",
+                                MetricType.GAUGE,
+                                "bytes",
+                                "The amount of used memory",
+                                true),
                         new LambdaGauge(() -> memoryPoolMXBean.getUsage().getUsed()),
                         tags);
 
                 registry.register(
-                        new ExtendedMetadataBuilder()
-                                .withName("jvm.memory.committed")
-                                .withType(MetricType.GAUGE)
-                                .withUnit("bytes")
-                                .withDescription(
-                                        "The amount of memory in bytes that is committed for the Java virtual machine to use")
-                                .skipsScopeInOpenMetricsExportCompletely(true)
-                                .build(),
+                        new ExtendedMetadata("jvm.memory.committed",
+                                MetricType.GAUGE,
+                                "bytes",
+                                "The amount of memory in bytes that is committed for the Java virtual machine to use",
+                                true),
                         new LambdaGauge(() -> memoryPoolMXBean.getUsage().getCommitted()),
                         tags);
 
                 registry.register(
-                        new ExtendedMetadataBuilder()
-                                .withName("jvm.memory.max")
-                                .withType(MetricType.GAUGE)
-                                .withUnit("bytes")
-                                .withDescription("The maximum amount of memory in bytes that can be used for memory management")
-                                .skipsScopeInOpenMetricsExportCompletely(true)
-                                .build(),
+                        new ExtendedMetadata("jvm.memory.max",
+                                MetricType.GAUGE,
+                                "bytes",
+                                "The maximum amount of memory in bytes that can be used for memory management",
+                                true),
                         new LambdaGauge(() -> memoryPoolMXBean.getUsage().getMax()),
                         tags);
             }
@@ -692,36 +666,29 @@ public class SmallRyeMetricsRecorder {
                 Tag tag = new Tag("id", bufferPoolBean.getName());
 
                 registry.register(
-                        new ExtendedMetadataBuilder()
-                                .withName("jvm.buffer.count")
-                                .withType(MetricType.GAUGE)
-                                .withUnit("buffers")
-                                .withDescription("An estimate of the number of buffers in the pool")
-                                .skipsScopeInOpenMetricsExportCompletely(true)
-                                .build(),
+                        new ExtendedMetadata("jvm.buffer.count",
+                                MetricType.GAUGE,
+                                "buffers",
+                                "An estimate of the number of buffers in the pool",
+                                true),
                         new LambdaGauge(() -> bufferPoolBean.getCount()),
                         tag);
 
                 registry.register(
-                        new ExtendedMetadataBuilder()
-                                .withName("jvm.buffer.memory.used")
-                                .withType(MetricType.GAUGE)
-                                .withUnit("bytes")
-                                .withDescription(
-                                        "An estimate of the memory that the Java virtual machine is using for this buffer pool")
-                                .skipsScopeInOpenMetricsExportCompletely(true)
-                                .build(),
+                        new ExtendedMetadata("jvm.buffer.memory.used",
+                                MetricType.GAUGE,
+                                "bytes",
+                                "An estimate of the memory that the Java virtual machine is using for this buffer pool",
+                                true),
                         new LambdaGauge(() -> bufferPoolBean.getMemoryUsed()),
                         tag);
 
                 registry.register(
-                        new ExtendedMetadataBuilder()
-                                .withName("jvm.buffer.total.capacity")
-                                .withType(MetricType.GAUGE)
-                                .withUnit("bytes")
-                                .withDescription("An estimate of the total capacity of the buffers in this pool")
-                                .skipsScopeInOpenMetricsExportCompletely(true)
-                                .build(),
+                        new ExtendedMetadata("jvm.buffer.total.capacity",
+                                MetricType.GAUGE,
+                                "bytes",
+                                "An estimate of the total capacity of the buffers in this pool",
+                                true),
                         new LambdaGauge(() -> bufferPoolBean.getTotalCapacity()),
                         tag);
             }
@@ -735,24 +702,21 @@ public class SmallRyeMetricsRecorder {
             ClassLoadingMXBean classLoadingBean = ManagementFactory.getClassLoadingMXBean();
 
             registry.register(
-                    new ExtendedMetadataBuilder()
-                            .withName("jvm.classes.loaded")
-                            .withType(MetricType.GAUGE)
-                            .withUnit("classes")
-                            .withDescription("The number of classes that are currently loaded in the Java virtual machine")
-                            .withOpenMetricsKeyOverride("jvm_classes_loaded_classes")
-                            .build(),
+                    new ExtendedMetadata("jvm.classes.loaded",
+                            MetricType.GAUGE,
+                            "classes",
+                            "The number of classes that are currently loaded in the Java virtual machine",
+                            true,
+                            "jvm_classes_loaded_classes"),
                     new LambdaGauge(() -> classLoadingBean.getLoadedClassCount()));
 
             registry.register(
-                    new ExtendedMetadataBuilder()
-                            .withName("jvm.classes.unloaded")
-                            .withType(MetricType.COUNTER)
-                            .withUnit("classes")
-                            .withDescription(
-                                    "The total number of classes unloaded since the Java virtual machine has started execution")
-                            .withOpenMetricsKeyOverride("jvm_classes_unloaded_classes_total")
-                            .build(),
+                    new ExtendedMetadata("jvm.classes.unloaded",
+                            MetricType.COUNTER,
+                            "classes",
+                            "The total number of classes unloaded since the Java virtual machine has started execution",
+                            true,
+                            "jvm_classes_unloaded_classes_total"),
                     new LambdaCounter(() -> classLoadingBean.getUnloadedClassCount()));
         }
     }

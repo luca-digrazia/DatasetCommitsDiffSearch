@@ -452,7 +452,7 @@ public class SmallRyeMetricsProcessor {
                     TagHolder[] tags = Arrays.stream(additionalMetric.getTags())
                             .map(TagHolder::from)
                             .toArray(TagHolder[]::new);
-                    recorder.registerMetric(additionalMetric.getRegistryType(),
+                    recorder.registerMetric(MetricRegistry.Type.VENDOR,
                             MetadataHolder.from(additionalMetric.getMetadata()),
                             tags,
                             additionalMetric.getImplementor());
