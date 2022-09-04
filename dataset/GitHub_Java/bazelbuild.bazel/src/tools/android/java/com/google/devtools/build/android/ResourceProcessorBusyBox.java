@@ -115,12 +115,6 @@ public class ResourceProcessorBusyBox {
         CompileLibraryResourcesAction.main(args);
       }
     },
-    LINK_STATIC_LIBRARY() {
-      @Override
-      void call(String[] args) throws Exception {
-        ValidateAndLinkResourcesAction.main(args);
-      }
-    },
     AAPT2_PACKAGE() {
       @Override
       void call(String[] args) throws Exception {
@@ -152,7 +146,7 @@ public class ResourceProcessorBusyBox {
           "The processing tool to execute. "
               + "Valid tools: PACKAGE, VALIDATE, GENERATE_BINARY_R, GENERATE_LIBRARY_R, PARSE, "
               + "MERGE, GENERATE_AAR, SHRINK, MERGE_MANIFEST, COMPILE_LIBRARY_RESOURCES, "
-              + "LINK_STATIC_LIBRARY, AAPT2_PACKAGE."
+              + "AAPT2_PACKAGE."
     )
     public Tool tool;
   }
