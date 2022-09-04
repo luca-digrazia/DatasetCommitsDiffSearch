@@ -1,13 +1,13 @@
-/**
- * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
- *
+/*
+ * Copyright 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
+ * 
+ * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations under
@@ -30,10 +30,13 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 
+import com.googlecode.androidannotations.annotations.BeforeViews;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.Extra;
+import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.annotations.rest.Delete;
 import com.googlecode.androidannotations.annotations.rest.Get;
 import com.googlecode.androidannotations.annotations.rest.Head;
@@ -53,7 +56,6 @@ import com.googlecode.androidannotations.validation.IsValid;
 public class ValidatorHelper {
 
     private static final String ANDROID_VIEW_QUALIFIED_NAME = "android.view.View";
-    private static final String ANDROID_APPLICATION_QUALIFIED_NAME = "android.app.Application";
     private static final String ANDROID_ACTIVITY_QUALIFIED_NAME = "android.app.Activity";
     private static final String ANDROID_BUNDLE_QUALIFIED_NAME = "android.os.Bundle";
     private static final String ANDROID_MOTION_EVENT_QUALIFIED_NAME = "android.view.MotionEvent";
@@ -147,6 +149,31 @@ public class ValidatorHelper {
         if (error) {
             valid.invalidate();
             annotationHelper.printAnnotationError(element, "%s must have a value, which is the extra name used when sending the intent");
+        }
+    }
+
+    public void viewMayExist(Element element, AnnotationElements validatedElements, IsValid valid) {
+
+        Element enclosingElement = element.getEnclosingElement();
+        hasEActivity(element, enclosingElement, validatedElements, valid);
+
+        if (valid.isValid()) {
+
+            EActivity eActivity = enclosingElement.getAnnotation(EActivity.class);
+            if (eActivity.value() == Id.DEFAULT_VALUE) {
+                List<ExecutableElement> methods = ElementFilter.methodsIn(enclosingElement.getEnclosedElements());
+                boolean hasBeforeMethod = false;
+                for (ExecutableElement method : methods) {
+                    if (method.getAnnotation(BeforeViews.class) != null) {
+                        hasBeforeMethod = true;
+                        break;
+                    }
+                }
+                if (!hasBeforeMethod) {
+                    valid.invalidate();
+                    annotationHelper.printAnnotationError(element, "%s cannot be used if " + TargetAnnotationHelper.annotationName(EActivity.class) + " has no layout id and there is no " + TargetAnnotationHelper.annotationName(BeforeViews.class) + " method to call setContentView(), because findViewById() will obviously always return null");
+                }
+            }
         }
     }
 
@@ -293,20 +320,11 @@ public class ValidatorHelper {
             annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with zero or one parameter, instead of " + parameters.size());
         }
     }
-    
-    public void zeroParameter(ExecutableElement executableElement, IsValid valid) {
-        List<? extends VariableElement> parameters = executableElement.getParameters();
-
-        if (parameters.size() > 0) {
-            valid.invalidate();
-            annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with zero parameter, instead of " + parameters.size());
-        }
-    }
 
     public void zeroOrOneViewParameters(ExecutableElement executableElement, IsValid valid) {
         zeroOrOneSpecificParameter(executableElement, ANDROID_VIEW_QUALIFIED_NAME, valid);
     }
-    
+
     public void zeroOrOneSpecificParameter(ExecutableElement executableElement, String parameterTypeQualifiedName, IsValid valid) {
 
         zeroOrOneParameter(executableElement, valid);
@@ -334,27 +352,6 @@ public class ValidatorHelper {
     public void extendsView(Element element, IsValid valid) {
         extendsType(element, ANDROID_VIEW_QUALIFIED_NAME, valid);
     }
-    
-    
-    public void extendsApplication(Element element, IsValid valid) {
-        extendsType(element, ANDROID_APPLICATION_QUALIFIED_NAME, valid);
-    }
-    
-    public void registeredInManifest(Element element, AndroidManifest manifest, IsValid valid) {
-        String applicationClassName = manifest.getApplicationClassName();
-        if (applicationClassName != null) {
-            TypeMirror elementType = element.asType();
-            TypeMirror manifestType = annotationHelper.typeElementFromQualifiedName(applicationClassName).asType();
-            if (!annotationHelper.isSubtype(manifestType, elementType)) {
-                valid.invalidate();
-                annotationHelper.printAnnotationError(element, "%s can only be used on an element that is an instance of the following class (or one of it's superclass): " + applicationClassName);
-            }
-        } else {
-            valid.invalidate();
-            annotationHelper.printAnnotationError(element, "No application class is registered in the AndroidManifest.xml");
-        }
-        
-    }
 
     public void extendsType(Element element, String typeQualifiedName, IsValid valid) {
         TypeMirror elementType = element.asType();
@@ -362,7 +359,7 @@ public class ValidatorHelper {
         TypeMirror expectedType = annotationHelper.typeElementFromQualifiedName(typeQualifiedName).asType();
         if (!annotationHelper.isSubtype(elementType, expectedType)) {
             valid.invalidate();
-            annotationHelper.printAnnotationError(element, "%s can only be used on an element that extends " + typeQualifiedName);
+            annotationHelper.printAnnotationError(element, "%s can only be an element that extends " + typeQualifiedName);
         }
     }
 
