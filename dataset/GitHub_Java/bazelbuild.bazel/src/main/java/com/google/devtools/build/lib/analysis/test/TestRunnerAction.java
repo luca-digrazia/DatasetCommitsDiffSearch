@@ -501,12 +501,6 @@ public class TestRunnerAction extends AbstractAction
     }
   }
 
-  void createEmptyOutputs() throws IOException {
-    for (Artifact output : TestRunnerAction.this.getMandatoryOutputs()) {
-      FileSystemUtils.touchFile(output.getPath());
-    }
-  }
-
   public void setupEnvVariables(Map<String, String> env, Duration timeout) {
     env.put("TEST_TARGET", Label.print(getOwner().getLabel()));
     env.put("TEST_SIZE", getTestProperties().getSize().toString());
@@ -766,8 +760,6 @@ public class TestRunnerAction extends AbstractAction
           beginIfNotCancelled(testRunnerSpawn, cancelFuture);
       if (testAttemptContinuation == null) {
         testRunnerSpawn.finalizeCancelledTest(ImmutableList.of());
-        // We need to create the mandatory output files even if we're not going to run anything.
-        createEmptyOutputs();
         return ActionContinuationOrResult.of(ActionResult.create(ImmutableList.of()));
       }
       return new RunAttemptsContinuation(
@@ -1031,7 +1023,9 @@ public class TestRunnerAction extends AbstractAction
           if (cancelFuture != null && cancelFuture.isCancelled()) {
             // Clear the interrupt bit.
             Thread.interrupted();
-            createEmptyOutputs();
+            for (Artifact output : TestRunnerAction.this.getMandatoryOutputs()) {
+              FileSystemUtils.touchFile(output.getPath());
+            }
             testRunnerSpawn.finalizeCancelledTest(failedAttempts);
             return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
           }
@@ -1087,8 +1081,6 @@ public class TestRunnerAction extends AbstractAction
           TestAttemptContinuation nextContinuation = beginIfNotCancelled(nextRunner, cancelFuture);
           if (nextContinuation == null) {
             testRunnerSpawn.finalizeCancelledTest(failedAttempts);
-            // We need to create the mandatory output files even if we're not going to run anything.
-            createEmptyOutputs();
             return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
           }
 
