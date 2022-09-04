@@ -42,6 +42,11 @@ public final class ConfigFeatureFlagConfiguration extends Fragment {
    */
   public static final class Loader implements ConfigurationFragmentFactory {
     @Override
+    public Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException {
+      return new ConfigFeatureFlagConfiguration(buildOptions);
+    }
+
+    @Override
     public Class<? extends Fragment> creates() {
       return ConfigFeatureFlagConfiguration.class;
     }

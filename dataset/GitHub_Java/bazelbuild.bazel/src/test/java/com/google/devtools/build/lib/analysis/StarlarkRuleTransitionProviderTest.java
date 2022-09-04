@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
@@ -46,7 +47,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
    * A fragment containing flags that exhibit different flag behaviors for easy testing purposes.
    */
   @RequiresOptions(options = {DummyTestOptions.class})
-  public static class DummyTestFragment extends Fragment {
+  private static class DummyTestFragment extends Fragment {
     public DummyTestFragment(BuildOptions buildOptions) {}
   }
 
@@ -88,6 +89,12 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
   /** Loads a new {link @DummyTestFragment} instance. */
   protected static class DummyTestLoader implements ConfigurationFragmentFactory {
+
+    @Override
+    public Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException {
+      return new DummyTestFragment(buildOptions);
+    }
+
     @Override
     public Class<? extends Fragment> creates() {
       return DummyTestFragment.class;
@@ -1459,45 +1466,5 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         testTarget.getRuleClassObject().getTransitionFactory().create(testTarget);
     assertThat(ruleTransition.requiresOptionFragments(ct.getConfiguration().getOptions()))
         .containsExactly("CppOptions");
-  }
-
-  /**
-   * Unit test for an invalid output directory from a mnemonic via a dep transition. Integration
-   * test for top-level transition in //src/test/shell/integration:starlark_configurations_test#
-   * test_invalid_mnemonic_from_transition_top_level. Has to be an integration test because the
-   * error is emitted in BuildTool.
-   */
-  @Test
-  public void invalidMnemonicFromDepTransition() throws Exception {
-    writeAllowlistFile();
-    scratch.file(
-        "test/transitions.bzl",
-        "def _impl(settings, attr):",
-        "  return {'//command_line_option:cpu': '//bad:cpu'}",
-        "my_transition = transition(implementation = _impl, inputs = [],",
-        "  outputs = ['//command_line_option:cpu'])");
-    scratch.file(
-        "test/rules.bzl",
-        "load('//test:transitions.bzl', 'my_transition')",
-        "def _impl(ctx):",
-        "  return []",
-        "my_rule = rule(",
-        "  implementation = _impl,",
-        "  cfg = my_transition,",
-        "  attrs = {",
-        "    '_allowlist_function_transition': attr.label(",
-        "        default = '//tools/allowlists/function_transition_allowlist',",
-        "    ),",
-        "  })");
-    scratch.file(
-        "test/BUILD",
-        "load('//test:rules.bzl', 'my_rule')",
-        "my_rule(name = 'bottom')",
-        "genrule(name = 'test', srcs = [':bottom'], outs = ['out'], cmd = 'touch $@')");
-    reporter.removeHandler(failFastHandler);
-    assertThat(getConfiguredTarget("//test:test")).isNull();
-    assertContainsEvent(
-        "Output directory name '//bad:cpu' specified by CppConfiguration is invalid as part of a "
-            + "path: must not contain /");
   }
 }

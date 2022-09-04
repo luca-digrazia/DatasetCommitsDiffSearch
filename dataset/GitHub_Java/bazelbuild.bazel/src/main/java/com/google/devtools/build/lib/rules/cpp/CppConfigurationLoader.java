@@ -14,8 +14,10 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 
 /**
  * Loader for C++ configurations.
@@ -28,4 +30,9 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
 
   /** Creates a new {@link CppConfigurationLoader} instance. */
   public CppConfigurationLoader() {}
+
+  @Override
+  public CppConfiguration create(BuildOptions options) throws InvalidConfigurationException {
+    return new CppConfiguration(options);
+  }
 }
