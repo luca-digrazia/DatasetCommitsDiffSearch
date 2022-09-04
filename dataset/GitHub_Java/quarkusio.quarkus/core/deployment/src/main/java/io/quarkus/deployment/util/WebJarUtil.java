@@ -10,12 +10,9 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -60,85 +57,47 @@ public class WebJarUtil {
         rootFolderInJar = normalizeRootFolderInJar(rootFolderInJar);
         AppArtifact userApplication = curateOutcomeBuildItem.getEffectiveModel().getAppArtifact();
 
-        Path deploymentPath = createResourcesDirectory(userApplication, resourcesArtifact);
+        Path path = createResourcesDirectory(userApplication, resourcesArtifact);
 
         // Clean if not in dev mode or if the resources jar is a snapshot version
         if (!launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)
                 || resourcesArtifact.getVersion().contains(SNAPSHOT_VERSION)) {
-            IoUtils.createOrEmptyDir(deploymentPath);
+            IoUtils.createOrEmptyDir(path);
         }
 
-        if (isEmpty(deploymentPath)) {
+        if (isEmpty(path)) {
             ClassLoader classLoader = WebJarUtil.class.getClassLoader();
             for (Path p : resourcesArtifact.getPaths()) {
                 File artifactFile = p.toFile();
-                if (artifactFile.isFile()) {
-                    // case of a jar file
-                    try (JarFile jarFile = JarFiles.create(artifactFile)) {
-                        Enumeration<JarEntry> entries = jarFile.entries();
-                        while (entries.hasMoreElements()) {
-                            JarEntry entry = entries.nextElement();
-                            if (entry.getName().startsWith(rootFolderInJar)) {
-                                String fileName = entry.getName().replace(rootFolderInJar, "");
-                                Path filePath = deploymentPath.resolve(fileName);
-                                if (entry.isDirectory()) {
-                                    Files.createDirectories(filePath);
-                                } else {
-                                    try (InputStream inputStream = jarFile.getInputStream(entry)) {
-                                        String modulename = getModuleOverrideName(resourcesArtifact, fileName);
-                                        if (IGNORE_LIST.contains(fileName)
-                                                && isOverride(userApplication.getPaths(), classLoader, fileName, modulename)) {
-                                            try (InputStream override = getOverride(userApplication.getPaths(), classLoader,
-                                                    fileName, modulename)) {
-                                                createFile(override, filePath);
-                                            }
-                                        } else {
-                                            createFile(inputStream, filePath);
+                try (JarFile jarFile = JarFiles.create(artifactFile)) {
+                    Enumeration<JarEntry> entries = jarFile.entries();
+                    while (entries.hasMoreElements()) {
+                        JarEntry entry = entries.nextElement();
+                        if (entry.getName().startsWith(rootFolderInJar)) {
+                            String fileName = entry.getName().replace(rootFolderInJar, "");
+                            Path filePath = path.resolve(fileName);
+                            if (entry.isDirectory()) {
+                                Files.createDirectories(filePath);
+                            } else {
+                                try (InputStream inputStream = jarFile.getInputStream(entry)) {
+                                    String modulename = getModuleOverrideName(resourcesArtifact, fileName);
+                                    if (IGNORE_LIST.contains(fileName)
+                                            && isOverride(userApplication.getPaths(), classLoader, fileName, modulename)) {
+                                        try (InputStream override = getOverride(userApplication.getPaths(), classLoader,
+                                                fileName, modulename)) {
+                                            createFile(override, filePath);
                                         }
+                                    } else {
+                                        createFile(inputStream, filePath);
                                     }
                                 }
                             }
                         }
                     }
-                } else {
-                    // case of a directory
-                    Path rootFolderToCopy = p.resolve(rootFolderInJar);
-                    if (!Files.isDirectory(rootFolderToCopy)) {
-                        continue;
-                    }
-
-                    Files.walkFileTree(rootFolderToCopy, new SimpleFileVisitor<Path>() {
-                        @Override
-                        public FileVisitResult preVisitDirectory(final Path dir,
-                                final BasicFileAttributes attrs) throws IOException {
-                            Files.createDirectories(deploymentPath.resolve(rootFolderToCopy.relativize(dir)));
-                            return FileVisitResult.CONTINUE;
-                        }
-
-                        @Override
-                        public FileVisitResult visitFile(final Path file,
-                                final BasicFileAttributes attrs) throws IOException {
-                            String fileName = rootFolderToCopy.relativize(file).toString();
-                            Path targetFilePath = deploymentPath.resolve(rootFolderToCopy.relativize(file));
-
-                            String modulename = getModuleOverrideName(resourcesArtifact, fileName);
-                            if (IGNORE_LIST.contains(fileName)
-                                    && isOverride(userApplication.getPaths(), classLoader, fileName, modulename)) {
-                                try (InputStream override = getOverride(userApplication.getPaths(), classLoader,
-                                        fileName, modulename)) {
-                                    createFile(override, targetFilePath);
-                                }
-                            } else {
-                                Files.copy(file, targetFilePath);
-                            }
-
-                            return FileVisitResult.CONTINUE;
-                        }
-                    });
                 }
             }
         }
-        return deploymentPath;
+        return path;
     }
 
     public static void updateFile(Path original, byte[] newContent) throws IOException {
