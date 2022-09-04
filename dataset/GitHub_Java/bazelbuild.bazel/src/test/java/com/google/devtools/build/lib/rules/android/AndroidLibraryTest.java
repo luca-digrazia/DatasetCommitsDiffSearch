@@ -1866,8 +1866,6 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "                manifest = 'AndroidManifest.xml',",
         "                resource_files = ['res/values/strings.xml'])");
     ConfiguredTarget target = getConfiguredTarget("//java/android:test");
-    ConfiguredTarget t1Target = getConfiguredTarget("//java/android:t1");
-    ConfiguredTarget t2Target = getConfiguredTarget("//java/android:t2");
     final AndroidLibraryAarInfo provider = target.get(AndroidLibraryAarInfo.PROVIDER);
 
     final Aar test =
@@ -1876,12 +1874,12 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
             getBinArtifact("test_processed_manifest/AndroidManifest.xml", target));
     final Aar t1 =
         Aar.create(
-            getBinArtifact("t1.aar", t1Target),
-            getBinArtifact("t1_processed_manifest/AndroidManifest.xml", t1Target));
+            getBinArtifact("t1.aar", target),
+            getBinArtifact("t1_processed_manifest/AndroidManifest.xml", target));
     final Aar t2 =
         Aar.create(
-            getBinArtifact("t2.aar", t2Target),
-            getBinArtifact("t2_processed_manifest/AndroidManifest.xml", t2Target));
+            getBinArtifact("t2.aar", target),
+            getBinArtifact("t2_processed_manifest/AndroidManifest.xml", target));
 
     assertThat(provider.getAar()).isEqualTo(test);
     assertThat(provider.getTransitiveAars()).containsExactly(test, t1, t2);
@@ -1897,12 +1895,11 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
         "                resource_files = ['res/values/strings.xml'])");
     ConfiguredTarget target = getConfiguredTarget("//java/android:test");
     final AndroidLibraryAarInfo provider = target.get(AndroidLibraryAarInfo.PROVIDER);
-    ConfiguredTarget transitiveTarget = getConfiguredTarget("//java/android:transitive");
 
     final Aar transitive =
         Aar.create(
-            getBinArtifact("transitive.aar", transitiveTarget),
-            getBinArtifact("transitive_processed_manifest/AndroidManifest.xml", transitiveTarget));
+            getBinArtifact("transitive.aar", target),
+            getBinArtifact("transitive_processed_manifest/AndroidManifest.xml", target));
 
     assertThat(provider.getAar()).isNull();
     assertThat(provider.getTransitiveAars()).containsExactly(transitive);
