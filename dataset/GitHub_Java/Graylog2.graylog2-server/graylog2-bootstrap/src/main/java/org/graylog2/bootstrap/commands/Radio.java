@@ -20,9 +20,8 @@ import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import io.airlift.airline.Command;
-import org.graylog2.bootstrap.Main;
 import org.graylog2.bootstrap.ServerBootstrap;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.bootstrap.Main;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.bindings.PeriodicalBindings;
 import org.graylog2.radio.bindings.RadioBindings;
@@ -36,21 +35,16 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.Arrays;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 @Command(name = "radio", description = "Start the Graylog2 radio")
 public class Radio extends ServerBootstrap implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Radio.class);
-    private static final Configuration configuration = new Configuration();
 
-    static {
-        // If this is not done, the default from BaseConfiguration will enable journaling on radio,
-        // but the actual Journal implementation there is the NoopJournal. This lead to discarding all incoming messages.
-        // see https://github.com/Graylog2/graylog2-server/issues/927
-        configuration.setMessageJournalEnabled(false);
-    }
+    private static final Configuration configuration = new Configuration();
 
     public Radio() {
         super("radio", configuration);
@@ -58,10 +52,10 @@ public class Radio extends ServerBootstrap implements Runnable {
 
     @Override
     protected List<Module> getCommandBindings() {
-        return Arrays.<Module>asList(new RadioBindings(configuration, capabilities()),
-                new RadioInitializerBindings(),
-                new PeriodicalBindings(),
-                new ObjectMapperModule());
+        return Arrays.<Module>asList(new RadioBindings(configuration),
+                                     new RadioInitializerBindings(),
+                                     new PeriodicalBindings(),
+                                     new ObjectMapperModule());
     }
 
     @Override
@@ -72,8 +66,8 @@ public class Radio extends ServerBootstrap implements Runnable {
     @Override
     protected void startNodeRegistration(Injector injector) {
         // register node by initiating first ping. if the node isn't registered, loading persisted inputs will fail silently, for example
-        Ping.Pinger pinger = injector.getInstance(Ping.Pinger.class);
-        pinger.ping();
+        Ping pinger = injector.getInstance(Ping.class);
+        pinger.run();
     }
 
     @Override
@@ -104,10 +98,5 @@ public class Radio extends ServerBootstrap implements Runnable {
     @Override
     protected Class<? extends Runnable> shutdownHook() {
         return ShutdownHook.class;
-    }
-
-    @Override
-    protected Set<ServerStatus.Capability> capabilities() {
-        return EnumSet.of(ServerStatus.Capability.RADIO);
     }
 }
