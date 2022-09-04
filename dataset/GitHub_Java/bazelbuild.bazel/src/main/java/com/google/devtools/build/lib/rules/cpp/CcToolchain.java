@@ -585,12 +585,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             builtInIncludeDirectories,
             sysroot,
             fdoMode,
-            new FdoProvider(
-                fdoSupport.getFilePath(),
-                fdoMode,
-                cppConfiguration.getFdoInstrument(),
-                profileArtifact,
-                prefetchHintsArtifact),
             cppConfiguration.useLLVMCoverageMapFormat(),
             configuration.isCodeCoverageEnabled(),
             configuration.isHostConfiguration());
@@ -603,6 +597,13 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         new RuleConfiguredTargetBuilder(ruleContext)
             .addNativeDeclaredProvider(ccProvider)
             .addNativeDeclaredProvider(templateVariableInfo)
+            .addProvider(
+                new FdoProvider(
+                    fdoSupport.getFilePath(),
+                    fdoMode,
+                    cppConfiguration.getFdoInstrument(),
+                    profileArtifact,
+                    prefetchHintsArtifact))
             .setFilesToBuild(crosstool)
             .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
 

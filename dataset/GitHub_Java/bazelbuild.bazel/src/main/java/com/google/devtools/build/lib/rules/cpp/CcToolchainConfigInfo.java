@@ -535,64 +535,55 @@ public class CcToolchainConfigInfo extends NativeInfo implements CcToolchainConf
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getOptCompilationModeCompilerFlags() {
-    ImmutableList<String> flags = compilationModeCompilerFlags.get(CompilationMode.OPT);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeCompilerFlags.get(CompilationMode.OPT);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getOptCompilationModeCxxFlags() {
-    ImmutableList<String> flags = compilationModeCxxFlags.get(CompilationMode.OPT);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeCxxFlags.get(CompilationMode.OPT);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getOptCompilationModeLinkerFlags() {
-    ImmutableList<String> flags = compilationModeLinkerFlags.get(CompilationMode.OPT);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeLinkerFlags.get(CompilationMode.OPT);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getDbgCompilationModeCompilerFlags() {
-    ImmutableList<String> flags = compilationModeCompilerFlags.get(CompilationMode.DBG);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeCompilerFlags.get(CompilationMode.DBG);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getDbgCompilationModeCxxFlags() {
-    ImmutableList<String> flags = compilationModeCxxFlags.get(CompilationMode.DBG);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeCxxFlags.get(CompilationMode.DBG);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getDbgCompilationModeLinkerFlags() {
-    ImmutableList<String> flags = compilationModeLinkerFlags.get(CompilationMode.DBG);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeLinkerFlags.get(CompilationMode.DBG);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getFastbuildCompilationModeCompilerFlags() {
-    ImmutableList<String> flags = compilationModeCompilerFlags.get(CompilationMode.FASTBUILD);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeCompilerFlags.get(CompilationMode.FASTBUILD);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getFastbuildCompilationModeCxxFlags() {
-    ImmutableList<String> flags = compilationModeCxxFlags.get(CompilationMode.FASTBUILD);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeCxxFlags.get(CompilationMode.FASTBUILD);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.
   @Deprecated
   public ImmutableList<String> getFastbuildCompilationModeLinkerFlags() {
-    ImmutableList<String> flags = compilationModeLinkerFlags.get(CompilationMode.FASTBUILD);
-    return flags == null ? ImmutableList.of() : flags;
+    return compilationModeLinkerFlags.get(CompilationMode.FASTBUILD);
   }
 
   // TODO(b/65151735): Remove once this field is migrated to features.

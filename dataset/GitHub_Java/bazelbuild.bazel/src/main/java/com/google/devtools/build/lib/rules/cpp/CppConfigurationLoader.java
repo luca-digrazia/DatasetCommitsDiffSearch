@@ -200,7 +200,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
             CrosstoolConfigurationLoader.selectToolchain(
                 file.getProto(), options, cpuTransformer.getTransformer());
         ccToolchainLabel = toolchains.get(toolchain.getTargetCpu() + "|" + toolchain.getCompiler());
-        if (cppOptions.disableCcToolchainFromCrosstool) {
+        if (!cppOptions.enableCcToolchainFromCrosstool) {
           throw new InvalidConfigurationException(
               errorMessage
                   + String.format(
