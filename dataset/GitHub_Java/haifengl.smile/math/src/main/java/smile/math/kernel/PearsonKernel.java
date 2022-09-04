@@ -40,10 +40,10 @@ public class PearsonKernel implements MercerKernel<double[]> {
     private final double sigma;
     /** The coefficient 4 * (2 ^ (1/omega) - 1) / (sigma^2). */
     private final double C;
-    /** The lower bound of sigma. */
-    private final double lo;
-    /** The upper bound of sigma. */
-    private final double hi;
+    /** The lower bound of omega and sigma. */
+    private final double[] lo;
+    /** The upper bound of omega and sigma. */
+    private final double[] hi;
 
     /**
      * Constructor.
@@ -51,18 +51,15 @@ public class PearsonKernel implements MercerKernel<double[]> {
      * @param omega The tailing factor of the peak.
      */
     public PearsonKernel(double sigma, double omega) {
-        this(sigma, omega, 1E-5, 1E5);
+        this(sigma, omega, new double[]{1E-5, 0.2}, new double[]{1E5, 2.0});
     }
 
     /**
      * Constructor.
      * @param sigma Pearson width.
-     * @param omega The tailing factor of the peak. The tailing factor is
-     *              fixed during hyperparameter tuning.
-     * @param lo The lower bound of length scale for hyperparameter tuning.
-     * @param hi The upper bound of length scale for hyperparameter tuning.
+     * @param omega The tailing factor of the peak.
      */
-    public PearsonKernel(double sigma, double omega, double lo, double hi) {
+    public PearsonKernel(double sigma, double omega, double[] lo, double[] hi) {
         this.omega = omega;
         this.sigma = sigma;
         this.C = 4.0 * (Math.pow(2.0, 1.0 / omega) - 1.0) / (sigma * sigma);
@@ -97,30 +94,26 @@ public class PearsonKernel implements MercerKernel<double[]> {
 
     @Override
     public double[] kg(double[] x, double[] y) {
-        double d = MathEx.squaredDistance(x, y);
-        double[] g = new double[2];
-        g[0] = Math.pow(1.0 + C * d, -omega);
-        g[1] = -2 * C * d * Math.pow(1.0 + C * d, -omega-1) / sigma;
-        return g;
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public PearsonKernel of(double[] params) {
-        return new PearsonKernel(params[0], omega, lo, hi);
+        return new PearsonKernel(params[0], params[1], lo, hi);
     }
 
     @Override
     public double[] hyperparameters() {
-        return new double[] { sigma };
+        return new double[] { omega, sigma };
     }
 
     @Override
     public double[] lo() {
-        return new double[] { lo };
+        return lo;
     }
 
     @Override
     public double[] hi() {
-        return new double[] { hi };
+        return hi;
     }
 }

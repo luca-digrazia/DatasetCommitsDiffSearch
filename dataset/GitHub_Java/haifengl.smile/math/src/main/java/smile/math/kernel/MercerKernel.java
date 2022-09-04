@@ -149,12 +149,12 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T, T>, Serializable 
     /** Returns the same kind kernel with the new hyperparameters. */
     MercerKernel<T> of(double[] params);
 
-    /** Returns the hyperparameters for tuning. */
+    /** Returns the hyperparameters of kernel. */
     double[] hyperparameters();
 
-    /** Returns the lower bound of hyperparameters. */
+    /** Returns the lower bound of hyperparameters for hyperparameter tuning. */
     double[] lo();
 
-    /** Returns the upper bound of hyperparameters. */
+    /** Returns the upper bound of hyperparameters for hyperparameter tuning. */
     double[] hi();
 }
