@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.vq;
 
@@ -27,14 +27,15 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
-import smile.plot.Palette;
-import smile.vq.LatticeNeighborhood;
-import smile.vq.LearningRate;
+import smile.math.TimeFunction;
+import smile.vq.Neighborhood;
 import smile.vq.SOM;
 import smile.math.MathEx;
-import smile.plot.Hexmap;
-import smile.plot.PlotCanvas;
-import smile.plot.ScatterPlot;
+import smile.plot.swing.Hexmap;
+import smile.plot.swing.Palette;
+import smile.plot.swing.Canvas;
+import smile.plot.swing.Grid;
+import smile.plot.swing.ScatterPlot;
 
 /**
  *
@@ -81,29 +82,55 @@ public class SOMDemo  extends VQDemo {
             return null;
         }
 
-        long clock = System.currentTimeMillis();
-        int epochs = 20;
         double[][][] lattice = SOM.lattice(width, height, dataset[datasetIndex]);
         SOM som = new SOM(lattice,
-                LearningRate.inverse(0.85, dataset[datasetIndex].length * epochs / 10),
-                LatticeNeighborhood.Gaussian(5, dataset[datasetIndex].length * epochs / 4));
-        for (int i = 0; i < epochs; i++) {
-            for (int j : MathEx.permutate(dataset[datasetIndex].length)) {
-                som.update(dataset[datasetIndex][j]);
-            }
-        }
-        System.out.format("Train SOM with %d samples for %d epochs in %dms\n", dataset[datasetIndex].length, epochs, System.currentTimeMillis()-clock);
+                TimeFunction.constant(learningRate),
+                Neighborhood.Gaussian(neighborhood, dataset[datasetIndex].length * epochs / 4));
 
         JPanel pane = new JPanel(new GridLayout(1, 2));
-        PlotCanvas plot = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
-        plot.grid(som.neurons());
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas();
+        plot.add(Grid.of(som.neurons()));
         plot.setTitle("SOM");
-        pane.add(plot);
+        JPanel panel = plot.panel();
+        pane.add(panel);
 
-        double[][] umatrix = som.umatrix();
-        plot = Hexmap.plot(umatrix, Palette.jet(256));
-        plot.setTitle("U-Matrix");
-        pane.add(plot);
+        int period = dataset[datasetIndex].length / 10;
+        Thread thread = new Thread(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            for (int i = 0, k = 1; i < epochs; i++) {
+                for (int j : MathEx.permutate(dataset[datasetIndex].length)) {
+                    som.update(dataset[datasetIndex][j]);
+
+                    if (++k % period == 0) {
+                        plot.clear();
+                        plot.add(ScatterPlot.of(dataset[datasetIndex], pointLegend));
+                        plot.add(Grid.of(som.neurons()));
+                        plot.setTitle("SOM");
+                        pane.repaint();
+
+                        try {
+                            Thread.sleep(100);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                System.out.format("%s epoch finishes%n", smile.util.Strings.ordinal(i+1));
+            }
+
+            double[][] umatrix = som.umatrix();
+            Canvas umatrixPlot = Hexmap.of(umatrix, Palette.jet(256)).canvas();
+            umatrixPlot.setTitle("U-Matrix");
+            pane.add(umatrixPlot.panel());
+            pane.invalidate();
+        });
+        thread.start();
+
         return pane;
     }
 
@@ -112,7 +139,7 @@ public class SOMDemo  extends VQDemo {
         return "SOM";
     }
 
-    public static void main(String argv[]) {
+    public static void main(String[] args) {
         VQDemo demo = new SOMDemo();
         JFrame f = new JFrame("SOM");
         f.setSize(new Dimension(1000, 1000));

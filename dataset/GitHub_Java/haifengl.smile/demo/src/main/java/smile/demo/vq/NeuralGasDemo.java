@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,19 +13,19 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.demo.vq;
 
-import java.awt.Dimension;
+import java.awt.*;
 import javax.swing.*;
 
 import smile.math.MathEx;
-import smile.vq.LearningRate;
+import smile.math.TimeFunction;
+import smile.plot.swing.Wireframe;
 import smile.vq.NeuralGas;
-import smile.plot.PlotCanvas;
-import smile.plot.ScatterPlot;
-import smile.vq.NeuralMap;
+import smile.plot.swing.Canvas;
+import smile.plot.swing.ScatterPlot;
 
 /**
  *
@@ -33,8 +33,8 @@ import smile.vq.NeuralMap;
  */
 @SuppressWarnings("serial")
 public class NeuralGasDemo extends VQDemo {
-    static int neuronNumber = 200;
-    private JTextField neuronField = new JTextField(Integer.toString(neuronNumber), 5);
+    static int numNeurons = 200;
+    private JTextField neuronField = new JTextField(Integer.toString(numNeurons), 5);
 
     public NeuralGasDemo() {
         optionPane.add(new JLabel("Neurons:"));
@@ -44,43 +44,58 @@ public class NeuralGasDemo extends VQDemo {
     @Override
     public JComponent learn() {
         try {
-            neuronNumber = Integer.parseInt(neuronField.getText().trim());
-            if (neuronNumber < 1) {
-                JOptionPane.showMessageDialog(this, "Invalid number of neurons: " + neuronNumber, "Error", JOptionPane.ERROR_MESSAGE);
+            numNeurons = Integer.parseInt(neuronField.getText().trim());
+            if (numNeurons < 1) {
+                JOptionPane.showMessageDialog(this, "Invalid number of neurons: " + numNeurons, "Error", JOptionPane.ERROR_MESSAGE);
                 return null;
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Invalid width: " + neuronField.getText(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Invalid number of neurons: " + numNeurons, "Error", JOptionPane.ERROR_MESSAGE);
             return null;
         }
 
-        long clock = System.currentTimeMillis();
-        int epochs = 20;
-        NeuralGas gas = new NeuralGas(NeuralGas.random(neuronNumber, dataset[datasetIndex]),
-                LearningRate.exp(3, dataset[datasetIndex].length * epochs / 10),
-                LearningRate.exp(30, dataset[datasetIndex].length * epochs / 1.25),
-                LearningRate.exp(20, dataset[datasetIndex].length * epochs / -2.5));
-        for (int i = 0; i < epochs; i++) {
-            for (int j : MathEx.permutate(dataset[datasetIndex].length)) {
-                gas.update(dataset[datasetIndex][j]);
+        NeuralGas gas = new NeuralGas(NeuralGas.seed(numNeurons, dataset[datasetIndex]),
+                TimeFunction.exp(learningRate, dataset[datasetIndex].length * epochs / 2),
+                TimeFunction.exp(neighborhood, dataset[datasetIndex].length * epochs / 8),
+                TimeFunction.constant(dataset[datasetIndex].length * 2));
+
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], pointLegend).canvas();
+        plot.add(ScatterPlot.of(gas.neurons(), '@'));
+
+        JPanel panel = plot.panel();
+        int period = dataset[datasetIndex].length / 10;
+        Thread thread = new Thread(() -> {
+            try {
+                Thread.sleep(1000);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        }
 
-        System.out.format("Train Neural Gas with %d samples for %d epochs in %dms\n", dataset[datasetIndex].length, epochs, System.currentTimeMillis()-clock);
+            for (int i = 0, k = 0; i < epochs; i++) {
+                for (int j : MathEx.permutate(dataset[datasetIndex].length)) {
+                    gas.update(dataset[datasetIndex][j]);
 
-        PlotCanvas plot = ScatterPlot.plot(dataset[datasetIndex], pointLegend);
+                    if (++k % period == 0) {
+                        plot.clear();
+                        plot.add(ScatterPlot.of(dataset[datasetIndex], pointLegend));
+                        double[][] neurons = gas.neurons();
+                        plot.add(ScatterPlot.of(neurons, '@'));
+                        plot.add(Wireframe.of(neurons, gas.network().getEdges().stream().map(edge -> new int[]{edge.v1, edge.v2}).toArray(int[][]::new)));
+                        panel.repaint();
 
-        double[][] neurons = gas.neurons();
-        smile.graph.Graph graph = gas.network();
-        for (int i = 0; i < neuronNumber; i++) {
-            for (smile.graph.Graph.Edge e : graph.getEdges(i)) {
-                plot.line(neurons[i], neurons[e.v2]);
-
+                        try {
+                            Thread.sleep(100);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                System.out.format("%s epoch finishes%n", smile.util.Strings.ordinal(i+1));
             }
-        }
-        plot.points(neurons, '@');
+        });
+        thread.start();
 
-        return plot;
+        return panel;
     }
 
     @Override
@@ -88,7 +103,7 @@ public class NeuralGasDemo extends VQDemo {
         return "Neural Gas";
     }
 
-    public static void main(String argv[]) {
+    public static void main(String[] args) {
         VQDemo demo = new NeuralGasDemo();
         JFrame f = new JFrame("Neural Gas");
         f.setSize(new Dimension(1000, 1000));

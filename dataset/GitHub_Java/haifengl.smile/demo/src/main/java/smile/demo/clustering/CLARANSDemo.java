@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.demo.clustering;
 
@@ -24,11 +25,11 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
 
-import smile.plot.Palette;
-import smile.plot.PlotCanvas;
+import smile.math.MathEx;
+import smile.plot.swing.Palette;
+import smile.plot.swing.Canvas;
 import smile.clustering.CLARANS;
-import smile.math.distance.EuclideanDistance;
-import smile.plot.ScatterPlot;
+import smile.plot.swing.ScatterPlot;
 
 /**
  *
@@ -36,6 +37,7 @@ import smile.plot.ScatterPlot;
  */
 @SuppressWarnings("serial")
 public class CLARANSDemo extends ClusteringDemo {
+    private static final String ERROR = "Error";
     JTextField numLocalField;
     int numLocal = 10;
     JTextField maxNeighborField;
@@ -55,44 +57,32 @@ public class CLARANSDemo extends ClusteringDemo {
         try {
             numLocal = Integer.parseInt(numLocalField.getText().trim());
             if (numLocal < 5) {
-                JOptionPane.showMessageDialog(this, "Toll smal NumLocal: " + numLocal, "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Toll smal NumLocal: " + numLocal, ERROR, JOptionPane.ERROR_MESSAGE);
                 return null;
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Invalid NumLocal: " + numLocalField.getText(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Invalid NumLocal: " + numLocalField.getText(), ERROR, JOptionPane.ERROR_MESSAGE);
             return null;
         }
 
         try {
             maxNeighbor = Integer.parseInt(maxNeighborField.getText().trim());
             if (maxNeighbor < 5) {
-                JOptionPane.showMessageDialog(this, "Too small MaxNeighbor: " + maxNeighbor, "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Too small MaxNeighbor: " + maxNeighbor, ERROR, JOptionPane.ERROR_MESSAGE);
                 return null;
             }
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Invalid MaxNeighbor: " + maxNeighborField.getText(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Invalid MaxNeighbor: " + maxNeighborField.getText(), ERROR, JOptionPane.ERROR_MESSAGE);
             return null;
         }
 
         long clock = System.currentTimeMillis();
-        CLARANS<double[]> clarans = new CLARANS<double[]>(dataset[datasetIndex], new EuclideanDistance(), clusterNumber, maxNeighbor, numLocal);
+        CLARANS<double[]> clarans = CLARANS.fit(dataset[datasetIndex], MathEx::distance, clusterNumber, maxNeighbor);
         System.out.format("CLARANS clusterings %d samples in %dms\n", dataset[datasetIndex].length, System.currentTimeMillis()-clock);
 
-        PlotCanvas plot = ScatterPlot.plot(clarans.medoids(), '@');
-        for (int k = 0; k < clusterNumber; k++) {
-            if (clarans.getClusterSize()[k] > 0) {
-                double[][] cluster = new double[clarans.getClusterSize()[k]][];
-                for (int i = 0, j = 0; i < dataset[datasetIndex].length; i++) {
-                    if (clarans.getClusterLabel()[i] == k) {
-                        cluster[j++] = dataset[datasetIndex][i];
-                    }
-                }
-
-                plot.points(cluster, pointLegend, Palette.COLORS[k % Palette.COLORS.length]);
-            }
-        }
-        plot.points(clarans.medoids(), '@');
-        return plot;
+        Canvas plot = ScatterPlot.of(dataset[datasetIndex], clarans.y, mark).canvas();
+        plot.add(ScatterPlot.of(clarans.centroids, '@'));
+        return plot.panel();
     }
 
     @Override
@@ -100,7 +90,7 @@ public class CLARANSDemo extends ClusteringDemo {
         return "CLARANS";
     }
 
-    public static void main(String argv[]) {
+    public static void main(String[] args) {
         ClusteringDemo demo = new CLARANSDemo();
         JFrame f = new JFrame("CLARANS");
         f.setSize(new Dimension(1000, 1000));

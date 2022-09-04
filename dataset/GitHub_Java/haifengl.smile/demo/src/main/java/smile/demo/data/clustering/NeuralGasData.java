@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.demo.data.clustering;
 
@@ -1492,7 +1492,7 @@ public class NeuralGasData {
         }
     }
 
-    public static void main(String[] argv) {
+    public static void main(String[] args) {
         String[] files = {
             "Rectangle.txt", "Circle.txt", "Ring.txt", "Complex1.txt",
             "Complex2.txt", "Complex3.txt", "HiLoDensity.txt", "Discrete.txt",

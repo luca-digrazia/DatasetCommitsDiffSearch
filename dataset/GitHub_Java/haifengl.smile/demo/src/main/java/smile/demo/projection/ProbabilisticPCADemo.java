@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.demo.projection;
 
@@ -112,7 +112,7 @@ public class ProbabilisticPCADemo extends ProjectionDemo {
         return "Probabilistic Principal Component Analysis";
     }
 
-    public static void main(String argv[]) {
+    public static void main(String[] args) {
         ProbabilisticPCADemo demo = new ProbabilisticPCADemo();
         JFrame f = new JFrame("Probabilistic Principal Component Analysis");
         f.setSize(new Dimension(1000, 1000));

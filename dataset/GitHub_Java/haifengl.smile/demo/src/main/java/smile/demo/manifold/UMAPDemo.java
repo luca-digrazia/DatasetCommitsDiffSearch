@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.demo.manifold;
 
@@ -23,12 +23,12 @@ import java.awt.event.ActionListener;
 import javax.swing.*;
 
 import org.apache.commons.csv.CSVFormat;
+import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.io.Read;
 import smile.manifold.UMAP;
 import smile.plot.swing.Canvas;
 import smile.plot.swing.ScatterPlot;
-import smile.projection.PCA;
 
 /**
  * Visualization Demo for {@link UMAP} algorithm
@@ -38,13 +38,9 @@ import smile.projection.PCA;
 @SuppressWarnings("serial")
 public class UMAPDemo extends JPanel implements Runnable, ActionListener {
 
-    private static final int DEFAULT_NEIGHBORS = 2;
+    private static final int DEFAULT_NEIGHBORS = 15;
     int neighbors = DEFAULT_NEIGHBORS;
-    JTextField neighborsField;    
-
-    private static final double DEFAULT_MIN_DIST = 0.1;
-    double mdist = DEFAULT_MIN_DIST;
-    JTextField mdistField;
+    JTextField neighborsField;
 
     private static String[] datasetName = {"MNIST"};
 
@@ -80,10 +76,6 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         optionPane.add(new JLabel("Neighbors:"));
         optionPane.add(neighborsField);
 
-        mdistField = new JTextField(Double.toString(mdist), 5);
-        optionPane.add(new JLabel("MinDist:"));
-        optionPane.add(mdistField);
-
         setLayout(new BorderLayout());
         add(optionPane, BorderLayout.NORTH);
     }
@@ -92,12 +84,16 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         JPanel pane = new JPanel(new GridLayout(1, 2));
         
         long clock = System.currentTimeMillis();
-        UMAP umap = new UMAP(data, neighbors, mdist);
+        UMAP umap = UMAP.of(data, neighbors);
         System.out.format("Learn UMAP from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
-        double[][] y = umap.coordinates;
+        double[][] x = umap.coordinates;
+        int[] y = new int[umap.index.length];
+        for (int i = 0; i < y.length; i++) {
+            y[i] = labels[umap.index[i]];
+        }
 
-        Canvas plot = ScatterPlot.of(y, labels, '@').canvas();
+        Canvas plot = ScatterPlot.of(x, y, '@').canvas();
 
         plot.setTitle("UMAP");
         pane.add(plot.panel());
@@ -110,7 +106,6 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         startButton.setEnabled(false);
         datasetBox.setEnabled(false);
         neighborsField.setEnabled(false);
-        mdistField.setEnabled(false);
 
         try {
             JComponent plot = learn();
@@ -128,7 +123,6 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         startButton.setEnabled(true);
         datasetBox.setEnabled(true);
         neighborsField.setEnabled(true);
-        mdistField.setEnabled(true);
     }
 
     @Override
@@ -138,7 +132,7 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
             try {
                 CSVFormat format = CSVFormat.DEFAULT.withDelimiter(' ').withIgnoreSurroundingSpaces(true);
                 DataFrame dataset = Read.csv(smile.util.Paths.getTestData("mnist/mnist2500_X.txt"), format);
-                data = dataset.toArray();
+                data = dataset.toArray(false, CategoricalEncoder.ONE_HOT);
 
                 dataset = Read.csv(smile.util.Paths.getTestData("mnist/mnist2500_labels.txt"));
                 labels = dataset.column(0).toIntArray();
@@ -160,19 +154,6 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
                 return;
             }
 
-            try {
-                mdist = Double.parseDouble(mdistField.getText().trim());
-                if (mdist < 0 || mdist >= 1) {
-                    JOptionPane.showMessageDialog(this, "Invalid MinDist: " + mdist, "Error",
-                            JOptionPane.ERROR_MESSAGE);
-                    return;
-                }
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Invalid MinDist: " + mdistField.getText(), "Error",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-
             Thread thread = new Thread(this);
             thread.start();
         }
@@ -183,7 +164,7 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         return "UMAP";
     }
 
-    public static void main(String argv[]) {
+    public static void main(String[] args) {
         UMAPDemo demo = new UMAPDemo();
         JFrame f = new JFrame("UMAP");
         f.setSize(new Dimension(1000, 1000));
