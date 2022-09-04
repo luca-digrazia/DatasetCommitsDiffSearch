@@ -57,10 +57,11 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -267,7 +268,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
   public static ConfiguredTarget init(CppSemantics semantics, RuleContext ruleContext, boolean fake)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    CcCommon.checkRuleLoadedThroughMacro(ruleContext);
+
     semantics.validateDeps(ruleContext);
     if (ruleContext.hasErrors()) {
       return null;
@@ -1001,10 +1002,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext, Iterable<Artifact> dynamicLibrariesForRuntime) {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
     for (Artifact target : dynamicLibrariesForRuntime) {
-      if (!ruleContext
-          .getLabel()
-          .getPackageIdentifier()
-          .equals(target.getOwner().getPackageIdentifier())) {
+      if (!ruleContext.getLabel().getPackageName().equals(target.getOwner().getPackageName())) {
         // SymlinkAction on file is actually copy on Windows.
         Artifact copy = ruleContext.getBinArtifact(target.getFilename());
         ruleContext.registerAction(SymlinkAction.toArtifact(

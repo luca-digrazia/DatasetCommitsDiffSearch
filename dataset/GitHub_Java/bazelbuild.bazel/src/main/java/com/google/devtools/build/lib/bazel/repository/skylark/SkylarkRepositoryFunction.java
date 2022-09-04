@@ -21,13 +21,13 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
+import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
+import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.bazel.repository.RepositoryResolvedEvent;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.SymbolGenerator;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
@@ -133,8 +133,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
                       /* toolsRepository = */ null,
                       /* fragmentNameToClass = */ null,
                       rule.getPackage().getRepositoryMapping(),
-                      new SymbolGenerator<>(key),
-                      /* analysisRuleLabel= */ null))
+                      new SymbolGenerator<>(key)))
               .build();
       SkylarkRepositoryContext skylarkRepositoryContext =
           new SkylarkRepositoryContext(
@@ -250,13 +249,7 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     return (Boolean) rule.getAttributeContainer().getAttr("$configure");
   }
 
-  /**
-   * Static method to determine if for a starlark repository rule {@code isConfigure} holds true. It
-   * also checks that the rule is indeed a Starlark rule so that this class is the appropriate
-   * handler for the given rule. As, however, only Starklark rules can be configure rules, this
-   * method can also be used as a universal check.
-   */
-  public static boolean isConfigureRule(Rule rule) {
+  public static boolean isConfigurelikeRule(Rule rule) {
     return rule.getRuleClassObject().isSkylark()
         && ((Boolean) rule.getAttributeContainer().getAttr("$configure"));
   }

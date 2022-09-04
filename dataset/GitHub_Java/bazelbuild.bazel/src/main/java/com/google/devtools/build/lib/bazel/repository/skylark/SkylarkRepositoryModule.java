@@ -15,10 +15,10 @@
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
+import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
@@ -90,7 +90,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
     builder.setConfiguredTargetFunction(implementation);
     builder.setRuleDefinitionEnvironmentLabelAndHashCode(
-        (Label) funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
+        funcallEnv.getGlobals().getLabel(), funcallEnv.getTransitiveContentHashCode());
     builder.setWorkspaceOnly();
     return new RepositoryRuleFunction(builder, ast.getLocation());
   }

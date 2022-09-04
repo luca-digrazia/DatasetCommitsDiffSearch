@@ -29,19 +29,20 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
+import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.repository.ExternalPackageException;
-import com.google.devtools.build.lib.repository.ExternalPackageHelper;
+import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
 import com.google.devtools.build.lib.skyframe.ActionEnvironmentFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -129,21 +130,20 @@ public abstract class RepositoryFunction {
           Transience.PERSISTENT);
     }
   }
-
   /**
    * An exception thrown when a dependency is missing to notify the SkyFunction from an evaluation.
    */
   protected static class RepositoryMissingDependencyException extends EvalException {
+
     RepositoryMissingDependencyException() {
       super(Location.BUILTIN, "Internal exception");
     }
 
     @Override
-    protected boolean canBeAddedToStackTrace() {
-      return false; // to avoid polluting the log with internal cause information
+    public boolean canBeAddedToStackTrace() {
+      return false;
     }
   }
-
   /**
    * repository functions can throw the result of this function to notify the RepositoryFunction
    * that a dependency was missing and the evaluation of the function must be restarted.
@@ -204,13 +204,7 @@ public abstract class RepositoryFunction {
   public boolean verifyMarkerData(Rule rule, Map<String, String> markerData, Environment env)
       throws InterruptedException, RepositoryFunctionException {
     return verifyEnvironMarkerData(markerData, env, getEnviron(rule))
-        && verifyMarkerDataForFiles(rule, markerData, env)
-        && verifySemanticsMarkerData(markerData, env);
-  }
-
-  protected boolean verifySemanticsMarkerData(Map<String, String> markerData, Environment env)
-      throws InterruptedException {
-    return true;
+        && verifyMarkerDataForFiles(rule, markerData, env);
   }
 
   private static boolean verifyLabelMarkerData(Rule rule, String key, String value, Environment env)
@@ -351,25 +345,14 @@ public abstract class RepositoryFunction {
     if (env.valuesMissing()) {
       return false; // Returns false so caller knows to return immediately
     }
-
-    Map<String, String> repoEnvOverride = PrecomputedValue.REPO_ENV.get(env);
-    if (repoEnvOverride == null) {
-      return false;
-    }
-
-    Map<String, String> repoEnv = new LinkedHashMap<>(environ);
-    for (Map.Entry<String, String> value : repoEnvOverride.entrySet()) {
-      repoEnv.put(value.getKey(), value.getValue());
-    }
-
     // Verify that all environment variable in the marker file are also in keys
     for (String key : markerData.keySet()) {
-      if (key.startsWith("ENV:") && !repoEnv.containsKey(key.substring(4))) {
+      if (key.startsWith("ENV:") && !environ.containsKey(key.substring(4))) {
         return false;
       }
     }
     // Now verify the values of the marker data
-    for (Map.Entry<String, String> value : repoEnv.entrySet()) {
+    for (Map.Entry<String, String> value : environ.entrySet()) {
       if (!markerData.containsKey("ENV:" + value.getKey())) {
         return false;
       }
@@ -394,6 +377,18 @@ public abstract class RepositoryFunction {
     return false;
   }
 
+  /**
+   * Returns a block of data that must be equal for two Rules for them to be considered the same.
+   *
+   * <p>This is used for the up-to-dateness check of fetched directory trees. The only reason for
+   * this to exist is the {@code maven_server} rule (which should go away, but until then, we need
+   * to keep it working somehow)
+   */
+  protected byte[] getRuleSpecificMarkerData(Rule rule, Environment env)
+      throws RepositoryFunctionException, InterruptedException {
+    return new byte[] {};
+  }
+
   protected Path prepareLocalRepositorySymlinkTree(Rule rule, Path repositoryDirectory)
       throws RepositoryFunctionException {
     try {
@@ -411,7 +406,7 @@ public abstract class RepositoryFunction {
       Path repositoryDirectory, String ruleKind, String ruleName)
       throws RepositoryFunctionException {
     try {
-      Path workspaceFile = repositoryDirectory.getRelative(LabelConstants.WORKSPACE_FILE_NAME);
+      Path workspaceFile = repositoryDirectory.getRelative("WORKSPACE");
       FileSystemUtils.writeContent(workspaceFile, Charset.forName("UTF-8"),
           String.format("# DO NOT EDIT: automatically generated WORKSPACE file for %s\n"
               + "workspace(name = \"%s\")\n", ruleKind, ruleName));
@@ -444,26 +439,23 @@ public abstract class RepositoryFunction {
     return writeFile(repositoryDirectory, "BUILD.bazel", contents);
   }
 
-  protected static String getPathAttr(Rule rule) throws RepositoryFunctionException {
+  @VisibleForTesting
+  protected static PathFragment getTargetPath(Rule rule, Path workspace)
+      throws RepositoryFunctionException {
     WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
+    String path;
     try {
-      return mapper.get("path", Type.STRING);
+      path = mapper.get("path", Type.STRING);
     } catch (EvalException e) {
       throw new RepositoryFunctionException(e, Transience.PERSISTENT);
     }
-  }
-
-  @VisibleForTesting
-  protected static PathFragment getTargetPath(String userDefinedPath, Path workspace)
-      throws RepositoryFunctionException {
-    PathFragment pathFragment = PathFragment.create(userDefinedPath);
+    PathFragment pathFragment = PathFragment.create(path);
     return workspace.getRelative(pathFragment).asFragment();
   }
 
   /**
    * Given a targetDirectory /some/path/to/y that contains files z, w, and v, create the following
    * directory structure:
-   *
    * <pre>
    * .external-repository/
    *   x/
@@ -475,7 +467,7 @@ public abstract class RepositoryFunction {
    * </pre>
    */
   public static boolean symlinkLocalRepositoryContents(
-      Path repositoryDirectory, Path targetDirectory, String userDefinedPath)
+      Path repositoryDirectory, Path targetDirectory)
       throws RepositoryFunctionException {
     try {
       FileSystemUtils.createDirectoryAndParents(repositoryDirectory);
@@ -484,13 +476,7 @@ public abstract class RepositoryFunction {
         createSymbolicLink(symlinkPath, target);
       }
     } catch (IOException e) {
-      throw new RepositoryFunctionException(
-          new IOException(
-              String.format(
-                  "The repository's path is \"%s\" (absolute: \"%s\") "
-                      + "but a symlink could not be created for it, because: %s",
-                  userDefinedPath, targetDirectory, e.getMessage())),
-          Transience.TRANSIENT);
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
     return true;
@@ -534,7 +520,7 @@ public abstract class RepositoryFunction {
   }
 
   protected static Path getExternalRepositoryDirectory(BlazeDirectories directories) {
-    return directories.getOutputBase().getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION);
+    return directories.getOutputBase().getRelative(LabelConstants.EXTERNAL_PACKAGE_NAME);
   }
 
   /**
@@ -549,11 +535,7 @@ public abstract class RepositoryFunction {
    * encourage nor optimize for since it is not common. So the set of external files is small.
    */
   public static void addExternalFilesDependencies(
-      RootedPath rootedPath,
-      boolean isDirectory,
-      BlazeDirectories directories,
-      Environment env,
-      ExternalPackageHelper externalPackageHelper)
+      RootedPath rootedPath, boolean isDirectory, BlazeDirectories directories, Environment env)
       throws InterruptedException {
     Path externalRepoDir = getExternalRepositoryDirectory(directories);
     PathFragment repositoryPath = rootedPath.asPath().relativeTo(externalRepoDir);
@@ -569,7 +551,7 @@ public abstract class RepositoryFunction {
       // dependency already but we want to catch RepositoryNotFoundException, so invoke
       // #getRuleByName
       // first.
-      Rule rule = externalPackageHelper.getRuleByName(repositoryName, env);
+      Rule rule = ExternalPackageUtil.getRuleByName(repositoryName, env);
       if (rule == null) {
         // Still an override might change the content of the repository.
         RepositoryDelegatorFunction.REPOSITORY_OVERRIDES.get(env);
@@ -579,7 +561,7 @@ public abstract class RepositoryFunction {
       if (isDirectory || repositoryPath.segmentCount() > 1) {
         if (!isDirectory
             && rule.getRuleClass().equals(LocalRepositoryRule.NAME)
-            && WorkspaceFileHelper.endsWithWorkspaceFileName(repositoryPath)) {
+            && repositoryPath.endsWith(BuildFileName.WORKSPACE.getFilenameFragment())) {
           // Ignore this, there is a dependency from LocalRepositoryFunction->WORKSPACE file already
           return;
         }

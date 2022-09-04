@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
+import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -70,7 +71,6 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    CcCommon.checkRuleLoadedThroughMacro(ruleContext);
 
     boolean systemProvided = ruleContext.attributes().get("system_provided", Type.BOOLEAN);
     CcToolchainProvider ccToolchain =

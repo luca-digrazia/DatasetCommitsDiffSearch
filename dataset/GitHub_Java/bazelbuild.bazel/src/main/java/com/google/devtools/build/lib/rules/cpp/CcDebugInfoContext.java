@@ -13,14 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcDebugInfoContextApi;
-import java.util.Collection;
 import java.util.Objects;
 
 /**
@@ -28,7 +26,7 @@ import java.util.Objects;
  * https://gcc.gnu.org/wiki/DebugFission for details.
  */
 @Immutable
-public final class CcDebugInfoContext implements CcDebugInfoContextApi {
+public final class CcDebugInfoContext {
 
   public static final CcDebugInfoContext EMPTY =
       new CcDebugInfoContext(
@@ -44,7 +42,7 @@ public final class CcDebugInfoContext implements CcDebugInfoContextApi {
   }
 
   /** Merge multiple {@link CcDebugInfoContext}s into one. */
-  public static CcDebugInfoContext merge(Collection<CcDebugInfoContext> contexts) {
+  public static CcDebugInfoContext merge(ImmutableList<CcDebugInfoContext> contexts) {
     NestedSetBuilder<Artifact> transitiveDwoFiles = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Artifact> transitivePicDwoFiles = NestedSetBuilder.stableOrder();
 
@@ -78,16 +76,6 @@ public final class CcDebugInfoContext implements CcDebugInfoContextApi {
    */
   public NestedSet<Artifact> getTransitivePicDwoFiles() {
     return transitivePicDwoFiles;
-  }
-
-  @Override
-  public Depset getStarlarkTransitiveFiles() {
-    return Depset.of(Artifact.TYPE, getTransitiveDwoFiles());
-  }
-
-  @Override
-  public Depset getStarlarkTransitivePicFiles() {
-    return Depset.of(Artifact.TYPE, getTransitivePicDwoFiles());
   }
 
   @Override

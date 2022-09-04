@@ -898,7 +898,6 @@ public final class CcCompilationHelper {
 
     ccCompilationContextBuilder.addSystemIncludeDirs(systemIncludeDirs);
     ccCompilationContextBuilder.addFrameworkIncludeDirs(frameworkIncludeDirs);
-    ccCompilationContextBuilder.addQuoteIncludeDirs(quoteIncludeDirs);
 
     for (PathFragment includeDir : includeDirs) {
       ccCompilationContextBuilder.addIncludeDir(includeDir);
@@ -996,6 +995,7 @@ public final class CcCompilationHelper {
       }
     }
     ccCompilationContextBuilder.setPurpose(purpose);
+    ccCompilationContextBuilder.addQuoteIncludeDirs(quoteIncludeDirs);
     return ccCompilationContextBuilder.build();
   }
 
