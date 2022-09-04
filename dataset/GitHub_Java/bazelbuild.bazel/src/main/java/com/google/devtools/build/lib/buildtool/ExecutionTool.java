@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.buildtool;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
@@ -48,7 +49,6 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
-import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
@@ -107,7 +107,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -167,7 +166,7 @@ public class ExecutionTool {
     }
   }
 
-  static final Logger logger = Logger.getLogger(ExecutionTool.class.getName());
+  static final Logger log = Logger.getLogger(ExecutionTool.class.getName());
 
   private final CommandEnvironment env;
   private final BlazeRuntime runtime;
@@ -470,7 +469,7 @@ public class ExecutionTool {
       Profiler.instance().markPhase(ProfilePhase.FINISH);
 
       if (buildCompleted) {
-        saveActionCache(actionCache);
+        saveCaches(actionCache);
       }
 
       try (AutoProfiler p = AutoProfiler.profiled("Show results", ProfilerTask.INFO)) {
@@ -717,25 +716,24 @@ public class ExecutionTool {
   }
 
   /**
-   * Writes the action cache files to disk, reporting any errors that occurred during writing and
-   * capturing statistics.
+   * Writes the cache files to disk, reporting any errors that occurred during
+   * writing.
    */
-  private void saveActionCache(ActionCache actionCache) {
-    ActionCacheStatistics.Builder builder = ActionCacheStatistics.newBuilder();
+  private void saveCaches(ActionCache actionCache) {
+    long actionCacheSizeInBytes = 0;
+    long actionCacheSaveTimeInMs;
 
-    AutoProfiler p =
-        AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, logger);
+    AutoProfiler p = AutoProfiler.profiledAndLogged("Saving action cache", ProfilerTask.INFO, log);
     try {
-      builder.setSizeInBytes(actionCache.save());
+      actionCacheSizeInBytes = actionCache.save();
     } catch (IOException e) {
-      builder.setSizeInBytes(0);
       getReporter().handle(Event.error("I/O error while writing action log: " + e.getMessage()));
     } finally {
-      builder.setSaveTimeInMs(
-          TimeUnit.MILLISECONDS.convert(p.completeAndGetElapsedTimeNanos(), TimeUnit.NANOSECONDS));
+      actionCacheSaveTimeInMs =
+          MILLISECONDS.convert(p.completeAndGetElapsedTimeNanos(), NANOSECONDS);
     }
-
-    env.getEventBus().post(builder.build());
+    env.getEventBus().post(new CachesSavedEvent(
+        actionCacheSaveTimeInMs, actionCacheSizeInBytes));
   }
 
   private Reporter getReporter() {
