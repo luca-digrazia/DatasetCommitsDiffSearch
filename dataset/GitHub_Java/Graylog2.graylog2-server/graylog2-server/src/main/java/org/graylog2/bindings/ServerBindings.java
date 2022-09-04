@@ -20,7 +20,6 @@
 package org.graylog2.bindings;
 
 import com.google.inject.AbstractModule;
-import com.google.inject.Scopes;
 import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.Multibinder;
@@ -63,10 +62,8 @@ import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.providers.AsyncHttpClientProvider;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
-import org.graylog2.streams.StreamRouter;
 import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
-import org.graylog2.system.shutdown.GracefulShutdown;
 
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
@@ -145,14 +142,12 @@ public class ServerBindings extends AbstractModule {
         bind(SystemJobFactory.class).toProvider(SystemJobFactoryProvider.class);
         bind(DashboardRegistry.class).toProvider(DashboardRegistryProvider.class);
         bind(AsyncHttpClient.class).toProvider(AsyncHttpClientProvider.class);
-        bind(GracefulShutdown.class).in(Scopes.SINGLETON);
     }
 
     private void bindInterfaces() {
         bind(MessageGateway.class).to(MessageGatewayImpl.class);
         bind(SecurityContextFactory.class).to(ShiroSecurityContextFactory.class);
         bind(AlertSender.class).to(FormattedEmailAlertSender.class);
-        bind(StreamRouter.class);
     }
 
     private MongoConnection getMongoConnection() {

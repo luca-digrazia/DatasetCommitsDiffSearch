@@ -36,13 +36,9 @@ import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.streams.requests.CreateRequest;
-import org.graylog2.rest.resources.streams.responses.StreamListResponse;
-import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleRequest;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.stats.ThroughputStats;
-import org.graylog2.streams.StreamRouter;
-import org.graylog2.streams.StreamRuleService;
-import org.graylog2.streams.StreamService;
+import org.graylog2.streams.*;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -87,7 +83,16 @@ public class StreamResource extends RestResource {
     @RequiresPermissions(RestPermissions.STREAMS_CREATE)
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(@ApiParam(title = "JSON body", required = true) final CreateRequest cr) throws ValidationException {
+    public Response create(@ApiParam(title = "JSON body", required = true) String body) {
+        CreateRequest cr;
+
+        try {
+            cr = objectMapper.readValue(body, CreateRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
         // Create stream.
         Map<String, Object> streamData = Maps.newHashMap();
         streamData.put("title", cr.title);
@@ -95,13 +100,18 @@ public class StreamResource extends RestResource {
         streamData.put("creator_user_id", cr.creatorUserId);
         streamData.put("created_at", new DateTime(DateTimeZone.UTC));
 
-        final Stream stream = streamService.create(streamData);
+        final StreamImpl stream = new StreamImpl(streamData);
+        String id;
         stream.setDisabled(true);
-
-        final String id = streamService.save(stream);
+        try {
+            id = streamService.save(stream);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         if (cr.rules != null && cr.rules.size() > 0) {
-            for (CreateStreamRuleRequest request : cr.rules) {
+            for (org.graylog2.rest.resources.streams.rules.requests.CreateRequest request : cr.rules) {
                 Map<String, Object> streamRuleData = Maps.newHashMap();
 
                 streamRuleData.put("type", request.type);
@@ -110,38 +120,56 @@ public class StreamResource extends RestResource {
                 streamRuleData.put("inverted", request.inverted);
                 streamRuleData.put("stream_id", id);
 
-                StreamRule streamRule = streamRuleService.create(streamRuleData);
-                streamRuleService.save(streamRule);
+                StreamRuleImpl streamRule = new StreamRuleImpl(streamRuleData);
+                try {
+                    streamRuleService.save(streamRule);
+                } catch (ValidationException e) {
+                    LOG.error("Validation error while trying to save a stream rule: ", e);
+                    throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+                }
             }
         }
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("stream_id", id);
 
-        return Response.status(Response.Status.CREATED).entity(result).build();
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
     
     @GET @Timed
     @ApiOperation(value = "Get a list of all streams")
     @Produces(MediaType.APPLICATION_JSON)
-    public StreamListResponse get() {
-        StreamListResponse response = new StreamListResponse();
+    public String get() {
+        List<Map<String, Object>> streams = Lists.newArrayList();
+        for (Stream stream : streamService.loadAll()) {
+            if (isPermitted(RestPermissions.STREAMS_READ, stream.getId())) {
+                try {
+                    List<StreamRule> streamRules = streamRuleService.loadForStream(stream);
+                    streams.add(stream.asMap(streamRules));
+                } catch (NotFoundException e) {
+                }
+            }
+        }
+        
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("total", streams.size());
+        result.put("streams", streams);
 
-        response.streams = streamService.loadAll();
-        response.total = response.streams.size();
-
-        return response;
+        return json(result);
     }
 
     @GET @Path("/enabled") @Timed
     @ApiOperation(value = "Get a list of all enabled streams")
     @Produces(MediaType.APPLICATION_JSON)
-    public String getEnabled() throws NotFoundException {
+    public String getEnabled() {
         List<Map<String, Object>> streams = Lists.newArrayList();
         for (Stream stream : streamService.loadAllEnabled()) {
             if (isPermitted(RestPermissions.STREAMS_READ, stream.getId())) {
-                List<StreamRule> streamRules = streamRuleService.loadForStream(stream);
-                streams.add(stream.asMap(streamRules));
+                try {
+                    List<StreamRule> streamRules = streamRuleService.loadForStream(stream);
+                    streams.add(stream.asMap(streamRules));
+                } catch (NotFoundException e) {
+                }
             }
         }
 
@@ -159,7 +187,7 @@ public class StreamResource extends RestResource {
             @ApiResponse(code = 404, message = "Stream not found."),
             @ApiResponse(code = 400, message = "Invalid ObjectId.")
     })
-    public Stream get(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) throws NotFoundException {
+    public String get(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId) {
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -167,9 +195,15 @@ public class StreamResource extends RestResource {
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
         Stream stream;
-        stream = streamService.load(streamId);
+        List<StreamRule> streamRules;
+        try {
+        	stream = streamService.load(streamId);
+            streamRules = streamRuleService.loadForStream(stream);
+        } catch (NotFoundException e) {
+        	throw new WebApplicationException(404);
+        }
 
-        return stream;
+        return json(stream.asMap(streamRules));
     }
 
     @PUT @Timed
@@ -299,7 +333,7 @@ public class StreamResource extends RestResource {
             serialisedMessage = objectMapper.readValue(body, new TypeReference<Map<String, Map<String, Object>>>() {});
         } catch (IOException e) {
             LOG.error("Received invalid JSON body. Returning HTTP 400.");
-            throw new BadRequestException();
+            throw new WebApplicationException(400);
         }
 
         if (serialisedMessage.get("message") == null) {
@@ -309,6 +343,8 @@ public class StreamResource extends RestResource {
 
         Stream stream = fetchStream(streamId);
         Message message = new Message(serialisedMessage.get("message"));
+
+        streamRouter.setUseCaching(false);
 
         Map<StreamRule, Boolean> ruleMatches = streamRouter.getRuleMatches(stream, message);
         Map<String, Boolean> rules = Maps.newHashMap();
@@ -334,7 +370,16 @@ public class StreamResource extends RestResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     public Response cloneStream(@ApiParam(title = "streamId", required = true) @PathParam("streamId") String streamId,
-                          @ApiParam(title = "JSON body", required = true) CreateRequest cr) {
+                          @ApiParam(title = "JSON body", required = true) String body) {
+        CreateRequest cr;
+
+        try {
+            cr = objectMapper.readValue(body, CreateRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
         checkPermission(RestPermissions.STREAMS_CREATE);
         checkPermission(RestPermissions.STREAMS_READ, streamId);
 
@@ -347,7 +392,7 @@ public class StreamResource extends RestResource {
         streamData.put("creator_user_id", cr.creatorUserId);
         streamData.put("created_at", new DateTime(DateTimeZone.UTC));
 
-        Stream stream = streamService.create(streamData);
+        StreamImpl stream = new StreamImpl(streamData);
         streamService.pause(stream);
         String id;
         try {
@@ -376,7 +421,7 @@ public class StreamResource extends RestResource {
                 streamRuleData.put("inverted", streamRule.getInverted());
                 streamRuleData.put("stream_id", new ObjectId(id));
 
-                StreamRule newStreamRule = streamRuleService.create(streamRuleData);
+                StreamRuleImpl newStreamRule = new StreamRuleImpl(streamRuleData);
                 try {
                     streamRuleService.save(newStreamRule);
                 } catch (ValidationException e) {
