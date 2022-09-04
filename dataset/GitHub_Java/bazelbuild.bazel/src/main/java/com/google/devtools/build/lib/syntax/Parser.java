@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.syntax.DictionaryLiteral.DictionaryEntryLiteral;
 import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
 import java.util.ArrayList;
@@ -116,6 +115,7 @@ public class Parser {
 
   private final Lexer lexer;
   private final EventHandler eventHandler;
+  private final List<Comment> comments;
 
   private static final Map<TokenKind, Operator> binaryOperators =
       new ImmutableMap.Builder<TokenKind, Operator>()
@@ -167,6 +167,7 @@ public class Parser {
   private Parser(Lexer lexer, EventHandler eventHandler) {
     this.lexer = lexer;
     this.eventHandler = eventHandler;
+    this.comments = new ArrayList<>();
     nextToken();
   }
 
@@ -186,18 +187,15 @@ public class Parser {
    * @param input the input to parse
    * @param eventHandler a reporter for parsing errors
    * @see BuildFileAST#parseBuildString
+   * @see BuildFileAST#parseSkylarkString
    */
   public static ParseResult parseFile(ParserInputSource input, EventHandler eventHandler) {
     Lexer lexer = new Lexer(input, eventHandler);
     Parser parser = new Parser(lexer, eventHandler);
-    List<Statement> statements;
-    try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.SKYLARK_PARSER, input.getPath().getPathString())) {
-      statements = parser.parseFileInput();
-    }
+    List<Statement> statements = parser.parseFileInput();
     boolean errors = parser.errorsCount > 0 || lexer.containsErrors();
     return new ParseResult(
-        statements, lexer.getComments(), locationFromStatements(lexer, statements), errors);
+        statements, parser.comments, locationFromStatements(lexer, statements), errors);
   }
 
   /**
@@ -417,6 +415,11 @@ public class Parser {
   private void nextToken() {
     if (token == null || token.kind != TokenKind.EOF) {
       token = lexer.nextToken();
+      // transparently handle comment tokens
+      while (token.kind == TokenKind.COMMENT) {
+        makeComment();
+        token = lexer.nextToken();
+      }
     }
     checkForbiddenKeywords();
     if (DEBUGGING) {
@@ -426,7 +429,7 @@ public class Parser {
 
   // create an error expression
   private Identifier makeErrorExpression(int start, int end) {
-    return setLocation(Identifier.of("$error$"), start, end);
+    return setLocation(new Identifier("$error$"), start, end);
   }
 
   // Convenience wrapper method around ASTNode.setLocation
@@ -465,9 +468,10 @@ public class Parser {
     if (expr instanceof Identifier) {
       // parse a named argument
       if (token.kind == TokenKind.EQUALS) {
+        String name = ((Identifier) expr).getName();
         nextToken();
         Expression val = parseNonTupleExpression();
-        return setLocation(new Argument.Keyword(((Identifier) expr), val), start, val);
+        return setLocation(new Argument.Keyword(name, val), start, val);
       }
     }
 
@@ -483,24 +487,28 @@ public class Parser {
     if (token.kind == TokenKind.STAR_STAR) { // kwarg
       nextToken();
       Identifier ident = parseIdent();
-      return setLocation(new Parameter.StarStar<>(ident), start, ident);
+      return setLocation(new Parameter.StarStar<Expression, Expression>(
+          ident.getName()), start, ident);
     } else if (token.kind == TokenKind.STAR) { // stararg
       int end = token.right;
       nextToken();
       if (token.kind == TokenKind.IDENTIFIER) {
         Identifier ident = parseIdent();
-        return setLocation(new Parameter.Star<>(ident), start, ident);
+        return setLocation(new Parameter.Star<Expression, Expression>(ident.getName()),
+            start, ident);
       } else {
-        return setLocation(new Parameter.Star<>(null), start, end);
+        return setLocation(new Parameter.Star<Expression, Expression>(null), start, end);
       }
     } else {
       Identifier ident = parseIdent();
       if (token.kind == TokenKind.EQUALS) { // there's a default value
         nextToken();
         Expression expr = parseNonTupleExpression();
-        return setLocation(new Parameter.Optional<>(ident, expr), start, expr);
+        return setLocation(new Parameter.Optional<Expression, Expression>(
+            ident.getName(), expr), start, expr);
       } else {
-        return setLocation(new Parameter.Mandatory<>(ident), start, ident);
+        return setLocation(new Parameter.Mandatory<Expression, Expression>(
+            ident.getName()), start, ident);
       }
     }
   }
@@ -895,7 +903,7 @@ public class Parser {
       expect(TokenKind.IDENTIFIER);
       return makeErrorExpression(token.left, token.right);
     }
-    Identifier ident = Identifier.of(((String) token.value));
+    Identifier ident = new Identifier(((String) token.value));
     setLocation(ident, token.left, token.right);
     nextToken();
     return ident;
@@ -1006,6 +1014,7 @@ public class Parser {
 
   // file_input ::= ('\n' | stmt)* EOF
   private List<Statement> parseFileInput() {
+    long startTime = Profiler.nanoTimeMaybe();
     List<Statement> list =  new ArrayList<>();
     while (token.kind != TokenKind.EOF) {
       if (token.kind == TokenKind.NEWLINE) {
@@ -1019,6 +1028,7 @@ public class Parser {
         parseTopLevelStatement(list);
       }
     }
+    Profiler.instance().logSimpleTask(startTime, ProfilerTask.SKYLARK_PARSER, "");
     return list;
   }
 
@@ -1072,7 +1082,7 @@ public class Parser {
     }
 
     String name = (String) token.value;
-    Identifier identifier = Identifier.of(name);
+    Identifier identifier = new Identifier(name);
     if (symbols.containsKey(identifier)) {
       syntaxError(
           String.format("Identifier '%s' is used more than once", identifier.getName()));
@@ -1333,5 +1343,10 @@ public class Parser {
       end = expression.getLocation().getEndOffset();
     }
     return setLocation(new ReturnStatement(expression), start, end);
+  }
+
+  // create a comment node
+  private void makeComment() {
+    comments.add(setLocation(new Comment((String) token.value), token.left, token.right));
   }
 }
