@@ -8,9 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EventListener;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -61,7 +59,6 @@ import org.jboss.metadata.web.spec.ServletSecurityMetaData;
 import org.jboss.metadata.web.spec.ServletsMetaData;
 import org.jboss.metadata.web.spec.TransportGuaranteeType;
 import org.jboss.metadata.web.spec.WebMetaData;
-import org.jboss.shamrock.deployment.ApplicationArchive;
 import org.jboss.shamrock.deployment.ArchiveContext;
 import org.jboss.shamrock.deployment.ProcessorContext;
 import org.jboss.shamrock.deployment.ResourceProcessor;
@@ -107,29 +104,7 @@ public class ServletResourceProcessor implements ResourceProcessor {
 
         try (BytecodeRecorder context = processorContext.addStaticInitTask(RuntimePriority.UNDERTOW_CREATE_DEPLOYMENT)) {
             UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
-            //we need to check for web resources in order to get welcome files to work
-            //this kinda sucks
-            Set<String> knownFiles = new HashSet<>();
-            Set<String> knownDirectories = new HashSet<>();
-            for(ApplicationArchive i : archiveContext.getAllApplicationArchives()) {
-                Path resource = i.getArchiveRoot().resolve("META-INF/resources");
-                if(Files.exists(resource)) {
-                    Files.walk(resource).forEach(new Consumer<Path>() {
-                        @Override
-                        public void accept(Path path) {
-                            Path rel = resource.relativize(path);
-                            if(Files.isDirectory(rel)) {
-                                knownDirectories.add(rel.toString());
-                            } else {
-                                knownFiles.add(rel.toString());
-                            }
-                        }
-                    });
-                }
-            }
-
-
-            template.createDeployment("test", knownFiles, knownDirectories);
+            template.createDeployment("test");
             template.initHandlerWrappers();
         }
         final IndexView index = archiveContext.getCombinedIndex();
