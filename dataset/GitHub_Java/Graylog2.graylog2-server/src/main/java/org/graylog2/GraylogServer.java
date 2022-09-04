@@ -76,12 +76,8 @@ public class GraylogServer implements Runnable {
 
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
-    
-    private String serverId;
 
     public void initialize(Configuration configuration) {
-        serverId = Tools.generateServerId();
-        
         this.configuration = configuration; // TODO use dependency injection
 
         mongoConnection = new MongoConnection();    // TODO use dependency injection
@@ -94,6 +90,7 @@ public class GraylogServer implements Runnable {
         mongoConnection.setMaxConnections(configuration.getMongoMaxConnections());
         mongoConnection.setThreadsAllowedToBlockMultiplier(configuration.getMongoThreadsAllowedToBlockMultiplier());
         mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
+        mongoConnection.setMessagesCollectionSize(configuration.getMessagesCollectionSize());
 
         messageCounterManager = new MessageCounterManager();
         messageCounterManager.register(MASTER_COUNTER_NAME);
@@ -116,13 +113,6 @@ public class GraylogServer implements Runnable {
     }
 
     public void registerInitializer(Initializer initializer) {
-        if (initializer.masterOnly() && !this.isMaster()) {
-            LOG.info("Not registering initializer " + initializer.getClass().getSimpleName()
-                    + " because it is marked as master only.");
-            return;
-        }
-        
-            
         this.initializers.add(initializer);
     }
 
@@ -162,6 +152,9 @@ public class GraylogServer implements Runnable {
                 System.exit(1);
             }
         }
+        
+        ////// XXXXXXXXXXX
+        indexer.createRecentIndex();
 
         // Statically set timeout for LogglyForwarder.
         // TODO: This is a code smell and needs to be fixed.
@@ -255,14 +248,6 @@ public class GraylogServer implements Runnable {
     
     public void setLastReceivedMessageTimestamp(int t) {
         this.lastReceivedMessageTimestamp = t;
-    }
-    
-    public boolean isMaster() {
-        return this.configuration.isMaster();
-    }
-    
-    public String getServerId() {
-        return this.serverId;
     }
 
 }

@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.log4j.Logger;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionFuture;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequestBuilder;
@@ -25,9 +26,16 @@ import org.elasticsearch.action.deletebyquery.DeleteByQueryRequestBuilder;
 import org.elasticsearch.action.deletebyquery.DeleteByQueryResponse;
 import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexRequestBuilder;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.UUID;
+import org.elasticsearch.common.collect.ImmutableMap;
+import org.elasticsearch.common.settings.NoClassSettingsException;
+import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.SettingsException;
 import org.elasticsearch.common.settings.loader.YamlSettingsLoader;
+import org.elasticsearch.common.unit.ByteSizeValue;
+import org.elasticsearch.common.unit.SizeValue;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.node.Node;
@@ -53,7 +61,7 @@ public class EmbeddedElasticSearchClient {
         server = graylogServer;
 
         final NodeBuilder builder = nodeBuilder().client(true);
-        String esSettings;
+        String esSettings = null;
         Map<String, String> settings = null;
         try {
             esSettings = FileUtils.readFileToString(new File(graylogServer.getConfiguration().getElasticSearchConfigFile()));
@@ -74,18 +82,18 @@ public class EmbeddedElasticSearchClient {
 
     }
 
-    public boolean indexExists(String index) {
-        ActionFuture<IndicesExistsResponse> existsFuture = client.admin().indices().exists(new IndicesExistsRequest(index));
+    public boolean indexExists() {
+        ActionFuture<IndicesExistsResponse> existsFuture = client.admin().indices().exists(new IndicesExistsRequest(getIndexName()));
         return existsFuture.actionGet().exists();
     }
 
     public boolean createIndex() {
-        final ActionFuture<CreateIndexResponse> createFuture = client.admin().indices().create(new CreateIndexRequest(getMainIndexName()));
+        final ActionFuture<CreateIndexResponse> createFuture = client.admin().indices().create(new CreateIndexRequest(getIndexName()));
         final boolean acknowledged = createFuture.actionGet().acknowledged();
         if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, getMainIndexName());
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, getIndexName());
         final boolean mappingCreated = client.admin().indices().putMapping(mappingRequest).actionGet().acknowledged();
         return acknowledged && mappingCreated;
     }
@@ -103,7 +111,7 @@ public class EmbeddedElasticSearchClient {
         if (!acknowledged) {
             return false;
         }
-        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, RECENT_INDEX_NAME);
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(client, getIndexName());
         final boolean mappingCreated = client.admin().indices().putMapping(mappingRequest).actionGet().acknowledged();
         return acknowledged && mappingCreated;
     }
@@ -115,15 +123,14 @@ public class EmbeddedElasticSearchClient {
 
         final BulkRequestBuilder b = client.prepareBulk();
         for (LogMessage msg : messages) {
-            String source = JSONValue.toJSONString(msg.toElasticSearchObject());
-            
-            // We manually set the same ID to allow linking between indices later.
-            final String id = UUID.randomBase64UUID();
-            
-            b.add(buildIndexRequest(getMainIndexName(), source, id, 0)); // Main index.
-            b.add(buildIndexRequest(RECENT_INDEX_NAME, source, id, server.getConfiguration().getRecentIndexTtlMinutes())); // Recent index.
+            final IndexRequestBuilder indexRequestBuilder = new IndexRequestBuilder(client);
+            indexRequestBuilder.setIndex(getIndexName());
+            indexRequestBuilder.setContentType(XContentType.JSON);
+            indexRequestBuilder.setOpType(OpType.INDEX);
+            indexRequestBuilder.setType(TYPE);
+            indexRequestBuilder.setSource(JSONValue.toJSONString(msg.toElasticSearchObject()));
+            b.add(indexRequestBuilder);
         }
-
         final ActionFuture<BulkResponse> bulkFuture = client.bulk(b.request());
         final BulkResponse response = bulkFuture.actionGet();
         LOG.debug(String.format("Bulk indexed %d messages, took %d ms, failures: %b",
@@ -133,16 +140,32 @@ public class EmbeddedElasticSearchClient {
         return !response.hasFailures();
     }
 
+    public boolean index(LogMessage msg) {
+
+        final IndexRequestBuilder indexRequestBuilder = new IndexRequestBuilder(client);
+        indexRequestBuilder.setIndex(getIndexName());
+        indexRequestBuilder.setContentType(XContentType.JSON);
+        indexRequestBuilder.setOpType(OpType.INDEX);
+        indexRequestBuilder.setType(TYPE);
+        indexRequestBuilder.setSource(JSONValue.toJSONString(msg.toElasticSearchObject()));
+
+        final ActionFuture<IndexResponse> f = client.index(indexRequestBuilder.request());
+        final IndexResponse response = f.actionGet();
+
+        LOG.debug("Wrote message <" + msg.getId() + "> to ElasticSearch index.");
+        return true;
+    }
+
     public boolean deleteMessagesByTimeRange(int to) {
-        DeleteByQueryRequestBuilder b = client.prepareDeleteByQuery(new String[] {getMainIndexName()});
+        DeleteByQueryRequestBuilder b = client.prepareDeleteByQuery(new String[] {getIndexName()});
         b.setTypes(new String[] {TYPE});
         final QueryBuilder qb = rangeQuery("created_at").from(0).to(to);
         b.setQuery(qb);
         ActionFuture<DeleteByQueryResponse> future = client.deleteByQuery(b.request());
-        return future.actionGet().index(getMainIndexName()).failedShards() == 0;
+        return future.actionGet().index(getIndexName()).failedShards() == 0;
     }
 
-    public String getMainIndexName() {
+    public String getIndexName() {
         return server.getConfiguration().getElasticSearchIndexName();
     }
 
@@ -153,26 +176,5 @@ public class EmbeddedElasticSearchClient {
 
         return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS", cal); // ramtamtam
     }
-    
-    private IndexRequestBuilder buildIndexRequest(String index, String source, String id, int ttlMinutes) {
-        final IndexRequestBuilder b = new IndexRequestBuilder(client);
-        
-        /*
-         * ID is set manually to allow inserting message into recent and total index
-         * with same ID. (Required for linking in frontend)
-         */
-        b.setId(id);
-        b.setSource(source);
-        b.setIndex(index);
-        b.setContentType(XContentType.JSON);
-        b.setOpType(OpType.INDEX);
-        b.setType(TYPE);
-        
-        // Set a TTL?
-        if (ttlMinutes > 0) {
-            b.setTTL(ttlMinutes*60*1000); // TTL is specified in milliseconds.
-        }
-        
-        return b;
-    }
+
 }
