@@ -31,17 +31,10 @@ import java.util.zip.ZipOutputStream;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
-import org.gradle.api.artifacts.Dependency;
-import org.gradle.api.artifacts.DependencySet;
-import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.ResolvedDependency;
-import org.gradle.api.plugins.Convention;
-import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.Optional;
-import org.gradle.api.tasks.SourceSet;
-import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 
@@ -244,43 +237,6 @@ public class QuarkusDev extends QuarkusTask {
                 resources.append(file.getAbsolutePath());
                 res = file.getAbsolutePath();
             }
-
-            final Configuration compileCp = project.getConfigurations().getByName("compileClasspath");
-            final DependencySet compileCpDependencies = compileCp.getAllDependencies();
-
-            for (Dependency dependency : compileCpDependencies) {
-                if (!(dependency instanceof ProjectDependency)) {
-                    continue;
-                }
-
-                Project dependencyProject = ((ProjectDependency) dependency).getDependencyProject();
-                Convention convention = dependencyProject.getConvention();
-                JavaPluginConvention javaConvention = convention.findPlugin(JavaPluginConvention.class);
-                if (javaConvention == null) {
-                    continue;
-                }
-
-                SourceSetContainer sourceSets = javaConvention.getSourceSets();
-                SourceSet mainSourceSet = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-                Set<String> sourcePaths = new HashSet<>();
-
-                for (File sourceDir : mainSourceSet.getAllJava().getSrcDirs()) {
-                    sourcePaths.add(sourceDir.getAbsolutePath());
-                }
-
-                String classesPaths = mainSourceSet.getOutput().getClassesDirs().getAsPath();
-                String resourcePaths = mainSourceSet.getResources().getSourceDirectories().getAsPath();
-
-                DevModeContext.ModuleInfo wsModuleInfo = new DevModeContext.ModuleInfo(
-                        dependencyProject.getName(),
-                        dependencyProject.getProjectDir().getAbsolutePath(),
-                        sourcePaths,
-                        classesPaths,
-                        resourcePaths);
-
-                context.getModules().add(wsModuleInfo);
-            }
-
             DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(
                     project.getName(),
                     project.getProjectDir().getAbsolutePath(),
@@ -311,7 +267,15 @@ public class QuarkusDev extends QuarkusTask {
 
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
-            args.add(extension.outputDirectory().getAbsolutePath());
+            final String outputClassDirectory = extension.outputDirectory().getAbsolutePath();
+            final String outputResourcesDirectory = extension.outputConfigDirectory().getAbsolutePath();
+            if (outputClassDirectory.equals(outputResourcesDirectory)) {
+                args.add(outputClassDirectory);
+            } else {
+                // we pass both the output class directory and the output config directory (which differ by default)
+                // so both can be added as classloader roots
+                args.add(outputClassDirectory + "," + outputResourcesDirectory);
+            }
             args.add(wiringClassesDirectory.getAbsolutePath());
             args.add(new File(getBuildDir(), "transformer-cache").getAbsolutePath());
             ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
