@@ -23,7 +23,6 @@ import com.google.auto.value.AutoValue;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static com.google.common.collect.ImmutableList.of;
@@ -36,9 +35,6 @@ abstract class Pivot implements SearchType {
     String type() {
         return NAME;
     }
-
-    @JsonProperty
-    public abstract Optional<String> name();
 
     @JsonProperty("row_groups")
     abstract List<BucketSpec> rowGroups();
@@ -59,9 +55,13 @@ abstract class Pivot implements SearchType {
     @JsonProperty
     Object filter() { return null; }
 
+    private static String newId() {
+        return new UUID().toString();
+    }
+
     static Builder builder() {
         return new AutoValue_Pivot.Builder()
-                .newId()
+                .id(newId())
                 .rowGroups(of())
                 .columnGroups(of())
                 .sort(of())
@@ -72,12 +72,6 @@ abstract class Pivot implements SearchType {
     static abstract class Builder {
 
         abstract Builder id(@Nullable String id);
-
-        Builder newId() {
-            return id(new UUID().toString());
-        }
-
-        abstract Builder name(@Nullable String name);
 
         abstract Builder rowGroups(@Nullable List<BucketSpec> rowGroups);
 
