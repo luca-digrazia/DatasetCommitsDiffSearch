@@ -1,7 +1,6 @@
 package io.quarkus.gradle;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -14,35 +13,34 @@ import org.gradle.tooling.ProjectConnection;
 import org.gradle.tooling.model.eclipse.EclipseExternalDependency;
 import org.gradle.tooling.model.eclipse.EclipseProject;
 
-import io.quarkus.devtools.project.buildfile.AbstractGradleBuildFile;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import io.quarkus.cli.commands.file.GradleBuildFile;
+import io.quarkus.cli.commands.writer.ProjectWriter;
 
-public class GradleBuildFileFromConnector extends AbstractGradleBuildFile {
+public class GradleBuildFileFromConnector extends GradleBuildFile {
 
     private List<Dependency> dependencies = null;
 
-    public GradleBuildFileFromConnector(final Path projectDirPath, final QuarkusPlatformDescriptor platformDescriptor) {
-        super(projectDirPath, platformDescriptor);
-    }
-
-    public GradleBuildFileFromConnector(Path projectDirPath, QuarkusPlatformDescriptor platformDescriptor,
-            Path rootProjectPath) {
-        super(projectDirPath, platformDescriptor, rootProjectPath);
+    public GradleBuildFileFromConnector(ProjectWriter writer) throws IOException {
+        super(writer);
+        // we need to initialize here since there is no other single point of entry
+        init();
     }
 
     @Override
-    public List<Dependency> getDependencies() throws IOException {
+    public List<Dependency> getDependencies() {
         if (dependencies == null) {
             EclipseProject eclipseProject = null;
             if (getBuildContent() != null) {
-                try {
-                    ProjectConnection connection = GradleConnector.newConnector()
-                            .forProjectDirectory(getProjectDirPath().toFile())
-                            .connect();
-                    eclipseProject = connection.getModel(EclipseProject.class);
-                } catch (BuildException e) {
-                    // ignore this error.
-                    e.printStackTrace();
+                if (getWriter().hasFile()) {
+                    try {
+                        ProjectConnection connection = GradleConnector.newConnector()
+                                .forProjectDirectory(getWriter().getProjectFolder())
+                                .connect();
+                        eclipseProject = connection.getModel(EclipseProject.class);
+                    } catch (BuildException e) {
+                        // ignore this error.
+                        e.printStackTrace();
+                    }
                 }
             }
             if (eclipseProject != null) {
