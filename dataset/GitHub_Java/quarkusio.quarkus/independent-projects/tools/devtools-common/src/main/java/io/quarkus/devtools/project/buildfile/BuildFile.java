@@ -1,83 +1,101 @@
 package io.quarkus.devtools.project.buildfile;
 
-import static io.quarkus.devtools.project.extensions.Extensions.findInList;
-import static io.quarkus.devtools.project.extensions.Extensions.toCoords;
-import static io.quarkus.devtools.project.extensions.Extensions.toKey;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 
-import io.quarkus.bootstrap.model.AppArtifactCoords;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.dependencies.Extension;
+import io.quarkus.devtools.project.extensions.ExtensionInstallPlan;
 import io.quarkus.devtools.project.extensions.ExtensionManager;
 import io.quarkus.devtools.project.extensions.Extensions;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import io.quarkus.maven.ArtifactCoords;
+import io.quarkus.maven.ArtifactKey;
+import io.quarkus.registry.catalog.Extension;
+import io.quarkus.registry.catalog.ExtensionCatalog;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.maven.model.Dependency;
 
 public abstract class BuildFile implements ExtensionManager {
 
-    private final Path projectFolderPath;
-    private final QuarkusPlatformDescriptor platformDescriptor;
+    private final Path projectDirPath;
+    private final ExtensionCatalog catalog;
 
-    public BuildFile(final Path projectFolderPath, final QuarkusPlatformDescriptor platformDescriptor) {
-        this.projectFolderPath = requireNonNull(projectFolderPath, "projectPath is required");
-        this.platformDescriptor = requireNonNull(platformDescriptor, "platformDescriptor is required");
+    public BuildFile(final Path projectDirPath, ExtensionCatalog catalog) {
+        this.projectDirPath = requireNonNull(projectDirPath, "projectPath is required");
+        this.catalog = requireNonNull(catalog, "catalog is required");
     }
 
     @Override
-    public final boolean hasQuarkusPlatformBom() throws IOException {
-        return containsBOM(platformDescriptor.getBomGroupId(), platformDescriptor.getBomArtifactId());
+    public final InstallResult install(Collection<ArtifactCoords> coords) throws IOException {
+        final ExtensionInstallPlan.Builder builder = ExtensionInstallPlan.builder();
+        for (ArtifactCoords coord : coords) {
+            if ("pom".equals(coord.getType())) {
+                builder.addPlatform(coord);
+            } else if (coord.getVersion() == null) {
+                builder.addManagedExtension(coord);
+            } else {
+                builder.addIndependentExtension(coord);
+            }
+        }
+        return install(builder.build());
     }
 
     @Override
-    public final InstallResult install(Collection<AppArtifactCoords> coords) throws IOException {
-        if (!hasQuarkusPlatformBom()) {
-            throw new IllegalStateException("The Quarkus BOM is required to add a Quarkus extension");
+    public InstallResult install(ExtensionInstallPlan plan) throws IOException {
+        this.refreshData();
+        List<ArtifactCoords> installedManagedExtensions = new ArrayList<>();
+        List<ArtifactCoords> installedIndependentExtensions = new ArrayList<>();
+        List<ArtifactCoords> installedPlatforms = new ArrayList<>();
+        final Set<ArtifactKey> alreadyInstalled = alreadyInstalled(plan.toCollection());
+        for (ArtifactCoords platform : withoutAlreadyInstalled(alreadyInstalled, plan.getPlatforms())) {
+            if (importBom(platform)) {
+                installedPlatforms.add(platform);
+            }
+        }
+        for (ArtifactCoords managedExtension : withoutAlreadyInstalled(alreadyInstalled, plan.getManagedExtensions())) {
+            if (addDependency(managedExtension, true)) {
+                installedManagedExtensions.add(managedExtension);
+            }
+        }
+        for (ArtifactCoords independentExtension : withoutAlreadyInstalled(alreadyInstalled, plan.getIndependentExtensions())) {
+            if (addDependency(independentExtension, false)) {
+                installedIndependentExtensions.add(independentExtension);
+            }
+        }
+        writeToDisk();
+        return new InstallResult(installedPlatforms, installedManagedExtensions, installedIndependentExtensions,
+                alreadyInstalled);
+    }
+
+    @Override
+    public final Collection<ArtifactCoords> getInstalled() throws IOException {
+        if (catalog == null) {
+            return Collections.emptyList();
         }
         this.refreshData();
-        final Set<AppArtifactKey> existingKeys = getDependenciesKeys();
-        final List<AppArtifactCoords> installed = coords.stream()
-                .distinct()
-                .filter(a -> !existingKeys.contains(a.getKey()))
-                .filter(e -> {
-                    try {
-                        addDependencyInBuildFile(e);
-                        return true;
-                    } catch (IOException ex) {
-                        throw new UncheckedIOException(ex);
-                    }
-                }).collect(toList());
-        this.writeToDisk();
-        return new InstallResult(installed);
-    }
-
-    @Override
-    public final Collection<AppArtifactCoords> getInstalled() throws IOException {
-        this.refreshData();
-        return this.getDependencies().stream()
-                .filter(d -> this.isQuarkusExtension(toKey(d)))
-                .map(d -> toCoords(d, extractVersion(d)))
+        final Set<ArtifactKey> catalogKeys = catalog.getExtensions().stream().map(e -> e.getArtifact().getKey())
+                .collect(Collectors.toSet());
+        return getDependencies().stream()
+                .filter(d -> catalogKeys.contains(d.getKey()))
                 .collect(toList());
     }
 
     @Override
-    public final UninstallResult uninstall(Collection<AppArtifactKey> keys) throws IOException {
+    public final UninstallResult uninstall(Collection<ArtifactKey> keys) throws IOException {
         this.refreshData();
-        final Set<AppArtifactKey> existingKeys = getDependenciesKeys();
-        final List<AppArtifactKey> uninstalled = keys.stream()
+        final Set<ArtifactKey> existingKeys = getDependenciesKeys();
+        final List<ArtifactKey> uninstalled = keys.stream()
                 .distinct()
                 .filter(existingKeys::contains)
                 .filter(k -> {
                     try {
-                        removeDependencyFromBuildFile(k);
+                        removeDependency(k);
                         return true;
                     } catch (IOException ex) {
                         throw new UncheckedIOException(ex);
@@ -87,72 +105,60 @@ public abstract class BuildFile implements ExtensionManager {
         return new UninstallResult(uninstalled);
     }
 
-    protected abstract void addDependencyInBuildFile(AppArtifactCoords coords) throws IOException;
+    private Set<ArtifactKey> alreadyInstalled(Collection<ArtifactCoords> extensions) throws IOException {
+        final Set<ArtifactKey> existingKeys = getDependenciesKeys();
+        return extensions.stream()
+                .distinct()
+                .filter(a -> existingKeys.contains(a.getKey()))
+                .map(ArtifactCoords::getKey)
+                .collect(Collectors.toSet());
+    }
 
-    protected abstract void removeDependencyFromBuildFile(AppArtifactKey key) throws IOException;
+    private Collection<ArtifactCoords> withoutAlreadyInstalled(Set<ArtifactKey> existingKeys,
+            Collection<ArtifactCoords> extensions) {
+        return extensions.stream()
+                .distinct()
+                .filter(a -> !existingKeys.contains(a.getKey()))
+                .collect(toList());
+    }
 
-    protected abstract List<Dependency> getDependencies() throws IOException;
+    protected abstract boolean importBom(ArtifactCoords coords);
+
+    protected abstract boolean addDependency(ArtifactCoords coords, boolean managed);
+
+    protected abstract void removeDependency(ArtifactKey key) throws IOException;
+
+    protected abstract List<ArtifactCoords> getDependencies() throws IOException;
 
     protected abstract void writeToDisk() throws IOException;
 
     protected abstract String getProperty(String propertyName) throws IOException;
 
-    protected abstract boolean containsBOM(String groupId, String artifactId) throws IOException;
-
     protected abstract void refreshData();
 
-    protected Path getProjectFolderPath() {
-        return projectFolderPath;
+    protected Path getProjectDirPath() {
+        return projectDirPath;
     }
 
     protected boolean hasProjectFile(final String fileName) throws IOException {
-        final Path filePath = projectFolderPath.resolve(fileName);
+        final Path filePath = projectDirPath.resolve(fileName);
         return Files.exists(filePath);
     }
 
     protected byte[] readProjectFile(final String fileName) throws IOException {
-        final Path filePath = projectFolderPath.resolve(fileName);
+        final Path filePath = projectDirPath.resolve(fileName);
         return Files.readAllBytes(filePath);
     }
 
     protected void writeToProjectFile(final String fileName, final byte[] content) throws IOException {
-        Files.write(projectFolderPath.resolve(fileName), content);
+        Files.write(projectDirPath.resolve(fileName), content);
     }
 
-    private boolean isQuarkusExtension(final AppArtifactKey key) {
-        // This will not always be true as the platform descriptor does not contain the list of all available extensions
-        return isDefinedInRegistry(platformDescriptor.getExtensions(), key);
+    private Set<ArtifactKey> getDependenciesKeys() throws IOException {
+        return getDependencies().stream().map(ArtifactCoords::getKey).collect(Collectors.toSet());
     }
 
-    private Set<AppArtifactKey> getDependenciesKeys() throws IOException {
-        return getDependencies().stream().map(Extensions::toKey).collect(Collectors.toSet());
+    public static boolean isDefinedInRegistry(Collection<Extension> registry, final ArtifactKey key) {
+        return Extensions.findInList(registry, key).isPresent();
     }
-
-    private String extractVersion(final Dependency d) {
-        String version = d != null ? d.getVersion() : null;
-        if (version != null && version.startsWith("$")) {
-            String value = null;
-            try {
-                value = (String) this.getProperty(propertyName(version));
-                if (value != null) {
-                    return value;
-                }
-            } catch (IOException e) {
-                // ignore this error.
-            }
-        }
-        if (version != null) {
-            return version;
-        }
-        return null;
-    }
-
-    private String propertyName(final String variable) {
-        return variable.substring(2, variable.length() - 1);
-    }
-
-    public static boolean isDefinedInRegistry(List<Extension> registry, final AppArtifactKey key) {
-        return findInList(registry, key).isPresent();
-    }
-
 }

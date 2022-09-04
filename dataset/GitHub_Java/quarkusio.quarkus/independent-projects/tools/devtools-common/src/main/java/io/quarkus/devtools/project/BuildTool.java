@@ -1,10 +1,12 @@
 package io.quarkus.devtools.project;
 
-import io.quarkus.devtools.project.buildfile.GenericGradleBuildFile;
+import io.quarkus.devtools.project.buildfile.GroovyGradleBuildFile;
+import io.quarkus.devtools.project.buildfile.KotlinGradleBuildFile;
 import io.quarkus.devtools.project.buildfile.MavenBuildFile;
 import io.quarkus.devtools.project.extensions.ExtensionManager;
-import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import io.quarkus.registry.catalog.ExtensionCatalog;
 import java.nio.file.Path;
+import java.util.Locale;
 
 /**
  * An enum of build tools, such as Maven and Gradle.
@@ -19,7 +21,17 @@ public enum BuildTool {
     /** Gradle build tool */
     GRADLE("\n# Gradle\n.gradle/\nbuild/",
             "build",
-            new String[] { "build.gradle", "settings.gradle", "gradle.properties" });
+            new String[] { "build.gradle", "settings.gradle", "gradle.properties" }),
+
+    /** Gradle build tool with Kotlin DSL */
+    GRADLE_KOTLIN_DSL("\n# Gradle\n.gradle/\nbuild/",
+            "build",
+            new String[] { "build.gradle.kts", "settings.gradle.kts", "gradle.properties" }),
+
+    /** JBang build tool */
+    JBANG("\n# JBang\n.target/\nbuild/",
+            "build",
+            new String[0]);
 
     private final String gitIgnoreEntries;
 
@@ -52,14 +64,34 @@ public enum BuildTool {
         return buildDirectory;
     }
 
-    public ExtensionManager createExtensionManager(final Path projectFolderPath,
-            final QuarkusPlatformDescriptor platformDescriptor) {
+    public ExtensionManager createExtensionManager(final Path projectDirPath,
+            ExtensionCatalog catalog) {
         switch (this) {
             case GRADLE:
-                return new GenericGradleBuildFile();
+                return new GroovyGradleBuildFile();
+            case GRADLE_KOTLIN_DSL:
+                return new KotlinGradleBuildFile();
             case MAVEN:
             default:
-                return new MavenBuildFile(projectFolderPath, platformDescriptor);
+                // TODO it should never get here, this needs a proper refactoring
+                return new MavenBuildFile(projectDirPath, catalog);
         }
+    }
+
+    public String getKey() {
+        return toString().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    public static BuildTool resolveExistingProject(Path path) {
+        return QuarkusProject.resolveExistingProjectBuildTool(path);
+    }
+
+    public static BuildTool findTool(String tool) {
+        for (BuildTool value : BuildTool.values()) {
+            if (value.toString().equalsIgnoreCase(tool) || value.getKey().equalsIgnoreCase(tool)) {
+                return value;
+            }
+        }
+        return null;
     }
 }

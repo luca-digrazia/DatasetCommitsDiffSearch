@@ -311,7 +311,7 @@ public class MavenProjectBuildFile extends BuildFile {
     @Override
     public final Collection<ArtifactCoords> getInstalledPlatforms() throws IOException {
         if (importedPlatforms == null) {
-            final List<ArtifactCoords> tmp = new ArrayList<>();
+            final List<ArtifactCoords> tmp = new ArrayList<>(4);
             for (ArtifactCoords c : getManagedDependencies()) {
                 if (PlatformArtifacts.isCatalogArtifact(c)) {
                     tmp.add(PlatformArtifacts.getBomArtifactForCatalog(c));
