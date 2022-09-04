@@ -49,7 +49,7 @@ public class HelloWorldConfiguration extends Configuration {
         return database;
     }
 
-    @JsonProperty("database")
+    @JsonProperty
     public void setDatabaseConfiguration(DatabaseConfiguration databaseConfiguration) {
         this.database = databaseConfiguration;
     }
