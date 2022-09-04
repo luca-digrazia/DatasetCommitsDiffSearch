@@ -26,9 +26,8 @@ import com.google.devtools.build.lib.actions.ActionExecutedEvent;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent.ErrorTiming;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderFactory;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderFactoryMap;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildeventstream.transports.BinaryFormatFileTransport;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
 import com.google.devtools.build.lib.buildeventstream.transports.JsonFormatFileTransport;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.runtime.BlazeModule.ModuleEnvironment;
 import com.google.devtools.build.lib.runtime.BuildEventStreamer;
 import com.google.devtools.build.lib.runtime.Command;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
@@ -62,7 +62,6 @@ public class BazelBuildEventServiceModuleTest {
       new ActionExecutedEvent(
           new ActionsTestUtil.NullAction(),
           /* exception= */ null,
-          ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
           /* stdout= */ null,
           /* stderr= */ null,
           ErrorTiming.NO_ERROR);
@@ -72,6 +71,14 @@ public class BazelBuildEventServiceModuleTest {
         @Override
         public Class<?> apply(Object o) {
           return o.getClass();
+        }
+      };
+
+  private static final PathConverter PATH_CONVERTER =
+      new PathConverter() {
+        @Override
+        public String apply(Path path) {
+          return path.getPathString();
         }
       };
 
@@ -139,9 +146,7 @@ public class BazelBuildEventServiceModuleTest {
         commandLineReporter,
         moduleEnvironment,
         clock,
-        new BuildEventArtifactUploaderFactoryMap.Builder()
-            .add("", BuildEventArtifactUploaderFactory.LOCAL_FILES_UPLOADER_FACTORY)
-            .build(),
+        PATH_CONVERTER,
         reporter,
         /* buildRequestId= */ "foo",
         /* invocationId= */ "bar",
