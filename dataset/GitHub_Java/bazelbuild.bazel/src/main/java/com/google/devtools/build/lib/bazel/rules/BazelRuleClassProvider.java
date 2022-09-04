@@ -59,6 +59,7 @@ import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewGitRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.workspace.NewHttpArchiveRule;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceBrokerInfo;
@@ -83,6 +84,8 @@ import com.google.devtools.build.lib.rules.config.ConfigRules;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoAspect;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoLibraryRule;
+import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.platform.PlatformRules;
 import com.google.devtools.build.lib.rules.proto.BazelProtoLibraryRule;
 import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
@@ -262,8 +265,14 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(ConfiguredRuleClassProvider.Builder builder) {
-          BazelJavaProtoAspect bazelJavaProtoAspect = new BazelJavaProtoAspect(builder);
-          BazelJavaLiteProtoAspect bazelJavaLiteProtoAspect = new BazelJavaLiteProtoAspect(builder);
+          LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute =
+              JavaSemantics.hostJdkAttribute(builder);
+          LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute =
+              JavaSemantics.javaToolchainAttribute(builder);
+          BazelJavaProtoAspect bazelJavaProtoAspect =
+              new BazelJavaProtoAspect(hostJdkAttribute, javaToolchainAttribute);
+          BazelJavaLiteProtoAspect bazelJavaLiteProtoAspect =
+              new BazelJavaLiteProtoAspect(hostJdkAttribute, javaToolchainAttribute);
           builder.addNativeAspectClass(bazelJavaProtoAspect);
           builder.addNativeAspectClass(bazelJavaLiteProtoAspect);
           builder.addRuleDefinition(new BazelJavaProtoLibraryRule(bazelJavaProtoAspect));

@@ -31,15 +31,14 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ComposingRuleTransitionFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
+import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.constraints.ConstraintSemantics;
 import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkModules;
-import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
@@ -53,6 +52,7 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skylarkbuildapi.Bootstrap;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
@@ -741,6 +741,21 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   }
 
   /**
+   * Returns the defaults package for the default settings.
+   */
+  public String getDefaultsPackageContent(InvocationPolicy invocationPolicy) {
+    return DefaultsPackage.getDefaultsPackageContent(configurationOptions, invocationPolicy);
+  }
+
+  /**
+   * Returns the defaults package for the given options taken from an optionsProvider.
+   */
+  public String getDefaultsPackageContent(OptionsProvider optionsProvider) {
+    return DefaultsPackage.getDefaultsPackageContent(
+        BuildOptions.of(configurationOptions, optionsProvider));
+  }
+
+  /**
    * Creates a BuildOptions class for the given options taken from an optionsProvider.
    */
   public BuildOptions createBuildOptions(OptionsProvider optionsProvider) {
@@ -776,19 +791,13 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private Environment createSkylarkRuleClassEnvironment(
       Mutability mutability,
-      GlobalFrame globals,
+      Environment.GlobalFrame globals,
       SkylarkSemantics skylarkSemantics,
       EventHandler eventHandler,
       String astFileContentHashCode,
-      Map<String, Extension> importMap,
-      ImmutableMap<RepositoryName, RepositoryName> repoMapping,
-      Label callerLabel) {
+      Map<String, Extension> importMap) {
     BazelStarlarkContext context =
-        new BazelStarlarkContext(
-            toolsRepository,
-            configurationFragmentMap,
-            repoMapping,
-            new SymbolGenerator<>(callerLabel));
+        new BazelStarlarkContext(toolsRepository, configurationFragmentMap);
     Environment env =
         Environment.builder(mutability)
             .setGlobals(globals)
@@ -809,17 +818,14 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       SkylarkSemantics skylarkSemantics,
       EventHandler eventHandler,
       String astFileContentHashCode,
-      Map<String, Extension> importMap,
-      ImmutableMap<RepositoryName, RepositoryName> repoMapping) {
+      Map<String, Extension> importMap) {
     return createSkylarkRuleClassEnvironment(
         mutability,
         globals.withLabel(extensionLabel),
         skylarkSemantics,
         eventHandler,
         astFileContentHashCode,
-        importMap,
-        repoMapping,
-        extensionLabel);
+        importMap);
   }
 
   @Override
