@@ -19,8 +19,7 @@
  */
 package selenium.serverstub.rest.resources;
 
-import org.codehaus.jackson.JsonProcessingException;
-import org.codehaus.jackson.map.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
@@ -35,16 +34,9 @@ public class RestResource {
 
     protected RestResource() { /* */ }
 
-    protected String json(Object x, boolean prettyPrint) {
+    protected String json(Object x) {
         try {
-            if (prettyPrint) {
-                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(x);
-            } else {
-                return objectMapper.writeValueAsString(x);
-            }
-        } catch (JsonProcessingException e) {
-            System.out.println(e);
-            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+            return objectMapper.writeValueAsString(x);
         } catch (IOException ioe) {
             System.out.println(ioe);
             throw new WebApplicationException(ioe, Response.Status.INTERNAL_SERVER_ERROR);

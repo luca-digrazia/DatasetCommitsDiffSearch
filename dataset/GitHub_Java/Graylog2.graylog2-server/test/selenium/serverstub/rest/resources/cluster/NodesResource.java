@@ -22,7 +22,7 @@ package selenium.serverstub.rest.resources.cluster;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.graylog2.restclient.lib.DateTools;
+import org.joda.time.DateTime;
 import org.joda.time.format.ISODateTimeFormat;
 import selenium.serverstub.ServerStub;
 import selenium.serverstub.rest.resources.RestResource;
@@ -54,7 +54,7 @@ public class NodesResource extends RestResource {
         Map<String, Object> nodeMap = Maps.newHashMap();
         nodeMap.put("node_id", core.nodeId);
         nodeMap.put("transport_address", core.transportAddress);
-        nodeMap.put("last_seen", ISODateTimeFormat.dateTime().print(DateTools.nowInUTC()));
+        nodeMap.put("last_seen", ISODateTimeFormat.dateTime().print(new DateTime()));
         nodes.add(nodeMap);
 
         Map<String, Object> result = Maps.newHashMap();
