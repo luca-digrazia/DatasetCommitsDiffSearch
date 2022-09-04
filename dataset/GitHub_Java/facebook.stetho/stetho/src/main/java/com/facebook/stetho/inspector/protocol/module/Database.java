@@ -9,14 +9,6 @@
 
 package com.facebook.stetho.inspector.protocol.module;
 
-import com.facebook.stetho.inspector.database.DatabaseFilesProvider;
-
-import java.io.UnsupportedEncodingException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.database.Cursor;
@@ -52,17 +44,6 @@ public class Database implements ChromeDevtoolsDomain {
    * truncation occurred.
    */
   private static final int MAX_EXECUTE_RESULTS = 250;
-
-  /**
-   * Maximum length of a BLOB field before we stop trying to interpret it and just
-   * return {@link #UNKNOWN_BLOB_LABEL}
-   */
-  private static final int MAX_BLOB_LENGTH = 512;
-
-  /**
-   * Label to use when a BLOB column cannot be converted to a string.
-   */
-  private static final String UNKNOWN_BLOB_LABEL = "{blob}";
 
   private List<DatabaseDriver> mDatabaseDrivers;
   private final ChromePeerManager mChromePeerManager;
@@ -134,8 +115,8 @@ public class Database implements ChromeDevtoolsDomain {
           ExecuteSQLResponse response = new ExecuteSQLResponse();
           // This is done because the inspector UI likes to delete rows if you give them no
           // name/value list
-          response.columnNames = Collections.singletonList("success");
-          response.values = Collections.singletonList("true");
+          response.columnNames = Arrays.asList("success");
+          response.values = Arrays.asList((Object) "true");
           return response;
         }
 
@@ -150,16 +131,16 @@ public class Database implements ChromeDevtoolsDomain {
         @Override
         public ExecuteSQLResponse handleInsert(long insertedId) throws SQLiteException {
           ExecuteSQLResponse response = new ExecuteSQLResponse();
-          response.columnNames = Collections.singletonList("ID of last inserted row");
-          response.values = Collections.singletonList(String.valueOf(insertedId));
+          response.columnNames = Arrays.asList("ID of last inserted row");
+          response.values = Arrays.asList((Object) insertedId);
           return response;
         }
 
         @Override
         public ExecuteSQLResponse handleUpdateDelete(int count) throws SQLiteException {
           ExecuteSQLResponse response = new ExecuteSQLResponse();
-          response.columnNames = Collections.singletonList("Modified rows");
-          response.values = Collections.singletonList(String.valueOf(count));
+          response.columnNames = Arrays.asList("Modified rows");
+          response.values = Arrays.asList((Object) count);
           return response;
         }
       });
@@ -188,12 +169,11 @@ public class Database implements ChromeDevtoolsDomain {
    *
    * @param cursor
    * @param limit Maximum number of rows to process.
-   * @return List of Java primitives matching the value type of each column, converted to
-   *      strings.
+   * @return List of Java primitives matching the value type of each column.
    */
-  private static ArrayList<String> flattenRows(Cursor cursor, int limit) {
+  private List<Object> flattenRows(Cursor cursor, int limit) {
     Util.throwIfNot(limit >= 0);
-    ArrayList<String> flatList = new ArrayList<>();
+    List<Object> flatList = new ArrayList<Object>();
     final int numColumns = cursor.getColumnCount();
     for (int row = 0; row < limit && cursor.moveToNext(); row++) {
       for (int column = 0; column < numColumns; column++) {
@@ -202,13 +182,13 @@ public class Database implements ChromeDevtoolsDomain {
             flatList.add(null);
             break;
           case Cursor.FIELD_TYPE_INTEGER:
-            flatList.add(String.valueOf(cursor.getLong(column)));
+            flatList.add(cursor.getLong(column));
             break;
           case Cursor.FIELD_TYPE_FLOAT:
-            flatList.add(String.valueOf(cursor.getDouble(column)));
+            flatList.add(cursor.getDouble(column));
             break;
           case Cursor.FIELD_TYPE_BLOB:
-            flatList.add(blobToString(cursor.getBlob(column)));
+            flatList.add(cursor.getBlob(column));
             break;
           case Cursor.FIELD_TYPE_STRING:
           default:
@@ -223,28 +203,6 @@ public class Database implements ChromeDevtoolsDomain {
       }
     }
     return flatList;
-  }
-
-  private static String blobToString(byte[] blob) {
-    if (blob.length <= MAX_BLOB_LENGTH) {
-      if (fastIsAscii(blob)) {
-        try {
-          return new String(blob, "US-ASCII");
-        } catch (UnsupportedEncodingException e) {
-          // Fall through...
-        }
-      }
-    }
-    return UNKNOWN_BLOB_LABEL;
-  }
-
-  private static boolean fastIsAscii(byte[] blob) {
-    for (byte b : blob) {
-      if ((b & ~0x7f) != 0) {
-        return false;
-      }
-    }
-    return true;
   }
 
   private static class DatabasePeerRegistrationListener implements PeerRegistrationListener {
@@ -292,7 +250,7 @@ public class Database implements ChromeDevtoolsDomain {
     public List<String> columnNames;
 
     @JsonProperty
-    public List<String> values;
+    public List<Object> values;
 
     @JsonProperty
     public Error sqlError;

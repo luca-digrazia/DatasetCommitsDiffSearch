@@ -38,7 +38,6 @@ public class SqliteDatabaseDriver extends Database.DatabaseDriver {
   };
 
   private final DatabaseFilesProvider mDatabaseFilesProvider;
-  private final DatabaseConnectionProvider mDatabaseConnectionProvider;
   private List<String> mDatabases;
 
   /**
@@ -62,7 +61,6 @@ public class SqliteDatabaseDriver extends Database.DatabaseDriver {
   public SqliteDatabaseDriver(Context context, DatabaseFilesProvider databaseFilesProvider) {
     super(context);
     mDatabaseFilesProvider = databaseFilesProvider;
-    mDatabaseConnectionProvider = new DefaultDatabaseConnectionProvider(context);
   }
 
   @Override
@@ -203,7 +201,12 @@ public class SqliteDatabaseDriver extends Database.DatabaseDriver {
 
   private SQLiteDatabase openDatabase(String databaseName) throws SQLiteException {
     Util.throwIfNull(databaseName);
-    return mDatabaseConnectionProvider.openDatabase(databaseName);
+    File databaseFile = mContext.getDatabasePath(databaseName);
+
+    // Execpted to throw if it cannot open the file (for example, if it doesn't exist).
+    return SQLiteDatabase.openDatabase(databaseFile.getAbsolutePath(),
+        null /* cursorFactory */,
+        SQLiteDatabase.OPEN_READWRITE);
   }
 
 }

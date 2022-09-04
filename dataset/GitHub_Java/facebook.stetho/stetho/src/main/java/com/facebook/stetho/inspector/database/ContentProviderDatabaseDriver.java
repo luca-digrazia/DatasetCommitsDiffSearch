@@ -13,40 +13,38 @@ import android.content.ContentResolver;
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteException;
-
 import com.facebook.stetho.inspector.protocol.module.Database;
-import com.facebook.stetho.inspector.protocol.module.DatabaseDescriptor;
-import com.facebook.stetho.inspector.protocol.module.DatabaseDriver2;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 
 import javax.annotation.concurrent.ThreadSafe;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @ThreadSafe
-public class ContentProviderDatabaseDriver
-    extends DatabaseDriver2<ContentProviderDatabaseDriver.ContentProviderDatabaseDescriptor> {
+public class ContentProviderDatabaseDriver extends Database.DatabaseDriver {
 
   private final static String sDatabaseName = "content-providers";
 
   private final ContentProviderSchema[] mContentProviderSchemas;
+  private List<String> mDatabaseNames;
   private List<String> mTableNames;
 
-  public ContentProviderDatabaseDriver(
-      Context context,
-      ContentProviderSchema... contentProviderSchemas) {
+  public ContentProviderDatabaseDriver(Context context, ContentProviderSchema... contentProviderSchemas) {
     super(context);
     mContentProviderSchemas = contentProviderSchemas;
   }
 
   @Override
-  public List<ContentProviderDatabaseDescriptor> getDatabaseNames() {
-    return Collections.singletonList(new ContentProviderDatabaseDescriptor());
+  public List<String> getDatabaseNames() {
+    if (mDatabaseNames == null && mContentProviderSchemas != null) {
+      mDatabaseNames = new ArrayList<>();
+      mDatabaseNames.add(sDatabaseName);
+    }
+    return mDatabaseNames;
   }
 
   @Override
-  public List<String> getTableNames(ContentProviderDatabaseDescriptor databaseDesc) {
+  public List<String> getTableNames(String databaseId) {
     if (mTableNames == null) {
       mTableNames = new ArrayList<>();
       for (ContentProviderSchema schema : mContentProviderSchemas) {
@@ -57,10 +55,7 @@ public class ContentProviderDatabaseDriver
   }
 
   @Override
-  public Database.ExecuteSQLResponse executeSQL(
-      ContentProviderDatabaseDescriptor databaseDesc,
-      String query,
-      ExecuteResultHandler<Database.ExecuteSQLResponse> handler) throws SQLiteException {
+  public Database.ExecuteSQLResponse executeSQL(String databaseName, String query, ExecuteResultHandler<Database.ExecuteSQLResponse> handler) throws SQLiteException {
 
     // resolve table name from query
     String tableName = fetchTableName(query);
@@ -96,15 +91,4 @@ public class ContentProviderDatabaseDriver
     return "";
   }
 
-  static class ContentProviderDatabaseDescriptor implements DatabaseDescriptor {
-    public ContentProviderDatabaseDescriptor() {
-    }
-
-    @Override
-    public String name() {
-      // Hmm, this probably should be each unique URI or authority instead of treating all
-      // content provider instances as one.
-      return sDatabaseName;
-    }
-  }
 }
