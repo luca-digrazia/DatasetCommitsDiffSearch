@@ -141,10 +141,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     }
   }
 
-  private static boolean isParamNamed(Param param) {
-    return param.named() || param.legacyNamed();
-  }
-
   private void verifyParamSemantics(ExecutableElement methodElement, SkylarkCallable annotation)
       throws SkylarkCallableProcessorException {
     boolean allowPositionalNext = true;
@@ -152,7 +148,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     boolean allowNonDefaultPositionalNext = true;
 
     for (Param parameter : annotation.parameters()) {
-      if ((!parameter.positional()) && (!isParamNamed(parameter))) {
+      if ((!parameter.positional()) && (!parameter.named())) {
         throw new SkylarkCallableProcessorException(
             methodElement,
             String.format("Parameter '%s' must be either positional or named",
@@ -184,7 +180,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
                       + "non-positonal parameters",
                   parameter.name()));
         }
-        if (!isParamNamed(parameter) && !allowPositionalOnlyNext) {
+        if (!parameter.named() && !allowPositionalOnlyNext) {
           throw new SkylarkCallableProcessorException(
               methodElement,
               String.format(
@@ -209,7 +205,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
         // No positional parameters can come after this parameter.
         allowPositionalNext = false;
       }
-      if (isParamNamed(parameter)) {
+      if (parameter.named()) {
         // No positional-only parameters can come after this parameter.
         allowPositionalOnlyNext = false;
       }

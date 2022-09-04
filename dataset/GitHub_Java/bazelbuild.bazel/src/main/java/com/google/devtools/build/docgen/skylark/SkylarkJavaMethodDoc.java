@@ -26,7 +26,7 @@ import java.util.List;
  * A class representing a Java method callable from Skylark with annotation.
  */
 public final class SkylarkJavaMethodDoc extends SkylarkMethodDoc {
-  private final String moduleName;
+  private final SkylarkModuleDoc module;
   private final String name;
   private final Method method;
   private final SkylarkCallable callable;
@@ -34,8 +34,9 @@ public final class SkylarkJavaMethodDoc extends SkylarkMethodDoc {
 
   private boolean isOverloaded;
 
-  public SkylarkJavaMethodDoc(String moduleName, Method method, SkylarkCallable callable) {
-    this.moduleName = moduleName;
+  public SkylarkJavaMethodDoc(SkylarkModuleDoc module, Method method,
+      SkylarkCallable callable) {
+    this.module = module;
     this.name = callable.name().isEmpty()
         ? StringUtilities.toPythonStyleFunctionName(method.getName())
         : callable.name();
@@ -87,7 +88,7 @@ public final class SkylarkJavaMethodDoc extends SkylarkMethodDoc {
 
   @Override
   public String getSignature() {
-    return getSignature(moduleName, name, method);
+    return getSignature(module.getName(), name, method);
   }
 
   @Override

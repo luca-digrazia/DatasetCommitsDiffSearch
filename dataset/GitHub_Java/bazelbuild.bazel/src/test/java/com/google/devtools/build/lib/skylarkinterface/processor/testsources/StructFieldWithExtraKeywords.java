@@ -14,28 +14,20 @@
 
 package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 
-/**
- * Test case for a SkylarkCallable method which specifies extraKeywords, but specifies the argument
- * out of order.
- */
-public class ExtraKeywordsOutOfOrder {
+/** Test case which verifies a struct field method cannot specify extraArgs. */
+public class StructFieldWithExtraKeywords {
 
   @SkylarkCallable(
-    name = "extra_kwargs_out_of_order",
+    name = "struct_field_method_with_extra_kwargs",
     documented = false,
-    parameters = {@Param(name = "one")},
-    extraKeywords = @Param(name = "kwargs"),
-    useLocation = true,
-    useEnvironment = true
+    structField = true,
+    extraKeywords = @Param(name = "kwargs")
   )
-  public String threeArgMethod(
-      SkylarkDict<?, ?> kwargs, String one, Location location, Environment environment) {
-    return "bar";
+  public String structFieldMethodWithExtraKeywords(SkylarkDict<?, ?> args) {
+    return "Dog.";
   }
 }
