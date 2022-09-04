@@ -919,16 +919,29 @@ public class Package {
 
     private boolean alreadyBuilt = false;
 
+    private EventHandler builderEventHandler = new EventHandler() {
+      @Override
+      public void handle(Event event) {
+        addEvent(event);
+      }
+    };
+
+    // low-level constructor
+    Builder(Package pkg, StarlarkSemantics starlarkSemantics) {
+      this.starlarkSemantics = starlarkSemantics;
+      this.pkg = pkg;
+      if (pkg.getName().startsWith("javatests/")) {
+        setDefaultTestonly(true);
+      }
+    }
+
+    // high-level constructor
     Builder(
         Helper helper,
         PackageIdentifier id,
         String runfilesPrefix,
         StarlarkSemantics starlarkSemantics) {
-      this.pkg = helper.createFreshPackage(id, runfilesPrefix);
-      this.starlarkSemantics = starlarkSemantics;
-      if (pkg.getName().startsWith("javatests/")) {
-        setDefaultTestonly(true);
-      }
+      this(helper.createFreshPackage(id, runfilesPrefix), starlarkSemantics);
     }
 
     PackageIdentifier getPackageIdentifier() {
@@ -1182,8 +1195,8 @@ public class Package {
      * are duplicated.
      */
     void setDefaultApplicableLicenses(List<Label> licenses, String attrName, Location location) {
-      if (hasDuplicateLabels(
-          licenses, "package " + pkg.getName(), attrName, location, this::addEvent)) {
+      if (!checkForDuplicateLabels(
+          licenses, "package " + pkg.getName(), attrName, location, builderEventHandler)) {
         setContainsErrors();
       }
       pkg.setDefaultApplicableLicenses(ImmutableSet.copyOf(licenses));
@@ -1225,8 +1238,8 @@ public class Package {
      * any labels are duplicated.
      */
     void setDefaultCompatibleWith(List<Label> environments, String attrName, Location location) {
-      if (hasDuplicateLabels(
-          environments, "package " + pkg.getName(), attrName, location, this::addEvent)) {
+      if (!checkForDuplicateLabels(environments, "package " + pkg.getName(), attrName, location,
+          builderEventHandler)) {
         setContainsErrors();
       }
       pkg.setDefaultCompatibleWith(ImmutableSet.copyOf(environments));
@@ -1238,8 +1251,8 @@ public class Package {
      * any labels are duplicated.
      */
     void setDefaultRestrictedTo(List<Label> environments, String attrName, Location location) {
-      if (hasDuplicateLabels(
-          environments, "package " + pkg.getName(), attrName, location, this::addEvent)) {
+      if (!checkForDuplicateLabels(environments, "package " + pkg.getName(), attrName, location,
+          builderEventHandler)) {
         setContainsErrors();
       }
 
@@ -1403,24 +1416,20 @@ public class Package {
     }
 
     /**
-     * Returns true if any labels in the given list appear multiple times, reporting an appropriate
-     * error message if so.
+     * Checks if any labels in the given list appear multiple times and reports an appropriate
+     * error message if so. Returns true if no duplicates were found, false otherwise.
      *
-     * <p>TODO(bazel-team): apply this to all build functions (maybe automatically?), possibly
+     * <p> TODO(bazel-team): apply this to all build functions (maybe automatically?), possibly
      * integrate with RuleClass.checkForDuplicateLabels.
      */
-    private static boolean hasDuplicateLabels(
-        Collection<Label> labels,
-        String owner,
-        String attrName,
-        Location location,
-        EventHandler eventHandler) {
+    private static boolean checkForDuplicateLabels(Collection<Label> labels, String owner,
+        String attrName, Location location, EventHandler eventHandler) {
       Set<Label> dupes = CollectionUtils.duplicatedElementsOf(labels);
       for (Label dupe : dupes) {
         eventHandler.handle(Event.error(location, String.format(
             "label '%s' is duplicated in the '%s' list of '%s'", dupe, attrName, owner)));
       }
-      return !dupes.isEmpty();
+      return dupes.isEmpty();
     }
 
     /**
@@ -1430,8 +1439,8 @@ public class Package {
         EventHandler eventHandler, Location location)
         throws NameConflictException, LabelSyntaxException {
 
-      if (hasDuplicateLabels(environments, name, "environments", location, eventHandler)
-          || hasDuplicateLabels(defaults, name, "defaults", location, eventHandler)) {
+      if (!checkForDuplicateLabels(environments, name, "environments", location, eventHandler)
+          || !checkForDuplicateLabels(defaults, name, "defaults", location, eventHandler)) {
         setContainsErrors();
         return;
       }

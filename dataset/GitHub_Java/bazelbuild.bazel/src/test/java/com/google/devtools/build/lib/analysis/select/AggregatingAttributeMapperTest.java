@@ -42,8 +42,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.UnknownRuleConfiguredTarget;
-import java.util.List;
-import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -313,7 +311,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
   }
 
   @Test
-  public void testVisitAttributesUnsetVisibilityUsesPackageDefault() throws Exception {
+  public void testGetPossibleAttributeValuesUnsetVisibilityUsesPackageDefault() throws Exception {
     Rule rule =
         scratchRule(
             /*packageName=*/ "x",
@@ -321,9 +319,10 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
             "package(default_visibility = ['//my:visibility'])",
             "cc_binary(name = 'bb', srcs = ['bb.cc'])");
 
-    Iterable<List<Label>> result =
+    Iterable<Object> result =
         AggregatingAttributeMapper.of(rule)
-            .visitAttribute("visibility", BuildType.NODEP_LABEL_LIST);
+            .getPossibleAttributeValues(
+                rule, rule.getRuleClassObject().getAttributeByName("visibility"));
 
     assertThat(result)
         .containsExactly(ImmutableList.of(Label.parseAbsoluteUnchecked("//my:visibility")));
@@ -335,7 +334,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
   }
 
   @Test
-  public void testVisitAttributesUnsetLicensesUsesPackageDefault() throws Exception {
+  public void testGetPossibleAttributeValuesUnsetLicensesUsesPackageDefault() throws Exception {
     Rule rule =
         scratchRule(
             /*packageName=*/ "x",
@@ -343,8 +342,10 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
             "package(licenses = ['notice'])",
             "cc_binary(name = 'bb', srcs = ['bb.cc'])");
 
-    Iterable<License> result =
-        AggregatingAttributeMapper.of(rule).visitAttribute("licenses", BuildType.LICENSE);
+    Iterable<Object> result =
+        AggregatingAttributeMapper.of(rule)
+            .getPossibleAttributeValues(
+                rule, rule.getRuleClassObject().getAttributeByName("licenses"));
 
     assertThat(result)
         .containsExactly(License.of(ImmutableList.of(LicenseType.NOTICE), ImmutableList.of()));
@@ -356,7 +357,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
   }
 
   @Test
-  public void testVisitAttributesUnsetDistribsUsesPackageDefault() throws Exception {
+  public void testGetPossibleAttributeValuesUnsetDistribsUsesPackageDefault() throws Exception {
     Rule rule =
         scratchRule(
             /*packageName=*/ "x",
@@ -364,8 +365,10 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
             "package(distribs = ['embedded'])",
             "cc_binary(name = 'bb', srcs = ['bb.cc'])");
 
-    Iterable<Set<DistributionType>> result =
-        AggregatingAttributeMapper.of(rule).visitAttribute("distribs", BuildType.DISTRIBUTIONS);
+    Iterable<Object> result =
+        AggregatingAttributeMapper.of(rule)
+            .getPossibleAttributeValues(
+                rule, rule.getRuleClassObject().getAttributeByName("distribs"));
 
     assertThat(result).containsExactly(ImmutableSet.of(DistributionType.EMBEDDED));
     assertThat(result).containsExactly(rule.getDistributions());
