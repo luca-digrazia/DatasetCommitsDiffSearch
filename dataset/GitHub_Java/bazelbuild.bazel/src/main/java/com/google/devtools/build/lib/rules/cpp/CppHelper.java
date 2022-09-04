@@ -233,11 +233,7 @@ public class CppHelper {
     }
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain);
-    try {
-      return defaultToolchain.getDynamicRuntimeLinkInputs(featureConfiguration);
-    } catch (EvalException e) {
-      throw ruleContext.throwWithRuleError(e.getMessage());
-    }
+    return defaultToolchain.getDynamicRuntimeLinkInputs(ruleContext, featureConfiguration);
   }
 
   /**
@@ -253,11 +249,7 @@ public class CppHelper {
     }
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain);
-    try {
-      return defaultToolchain.getStaticRuntimeLinkInputs(featureConfiguration);
-    } catch (EvalException e) {
-      throw ruleContext.throwWithRuleError(e.getMessage());
-    }
+    return defaultToolchain.getStaticRuntimeLinkInputs(ruleContext, featureConfiguration);
   }
 
   /**
@@ -606,9 +598,6 @@ public class CppHelper {
       if (branchFdoProfile.isAutoXBinaryFdo()) {
         return featureConfiguration.isEnabled(CppRuleClasses.XBINARYFDO) ? "XFDO" : null;
       }
-    }
-    if (cppConfiguration.isCSFdo()) {
-      return "CSFDO";
     }
     if (cppConfiguration.isFdo()) {
       return "FDO";
