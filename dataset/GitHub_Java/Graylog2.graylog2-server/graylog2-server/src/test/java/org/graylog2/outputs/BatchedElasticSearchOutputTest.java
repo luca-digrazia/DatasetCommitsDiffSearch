@@ -20,11 +20,9 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Uninterruptibles;
 import org.graylog2.Configuration;
-import org.graylog2.indexer.cluster.Cluster;
-import org.graylog2.indexer.messages.Messages;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
-import org.graylog2.shared.journal.NoopJournal;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
@@ -33,20 +31,22 @@ import java.util.concurrent.TimeUnit;
 
 import static org.mockito.Matchers.anyListOf;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.testng.Assert.fail;
 
 public class BatchedElasticSearchOutputTest {
 
     private MetricRegistry metricRegistry;
-    private Cluster cluster;
-    private Messages messages;
+    private Indexer indexer;
 
     @BeforeMethod
     public void setUp() {
         metricRegistry = new MetricRegistry();
-        cluster = mock(Cluster.class);
-        messages = mock(Messages.class);
+        indexer = mock(Indexer.class);
     }
 
     @Test
@@ -57,17 +57,13 @@ public class BatchedElasticSearchOutputTest {
                 return 10;
             }
         };
-        when(cluster.isConnectedAndHealthy()).thenReturn(true);
+        when(indexer.isConnectedAndHealthy()).thenReturn(true);
 
-        Messages messages = mock(Messages.class);
-        final List<Message> messageList = buildMessages(3);
-        MetricRegistry metricRegistry = new MetricRegistry();
-
-        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages,
-                                                                                 cluster, config, new NoopJournal());
+        final List<Message> messages = buildMessages(3);
+        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, indexer, config);
 
         try {
-            for (Message message : messageList) {
+            for (Message message : messages) {
                 output.write(message);
             }
         } catch (Exception e) {
@@ -76,7 +72,7 @@ public class BatchedElasticSearchOutputTest {
 
         output.flush(false);
 
-        verify(messages, times(1)).bulkIndex(eq(messageList));
+        verify(indexer, times(1)).bulkIndex(eq(messages));
     }
 
     @Test
@@ -87,13 +83,13 @@ public class BatchedElasticSearchOutputTest {
                 return 10;
             }
         };
-        when(cluster.isConnectedAndHealthy()).thenReturn(false);
+        when(indexer.isConnectedAndHealthy()).thenReturn(false);
 
-        final List<Message> messageList = buildMessages(3);
-        BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages, cluster, config, new NoopJournal());
+        final List<Message> messages = buildMessages(3);
+        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, indexer, config);
 
         try {
-            for (Message message : messageList) {
+            for (Message message : messages) {
                 output.write(message);
             }
         } catch (Exception e) {
@@ -102,7 +98,7 @@ public class BatchedElasticSearchOutputTest {
 
         output.flush(false);
 
-        verify(messages, never()).bulkIndex(eq(messageList));
+        verify(indexer, never()).bulkIndex(eq(messages));
     }
 
     @Test
@@ -114,13 +110,13 @@ public class BatchedElasticSearchOutputTest {
                 return batchSize;
             }
         };
-        when(cluster.isConnectedAndHealthy()).thenReturn(true);
+        when(indexer.isConnectedAndHealthy()).thenReturn(true);
 
-        final List<Message> messageList = buildMessages(batchSize + 1);
-        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages, cluster, config, new NoopJournal());
+        final List<Message> messages = buildMessages(batchSize + 1);
+        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, indexer, config);
 
         try {
-            for (Message message : messageList) {
+            for (Message message : messages) {
                 output.write(message);
             }
         } catch (Exception e) {
@@ -130,7 +126,7 @@ public class BatchedElasticSearchOutputTest {
         // Give the asynchronous flush a chance to finish
         Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS);
 
-        verify(messages, times(1)).bulkIndex(eq(messageList.subList(0, batchSize)));
+        verify(indexer, times(1)).bulkIndex(eq(messages.subList(0, batchSize)));
     }
 
     @Test
@@ -141,13 +137,13 @@ public class BatchedElasticSearchOutputTest {
                 return 10;
             }
         };
-        when(cluster.isConnectedAndHealthy()).thenReturn(true);
+        when(indexer.isConnectedAndHealthy()).thenReturn(true);
 
-        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, messages, cluster, config, new NoopJournal());
+        final BatchedElasticSearchOutput output = new BatchedElasticSearchOutput(metricRegistry, indexer, config);
 
         output.flush(false);
 
-        verify(messages, never()).bulkIndex(anyListOf(Message.class));
+        verify(indexer, never()).bulkIndex(anyListOf(Message.class));
     }
 
     private List<Message> buildMessages(final int count) {
