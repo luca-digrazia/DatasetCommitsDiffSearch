@@ -32,7 +32,6 @@ import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -88,7 +87,7 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
     }
 
     @Override
-    protected void handleMessage(@Nonnull Message msg) {
+    protected void handleMessage(Message msg) {
 
         if (filterRegistry.size() == 0)
             throw new RuntimeException("Empty filter registry!");
@@ -114,8 +113,13 @@ public class ServerProcessBufferProcessor extends ProcessBufferProcessor {
             }
         }
 
-        LOG.debug("Finished processing message. Writing to output buffer.");
-        outputBuffer.insertBlocking(msg);
+        if (configuration.isDisableOutputCache()) {
+            LOG.debug("Finished processing message. Writing to output buffer.");
+            outputBuffer.insertBlocking(msg);
+        } else {
+            LOG.debug("Finished processing message. Writing to output cache.");
+            outputBuffer.insertCached(msg, null);
+        }
     }
 
     // default visibility for tests

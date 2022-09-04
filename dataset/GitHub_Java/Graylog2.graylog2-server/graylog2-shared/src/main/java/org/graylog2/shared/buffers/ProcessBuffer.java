@@ -16,22 +16,33 @@
  */
 package org.graylog2.shared.buffers;
 
-import com.codahale.metrics.*;
+import com.codahale.metrics.InstrumentedExecutorService;
+import com.codahale.metrics.InstrumentedThreadFactory;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
+import org.graylog2.inputs.Cache;
+import org.graylog2.inputs.InputCache;
+import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.graylog2.plugin.buffers.MessageEvent;
+import org.graylog2.plugin.buffers.ProcessingDisabledException;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.journal.RawMessage;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import javax.inject.Inject;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -47,22 +58,32 @@ public class ProcessBuffer extends Buffer {
     public static String SOURCE_INPUT_ATTR_NAME;
     public static String SOURCE_NODE_ATTR_NAME;
 
+    private final BaseConfiguration configuration;
     private final DecodingProcessor.Factory decodingProcessorFactory;
+    private final InputCache inputCache;
     private final ExecutorService executor;
 
     private final Meter incomingMessages;
+    private final Meter rejectedMessages;
+    private final Meter cachedMessages;
 
     private final ServerStatus serverStatus;
 
     @Inject
     public ProcessBuffer(MetricRegistry metricRegistry,
                          ServerStatus serverStatus,
-                         DecodingProcessor.Factory decodingProcessorFactory) {
+                         BaseConfiguration configuration,
+                         DecodingProcessor.Factory decodingProcessorFactory,
+                         InputCache inputCache) {
         this.serverStatus = serverStatus;
+        this.configuration = configuration;
         this.decodingProcessorFactory = decodingProcessorFactory;
+        this.inputCache = inputCache;
 
         this.executor = executorService(metricRegistry);
         this.incomingMessages = metricRegistry.meter(name(ProcessBuffer.class, "incomingMessages"));
+        this.rejectedMessages = metricRegistry.meter(name(ProcessBuffer.class, "rejectedMessages"));
+        this.cachedMessages = metricRegistry.meter(name(ProcessBuffer.class, "cachedMessages"));
 
         this.parseTime = metricRegistry.timer(name(ProcessBuffer.class, "parseTime"));
         this.decodeTime = metricRegistry.timer(name(ProcessBuffer.class, "decodeTime"));
@@ -86,6 +107,10 @@ public class ProcessBuffer extends Buffer {
                 new ThreadFactoryBuilder().setNameFormat("processbufferprocessor-%d").build(), metricRegistry);
     }
 
+    public Cache getInputCache() {
+        return inputCache;
+    }
+
     public void initialize(ProcessBufferProcessor[] processors,
                            int ringBufferSize,
                            WaitStrategy waitStrategy) {
@@ -107,9 +132,123 @@ public class ProcessBuffer extends Buffer {
         ringBuffer = disruptor.start();
     }
 
-    public void insertBlocking(@Nonnull RawMessage rawMessage) {
-        final long sequence = ringBuffer.next();
-        final MessageEvent event = ringBuffer.get(sequence);
+    @Override
+    public void insertCached(Message message, MessageInput sourceInput) {
+        prepareMessage(message, sourceInput);
+
+        if (!serverStatus.isProcessing()) {
+            LOG.debug("Message processing is paused. Writing to cache.");
+            cachedMessages.mark();
+            inputCache.add(message);
+            return;
+        }
+
+        if (!hasCapacity()) {
+            if (configuration.getInputCacheMaxSize() == 0 || inputCache.size() < configuration.getInputCacheMaxSize()) {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("Out of capacity. Writing to cache.");
+                cachedMessages.mark();
+                inputCache.add(message);
+            } else {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("Out of capacity. Input cache limit reached. Dropping message.");
+                rejectedMessages.mark();
+            }
+            return;
+        }
+
+        insert(message);
+    }
+
+    private void prepareMessage(Message message, MessageInput sourceInput) {
+        message.setSourceInput(sourceInput);
+
+        final String source_input_name;
+
+        if (sourceInput != null)
+            source_input_name = sourceInput.getId();
+        else
+            source_input_name = "<nonexistent input>";
+
+        message.addField(SOURCE_INPUT_ATTR_NAME, source_input_name);
+        message.addField(SOURCE_NODE_ATTR_NAME, serverStatus.getNodeId());
+    }
+
+    @Override
+    public void insertFailFast(Message message, MessageInput sourceInput) throws BufferOutOfCapacityException, ProcessingDisabledException {
+        prepareMessage(message, sourceInput);
+
+        if (!serverStatus.isProcessing()) {
+            LOG.debug("Rejecting message, because message processing is paused.");
+            throw new ProcessingDisabledException();
+        }
+
+        if (!hasCapacity()) {
+            LOG.debug("Rejecting message, because I am full and caching was disabled by input. Raise my size or add more processors.");
+            rejectedMessages.mark();
+            throw new BufferOutOfCapacityException();
+        }
+
+        insert(message);
+    }
+
+    @Override
+    public void insertFailFast(List<Message> messages) throws BufferOutOfCapacityException, ProcessingDisabledException {
+        int length = messages.size();
+        for (Message message : messages) {
+            MessageInput sourceInput = message.getSourceInput();
+            prepareMessage(message, sourceInput);
+        }
+
+        if (!serverStatus.isProcessing()) {
+            LOG.debug("Rejecting message, because message processing is paused.");
+            throw new ProcessingDisabledException();
+        }
+
+        if (!hasCapacity(length)) {
+            LOG.debug("Rejecting message, because I am full and caching was disabled by input. Raise my size or add more processors.");
+            rejectedMessages.mark();
+            throw new BufferOutOfCapacityException();
+        }
+
+        insert(messages.toArray(new Message[length]));
+        afterInsert(length);
+    }
+
+    @Override
+    public void insertCached(List<Message> messages) {
+        int length = messages.size();
+        for (Message message : messages)
+            prepareMessage(message, message.getSourceInput());
+
+        if (!serverStatus.isProcessing()) {
+            LOG.debug("Message processing is paused. Writing to cache.");
+            cachedMessages.mark();
+            inputCache.add(messages);
+            return;
+        }
+
+        if (!hasCapacity(length)) {
+            if (configuration.getInputCacheMaxSize() == 0 || inputCache.size() < configuration.getInputCacheMaxSize()) {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("Out of capacity. Writing to cache.");
+                cachedMessages.mark();
+                inputCache.add(messages);
+            } else {
+                if (LOG.isDebugEnabled())
+                    LOG.debug("Out of capacity. Input cache limit reached. Dropping message.");
+                rejectedMessages.mark();
+            }
+            return;
+        }
+
+        insert(messages.toArray(new Message[length]));
+        afterInsert(length);
+    }
+
+    public void insertBlocking(RawMessage rawMessage) {
+        long sequence = ringBuffer.next();
+        MessageEvent event = ringBuffer.get(sequence);
         event.setRaw(rawMessage);
         ringBuffer.publish(sequence);
         afterInsert(1);

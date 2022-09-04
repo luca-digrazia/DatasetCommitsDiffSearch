@@ -37,7 +37,6 @@ import java.io.File;
 import java.net.InetAddress;
 import java.net.URI;
 
-@SuppressWarnings("FieldMayBeFinal")
 public abstract class BaseConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(BaseConfiguration.class);
     protected static final int GRAYLOG2_DEFAULT_PORT = 12900;
@@ -69,6 +68,7 @@ public abstract class BaseConfiguration {
     @Parameter(value = "rest_enable_gzip")
     private boolean restEnableGzip = false;
 
+
     @Parameter(value = "rest_max_initial_line_length", required = true, validator = PositiveIntegerValidator.class)
     private int restMaxInitialLineLength = 4096;
 
@@ -93,9 +93,6 @@ public abstract class BaseConfiguration {
     @Parameter(value = "rest_tls_key_password")
     private String restTlsKeyPassword;
 
-    @Parameter(value = "rest_worker_threads_max_pool_size", required = true, validator = PositiveIntegerValidator.class)
-    private int restWorkerThreadsMaxPoolSize = 16;
-
     @Parameter(value = "groovy_shell_enable")
     private boolean groovyShellEnable = false;
 
@@ -108,11 +105,19 @@ public abstract class BaseConfiguration {
     @Parameter(value = "async_eventbus_processors")
     private int asyncEventbusProcessors = 2;
 
+    @Parameter(value = "input_cache_max_size")
+    private long inputCacheMaxSize = 0;
     @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
     private int udpRecvBufferSizes = 1048576;
 
     @Parameter("message_journal_enabled")
     private boolean messageJournalEnabled = false;
+
+    @Parameter("message_journal_dir")
+    private String messageJournalDir = "journal";
+
+    @Parameter("message_journal_segment_size")
+    private int messageJournalSegmentSize = 1024 * 1024 * 100; // 100 MB
 
     @Parameter("inputbuffer_processors")
     private int inputbufferProcessors = 2;
@@ -235,10 +240,6 @@ public abstract class BaseConfiguration {
         return restTlsKeyPassword;
     }
 
-    public int getRestWorkerThreadsMaxPoolSize() {
-        return restWorkerThreadsMaxPoolSize;
-    }
-
     public boolean isGroovyShellEnable() {
         return groovyShellEnable;
     }
@@ -255,6 +256,10 @@ public abstract class BaseConfiguration {
         return asyncEventbusProcessors;
     }
 
+    public long getInputCacheMaxSize() {
+        return inputCacheMaxSize;
+    }
+
     public abstract String getNodeIdFile();
 
     public abstract URI getRestListenUri();
@@ -263,8 +268,16 @@ public abstract class BaseConfiguration {
         return messageJournalEnabled;
     }
 
+    public String getMessageJournalDir() {
+        return messageJournalDir;
+    }
+
     public int getInputbufferProcessors() {
         return inputbufferProcessors;
+    }
+
+    public int getMessageJournalSegmentSize() {
+        return messageJournalSegmentSize;
     }
 
     public int getShutdownTimeout() {
