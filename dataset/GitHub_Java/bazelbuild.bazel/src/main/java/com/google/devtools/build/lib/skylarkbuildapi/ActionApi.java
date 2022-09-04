@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.io.IOException;
-import javax.annotation.Nullable;
 
 /** Interface for actions in Skylark. */
 @SkylarkModule(
@@ -86,30 +85,15 @@ public interface ActionApi extends StarlarkValue {
       enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_ACTION_ARGS)
   Sequence<CommandLineArgsApi> getStarlarkArgs() throws EvalException;
 
-  /**
-   * If the action writes a file whose content is known at analysis time, returns that content;
-   * returns null otherwise.
-   *
-   * <p>The content might be unknown if, for instance, the action expands an {@code Args} object
-   * that includes a directory ({@link TreeArtifact}) with {@code expand_directories=False}.
-   *
-   * @throws EvalException if there is a Starlark evaluation error, e.g. in an {@code Args} object's
-   *     call to a {@code map_each} callback.
-   * @throws IOException if there is a non-Starlark error in expanding an {@code Args} object.
-   */
   @SkylarkCallable(
       name = "content",
       doc =
           "For actions created by <a href=\"actions.html#write\">ctx.actions.write()</a> or "
               + "<a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a>,"
-              + " the contents of the file to be written, if those contents can be computed during "
-              + " the analysis phase. None if the contents cannot be determined until the "
-              + " execution phase, such as when a directory in an {@code Args} object needs to be "
-              + " expanded.",
+              + " the contents of the file to be written.",
       structField = true,
       allowReturnNones = true)
-  @Nullable
-  String getSkylarkContent() throws IOException, EvalException;
+  String getSkylarkContent() throws IOException;
 
   @SkylarkCallable(
       name = "substitutions",
@@ -129,18 +113,4 @@ public interface ActionApi extends StarlarkValue {
               + " settings which are explicitly set by the action definition, and thus omits"
               + " settings which are only pre-set in the execution environment.")
   Dict<String, String> getEnv();
-
-  @SkylarkCallable(
-      name = "execution_info",
-      structField = true,
-      doc =
-          "The execution requirements for this action, set for this action specifically. This is a"
-              + " dictionary that maps strings specifying execution info to arbitrary strings."
-              + " This is in order to match the structure of execution info in other parts of the"
-              + " code base; all relevant info is in the keyset. Returns None if this action does"
-              + " not expose execution requirements.",
-      allowReturnNones = true,
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API)
-  @Nullable
-  public Dict<String, String> getExecutionInfoDict();
 }

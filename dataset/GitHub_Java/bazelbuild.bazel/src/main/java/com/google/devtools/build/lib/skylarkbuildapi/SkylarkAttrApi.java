@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skylarkbuildapi;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -23,6 +22,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
@@ -149,7 +149,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
       parameters = {
         @Param(
             name = DEFAULT_ARG,
-            type = Integer.class,
+            allowedTypes = {
+              @ParamType(type = Integer.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
             defaultValue = "0",
             doc = DEFAULT_DOC,
             named = true,
@@ -177,14 +180,14 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true,
             positional = false)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor intAttribute(
-      Integer defaultValue,
+      Integer defaultInt,
       String doc,
       Boolean mandatory,
       Sequence<?> values,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -194,7 +197,9 @@ public interface SkylarkAttrApi extends StarlarkValue {
       parameters = {
         @Param(
             name = DEFAULT_ARG,
-            type = String.class,
+            allowedTypes = {
+              @ParamType(type = String.class),
+            },
             defaultValue = "''",
             doc = DEFAULT_DOC,
             named = true,
@@ -222,14 +227,14 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true,
             positional = false)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor stringAttribute(
-      String defaultValue,
+      String defaultString,
       String doc,
       Boolean mandatory,
       Sequence<?> values,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -254,11 +259,6 @@ public interface SkylarkAttrApi extends StarlarkValue {
               @ParamType(type = Label.class),
               @ParamType(type = String.class),
               @ParamType(type = LateBoundDefaultApi.class),
-              // TODO(adonovan): remove StarlarkFunction. It's undocumented,
-              // unused by Google's .bzl files, and likely unused in Bazel.
-              // I suspect it is a vestige of a "computed defaults" feature
-              // that was never fully exposed to Starlark (or was since
-              // withdrawn).
               @ParamType(type = StarlarkFunction.class)
             },
             callbackEnabled = true,
@@ -359,10 +359,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = ASPECTS_ARG_DOC),
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor labelAttribute(
-      Object defaultValue,
+      Object defaultO,
       String doc,
       Boolean executable,
       Object allowFiles,
@@ -373,7 +373,7 @@ public interface SkylarkAttrApi extends StarlarkValue {
       Boolean singleFile,
       Object cfg,
       Sequence<?> aspects,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -401,8 +401,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true),
         @Param(
             name = DEFAULT_ARG,
-            type = Sequence.class,
-            generic1 = String.class,
+            allowedTypes = {
+              @ParamType(type = Sequence.class, generic1 = String.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
             defaultValue = "[]",
             doc = DEFAULT_DOC,
             named = true,
@@ -415,15 +417,15 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true,
             positional = false)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor stringListAttribute(
       Boolean mandatory,
       Boolean nonEmpty,
       Boolean allowEmpty,
-      Sequence<?> defaultValue,
+      Sequence<?> defaultList,
       String doc,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -451,8 +453,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true),
         @Param(
             name = DEFAULT_ARG,
-            type = Sequence.class,
-            generic1 = Integer.class,
+            allowedTypes = {
+              @ParamType(type = Sequence.class, generic1 = Integer.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
             defaultValue = "[]",
             doc = DEFAULT_DOC,
             named = true,
@@ -465,15 +469,15 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true,
             positional = false)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor intListAttribute(
       Boolean mandatory,
       Boolean nonEmpty,
       Boolean allowEmpty,
-      Sequence<?> defaultValue,
+      Sequence<?> defaultList,
       String doc,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -573,11 +577,11 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = ASPECTS_ARG_DOC),
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor labelListAttribute(
       Boolean allowEmpty,
-      Object defaultValue,
+      Object defaultList,
       String doc,
       Object allowFiles,
       Object allowRules,
@@ -587,7 +591,7 @@ public interface SkylarkAttrApi extends StarlarkValue {
       Boolean nonEmpty,
       Object cfg,
       Sequence<?> aspects,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -689,11 +693,11 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = ASPECTS_ARG_DOC)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor labelKeyedStringDictAttribute(
       Boolean allowEmpty,
-      Object defaultValue,
+      Object defaultList,
       String doc,
       Object allowFiles,
       Object allowRules,
@@ -703,7 +707,7 @@ public interface SkylarkAttrApi extends StarlarkValue {
       Boolean nonEmpty,
       Object cfg,
       Sequence<?> aspects,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -713,7 +717,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
       parameters = {
         @Param(
             name = DEFAULT_ARG,
-            type = Boolean.class,
+            allowedTypes = {
+              @ParamType(type = Boolean.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
             defaultValue = "False",
             named = true,
             positional = false,
@@ -733,10 +740,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = MANDATORY_DOC)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor boolAttribute(
-      Boolean defaultValue, String doc, Boolean mandatory, Location loc, StarlarkThread thread)
+      Boolean defaultO, String doc, Boolean mandatory, FuncallExpression ast, StarlarkThread thread)
       throws EvalException;
 
   @SkylarkCallable(
@@ -771,10 +778,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = MANDATORY_DOC)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor outputAttribute(
-      Object defaultValue, String doc, Boolean mandatory, Location loc, StarlarkThread thread)
+      Object defaultO, String doc, Boolean mandatory, FuncallExpression ast, StarlarkThread thread)
       throws EvalException;
 
   @SkylarkCallable(
@@ -822,15 +829,15 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = NON_EMPTY_DOC)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor outputListAttribute(
       Boolean allowEmpty,
-      Object defaultValue,
+      Object defaultList,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -848,7 +855,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true),
         @Param(
             name = DEFAULT_ARG,
-            type = Dict.class,
+            allowedTypes = {
+              @ParamType(type = Dict.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
             named = true,
             positional = false,
             defaultValue = "{}",
@@ -875,15 +885,15 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = NON_EMPTY_DOC)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor stringDictAttribute(
       Boolean allowEmpty,
-      Dict<?, ?> defaultValue,
+      Dict<?, ?> defaultO,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -901,7 +911,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             named = true),
         @Param(
             name = DEFAULT_ARG,
-            type = Dict.class,
+            allowedTypes = {
+              @ParamType(type = Dict.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
             defaultValue = "{}",
             named = true,
             positional = false,
@@ -928,15 +941,15 @@ public interface SkylarkAttrApi extends StarlarkValue {
             positional = false,
             doc = NON_EMPTY_DOC)
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor stringListDictAttribute(
       Boolean allowEmpty,
-      Dict<?, ?> defaultValue,
+      Dict<?, ?> defaultO,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -969,10 +982,10 @@ public interface SkylarkAttrApi extends StarlarkValue {
             doc = MANDATORY_DOC)
       },
       disableWithFlag = FlagIdentifier.INCOMPATIBLE_NO_ATTR_LICENSE,
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   Descriptor licenseAttribute(
-      Object defaultValue, String doc, Boolean mandatory, Location loc, StarlarkThread thread)
+      Object defaultO, String doc, Boolean mandatory, FuncallExpression ast, StarlarkThread thread)
       throws EvalException;
 
   /** An attribute descriptor. */

@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
@@ -330,7 +331,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
                 "If set, points to the configuration transition the rule will "
                     + "apply to its own configuration before analysis.")
       },
-      useLocation = true,
+      useAst = true,
       useStarlarkThread = true)
   BaseFunction rule(
       StarlarkFunction implementation,
@@ -349,7 +350,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
       Object analysisTest,
       Object buildSetting,
       Object cfg,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 
@@ -489,7 +490,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "aspect will propagate only to `alpha`. </p><p>False by default.</p>")
       },
       useStarlarkThread = true,
-      useLocation = true)
+      useAst = true)
   SkylarkAspectApi aspect(
       StarlarkFunction implementation,
       Sequence<?> attributeAspects,
@@ -501,7 +502,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
       Sequence<?> toolchains,
       String doc,
       Boolean applyToGeneratingRules,
-      Location loc,
+      FuncallExpression ast,
       StarlarkThread thread)
       throws EvalException;
 

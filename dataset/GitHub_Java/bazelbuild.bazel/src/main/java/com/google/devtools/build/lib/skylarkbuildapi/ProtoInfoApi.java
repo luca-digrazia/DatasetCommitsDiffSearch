@@ -15,12 +15,25 @@
 package com.google.devtools.build.lib.skylarkbuildapi;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 
 /** Info object propagating information about protocol buffer sources. */
-@SkylarkModule(name = "ProtoInfo", doc = "")
+@SkylarkModule(
+    name = "ProtoInfo",
+    category = SkylarkModuleCategory.PROVIDER,
+    doc =
+        "Encapsulates information provided by <a href=\""
+            + "../../be/protocol-buffer.html#proto_library\">proto_library.</a>"
+            + "<p>"
+            + "Please consider using `load(\"@rules_proto//proto:defs.bzl\", \"ProtoInfo\")` "
+            + "to load this symbol from <a href=\"https://github.com/bazelbuild/rules_proto.\">"
+            + "rules_proto</a>"
+            + "</p>")
 public interface ProtoInfoApi<FileT extends FileApi> extends StructApi {
   /** Provider class for {@link ProtoInfoApi} objects. */
   @SkylarkModule(name = "Provider", documented = false, doc = "")
@@ -32,7 +45,7 @@ public interface ProtoInfoApi<FileT extends FileApi> extends StructApi {
       name = "transitive_imports",
       doc = "Transitive imports including weak dependencies.",
       structField = true)
-  public NestedSet<FileT> getTransitiveImports();
+  Depset /*<FileT>*/ getTransitiveImports();
 
   @SkylarkCallable(
       name = "transitive_sources",
@@ -41,13 +54,13 @@ public interface ProtoInfoApi<FileT extends FileApi> extends StructApi {
   // TODO(bazel-team): The difference between transitive imports and transitive proto sources
   // should never be used by Skylark or by an Aspect. One of these two should be removed,
   // preferably soon, before Skylark users start depending on them.
-  public NestedSet<FileT> getTransitiveProtoSources();
+  Depset /*<FileT>*/ getTransitiveProtoSourcesForStarlark();
 
   @SkylarkCallable(
       name = "direct_sources",
       doc = "Proto sources from the 'srcs' attribute.",
       structField = true)
-  public ImmutableList<FileT> getDirectProtoSources();
+  ImmutableList<FileT> getDirectProtoSources();
 
   @SkylarkCallable(
       name = "check_deps_sources",
@@ -56,35 +69,33 @@ public interface ProtoInfoApi<FileT extends FileApi> extends StructApi {
               + "that has no sources, it contains the check_deps_sources "
               + "from this library's direct deps.",
       structField = true)
-  public NestedSet<FileT> getStrictImportableProtoSourcesForDependents();
+  Depset /*<FileT>*/ getStrictImportableProtoSourcesForDependentsForStarlark();
 
   @SkylarkCallable(
       name = "direct_descriptor_set",
       doc =
           "The <a href=\""
-              + "https://github.com/google/protobuf/search?q=%22message+FileDescriptorSet%22+path%3A%2Fsrc"
-              + "\">FileDescriptorSet</a> of the direct sources. "
-              + "If no srcs, contains an empty file.",
+              + "https://github.com/google/protobuf/search?q=%22message+FileDescriptorSet%22+path%3A%2Fsrc\">FileDescriptorSet</a>"
+              + " of the direct sources. If no srcs, contains an empty file.",
       structField = true)
-  public FileT getDirectDescriptorSet();
+  FileT getDirectDescriptorSet();
 
   @SkylarkCallable(
       name = "transitive_descriptor_sets",
       doc =
           "A set of <a href=\""
-              + "https://github.com/google/protobuf/search?q=%22message+FileDescriptorSet%22+path%3A%2Fsrc"
-              + "\">FileDescriptorSet</a> files of all dependent proto_library rules, "
-              + "and this one's. "
-              + "This is not the same as passing --include_imports to proto-compiler. "
-              + "Will be empty if no dependencies.",
+              + "https://github.com/google/protobuf/search?q=%22message+FileDescriptorSet%22+path%3A%2Fsrc\">FileDescriptorSet</a>"
+              + " files of all dependent proto_library rules, and this one's. This is not the same"
+              + " as passing --include_imports to proto-compiler. Will be empty if no"
+              + " dependencies.",
       structField = true)
-  public NestedSet<FileT> getTransitiveDescriptorSets();
+  Depset /*<FileT>*/ getTransitiveDescriptorSetsForStarlark();
 
   @SkylarkCallable(
       name = "transitive_proto_path",
       doc = "A set of proto source roots collected from the transitive closure of this rule.",
       structField = true)
-  public NestedSet<String> getTransitiveProtoSourceRoots();
+  Depset /*<String>*/ getTransitiveProtoSourceRootsForStarlark();
 
   @SkylarkCallable(
       name = "proto_source_root",

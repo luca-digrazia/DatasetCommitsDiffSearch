@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
@@ -54,7 +55,8 @@ public interface SkylarkBuildApiGlobals {
             named = true,
             doc = "The name of the value to obtain from the configuration fragment."),
       },
+      useLocation = true,
       useStarlarkThread = true)
-  LateBoundDefaultApi configurationField(String fragment, String name, StarlarkThread thread)
-      throws EvalException;
+  LateBoundDefaultApi configurationField(
+      String fragment, String name, Location loc, StarlarkThread thread) throws EvalException;
 }
