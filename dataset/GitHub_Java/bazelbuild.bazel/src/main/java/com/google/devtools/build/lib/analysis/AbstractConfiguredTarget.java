@@ -161,7 +161,7 @@ public abstract class AbstractConfiguredTarget
         LABEL_FIELD,
         FILES_FIELD,
         FilesToRunProvider.SKYLARK_NAME));
-    if (get(OutputGroupProvider.SKYLARK_CONSTRUCTOR) != null) {
+    if (getProvider(OutputGroupProvider.class) != null) {
       result.add(OutputGroupProvider.SKYLARK_NAME);
     }
     addExtraSkylarkKeys(result::add);
@@ -190,6 +190,9 @@ public abstract class AbstractConfiguredTarget
     if (providerKey.equals(DefaultProvider.SKYLARK_CONSTRUCTOR.getKey())) {
       return getDefaultProvider();
     }
+    if (providerKey.equals(OutputGroupProvider.SKYLARK_CONSTRUCTOR.getKey())) {
+      return OutputGroupProvider.get(this);
+    }
     return rawGetSkylarkProvider(providerKey);
   }
 
@@ -204,7 +207,7 @@ public abstract class AbstractConfiguredTarget
   @Override
   public final Object get(String providerKey) {
     if (OutputGroupProvider.SKYLARK_NAME.equals(providerKey)) {
-      return get(OutputGroupProvider.SKYLARK_CONSTRUCTOR);
+      return getProvider(OutputGroupProvider.class);
     }
     return rawGetSkylarkProvider(providerKey);
   }
