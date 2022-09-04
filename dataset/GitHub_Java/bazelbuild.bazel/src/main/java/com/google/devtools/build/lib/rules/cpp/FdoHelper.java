@@ -442,8 +442,7 @@ public class FdoHelper {
   }
 
   private static FdoInputFile fdoInputFileFromArtifacts(
-      RuleContext ruleContext, CcToolchainAttributesProvider attributes)
-      throws InterruptedException {
+      RuleContext ruleContext, CcToolchainAttributesProvider attributes) {
     ImmutableList<Artifact> fdoArtifacts = attributes.getFdoOptimizeArtifacts();
     if (fdoArtifacts.size() != 1) {
       ruleContext.ruleError("--fdo_optimize does not point to a single target");
@@ -459,11 +458,7 @@ public class FdoHelper {
     Label fdoLabel = attributes.getFdoOptimize().getLabel();
     if (!fdoLabel
         .getPackageIdentifier()
-        .getExecPath(
-            ruleContext
-                .getAnalysisEnvironment()
-                .getStarlarkSemantics()
-                .experimentalSiblingRepositoryLayout())
+        .getPathUnderExecRoot()
         .getRelative(fdoLabel.getName())
         .equals(fdoArtifact.getExecPath())) {
       ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
