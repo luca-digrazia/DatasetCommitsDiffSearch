@@ -489,6 +489,10 @@ public abstract class AndroidResourcesTest extends ResourceTestBase {
     return getRuleContext("android_library");
   }
 
+  private RuleContext getRuleContextWithDataBinding() throws Exception {
+    return getRuleContext("android_library", "enable_data_binding = 1");
+  }
+
   /** Gets a dummy rule context object by creating a dummy target. */
   private RuleContext getRuleContext(String kind, String... additionalLines) throws Exception {
     ConfiguredTarget target =
@@ -502,9 +506,5 @@ public abstract class AndroidResourcesTest extends ResourceTestBase {
                 .build()
                 .toArray(new String[0]));
     return getRuleContextForActionTesting(target);
-  }
-
-  private RuleContext getRuleContextWithDataBinding() throws Exception {
-    return getRuleContext("android_library", "enable_data_binding = 1");
   }
 }

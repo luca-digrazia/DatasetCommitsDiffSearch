@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 
@@ -152,29 +151,21 @@ public abstract class AndroidInstrumentationTestTest extends AndroidBuildViewTes
             .toList();
     assertThat(runfiles)
         .containsAtLeastElementsIn(
-            getDirectPrerequisite(
-                    androidInstrumentationTest.getConfiguredTarget(),
-                    "//tools/android/emulated_device:nexus_6")
+            getHostConfiguredTarget("//tools/android/emulated_device:nexus_6")
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
                 .getAllArtifacts()
                 .toList());
-    // The dependency chain is ait -> host_fixture -> server
-    ConfiguredTarget hostFixture =
-        getDirectPrerequisite(
-            androidInstrumentationTest.getConfiguredTarget(), "//javatests/com/app:host_fixture");
     assertThat(runfiles)
         .containsAtLeastElementsIn(
-            getDirectPrerequisite(hostFixture, "//java/com/server")
+            getHostConfiguredTarget("//java/com/server")
                 .getProvider(RunfilesProvider.class)
                 .getDefaultRunfiles()
                 .getAllArtifacts()
                 .toList());
-
     assertThat(runfiles)
         .containsAtLeastElementsIn(
-            getDirectPrerequisite(
-                    androidInstrumentationTest.getConfiguredTarget(),
+            getHostConfiguredTarget(
                     androidInstrumentationTest
                         .getTarget()
                         .getAssociatedRule()
@@ -184,18 +175,15 @@ public abstract class AndroidInstrumentationTestTest extends AndroidBuildViewTes
                 .getDefaultRunfiles()
                 .getAllArtifacts()
                 .toList());
-    assertThat(runfiles.stream().map(Artifact::toString).collect(toImmutableList()))
+    assertThat(runfiles)
         .containsAtLeast(
-            getDeviceFixtureScript(getConfiguredTarget("//javatests/com/app:device_fixture"))
-                .toString(),
-            getInstrumentationApk(getConfiguredTarget("//javatests/com/app:instrumentation_app"))
-                .toString(),
-            getTargetApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")).toString(),
+            getDeviceFixtureScript(getConfiguredTarget("//javatests/com/app:device_fixture")),
+            getInstrumentationApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")),
+            getTargetApk(getConfiguredTarget("//javatests/com/app:instrumentation_app")),
             getConfiguredTarget("//javatests/com/app/ait:foo.txt")
                 .getProvider(FileProvider.class)
                 .getFilesToBuild()
-                .getSingleton()
-                .toString());
+                .getSingleton());
   }
 
   @Test

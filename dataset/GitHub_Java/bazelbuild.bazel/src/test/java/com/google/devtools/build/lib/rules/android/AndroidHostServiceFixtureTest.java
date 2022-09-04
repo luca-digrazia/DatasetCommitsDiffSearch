@@ -18,14 +18,36 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.rules.android.AndroidHostServiceFixtureTest.WithPlatforms;
+import com.google.devtools.build.lib.rules.android.AndroidHostServiceFixtureTest.WithoutPlatforms;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.junit.runners.Suite;
+import org.junit.runners.Suite.SuiteClasses;
 
 /** Tests for {@link AndroidHostServiceFixture}. */
-@RunWith(JUnit4.class)
-public class AndroidHostServiceFixtureTest extends AndroidBuildViewTestCase {
+@RunWith(Suite.class)
+@SuiteClasses({WithoutPlatforms.class, WithPlatforms.class})
+public abstract class AndroidHostServiceFixtureTest extends AndroidBuildViewTestCase {
+  /** Use legacy toolchain resolution. */
+  @RunWith(JUnit4.class)
+  public static class WithoutPlatforms extends AndroidHostServiceFixtureTest {}
+
+  /** Use platform-based toolchain resolution. */
+  @RunWith(JUnit4.class)
+  public static class WithPlatforms extends AndroidHostServiceFixtureTest {
+    @Override
+    protected boolean platformBasedToolchains() {
+      return true;
+    }
+  }
+
+  @Before
+  public void setupCcToolchain() throws Exception {
+    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
+  }
 
   @Before
   public void setup() throws Exception {
@@ -65,7 +87,7 @@ public class AndroidHostServiceFixtureTest extends AndroidBuildViewTestCase {
                 hostServiceFixture
                     .getProvider(RunfilesProvider.class)
                     .getDefaultRunfiles()
-                    .getArtifactsWithoutMiddlemen()))
+                    .getArtifacts()))
         .containsExactlyElementsIn(
             ActionsTestUtil.prettyArtifactNames(
                 getConfiguredTarget("//java/com/server")
@@ -162,7 +184,6 @@ public class AndroidHostServiceFixtureTest extends AndroidBuildViewTestCase {
 
   private AndroidHostServiceFixtureInfoProvider getHostServiceFixtureInfoProvider(
       ConfiguredTarget ct) throws Exception {
-    return (AndroidHostServiceFixtureInfoProvider)
-        ct.get(AndroidHostServiceFixtureInfoProvider.ANDROID_HOST_SERVICE_FIXTURE_INFO.getKey());
+    return ct.get(AndroidHostServiceFixtureInfoProvider.ANDROID_HOST_SERVICE_FIXTURE_INFO);
   }
 }

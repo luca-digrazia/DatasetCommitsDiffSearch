@@ -16,34 +16,65 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.StoredEventHandler;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.skyframe.StarlarkBuiltinsValue;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+import com.google.devtools.build.skyframe.SkyFunction;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.junit.After;
 import org.junit.Before;
 
 /** Base class for tests that work with resource artifacts. */
-public abstract class ResourceTestBase {
+public abstract class ResourceTestBase extends AndroidBuildViewTestCase {
   public static final String RESOURCE_ROOT = "java/android/res";
 
-  private static final ArtifactOwner OWNER = () -> {
-    try {
-      return Label.create("java", "all");
-    } catch (LabelSyntaxException e) {
-      assertWithMessage(e.getMessage()).fail();
-      return null;
-    }
-  };
+  private static final ImmutableSet<String> TOOL_FILENAMES =
+      ImmutableSet.of(
+          "static_aapt_tool",
+          "aapt.static",
+          "aapt",
+          "static_aapt2_tool",
+          "aapt2",
+          "empty.sh",
+          "android_blaze.jar",
+          "android.jar",
+          "ResourceProcessorBusyBox_deploy.jar");
+
+  private static final ArtifactOwner OWNER =
+      () -> {
+        try {
+          return Label.create("java", "all");
+        } catch (LabelSyntaxException e) {
+          assertWithMessage(e.getMessage()).fail();
+          return null;
+        }
+      };
 
   /** A faked {@link RuleErrorConsumer} that validates that only expected errors were reported. */
   public static final class FakeRuleErrorConsumer implements RuleErrorConsumer {
@@ -51,12 +82,16 @@ public abstract class ResourceTestBase {
     private String attributeErrorAttribute = null;
     private String attributeErrorMessage = null;
 
+    private final List<String> ruleWarnings = new ArrayList<>();
+
     // Use an ArrayListMultimap since it allows duplicates - we'll want to know if a warning is
     // reported twice.
     private final Multimap<String, String> attributeWarnings = ArrayListMultimap.create();
 
     @Override
-    public void ruleWarning(String message) {}
+    public void ruleWarning(String message) {
+      ruleWarnings.add(message);
+    }
 
     @Override
     public void ruleError(String message) {
@@ -72,6 +107,21 @@ public abstract class ResourceTestBase {
     public void attributeError(String attrName, String message) {
       attributeErrorAttribute = attrName;
       attributeErrorMessage = message;
+    }
+
+    @Override
+    public boolean hasErrors() {
+      return ruleErrorMessage != null || attributeErrorMessage != null;
+    }
+
+    public Collection<String> getAndClearRuleWarnings() {
+      Collection<String> warnings = ImmutableList.copyOf(ruleWarnings);
+      ruleWarnings.clear();
+      return warnings;
+    }
+
+    public void assertNoRuleWarnings() {
+      assertThat(ruleWarnings).isEmpty();
     }
 
     public Collection<String> getAndClearAttributeWarnings(String attrName) {
@@ -129,17 +179,17 @@ public abstract class ResourceTestBase {
       assertThat(attributeErrorMessage).isNull();
       assertThat(attributeErrorAttribute).isNull();
     }
-  };
+  }
 
   public FakeRuleErrorConsumer errorConsumer;
   public FileSystem fileSystem;
-  public Root root;
+  public ArtifactRoot root;
 
   @Before
-  public void setup() {
+  public void setup() throws Exception {
     errorConsumer = new FakeRuleErrorConsumer();
-    fileSystem = new InMemoryFileSystem();
-    root = Root.asDerivedRoot(fileSystem.getRootDirectory());
+    fileSystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
+    root = ArtifactRoot.asSourceRoot(Root.fromPath(fileSystem.getPath("/")));
   }
 
   @After
@@ -156,9 +206,88 @@ public abstract class ResourceTestBase {
     return builder.build();
   }
 
-  public Artifact getResource(String pathString) {
-    Path path = fileSystem.getPath("/" + RESOURCE_ROOT + "/" + pathString);
-    return new Artifact(
-        path, root, root.getExecPath().getRelative(path.relativeTo(root.getPath())), OWNER);
+  Artifact getResource(String pathString) {
+    return getArtifact(RESOURCE_ROOT, pathString);
+  }
+
+  Artifact getOutput(String pathString) {
+    return getArtifact("outputs", pathString);
+  }
+
+  private Artifact getArtifact(String subdir, String pathString) {
+    Path path = fileSystem.getPath("/" + subdir + "/" + pathString);
+    return new Artifact.SourceArtifact(
+        root, root.getExecPath().getRelative(root.getRoot().relativize(path)), OWNER);
+  }
+
+  /**
+   * Gets a RuleContext that can be used to register actions and test that they are created
+   * correctly.
+   *
+   * <p>Takes in a dummy target which will be used to configure the RuleContext's {@link
+   * AndroidConfiguration}.
+   */
+  public RuleContext getRuleContextForActionTesting(ConfiguredTarget dummyTarget) throws Exception {
+    RuleContext dummy = getRuleContext(dummyTarget);
+    ExtendedEventHandler eventHandler = new StoredEventHandler();
+
+    SkyFunction.Environment skyframeEnv =
+        skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler);
+    StarlarkBuiltinsValue starlarkBuiltinsValue =
+        (StarlarkBuiltinsValue)
+            Preconditions.checkNotNull(skyframeEnv.getValue(StarlarkBuiltinsValue.key()));
+    CachingAnalysisEnvironment analysisEnv =
+        new CachingAnalysisEnvironment(
+            view.getArtifactFactory(),
+            skyframeExecutor.getActionKeyContext(),
+            ConfiguredTargetKey.builder()
+                .setLabel(dummyTarget.getLabel())
+                .setConfiguration(targetConfig)
+                .build(),
+            /*isSystemEnv=*/ false,
+            targetConfig.extendedSanityChecks(),
+            targetConfig.allowAnalysisFailures(),
+            eventHandler,
+            skyframeEnv,
+            starlarkBuiltinsValue);
+
+    return view.getRuleContextForTesting(
+        eventHandler,
+        dummyTarget,
+        analysisEnv,
+        new BuildConfigurationCollection(
+            ImmutableList.of(dummy.getConfiguration()), dummy.getHostConfiguration()));
+  }
+
+  /**
+   * Assets that the action used to generate the given outputs has the expected inputs and outputs.
+   */
+  void assertActionArtifacts(
+      RuleContext ruleContext, ImmutableList<Artifact> inputs, ImmutableList<Artifact> outputs) {
+    // Actions must have at least one output
+    assertThat(outputs).isNotEmpty();
+
+    // Get the action from one of the outputs
+    ActionAnalysisMetadata action =
+        ruleContext.getAnalysisEnvironment().getLocalGeneratingAction(outputs.get(0));
+    assertThat(action).isNotNull();
+
+    assertThat(removeToolingArtifacts(action.getInputs())).containsExactlyElementsIn(inputs);
+
+    assertThat(action.getOutputs()).containsExactlyElementsIn(outputs);
+  }
+
+  /** Remove busybox and aapt2 tooling artifacts from a list of action inputs */
+  private static Iterable<Artifact> removeToolingArtifacts(NestedSet<Artifact> inputArtifacts) {
+    return inputArtifacts.toList().stream()
+        .filter(
+            artifact ->
+                // Not a known tool
+                !TOOL_FILENAMES.contains(artifact.getFilename())
+                    // Not one of the various busybox tools (we get different ones on different OSs)
+                    && !artifact.getFilename().contains("busybox")
+                    // Not a params file
+                    && !artifact.getFilename().endsWith(".params"))
+        .collect(Collectors.toList());
   }
 }

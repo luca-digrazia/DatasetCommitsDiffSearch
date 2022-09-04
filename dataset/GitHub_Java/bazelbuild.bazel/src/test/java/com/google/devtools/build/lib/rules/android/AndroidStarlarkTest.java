@@ -81,7 +81,6 @@ public abstract class AndroidStarlarkTest extends AndroidBuildViewTestCase {
 
   @Before
   public void setup() throws Exception {
-    BazelMockAndroidSupport.setupNdk(mockToolsConfig);
     scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
 
     scratch.file("myinfo/BUILD");

@@ -90,20 +90,17 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
     setBuildLanguageOptions("--experimental_google_legacy_api");
   }
 
-  private FilesToRunProvider getToolDependency(ConfiguredTarget target, String label)
-      throws Exception {
-    return getDirectPrerequisite(target, ruleClassProvider.getToolsRepository() + label)
+  private FilesToRunProvider getToolDependency(String label) throws Exception {
+    return getHostConfiguredTarget(ruleClassProvider.getToolsRepository() + label)
         .getProvider(FilesToRunProvider.class);
   }
 
-  private String getToolDependencyExecPathString(ConfiguredTarget target, String label)
-      throws Exception {
-    return getToolDependency(target, label).getExecutable().getExecPathString();
+  private String getToolDependencyExecPathString(String label) throws Exception {
+    return getToolDependency(label).getExecutable().getExecPathString();
   }
 
-  private String getToolDependencyRunfilesPathString(ConfiguredTarget target, String label)
-      throws Exception {
-    return getToolDependency(target, label).getExecutable().getRunfilesPathString();
+  private String getToolDependencyRunfilesPathString(String label) throws Exception {
+    return getToolDependency(label).getExecutable().getRunfilesPathString();
   }
 
   @Test
@@ -133,14 +130,10 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
         .containsExactly("nexus_6", "userdata_images.dat", "emulator-meta-data.pb");
 
     Runfiles runfiles = getDefaultRunfiles(target);
-    ConfiguredTarget xvfbFiles =
-        getDirectPrerequisite(
-            target,
-            ruleClassProvider.getToolsRepository() + "//tools/android/emulator:xvfb_support");
     assertThat(ActionsTestUtil.execPaths(runfiles.getArtifacts()))
         .containsAtLeast(
-            getToolDependencyExecPathString(xvfbFiles, "//tools/android/emulator:support_file1"),
-            getToolDependencyExecPathString(xvfbFiles, "//tools/android/emulator:support_file2"));
+            getToolDependencyExecPathString("//tools/android/emulator:support_file1"),
+            getToolDependencyExecPathString("//tools/android/emulator:support_file2"));
 
     SpawnAction action =
         (SpawnAction)
@@ -153,7 +146,7 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
 
     Iterable<String> biosFilesExecPathStrings =
         Iterables.transform(
-            getToolDependency(target, "//tools/android/emulator:emulator_x86_bios")
+            getToolDependency("//tools/android/emulator:emulator_x86_bios")
                 .getFilesToRun()
                 .toList(),
             (artifact) -> artifact.getExecPathString());
@@ -161,7 +154,7 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
     assertWithMessage("Invalid boot commandline.")
         .that(action.getArguments())
         .containsExactly(
-            getToolDependencyExecPathString(target, "//tools/android/emulator:unified_launcher"),
+            getToolDependencyExecPathString("//tools/android/emulator:unified_launcher"),
             "--action=boot",
             "--density=280",
             "--memory=2048",
@@ -174,29 +167,27 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
             "--generate_output_dir="
                 + targetConfig.getBinFragment(RepositoryName.MAIN)
                 + "/tools/android/emulated_device/nexus_6_images",
-            "--adb_static=" + getToolDependencyExecPathString(target, "//tools/android:adb_static"),
+            "--adb_static=" + getToolDependencyExecPathString("//tools/android:adb_static"),
             "--emulator_x86="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:emulator_x86"),
+                + getToolDependencyExecPathString("//tools/android/emulator:emulator_x86"),
             "--emulator_arm="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:emulator_arm"),
-            "--adb=" + getToolDependencyExecPathString(target, "//tools/android:adb"),
-            "--mksdcard="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:mksd"),
+                + getToolDependencyExecPathString("//tools/android/emulator:emulator_arm"),
+            "--adb=" + getToolDependencyExecPathString("//tools/android:adb"),
+            "--mksdcard=" + getToolDependencyExecPathString("//tools/android/emulator:mksd"),
             "--empty_snapshot_fs="
-                + getToolDependencyExecPathString(
-                    target, "//tools/android/emulator:empty_snapshot_fs"),
+                + getToolDependencyExecPathString("//tools/android/emulator:empty_snapshot_fs"),
             "--flag_configured_android_tools",
             "--nocopy_system_images",
             "--single_image_file",
             "--android_sdk_path="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:sdk_path"),
+                + getToolDependencyExecPathString("//tools/android/emulator:sdk_path"),
             "--platform_apks=");
 
     assertThat(action.getExecutionInfo()).doesNotContainKey(REQUIRES_KVM);
     assertThat(ActionsTestUtil.execPaths(action.getInputs()))
         .containsAtLeast(
-            getToolDependencyExecPathString(xvfbFiles, "//tools/android/emulator:support_file1"),
-            getToolDependencyExecPathString(xvfbFiles, "//tools/android/emulator:support_file2"));
+            getToolDependencyExecPathString("//tools/android/emulator:support_file1"),
+            getToolDependencyExecPathString("//tools/android/emulator:support_file2"));
 
     assertThat(target.get(ExecutionInfo.PROVIDER.getKey())).isNotNull();
     ExecutionInfo executionInfo = target.get(ExecutionInfo.PROVIDER);
@@ -208,30 +199,27 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
         .contains(
             String.format(
                 "unified_launcher=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(
-                    target, "//tools/android/emulator:unified_launcher")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:unified_launcher")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "adb=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(target, "//tools/android:adb")));
+                getToolDependencyRunfilesPathString("//tools/android:adb")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "adb_static=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(target, "//tools/android:adb_static")));
+                getToolDependencyRunfilesPathString("//tools/android:adb_static")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "emulator_arm=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(
-                    target, "//tools/android/emulator:emulator_arm")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:emulator_arm")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "emulator_x86=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(
-                    target, "//tools/android/emulator:emulator_x86")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:emulator_x86")));
     assertThat(stubContents)
         .contains("source_properties_file=\"${WORKSPACE_DIR}/" + SOURCE_PROPERTIES + "\"");
     assertThat(stubContents).contains("emulator_system_images=\"" + systemImageString + "\"");
@@ -310,7 +298,7 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
     String systemImageString = Joiner.on(" ").join(SYSTEM_IMAGE_FILES);
     Iterable<String> biosFilesExecPathStrings =
         Iterables.transform(
-            getToolDependency(target, "//tools/android/emulator:emulator_x86_bios")
+            getToolDependency("//tools/android/emulator:emulator_x86_bios")
                 .getFilesToRun()
                 .toList(),
             Artifact::getExecPathString);
@@ -318,7 +306,7 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
     assertWithMessage("Invalid boot commandline.")
         .that(action.getArguments())
         .containsExactly(
-            getToolDependencyExecPathString(target, "//tools/android/emulator:unified_launcher"),
+            getToolDependencyExecPathString("//tools/android/emulator:unified_launcher"),
             "--action=boot",
             "--density=280",
             "--memory=2048",
@@ -331,22 +319,20 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
             "--generate_output_dir="
                 + targetConfig.getBinFragment(RepositoryName.MAIN)
                 + "/tools/android/emulated_device/nexus_6_images",
-            "--adb_static=" + getToolDependencyExecPathString(target, "//tools/android:adb_static"),
+            "--adb_static=" + getToolDependencyExecPathString("//tools/android:adb_static"),
             "--emulator_x86="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:emulator_x86"),
+                + getToolDependencyExecPathString("//tools/android/emulator:emulator_x86"),
             "--emulator_arm="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:emulator_arm"),
-            "--adb=" + getToolDependencyExecPathString(target, "//tools/android:adb"),
-            "--mksdcard="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:mksd"),
+                + getToolDependencyExecPathString("//tools/android/emulator:emulator_arm"),
+            "--adb=" + getToolDependencyExecPathString("//tools/android:adb"),
+            "--mksdcard=" + getToolDependencyExecPathString("//tools/android/emulator:mksd"),
             "--empty_snapshot_fs="
-                + getToolDependencyExecPathString(
-                    target, "//tools/android/emulator:empty_snapshot_fs"),
+                + getToolDependencyExecPathString("//tools/android/emulator:empty_snapshot_fs"),
             "--flag_configured_android_tools",
             "--nocopy_system_images",
             "--single_image_file",
             "--android_sdk_path="
-                + getToolDependencyExecPathString(target, "//tools/android/emulator:sdk_path"),
+                + getToolDependencyExecPathString("//tools/android/emulator:sdk_path"),
             "--platform_apks=",
             "--default_properties_file=" + String.format("%s/%s", dummyPropPackage, dummyPropFile));
 
@@ -357,30 +343,27 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
         .contains(
             String.format(
                 "unified_launcher=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(
-                    target, "//tools/android/emulator:unified_launcher")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:unified_launcher")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "adb=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(target, "//tools/android:adb")));
+                getToolDependencyRunfilesPathString("//tools/android:adb")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "adb_static=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(target, "//tools/android:adb_static")));
+                getToolDependencyRunfilesPathString("//tools/android:adb_static")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "emulator_arm=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(
-                    target, "//tools/android/emulator:emulator_arm")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:emulator_arm")));
     assertThat(stubContents)
         .contains(
             String.format(
                 "emulator_x86=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(
-                    target, "//tools/android/emulator:emulator_x86")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:emulator_x86")));
     assertThat(stubContents)
         .contains("source_properties_file=\"${WORKSPACE_DIR}/" + SOURCE_PROPERTIES + "\"");
     assertThat(stubContents).contains("emulator_system_images=\"" + systemImageString + "\"");
@@ -388,12 +371,11 @@ public abstract class AndroidDeviceTest extends AndroidBuildViewTestCase {
         .contains(
             String.format(
                 "android_sdk_path=\"${WORKSPACE_DIR}/%s\"",
-                getToolDependencyRunfilesPathString(target, "//tools/android/emulator:sdk_path")));
+                getToolDependencyRunfilesPathString("//tools/android/emulator:sdk_path")));
 
     assertThat(
             target.getProvider(RunfilesProvider.class).getDefaultRunfiles().getArtifacts().toList())
-        .contains(
-            getToolDependency(target, "//tools/android/emulator:unified_launcher").getExecutable());
+        .contains(getToolDependency("//tools/android/emulator:unified_launcher").getExecutable());
   }
 
   @Test

@@ -17,22 +17,40 @@ package com.google.devtools.build.lib.bazel.rules.android;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.bazel.rules.android.SdkMavenRepositoryTest.WithPlatforms;
+import com.google.devtools.build.lib.bazel.rules.android.SdkMavenRepositoryTest.WithoutPlatforms;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.android.AndroidBuildViewTestCase;
 import com.google.devtools.build.lib.vfs.Path;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.junit.runners.Suite;
+import org.junit.runners.Suite.SuiteClasses;
 
 /** Tests for {@link SdkMavenRepository}. */
-@RunWith(JUnit4.class)
-public class SdkMavenRepositoryTest extends BuildViewTestCase {
+@RunWith(Suite.class)
+@SuiteClasses({WithoutPlatforms.class, WithPlatforms.class})
+public class SdkMavenRepositoryTest extends AndroidBuildViewTestCase {
+  /** Use legacy toolchain resolution. */
+  @RunWith(JUnit4.class)
+  public static class WithoutPlatforms extends SdkMavenRepositoryTest {}
+
+  /** Use platform-based toolchain resolution. */
+  @RunWith(JUnit4.class)
+  public static class WithPlatforms extends SdkMavenRepositoryTest {
+    @Override
+    protected boolean platformBasedToolchains() {
+      return true;
+    }
+  }
+
   Path workspaceDir;
   Path repoPath;
   SdkMavenRepository sdkMavenRepository;
@@ -95,7 +113,7 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
 
     Path groupIdPath = scratch.resolve("com.google.android");
-    assertThat(workspaceDir.getDirectoryEntries()).containsAllOf(repoPath, groupIdPath);
+    assertThat(workspaceDir.getDirectoryEntries()).containsAtLeast(repoPath, groupIdPath);
 
     Path buildFilePath = groupIdPath.getRelative("BUILD");
     assertThat(groupIdPath.getDirectoryEntries()).containsExactly(buildFilePath);
@@ -105,7 +123,9 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
   public void testGeneratedAarImport() throws Exception {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
     Rule aarImport =
-        getConfiguredTarget("//com.google.android:bar-1.0.0").getTarget().getAssociatedRule();
+        getConfiguredTargetAndData("//com.google.android:bar-1.0.0")
+            .getTarget()
+            .getAssociatedRule();
     assertThat(aarImport.getRuleClass()).isEqualTo("aar_import");
     AttributeMap attributes = RawAttributeMapper.of(aarImport);
     assertThat(attributes.get("aar", BuildType.LABEL))
@@ -118,7 +138,9 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
   public void testGeneratedJavaImport() throws Exception {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
     Rule javaImport =
-        getConfiguredTarget("//com.google.android:foo-1.0.0").getTarget().getAssociatedRule();
+        getConfiguredTargetAndData("//com.google.android:foo-1.0.0")
+            .getTarget()
+            .getAssociatedRule();
     assertThat(javaImport.getRuleClass()).isEqualTo("java_import");
     AttributeMap attributes = RawAttributeMapper.of(javaImport);
     assertThat(attributes.get("jars", BuildType.LABEL_LIST)).containsExactly(
@@ -130,7 +152,9 @@ public class SdkMavenRepositoryTest extends BuildViewTestCase {
   public void testGeneratedRuleForInvalidPackaging() throws Exception {
     sdkMavenRepository.writeBuildFiles(workspaceDir);
     Rule invalidPackagingGenrule =
-        getConfiguredTarget("//com.google.android:baz-1.0.0").getTarget().getAssociatedRule();
+        getConfiguredTargetAndData("//com.google.android:baz-1.0.0")
+            .getTarget()
+            .getAssociatedRule();
     assertThat(invalidPackagingGenrule.getRuleClass()).isEqualTo("genrule");
     assertThat(RawAttributeMapper.of(invalidPackagingGenrule).get("cmd", Type.STRING))
         .isEqualTo("echo Bazel does not recognize the Maven packaging type for: "

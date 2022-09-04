@@ -656,11 +656,10 @@ public abstract class BuildIntegrationTestCase {
    * Creates folders on the path to {@code relativeLinkPath} and a symlink to {@code target} at
    * {@code relativeLinkPath} (equivalent to {@code ln -s <target> <relativeLinkPath>}).
    */
-  protected Path createSymlink(String target, String relativeLinkPath) throws IOException {
+  protected void createSymlink(String target, String relativeLinkPath) throws IOException {
     Path path = getWorkspace().getRelative(relativeLinkPath);
     path.getParentDirectory().createDirectoryAndParents();
     path.createSymbolicLink(PathFragment.create(target));
-    return path;
   }
 
   /**
