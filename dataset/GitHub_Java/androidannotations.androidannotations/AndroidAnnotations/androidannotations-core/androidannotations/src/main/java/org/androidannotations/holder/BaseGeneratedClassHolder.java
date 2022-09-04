@@ -58,7 +58,7 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 	protected void setGeneratedClass() throws Exception {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-		annotatedClass = getCodeModel().directClass(annotatedElement.asType().toString());
+		annotatedClass = codeModel().directClass(annotatedElement.asType().toString());
 
 		if (annotatedElement.getNestingKind().isNested()) {
 			Element enclosingElement = annotatedElement.getEnclosingElement();
@@ -67,7 +67,7 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 			generatedClass = enclosingHolder.getGeneratedClass()._class(PUBLIC | FINAL | STATIC, generatedBeanSimpleName, ClassType.CLASS);
 		} else {
 			String generatedClassQualifiedName = annotatedComponentQualifiedName + classSuffix();
-			generatedClass = getCodeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, ClassType.CLASS);
+			generatedClass = codeModel()._class(PUBLIC | FINAL, generatedClassQualifiedName, ClassType.CLASS);
 		}
 		for (TypeParameterElement typeParam : annotatedElement.getTypeParameters()) {
 			JClass bound = codeModelHelper.typeBoundsToJClass(typeParam.getBounds());
@@ -82,7 +82,7 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	}
 
 	protected void setExtends() {
-		JClass annotatedComponent = getCodeModel().directClass(annotatedElement.asType().toString());
+		JClass annotatedComponent = codeModel().directClass(annotatedElement.asType().toString());
 		generatedClass._extends(annotatedComponent);
 	}
 
@@ -105,11 +105,12 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	}
 
 	protected ProcessHolder.Classes getClasses() {
-		return environment.getClasses();
+		return processHolder().classes();
 	}
 
-	protected JCodeModel getCodeModel() {
-		return environment().getCodeModel();
+	@Override
+	public JCodeModel codeModel() {
+		return processHolder().codeModel();
 	}
 
 	@Override
@@ -135,7 +136,7 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 	public JClass narrow(JClass toNarrow) {
 		List<JClass> classes = new ArrayList<>();
 		for (JTypeVar type : generatedClass.typeParams()) {
-			classes.add(getCodeModel().directClass(type.name()));
+			classes.add(codeModel().directClass(type.name()));
 		}
 		if (classes.isEmpty()) {
 			return toNarrow;

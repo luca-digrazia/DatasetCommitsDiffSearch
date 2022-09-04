@@ -46,8 +46,9 @@ public abstract class GeneratedClassHolderDelegate<T extends GeneratedClassHolde
 		return environment().getClasses();
 	}
 
-	protected final JCodeModel codeModel() {
-		return environment().getCodeModel();
+	@Override
+	public final JCodeModel codeModel() {
+		return holder.codeModel();
 	}
 
 	@Override

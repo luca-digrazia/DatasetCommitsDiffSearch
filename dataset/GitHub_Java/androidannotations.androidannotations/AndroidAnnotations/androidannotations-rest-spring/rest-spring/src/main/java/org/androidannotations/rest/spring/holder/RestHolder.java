@@ -63,7 +63,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 	@Override
 	protected void setExtends() {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-		JClass annotatedComponent = getCodeModel().directClass(annotatedComponentQualifiedName);
+		JClass annotatedComponent = codeModel().directClass(annotatedComponentQualifiedName);
 		generatedClass._implements(narrow(annotatedComponent));
 	}
 
@@ -143,7 +143,7 @@ public class RestHolder extends BaseGeneratedClassHolder {
 			JExpression tokenExpr = lit("Bearer ").plus(tokenParamVar);
 
 			JClass authClass = refClass(HTTP_AUTHENTICATION);
-			JDefinedClass anonymousHttpAuthClass = getCodeModel().anonymousClass(authClass);
+			JDefinedClass anonymousHttpAuthClass = codeModel().anonymousClass(authClass);
 
 			JMethod getHeaderValueMethod = anonymousHttpAuthClass.method(JMod.PUBLIC, String.class, "getHeaderValue");
 			getHeaderValueMethod.annotate(Override.class);

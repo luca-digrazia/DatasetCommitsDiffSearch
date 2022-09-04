@@ -69,11 +69,11 @@ public class OrmLiteDaoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		String fieldName = element.getSimpleName().toString();
 
-		JClass modelClass = getJClass(ormLiteHelper.getEntityType(element).toString());
-		JClass idClass = getJClass(ormLiteHelper.getEntityIdType(element).toString());
+		JClass modelClass = refClass(ormLiteHelper.getEntityType(element));
+		JClass idClass = refClass(ormLiteHelper.getEntityIdType(element));
 		JExpression modelClassDotClass = modelClass.dotclass();
 
-		JClass daoClass = getJClass(OrmLiteClasses.DAO).narrow(modelClass, idClass);
+		JClass daoClass = refClass(OrmLiteClasses.DAO).narrow(modelClass, idClass);
 
 		TypeMirror databaseHelperTypeMirror = annotationHelper.extractAnnotationParameter(element, "helper");
 		JFieldVar databaseHelperRef = ormLiteHolder.getDatabaseHelperRef(databaseHelperTypeMirror);

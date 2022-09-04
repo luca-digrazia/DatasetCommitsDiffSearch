@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,9 +15,9 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PRIVATE;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.Arrays;
@@ -28,9 +28,9 @@ import java.util.Set;
 
 import org.androidannotations.annotations.Receiver.RegisterAt;
 
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
 
 public class ReceiverRegistrationDelegate<T extends EComponentHolder & HasReceiverRegistration> extends GeneratedClassHolderDelegate<T> {
 
@@ -52,7 +52,7 @@ public class ReceiverRegistrationDelegate<T extends EComponentHolder & HasReceiv
 
 	private JFieldVar createIntentFilterField(IntentFilterData intentFilterData) {
 		String intentFilterName = "intentFilter" + (intentFilterFields.size() + 1) + generationSuffix();
-		IJExpression newIntentFilterExpr = _new(getClasses().INTENT_FILTER);
+		JExpression newIntentFilterExpr = _new(getClasses().INTENT_FILTER);
 		JFieldVar intentFilterField = getGeneratedClass().field(PRIVATE | FINAL, getClasses().INTENT_FILTER, intentFilterName, newIntentFilterExpr);
 
 		JBlock intentFilterTarget = holder.getIntentFilterInitializationBlock(intentFilterData);
@@ -83,10 +83,6 @@ public class ReceiverRegistrationDelegate<T extends EComponentHolder & HasReceiv
 	}
 
 	public JBlock getOnDetachBeforeSuperBlock() {
-		throw illegalStateException;
-	}
-
-	public JBlock getOnResumeAfterSuperBlock() {
 		throw illegalStateException;
 	}
 

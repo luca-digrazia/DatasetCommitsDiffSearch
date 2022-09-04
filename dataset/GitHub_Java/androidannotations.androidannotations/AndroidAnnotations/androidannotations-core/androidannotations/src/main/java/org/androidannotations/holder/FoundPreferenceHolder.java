@@ -27,9 +27,7 @@ public class FoundPreferenceHolder extends FoundHolder {
 
 	@Override
 	protected JClass getBaseType() {
-		HasPreferences hasPreferences = (HasPreferences) getGeneratedClassHolder();
-
-		return hasPreferences.getBasePreferenceClass();
+		return getClasses().PREFERENCE;
 	}
 
 }

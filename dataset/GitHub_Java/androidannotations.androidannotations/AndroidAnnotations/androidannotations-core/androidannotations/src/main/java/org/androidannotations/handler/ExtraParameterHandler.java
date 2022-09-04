@@ -61,10 +61,10 @@ public abstract class ExtraParameterHandler extends BaseAnnotationHandler<Genera
 	}
 
 	public JExpression getExtraValue(VariableElement parameter, JVar intent, JVar extras, JBlock block, JMethod annotatedMethod, GeneratedClassHolder holder) {
-		return getExtraValue(parameter, intent, extras, block, annotatedMethod, holder.getGeneratedClass());
+		return getExtraValue(parameter, intent, extras, block, annotatedMethod, holder.getGeneratedClass(), holder);
 	}
 
-	public JExpression getExtraValue(VariableElement parameter, JVar intent, JVar extras, JBlock block, JMethod annotatedMethod, JDefinedClass generatedClass) {
+	public JExpression getExtraValue(VariableElement parameter, JVar intent, JVar extras, JBlock block, JMethod annotatedMethod, JDefinedClass generatedClass, GeneratedClassHolder holder) {
 		String parameterName = parameter.getSimpleName().toString();
 		JClass parameterClass = codeModelHelper.typeMirrorToJClass(parameter.asType());
 
@@ -73,13 +73,14 @@ public abstract class ExtraParameterHandler extends BaseAnnotationHandler<Genera
 			extraKey = parameterName;
 		}
 
-		BundleHelper bundleHelper = new BundleHelper(getEnvironment(), parameter.asType());
-		JExpression restoreMethodCall = bundleHelper.getExpressionToRestoreFromIntentOrBundle(parameterClass, intent, extras, getStaticExtraField(generatedClass, extraKey), annotatedMethod);
+		BundleHelper bundleHelper = new BundleHelper(annotationHelper, parameter.asType());
+		JExpression restoreMethodCall = bundleHelper.getExpressionToRestoreFromIntentOrBundle(parameterClass, intent, extras, getStaticExtraField(generatedClass, extraKey, holder), annotatedMethod,
+				holder);
 
 		return block.decl(parameterClass, parameterName, restoreMethodCall);
 	}
 
-	private JFieldVar getStaticExtraField(JDefinedClass generatedClass, String extraName) {
+	private JFieldVar getStaticExtraField(JDefinedClass generatedClass, String extraName, GeneratedClassHolder holder) {
 		String staticFieldName = CaseHelper.camelCaseToUpperSnakeCase(null, extraName, "Extra");
 		JFieldVar staticExtraField = generatedClass.fields().get(staticFieldName);
 		if (staticExtraField == null) {

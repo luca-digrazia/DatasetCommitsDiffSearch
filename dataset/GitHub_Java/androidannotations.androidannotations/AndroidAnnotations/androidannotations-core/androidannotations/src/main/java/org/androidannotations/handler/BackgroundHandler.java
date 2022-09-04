@@ -51,9 +51,9 @@ public class BackgroundHandler extends AbstractRunnableHandler {
 
 		JBlock previousMethodBody = codeModelHelper.removeBody(delegatingMethod);
 
-		JDefinedClass anonymousTaskClass = getCodeModel().anonymousClass(BackgroundExecutor.Task.class);
+		JDefinedClass anonymousTaskClass = codeModel().anonymousClass(BackgroundExecutor.Task.class);
 
-		JMethod executeMethod = anonymousTaskClass.method(JMod.PUBLIC, getCodeModel().VOID, "execute");
+		JMethod executeMethod = anonymousTaskClass.method(JMod.PUBLIC, codeModel().VOID, "execute");
 		executeMethod.annotate(Override.class);
 
 		// Catch exception in user code
@@ -73,7 +73,7 @@ public class BackgroundHandler extends AbstractRunnableHandler {
 		int delay = annotation.delay();
 		String serial = annotation.serial();
 
-		JClass backgroundExecutorClass = getJClass(BackgroundExecutor.class);
+		JClass backgroundExecutorClass = refClass(BackgroundExecutor.class);
 		JInvocation newTask = _new(anonymousTaskClass).arg(lit(id)).arg(lit(delay)).arg(lit(serial));
 		JInvocation executeCall = backgroundExecutorClass.staticInvoke("execute").arg(newTask);
 

@@ -149,8 +149,4 @@ public abstract class IntentBuilder {
 	protected ProcessHolder.Classes getClasses() {
 		return environment.getClasses();
 	}
-
-	protected JClass getJClass(Class<?> clazz) {
-		return environment.getJClass(clazz);
-	}
 }
