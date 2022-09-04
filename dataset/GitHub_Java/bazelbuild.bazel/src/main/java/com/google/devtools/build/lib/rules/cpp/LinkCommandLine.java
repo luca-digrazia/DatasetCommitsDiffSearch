@@ -22,9 +22,6 @@ import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -51,12 +48,13 @@ public final class LinkCommandLine extends CommandLine {
   // The feature config can be null for tests.
   @Nullable private final FeatureConfiguration featureConfiguration;
   private final ImmutableList<Artifact> buildInfoHeaderArtifacts;
-  private final NestedSet<Artifact> linkerInputArtifacts;
+  private final Iterable<Artifact> linkerInputArtifacts;
   private final LinkTargetType linkTargetType;
   private final Link.LinkingMode linkingMode;
   @Nullable private final PathFragment toolchainLibrariesSolibDir;
   private final boolean nativeDeps;
   private final boolean useTestOnlyFlags;
+  private final boolean doNotSplitLinkingCmdLine;
 
   @Nullable private final Artifact paramFile;
 
@@ -65,7 +63,7 @@ public final class LinkCommandLine extends CommandLine {
       String actionName,
       String forcedToolPath,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
-      NestedSet<Artifact> linkerInputArtifacts,
+      Iterable<Artifact> linkerInputArtifacts,
       LinkTargetType linkTargetType,
       Link.LinkingMode linkingMode,
       @Nullable PathFragment toolchainLibrariesSolibDir,
@@ -73,7 +71,8 @@ public final class LinkCommandLine extends CommandLine {
       boolean useTestOnlyFlags,
       @Nullable Artifact paramFile,
       CcToolchainVariables variables,
-      @Nullable FeatureConfiguration featureConfiguration) {
+      @Nullable FeatureConfiguration featureConfiguration,
+      boolean doNotSplitLinkingCmdLine) {
 
     this.actionName = actionName;
     this.forcedToolPath = forcedToolPath;
@@ -87,6 +86,7 @@ public final class LinkCommandLine extends CommandLine {
     this.nativeDeps = nativeDeps;
     this.useTestOnlyFlags = useTestOnlyFlags;
     this.paramFile = paramFile;
+    this.doNotSplitLinkingCmdLine = doNotSplitLinkingCmdLine;
   }
 
   @Nullable
@@ -100,7 +100,7 @@ public final class LinkCommandLine extends CommandLine {
   }
 
   /** Returns the (ordered, immutable) list of paths to the linker's input files. */
-  public NestedSet<Artifact> getLinkerInputArtifacts() {
+  public Iterable<Artifact> getLinkerInputArtifacts() {
     return linkerInputArtifacts;
   }
 
@@ -108,10 +108,6 @@ public final class LinkCommandLine extends CommandLine {
   @VisibleForTesting
   public FeatureConfiguration getFeatureConfiguration() {
     return featureConfiguration;
-  }
-
-  public String getActionName() {
-    return actionName;
   }
 
   /** Returns the current type of link target set. */
@@ -166,17 +162,22 @@ public final class LinkCommandLine extends CommandLine {
    */
   @VisibleForTesting
   final Pair<List<String>, List<String>> splitCommandline() throws CommandLineExpansionException {
-    return splitCommandline(paramFile, getRawLinkArgv(null), linkTargetType);
+    return splitCommandline(
+        paramFile, getRawLinkArgv(null), linkTargetType, doNotSplitLinkingCmdLine);
   }
 
   @VisibleForTesting
   final Pair<List<String>, List<String>> splitCommandline(@Nullable ArtifactExpander expander)
       throws CommandLineExpansionException {
-    return splitCommandline(paramFile, getRawLinkArgv(expander), linkTargetType);
+    return splitCommandline(
+        paramFile, getRawLinkArgv(expander), linkTargetType, doNotSplitLinkingCmdLine);
   }
 
   private static Pair<List<String>, List<String>> splitCommandline(
-      Artifact paramFile, List<String> args, LinkTargetType linkTargetType) {
+      Artifact paramFile,
+      List<String> args,
+      LinkTargetType linkTargetType,
+      boolean doNotSplitLinkingCmdline) {
     Preconditions.checkNotNull(paramFile);
     if (linkTargetType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER) {
       // Ar link commands can also generate huge command lines.
@@ -190,31 +191,10 @@ public final class LinkCommandLine extends CommandLine {
       // a parameter file and pass any linker options through it.
       List<String> paramFileArgs = new ArrayList<>();
       List<String> commandlineArgs = new ArrayList<>();
-      extractArgumentsForDynamicLinkParamFile(args, commandlineArgs, paramFileArgs);
+      extractArgumentsForDynamicLinkParamFile(
+          args, commandlineArgs, paramFileArgs, doNotSplitLinkingCmdline);
       return Pair.of(commandlineArgs, paramFileArgs);
     }
-  }
-
-  public CommandLine getCommandLineForStarlark() {
-    return new CommandLine() {
-      @Override
-      public Iterable<String> arguments() throws CommandLineExpansionException {
-        return arguments(/* artifactExpander= */ null);
-      }
-
-      @Override
-      public Iterable<String> arguments(ArtifactExpander artifactExpander)
-          throws CommandLineExpansionException {
-        if (paramFile == null) {
-          return ImmutableList.copyOf(getRawLinkArgv(artifactExpander));
-        } else {
-          return ImmutableList.<String>builder()
-              .add(getLinkerPathString())
-              .addAll(splitCommandline(artifactExpander).getSecond())
-              .build();
-        }
-      }
-    };
   }
 
   /**
@@ -230,6 +210,7 @@ public final class LinkCommandLine extends CommandLine {
     private final FeatureConfiguration featureConfiguration;
     private final String actionName;
     private final CcToolchainVariables variables;
+    private final boolean doNotSplitLinkingCmdLine;
 
     public ParamFileCommandLine(
         Artifact paramsFile,
@@ -237,13 +218,15 @@ public final class LinkCommandLine extends CommandLine {
         String forcedToolPath,
         FeatureConfiguration featureConfiguration,
         String actionName,
-        CcToolchainVariables variables) {
+        CcToolchainVariables variables,
+        boolean doNotSplitLinkingCmdLine) {
       this.paramsFile = paramsFile;
       this.linkTargetType = linkTargetType;
       this.forcedToolPath = forcedToolPath;
       this.featureConfiguration = featureConfiguration;
       this.actionName = actionName;
       this.variables = variables;
+      this.doNotSplitLinkingCmdLine = doNotSplitLinkingCmdLine;
     }
 
     @Override
@@ -251,7 +234,8 @@ public final class LinkCommandLine extends CommandLine {
       List<String> argv =
           getRawLinkArgv(
               null, forcedToolPath, featureConfiguration, actionName, linkTargetType, variables);
-      return splitCommandline(paramsFile, argv, linkTargetType).getSecond();
+      return splitCommandline(paramsFile, argv, linkTargetType, doNotSplitLinkingCmdLine)
+          .getSecond();
     }
 
     @Override
@@ -265,7 +249,8 @@ public final class LinkCommandLine extends CommandLine {
               actionName,
               linkTargetType,
               variables);
-      return splitCommandline(paramsFile, argv, linkTargetType).getSecond();
+      return splitCommandline(paramsFile, argv, linkTargetType, doNotSplitLinkingCmdLine)
+          .getSecond();
     }
   }
 
@@ -273,7 +258,13 @@ public final class LinkCommandLine extends CommandLine {
   CommandLine paramCmdLine() {
     Preconditions.checkNotNull(paramFile);
     return new ParamFileCommandLine(
-        paramFile, linkTargetType, forcedToolPath, featureConfiguration, actionName, variables);
+        paramFile,
+        linkTargetType,
+        forcedToolPath,
+        featureConfiguration,
+        actionName,
+        variables,
+        doNotSplitLinkingCmdLine);
   }
 
   public static void extractArgumentsForStaticLinkParamFile(
@@ -291,17 +282,67 @@ public final class LinkCommandLine extends CommandLine {
   }
 
   public static void extractArgumentsForDynamicLinkParamFile(
-      List<String> args, List<String> commandlineArgs, List<String> paramFileArgs) {
+      List<String> args,
+      List<String> commandlineArgs,
+      List<String> paramFileArgs,
+      boolean doNotSplitLinkingCmdline) {
     // Note, that it is not important that all linker arguments are extracted so that
     // they can be moved into a parameter file, but the vast majority should.
     commandlineArgs.add(args.get(0)); // gcc command, must not be moved!
     int argsSize = args.size();
-    for (int i = 1; i < argsSize; i++) {
-      String arg = args.get(i);
-      if (arg.startsWith("@")) {
-        commandlineArgs.add(arg); // params file, keep it in the command line
-      } else {
-        paramFileArgs.add(arg); // the rest goes to the params file
+    if (doNotSplitLinkingCmdline) {
+      for (int i = 1; i < argsSize; i++) {
+        String arg = args.get(i);
+        if (arg.startsWith("@")) {
+          commandlineArgs.add(arg); // params file, keep it in the command line
+        } else {
+          paramFileArgs.add(arg); // the rest goes to the params file
+        }
+      }
+    } else {
+      for (int i = 1; i < argsSize; i++) {
+        String arg = args.get(i);
+        if (arg.isEmpty()) {
+          continue;
+        }
+        if (arg.equals("-Wl,-no-whole-archive")) {
+          paramFileArgs.add("-no-whole-archive");
+        } else if (arg.equals("-Wl,-whole-archive")) {
+          paramFileArgs.add("-whole-archive");
+        } else if (arg.equals("-Wl,--start-group")) {
+          paramFileArgs.add("--start-group");
+        } else if (arg.equals("-Wl,--end-group")) {
+          paramFileArgs.add("--end-group");
+        } else if (arg.equals("-Wl,--start-lib")) {
+          paramFileArgs.add("--start-lib");
+        } else if (arg.equals("-Wl,--end-lib")) {
+          paramFileArgs.add("--end-lib");
+        } else if (arg.charAt(0) == '-') {
+          if (arg.startsWith("-l")) {
+            paramFileArgs.add(arg);
+          } else {
+            // Anything else starting with a '-' can stay on the commandline.
+            commandlineArgs.add(arg);
+            if (arg.equals("-o")) {
+              // Special case for '-o': add the following argument as well - it is the output file!
+              commandlineArgs.add(args.get(++i));
+            }
+          }
+        } else if (CppFileTypes.OBJECT_FILE.apply(arg)
+            || CppFileTypes.PIC_OBJECT_FILE.apply(arg)
+            || CppFileTypes.ARCHIVE.apply(arg)
+            || CppFileTypes.PIC_ARCHIVE.apply(arg)
+            || CppFileTypes.ALWAYS_LINK_LIBRARY.apply(arg)
+            || CppFileTypes.ALWAYS_LINK_PIC_LIBRARY.apply(arg)
+            || CppFileTypes.SHARED_LIBRARY.apply(arg)
+            || CppFileTypes.INTERFACE_SHARED_LIBRARY.apply(arg)
+            || CppFileTypes.VERSIONED_SHARED_LIBRARY.apply(arg)) {
+          // All objects of any kind go into the linker parameters.
+          paramFileArgs.add(arg);
+        } else {
+          // Everything that's left stays conservatively on the commandline.
+          commandlineArgs.add(arg);
+        }
       }
     }
   }
@@ -383,8 +424,7 @@ public final class LinkCommandLine extends CommandLine {
 
     private String forcedToolPath;
     private ImmutableList<Artifact> buildInfoHeaderArtifacts = ImmutableList.of();
-    private NestedSet<Artifact> linkerInputArtifacts =
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    private Iterable<Artifact> linkerInputArtifacts = ImmutableList.of();
     @Nullable private LinkTargetType linkTargetType;
     private Link.LinkingMode linkingMode = Link.LinkingMode.STATIC;
     @Nullable private PathFragment toolchainLibrariesSolibDir;
@@ -393,9 +433,10 @@ public final class LinkCommandLine extends CommandLine {
     @Nullable private Artifact paramFile;
     private CcToolchainVariables variables;
     private FeatureConfiguration featureConfiguration;
-    private String actionName;
+    private boolean doNotSplitLinkingCmdLine;
 
     public LinkCommandLine build() {
+
       if (linkTargetType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER) {
         Preconditions.checkArgument(
             buildInfoHeaderArtifacts.isEmpty(),
@@ -405,6 +446,8 @@ public final class LinkCommandLine extends CommandLine {
       if (variables == null) {
         variables = CcToolchainVariables.EMPTY;
       }
+
+      String actionName = linkTargetType.getActionName();
 
       return new LinkCommandLine(
           actionName,
@@ -418,7 +461,8 @@ public final class LinkCommandLine extends CommandLine {
           useTestOnlyFlags,
           paramFile,
           variables,
-          featureConfiguration);
+          featureConfiguration,
+          doNotSplitLinkingCmdLine);
     }
 
     /** Use given tool path instead of the one from feature configuration */
@@ -450,8 +494,8 @@ public final class LinkCommandLine extends CommandLine {
      * staticness and the target type. This call makes an immutable copy of the inputs, if the
      * provided Iterable isn't already immutable (see {@link CollectionUtils#makeImmutable}).
      */
-    public Builder setLinkerInputArtifacts(NestedSet<Artifact> linkerInputArtifacts) {
-      this.linkerInputArtifacts = linkerInputArtifacts;
+    public Builder setLinkerInputArtifacts(Iterable<Artifact> linkerInputArtifacts) {
+      this.linkerInputArtifacts = CollectionUtils.makeImmutable(linkerInputArtifacts);
       return this;
     }
 
@@ -509,8 +553,8 @@ public final class LinkCommandLine extends CommandLine {
       return this;
     }
 
-    public Builder setActionName(String actionName) {
-      this.actionName = actionName;
+    public Builder doNotSplitLinkingCmdLine() {
+      this.doNotSplitLinkingCmdLine = true;
       return this;
     }
   }

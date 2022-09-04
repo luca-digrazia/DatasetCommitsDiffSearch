@@ -428,7 +428,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
     ImmutableMap.Builder<String, Object> splitAttrInfos = ImmutableMap.builder();
     for (Attribute attr : attributes) {
 
-      if (attr.getTransitionFactory().isSplit()) {
+      if (attr.hasSplitConfigurationTransition()) {
 
         Map<Optional<String>, ? extends List<? extends TransitiveInfoCollection>> splitPrereqs =
             ruleContext.getSplitPrerequisites(attr.getName());

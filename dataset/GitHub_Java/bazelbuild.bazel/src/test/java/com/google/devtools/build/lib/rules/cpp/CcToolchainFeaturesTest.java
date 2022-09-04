@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -876,28 +875,29 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
             "-a", "00", "01", "02", "-b", "-a", "10", "11", "12", "-b", "-a", "20", "21", "22",
             "-b");
 
-    ExpansionException e =
-        assertThrows(
-            ExpansionException.class,
-            () -> getCommandLineForFlagGroups(nestedGroup, createNestedVariables("v", 2, 3)));
-    assertThat(e).hasMessageThat().contains("'v'");
+    try {
+      getCommandLineForFlagGroups(nestedGroup, createNestedVariables("v", 2, 3));
+      fail("Expected ExpansionException");
+    } catch (ExpansionException e) {
+      assertThat(e).hasMessageThat().contains("'v'");
+    }
 
-    e =
-        assertThrows(
-            ExpansionException.class,
-            () ->
-                buildFeatures(
-                    "feature {",
-                    "  name: 'a'",
-                    "  flag_set {",
-                    "    action: 'c++-compile'",
-                    "    flag_group {",
-                    "      flag_group { flag: '-f' }",
-                    "      flag: '-f'",
-                    "    }",
-                    "  }",
-                    "}"));
-    assertThat(e).hasMessageThat().contains("Invalid toolchain configuration");
+    try {
+      buildFeatures(
+          "feature {",
+          "  name: 'a'",
+          "  flag_set {",
+          "    action: 'c++-compile'",
+          "    flag_group {",
+          "      flag_group { flag: '-f' }",
+          "      flag: '-f'",
+          "    }",
+          "  }",
+          "}");
+      fail("Expected ExpansionException");
+    } catch (ExpansionException e) {
+      assertThat(e).hasMessageThat().contains("Invalid toolchain configuration");
+    }
   }
 
   @Test
@@ -1010,22 +1010,24 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
 
   @Test
   public void testFeatureNameCollision() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () ->
-                buildFeatures(
-                    "feature { name: '<<<collision>>>' }", "feature { name: '<<<collision>>>' }"));
-    assertThat(e).hasMessageThat().contains("<<<collision>>>");
+    try {
+      buildFeatures(
+          "feature { name: '<<<collision>>>' }",
+          "feature { name: '<<<collision>>>' }");
+      fail("Expected EvalException");
+    } catch (EvalException e) {
+      assertThat(e).hasMessageThat().contains("<<<collision>>>");
+    }
   }
 
   @Test
   public void testReferenceToUndefinedFeature() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () -> buildFeatures("feature { name: 'a' implies: '<<<undefined>>>' }"));
-    assertThat(e).hasMessageThat().contains("<<<undefined>>>");
+    try {
+      buildFeatures("feature { name: 'a' implies: '<<<undefined>>>' }");
+      fail("Expected EvalException");
+    } catch (EvalException e) {
+      assertThat(e).hasMessageThat().contains("<<<undefined>>>");
+    }
   }
 
   @Test
@@ -1565,13 +1567,14 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
     FeatureConfiguration noFeaturesConfiguration =
         toolchainFeatures.getFeatureConfiguration(ImmutableSet.of("activates-action-a"));
 
-    IllegalArgumentException e =
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> noFeaturesConfiguration.getToolPathForAction("action-a"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Matching tool for action action-a not found for given feature configuration");
+    try {
+      noFeaturesConfiguration.getToolPathForAction("action-a");
+      fail("Expected IllegalArgumentException");
+    } catch (IllegalArgumentException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("Matching tool for action action-a not found for given feature configuration");
+    }
   }
 
   @Test
@@ -1618,40 +1621,40 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
 
   @Test
   public void testInvalidActionConfigurationDuplicateActionConfigs() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () ->
-                buildFeatures(
-                    "action_config {",
-                    "  config_name: 'action-a'",
-                    "  action_name: 'action-1'",
-                    "}",
-                    "action_config {",
-                    "  config_name: 'action-a'",
-                    "  action_name: 'action-2'",
-                    "}"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("feature or action config 'action-a' was specified multiple times.");
+    try {
+      buildFeatures(
+          "action_config {",
+          "  config_name: 'action-a'",
+          "  action_name: 'action-1'",
+          "}",
+          "action_config {",
+          "  config_name: 'action-a'",
+          "  action_name: 'action-2'",
+          "}");
+      fail("Expected EvalException");
+    } catch (EvalException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("feature or action config 'action-a' was specified multiple times.");
+    }
   }
 
   @Test
   public void testInvalidActionConfigurationMultipleActionConfigsForAction() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () ->
-                buildFeatures(
-                    "action_config {",
-                    "  config_name: 'name-a'",
-                    "  action_name: 'action-a'",
-                    "}",
-                    "action_config {",
-                    "  config_name: 'name-b'",
-                    "  action_name: 'action-a'",
-                    "}"));
-    assertThat(e).hasMessageThat().contains("multiple action configs for action 'action-a'");
+    try {
+      buildFeatures(
+          "action_config {",
+          "  config_name: 'name-a'",
+          "  action_name: 'action-a'",
+          "}",
+          "action_config {",
+          "  config_name: 'name-b'",
+          "  action_name: 'action-a'",
+          "}");
+      fail("Expected EvalException");
+    } catch (EvalException e) {
+      assertThat(e).hasMessageThat().contains("multiple action configs for action 'action-a'");
+    }
   }
 
   @Test
@@ -1673,23 +1676,23 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
 
   @Test
   public void testErrorForFlagFromActionConfigWithSpecifiedAction() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () ->
-                buildFeatures(
-                        "action_config {",
-                        "  config_name: 'c++-compile'",
-                        "  action_name: 'c++-compile'",
-                        "  flag_set {",
-                        "    action: 'c++-compile'",
-                        "    flag_group {flag: 'foo'}",
-                        "  }",
-                        "}")
-                    .getFeatureConfiguration(ImmutableSet.of("c++-compile")));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, "c++-compile"));
+    try {
+      buildFeatures(
+              "action_config {",
+              "  config_name: 'c++-compile'",
+              "  action_name: 'c++-compile'",
+              "  flag_set {",
+              "    action: 'c++-compile'",
+              "    flag_group {flag: 'foo'}",
+              "  }",
+              "}")
+          .getFeatureConfiguration(ImmutableSet.of("c++-compile"));
+      fail("Should throw EvalException");
+    } catch (EvalException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains(String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, "c++-compile"));
+    }
   }
 
   @Test
@@ -1726,60 +1729,58 @@ public class CcToolchainFeaturesTest extends BuildViewTestCase {
 
   @Test
   public void testProvidesCollision() throws Exception {
-    Exception e =
-        assertThrows(
-            Exception.class,
-            () ->
-                buildFeatures(
-                        "feature {",
-                        " name: 'a'",
-                        " provides: 'provides_string'",
-                        "}",
-                        "feature {",
-                        " name: 'b'",
-                        " provides: 'provides_string'",
-                        "}")
-                    .getFeatureConfiguration(ImmutableSet.of("a", "b")));
-    assertThat(e).hasMessageThat().contains("a b");
+    try {
+      buildFeatures(
+              "feature {",
+              " name: 'a'",
+              " provides: 'provides_string'",
+              "}",
+              "feature {",
+              " name: 'b'",
+              " provides: 'provides_string'",
+              "}")
+          .getFeatureConfiguration(ImmutableSet.of("a", "b"));
+      fail("Should throw CollidingProvidesException on collision, instead did not throw.");
+    } catch (Exception e) {
+      assertThat(e).hasMessageThat().contains("a b");
+    }
   }
 
   @Test
   public void testErrorForNoMatchingArtifactNamePatternCategory() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () ->
-                buildFeatures(
-                    "artifact_name_pattern {",
-                    "category_name: 'NONEXISTENT_CATEGORY'",
-                    "prefix: 'foo'",
-                    "extension: 'bar'}"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("Artifact category NONEXISTENT_CATEGORY not recognized");
+    try {
+      buildFeatures(
+          "artifact_name_pattern {",
+          "category_name: 'NONEXISTENT_CATEGORY'",
+          "prefix: 'foo'",
+          "extension: 'bar'}");
+      fail("Should throw EvalException.");
+    } catch (EvalException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains("Artifact category NONEXISTENT_CATEGORY not recognized");
+    }
   }
 
   @Test
   public void testErrorForNoMatchingArtifactPatternForCategory() throws Exception {
-    EvalException e =
-        assertThrows(
-            EvalException.class,
-            () -> {
-              CcToolchainFeatures toolchainFeatures =
-                  buildFeatures(
-                      "artifact_name_pattern {",
-                      "category_name: 'static_library'",
-                      "prefix: 'foo'",
-                      "extension: '.a'}");
-              toolchainFeatures.getArtifactNameForCategory(
-                  ArtifactCategory.DYNAMIC_LIBRARY, "output_name");
-            });
-    assertThat(e)
-        .hasMessageThat()
-        .contains(
-            String.format(
-                CcToolchainFeatures.MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE,
-                ArtifactCategory.DYNAMIC_LIBRARY.toString().toLowerCase()));
+    try {
+      CcToolchainFeatures toolchainFeatures =
+          buildFeatures(
+              "artifact_name_pattern {",
+              "category_name: 'static_library'",
+              "prefix: 'foo'",
+              "extension: '.a'}");
+      toolchainFeatures.getArtifactNameForCategory(ArtifactCategory.DYNAMIC_LIBRARY, "output_name");
+      fail("Should throw EvalException.");
+    } catch (EvalException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains(
+              String.format(
+                  CcToolchainFeatures.MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE,
+                  ArtifactCategory.DYNAMIC_LIBRARY.toString().toLowerCase()));
+    }
   }
 
   @Test

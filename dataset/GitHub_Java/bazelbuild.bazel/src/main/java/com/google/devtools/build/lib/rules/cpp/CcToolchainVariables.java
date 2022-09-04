@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainVariablesApi;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.util.Pair;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -298,10 +299,7 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
   /** An empty variables instance. */
   public static final CcToolchainVariables EMPTY = builder().build();
 
-  private static final Object NULL_MARKER = new Object();
-
-  // Values in this cache are either VariableValue, String error message, or NULL_MARKER.
-  private Map<String, Object> cache;
+  private Map<String, Pair<VariableValue, String>> cache;
 
   /**
    * Retrieves a {@link StringSequence} variable named {@code variableName} from {@code variables}
@@ -347,20 +345,21 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
     if (cache == null) {
       cache = Maps.newConcurrentMap();
     }
-    Object variableOrError =
+    Pair<VariableValue, String> variableOrError =
         cache.computeIfAbsent(
             name,
             n -> {
-              VariableValue variable = getNonStructuredVariable(n);
-              if (variable != null) {
-                return variable;
+              VariableValue nonStructuredVariable = getNonStructuredVariable(n);
+              if (nonStructuredVariable != null) {
+                return Pair.of(nonStructuredVariable, null);
               }
               try {
-                variable = getStructureVariable(n, throwOnMissingVariable, expander);
-                return variable != null ? variable : NULL_MARKER;
+                VariableValue structuredVariable =
+                    getStructureVariable(n, throwOnMissingVariable, expander);
+                return Pair.of(structuredVariable, null);
               } catch (ExpansionException e) {
                 if (throwOnMissingVariable) {
-                  return e.getMessage();
+                  return Pair.of(null, e.getMessage());
                 } else {
                   throw new IllegalStateException(
                       "Should not happen - call to getStructuredVariable threw when asked not to.",
@@ -368,18 +367,14 @@ public abstract class CcToolchainVariables implements CcToolchainVariablesApi {
                 }
               }
             });
-
-    if (variableOrError instanceof VariableValue) {
-      return (VariableValue) variableOrError;
-    }
-    if (throwOnMissingVariable) {
+    if (variableOrError.first == null && throwOnMissingVariable) {
       throw new ExpansionException(
-          variableOrError instanceof String
-              ? (String) variableOrError
+          variableOrError.second != null
+              ? variableOrError.second
               : String.format(
                   "Invalid toolchain configuration: Cannot find variable named '%s'.", name));
     }
-    return null;
+    return variableOrError.first;
   }
 
   private VariableValue getStructureVariable(

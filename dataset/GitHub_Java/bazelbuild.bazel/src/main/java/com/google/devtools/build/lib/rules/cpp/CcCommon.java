@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -27,10 +25,8 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
@@ -124,14 +120,10 @@ public final class CcCommon {
           CppActionNames.PREPROCESS_ASSEMBLE,
           CppActionNames.CLIF_MATCH,
           CppActionNames.LINKSTAMP_COMPILE,
-          CppActionNames.CC_FLAGS_MAKE_VARIABLE,
-          CppActionNames.LTO_BACKEND);
+          CppActionNames.CC_FLAGS_MAKE_VARIABLE);
 
   public static final ImmutableSet<String> ALL_LINK_ACTIONS =
       ImmutableSet.of(
-          CppActionNames.LTO_INDEX_EXECUTABLE,
-          CppActionNames.LTO_INDEX_DYNAMIC_LIBRARY,
-          CppActionNames.LTO_INDEX_NODEPS_DYNAMIC_LIBRARY,
           LinkTargetType.EXECUTABLE.getActionName(),
           Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
           Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName());
@@ -710,23 +702,7 @@ public final class CcCommon {
   /** Returns the Windows DEF file specified in win_def_file attribute of the rule. */
   @Nullable
   Artifact getWinDefFile() {
-    if (!ruleContext.isAttrDefined("win_def_file", LABEL)) {
-      return null;
-    }
-
     return ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET);
-  }
-
-  /**
-   * Returns the parser & Windows DEF file generator specified in $def_parser attribute of the rule.
-   */
-  @Nullable
-  Artifact getDefParser() {
-    if (!ruleContext.isAttrDefined("$def_parser", LABEL)) {
-      return null;
-    }
-
-    return ruleContext.getPrerequisiteArtifact("$def_parser", Mode.HOST);
   }
 
   /** Provides support for instrumentation. */
@@ -866,19 +842,14 @@ public final class CcCommon {
 
     allFeatures.addAll(getCoverageFeatures(cppConfiguration));
 
-    if (!allUnsupportedFeatures.contains(CppRuleClasses.FDO_INSTRUMENT)) {
-      if (cppConfiguration.getFdoInstrument() != null) {
-        allFeatures.add(CppRuleClasses.FDO_INSTRUMENT);
-      } else {
-        if (cppConfiguration.getCSFdoInstrument() != null) {
-          allFeatures.add(CppRuleClasses.CS_FDO_INSTRUMENT);
-        }
-      }
+    String fdoInstrument = cppConfiguration.getFdoInstrument();
+    if (fdoInstrument != null && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_INSTRUMENT)) {
+      allFeatures.add(CppRuleClasses.FDO_INSTRUMENT);
     }
 
     FdoContext.BranchFdoProfile branchFdoProvider = toolchain.getFdoContext().getBranchFdoProfile();
     if (branchFdoProvider != null && cppConfiguration.getCompilationMode() == CompilationMode.OPT) {
-      if ((branchFdoProvider.isLlvmFdo() || branchFdoProvider.isLlvmCSFdo())
+      if (branchFdoProvider.isLlvmFdo()
           && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_OPTIMIZE)) {
         allFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
         // For LLVM, support implicit enabling of ThinLTO for FDO unless it has been
@@ -887,9 +858,6 @@ public final class CcCommon {
             && !allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
           allFeatures.add(CppRuleClasses.ENABLE_FDO_THINLTO);
         }
-      }
-      if (branchFdoProvider.isLlvmCSFdo()) {
-        allFeatures.add(CppRuleClasses.CS_FDO_OPTIMIZE);
       }
       if (branchFdoProvider.isAutoFdo()) {
         allFeatures.add(CppRuleClasses.AUTOFDO);
@@ -1006,8 +974,9 @@ public final class CcCommon {
     FeatureConfiguration featureConfiguration = null;
     CppConfiguration cppConfiguration;
     if (toolchainProvider.requireCtxInConfigureFeatures()) {
-      // When --incompatible_require_ctx_in_configure_features is flipped, this whole method will go
-      // away. But I'm keeping it there so we can experiment with flags before they are flipped.
+      // When this is flipped, this whole method will go away. But I'm keeping it there
+      // so we can experiment with flags before they are flipped.
+      Preconditions.checkArgument(toolchainProvider.disableGenruleCcToolchainDependency());
       cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     } else {
       cppConfiguration =
@@ -1031,42 +1000,5 @@ public final class CcCommon {
           ruleContext, featureConfiguration, buildVariables, CppActionNames.CC_FLAGS_MAKE_VARIABLE);
     }
     return ImmutableList.of();
-  }
-
-  /** Returns artifacts that help debug the state of C++ features for the given ruleContext. */
-  public static Map<String, NestedSet<Artifact>> createSaveFeatureStateArtifacts(
-      CppConfiguration cppConfiguration,
-      FeatureConfiguration featureConfiguration,
-      RuleContext ruleContext) {
-
-    ImmutableMap.Builder<String, NestedSet<Artifact>> outputGroupsBuilder = ImmutableMap.builder();
-
-    if (cppConfiguration.saveFeatureState()) {
-      Artifact enabledFeaturesFile =
-          ruleContext.getUniqueDirectoryArtifact("feature_debug", "enabled_features.txt");
-      ruleContext.registerAction(
-          FileWriteAction.create(
-              ruleContext,
-              enabledFeaturesFile,
-              featureConfiguration.getEnabledFeatureNames().toString(),
-              /* makeExecutable= */ false));
-
-      Artifact requestedFeaturesFile =
-          ruleContext.getUniqueDirectoryArtifact("feature_debug", "requested_features.txt");
-      ruleContext.registerAction(
-          FileWriteAction.create(
-              ruleContext,
-              requestedFeaturesFile,
-              featureConfiguration.getRequestedFeatures().toString(),
-              /* makeExecutable= */ false));
-
-      outputGroupsBuilder.put(
-          OutputGroupInfo.DEFAULT,
-          NestedSetBuilder.<Artifact>stableOrder()
-              .add(enabledFeaturesFile)
-              .add(requestedFeaturesFile)
-              .build());
-    }
-    return outputGroupsBuilder.build();
   }
 }

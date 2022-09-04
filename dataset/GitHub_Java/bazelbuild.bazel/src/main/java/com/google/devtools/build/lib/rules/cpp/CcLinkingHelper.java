@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.Link.Picness;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LinkingInfoApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -263,15 +262,7 @@ public final class CcLinkingHelper {
    * <p>This only sets the link type (see {@link #setStaticLinkType}), either to a static library or
    * to an alwayslink static library (blaze uses a different file extension to signal alwayslink to
    * downstream code).
-   *
-   * @deprecated This is only set here for naming always to link static libraries with the *.lo
-   *     extension. This is no longer needed because {@link
-   *     com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink}s already carry
-   *     information about whether a library should always be linked or not. This method will be
-   *     removed when we no longer use *.lo for always to link static libraries in native
-   *     cc_library.
    */
-  @Deprecated
   public CcLinkingHelper setAlwayslink(boolean alwayslink) {
     staticLinkType =
         alwayslink ? LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY : LinkTargetType.STATIC_LIBRARY;
@@ -283,6 +274,7 @@ public final class CcLinkingHelper {
    * anything other than a static link causes this class to skip the link action creation. This
    * exists only for Objective-C.
    */
+  @Deprecated
   public CcLinkingHelper setStaticLinkType(LinkTargetType linkType) {
     Preconditions.checkNotNull(linkType);
     Preconditions.checkState(linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER);
@@ -450,8 +442,12 @@ public final class CcLinkingHelper {
           (!dynamicLinkType.isExecutable() && usePicForDynamicLibs)
               || (dynamicLinkType.isExecutable() && usePicForBinaries);
       hasBuiltDynamicLibrary =
-          createDynamicLinkAction(
-              ccLinkingOutputsBuilder, libraryToLinkBuilder, usePic, libraryIdentifier, ccOutputs);
+          createDynamicLibrary(
+              ccLinkingOutputsBuilder,
+              libraryToLinkBuilder,
+              usePic,
+              libraryIdentifier,
+              ccOutputs);
     }
 
     if (hasBuiltDynamicLibrary || shouldCreateStaticLibraries) {
@@ -625,7 +621,7 @@ public final class CcLinkingHelper {
     return action;
   }
 
-  private boolean createDynamicLinkAction(
+  private boolean createDynamicLibrary(
       CcLinkingOutputs.Builder ccLinkingOutputs,
       LibraryToLink.Builder libraryToLinkBuilder,
       boolean usePic,
@@ -634,21 +630,21 @@ public final class CcLinkingHelper {
       throws RuleErrorException, InterruptedException {
     boolean hasBuiltDynamicLibrary = false;
     // Create dynamic library.
-    Artifact linkerOutput;
+    Artifact soImpl;
     String mainLibraryIdentifier;
     if (linkerOutputArtifact == null) {
       // If the crosstool is configured to select an output artifact, we use that selection.
       // Otherwise, we use linux defaults.
-      linkerOutput = getLinkedArtifact(dynamicLinkType);
+      soImpl = getLinkedArtifact(LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
       mainLibraryIdentifier = libraryIdentifier;
     } else {
       // This branch is only used for vestigial Google-internal rules where the name of the output
       // file is explicitly specified in the BUILD file and as such, is platform-dependent. Thus,
       // we just hardcode some reasonable logic to compute the library identifier and hope that this
       // will eventually go away.
-      linkerOutput = linkerOutputArtifact;
+      soImpl = linkerOutputArtifact;
       mainLibraryIdentifier =
-          FileSystemUtils.removeExtension(linkerOutput.getRootRelativePath().getPathString());
+          FileSystemUtils.removeExtension(soImpl.getRootRelativePath().getPathString());
     }
 
     List<String> sonameLinkopts = ImmutableList.of();
@@ -662,12 +658,12 @@ public final class CcLinkingHelper {
             ImmutableList.of(
                 "-Wl,-soname="
                     + SolibSymlinkAction.getDynamicLibrarySoname(
-                        linkerOutput.getRootRelativePath(), /* preserveName= */ false));
+                        soImpl.getRootRelativePath(), /* preserveName= */ false));
       }
     }
 
     CppLinkActionBuilder dynamicLinkActionBuilder =
-        newLinkActionBuilder(linkerOutput)
+        newLinkActionBuilder(soImpl)
             .setWholeArchive(wholeArchive)
             .setNativeDeps(nativeDeps)
             .setAdditionalLinkstampDefines(additionalLinkstampDefines.build())
@@ -694,23 +690,15 @@ public final class CcLinkingHelper {
     }
 
     if (linkingMode == LinkingMode.DYNAMIC) {
-      try {
-        dynamicLinkActionBuilder.setRuntimeInputs(
-            ArtifactCategory.DYNAMIC_LIBRARY,
-            ccToolchain.getDynamicRuntimeLinkMiddleman(ruleErrorConsumer, featureConfiguration),
-            ccToolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
-      } catch (EvalException e) {
-        throw ruleErrorConsumer.throwWithRuleError(e.getMessage());
-      }
+      dynamicLinkActionBuilder.setRuntimeInputs(
+          ArtifactCategory.DYNAMIC_LIBRARY,
+          ccToolchain.getDynamicRuntimeLinkMiddleman(ruleErrorConsumer, featureConfiguration),
+          ccToolchain.getDynamicRuntimeLinkInputs(ruleErrorConsumer, featureConfiguration));
     } else {
-      try {
-        dynamicLinkActionBuilder.setRuntimeInputs(
-            ArtifactCategory.STATIC_LIBRARY,
-            ccToolchain.getStaticRuntimeLinkMiddleman(ruleErrorConsumer, featureConfiguration),
-            ccToolchain.getStaticRuntimeLinkInputs(featureConfiguration));
-      } catch (EvalException e) {
-        throw ruleErrorConsumer.throwWithRuleError(e.getMessage());
-      }
+      dynamicLinkActionBuilder.setRuntimeInputs(
+          ArtifactCategory.STATIC_LIBRARY,
+          ccToolchain.getStaticRuntimeLinkMiddleman(ruleErrorConsumer, featureConfiguration),
+          ccToolchain.getStaticRuntimeLinkInputs(ruleErrorConsumer, featureConfiguration));
     }
 
     // On Windows, we cannot build a shared library with symbols unresolved, so here we
@@ -758,9 +746,6 @@ public final class CcLinkingHelper {
       ccLinkingOutputs.addAllLtoArtifacts(dynamicLinkActionBuilder.getAllLtoBackendArtifacts());
     }
     CppLinkAction dynamicLinkAction = dynamicLinkActionBuilder.build();
-    if (dynamicLinkType.isExecutable()) {
-      ccLinkingOutputs.setExecutable(linkerOutput);
-    }
     ccLinkingOutputs.addLinkActionInputs(dynamicLinkAction.getInputs());
     actionConstructionContext.registerAction(dynamicLinkAction);
 

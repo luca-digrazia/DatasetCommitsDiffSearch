@@ -191,20 +191,6 @@ public class CppLinkActionBuilder {
 
   /** Returns the action name for purposes of querying the crosstool. */
   private String getActionName() {
-    // We check that this action is not lto-indexing, or when it is, it's either for executable
-    // or transitive or nodeps dynamic library.
-    Preconditions.checkArgument(
-        !isLtoIndexing || linkType.isExecutable() || linkType.isDynamicLibrary());
-    if (isLtoIndexing && cppConfiguration.useStandaloneLtoIndexingCommandLines()) {
-      if (linkType.isExecutable()) {
-        return CppActionNames.LTO_INDEX_EXECUTABLE;
-      } else if (linkType.isTransitiveDynamicLibrary()) {
-        return CppActionNames.LTO_INDEX_DYNAMIC_LIBRARY;
-      } else {
-        return CppActionNames.LTO_INDEX_NODEPS_DYNAMIC_LIBRARY;
-      }
-    }
-
     return linkType.getActionName();
   }
 
@@ -334,7 +320,7 @@ public class CppLinkActionBuilder {
    */
   private LtoBackendArtifacts createLtoArtifact(
       Artifact bitcodeFile,
-      @Nullable BitcodeFiles allBitcode,
+      Map<PathFragment, Artifact> allBitcode,
       PathFragment ltoOutputRootPrefix,
       boolean createSharedNonLto,
       List<String> argv)
@@ -433,7 +419,6 @@ public class CppLinkActionBuilder {
         allBitcode.put(input.getArtifact().getExecPath(), input.getArtifact());
       }
     }
-    BitcodeFiles bitcodeFiles = new BitcodeFiles(allBitcode);
 
     ImmutableList.Builder<LtoBackendArtifacts> ltoOutputs = ImmutableList.builder();
     for (LinkerInputs.LibraryToLink lib : uniqueLibraries) {
@@ -451,7 +436,7 @@ public class CppLinkActionBuilder {
             LtoBackendArtifacts ltoArtifacts =
                 createLtoArtifact(
                     objectFile,
-                    bitcodeFiles,
+                    allBitcode,
                     ltoOutputRootPrefix,
                     /* createSharedNonLto= */ false,
                     backendUserCompileFlags);
@@ -475,7 +460,7 @@ public class CppLinkActionBuilder {
         LtoBackendArtifacts ltoArtifacts =
             createLtoArtifact(
                 input.getArtifact(),
-                bitcodeFiles,
+                allBitcode,
                 ltoOutputRootPrefix,
                 !allowLtoIndexing,
                 backendUserCompileFlags);
@@ -874,13 +859,6 @@ public class CppLinkActionBuilder {
 
     CcToolchainVariables variables;
     try {
-      ImmutableList.Builder<String> userLinkFlags =
-          ImmutableList.<String>builder().addAll(linkopts).addAll(cppConfiguration.getLinkopts());
-
-      if (isLtoIndexing && cppConfiguration.useStandaloneLtoIndexingCommandLines()) {
-        userLinkFlags.addAll(cppConfiguration.getLtoIndexOptions());
-      }
-
       variables =
           LinkBuildVariables.setupVariables(
               getLinkType().linkerOrArchiver().equals(LinkerOrArchiver.LINKER),
@@ -897,7 +875,10 @@ public class CppLinkActionBuilder {
               featureConfiguration,
               useTestOnlyFlags,
               isLtoIndexing,
-              userLinkFlags.build(),
+              ImmutableList.<String>builder()
+                  .addAll(linkopts)
+                  .addAll(cppConfiguration.getLinkopts())
+                  .build(),
               toolchain.getInterfaceSoBuilder().getExecPathString(),
               interfaceOutput != null ? interfaceOutput.getExecPathString() : null,
               ltoOutputRootPrefix,
@@ -940,7 +921,6 @@ public class CppLinkActionBuilder {
 
     LinkCommandLine.Builder linkCommandLineBuilder =
         new LinkCommandLine.Builder()
-            .setActionName(getActionName())
             .setLinkerInputArtifacts(expandedLinkerArtifacts)
             .setLinkTargetType(linkType)
             .setLinkingMode(linkingMode)

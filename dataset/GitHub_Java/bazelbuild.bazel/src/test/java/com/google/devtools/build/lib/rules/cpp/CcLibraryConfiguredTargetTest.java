@@ -262,16 +262,6 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testFilesToBuildWithSaveFeatureState() throws Exception {
-    useConfiguration("--experimental_save_feature_state");
-    ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
-    Artifact archive = getBinArtifact("libhello.a", hello);
-    assertThat(getFilesToBuild(hello)).containsExactly(archive);
-    assertThat(ActionsTestUtil.baseArtifactNames(getOutputGroup(hello, OutputGroupInfo.DEFAULT)))
-        .containsAllOf("enabled_features.txt", "requested_features.txt");
-  }
-
-  @Test
   public void testEmptyLinkopts() throws Exception {
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
     assertThat(hello.get(CcInfo.PROVIDER).getCcLinkingContext().getUserLinkFlags().isEmpty())
@@ -584,10 +574,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             "package(features = ['header_modules'])",
             "cc_library(name = 'x', srcs = ['x.cc'], deps = [':y'])",
             "cc_library(name = 'y', hdrs = ['y.h'])");
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                getOutputGroup(x, OutputGroupInfo.COMPILATION_PREREQUISITES)))
-        .containsAtLeast("y.h", "y.cppmap", "crosstool.cppmap", "x.cppmap", "y.pic.pcm", "x.cc");
+    assertThat(ActionsTestUtil.baseArtifactNames(
+        getOutputGroup(x, OutputGroupInfo.COMPILATION_PREREQUISITES)))
+        .containsAllOf("y.h", "y.cppmap", "crosstool.cppmap", "x.cppmap", "y.pic.pcm", "x.cc");
   }
 
   @Test
