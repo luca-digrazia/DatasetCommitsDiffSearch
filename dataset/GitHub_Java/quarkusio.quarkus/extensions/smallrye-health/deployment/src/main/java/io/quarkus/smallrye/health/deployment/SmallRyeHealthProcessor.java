@@ -417,7 +417,6 @@ class SmallRyeHealthProcessor {
             }
 
             String healthPath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.rootPath));
-            String healthUiPath = httpRootPath.adjustPath(nonApplicationRootPathBuildItem.adjustPath(healthConfig.ui.rootPath));
 
             AppArtifact artifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, HEALTH_UI_WEBJAR_GROUP_ID,
                     HEALTH_UI_WEBJAR_ARTIFACT_ID);
@@ -427,8 +426,8 @@ class SmallRyeHealthProcessor {
                         HEALTH_UI_WEBJAR_PREFIX);
                 updateApiUrl(tempPath.resolve(FILE_TO_UPDATE), healthPath);
 
-                smallRyeHealthBuildProducer
-                        .produce(new SmallRyeHealthBuildItem(tempPath.toAbsolutePath().toString(), healthUiPath));
+                smallRyeHealthBuildProducer.produce(new SmallRyeHealthBuildItem(tempPath.toAbsolutePath().toString(),
+                        httpRootPath.adjustPath(healthConfig.ui.rootPath)));
 
                 notFoundPageDisplayableEndpointProducer
                         .produce(new NotFoundPageDisplayableEndpointBuildItem(
@@ -458,7 +457,8 @@ class SmallRyeHealthProcessor {
                     nativeImageResourceProducer.produce(new NativeImageResourceBuildItem(fileName));
                 }
 
-                smallRyeHealthBuildProducer.produce(new SmallRyeHealthBuildItem(HEALTH_UI_FINAL_DESTINATION, healthUiPath));
+                smallRyeHealthBuildProducer.produce(new SmallRyeHealthBuildItem(HEALTH_UI_FINAL_DESTINATION,
+                        httpRootPath.adjustPath(healthConfig.ui.rootPath)));
             }
         }
     }
