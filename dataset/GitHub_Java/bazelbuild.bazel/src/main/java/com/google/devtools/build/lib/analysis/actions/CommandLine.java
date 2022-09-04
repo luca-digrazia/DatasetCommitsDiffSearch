@@ -17,11 +17,8 @@ package com.google.devtools.build.lib.analysis.actions;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.util.Fingerprint;
 
 /** A representation of a list of arguments, often a command executed by {@link SpawnAction}. */
 public abstract class CommandLine {
@@ -33,8 +30,10 @@ public abstract class CommandLine {
         }
       };
 
-  /** Returns the command line. */
-  public abstract Iterable<String> arguments() throws CommandLineExpansionException;
+  /**
+   * Returns the command line.
+   */
+  public abstract Iterable<String> arguments();
 
   /**
    * Returns the evaluated command line with enclosed artifacts expanded by {@code artifactExpander}
@@ -44,16 +43,8 @@ public abstract class CommandLine {
    * artifact expansion. Subclasses should override this method if they contain TreeArtifacts and
    * need to expand them for proper argument evaluation.
    */
-  public Iterable<String> arguments(ArtifactExpander artifactExpander)
-      throws CommandLineExpansionException {
+  public Iterable<String> arguments(ArtifactExpander artifactExpander) {
     return arguments();
-  }
-
-  public void addToFingerprint(ActionKeyContext actionKeyContext, Fingerprint fingerprint)
-      throws CommandLineExpansionException {
-    for (String s : arguments()) {
-      fingerprint.addString(s);
-    }
   }
 
   /** Returns a {@link CommandLine} backed by a copy of the given list of arguments. */
@@ -78,13 +69,12 @@ public abstract class CommandLine {
     }
     return new CommandLine() {
       @Override
-      public Iterable<String> arguments() throws CommandLineExpansionException {
+      public Iterable<String> arguments() {
         return Iterables.concat(executableArgs, commandLine.arguments());
       }
 
       @Override
-      public Iterable<String> arguments(ArtifactExpander artifactExpander)
-          throws CommandLineExpansionException {
+      public Iterable<String> arguments(ArtifactExpander artifactExpander) {
         return Iterables.concat(executableArgs, commandLine.arguments(artifactExpander));
       }
     };
@@ -101,13 +91,12 @@ public abstract class CommandLine {
     }
     return new CommandLine() {
       @Override
-      public Iterable<String> arguments() throws CommandLineExpansionException {
+      public Iterable<String> arguments() {
         return Iterables.concat(commandLine.arguments(), args);
       }
 
       @Override
-      public Iterable<String> arguments(ArtifactExpander artifactExpander)
-          throws CommandLineExpansionException {
+      public Iterable<String> arguments(ArtifactExpander artifactExpander) {
         return Iterables.concat(commandLine.arguments(artifactExpander), args);
       }
     };
@@ -119,10 +108,6 @@ public abstract class CommandLine {
    */
   @Override
   public String toString() {
-    try {
-      return Joiner.on(' ').join(arguments());
-    } catch (CommandLineExpansionException e) {
-      return "Error in expanding command line";
-    }
+    return Joiner.on(' ').join(arguments());
   }
 }

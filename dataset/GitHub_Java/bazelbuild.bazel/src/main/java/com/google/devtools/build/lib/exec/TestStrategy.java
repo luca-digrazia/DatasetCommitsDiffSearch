@@ -134,12 +134,17 @@ public abstract class TestStrategy implements TestActionContext {
   // Used for generating unique temporary directory names. Contains the next numeric index for every
   // executable base name.
   private final Map<String, Integer> tmpIndex = new HashMap<>();
+  protected final ImmutableMap<String, String> clientEnv;
   protected final ExecutionOptions executionOptions;
   protected final BinTools binTools;
 
-  public TestStrategy(OptionsClassProvider requestOptionsProvider, BinTools binTools) {
+  public TestStrategy(
+      OptionsClassProvider requestOptionsProvider,
+      BinTools binTools,
+      Map<String, String> clientEnv) {
     this.executionOptions = requestOptionsProvider.getOptions(ExecutionOptions.class);
     this.binTools = binTools;
+    this.clientEnv = ImmutableMap.copyOf(clientEnv);
   }
 
   @Override
