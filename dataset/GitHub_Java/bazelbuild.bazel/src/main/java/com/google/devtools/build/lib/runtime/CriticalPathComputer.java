@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,26 +15,38 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Comparators;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
+import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
+import com.google.common.flogger.GoogleLogger;
+import com.google.common.flogger.StackSize;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
-import com.google.devtools.build.lib.actions.ActionMetadata;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionMiddlemanEvent;
+import com.google.devtools.build.lib.actions.ActionRewoundEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.Actions;
+import com.google.devtools.build.lib.actions.AggregatedSpawnMetrics;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
-import com.google.devtools.build.lib.util.Clock;
-
-import java.util.ArrayList;
-import java.util.Collections;
+import com.google.devtools.build.lib.actions.DiscoveredInputsEvent;
+import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
+import com.google.devtools.build.lib.actions.SpawnMetrics;
+import com.google.devtools.build.lib.actions.SpawnResult;
+import com.google.devtools.build.lib.clock.Clock;
+import java.time.Duration;
 import java.util.Comparator;
-import java.util.PriorityQueue;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.TimeUnit;
-
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BinaryOperator;
+import java.util.stream.Stream;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
@@ -43,46 +55,56 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>After instantiation, this object needs to be registered on the event bus to work.
  */
 @ThreadSafe
-public abstract class CriticalPathComputer<C extends AbstractCriticalPathComponent<C>,
-                                           A extends AggregatedCriticalPath<C>> {
+public class CriticalPathComputer {
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   /** Number of top actions to record. */
   static final int SLOWEST_COMPONENTS_SIZE = 30;
+
+  private static final int LARGEST_MEMORY_COMPONENTS_SIZE = 20;
+  private static final int LARGEST_INPUT_SIZE_COMPONENTS_SIZE = 20;
+
+  /** Selects and returns the longer of two components (the first may be {@code null}). */
+  private static final BinaryOperator<CriticalPathComponent> SELECT_LONGER_COMPONENT =
+      (a, b) ->
+          a == null || a.getAggregatedElapsedTime().compareTo(b.getAggregatedElapsedTime()) < 0
+              ? b
+              : a;
+
+  private final AtomicInteger idGenerator = new AtomicInteger();
   // outputArtifactToComponent is accessed from multiple event handlers.
-  protected final ConcurrentMap<Artifact, C> outputArtifactToComponent = Maps.newConcurrentMap();
+  private final ConcurrentMap<Artifact, CriticalPathComponent> outputArtifactToComponent =
+      Maps.newConcurrentMap();
+  private final ActionKeyContext actionKeyContext;
 
   /** Maximum critical path found. */
-  private C maxCriticalPath;
+  private final AtomicReference<CriticalPathComponent> maxCriticalPath;
+
   private final Clock clock;
+  private final boolean checkCriticalPathInconsistencies;
 
-  /**
-   * The list of slowest individual components, ignoring the time to build dependencies.
-   *
-   * <p>This data is a useful metric when running non highly incremental builds, where multiple
-   * tasks could run un parallel and critical path would only record the longest path.
-   */
-  private final PriorityQueue<C> slowestComponents = new PriorityQueue<>(SLOWEST_COMPONENTS_SIZE,
-      new Comparator<C>() {
-        @Override
-        public int compare(C o1, C o2) {
-          return Long.compare(o1.getActionWallTime(), o2.getActionWallTime());
-        }
-      }
-  );
-
-  private final Object lock = new Object();
-
-  protected CriticalPathComputer(Clock clock) {
+  public CriticalPathComputer(
+      ActionKeyContext actionKeyContext, Clock clock, boolean checkCriticalPathInconsistencies) {
+    this.actionKeyContext = actionKeyContext;
     this.clock = clock;
-    maxCriticalPath = null;
+    maxCriticalPath = new AtomicReference<>();
+    this.checkCriticalPathInconsistencies = checkCriticalPathInconsistencies;
+  }
+
+  public CriticalPathComputer(ActionKeyContext actionKeyContext, Clock clock) {
+    this(actionKeyContext, clock, /*checkCriticalPathInconsistencies=*/ true);
   }
 
   /**
    * Creates a critical path component for an action.
+   *
    * @param action the action for the critical path component
-   * @param startTimeMillis time when the action started to run
+   * @param relativeStartNanos time when the action started to run in nanos. Only meant to be used
+   *     for computing time differences.
    */
-  protected abstract C createComponent(Action action, long startTimeMillis);
+  private CriticalPathComponent createComponent(Action action, long relativeStartNanos) {
+    return new CriticalPathComponent(idGenerator.getAndIncrement(), action, relativeStartNanos);
+  }
 
   /**
    * Return the critical path stats for the current command execution.
@@ -90,22 +112,125 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
    * <p>This method allows us to calculate lazily the aggregate statistics of the critical path,
    * avoiding the memory and cpu penalty for doing it for all the actions executed.
    */
-  public abstract A aggregate();
+  public AggregatedCriticalPath aggregate() {
+    CriticalPathComponent criticalPath = getMaxCriticalPath();
+    if (criticalPath == null) {
+      return AggregatedCriticalPath.EMPTY;
+    }
+
+    ImmutableList.Builder<CriticalPathComponent> components = ImmutableList.builder();
+    AggregatedSpawnMetrics.Builder metricsBuilder = new AggregatedSpawnMetrics.Builder();
+    CriticalPathComponent child = criticalPath;
+
+    while (child != null) {
+      AggregatedSpawnMetrics childSpawnMetrics = child.getSpawnMetrics();
+      if (childSpawnMetrics != null) {
+        metricsBuilder.addDurations(childSpawnMetrics);
+        metricsBuilder.addNonDurations(childSpawnMetrics);
+      }
+      components.add(child);
+      child = child.getChild();
+    }
+
+    return new AggregatedCriticalPath(
+        criticalPath.getAggregatedElapsedTime(), metricsBuilder.build(), components.build());
+  }
+
+  public Map<Artifact, CriticalPathComponent> getCriticalPathComponentsMap() {
+    return outputArtifactToComponent;
+  }
+
+  /** Changes the phase of the action */
+  @Subscribe
+  @AllowConcurrentEvents
+  public void nextCriticalPathPhase(SpawnExecutedEvent.ChangePhase phase) {
+    CriticalPathComponent stats =
+        outputArtifactToComponent.get(phase.getAction().getPrimaryOutput());
+    if (stats != null) {
+      stats.changePhase();
+    }
+  }
+
+  /** Adds spawn metrics to the action stats. */
+  @Subscribe
+  @AllowConcurrentEvents
+  public void spawnExecuted(SpawnExecutedEvent event) {
+    ActionAnalysisMetadata action = event.getActionMetadata();
+    Artifact primaryOutput = action.getPrimaryOutput();
+    if (primaryOutput == null) {
+      // Despite the documentation to the contrary, the SpawnIncludeScanner creates an
+      // ActionExecutionMetadata instance that returns a null primary output. That said, this
+      // class is incorrect wrt. multiple Spawns in a single action. See b/111583707.
+      return;
+    }
+    CriticalPathComponent stats =
+        Preconditions.checkNotNull(outputArtifactToComponent.get(primaryOutput));
+
+    SpawnResult spawnResult = event.getSpawnResult();
+    stats.addSpawnResult(
+        spawnResult.getMetrics(),
+        spawnResult.getRunnerName(),
+        spawnResult.getRunnerSubtype(),
+        spawnResult.wasRemote());
+  }
+
+  /** Returns the list of components using the most memory. */
+  public List<CriticalPathComponent> getLargestMemoryComponents() {
+    return uniqueActions()
+        .collect(
+            Comparators.greatest(
+                LARGEST_MEMORY_COMPONENTS_SIZE,
+                Comparator.comparingLong(
+                    (c) ->
+                        c.getSpawnMetrics().getMaxNonDuration(0, SpawnMetrics::memoryEstimate))));
+  }
+
+  /** Returns the list of components with the largest input sizes. */
+  public List<CriticalPathComponent> getLargestInputSizeComponents() {
+    return uniqueActions()
+        .collect(
+            Comparators.greatest(
+                LARGEST_INPUT_SIZE_COMPONENTS_SIZE,
+                Comparator.comparingLong(
+                    (c) -> c.getSpawnMetrics().getMaxNonDuration(0, SpawnMetrics::inputBytes))));
+  }
+
+  /** Returns the list of slowest components. */
+  public List<CriticalPathComponent> getSlowestComponents() {
+    return uniqueActions()
+        .collect(
+            Comparators.greatest(
+                SLOWEST_COMPONENTS_SIZE,
+                Comparator.comparingLong(CriticalPathComponent::getElapsedTimeNanos)));
+  }
+
+  private Stream<CriticalPathComponent> uniqueActions() {
+    return outputArtifactToComponent.entrySet().stream()
+        .filter((e) -> e.getValue().isPrimaryOutput(e.getKey()))
+        .map((e) -> e.getValue());
+  }
+
+  /** Creates a CriticalPathComponent and adds the duration of input discovery and changes phase. */
+  @Subscribe
+  @AllowConcurrentEvents
+  public void discoverInputs(DiscoveredInputsEvent event) throws InterruptedException {
+    CriticalPathComponent stats =
+        tryAddComponent(createComponent(event.getAction(), event.getStartTimeNanos()));
+    stats.addSpawnResult(event.getMetrics(), null, "", /* wasRemote=*/ false);
+    stats.changePhase();
+  }
 
   /**
-   * Record an action that has started to run.
+   * Record an action that has started to run. If the CriticalPathComponent has not been created,
+   * initialize it and then start running.
    *
    * @param event information about the started action
    */
   @Subscribe
-  public void actionStarted(ActionStartedEvent event) {
+  @AllowConcurrentEvents
+  public void actionStarted(ActionStartedEvent event) throws InterruptedException {
     Action action = event.getAction();
-    C component = createComponent(action, TimeUnit.NANOSECONDS.toMillis(event.getNanoTimeStart()));
-    for (Artifact output : action.getOutputs()) {
-      C old = outputArtifactToComponent.put(output, component);
-      Preconditions.checkState(old == null, "Duplicate output artifact found. This could happen"
-          + " if a previous event registered the action %s. Artifact: %s", action, output);
-    }
+    tryAddComponent(createComponent(action, event.getNanoTimeStart())).startRunning();
   }
 
   /**
@@ -116,26 +241,59 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
    * for the same middleman. This should only happen if the actions are shared.
    */
   @Subscribe
-  public void middlemanAction(ActionMiddlemanEvent event) {
+  @AllowConcurrentEvents
+  public void middlemanAction(ActionMiddlemanEvent event) throws InterruptedException {
     Action action = event.getAction();
-    C component = createComponent(action, TimeUnit.NANOSECONDS.toMillis(event.getNanoTimeStart()));
-    boolean duplicate = false;
-    for (Artifact output : action.getOutputs()) {
-      C old = outputArtifactToComponent.putIfAbsent(output, component);
-      if (old != null) {
-        if (!Actions.canBeShared(action, old.getAction())) {
-          throw new IllegalStateException("Duplicate output artifact found for middleman."
-              + "This could happen  if a previous event registered the action.\n"
-              + "Old action: " + old.getAction() + "\n\n"
-              + "New action: " + action + "\n\n"
-              + "Artifact: " + output + "\n");
-        }
-        duplicate = true;
+    CriticalPathComponent component =
+        tryAddComponent(createComponent(action, event.getNanoTimeStart()));
+    finalizeActionStat(event.getNanoTimeStart(), action, component);
+  }
+
+  /**
+   * Try to add the component to the map of critical path components. If there is an existing
+   * component for its primary output it uses that to update the rest of the outputs.
+   *
+   * @return The component to be used for updating the time stats.
+   */
+  @SuppressWarnings("ReferenceEquality")
+  private CriticalPathComponent tryAddComponent(CriticalPathComponent newComponent)
+      throws InterruptedException {
+    Action newAction = newComponent.getAction();
+    Artifact primaryOutput = newAction.getPrimaryOutput();
+    CriticalPathComponent storedComponent =
+        outputArtifactToComponent.putIfAbsent(primaryOutput, newComponent);
+    if (storedComponent != null) {
+      Action oldAction = storedComponent.getAction();
+      // TODO(b/120663721) Replace this fragile reference equality check with something principled.
+      if (oldAction != newAction && !Actions.canBeShared(actionKeyContext, newAction, oldAction)) {
+        throw new IllegalStateException(
+            "Duplicate output artifact found for unsharable actions."
+                + "This can happen if a previous event registered the action.\n"
+                + "Old action: "
+                + oldAction
+                + "\n\nNew action: "
+                + newAction
+                + "\n\nArtifact: "
+                + primaryOutput
+                + "\n");
       }
+    } else {
+      storedComponent = newComponent;
     }
-    if (!duplicate) {
-      finalizeActionStat(action, component);
+    // Try to insert the existing component for the rest of the outputs even if we failed to be
+    // the ones inserting the component so that at the end of this method we guarantee that all the
+    // outputs have a component.
+    for (Artifact output : newAction.getOutputs()) {
+      if (output == primaryOutput) {
+        continue;
+      }
+      CriticalPathComponent old = outputArtifactToComponent.putIfAbsent(output, storedComponent);
+      // If two actions run concurrently maybe we find a component by primary output but we are
+      // the first updating the rest of the outputs.
+      Preconditions.checkState(
+          old == null || old == storedComponent, "Inconsistent state for %s", newAction);
     }
+    return storedComponent;
   }
 
   /**
@@ -144,13 +302,12 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
    * middle of the critical path.
    */
   @Subscribe
-  public void actionCached(CachedActionEvent event) {
+  @AllowConcurrentEvents
+  public void actionCached(CachedActionEvent event) throws InterruptedException {
     Action action = event.getAction();
-    C component = createComponent(action, TimeUnit.NANOSECONDS.toMillis(event.getNanoTimeStart()));
-    for (Artifact output : action.getOutputs()) {
-      outputArtifactToComponent.put(output, component);
-    }
-    finalizeActionStat(action, component);
+    CriticalPathComponent component =
+        tryAddComponent(createComponent(action, event.getNanoTimeStart()));
+    finalizeActionStat(event.getNanoTimeStart(), action, component);
   }
 
   /**
@@ -158,74 +315,83 @@ public abstract class CriticalPathComputer<C extends AbstractCriticalPathCompone
    * dependent artifacts and records the critical path stats.
    */
   @Subscribe
+  @AllowConcurrentEvents
   public void actionComplete(ActionCompletionEvent event) {
-    ActionMetadata action = event.getActionMetadata();
-    C component = Preconditions.checkNotNull(
-        outputArtifactToComponent.get(action.getPrimaryOutput()));
-    finalizeActionStat(action, component);
+    Action action = event.getAction();
+    CriticalPathComponent component =
+        Preconditions.checkNotNull(
+            outputArtifactToComponent.get(action.getPrimaryOutput()), action);
+    finalizeActionStat(event.getRelativeActionStartTime(), action, component);
+  }
+
+  /**
+   * Record that the failed rewound action is no longer running. The action may or may not start
+   * again later.
+   */
+  @Subscribe
+  @AllowConcurrentEvents
+  public void actionRewound(ActionRewoundEvent event) {
+    Action action = event.getFailedRewoundAction();
+    CriticalPathComponent component =
+        Preconditions.checkNotNull(outputArtifactToComponent.get(action.getPrimaryOutput()));
+    component.finishActionExecution(event.getRelativeActionStartTime(), clock.nanoTime());
   }
 
   /** Maximum critical path component found during the build. */
-  protected C getMaxCriticalPath() {
-    synchronized (lock) {
-      return maxCriticalPath;
-    }
+  protected CriticalPathComponent getMaxCriticalPath() {
+    return maxCriticalPath.get();
   }
 
-  /**
-   * The list of slowest individual components, ignoring the time to build dependencies.
-   */
-  public ImmutableList<C> getSlowestComponents() {
-    ArrayList<C> list;
-    synchronized (lock) {
-      list = new ArrayList<>(slowestComponents);
-      Collections.sort(list, slowestComponents.comparator());
+  private void finalizeActionStat(
+      long startTimeNanos, Action action, CriticalPathComponent component) {
+    long finishTimeNanos = clock.nanoTime();
+    for (Artifact input : action.getInputs().toList()) {
+      addArtifactDependency(component, input, finishTimeNanos);
     }
-    return ImmutableList.copyOf(list).reverse();
+    if (Duration.ofNanos(finishTimeNanos - startTimeNanos).compareTo(Duration.ofMillis(-5)) < 0) {
+      // See note in {@link Clock#nanoTime} about non increasing subsequent #nanoTime calls.
+      logger.atWarning().withStackTrace(StackSize.MEDIUM).log(
+          "Negative duration time for [%s] %s with start: %s, finish: %s.",
+          action.getMnemonic(), action.getPrimaryOutput(), startTimeNanos, finishTimeNanos);
+    }
+    component.finishActionExecution(startTimeNanos, finishTimeNanos);
+    maxCriticalPath.accumulateAndGet(component, SELECT_LONGER_COMPONENT);
   }
 
-  private void finalizeActionStat(ActionMetadata action, C component) {
-    component.setFinishTimeMillis(getTime());
-    for (Artifact input : action.getInputs()) {
-      addArtifactDependency(component, input);
-    }
-
-    synchronized (lock) {
-      if (isBiggestCriticalPath(component)) {
-        maxCriticalPath = component;
-      }
-
-      if (slowestComponents.size() == SLOWEST_COMPONENTS_SIZE) {
-        // The new component is faster than any of the slow components, avoid insertion.
-        if (slowestComponents.peek().getActionWallTime() >= component.getActionWallTime()) {
-          return;
-        }
-        // Remove the head element to make space (The fastest component in the queue).
-        slowestComponents.remove();
-      }
-      slowestComponents.add(component);
-    }
-  }
-
-  private long getTime() {
-    return TimeUnit.NANOSECONDS.toMillis(clock.nanoTime());
-  }
-
-  private boolean isBiggestCriticalPath(C newCriticalPath) {
-    synchronized (lock) {
-      return maxCriticalPath == null
-          || maxCriticalPath.getAggregatedWallTime() < newCriticalPath.getAggregatedWallTime();
-    }
-  }
-
-  /**
-   * If "input" is a generated artifact, link its critical path to the one we're building.
-   */
-  private void addArtifactDependency(C actionStats, Artifact input) {
-    C depComponent = outputArtifactToComponent.get(input);
+  /** If "input" is a generated artifact, link its critical path to the one we're building. */
+  private void addArtifactDependency(
+      CriticalPathComponent actionStats, Artifact input, long componentFinishNanos) {
+    CriticalPathComponent depComponent = outputArtifactToComponent.get(input);
     if (depComponent != null) {
-      actionStats.addDepInfo(depComponent);
+      if (depComponent.isRunning()) {
+        checkCriticalPathInconsistency(
+            (Artifact.DerivedArtifact) input, depComponent.getAction(), actionStats);
+        return;
+      }
+      actionStats.addDepInfo(depComponent, componentFinishNanos);
+    }
+  }
+
+  private void checkCriticalPathInconsistency(
+      Artifact.DerivedArtifact input, Action dependencyAction, CriticalPathComponent actionStats) {
+    if (!checkCriticalPathInconsistencies) {
+      return;
+    }
+    // Rare case that an action depending on a previously-cached shared action sees a different
+    // shared action that is in the midst of being an action cache hit.
+    for (Artifact actionOutput : dependencyAction.getOutputs()) {
+      if (input.equals(actionOutput)
+          && input
+              .getGeneratingActionKey()
+              .equals(((Artifact.DerivedArtifact) actionOutput).getGeneratingActionKey())) {
+        // This (currently running) dependency action is the same action that produced the input for
+        // the finished actionStats CriticalPathComponent. This should be impossible.
+        throw new IllegalStateException(
+            String.format(
+                "Cannot add critical path stats when the dependency action is not finished. "
+                    + "%s. %s. %s.",
+                input, actionStats.prettyPrintAction(), dependencyAction));
+      }
     }
   }
 }
-

@@ -14,9 +14,9 @@
 package com.google.devtools.build.lib.exec;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -24,84 +24,84 @@ import com.google.devtools.build.lib.actions.MiddlemanAction;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
-
-import java.util.ArrayList;
-import java.util.Arrays;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * A test for {@link MiddlemanAction}.
  */
 @TestSpec(size = Suite.SMALL_TESTS)
+@RunWith(JUnit4.class)
 public class MiddlemanActionTest extends BuildViewTestCase {
 
   private AnalysisTestUtil.CollectingAnalysisEnvironment analysisEnvironment;
   private MiddlemanFactory middlemanFactory;
-  private Artifact a, b, middle;
+  private Artifact a;
+  private Artifact b;
 
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
+  @Before
+  public final void initializeMiddleman() throws Exception  {
     scratch.file("a/BUILD",
                 "testing_dummy_rule(name='a', outs=['a.out'])");
     scratch.file("b/BUILD",
                 "testing_dummy_rule(name='b', outs=['b.out'])");
-    a = getFilesToBuild(getConfiguredTarget("//a")).iterator().next();
-    b = getFilesToBuild(getConfiguredTarget("//b")).iterator().next();
+    a = getFilesToBuild(getConfiguredTarget("//a")).toList().get(0);
+    b = getFilesToBuild(getConfiguredTarget("//b")).toList().get(0);
     analysisEnvironment =
         new AnalysisTestUtil.CollectingAnalysisEnvironment(
             AnalysisTestUtil.STUB_ANALYSIS_ENVIRONMENT);
     middlemanFactory = new MiddlemanFactory(view.getArtifactFactory(), analysisEnvironment);
-    middle = middlemanFactory.createAggregatingMiddleman(
-        NULL_ACTION_OWNER, "middleman_test",
-        Arrays.asList(a, b),
-        targetConfig.getMiddlemanDirectory());
+  }
+
+  @Test
+  public void testActionIsAMiddleman() throws Exception {
+    Artifact middle =
+        middlemanFactory.createRunfilesMiddleman(
+            NULL_ACTION_OWNER,
+            null,
+            NestedSetBuilder.<Artifact>stableOrder().add(a).add(b).build(),
+            targetConfig.getMiddlemanDirectory(RepositoryName.MAIN),
+            "runfiles");
     analysisEnvironment.registerWith(getMutableActionGraph());
-  }
-
-  public void testActionIsAMiddleman() {
     Action middleman = getGeneratingAction(middle);
-    assertTrue("Encountered instance of " + middleman.getClass(),
-        middleman.getActionType().isMiddleman());
-  }
 
-  public void testAAndBAreInputsToMiddleman() {
-    MiddlemanAction middleman = (MiddlemanAction) getGeneratingAction(middle);
-    assertThat(middleman.getInputs()).containsExactly(a, b);
-  }
-
-  public void testMiddleIsOutputOfMiddleman() {
-    MiddlemanAction middleman = (MiddlemanAction) getGeneratingAction(middle);
+    assertWithMessage("Encountered instance of " + middleman.getClass())
+        .that(middleman.getActionType().isMiddleman())
+        .isTrue();
+    assertThat(middleman.getInputs().toList()).containsExactly(a, b);
     assertThat(middleman.getOutputs()).containsExactly(middle);
   }
 
-  public void testMiddlemanIsNullForEmptyInputs() throws Exception {
-    assertNull(middlemanFactory.createAggregatingMiddleman(NULL_ACTION_OWNER,
-        "middleman_test", new ArrayList<Artifact>(), targetConfig.getMiddlemanDirectory()));
-  }
-
-  public void testMiddlemanIsIdentityForLonelyInput() throws Exception {
-    assertEquals(a,
-        middlemanFactory.createAggregatingMiddleman(
-            NULL_ACTION_OWNER, "middleman_test",
-            Lists.newArrayList(a),
-            targetConfig.getMiddlemanDirectory()));
-  }
-
+  @Test
   public void testDifferentExecutablesForRunfilesMiddleman() throws Exception {
     scratch.file("c/BUILD",
                 "testing_dummy_rule(name='c', outs=['c.out', 'd.out', 'common.out'])");
 
-    Artifact c = getFilesToBuild(getConfiguredTarget("//c:c.out")).iterator().next();
-    Artifact d = getFilesToBuild(getConfiguredTarget("//c:d.out")).iterator().next();
-    Artifact common = getFilesToBuild(getConfiguredTarget("//c:common.out")).iterator().next();
+    Artifact c = getFilesToBuild(getConfiguredTarget("//c:c.out")).toList().get(0);
+    Artifact d = getFilesToBuild(getConfiguredTarget("//c:d.out")).toList().get(0);
+    Artifact common = getFilesToBuild(getConfiguredTarget("//c:common.out")).toList().get(0);
 
     analysisEnvironment.clear();
-    Artifact middlemanForC = middlemanFactory.createRunfilesMiddleman(
-        NULL_ACTION_OWNER, c, Arrays.asList(c, common), targetConfig.getMiddlemanDirectory());
-    Artifact middlemanForD = middlemanFactory.createRunfilesMiddleman(
-        NULL_ACTION_OWNER, d, Arrays.asList(d, common), targetConfig.getMiddlemanDirectory());
+    Artifact middlemanForC =
+        middlemanFactory.createRunfilesMiddleman(
+            NULL_ACTION_OWNER,
+            c,
+            NestedSetBuilder.<Artifact>stableOrder().add(c).add(common).build(),
+            targetConfig.getMiddlemanDirectory(RepositoryName.MAIN),
+            "runfiles");
+    Artifact middlemanForD =
+        middlemanFactory.createRunfilesMiddleman(
+            NULL_ACTION_OWNER,
+            d,
+            NestedSetBuilder.<Artifact>stableOrder().add(d).add(common).build(),
+            targetConfig.getMiddlemanDirectory(RepositoryName.MAIN),
+            "runfiles");
     analysisEnvironment.registerWith(getMutableActionGraph());
 
     MiddlemanAction middlemanActionForC = (MiddlemanAction) getGeneratingAction(middlemanForC);

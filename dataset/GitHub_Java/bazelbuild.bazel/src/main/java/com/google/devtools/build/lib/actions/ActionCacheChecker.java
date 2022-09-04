@@ -54,12 +54,11 @@ import javax.annotation.Nullable;
  * otherwise lightweight, and should be constructed anew and discarded for each build request.
  */
 public class ActionCacheChecker {
+  private final ActionCache actionCache;
   private final ActionKeyContext actionKeyContext;
   private final Predicate<? super Action> executionFilter;
   private final ArtifactResolver artifactResolver;
   private final CacheConfig cacheConfig;
-
-  @Nullable private final ActionCache actionCache; // Null when not enabled.
 
   /** Cache config parameters for ActionCacheChecker. */
   @AutoValue
@@ -84,11 +83,12 @@ public class ActionCacheChecker {
   }
 
   public ActionCacheChecker(
-      @Nullable ActionCache actionCache,
+      ActionCache actionCache,
       ArtifactResolver artifactResolver,
       ActionKeyContext actionKeyContext,
       Predicate<? super Action> executionFilter,
       @Nullable CacheConfig cacheConfig) {
+    this.actionCache = actionCache;
     this.executionFilter = executionFilter;
     this.actionKeyContext = actionKeyContext;
     this.artifactResolver = artifactResolver;
@@ -96,11 +96,6 @@ public class ActionCacheChecker {
         cacheConfig != null
             ? cacheConfig
             : CacheConfig.builder().setEnabled(true).setVerboseExplanations(false).build();
-    if (this.cacheConfig.enabled()) {
-      this.actionCache = Preconditions.checkNotNull(actionCache);
-    } else {
-      this.actionCache = null;
-    }
   }
 
   public boolean isActionExecutionProhibited(Action action) {
@@ -444,7 +439,7 @@ public class ActionCacheChecker {
 
   @Nullable
   public List<Artifact> getCachedInputs(Action action, PackageRootResolver resolver)
-      throws PackageRootResolver.PackageRootException, InterruptedException {
+      throws InterruptedException {
     ActionCache.Entry entry = getCacheEntry(action);
     if (entry == null || entry.isCorrupted()) {
       return ImmutableList.of();
@@ -516,7 +511,7 @@ public class ActionCacheChecker {
    * when it is different. Whenever it encounters middleman artifacts as input artifacts for other
    * actions, it consults with the aggregated middleman digest computed here.
    */
-  private void checkMiddlemanAction(
+  protected void checkMiddlemanAction(
       Action action, EventHandler handler, MetadataHandler metadataHandler) {
     if (!cacheConfig.enabled()) {
       // Action cache is disabled, don't generate digests.
@@ -545,7 +540,7 @@ public class ActionCacheChecker {
       // Compute the aggregated middleman digest.
       // Since we never validate action key for middlemen, we should not store
       // it in the cache entry and just use empty string instead.
-      entry = new ActionCache.Entry("", ImmutableMap.of(), false);
+      entry = new ActionCache.Entry("", ImmutableMap.<String, String>of(), false);
       for (Artifact input : action.getInputs().toList()) {
         entry.addFile(input.getExecPath(), getMetadataMaybe(metadataHandler, input));
       }

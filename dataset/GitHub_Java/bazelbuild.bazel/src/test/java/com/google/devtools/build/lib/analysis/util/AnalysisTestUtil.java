@@ -32,12 +32,9 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.Runfiles;
-import com.google.devtools.build.lib.analysis.SingleRunfilesSupplier;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
@@ -62,6 +59,7 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -100,9 +98,9 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public void registerAction(ActionAnalysisMetadata action) {
-      this.actions.add(action);
-      original.registerAction(action);
+    public void registerAction(ActionAnalysisMetadata... actions) {
+      Collections.addAll(this.actions, actions);
+      original.registerAction(actions);
     }
 
     /** Calls {@link MutableActionGraph#registerAction} for all collected actions. */
@@ -186,11 +184,6 @@ public final class AnalysisTestUtil {
     @Override
     public StarlarkSemantics getStarlarkSemantics() throws InterruptedException {
       return original.getStarlarkSemantics();
-    }
-
-    @Override
-    public ImmutableMap<String, Object> getStarlarkDefinedBuiltins() throws InterruptedException {
-      return original.getStarlarkDefinedBuiltins();
     }
 
     @Override
@@ -349,7 +342,8 @@ public final class AnalysisTestUtil {
         };
 
     @Override
-    public void registerAction(ActionAnalysisMetadata action) {}
+    public void registerAction(ActionAnalysisMetadata... action) {
+    }
 
     @Override
     public boolean hasErrors() {
@@ -403,11 +397,6 @@ public final class AnalysisTestUtil {
 
     @Override
     public StarlarkSemantics getStarlarkSemantics() {
-      return null;
-    }
-
-    @Override
-    public ImmutableMap<String, Object> getStarlarkDefinedBuiltins() throws InterruptedException {
       return null;
     }
 
@@ -479,23 +468,9 @@ public final class AnalysisTestUtil {
    */
   public static Set<String> artifactsToStrings(
       BuildConfigurationCollection configurations, Iterable<? extends Artifact> artifacts) {
+    Map<String, String> rootMap = new HashMap<>();
     BuildConfiguration targetConfiguration =
         Iterables.getOnlyElement(configurations.getTargetConfigurations());
-    BuildConfiguration hostConfiguration = configurations.getHostConfiguration();
-    return artifactsToStrings(targetConfiguration, hostConfiguration, artifacts);
-  }
-
-  /**
-   * Given a collection of Artifacts, returns a corresponding set of strings of the form "{root}
-   * {relpath}", such as "bin x/libx.a". Such strings make assertions easier to write.
-   *
-   * <p>The returned set preserves the order of the input.
-   */
-  public static Set<String> artifactsToStrings(
-      BuildConfiguration targetConfiguration,
-      BuildConfiguration hostConfiguration,
-      Iterable<? extends Artifact> artifacts) {
-    Map<String, String> rootMap = new HashMap<>();
     rootMap.put(
         targetConfiguration.getBinDirectory(RepositoryName.MAIN).getRoot().toString(), "bin");
     // In preparation for merging genfiles/ and bin/, we don't differentiate them in tests anymore
@@ -505,6 +480,7 @@ public final class AnalysisTestUtil {
         targetConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getRoot().toString(),
         "internal");
 
+    BuildConfiguration hostConfiguration = configurations.getHostConfiguration();
     rootMap.put(
         hostConfiguration.getBinDirectory(RepositoryName.MAIN).getRoot().toString(), "bin(host)");
     // In preparation for merging genfiles/ and bin/, we don't differentiate them in tests anymore
@@ -540,14 +516,4 @@ public final class AnalysisTestUtil {
     return files;
   }
 
-  /** Creates a {@link RunfilesSupplier} for use in tests. */
-  public static RunfilesSupplier createRunfilesSupplier(
-      PathFragment runfilesDir, Runfiles runfiles) {
-    return new SingleRunfilesSupplier(
-        runfilesDir,
-        runfiles,
-        /*manifest=*/ null,
-        /*buildRunfileLinks=*/ false,
-        /*runfileLinksEnabled=*/ false);
-  }
 }

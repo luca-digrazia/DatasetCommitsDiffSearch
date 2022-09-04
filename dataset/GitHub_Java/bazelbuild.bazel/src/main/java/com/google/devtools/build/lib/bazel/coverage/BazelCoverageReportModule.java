@@ -16,12 +16,15 @@ package com.google.devtools.build.lib.bazel.coverage;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.eventbus.EventBus;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
+import com.google.devtools.build.lib.actions.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
-import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.Command;
@@ -40,15 +43,14 @@ public class BazelCoverageReportModule extends BlazeModule {
   public static class Options extends OptionsBase {
 
     @Option(
-      name = "combined_report",
-      converter = ReportTypeConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      defaultValue = "none",
-      help =
-          "Specifies desired cumulative coverage report type. At this point only HTML "
-              + "and LCOV reports are supported."
-    )
+        name = "combined_report",
+        converter = ReportTypeConverter.class,
+        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+        effectTags = {OptionEffectTag.UNKNOWN},
+        defaultValue = "none",
+        help =
+            "Specifies desired cumulative coverage report type. At this point only LCOV "
+                + "is supported.")
     public ReportType combinedReport;
   }
 
@@ -79,12 +81,15 @@ public class BazelCoverageReportModule extends BlazeModule {
       @Override
       public CoverageReportActionsWrapper createCoverageReportActionsWrapper(
           EventHandler eventHandler,
+          EventBus eventBus,
           BlazeDirectories directories,
           Collection<ConfiguredTarget> targetsToTest,
-          Iterable<Artifact> baselineCoverageArtifacts,
+          NestedSet<Artifact> baselineCoverageArtifacts,
           ArtifactFactory artifactFactory,
-          ArtifactOwner artifactOwner,
-          String workspaceName) {
+          ActionKeyContext actionKeyContext,
+          ActionLookupKey actionLookupKey,
+          String workspaceName)
+          throws InterruptedException {
         if (options == null || options.combinedReport == ReportType.NONE) {
           return null;
         }
@@ -96,7 +101,8 @@ public class BazelCoverageReportModule extends BlazeModule {
             targetsToTest,
             baselineCoverageArtifacts,
             artifactFactory,
-            artifactOwner,
+            actionKeyContext,
+            actionLookupKey,
             workspaceName,
             this::getArgs,
             this::getLocationMessage,
@@ -104,17 +110,21 @@ public class BazelCoverageReportModule extends BlazeModule {
       }
 
       private ImmutableList<String> getArgs(CoverageArgs args) {
-        ImmutableList.Builder<String> argsBuilder = ImmutableList.<String>builder().add(
-            args.reportGenerator().getExecutable().getExecPathString(),
-            // A file that contains all the exec paths to the coverage artifacts
-            "--reports_file=" + args.lcovArtifact().getExecPathString(),
-            "--output_file=" + args.lcovOutput().getExecPathString());
+        ImmutableList.Builder<String> argsBuilder =
+            ImmutableList.<String>builder()
+                .add(
+                    args.reportGenerator().getExecutable().getExecPathString(),
+                    // A file that contains all the exec paths to the coverage artifacts
+                    "--reports_file=" + args.lcovArtifact().getExecPathString(),
+                    "--output_file=" + args.lcovOutput().getExecPathString());
         return argsBuilder.build();
       }
 
       private String getLocationMessage(CoverageArgs args) {
-        return "LCOV coverage report is located at " + args.lcovOutput().getPath().getPathString()
-            + "\n and execpath is " + args.lcovOutput().getExecPathString();
+        return "LCOV coverage report is located at "
+            + args.lcovOutput().getPath().getPathString()
+            + "\n and execpath is "
+            + args.lcovOutput().getExecPathString();
       }
     };
   }

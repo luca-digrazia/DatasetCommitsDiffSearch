@@ -88,7 +88,7 @@ public final class ExtraActionSpec implements TransitiveInfoProvider {
     NestedSetBuilder<Artifact> extraActionInputs = NestedSetBuilder.stableOrder();
 
     Label ownerLabel = owningRule.getLabel();
-    if (requiresActionOutput) {
+    if (requiresActionOutput || actionToShadow.discoversInputs()) {
       extraActionInputs.addAll(actionToShadow.getOutputs());
     }
 
