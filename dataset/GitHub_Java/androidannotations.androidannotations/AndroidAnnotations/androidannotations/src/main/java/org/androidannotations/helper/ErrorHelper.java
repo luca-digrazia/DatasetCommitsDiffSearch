@@ -35,11 +35,7 @@ public class ErrorHelper {
 		for (AnnotationMirror annotation : annotations) {
 			result += annotationFullString(annotation) + "\n";
 		}
-		Element enclosingElement = element.getEnclosingElement();
-		if (enclosingElement != null) {
-			result += enclosingElement.toString() + ".";
-		}
-		return result + element.asType().toString();
+		return result + element.toString();
 	}
 
 	private String annotationFullString(AnnotationMirror annotation) {
