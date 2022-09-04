@@ -60,7 +60,9 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
             manifest.getOwnerLabel().getPackageName(), "resourceContainer_" + resources.hashCode());
 
     return ResourceContainer.builder()
-        .setResources(AndroidResources.forResources(errorConsumer, resources, "resource_files"))
+        .setResources(resources)
+        .setResourcesRoots(
+            LocalResourceContainer.getResourceRoots(errorConsumer, resources, "resource_files"))
         .setLabel(label)
         .setManifestExported(false)
         .setManifest(manifest)
@@ -352,11 +354,9 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
     Artifact transitiveResourceToDiscard =
         getResource("transitive/drawable-en-ldpi/transitive.png");
 
-    AndroidResources localResources =
-        AndroidResources.forResources(
-            errorConsumer,
-            ImmutableList.of(localResourceToKeep, localResourceToDiscard),
-            "resource_files");
+    LocalResourceContainer localResources =
+        LocalResourceContainer.forResources(
+            errorConsumer, ImmutableList.of(localResourceToKeep, localResourceToDiscard));
 
     ResourceDependencies resourceDependencies =
         ResourceDependencies.empty()
@@ -383,10 +383,10 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
         resourceFilterFactory.getResourceFilter(
             errorConsumer, resourceDependencies, localResources);
 
-    assertThat(localResources.filterLocalResources(errorConsumer, filter).getResources())
+    assertThat(localResources.filter(errorConsumer, filter).getResources())
         .containsExactly(localResourceToKeep);
 
-    ResourceDependencies filteredResourceDeps = resourceDependencies.filter(errorConsumer, filter);
+    ResourceDependencies filteredResourceDeps = resourceDependencies.filter(filter);
 
     // TODO: Remove - assert was same order before
     assertThat(resourceDependencies.getTransitiveResources())
@@ -401,13 +401,13 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
         filteredResourceDeps.getDirectResourceContainers().toList();
     assertThat(directContainers).hasSize(2);
 
-    AndroidResources directToDiscard = directContainers.get(0).getResources();
+    ResourceContainer directToDiscard = directContainers.get(0);
     assertThat(directToDiscard.getResources()).isEmpty();
-    assertThat(directToDiscard.getResourceRoots()).isEmpty();
+    assertThat(directToDiscard.getResourcesRoots()).isEmpty();
 
-    AndroidResources directToKeep = directContainers.get(1).getResources();
+    ResourceContainer directToKeep = directContainers.get(1);
     assertThat(directToKeep.getResources()).containsExactly(directResourceToKeep);
-    assertThat(directToKeep.getResourceRoots())
+    assertThat(directToKeep.getResourcesRoots())
         .containsExactly(
             directResourceToKeep.getExecPath().getParentDirectory().getParentDirectory());
 
@@ -415,13 +415,13 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
         filteredResourceDeps.getTransitiveResourceContainers().toList();
     assertThat(transitiveContainers).hasSize(2);
 
-    AndroidResources transitiveToDiscard = transitiveContainers.get(0).getResources();
+    ResourceContainer transitiveToDiscard = transitiveContainers.get(0);
     assertThat(transitiveToDiscard.getResources()).isEmpty();
-    assertThat(transitiveToDiscard.getResourceRoots()).isEmpty();
+    assertThat(transitiveToDiscard.getResourcesRoots()).isEmpty();
 
-    AndroidResources transitiveToKeep = transitiveContainers.get(1).getResources();
+    ResourceContainer transitiveToKeep = transitiveContainers.get(1);
     assertThat(transitiveToKeep.getResources()).containsExactly(transitiveResourceToKeep);
-    assertThat(transitiveToKeep.getResourceRoots())
+    assertThat(transitiveToKeep.getResourcesRoots())
         .containsExactly(
             transitiveResourceToKeep.getExecPath().getParentDirectory().getParentDirectory());
 
@@ -492,16 +492,17 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
   private ImmutableList<Artifact> doFilter(
       ResourceFilterFactory resourceFilterFactory, ImmutableList<Artifact> artifacts)
       throws RuleErrorException {
-    AndroidResources localResources =
-        AndroidResources.forResources(errorConsumer, artifacts, "resource_files");
+    LocalResourceContainer localResourceContainer =
+        LocalResourceContainer.forResources(errorConsumer, artifacts);
 
     ResourceDependencies resourceDeps = ResourceDependencies.empty();
 
     ResourceFilter filter =
-        resourceFilterFactory.getResourceFilter(errorConsumer, resourceDeps, localResources);
+        resourceFilterFactory.getResourceFilter(
+            errorConsumer, resourceDeps, localResourceContainer);
 
-    assertThat(resourceDeps.filter(errorConsumer, filter)).isSameAs(resourceDeps);
+    assertThat(resourceDeps.filter(filter)).isSameAs(resourceDeps);
 
-    return localResources.filterLocalResources(errorConsumer, filter).getResources();
+    return localResourceContainer.filter(errorConsumer, filter).getResources();
   }
 }

@@ -316,7 +316,7 @@ public class ResourceFilterFactory {
   ResourceFilter getResourceFilter(
       RuleErrorConsumer ruleErrorConsumer,
       ResourceDependencies resourceDeps,
-      AndroidResources localResources) {
+      LocalResourceContainer localResources) {
     if (!isPrefiltering()) {
       return ResourceFilter.empty();
     }
@@ -364,7 +364,7 @@ public class ResourceFilterFactory {
         (artifact) -> {
           // This class needs to record any dependent resources that were filtered out so that
           // resource processing ignores references to them in symbols files of  dependencies.
-          String parentDir = artifact.getExecPath().getParentDirectory().getBaseName();
+          String parentDir = artifact.getPath().getParentDirectory().getBaseName();
           filteredResources.add(parentDir + "/" + artifact.getFilename());
         });
   }
