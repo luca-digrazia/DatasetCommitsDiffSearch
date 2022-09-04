@@ -341,7 +341,6 @@ public class CppCompileActionBuilder {
     // This must be set either to false or true by CppSemantics, otherwise someone forgot to call
     // finalizeCompileActionBuilder on this builder.
     Preconditions.checkNotNull(shouldScanIncludes);
-    Preconditions.checkNotNull(featureConfiguration);
     boolean useHeaderModules =
         allowUsingHeaderModules
             && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES);
@@ -526,7 +525,6 @@ public class CppCompileActionBuilder {
    */
   public CppCompileActionBuilder setFeatureConfiguration(
       FeatureConfiguration featureConfiguration) {
-    Preconditions.checkNotNull(featureConfiguration);
     this.featureConfiguration = featureConfiguration;
     return this;
   }
