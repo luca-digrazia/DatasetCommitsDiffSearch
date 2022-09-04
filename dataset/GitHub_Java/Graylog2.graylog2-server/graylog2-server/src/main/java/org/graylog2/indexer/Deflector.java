@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.indices.InvalidAliasNameException;
+import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.shared.system.activities.Activity;
@@ -54,8 +55,6 @@ public class Deflector { // extends Ablenkblech
 
     public static final String DEFLECTOR_SUFFIX = "deflector";
     public static final String SEPARATOR = "_";
-    // TODO: Hardcoded archive suffix. See: https://github.com/Graylog2/graylog2-server/issues/2058
-    public static final String RESTORED_ARCHIVE_SUFFIX = "_restored_archive";
 
     private final SystemJobManager systemJobManager;
     private final ActivityWriter activityWriter;
@@ -64,7 +63,6 @@ public class Deflector { // extends Ablenkblech
     private final String deflectorName;
     private final Indices indices;
     private final SetIndexReadOnlyJob.Factory indexReadOnlyJobFactory;
-    private final Pattern deflectorIndexPattern;
     private final Pattern indexPattern;
 
     @Inject
@@ -83,8 +81,7 @@ public class Deflector { // extends Ablenkblech
 
         this.deflectorName = buildName(indexPrefix);
         this.indices = indices;
-        this.deflectorIndexPattern = Pattern.compile("^" + indexPrefix + SEPARATOR + "\\d+");
-        this.indexPattern = Pattern.compile("^" + indexPrefix + SEPARATOR + "\\d+(?:"+ RESTORED_ARCHIVE_SUFFIX +")?");
+        this.indexPattern = Pattern.compile("^" + indexPrefix + SEPARATOR + "\\d+");
     }
 
     public boolean isUp() {
@@ -189,7 +186,7 @@ public class Deflector { // extends Ablenkblech
 
         final List<Integer> indexNumbers = Lists.newArrayListWithExpectedSize(indices.size());
         for (String indexName : indices.keySet()) {
-            if (!isGraylogDeflectorIndex(indexName)) {
+            if (!isGraylogIndex(indexName)) {
                 continue;
             }
 
@@ -287,10 +284,6 @@ public class Deflector { // extends Ablenkblech
 
     public boolean isDeflectorAlias(final String indexName) {
         return getName().equals(indexName);
-    }
-
-    public boolean isGraylogDeflectorIndex(final String indexName) {
-        return !isNullOrEmpty(indexName) && !isDeflectorAlias(indexName) && deflectorIndexPattern.matcher(indexName).matches();
     }
 
     public boolean isGraylogIndex(final String indexName) {

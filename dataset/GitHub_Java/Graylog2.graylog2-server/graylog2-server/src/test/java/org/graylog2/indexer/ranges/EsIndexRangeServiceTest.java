@@ -73,6 +73,8 @@ public class EsIndexRangeServiceTest {
     private Indices indices;
     @Mock
     private EventBus localEventBus;
+    @Mock
+    private EventBus clusterEventBus;
     private EsIndexRangeService indexRangeService;
 
     public EsIndexRangeServiceTest() {
@@ -85,7 +87,7 @@ public class EsIndexRangeServiceTest {
         final Messages messages = new Messages(client, ELASTICSEARCH_CONFIGURATION);
         indices = new Indices(client, ELASTICSEARCH_CONFIGURATION, new IndexMapping(), messages);
         final Deflector deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION.getIndexPrefix(), new NullActivityWriter(), null, null, indices);
-        indexRangeService = new EsIndexRangeService(client, deflector, localEventBus, new MetricRegistry());
+        indexRangeService = new EsIndexRangeService(client, deflector, localEventBus, clusterEventBus, new MetricRegistry());
     }
 
     @Test
