@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options.MakeVariableSource;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -52,7 +51,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -914,26 +912,14 @@ public class CppHelper {
         objectDir.getRelative(rootRelativePath), sourceTreeArtifact.getRoot());
   }
 
-  static String getArtifactNameForCategory(
-      RuleContext ruleContext,
-      CcToolchainProvider toolchain,
-      ArtifactCategory category,
-      String outputName)
-      throws RuleErrorException {
-    try {
-      return toolchain.getFeatures().getArtifactNameForCategory(category, outputName);
-    } catch (InvalidConfigurationException e) {
-      ruleContext.throwWithRuleError(e.getMessage());
-      throw new IllegalStateException("Should not be reached");
-    }
+  static String getArtifactNameForCategory(RuleContext ruleContext, CcToolchainProvider toolchain,
+      ArtifactCategory category, String outputName) {
+    return toolchain.getFeatures().getArtifactNameForCategory(category, outputName);
   }
 
   static String getDotdFileName(
-      RuleContext ruleContext,
-      CcToolchainProvider toolchain,
-      ArtifactCategory outputCategory,
-      String outputName)
-      throws RuleErrorException {
+      RuleContext ruleContext, CcToolchainProvider toolchain, ArtifactCategory outputCategory,
+      String outputName) {
     String baseName = outputCategory == ArtifactCategory.OBJECT_FILE
         || outputCategory == ArtifactCategory.PROCESSED_HEADER
         ? outputName

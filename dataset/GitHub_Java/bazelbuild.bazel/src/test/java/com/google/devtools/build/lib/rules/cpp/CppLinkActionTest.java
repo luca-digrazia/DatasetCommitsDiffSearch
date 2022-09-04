@@ -93,13 +93,15 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 /* supportsInterfaceSharedLibraries= */ false),
             CppActionConfigs.getFeaturesToAppearLastInToolchain(ImmutableSet.of()))
         .getFeatureConfiguration(
-            ImmutableSet.of(
-                Link.LinkTargetType.EXECUTABLE.getActionName(),
-                Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
-                Link.LinkTargetType.STATIC_LIBRARY.getActionName(),
-                Link.LinkTargetType.PIC_STATIC_LIBRARY.getActionName(),
-                Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY.getActionName(),
-                Link.LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY.getActionName()));
+            FeatureSpecification.create(
+                ImmutableSet.of(
+                    Link.LinkTargetType.EXECUTABLE.getActionName(),
+                    Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
+                    Link.LinkTargetType.STATIC_LIBRARY.getActionName(),
+                    Link.LinkTargetType.PIC_STATIC_LIBRARY.getActionName(),
+                    Link.LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY.getActionName(),
+                    Link.LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY.getActionName()),
+                ImmutableSet.<String>of()));
   }
 
   @Test
@@ -115,7 +117,9 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "   }",
                 "}")
             .getFeatureConfiguration(
-                ImmutableSet.of("a", Link.LinkTargetType.EXECUTABLE.getActionName()));
+                FeatureSpecification.create(
+                    ImmutableSet.of("a", Link.LinkTargetType.EXECUTABLE.getActionName()),
+                    ImmutableSet.<String>of()));
 
     CppLinkAction linkAction =
         createLinkBuilder(
@@ -140,7 +144,9 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "      execution_requirement: 'dummy-exec-requirement'",
                 "   }",
                 "}")
-            .getFeatureConfiguration(ImmutableSet.of(LinkTargetType.EXECUTABLE.getActionName()));
+            .getFeatureConfiguration(
+                FeatureSpecification.create(
+                    ImmutableSet.of(LinkTargetType.EXECUTABLE.getActionName()), ImmutableSet.of()));
 
     CppLinkAction linkAction =
         createLinkBuilder(
@@ -260,7 +266,9 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "   }",
                 "}")
             .getFeatureConfiguration(
-                ImmutableSet.of(Link.LinkTargetType.EXECUTABLE.getActionName(), "a"));
+                FeatureSpecification.create(
+                    ImmutableSet.of(Link.LinkTargetType.EXECUTABLE.getActionName(), "a"),
+                    ImmutableSet.<String>of()));
 
     CppLinkAction linkAction =
         createLinkBuilder(
@@ -588,10 +596,12 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "   implies: 'dynamic_library_linker_tool'",
                 "}")
             .getFeatureConfiguration(
-                ImmutableSet.of(
-                    "build_interface_libraries",
-                    "dynamic_library_linker_tool",
-                    LinkTargetType.DYNAMIC_LIBRARY.getActionName()));
+                FeatureSpecification.create(
+                    ImmutableSet.of(
+                        "build_interface_libraries",
+                        "dynamic_library_linker_tool",
+                        LinkTargetType.DYNAMIC_LIBRARY.getActionName()),
+                    ImmutableSet.<String>of()));
     CppLinkActionBuilder builder =
         createLinkBuilder(
                 LinkTargetType.DYNAMIC_LIBRARY,

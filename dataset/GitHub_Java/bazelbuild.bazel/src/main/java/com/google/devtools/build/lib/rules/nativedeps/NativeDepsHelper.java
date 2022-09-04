@@ -258,7 +258,8 @@ public abstract class NativeDepsHelper {
         .addLtoBitcodeFiles(ltoBitcodeFilesMap.build())
         .addNonCodeInputs(nonCodeInputs);
 
-    if (builder.hasLtoBitcodeInputs() && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
+    if (!builder.getLtoBitcodeFiles().isEmpty()
+        && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
       builder.setLtoIndexing(true);
       builder.setUsePicForLtoBackendActions(CppHelper.usePic(ruleContext, toolchain, false));
       CppLinkAction indexAction = builder.build();

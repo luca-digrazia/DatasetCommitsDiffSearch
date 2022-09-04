@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -189,13 +188,7 @@ public final class LinkCommandLine extends CommandLine {
    */
   @VisibleForTesting
   final Pair<List<String>, List<String>> splitCommandline() {
-    return splitCommandline(null);
-  }
-
-  @VisibleForTesting
-  final Pair<List<String>, List<String>> splitCommandline(@Nullable ArtifactExpander expander) {
-    Preconditions.checkNotNull(paramFile);
-    List<String> args = getRawLinkArgv(expander);
+    List<String> args = getRawLinkArgv();
     if (linkTargetType.staticness() == Staticness.STATIC) {
       // Ar link commands can also generate huge command lines.
       List<String> paramFileArgs = new ArrayList<>();
@@ -222,12 +215,7 @@ public final class LinkCommandLine extends CommandLine {
     return new CommandLine() {
       @Override
       public Iterable<String> arguments() {
-        return splitCommandline(null).getSecond();
-      }
-
-      @Override
-      public Iterable<String> arguments(ArtifactExpander expander) {
-        return splitCommandline(expander).getSecond();
+        return splitCommandline().getSecond();
       }
     };
   }
@@ -354,23 +342,11 @@ public final class LinkCommandLine extends CommandLine {
 
   /**
    * Returns a raw link command for the given link invocation, including both command and arguments
-   * (argv). The version that uses the expander is preferred, but that one can't be used during
-   * analysis.
+   * (argv).
    *
    * @return raw link command line.
    */
   public List<String> getRawLinkArgv() {
-    return getRawLinkArgv(null);
-  }
-
-  /**
-   * Returns a raw link command for the given link invocation, including both command and arguments
-   * (argv).
-   *
-   * @param expander ArtifactExpander for expanding TreeArtifacts.
-   * @return raw link command line.
-   */
-  public List<String> getRawLinkArgv(@Nullable ArtifactExpander expander) {
     List<String> argv = new ArrayList<>();
     if (forcedToolPath != null) {
       argv.add(forcedToolPath);
@@ -390,30 +366,24 @@ public final class LinkCommandLine extends CommandLine {
             new Variables.Builder(variables)
                 .addStringSequenceVariable(
                     CppLinkActionBuilder.LEGACY_LINK_FLAGS_VARIABLE, getToolchainFlags())
-                .build(),
-            expander));
+                .build()));
     return argv;
   }
 
-  List<String> getCommandLine(@Nullable ArtifactExpander expander) {
+  List<String> getCommandLine() {
     // Try to shorten the command line by use of a parameter file.
     // This makes the output with --subcommands (et al) more readable.
     if (paramFile != null) {
-      Pair<List<String>, List<String>> split = splitCommandline(expander);
+      Pair<List<String>, List<String>> split = splitCommandline();
       return split.first;
     } else {
-      return getRawLinkArgv(expander);
+      return getRawLinkArgv();
     }
   }
 
   @Override
   public List<String> arguments() {
-    return getRawLinkArgv(null);
-  }
-
-  @Override
-  public Iterable<String> arguments(ArtifactExpander artifactExpander) {
-    return getRawLinkArgv(artifactExpander);
+    return getRawLinkArgv();
   }
 
   /** A builder for a {@link LinkCommandLine}. */
