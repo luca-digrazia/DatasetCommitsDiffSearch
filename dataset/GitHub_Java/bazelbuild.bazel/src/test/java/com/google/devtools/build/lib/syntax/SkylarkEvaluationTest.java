@@ -86,24 +86,24 @@ public class SkylarkEvaluationTest extends EvaluationTest {
       super(CONSTRUCTOR);
     }
 
-    @SkylarkCallable(name = "callable_string", documented = false, structField = false)
+    @SkylarkCallable(name = "callable_string", doc = "", structField = false)
     public String callableString() {
       return "a";
     }
 
-    @SkylarkCallable(name = "struct_field_string", documented = false, structField = true)
+    @SkylarkCallable(name = "struct_field_string", doc = "", structField = true)
     public String structFieldString() {
       return "a";
     }
 
-    @SkylarkCallable(name = "struct_field_callable", documented = false, structField = true)
+    @SkylarkCallable(name = "struct_field_callable", doc = "", structField = true)
     public BuiltinFunction structFieldCallable() {
       return foobar;
     }
 
     @SkylarkCallable(
       name = "struct_field_none",
-      documented = false,
+      doc = "",
       structField = true,
       allowReturnNones = true
     )
@@ -114,58 +114,58 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @SkylarkModule(name = "Mock", doc = "")
   static class Mock {
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public static Integer valueOf(String str) {
       return Integer.valueOf(str);
     }
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public Boolean isEmpty(String str) {
       return str.isEmpty();
     }
     public void value() {}
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public Bad returnBad() {
       return new Bad();
     }
-    @SkylarkCallable(name = "struct_field", documented = false, structField = true)
+    @SkylarkCallable(name = "struct_field", doc = "", structField = true)
     public String structField() {
       return "a";
     }
-    @SkylarkCallable(name = "struct_field_callable", documented = false, structField = true)
+    @SkylarkCallable(name = "struct_field_callable", doc = "", structField = true)
     public BuiltinFunction structFieldCallable() {
       return foobar;
     }
-    @SkylarkCallable(name = "function", documented = false, structField = false)
+    @SkylarkCallable(name = "function", doc = "", structField = false)
     public String function() {
       return "a";
     }
     @SuppressWarnings("unused")
-    @SkylarkCallable(name = "nullfunc_failing", documented = false, allowReturnNones = false)
+    @SkylarkCallable(name = "nullfunc_failing", doc = "", allowReturnNones = false)
     public SkylarkValue nullfuncFailing(String p1, Integer p2) {
       return null;
     }
-    @SkylarkCallable(name = "nullfunc_working", documented = false, allowReturnNones = true)
+    @SkylarkCallable(name = "nullfunc_working", doc = "", allowReturnNones = true)
     public SkylarkValue nullfuncWorking() {
       return null;
     }
-    @SkylarkCallable(name = "voidfunc", documented = false)
+    @SkylarkCallable(name = "voidfunc", doc = "")
     public void voidfunc() {}
-    @SkylarkCallable(name = "string_list", documented = false)
+    @SkylarkCallable(name = "string_list", doc = "")
     public ImmutableList<String> stringList() {
       return ImmutableList.<String>of("a", "b");
     }
-    @SkylarkCallable(name = "string", documented = false)
+    @SkylarkCallable(name = "string", doc = "")
     public String string() {
       return "a";
     }
-    @SkylarkCallable(name = "string_list_dict", documented = false)
+    @SkylarkCallable(name = "string_list_dict", doc = "")
     public Map<String, List<String>> stringListDict() {
       return ImmutableMap.of("a", ImmutableList.of("b", "c"));
     }
 
     @SkylarkCallable(
       name = "with_params",
-      documented = false,
+      doc = "",
       mandatoryPositionals = 1,
       parameters = {
         @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
@@ -241,28 +241,25 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
     @SkylarkCallable(
       name = "with_extra",
-      documented = false,
+      doc = "",
       useLocation = true,
       useAst = true,
-      useEnvironment = true,
-      useSkylarkSemantics = true
+      useEnvironment = true
     )
     public String withExtraInterpreterParams(
-        Location location, FuncallExpression func, Environment env, SkylarkSemantics sem) {
+        Location location, FuncallExpression func, Environment env) {
       return "with_extra("
           + location.getStartLine()
           + ", "
           + func.getArguments().size()
           + ", "
           + env.isGlobal()
-          + ", "
-          + (sem != null)
           + ")";
     }
 
     @SkylarkCallable(
       name = "with_params_and_extra",
-      documented = false,
+      doc = "",
       mandatoryPositionals = 1,
       parameters = {
         @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
@@ -311,8 +308,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
       },
       useAst = true,
       useLocation = true,
-      useEnvironment = true,
-      useSkylarkSemantics = true
+      useEnvironment = true
     )
     public String withParamsAndExtraInterpreterParams(
         Integer pos1,
@@ -325,8 +321,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         Object multi,
         Location location,
         FuncallExpression func,
-        Environment env,
-        SkylarkSemantics sem) {
+        Environment env) {
       return "with_params_and_extra("
           + pos1
           + ", "
@@ -347,8 +342,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           + func.getArguments().size()
           + ", "
           + env.isGlobal()
-          + ", "
-          + (sem != null)
           + ")";
     }
 
@@ -360,7 +353,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @SkylarkModule(name = "MockInterface", doc = "")
   static interface MockInterface {
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public Boolean isEmptyInterface(String str);
   }
 
@@ -373,13 +366,13 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     public Boolean isEmptyInterface(String str) {
       return str.isEmpty();
     }
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public Boolean isEmptyClassNotAnnotated(String str) {
       return str.isEmpty();
     }
   }
 
-  @SkylarkModule(name = "MockClassObject", documented = false, doc = "")
+  @SkylarkModule(name = "MockClassObject", doc = "", documented = false)
   static final class MockClassObject implements ClassObject {
     @Override
     public Object getValue(String name) {
@@ -404,10 +397,10 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   @SkylarkModule(name = "MockMultipleMethodClass", doc = "")
   static final class MockMultipleMethodClass {
     @SuppressWarnings("unused")
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public void method(Object o) {}
     @SuppressWarnings("unused")
-    @SkylarkCallable(documented = false)
+    @SkylarkCallable(doc = "")
     public void method(String i) {}
   }
 
@@ -1041,7 +1034,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.with_extra()")
-        .testLookup("v", "with_extra(1, 0, true, true)");
+        .testLookup("v", "with_extra(1, 0, true)");
   }
 
   @Test
@@ -1049,7 +1042,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params_and_extra(1, True, named=True)")
-        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, 3, true, true)");
+        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, 3, true)");
   }
 
   @Test
@@ -1694,22 +1687,22 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           Location.BUILTIN);
     }
 
-    @SkylarkCallable(name = "callable_only_field", documented = false, structField = true)
+    @SkylarkCallable(name = "callable_only_field", doc = "", structField = true)
     public String getCallableOnlyField() {
       return "fromSkylarkCallable";
     }
 
-    @SkylarkCallable(name = "callable_only_method", documented = false, structField = false)
+    @SkylarkCallable(name = "callable_only_method", doc = "", structField = false)
     public String getCallableOnlyMethod() {
       return "fromSkylarkCallable";
     }
 
-    @SkylarkCallable(name = "collision_field", documented = false, structField = true)
+    @SkylarkCallable(name = "collision_field", doc = "", structField = true)
     public String getCollisionField() {
       return "fromSkylarkCallable";
     }
 
-    @SkylarkCallable(name = "collision_method", documented = false, structField = false)
+    @SkylarkCallable(name = "collision_method", doc = "", structField = false)
     public String getCollisionMethod() {
       return "fromSkylarkCallable";
     }
