@@ -3,13 +3,15 @@ package io.dropwizard.client;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.httpclient.HttpClientMetricNameStrategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
-import io.dropwizard.jersey.jackson.JacksonFeature;
-import io.dropwizard.jersey.validation.HibernateValidationBinder;
+import io.dropwizard.jersey.jackson.JacksonBinder;
+import io.dropwizard.jersey.validation.HibernateValidationFeature;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
+import io.dropwizard.util.Duration;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.ServiceUnavailableRetryStrategy;
@@ -18,6 +20,9 @@ import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.glassfish.jersey.client.ClientConfig;
+import org.glassfish.jersey.client.rx.Rx;
+import org.glassfish.jersey.client.rx.RxClient;
+import org.glassfish.jersey.client.rx.RxInvoker;
 import org.glassfish.jersey.client.spi.ConnectorProvider;
 
 import javax.annotation.Nullable;
@@ -25,7 +30,6 @@ import javax.net.ssl.HostnameVerifier;
 import javax.validation.Validator;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.RxInvokerProvider;
 import javax.ws.rs.core.Configuration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -84,6 +88,7 @@ public class JerseyClientBuilder {
         this.apacheHttpClientBuilder = new HttpClientBuilder(metricRegistry);
     }
 
+    @VisibleForTesting
     public void setApacheHttpClientBuilder(HttpClientBuilder apacheHttpClientBuilder) {
         this.apacheHttpClientBuilder = apacheHttpClientBuilder;
     }
@@ -317,12 +322,12 @@ public class JerseyClientBuilder {
     }
 
     /**
-     * Builds the {@link Client} instance with a custom reactive client provider.
+     * Builds the {@link RxClient} instance.
      *
-     * @return a fully-configured {@link Client}
+     * @return a fully-configured {@link RxClient}
      */
-    public <RX extends RxInvokerProvider> Client buildRx(String name, Class<RX> invokerType) {
-        return build(name).register(invokerType);
+    public <RX extends RxInvoker> RxClient<RX> buildRx(String name, Class<RX> invokerType) {
+        return Rx.from(build(name), invokerType, executorService);
     }
 
     /**
@@ -404,22 +409,20 @@ public class JerseyClientBuilder {
             config.register(provider);
         }
 
-        config.register(new JacksonFeature(objectMapper));
-        config.register(new HibernateValidationBinder(validator));
+        config.register(new JacksonBinder(objectMapper));
+        config.register(new HibernateValidationFeature(validator));
 
         for (Map.Entry<String, Object> property : this.properties.entrySet()) {
             config.property(property.getKey(), property.getValue());
         }
 
         config.register(new DropwizardExecutorProvider(threadPool));
-
         if (connectorProvider == null) {
             final ConfiguredCloseableHttpClient apacheHttpClient =
                     apacheHttpClientBuilder.buildWithDefaultRequestConfiguration(name);
-            config.connectorProvider((client, runtimeConfig) -> createDropwizardApacheConnector(apacheHttpClient));
-        } else {
-            config.connectorProvider(connectorProvider);
+            connectorProvider = (client, runtimeConfig) -> createDropwizardApacheConnector(apacheHttpClient);
         }
+        config.connectorProvider(connectorProvider);
 
         return config;
     }

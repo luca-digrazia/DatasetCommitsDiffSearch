@@ -4,6 +4,8 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.httpclient.HttpClientMetricNameStrategies;
 import com.codahale.metrics.httpclient.HttpClientMetricNameStrategy;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
 import io.dropwizard.jersey.validation.Validators;
@@ -12,8 +14,8 @@ import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.setup.Environment;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.ServiceUnavailableRetryStrategy;
 import org.apache.http.client.entity.GzipCompressingEntity;
+import org.apache.http.client.ServiceUnavailableRetryStrategy;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.DnsResolver;
@@ -28,9 +30,8 @@ import org.apache.http.impl.client.SystemDefaultCredentialsProvider;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
 import org.glassfish.jersey.client.ClientRequest;
-import org.glassfish.jersey.client.JerseyClient;
-import org.glassfish.jersey.client.rx.rxjava2.RxFlowableInvokerProvider;
-import org.glassfish.jersey.client.spi.ConnectorProvider;
+import org.glassfish.jersey.client.rx.RxClient;
+import org.glassfish.jersey.client.rx.java8.RxCompletionStageInvoker;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -60,7 +61,6 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
@@ -160,9 +160,9 @@ public class JerseyClientBuilderTest {
 
     @Test
     public void createsAnRxEnabledClient() throws Exception {
-        final Client client =
+        final RxClient<RxCompletionStageInvoker> client =
             builder.using(executorService, objectMapper)
-                .buildRx("test", RxFlowableInvokerProvider.class);
+                .buildRx("test", RxCompletionStageInvoker.class);
 
         for (Object o : client.getConfiguration().getInstances()) {
             if (o instanceof DropwizardExecutorProvider) {
@@ -197,35 +197,16 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void createsNewConnectorProvider(){
-        final JerseyClient clientA = (JerseyClient) builder.using(executorService, objectMapper).build("testA");
-        final JerseyClient clientB = (JerseyClient) builder.build("testB");
-        assertThat(clientA.getConfiguration().getConnectorProvider())
-            .isNotSameAs(clientB.getConfiguration().getConnectorProvider());
-    }
-
-    @Test
-    public void usesSameConnectorProvider(){
-        final JerseyClient clientA = (JerseyClient) builder.using(executorService, objectMapper)
-            .using(mock(ConnectorProvider.class))
-            .build("testA");
-        final JerseyClient clientB = (JerseyClient) builder.build("testB");
-
-        assertThat(clientA.getConfiguration().getConnectorProvider())
-            .isSameAs(clientB.getConfiguration().getConnectorProvider());
-    }
-
-    @Test
     public void addBidirectionalGzipSupportIfEnabled() throws Exception {
         final JerseyClientConfiguration configuration = new JerseyClientConfiguration();
         configuration.setGzipEnabled(true);
 
         final Client client = builder.using(configuration)
                 .using(executorService, objectMapper).build("test");
-        assertThat(client.getConfiguration().getInstances())
-                .anyMatch(element -> element instanceof GZipDecoder);
-        assertThat(client.getConfiguration().getInstances())
-                .anyMatch(element -> element instanceof ConfiguredGZipEncoder);
+        assertThat(Iterables.filter(client.getConfiguration().getInstances(), GZipDecoder.class)
+                .iterator().hasNext()).isTrue();
+        assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
+                .iterator().hasNext()).isTrue();
         verify(apacheHttpClientBuilder, never()).disableContentCompression(true);
     }
 
@@ -237,10 +218,10 @@ public class JerseyClientBuilderTest {
         final Client client = builder.using(configuration)
                 .using(executorService, objectMapper).build("test");
 
-        assertThat(client.getConfiguration().getInstances())
-                .noneMatch(element -> element instanceof GZipDecoder);
-        assertThat(client.getConfiguration().getInstances())
-                .noneMatch(element -> element instanceof ConfiguredGZipEncoder);
+        assertThat(Iterables.filter(client.getConfiguration().getInstances(), GZipDecoder.class)
+                .iterator().hasNext()).isFalse();
+        assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
+                .iterator().hasNext()).isFalse();
         verify(apacheHttpClientBuilder).disableContentCompression(true);
     }
 
@@ -345,7 +326,7 @@ public class JerseyClientBuilderTest {
         final HttpRoutePlanner customHttpRoutePlanner = new SystemDefaultRoutePlanner(new ProxySelector() {
             @Override
             public List<Proxy> select(URI uri) {
-                return Collections.singletonList(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("192.168.53.12", 8080)));
+                return ImmutableList.of(new Proxy(Proxy.Type.HTTP, new InetSocketAddress("192.168.53.12", 8080)));
             }
 
             @Override
