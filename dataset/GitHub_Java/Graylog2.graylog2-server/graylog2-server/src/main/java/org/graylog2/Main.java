@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2;
 
 import com.beust.jcommander.JCommander;
@@ -48,7 +51,7 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugins.PluginInstaller;
 import org.graylog2.shared.NodeRunner;
-import org.graylog2.plugin.ServerStatus;
+import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.plugins.PluginLoader;
@@ -66,8 +69,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import static com.google.common.base.Strings.nullToEmpty;
 
 /**
  * Main class of Graylog2.
@@ -313,7 +314,7 @@ public final class Main extends NodeRunner {
         sb.append("# Generated on ").append(DateTime.now()).append(System.lineSeparator());
 
         for(Map.Entry<String, String> entry:  configMap.entrySet()) {
-            sb.append(entry.getKey()).append('=').append(nullToEmpty(entry.getValue())).append(System.lineSeparator());
+            sb.append(entry.getKey()).append('=').append(entry.getValue()).append(System.lineSeparator());
         }
 
         return sb.toString();

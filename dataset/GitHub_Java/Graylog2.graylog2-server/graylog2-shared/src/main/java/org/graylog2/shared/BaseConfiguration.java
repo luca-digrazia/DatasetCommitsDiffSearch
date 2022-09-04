@@ -59,9 +59,6 @@ public abstract class BaseConfiguration {
     @Parameter(value = "plugin_dir")
     private String pluginDir = "plugin";
 
-    @Parameter(value = "async_eventbus_processors")
-    private int asyncEventbusProcessors = 2;
-
     public URI getRestTransportUri() {
         if (restTransportUri == null || restTransportUri.isEmpty()) {
             return null;
@@ -140,10 +137,6 @@ public abstract class BaseConfiguration {
 
     public String getPluginDir() {
         return pluginDir;
-    }
-
-    public int getAsyncEventbusProcessors() {
-        return asyncEventbusProcessors;
     }
 
     public abstract String getNodeIdFile();
