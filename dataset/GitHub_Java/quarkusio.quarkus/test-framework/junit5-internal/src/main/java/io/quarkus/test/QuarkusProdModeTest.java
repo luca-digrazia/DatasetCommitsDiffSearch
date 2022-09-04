@@ -1,15 +1,11 @@
 package io.quarkus.test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,7 +21,6 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.LogManager;
@@ -42,8 +37,6 @@ import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.InvocationInterceptor;
-import org.junit.jupiter.api.extension.ReflectiveInvocationContext;
 import org.junit.jupiter.api.extension.TestWatcher;
 
 import io.quarkus.bootstrap.app.AugmentAction;
@@ -55,6 +48,7 @@ import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.RestAssuredURLManager;
+import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.utilities.JavaBinFinder;
 
 /**
@@ -62,7 +56,7 @@ import io.quarkus.utilities.JavaBinFinder;
  * consumption
  */
 public class QuarkusProdModeTest
-        implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, TestWatcher, InvocationInterceptor {
+        implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, TestWatcher {
 
     private static final String EXPECTED_OUTPUT_FROM_SUCCESSFULLY_STARTED = "features";
     private static final int DEFAULT_HTTP_PORT_INT = 8081;
@@ -105,7 +99,6 @@ public class QuarkusProdModeTest
     private boolean expectExit;
     private String startupConsoleOutput;
     private int exitCode;
-    private Consumer<Throwable> assertBuildException;
 
     public Supplier<JavaArchive> getArchiveProducer() {
         return archiveProducer;
@@ -193,31 +186,6 @@ public class QuarkusProdModeTest
         return this;
     }
 
-    public QuarkusProdModeTest assertBuildException(Consumer<Throwable> assertException) {
-        if (this.assertBuildException != null) {
-            throw new IllegalStateException("Don't set the asserted or excepted exception twice"
-                    + " to avoid shadowing out the first call.");
-        }
-        this.assertBuildException = assertException;
-        return this;
-    }
-
-    public QuarkusProdModeTest setExpectedException(Class<? extends Throwable> expectedException) {
-        return assertBuildException(t -> {
-            Throwable i = t;
-            boolean found = false;
-            while (i != null) {
-                if (i.getClass().getName().equals(expectedException.getName())) {
-                    found = true;
-                    break;
-                }
-                i = i.getCause();
-            }
-
-            assertTrue(found, "Build failed with wrong exception, expected " + expectedException + " but got " + t);
-        });
-    }
-
     /**
      * Returns the console output from startup. If {@link #expectExit} is true then this will contain
      * all the console output.
@@ -291,6 +259,19 @@ public class QuarkusProdModeTest
         };
         timeoutTimer.schedule(timeoutTask, 1000 * 60 * 5);
 
+        ExtensionContext.Store store = extensionContext.getRoot().getStore(ExtensionContext.Namespace.GLOBAL);
+        if (store.get(TestResourceManager.class.getName()) == null) {
+            TestResourceManager manager = new TestResourceManager(extensionContext.getRequiredTestClass());
+            manager.start();
+            store.put(TestResourceManager.class.getName(), new ExtensionContext.Store.CloseableResource() {
+
+                @Override
+                public void close() throws Throwable {
+                    manager.close();
+                }
+            });
+        }
+
         Class<?> testClass = extensionContext.getRequiredTestClass();
 
         try {
@@ -324,20 +305,7 @@ public class QuarkusProdModeTest
             curatedApplication = builder.build().bootstrap();
 
             AugmentAction action = curatedApplication.createAugmentor();
-            AugmentResult result;
-            try {
-                result = action.createProductionApplication();
-                if (assertBuildException != null) {
-                    fail("The build was expected to fail");
-                }
-            } catch (Exception e) {
-                if (assertBuildException != null) {
-                    assertBuildException.accept(e);
-                    return;
-                } else {
-                    throw e;
-                }
-            }
+            AugmentResult result = action.createProductionApplication();
 
             Path builtResultArtifact = setupProdModeResults(testClass, buildDir, result);
 
@@ -451,32 +419,6 @@ public class QuarkusProdModeTest
                 throw new RuntimeException(
                         "The produced jar could not be launched. Consult the above output for the exact cause.");
             }
-        }
-    }
-
-    @Override
-    public void interceptBeforeAllMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        doIntercept(invocation);
-    }
-
-    @Override
-    public void interceptBeforeEachMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        doIntercept(invocation);
-    }
-
-    @Override
-    public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-            ExtensionContext extensionContext) throws Throwable {
-        doIntercept(invocation);
-    }
-
-    private void doIntercept(Invocation<Void> invocation) throws Throwable {
-        if (assertBuildException != null) {
-            invocation.skip();
-        } else {
-            invocation.proceed();
         }
     }
 
