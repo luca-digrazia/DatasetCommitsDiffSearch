@@ -117,11 +117,6 @@ public abstract class JavaCompilationArgs {
       return this;
     }
 
-    public Builder addTransitiveRuntimeJars(NestedSet<Artifact> runtimeJars) {
-      this.runtimeJarsBuilder.addTransitive(runtimeJars);
-      return this;
-    }
-
     public Builder addCompileTimeJar(Artifact compileTimeJar) {
       this.compileTimeJarsBuilder.add(compileTimeJar);
       return this;
@@ -129,11 +124,6 @@ public abstract class JavaCompilationArgs {
 
     public Builder addCompileTimeJars(Iterable<Artifact> compileTimeJars) {
       this.compileTimeJarsBuilder.addAll(compileTimeJars);
-      return this;
-    }
-
-    public Builder addTransitiveCompileTimeJars(NestedSet<Artifact> compileTimeJars) {
-      this.compileTimeJarsBuilder.addTransitive(compileTimeJars);
       return this;
     }
 
