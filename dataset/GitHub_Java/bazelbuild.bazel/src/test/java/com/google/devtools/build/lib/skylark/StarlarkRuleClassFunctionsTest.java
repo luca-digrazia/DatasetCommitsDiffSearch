@@ -23,9 +23,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkAttrModule;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleClassFunctions.StarlarkRuleFunction;
-import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkAttrModule;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleClassFunctions.StarlarkRuleFunction;
+import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
@@ -266,26 +266,6 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
     assertThat(event.getKind()).isEqualTo(EventKind.ERROR);
     assertThat(event.getMessage())
         .matches("Attribute r\\.x{150}'s name is too long \\(150 > 128\\)");
-  }
-
-  @Test
-  public void testDisableDeprecatedParams() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disable_deprecated_attr_params=true");
-
-    // Verify 'single_file' deprecation.
-    EvalException expected =
-        assertThrows(EvalException.class, () -> ev.eval("attr.label(single_file = True)"));
-    assertThat(expected).hasMessageThat().contains(
-        "'single_file' is no longer supported. use allow_single_file instead.");
-    Attribute attr = buildAttribute("a1", "attr.label(allow_single_file = ['.xml'])");
-    assertThat(attr.isSingleArtifact()).isTrue();
-
-    // Verify 'non_empty' deprecation.
-    expected = assertThrows(EvalException.class, () -> ev.eval("attr.string_list(non_empty=True)"));
-    assertThat(expected).hasMessageThat().contains(
-        "'non_empty' is no longer supported. use allow_empty instead.");
-    attr = buildAttribute("a2", "attr.string_list(allow_empty=False)");
-    assertThat(attr.isNonEmpty()).isTrue();
   }
 
   @Test
@@ -617,15 +597,6 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testAttrNonEmpty() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disable_deprecated_attr_params=false");
-
-    Attribute attr = buildAttribute("a1", "attr.string_list(non_empty=True)");
-    assertThat(attr.isNonEmpty()).isTrue();
-    assertThat(attr.isMandatory()).isFalse();
-  }
-
-  @Test
   public void testAttrAllowEmpty() throws Exception {
     Attribute attr = buildAttribute("a1", "attr.string_list(allow_empty=False)");
     assertThat(attr.isNonEmpty()).isTrue();
@@ -695,9 +666,7 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
   @Test
   public void testNoAttrLicense() throws Exception {
     EvalException expected = assertThrows(EvalException.class, () -> ev.eval("attr.license()"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains("'attr (a language module)' value has no field or method 'license'");
+    assertThat(expected).hasMessageThat().contains("'attr' value has no field or method 'license'");
   }
 
   @Test
@@ -735,9 +704,6 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
         "attr.label(default=f)",
         "attr.label_list(default=f)",
         "attr.label_keyed_string_dict(default=f)");
-    // Note: the default parameter of attr.output{,_list} is deprecated
-    // (see --incompatible_no_output_attr_default)
-
     // For all other attribute types, the default value may not be a function.
     //
     // (This is a regression test for github.com/bazelbuild/bazel/issues/9463.
@@ -1823,10 +1789,10 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
         ")");
     RuleClass plum = ((StarlarkRuleFunction) ev.lookup("plum")).getRuleClass();
     assertThat(plum.getRequiredToolchains()).isEmpty();
-    assertThat(plum.getExecGroups().get("group").getRequiredToolchains())
+    assertThat(plum.getExecGroups().get("group").requiredToolchains())
         .containsExactly(makeLabel("//test:my_toolchain_type"));
     assertThat(plum.getExecutionPlatformConstraints()).isEmpty();
-    assertThat(plum.getExecGroups().get("group").getExecutionPlatformConstraints())
+    assertThat(plum.getExecGroups().get("group").execCompatibleWith())
         .containsExactly(makeLabel("//constraint:cv1"), makeLabel("//constraint:cv2"));
   }
 
@@ -1876,9 +1842,8 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
         "  exec_compatible_with=['//constraint:cv1', '//constraint:cv2'],",
         ")");
     ExecGroup group = ((ExecGroup) ev.lookup("group"));
-    assertThat(group.getRequiredToolchains())
-        .containsExactly(makeLabel("//test:my_toolchain_type"));
-    assertThat(group.getExecutionPlatformConstraints())
+    assertThat(group.requiredToolchains()).containsExactly(makeLabel("//test:my_toolchain_type"));
+    assertThat(group.execCompatibleWith())
         .containsExactly(makeLabel("//constraint:cv1"), makeLabel("//constraint:cv2"));
   }
 }

@@ -15,19 +15,19 @@
 package com.google.devtools.build.skydoc.fakebuildapi;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.starlarkbuildapi.StarlarkAttrModuleApi;
-import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StarlarkAttrModuleApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.skydoc.rendering.proto.StardocOutputProtos.AttributeType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Module;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkInt;
-import net.starlark.java.eval.StarlarkThread;
+import java.util.Map.Entry;
 
 /**
  * Fake implementation of {@link StarlarkAttrModuleApi}.
@@ -36,7 +36,7 @@ public class FakeStarlarkAttrModuleApi implements StarlarkAttrModuleApi {
 
   @Override
   public Descriptor intAttribute(
-      StarlarkInt defaultInt,
+      Integer defaultInt,
       String doc,
       Boolean mandatory,
       Sequence<?> values,
@@ -269,17 +269,11 @@ public class FakeStarlarkAttrModuleApi implements StarlarkAttrModuleApi {
    * name will be set to "Unknown Provider".
    */
   private static String providerName(ProviderApi provider, StarlarkThread thread) {
-    Module bzl = Module.ofInnermostEnclosingStarlarkFunction(thread);
-    // user-defined provider?
-    for (Map.Entry<String, Object> e : bzl.getGlobals().entrySet()) {
-      if (provider.equals(e.getValue())) {
-        return e.getKey();
-      }
-    }
-    // predeclared provider? (e.g. DefaultInfo)
-    for (Map.Entry<String, Object> e : bzl.getPredeclaredBindings().entrySet()) {
-      if (provider.equals(e.getValue())) {
-        return e.getKey();
+    Map<String, Object> bindings =
+        Module.ofInnermostEnclosingStarlarkFunction(thread).getTransitiveBindings();
+    for (Entry<String, Object> envEntry : bindings.entrySet()) {
+      if (provider.equals(envEntry.getValue())) {
+        return envEntry.getKey();
       }
     }
     return "Unknown Provider";
