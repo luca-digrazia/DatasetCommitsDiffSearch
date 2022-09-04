@@ -420,10 +420,8 @@ final class ClassConfigPropertiesUtil {
             createWriteValue(methodCreator, configObject, field, setter, useFieldAccess, setterValue);
 
         }
-        if (field.type().kind() != Type.Kind.PRIMITIVE) { // the JVM assigns primitive types a default even though it doesn't show up in the bytecode
-            configPropertyBuildItemCandidates
-                    .add(new ConfigPropertyBuildItemCandidate(field.name(), fullConfigName, fieldType));
-        }
+        configPropertyBuildItemCandidates
+                .add(new ConfigPropertyBuildItemCandidate(field.name(), fullConfigName, fieldType));
     }
 
     private static String getFullConfigName(String prefixStr, ConfigProperties.NamingStrategy namingStrategy, FieldInfo field) {
