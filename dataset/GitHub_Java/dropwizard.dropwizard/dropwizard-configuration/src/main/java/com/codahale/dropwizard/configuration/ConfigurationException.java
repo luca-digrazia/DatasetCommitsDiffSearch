@@ -1,20 +1,19 @@
 package com.codahale.dropwizard.configuration;
 
-import java.util.Collection;
+import com.codahale.dropwizard.validation.ConstraintViolations;
+import com.google.common.collect.ImmutableSet;
+
+import javax.validation.ConstraintViolation;
+import java.util.Set;
 
 /**
- * Base class for problems with a Configuration object.
- * <p/>
- * Refer to the implementations for different classes of problems:
- * <ul>
- *     <li>Parsing errors: {@link ConfigurationParsingException}</li>
- *     <li>Validation errors: {@link ConfigurationValidationException}</li>
- * </ul>
+ * An exception thrown where there is an error parsing a configuration object.
  */
-public abstract class ConfigurationException extends Exception {
-    protected static final String NEWLINE = String.format("%n");
+public class ConfigurationException extends Exception {
+    private static final String NEWLINE = String.format("%n");
+    private static final long serialVersionUID = 5325162099634227047L;
 
-    private final Collection<String> errors;
+    private final ImmutableSet<ConstraintViolation<?>> constraintViolations;
 
     /**
      * Creates a new ConfigurationException for the given path with the given errors.
@@ -22,30 +21,23 @@ public abstract class ConfigurationException extends Exception {
      * @param path      the bad configuration path
      * @param errors    the errors in the path
      */
-    public ConfigurationException(String path, Collection<String> errors) {
-        super(formatMessage(path, errors));
-        this.errors = errors;
+    public <T> ConfigurationException(String path, Set<ConstraintViolation<T>> errors) {
+        super(formatMessage(path, ConstraintViolations.format(errors)));
+        this.constraintViolations = ConstraintViolations.copyOf(errors);
     }
 
     /**
-     * Creates a new ConfigurationException for the given path with the given errors and cause.
+     * Returns the set of constraint violations in the configuration.
      *
-     * @param path      the bad configuration path
-     * @param errors    the errors in the path
-     * @param cause     the cause of the error(s)
+     * @return the set of constraint violations
      */
-    public ConfigurationException(String path, Collection<String> errors, Throwable cause) {
-        super(formatMessage(path, errors), cause);
-        this.errors = errors;
+    public ImmutableSet<ConstraintViolation<?>> getConstraintViolations() {
+        return constraintViolations;
     }
 
-    public Collection<String> getErrors() {
-        return errors;
-    }
-
-    protected static String formatMessage(String file, Collection<String> errors) {
+    private static String formatMessage(String file, Iterable<String> errors) {
         final StringBuilder msg = new StringBuilder(file);
-        msg.append(errors.size() == 1 ? " has an error:" : " has the following errors:").append(NEWLINE);
+        msg.append(" has the following errors:").append(NEWLINE);
         for (String error : errors) {
             msg.append("  * ").append(error).append(NEWLINE);
         }
