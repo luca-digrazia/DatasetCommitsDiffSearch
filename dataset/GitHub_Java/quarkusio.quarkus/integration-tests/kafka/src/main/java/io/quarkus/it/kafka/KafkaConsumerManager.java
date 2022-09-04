@@ -1,5 +1,6 @@
 package io.quarkus.it.kafka;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
 
@@ -8,6 +9,7 @@ import javax.enterprise.context.ApplicationScoped;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -28,7 +30,6 @@ public class KafkaConsumerManager {
         return consumer;
     }
 
-    private int count;
     private Consumer<Integer, String> consumer;
 
     @PostConstruct
@@ -37,7 +38,11 @@ public class KafkaConsumerManager {
     }
 
     public String receive() {
-        return consumer.poll(10000).iterator().next().value();
+        final ConsumerRecords<Integer, String> records = consumer.poll(Duration.ofMillis(60000));
+        if (records.isEmpty()) {
+            return null;
+        }
+        return records.iterator().next().value();
     }
 
 }
