@@ -545,13 +545,8 @@ public final class ObjcCommon {
         if (umbrellaHeader.isPresent()) {
           objcProvider.add(UMBRELLA_HEADER, umbrellaHeader.get());
         }
-        if (context.getFragment(ObjcConfiguration.class).useStrictObjcModuleMaps()) {
-          objcProvider.addForDirectDependents(MODULE_MAP, moduleMap.getArtifact());
-          objcProvider.addForDirectDependents(TOP_LEVEL_MODULE_MAP, moduleMap);
-        } else {
-          objcProvider.add(MODULE_MAP, moduleMap.getArtifact());
-          objcProvider.add(TOP_LEVEL_MODULE_MAP, moduleMap);
-        }
+        objcProvider.add(MODULE_MAP, moduleMap.getArtifact());
+        objcProvider.add(TOP_LEVEL_MODULE_MAP, moduleMap);
       }
 
       objcProvider

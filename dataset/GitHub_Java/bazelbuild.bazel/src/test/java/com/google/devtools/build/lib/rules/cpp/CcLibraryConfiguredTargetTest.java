@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -938,17 +939,10 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     CppCompileAction action = getCppCompileAction(target);
     String genfilesDir = target.getConfiguration().getGenfilesFragment().toString();
     // Local include paths come first.
-    assertContainsSublist(
-        action.getCompilerOptions(),
-        ImmutableList.of(
-            "-isystem",
-            "foo/foo",
-            "-isystem",
-            genfilesDir + "/foo/foo",
-            "-isystem",
-            "foo/bar",
-            "-isystem",
-            genfilesDir + "/foo/bar"));
+    assertContainsSublist(action.getCompilerOptions(), ImmutableList.of(
+        "-isystem", "foo/foo", "-isystem", genfilesDir + "/foo/foo",
+        "-isystem", "foo/bar", "-isystem", genfilesDir + "/foo/bar",
+        "-isystem", TestConstants.GCC_INCLUDE_PATH));
   }
 
   @Test

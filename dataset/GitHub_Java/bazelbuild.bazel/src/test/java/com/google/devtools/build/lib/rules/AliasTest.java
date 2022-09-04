@@ -41,7 +41,7 @@ public class AliasTest extends BuildViewTestCase {
         "alias(name='b', actual='a')");
 
     ConfiguredTarget b = getConfiguredTarget("//a:b");
-    assertThat(b.get(CcCompilationInfo.PROVIDER).getCcCompilationContextInfo()).isNotNull();
+    assertThat(b.get(CcCompilationInfo.PROVIDER)).isNotNull();
   }
 
   @Test
@@ -78,7 +78,7 @@ public class AliasTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//c:c");
     assertContainsEvent(
-        "alias '//b:b' referring to target '//a:a' is not visible from target '//c:c'");
+        "Target '//a:a' (aliased through '//b:b') is not visible from target '//c:c'");
   }
 
   @Test
@@ -94,8 +94,8 @@ public class AliasTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//d:d");
-    assertContainsEvent("alias '//c:c' referring to target '//a:a' through '//b:b' "
-        + "is not visible from target '//d:d'");
+    assertContainsEvent(
+        "Target '//a:a' (aliased through '//c:c' -> '//b:b') is not visible from target '//d:d'");
   }
 
   @Test
@@ -131,7 +131,7 @@ public class AliasTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//a:a");
-    assertContainsEvent("alias '//a:b' referring to filegroup rule '//a:c' is misplaced here");
+    assertContainsEvent("filegroup rule '//a:c' (aliased through '//a:b') is misplaced here");
   }
 
   @Test

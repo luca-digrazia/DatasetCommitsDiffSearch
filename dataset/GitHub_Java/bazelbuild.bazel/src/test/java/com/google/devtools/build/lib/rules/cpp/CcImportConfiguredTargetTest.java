@@ -284,7 +284,6 @@ public class CcImportConfiguredTargetTest extends BuildViewTestCase {
                 "foo",
                 "cc_import(name = 'foo', static_library = 'libfoo.a', hdrs = ['foo.h'])")
             .get(CcCompilationInfo.PROVIDER)
-            .getCcCompilationContextInfo()
             .getDeclaredIncludeSrcs();
     assertThat(artifactsToStrings(headers)).containsExactly("src a/foo.h");
   }
