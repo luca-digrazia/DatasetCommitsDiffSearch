@@ -11,22 +11,7 @@ import com.google.common.collect.Maps;
 import java.util.List;
 import java.util.Map;
 
-/**
- * A factory class for {@link ObjectMapper}.
- *
- * <p>By default, ObjectMapperFactory is configured to:</p>
- * <ul>
- *     <li>Automatically close JSON content, if possible.</li>
- *     <li>Automatically close input and output streams.</li>
- *     <li>Quote field names.</li>
- *     <li>Allow both C-style line and block comments.</li>
- *     <li>Not fail when encountering unknown properties.</li>
- *     <li>Read and write enums using {@code toString()}.</li>
- *     <li>Use {@code snake_case} for property names when encoding and decoding
- *         classes annotated with {@link JsonSnakeCase}.</li>
- * </ul>
- */
-public class ObjectMapperFactory {
+public class ObjectMapperFactory implements Cloneable {
     private final List<Module> modules;
     private final Map<MapperFeature, Boolean> mapperFeatures;
     private final Map<DeserializationFeature, Boolean> deserializationFeatures;
@@ -35,10 +20,7 @@ public class ObjectMapperFactory {
     private final Map<JsonParser.Feature, Boolean> parserFeatures;
     private final Map<JsonFactory.Feature, Boolean> factoryFeatures;
 
-    /**
-     * Create a new ObjectMapperFactory.
-     */
-    public ObjectMapperFactory() {
+    private ObjectMapperFactory() {
         this.modules = Lists.newArrayList();
         this.mapperFeatures = Maps.newHashMap();
         this.deserializationFeatures = Maps.newHashMap();
@@ -46,20 +28,26 @@ public class ObjectMapperFactory {
         this.generatorFeatures = Maps.newHashMap();
         this.parserFeatures = Maps.newHashMap();
         this.factoryFeatures = Maps.newHashMap();
+    }
 
-        enable(JsonGenerator.Feature.AUTO_CLOSE_JSON_CONTENT);
-        enable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-        enable(JsonGenerator.Feature.QUOTE_FIELD_NAMES);
-        enable(JsonParser.Feature.ALLOW_COMMENTS);
-        enable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
+    public static ObjectMapperFactory defaultInstance() {
+        final ObjectMapperFactory factory = new ObjectMapperFactory();
 
-        disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-        disable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
-        disable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+        factory.enable(JsonGenerator.Feature.AUTO_CLOSE_JSON_CONTENT);
+        factory.enable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+        factory.enable(JsonGenerator.Feature.QUOTE_FIELD_NAMES);
+        factory.enable(JsonParser.Feature.ALLOW_COMMENTS);
+        factory.enable(JsonParser.Feature.AUTO_CLOSE_SOURCE);
 
-        registerModule(new GuavaModule());
-        registerModule(new LogbackModule());
-        registerModule(new GuavaExtrasModule());
+        factory.disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+        factory.disable(SerializationFeature.WRITE_ENUMS_USING_TO_STRING);
+        factory.disable(DeserializationFeature.READ_ENUMS_USING_TO_STRING);
+
+        factory.registerModule(new GuavaModule());
+        factory.registerModule(new LogbackModule());
+        factory.registerModule(new GuavaExtrasModule());
+
+        return factory;
     }
 
     /**
@@ -74,7 +62,8 @@ public class ObjectMapperFactory {
     }
 
     /**
-     * Returns true if the given {@link MapperFeature} is enabled.
+     * Returns true if the given {@link MapperFeature} is
+     * enabled.
      *
      * @param feature a given feature
      * @return {@code true} if {@code feature} is enabled
@@ -113,7 +102,8 @@ public class ObjectMapperFactory {
     }
 
     /**
-     * Returns true if the given {@link DeserializationFeature} is enabled.
+     * Returns true if the given {@link DeserializationFeature} is
+     * enabled.
      *
      * @param feature a given feature
      * @return {@code true} if {@code feature} is enabled
@@ -152,7 +142,8 @@ public class ObjectMapperFactory {
     }
 
     /**
-     * Returns true if the given {@link SerializationFeature} is enabled.
+     * Returns true if the given {@link SerializationFeature} is
+     * enabled.
      *
      * @param feature a given feature
      * @return {@code true} if {@code feature} is enabled
@@ -191,7 +182,8 @@ public class ObjectMapperFactory {
     }
 
     /**
-     * Returns true if the given {@link JsonGenerator.Feature} is enabled.
+     * Returns true if the given {@link JsonGenerator.Feature} is
+     * enabled.
      *
      * @param feature a given feature
      * @return {@code true} if {@code feature} is enabled
@@ -307,12 +299,6 @@ public class ObjectMapperFactory {
         }
     }
 
-    /**
-     * Builds a new {@link ObjectMapper} instance with the given {@link JsonFactory} instance.
-     *
-     * @param factory a {@link JsonFactory}
-     * @return a configured {@link ObjectMapper} instance
-     */
     public ObjectMapper build(JsonFactory factory) {
         final ObjectMapper mapper = new ObjectMapper(factory);
 
@@ -349,20 +335,10 @@ public class ObjectMapperFactory {
         return mapper;
     }
 
-    /**
-     * Builds a new {@link ObjectMapper} instance with a default {@link JsonFactory} instance.
-     *
-     * @return a configured {@link ObjectMapper} instance
-     */
     public ObjectMapper build() {
         return build(new JsonFactory());
     }
 
-    /**
-     * Creates a copy of {@code this}.
-     *
-     * @return a copy of {@code this}
-     */
     public ObjectMapperFactory copy() {
         final ObjectMapperFactory factory = new ObjectMapperFactory();
         factory.modules.addAll(modules);
