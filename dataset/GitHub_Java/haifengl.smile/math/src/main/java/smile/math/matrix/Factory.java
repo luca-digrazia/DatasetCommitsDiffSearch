@@ -33,8 +33,6 @@ class Factory {
     private static Constructor<?> nlmatrixZeros;
     private static Constructor<?> nlmatrixOnes;
 
-    private static Class<?> netlibLU;
-
     static {
         try {
             nlmatrix = Class.forName("smile.netlib.NLMatrix");
@@ -56,11 +54,8 @@ class Factory {
             } catch (NoSuchMethodException e) {
                 logger.error("NLMatrix(int, int, double) does not exist");
             }
-
-            netlibLU = Class.forName("smile.netlib.LUDecomposition");
-
         } catch (ClassNotFoundException e) {
-            logger.info("Netlib module does not exist on the classpath. Pure Java matrix library will be employed.");
+            logger.info("Netlib module does not exist on the classpath");
         }
     }
 
@@ -74,20 +69,7 @@ class Factory {
             }
         }
 
-        return new JMatrix(A);
-    }
-
-    /** Creates a column vector/matrix initialized by A. */
-    public static DenseMatrix matrix(double[] A) {
-        if (nlmatrixZeros != null) {
-            try {
-                return (DenseMatrix) nlmatrixArray.newInstance((Object) A);
-            } catch (Exception e) {
-                logger.error("Failed to call NLMatrix(double[]): {}", e);
-            }
-        }
-
-        return new JMatrix(A);
+        return new ColumnMajorMatrix(A);
     }
 
     /** Creates a matrix of all zeros. */
@@ -100,7 +82,7 @@ class Factory {
             }
         }
 
-        return new JMatrix(nrows, ncols);
+        return new ColumnMajorMatrix(nrows, ncols);
     }
 
     /** Creates a matrix filled with given value. */
@@ -113,6 +95,6 @@ class Factory {
             }
         }
 
-        return new JMatrix(nrows, ncols, value);
+        return new ColumnMajorMatrix(nrows, ncols, value);
     }
 }
