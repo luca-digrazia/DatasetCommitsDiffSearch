@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.restclient.models;
 
 import org.graylog2.rest.models.roles.responses.RoleMembershipResponse;
@@ -9,6 +25,7 @@ import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.util.Collections;
@@ -35,6 +52,7 @@ public class RolesService {
         return Collections.emptySet();
     }
 
+    @Nullable
     public RoleResponse load(String roleName) {
         try {
             return api.path(routes.RolesResource().read(roleName), RoleResponse.class).execute();
@@ -44,15 +62,29 @@ public class RolesService {
         return null;
     }
 
-    public RoleResponse create(RoleResponse newRole) {
+    /**
+     * Creates a new role.
+     * @param newRole new role to create
+     * @return created role
+     * @throws APIException thrown for a bad request, which likely is "Role already exists"
+     */
+    @Nullable
+    public RoleResponse create(RoleResponse newRole) throws APIException {
         try {
             return api.path(routes.RolesResource().create(), RoleResponse.class).body(newRole).execute();
-        } catch (APIException | IOException e) {
+        } catch (APIException e) {
+            log.error("Unable to create role " + newRole.name(), e);
+            if (e.getHttpCode() == 400) {
+                throw e;
+            }
+            return null;
+        } catch (IOException e) {
             log.error("Unable to create role " + newRole.name(), e);
             return null;
         }
     }
 
+    @Nullable
     public RoleMembershipResponse getMembers(String roleName) {
         try {
             return api.path(routes.RolesResource().getMembers(roleName), RoleMembershipResponse.class).execute();
@@ -82,13 +114,14 @@ public class RolesService {
         }
     }
 
-    public RoleResponse updateRole(RoleResponse role) {
+    @Nullable
+    public RoleResponse updateRole(String oldRoleName, RoleResponse role) {
         try {
-            final RoleResponse response = api.path(routes.RolesResource().update(role.name()), RoleResponse.class).body(
+            final RoleResponse response = api.path(routes.RolesResource().update(oldRoleName), RoleResponse.class).body(
                     role).execute();
             return response;
         } catch (APIException | IOException e) {
-            log.error("Unable to update role " + role.name(), e);
+            log.error("Unable to update role " + oldRoleName, e);
         }
         return null;
     }
