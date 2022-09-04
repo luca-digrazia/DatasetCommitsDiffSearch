@@ -36,17 +36,6 @@ public final class RemoteOptions extends OptionsBase {
   public String remoteHttpCache;
 
   @Option(
-      name = "remote_cache_proxy",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Connect to the remote cache through a proxy. Currently this flag can only be used to "
-              + "configure a Unix domain socket (unix:/path/to/socket) for the HTTP cache."
-  )
-  public String remoteCacheProxy;
-
-  @Option(
       name = "remote_max_connections",
       defaultValue = "100",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -101,14 +90,6 @@ public final class RemoteOptions extends OptionsBase {
     help = "Whether to fall back to standalone local execution strategy if remote execution fails."
   )
   public boolean remoteLocalFallback;
-
-  @Option(
-      name = "remote_local_fallback_strategy",
-      defaultValue = "local",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "The strategy to use when remote execution has to fallback to local execution.")
-  public String remoteLocalFallbackStrategy;
 
   @Option(
     name = "remote_upload_local_results",
@@ -235,16 +216,17 @@ public final class RemoteOptions extends OptionsBase {
   public String experimentalRemoteGrpcLog;
 
   @Option(
-      name = "remote_allow_symlink_upload",
-      defaultValue = "true",
-      category = "remote",
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help =
-          "If true, upload action symlink outputs to the remote cache. "
-              + "The remote cache currently doesn't support symlinks, "
-              + "so symlink outputs are converted into regular files. "
-              + "If this option is not enabled, "
-              + "cachable actions that output symlinks will fail.")
+    name = "remote_allow_symlink_upload",
+    defaultValue = "true",
+    category = "remote",
+    documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
+    effectTags = {OptionEffectTag.EXECUTION},
+    help =
+        "If true, upload action symlink outputs to the remote cache. "
+            + "The remote cache currently doesn't support symlinks, "
+            + "so symlink outputs are converted into regular files. "
+            + "If this option is not enabled, "
+            + "otherwise cachable actions that output symlinks will fail."
+  )
   public boolean allowSymlinkUpload;
 }
