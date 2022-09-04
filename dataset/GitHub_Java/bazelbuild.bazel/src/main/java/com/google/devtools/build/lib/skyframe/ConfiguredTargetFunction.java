@@ -448,7 +448,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       return null;
     }
     Rule rule = ((Rule) targetAndConfig.getTarget());
-    if (!rule.getRuleClassObject().useToolchainResolution()) {
+    if (!rule.getRuleClassObject().supportsPlatforms()) {
       return null;
     }
     BuildConfiguration configuration = targetAndConfig.getConfiguration();
@@ -942,11 +942,9 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       // rule implementation).
       try {
         generatingActions =
-            Actions.assignOwnersAndFilterSharedActionsAndThrowActionConflict(
+            Actions.filterSharedActionsAndThrowActionConflict(
                 analysisEnvironment.getActionKeyContext(),
-                analysisEnvironment.getRegisteredActions(),
-                configuredTargetKey,
-                /*outputFiles=*/ null);
+                analysisEnvironment.getRegisteredActions());
       } catch (ActionConflictException e) {
         throw new ConfiguredTargetFunctionException(e);
       }
