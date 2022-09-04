@@ -60,15 +60,16 @@ import org.jboss.shamrock.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnot
 import org.jboss.shamrock.deployment.annotations.BuildProducer;
 import org.jboss.shamrock.deployment.annotations.BuildStep;
 import org.jboss.shamrock.deployment.annotations.Record;
-import org.jboss.shamrock.deployment.builditem.AnnotationProxyBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.util.HashUtil;
 import org.jboss.shamrock.scheduler.api.Scheduled;
 import org.jboss.shamrock.scheduler.api.ScheduledExecution;
+import org.jboss.shamrock.scheduler.api.Scheduleds;
 import org.jboss.shamrock.scheduler.runtime.QuartzScheduler;
 import org.jboss.shamrock.scheduler.runtime.ScheduledInvoker;
+import org.jboss.shamrock.scheduler.runtime.ScheduledLiteral;
 import org.jboss.shamrock.scheduler.runtime.SchedulerConfiguration;
 import org.jboss.shamrock.scheduler.runtime.SchedulerDeploymentTemplate;
 import org.quartz.CronExpression;
@@ -85,7 +86,7 @@ public class SchedulerProcessor {
     private static final Logger LOGGER = Logger.getLogger("org.jboss.shamrock.scheduler.deployment.processor");
 
     static final DotName SCHEDULED_NAME = DotName.createSimple(Scheduled.class.getName());
-    static final DotName SCHEDULES_NAME = DotName.createSimple(Scheduled.Schedules.class.getName());
+    static final DotName SCHEDULEDS_NAME = DotName.createSimple(Scheduleds.class.getName());
 
     static final Type SCHEDULED_EXECUTION_TYPE = Type.create(DotName.createSimple(ScheduledExecution.class.getName()), Kind.CLASS);
 
@@ -112,7 +113,7 @@ public class SchedulerProcessor {
             public void transform(TransformationContext context) {
                 if (context.getAnnotations().isEmpty()) {
                     // Class with no annotations but with @Scheduled method
-                    if (context.getTarget().asClass().annotations().containsKey(SCHEDULED_NAME) || context.getTarget().asClass().annotations().containsKey(SCHEDULES_NAME)) {
+                    if (context.getTarget().asClass().annotations().containsKey(SCHEDULED_NAME) || context.getTarget().asClass().annotations().containsKey(SCHEDULEDS_NAME)) {
                         LOGGER.debugf("Found scheduled business methods on a class %s with no annotations - adding @Singleton", context.getTarget());
                         context.transform().add(Singleton.class).done();
                     }
@@ -152,12 +153,13 @@ public class SchedulerProcessor {
                             if (scheduledAnnotation != null) {
                                 schedules = Collections.singletonList(scheduledAnnotation);
                             } else {
-                                AnnotationInstance scheduledsAnnotation = annotationStore.getAnnotation(method, SCHEDULES_NAME);
+                                AnnotationInstance scheduledsAnnotation = annotationStore.getAnnotation(method, SCHEDULEDS_NAME);
                                 if (scheduledsAnnotation != null) {
                                     schedules = new ArrayList<>();
                                     for (AnnotationInstance scheduledInstance : scheduledsAnnotation.value().asNestedArray()) {
                                         schedules.add(scheduledInstance);
                                     }
+
                                 } else {
                                     schedules = null;
                                 }
@@ -190,14 +192,14 @@ public class SchedulerProcessor {
     @BuildStep
     public List<UnremovableBeanBuildItem> unremovableBeans() {
         return Arrays.asList(new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULED_NAME)),
-                new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULES_NAME)));
+                new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(SCHEDULEDS_NAME)));
     }
 
     @BuildStep
     @Record(STATIC_INIT)
     public void build(SchedulerDeploymentTemplate template, BeanContainerBuildItem beanContainer, List<ScheduledBusinessMethodItem> scheduledBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<FeatureBuildItem> feature, AnnotationProxyBuildItem annotationProxy) {
+            BuildProducer<FeatureBuildItem> feature) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SCHEDULER));
         List<Map<String, Object>> scheduleConfigurations = new ArrayList<>();
@@ -213,9 +215,13 @@ public class SchedulerProcessor {
             String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, invokerClass));
             config.put(SchedulerDeploymentTemplate.INVOKER_KEY, invokerClass);
-            List<Scheduled> schedules = new ArrayList<>();
+            List<Map<String, Object>> schedules = new ArrayList<>();
             for (AnnotationInstance scheduled : businessMethod.getSchedules()) {
-                schedules.add(annotationProxy.from(scheduled, Scheduled.class));
+                Map<String, Object> scheduledConfig = new HashMap<>();
+                for (AnnotationValue annotationValue : scheduled.values()) {
+                    scheduledConfig.put(annotationValue.name(), getValue(annotationValue));
+                }
+                schedules.add(scheduledConfig);
             }
             config.put(SchedulerDeploymentTemplate.SCHEDULES_KEY, schedules);
             config.put(SchedulerDeploymentTemplate.DESC_KEY, businessMethod.getMethod().declaringClass() + "#" + businessMethod.getMethod().name());
@@ -269,11 +275,24 @@ public class SchedulerProcessor {
         return generatedName.replace('/', '.');
     }
 
+    private Object getValue(AnnotationValue annotationValue) {
+        switch (annotationValue.kind()) {
+            case STRING:
+                return annotationValue.asString();
+            case LONG:
+                return annotationValue.asLong();
+            case ENUM:
+                return annotationValue.asEnum();
+            default:
+                throw new IllegalArgumentException("Unsupported annotation value: " + annotationValue);
+        }
+    }
+
     private void validateScheduled(ValidationContext validationContext, AnnotationInstance schedule) {
         AnnotationValue cronValue = schedule.value("cron");
         if (cronValue != null && !cronValue.asString().trim().isEmpty()) {
             String cron = cronValue.asString().trim();
-            if (SchedulerConfiguration.isConfigValue(cron)) {
+            if (ScheduledLiteral.isConfigValue(cron)) {
                 // Don't validate config property
                 return;
             }
@@ -286,7 +305,7 @@ public class SchedulerProcessor {
             AnnotationValue everyValue = schedule.value("every");
             if (everyValue != null && !everyValue.asString().trim().isEmpty()) {
                 String every = everyValue.asString().trim();
-                if (SchedulerConfiguration.isConfigValue(every)) {
+                if (ScheduledLiteral.isConfigValue(every)) {
                     return;
                 }
                 if (Character.isDigit(every.charAt(0))) {
