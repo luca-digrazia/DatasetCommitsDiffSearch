@@ -34,31 +34,17 @@ import java.util.List;
 public class RepositoryOptions extends OptionsBase {
 
   @Option(
-    name = "repository_cache",
-    oldName = "experimental_repository_cache",
+    name = "experimental_repository_cache",
     defaultValue = "null",
     documentationCategory = OptionDocumentationCategory.BAZEL_CLIENT_OPTIONS,
     effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
+    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
     converter = OptionsUtils.PathFragmentConverter.class,
     help =
         "Specifies the cache location of the downloaded values obtained "
             + "during the fetching of external repositories."
   )
   public PathFragment experimentalRepositoryCache;
-
-  @Option(
-    name = "experimental_distdir",
-    defaultValue = "null",
-    allowMultiple = true,
-    documentationCategory = OptionDocumentationCategory.BAZEL_CLIENT_OPTIONS,
-    effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-    metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-    converter = OptionsUtils.PathFragmentConverter.class,
-    help =
-        "Additional places to search for archives before accessing the network "
-            + "to download them."
-  )
-  public List<PathFragment> experimentalDistdir;
 
   @Option(
     name = "override_repository",
