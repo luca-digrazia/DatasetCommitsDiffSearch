@@ -9,7 +9,6 @@ import com.shuyu.gsyvideoplayer.listener.GSYVideoShotListener;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoShotSaveListener;
 import com.shuyu.gsyvideoplayer.render.glrender.GSYVideoGLViewBaseRender;
 import com.shuyu.gsyvideoplayer.render.view.listener.IGSYSurfaceListener;
-import com.shuyu.gsyvideoplayer.utils.MeasureHelper;
 
 import java.io.File;
 
@@ -22,29 +21,19 @@ public interface IGSYRenderView {
     IGSYSurfaceListener getIGSYSurfaceListener();
 
     /**
-     * Surface变化监听，必须
+     * Surface变化监听
      */
     void setIGSYSurfaceListener(IGSYSurfaceListener surfaceListener);
 
     /**
-     * 当前view高度，必须
+     * 当前view高度
      */
     int getSizeH();
 
     /**
-     * 当前view宽度，必须
+     * 当前view宽度
      */
     int getSizeW();
-
-    /**
-     * 实现该接口的view，必须
-     */
-    View getRenderView();
-
-    /**
-     * 渲染view通过MeasureFormVideoParamsListener获取视频的相关参数，必须
-     */
-    void setVideoParamsListener(MeasureHelper.MeasureFormVideoParamsListener listener);
 
     /**
      * 截图
@@ -55,6 +44,11 @@ public interface IGSYRenderView {
      * 保存当前帧
      */
     void saveFrame(final File file, final boolean high, final GSYVideoShotSaveListener gsyVideoShotSaveListener);
+
+    /**
+     * 实现该接口的view
+     */
+    View getRenderView();
 
     /**
      * 获取当前画面的bitmap，没有返回空
