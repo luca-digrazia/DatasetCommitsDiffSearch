@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.DefaultInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.FilesToRunProviderApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -82,7 +83,7 @@ public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
   }
 
   @Override
-  public FilesToRunProvider getFilesToRun() {
+  public FilesToRunProviderApi getFilesToRun() {
     return filesToRunProvider;
   }
 
