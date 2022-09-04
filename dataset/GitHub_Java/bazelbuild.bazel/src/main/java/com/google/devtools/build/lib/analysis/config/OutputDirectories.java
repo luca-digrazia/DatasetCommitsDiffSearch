@@ -111,13 +111,7 @@ public class OutputDirectories {
       Path execRoot = directories.getExecRoot(mainRepositoryName.strippedName());
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
       return ArtifactRoot.asDerivedRoot(
-          execRoot,
-          middleman,
-          false,
-          false,
-          directories.getRelativeOutputPath(),
-          outputDirName,
-          nameFragment);
+          execRoot, middleman, directories.getRelativeOutputPath(), outputDirName, nameFragment);
     }
   }
 
@@ -222,8 +216,6 @@ public class OutputDirectories {
     return ArtifactRoot.asDerivedRoot(
         execRoot,
         isMiddleman,
-        !repository.isMain() && !repository.isDefault(),
-        true,
         directories.getRelativeOutputPath(),
         repository.strippedName(),
         outputDirName,
