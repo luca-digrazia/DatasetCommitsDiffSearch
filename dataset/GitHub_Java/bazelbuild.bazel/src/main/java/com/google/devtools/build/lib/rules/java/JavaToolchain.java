@@ -86,20 +86,11 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
     }
 
     TransitiveInfoCollection javacDep = ruleContext.getPrerequisite("javac", Mode.HOST);
-
-    ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> locationsBuilder =
-        ImmutableMap.builder();
+    ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> locations = ImmutableMap.builder();
     if (javacDep != null) {
-      locationsBuilder.put(AliasProvider.getDependencyLabel(javacDep), ImmutableList.of(javac));
+      locations.put(AliasProvider.getDependencyLabel(javacDep), ImmutableList.of(javac));
     }
-    ImmutableMap<Label, ImmutableCollection<Artifact>> locations = locationsBuilder.build();
-
-    ImmutableList<String> jvmOpts = getJvmOpts(ruleContext, locations, "jvm_opts");
-    ImmutableList<String> javabuilderJvmOpts =
-        ImmutableList.<String>builder()
-            .addAll(jvmOpts)
-            .addAll(getJvmOpts(ruleContext, locations, "javabuilder_jvm_opts"))
-            .build();
+    ImmutableList<String> jvmOpts = getJvmOpts(ruleContext, locations.build());
 
     ImmutableList<JavaPackageConfigurationProvider> packageConfiguration =
         ImmutableList.copyOf(
@@ -111,7 +102,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             ruleContext.getLabel(),
             javacopts,
             jvmOpts,
-            javabuilderJvmOpts,
             javacSupportsWorkers,
             bootclasspath,
             extclasspath,
@@ -171,9 +161,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
   }
 
   private static ImmutableList<String> getJvmOpts(
-      RuleContext ruleContext,
-      ImmutableMap<Label, ImmutableCollection<Artifact>> locations,
-      String attribute) {
-    return ruleContext.getExpander().withExecLocations(locations).list(attribute);
+      RuleContext ruleContext, ImmutableMap<Label, ImmutableCollection<Artifact>> locations) {
+    return ruleContext.getExpander().withExecLocations(locations).list("jvm_opts");
   }
 }
