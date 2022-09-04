@@ -29,8 +29,6 @@ import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -80,9 +78,6 @@ class ArcContainerImpl implements ArcContainer {
 
     private final List<ResourceReferenceProvider> resourceProviders;
 
-    private AsyncRequestStatusProvider asyncRequestStatusProvider;
-    private final List<AsyncRequestNotifierProvider> asyncRequestListenerProviders;
-
     public ArcContainerImpl() {
         id = UUID.randomUUID().toString();
         running = new AtomicBoolean(true);
@@ -127,18 +122,6 @@ class ArcContainerImpl implements ArcContainer {
         resourceProviders = new ArrayList<>();
         for (ResourceReferenceProvider resourceProvider : ServiceLoader.load(ResourceReferenceProvider.class)) {
             resourceProviders.add(resourceProvider);
-        }
-        for (AsyncRequestStatusProvider asyncRequestStatusProvider : ServiceLoader.load(AsyncRequestStatusProvider.class)) {
-            if (this.asyncRequestStatusProvider != null)
-                throw new IllegalStateException("Only one AsyncRequestStatusProvider can be registered: " +
-                        asyncRequestStatusProvider.getClass() + " was specified after "
-                        + this.asyncRequestStatusProvider.getClass() + " was already loaded");
-            this.asyncRequestStatusProvider = asyncRequestStatusProvider;
-        }
-        asyncRequestListenerProviders = new ArrayList<>();
-        for (AsyncRequestNotifierProvider asyncRequestListenerProvider : ServiceLoader
-                .load(AsyncRequestNotifierProvider.class)) {
-            asyncRequestListenerProviders.add(asyncRequestListenerProvider);
         }
     }
 
@@ -225,11 +208,6 @@ class ArcContainerImpl implements ArcContainer {
         Objects.requireNonNull(bean);
         requireRunning();
         return bean != null ? (InstanceHandle<T>) beanInstanceHandle(bean, null) : InstanceHandleImpl.unavailable();
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
     }
 
     @SuppressWarnings("unchecked")
@@ -609,22 +587,6 @@ class ArcContainerImpl implements ArcContainer {
             return true;
         }
 
-    }
-
-    @Override
-    public boolean isCurrentRequestAsync() {
-        return asyncRequestStatusProvider != null && asyncRequestStatusProvider.isCurrentRequestAsync();
-    }
-
-    @Override
-    public CompletionStage<Void> getAsyncRequestNotifier() {
-        if (asyncRequestListenerProviders.isEmpty())
-            return CompletableFuture.completedFuture(null);
-        CompletableFuture<?>[] stages = asyncRequestListenerProviders.stream()
-                .map(AsyncRequestNotifierProvider::getAsyncRequestNotifier)
-                .collect(Collectors.toList())
-                .toArray(new CompletableFuture[0]);
-        return CompletableFuture.allOf(stages);
     }
 
 }

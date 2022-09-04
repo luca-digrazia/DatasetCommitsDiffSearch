@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import javax.enterprise.inject.spi.BeanManager;
+import javax.enterprise.inject.spi.InjectionPoint;
 import javax.inject.Inject;
 import javax.inject.Qualifier;
 
@@ -14,6 +15,8 @@ import io.quarkus.arc.CurrentInjectionPointProvider.InjectionPointImpl;
 import io.quarkus.deployment.test.TestResourceProvider;
 
 public class ArcTestResourceProvider implements TestResourceProvider {
+
+    public static final Annotation[] EMPTY_ANNOTATION_ARRAY = new Annotation[0];
 
     @Override
     public void inject(Object test) {

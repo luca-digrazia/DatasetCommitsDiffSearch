@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc;
 
 import io.quarkus.arc.CurrentInjectionPointProvider.InjectionPointImpl;
@@ -9,9 +25,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Objects;
 import java.util.Set;
-import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.inject.AmbiguousResolutionException;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.UnsatisfiedResolutionException;
@@ -78,7 +92,7 @@ class InstanceImpl<T> implements Instance<T> {
         if (beans.isEmpty()) {
             throw new UnsatisfiedResolutionException();
         } else if (beans.size() > 1) {
-            throw new AmbiguousResolutionException("Beans: " + beans.toString());
+            throw new AmbiguousResolutionException();
         }
         return getBeanInstance((InjectableBean<T>) beans.iterator().next());
     }
@@ -116,18 +130,11 @@ class InstanceImpl<T> implements Instance<T> {
 
     @Override
     public void destroy(T instance) {
-        Objects.requireNonNull(instance);
         if (instance instanceof ClientProxy) {
-            ClientProxy proxy = (ClientProxy) instance;
-            InjectableContext context = Arc.container().getActiveContext(proxy.arc_bean().getScope());
-            if (context == null) {
-                throw new ContextNotActiveException("No active context found for: " + proxy.arc_bean().getScope());
-            }
-            context.destroy(proxy.arc_bean());
-        } else {
-            // Try to destroy a dependent instance
-            creationalContext.destroyDependentInstance(instance);
+            throw new UnsupportedOperationException();
         }
+        // Try to destroy a dependent instance
+        creationalContext.destroyDependentInstance(instance);
     }
 
     void destroy() {

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
@@ -12,7 +28,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Supplier;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.spi.Annotated;
 import javax.enterprise.inject.spi.AnnotatedCallable;
@@ -33,13 +48,13 @@ public class CurrentInjectionPointProvider<T> implements InjectableReferenceProv
     static final InjectionPoint EMPTY = new InjectionPointImpl(Object.class, Object.class, Collections.emptySet(), null, null,
             null, -1);
 
-    private final Supplier<InjectableReferenceProvider<T>> delegateSupplier;
+    private final InjectableReferenceProvider<T> delegate;
 
     private final InjectionPoint injectionPoint;
 
-    public CurrentInjectionPointProvider(InjectableBean<?> bean, Supplier<InjectableReferenceProvider<T>> delegateSupplier,
-            Type requiredType, Set<Annotation> qualifiers, Set<Annotation> annotations, Member javaMember, int position) {
-        this.delegateSupplier = delegateSupplier;
+    public CurrentInjectionPointProvider(InjectableBean<?> bean, InjectableReferenceProvider<T> delegate, Type requiredType,
+            Set<Annotation> qualifiers, Set<Annotation> annotations, Member javaMember, int position) {
+        this.delegate = delegate;
         this.injectionPoint = new InjectionPointImpl(requiredType, requiredType, qualifiers, bean, annotations, javaMember,
                 position);
     }
@@ -48,7 +63,7 @@ public class CurrentInjectionPointProvider<T> implements InjectableReferenceProv
     public T get(CreationalContext<T> creationalContext) {
         InjectionPoint prev = InjectionPointProvider.set(injectionPoint);
         try {
-            return delegateSupplier.get().get(creationalContext);
+            return delegate.get(creationalContext);
         } finally {
             InjectionPointProvider.set(prev);
         }
