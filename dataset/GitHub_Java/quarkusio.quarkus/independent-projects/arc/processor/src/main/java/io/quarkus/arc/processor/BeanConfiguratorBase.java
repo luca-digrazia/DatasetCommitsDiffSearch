@@ -2,7 +2,6 @@ package io.quarkus.arc.processor;
 
 import io.quarkus.arc.BeanCreator;
 import io.quarkus.arc.BeanDestroyer;
-import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
@@ -40,7 +39,6 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
     protected boolean removable;
     protected final Map<String, Object> params;
     protected Type providerType;
-    protected boolean forceApplicationClass;
 
     protected BeanConfiguratorBase(DotName implClazz) {
         this.implClazz = implClazz;
@@ -64,7 +62,6 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
         types.addAll(base.types);
         qualifiers.clear();
         qualifiers.addAll(base.qualifiers);
-        forceApplicationClass = base.forceApplicationClass;
         scope(base.scope);
         if (base.alternativePriority != null) {
             alternativePriority(base.alternativePriority);
@@ -173,17 +170,6 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
         return self();
     }
 
-    /**
-     * Forces the bean to be considered an 'application class', so it will be defined in the runtime
-     * ClassLoader and re-created on each redeployment.
-     *
-     * @return self
-     */
-    public B forceApplicationClass() {
-        this.forceApplicationClass = true;
-        return self();
-    }
-
     public B alternativePriority(int priority) {
         this.alternativePriority = priority;
         return self();
@@ -219,16 +205,6 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
         return self();
     }
 
-    /**
-     * The provider type is the "real" type of the bean instance created via
-     * {@link InjectableReferenceProvider#get(CreationalContext)}.
-     * <p>
-     * The container attempts to derive the provider type from the implementation class. However, in some cases it's better to
-     * specify it manually.
-     * 
-     * @param providerType
-     * @return self
-     */
     public B providerType(Type providerType) {
         this.providerType = providerType;
         return self();

@@ -152,7 +152,7 @@ final class Beans {
     private static ScopeInfo inheritScope(ClassInfo beanClass, BeanDeployment beanDeployment) {
         DotName superClassName = beanClass.superName();
         while (!superClassName.equals(DotNames.OBJECT)) {
-            ClassInfo classFromIndex = getClassByName(beanDeployment.getBeanArchiveIndex(), superClassName);
+            ClassInfo classFromIndex = getClassByName(beanDeployment.getIndex(), superClassName);
             if (classFromIndex == null) {
                 // class not in index
                 LOGGER.warnf("Unable to determine scope for bean %s using inheritance because its super class " +
@@ -690,7 +690,7 @@ final class Beans {
                 if (bean.getDeployment().transformUnproxyableClasses) {
                     DotName superName = beanClass.superName();
                     if (!DotNames.OBJECT.equals(superName)) {
-                        ClassInfo superClass = bean.getDeployment().getBeanArchiveIndex().getClassByName(beanClass.superName());
+                        ClassInfo superClass = bean.getDeployment().getIndex().getClassByName(beanClass.superName());
                         if (superClass == null || !superClass.hasNoArgsConstructor()) {
                             // Bean class extends a class without no-args constructor
                             // It is not possible to generate a no-args constructor reliably
@@ -730,7 +730,7 @@ final class Beans {
             }
 
         } else if (bean.isProducerField() || bean.isProducerMethod()) {
-            ClassInfo returnTypeClass = getClassByName(bean.getDeployment().getBeanArchiveIndex(),
+            ClassInfo returnTypeClass = getClassByName(bean.getDeployment().getIndex(),
                     bean.isProducerMethod() ? bean.getTarget().get().asMethod().returnType()
                             : bean.getTarget().get().asField().type());
             // can be null for primitive types
@@ -753,8 +753,7 @@ final class Beans {
                     if (bean.getDeployment().transformUnproxyableClasses) {
                         DotName superName = returnTypeClass.superName();
                         if (!DotNames.OBJECT.equals(superName)) {
-                            ClassInfo superClass = bean.getDeployment().getBeanArchiveIndex()
-                                    .getClassByName(returnTypeClass.superName());
+                            ClassInfo superClass = bean.getDeployment().getIndex().getClassByName(returnTypeClass.superName());
                             if (superClass == null || !superClass.hasNoArgsConstructor()) {
                                 // Bean class extends a class without no-args constructor
                                 // It is not possible to generate a no-args constructor reliably
@@ -789,37 +788,6 @@ final class Beans {
                     }
                 }
             }
-        } else if (bean.isSynthetic()) {
-            // this is for synthetic beans that need to be proxied but their classes don't have no-args constructor
-            ClassInfo beanClass = getClassByName(bean.getDeployment().getBeanArchiveIndex(), bean.getBeanClass());
-            MethodInfo noArgsConstructor = beanClass.method(Methods.INIT);
-            if (bean.getScope().isNormal() && !Modifier.isInterface(beanClass.flags()) && noArgsConstructor == null) {
-                if (bean.getDeployment().transformUnproxyableClasses) {
-                    DotName superName = beanClass.superName();
-                    if (!DotNames.OBJECT.equals(superName)) {
-                        ClassInfo superClass = bean.getDeployment().getBeanArchiveIndex().getClassByName(beanClass.superName());
-                        if (superClass == null || !superClass.hasNoArgsConstructor()) {
-                            // Bean class extends a class without no-args constructor
-                            // It is not possible to generate a no-args constructor reliably
-                            superName = null;
-                        }
-                    }
-                    if (superName != null) {
-                        String superClassName = superName.toString().replace('.', '/');
-                        bytecodeTransformerConsumer.accept(new BytecodeTransformer(beanClass.name().toString(),
-                                new NoArgConstructorTransformFunction(superClassName)));
-                    } else {
-                        errors.add(new DeploymentException(
-                                "It's not possible to add a synthetic constructor with no parameters to the unproxyable bean class: "
-                                        +
-                                        beanClass));
-                    }
-                } else {
-                    errors.add(new DeploymentException(String
-                            .format("Normal scoped beans must declare a non-private constructor with no parameters: %s",
-                                    bean)));
-                }
-            }
         }
     }
 
@@ -829,7 +797,7 @@ final class Beans {
         }
         if (type.kind() == Type.Kind.CLASS) {
             // Index the class additionally if needed
-            getClassByName(beanDeployment.getBeanArchiveIndex(), type.name());
+            getClassByName(beanDeployment.getIndex(), type.name());
         } else {
             analyzeType(type, beanDeployment);
         }
