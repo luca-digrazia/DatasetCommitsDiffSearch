@@ -15,34 +15,16 @@
  */
 package org.androidannotations.holder;
 
-import static com.sun.codemodel.JExpr.FALSE;
-import static com.sun.codemodel.JExpr.TRUE;
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr._super;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JExpr.ref;
-import static com.sun.codemodel.JMod.PRIVATE;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-
-import javax.lang.model.element.TypeElement;
-
+import com.sun.codemodel.*;
 import org.androidannotations.helper.ActionBarSherlockHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.HoloEverywhereHelper;
 import org.androidannotations.process.ProcessHolder;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JVar;
+import javax.lang.model.element.TypeElement;
+
+import static com.sun.codemodel.JExpr.*;
+import static com.sun.codemodel.JMod.*;
 
 public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration {
 
@@ -126,7 +108,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	private void setFragmentBuilder() throws JClassAlreadyExistsException {
 		fragmentBuilderClass = generatedClass._class(PUBLIC | STATIC, "FragmentBuilder_");
 		JClass superClass = refClass(org.androidannotations.api.builder.FragmentBuilder.class);
-		superClass = superClass.narrow(fragmentBuilderClass, getGeneratedClass());
+		superClass = superClass.narrow(fragmentBuilderClass);
 		fragmentBuilderClass._extends(superClass);
 		fragmentArgumentsBuilderField = ref("args");
 		setFragmentBuilderBuild();
@@ -135,7 +117,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 
 	private void setFragmentBuilderBuild() {
 		JMethod method = fragmentBuilderClass.method(PUBLIC, generatedClass._extends(), "build");
-		method.annotate(Override.class);
 		JBlock body = method.body();
 
 		JVar fragment = body.decl(generatedClass, "fragment_", _new(generatedClass));
