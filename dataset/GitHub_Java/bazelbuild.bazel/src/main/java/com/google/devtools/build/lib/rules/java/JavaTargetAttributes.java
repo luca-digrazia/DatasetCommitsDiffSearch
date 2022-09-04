@@ -61,11 +61,11 @@ public class JavaTargetAttributes {
     private final NestedSetBuilder<Artifact> compileTimeClassPathBuilder =
         NestedSetBuilder.naiveLinkOrder();
 
-    private BootClassPathInfo bootClassPath = BootClassPathInfo.empty();
+    private NestedSet<Artifact> bootClassPath = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     private ImmutableList<Artifact> sourcePath = ImmutableList.of();
     private final ImmutableList.Builder<Artifact> nativeLibraries = ImmutableList.builder();
 
-    private JavaPluginInfo plugins = JavaPluginInfo.empty();
+    private JavaPluginInfoProvider plugins = JavaPluginInfoProvider.empty();
 
     private final Map<PathFragment, Artifact> resources = new LinkedHashMap<>();
     private final NestedSetBuilder<Artifact> resourceJars = NestedSetBuilder.stableOrder();
@@ -187,11 +187,11 @@ public class JavaTargetAttributes {
      * <p>If this method is called, then the bootclasspath specified in this JavaTargetAttributes
      * instance overrides the default bootclasspath.
      */
-    public Builder setBootClassPath(BootClassPathInfo bootClassPath) {
+    public Builder setBootClassPath(NestedSet<Artifact> jars) {
       Preconditions.checkArgument(!built);
-      Preconditions.checkArgument(!bootClassPath.isEmpty());
-      Preconditions.checkState(this.bootClassPath.isEmpty());
-      this.bootClassPath = bootClassPath;
+      Preconditions.checkArgument(!jars.isEmpty());
+      Preconditions.checkState(bootClassPath.isEmpty());
+      bootClassPath = jars;
       return this;
     }
 
@@ -296,9 +296,9 @@ public class JavaTargetAttributes {
       return this;
     }
 
-    public Builder addPlugin(JavaPluginInfo plugins) {
+    public Builder addPlugin(JavaPluginInfoProvider plugins) {
       Preconditions.checkArgument(!built);
-      this.plugins = JavaPluginInfo.merge(this.plugins, plugins);
+      this.plugins = JavaPluginInfoProvider.merge(this.plugins, plugins);
       return this;
     }
 
@@ -375,11 +375,11 @@ public class JavaTargetAttributes {
   private final NestedSet<Artifact> runtimeClassPath;
   private final NestedSet<Artifact> compileTimeClassPath;
 
-  private final BootClassPathInfo bootClassPath;
+  private final NestedSet<Artifact> bootClassPath;
   private final ImmutableList<Artifact> sourcePath;
   private final ImmutableList<Artifact> nativeLibraries;
 
-  private final JavaPluginInfo plugins;
+  private final JavaPluginInfoProvider plugins;
 
   private final ImmutableMap<PathFragment, Artifact> resources;
   private final NestedSet<Artifact> resourceJars;
@@ -404,10 +404,10 @@ public class JavaTargetAttributes {
       ImmutableSet<Artifact> sourceFiles,
       NestedSet<Artifact> runtimeClassPath,
       NestedSet<Artifact> compileTimeClassPath,
-      BootClassPathInfo bootClassPath,
+      NestedSet<Artifact> bootClassPath,
       ImmutableList<Artifact> sourcePath,
       ImmutableList<Artifact> nativeLibraries,
-      JavaPluginInfo plugins,
+      JavaPluginInfoProvider plugins,
       ImmutableMap<PathFragment, Artifact> resources,
       NestedSet<Artifact> resourceJars,
       ImmutableList<Artifact> messages,
@@ -450,34 +450,6 @@ public class JavaTargetAttributes {
     NestedSet<Artifact> directJars =
         NestedSetBuilder.fromNestedSet(additionalClassPathEntries)
             .addTransitive(this.directJars)
-            .build();
-    return new JavaTargetAttributes(
-        sourceFiles,
-        runtimeClassPath,
-        compileTimeClassPath,
-        bootClassPath,
-        sourcePath,
-        nativeLibraries,
-        plugins,
-        resources,
-        resourceJars,
-        messages,
-        sourceJars,
-        classPathResources,
-        additionalOutputs,
-        directJars,
-        compileTimeDependencyArtifacts,
-        targetLabel,
-        injectingRuleKind,
-        excludedArtifacts,
-        strictJavaDeps);
-  }
-
-  JavaTargetAttributes appendAdditionalTransitiveClassPathEntries(
-      NestedSet<Artifact> additionalClassPathEntries) {
-    NestedSet<Artifact> compileTimeClassPath =
-        NestedSetBuilder.fromNestedSet(this.compileTimeClassPath)
-            .addTransitive(additionalClassPathEntries)
             .build();
     return new JavaTargetAttributes(
         sourceFiles,
@@ -569,7 +541,7 @@ public class JavaTargetAttributes {
     return compileTimeClassPath;
   }
 
-  public BootClassPathInfo getBootClassPath() {
+  public NestedSet<Artifact> getBootClassPath() {
     return bootClassPath;
   }
 
@@ -577,7 +549,7 @@ public class JavaTargetAttributes {
     return sourcePath;
   }
 
-  public JavaPluginInfo plugins() {
+  public JavaPluginInfoProvider plugins() {
     return plugins;
   }
 
