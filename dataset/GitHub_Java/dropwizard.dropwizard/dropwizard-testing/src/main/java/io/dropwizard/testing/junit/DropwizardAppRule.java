@@ -1,7 +1,7 @@
 package io.dropwizard.testing.junit;
 
 import com.google.common.base.Strings;
-import com.google.common.base.Throwables;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
@@ -12,15 +12,12 @@ import io.dropwizard.setup.Environment;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.junit.rules.ExternalResource;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
 import javax.annotation.Nullable;
-import java.util.Enumeration;
-
-import static com.google.common.base.Throwables.propagate;
+import java.util.List;
 
 /**
  * A JUnit rule for starting and stopping your application at the start and end of a test class.
@@ -31,10 +28,11 @@ import static com.google.common.base.Throwables.propagate;
  *
  * @param <C> the configuration type
  */
-public class DropwizardAppRule<C extends Configuration> extends ExternalResource {
+public class DropwizardAppRule<C extends Configuration> implements TestRule {
 
     private final Class<? extends Application<C>> applicationClass;
     private final String configPath;
+    private final List<ConfigOverride> configOverrides;
 
     private C configuration;
     private Application<C> application;
@@ -46,33 +44,38 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
                              ConfigOverride... configOverrides) {
         this.applicationClass = applicationClass;
         this.configPath = configPath;
-        for (ConfigOverride configOverride: configOverrides) {
+        this.configOverrides = (configOverrides == null)
+                ? ImmutableList.<ConfigOverride>of()
+                : ImmutableList.copyOf(configOverrides);
+    }
+
+    @Override
+    public Statement apply(final Statement base, Description description) {
+        return new Statement() {
+            @Override
+            public void evaluate() throws Throwable {
+                applyConfigOverrides();
+                startIfRequired();
+                try {
+                    base.evaluate();
+                } finally {
+                    resetConfigOverrides();
+                    jettyServer.stop();
+                    jettyServer = null;
+                }
+            }
+        };
+    }
+
+    private void applyConfigOverrides() {
+        for (ConfigOverride configOverride : configOverrides) {
             configOverride.addToSystemProperties();
         }
     }
 
-    @Override
-    protected void before()  {
-        startIfRequired();
-    }
-
-    @Override
-    protected void after() {
-        resetConfigOverrides();
-        try {
-            jettyServer.stop();
-        } catch (Exception e) {
-            propagate(e);
-        }
-        jettyServer = null;
-    }
-
     private void resetConfigOverrides() {
-        for (Enumeration<?> props = System.getProperties().propertyNames(); props.hasMoreElements();) {
-            String keyString = (String) props.nextElement();
-            if (keyString.startsWith("dw.")) {
-                System.clearProperty(keyString);
-            }
+        for (ConfigOverride configOverride : configOverrides) {
+            configOverride.removeFromSystemProperties();
         }
     }
 
@@ -88,11 +91,11 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
                 @Override
                 public void run(C configuration, Environment environment) throws Exception {
                     environment.lifecycle().addServerLifecycleListener(new ServerLifecycleListener() {
-                                    @Override
-                                    public void serverStarted(Server server) {
-                                        jettyServer = server;
-                                    }
-                                });
+                        @Override
+                        public void serverStarted(Server server) {
+                            jettyServer = server;
+                        }
+                    });
                     DropwizardAppRule.this.configuration = configuration;
                     DropwizardAppRule.this.environment = environment;
                     super.run(configuration, environment);
