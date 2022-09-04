@@ -17,13 +17,13 @@
 
 package smile.graph;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Queue;
+import smile.math.matrix.Matrix;
 import smile.math.matrix.SparseMatrix;
 import smile.sort.QuickSort;
 import smile.util.PriorityQueue;
@@ -33,16 +33,20 @@ import smile.util.PriorityQueue;
  *
  * @author Haifeng Li
  */
-public class AdjacencyList implements Graph, Serializable {
-    private static final long serialVersionUID = 2L;
+public class AdjacencyList implements Graph {
+
+    /**
+     * The number of vertices.
+     */
+    private int n;
     /**
      * Is the graph directed?
      */
-    private final boolean digraph;
+    private boolean digraph;
     /**
      * Adjacency list. Non-zero values are the weights of edges.
      */
-    private final LinkedList<Edge>[] graph;
+    private LinkedList<Edge>[] graph;
 
     /**
      * Constructor.
@@ -61,6 +65,7 @@ public class AdjacencyList implements Graph, Serializable {
      */
     @SuppressWarnings("unchecked")
     public AdjacencyList(int n, boolean digraph) {
+        this.n = n;
         this.digraph = digraph;
         graph = new LinkedList[n];
         for (int i = 0; i < n; i++) {
@@ -70,7 +75,7 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public int getNumVertices() {
-        return graph.length;
+        return n;
     }
 
     @Override
@@ -137,7 +142,6 @@ public class AdjacencyList implements Graph, Serializable {
     public Collection<Edge> getEdges() {
         Collection<Edge> set = new HashSet<>();
 
-        int n = graph.length;
         for (int i = 0; i < n; i++) {
             set.addAll(graph[i]);
         }
@@ -276,7 +280,6 @@ public class AdjacencyList implements Graph, Serializable {
     @Override
     public int getIndegree(int vertex) {
         int degree = 0;
-        int n = graph.length;
 
         for (int i = 0; i < n; i++) {
             if (hasEdge(i, vertex)) {
@@ -322,7 +325,6 @@ public class AdjacencyList implements Graph, Serializable {
         }
 
         int count = 0;
-        int n = graph.length;
 
         int[] pre = new int[n];
         int[] ts = new int[n];
@@ -362,7 +364,6 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public int[][] dfs() {
-        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -394,7 +395,6 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public void dfs(Visitor visitor) {
-        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -433,7 +433,6 @@ public class AdjacencyList implements Graph, Serializable {
             throw new UnsupportedOperationException("Topological sort is only meaningful for digraph.");
         }
 
-        int n = graph.length;
         int[] in = new int[n];
         int[] ts = new int[n];
         for (int i = 0; i < n; i++) {
@@ -492,7 +491,6 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public int[][] bfs() {
-        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -552,7 +550,6 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public void bfs(Visitor visitor) {
-        int n = graph.length;
         int[] cc = new int[n];
         Arrays.fill(cc, -1);
 
@@ -566,7 +563,6 @@ public class AdjacencyList implements Graph, Serializable {
 
     @Override
     public double[] dijkstra(int s) {
-        int n = graph.length;
         double[] wt = new double[n];
         Arrays.fill(wt, Double.POSITIVE_INFINITY);
 
@@ -622,7 +618,6 @@ public class AdjacencyList implements Graph, Serializable {
     @Override
     public SparseMatrix toMatrix() {
         int size = 0;
-        int n = graph.length;
         int[] colSize = new int[n];
         int[] colIndex = new int[n + 1];
         for (int i = 0; i < n; i++) {

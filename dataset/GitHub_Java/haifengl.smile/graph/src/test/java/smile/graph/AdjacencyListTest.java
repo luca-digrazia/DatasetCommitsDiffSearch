@@ -1,18 +1,19 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
 
 package smile.graph;
 
@@ -23,8 +24,9 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
-import smile.math.Math;
-import smile.math.matrix.SparseMatrix;
+import smile.math.MathEx;
+import smile.math.matrix.Matrix;
+import java.util.Arrays;
 
 /**
  *
@@ -340,7 +342,7 @@ public class AdjacencyListTest {
         graph.addEdge(9, 12);
         graph.addEdge(11, 12);
 
-        assertTrue(Math.equals(ts, graph.sortdfs()));
+        assertTrue(Arrays.equals(ts, graph.sortdfs()));
     }
 
     /**
@@ -363,18 +365,17 @@ public class AdjacencyListTest {
         graph.addEdge(5, 4);
 
         int[][] cc2 = graph.dfs();
-        assertTrue(Math.equals(cc, cc2));
+        assertTrue(Arrays.deepEquals(cc, cc2));
     }
 
     /**
      * Test of toSparseMatrix method, of class AdjacencyList.
      */
-    /*
     @Test
-    public void testToSparseMatrix() {
-        System.out.println("toSparseMatrix");
+    public void testToMatrix() {
+        System.out.println("toMatrix digraph = false");
 
-        AdjacencyList graph = new AdjacencyList(8);
+        AdjacencyList graph = new AdjacencyList(8, false);
         graph.addEdge(0, 2);
         graph.addEdge(1, 7);
         graph.addEdge(2, 6);
@@ -383,9 +384,134 @@ public class AdjacencyListTest {
         graph.addEdge(3, 5);
         graph.addEdge(5, 4);
 
-        SparseMatrix matrix = graph.toSparseMatrix();
+        Matrix matrix = graph.toMatrix();
+
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                System.out.print(matrix.get(i, j) + " ");
+            }
+            System.out.println();
+        }
+
+        assertEquals(1.0, matrix.get(0, 2), 1E-10);
+        assertEquals(1.0, matrix.get(1, 7), 1E-10);
+        assertEquals(1.0, matrix.get(2, 6), 1E-10);
+        assertEquals(1.0, matrix.get(7, 4), 1E-10);
+        assertEquals(1.0, matrix.get(3, 4), 1E-10);
+        assertEquals(1.0, matrix.get(3, 5), 1E-10);
+        assertEquals(1.0, matrix.get(5, 4), 1E-10);
+
+        // Graph is undirected.
+        assertEquals(1.0, matrix.get(2, 0), 1E-10);
+        assertEquals(1.0, matrix.get(7, 1), 1E-10);
+        assertEquals(1.0, matrix.get(6, 2), 1E-10);
+        assertEquals(1.0, matrix.get(4, 7), 1E-10);
+        assertEquals(1.0, matrix.get(4, 3), 1E-10);
+        assertEquals(1.0, matrix.get(5, 3), 1E-10);
+        assertEquals(1.0, matrix.get(4, 5), 1E-10);
     }
-    */
+
+    /**
+     * Test of toSparseMatrix method, of class AdjacencyList.
+     */
+    @Test
+    public void testToMatrixDigraph() {
+        System.out.println("toMatrix digraph = true");
+
+        AdjacencyList graph = new AdjacencyList(8, true);
+        graph.addEdge(0, 2);
+        graph.addEdge(1, 7);
+        graph.addEdge(2, 6);
+        graph.addEdge(7, 4);
+        graph.addEdge(3, 4);
+        graph.addEdge(3, 5);
+        graph.addEdge(5, 4);
+
+        Matrix matrix = graph.toMatrix();
+
+        for (int i = 0; i < 8; i++) {
+            for (int j = 0; j < 8; j++) {
+                System.out.print(matrix.get(i, j) + " ");
+            }
+            System.out.println();
+        }
+
+        assertEquals(1.0, matrix.get(0, 2), 1E-10);
+        assertEquals(1.0, matrix.get(1, 7), 1E-10);
+        assertEquals(1.0, matrix.get(2, 6), 1E-10);
+        assertEquals(1.0, matrix.get(7, 4), 1E-10);
+        assertEquals(1.0, matrix.get(3, 4), 1E-10);
+        assertEquals(1.0, matrix.get(3, 5), 1E-10);
+        assertEquals(1.0, matrix.get(5, 4), 1E-10);
+
+        // Graph is directed.
+        assertEquals(0.0, matrix.get(2, 0), 1E-10);
+        assertEquals(0.0, matrix.get(7, 1), 1E-10);
+        assertEquals(0.0, matrix.get(6, 2), 1E-10);
+        assertEquals(0.0, matrix.get(4, 7), 1E-10);
+        assertEquals(0.0, matrix.get(4, 3), 1E-10);
+        assertEquals(0.0, matrix.get(5, 3), 1E-10);
+        assertEquals(0.0, matrix.get(4, 5), 1E-10);
+    }
+
+    /**
+     * Test of subgraph method, of class AdjacencyList.
+     */
+    @Test
+    public void testSubgraph() {
+        System.out.println("subgraph digraph = false");
+
+        AdjacencyList graph = new AdjacencyList(8, false);
+        graph.addEdge(0, 2);
+        graph.addEdge(1, 7);
+        graph.addEdge(2, 6);
+        graph.addEdge(7, 4);
+        graph.addEdge(3, 4);
+        graph.addEdge(3, 5);
+        graph.addEdge(5, 4);
+
+        int[] v = {1, 3, 7};
+        AdjacencyList sub = graph.subgraph(v);
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                System.out.print(sub.getWeight(i, j) + " ");
+            }
+            System.out.println();
+        }
+
+        assertEquals(1.0, sub.getWeight(0, 2), 1E-10);
+        assertEquals(1.0, sub.getWeight(2, 0), 1E-10);
+    }
+
+    /**
+     * Test of subgraph method, of class AdjacencyList.
+     */
+    @Test
+    public void testSubgraphDigraph() {
+        System.out.println("subgraph digraph = true");
+
+        AdjacencyList graph = new AdjacencyList(8, true);
+        graph.addEdge(0, 2);
+        graph.addEdge(1, 7);
+        graph.addEdge(2, 6);
+        graph.addEdge(7, 4);
+        graph.addEdge(3, 4);
+        graph.addEdge(3, 5);
+        graph.addEdge(5, 4);
+
+        int[] v = {1, 3, 7};
+        AdjacencyList sub = graph.subgraph(v);
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                System.out.print(sub.getWeight(i, j) + " ");
+            }
+            System.out.println();
+        }
+
+        assertEquals(1.0, sub.getWeight(0, 2), 1E-10);
+    }
 
     /**
      * Test of bfs method, of class AdjacencyList.
@@ -414,7 +540,7 @@ public class AdjacencyListTest {
         graph.addEdge(9, 12);
         graph.addEdge(11, 12);
 
-        assertTrue(Math.equals(ts, graph.sortbfs()));
+        assertTrue(Arrays.equals(ts, graph.sortbfs()));
     }
 
     /**
@@ -437,7 +563,7 @@ public class AdjacencyListTest {
         graph.addEdge(5, 4);
 
         int[][] cc2 = graph.bfs();
-        assertTrue(Math.equals(cc, cc2));
+        assertTrue(Arrays.deepEquals(cc, cc2));
     }
 
     /**
@@ -470,6 +596,6 @@ public class AdjacencyListTest {
 
         double[][] wt2 = graph.dijkstra();
         
-        assertTrue(Math.equals(wt, wt2));
+        assertTrue(MathEx.equals(wt, wt2));
     }
 }
