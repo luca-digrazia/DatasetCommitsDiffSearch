@@ -17,7 +17,6 @@
 
 package smile.math.kernel;
 
-import smile.math.Function;
 import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
 
@@ -26,13 +25,7 @@ import smile.math.matrix.Matrix;
  *
  * @author Haifeng Li
  */
-public interface DotProductKernel extends Function {
-
-    @Override
-    default double f(double dist) {
-        return k(dist);
-    }
-
+public interface DotProductKernel {
     /**
      * Kernel function.
      * @param dot the dot product.
