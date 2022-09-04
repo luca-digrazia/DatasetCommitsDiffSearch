@@ -61,20 +61,20 @@ public class BazelConfiguration extends Fragment {
     if (OS.getCurrent() == OS.WINDOWS) {
       String path = System.getenv("BAZEL_SH");
       if (path != null) {
-        return PathFragment.create(path);
+        return new PathFragment(path);
       } else {
-        return PathFragment.create("c:/tools/msys64/usr/bin/bash.exe");
+        return new PathFragment("c:/tools/msys64/usr/bin/bash.exe");
       }
     }
     if (OS.getCurrent() == OS.FREEBSD) {
       String path = System.getenv("BAZEL_SH");
       if (path != null) {
-        return  PathFragment.create(path);
+        return  new PathFragment(path);
       } else {
-        return PathFragment.create("/usr/local/bin/bash");
+        return new PathFragment("/usr/local/bin/bash");
       }
     }
-    return PathFragment.create("/bin/bash");
+    return new PathFragment("/bin/bash");
   }
 
   @Override
@@ -101,10 +101,10 @@ public class BazelConfiguration extends Fragment {
     String newPath = "";
     if (sh != null && sh.getParentDirectory() != null) {
       newPath = sh.getParentDirectory().getPathString();
-      if (sh.getParentDirectory().endsWith(PathFragment.create("usr/bin"))) {
+      if (sh.getParentDirectory().endsWith(new PathFragment("usr/bin"))) {
         newPath +=
             ";" + sh.getParentDirectory().getParentDirectory().replaceName("bin").getPathString();
-      } else if (sh.getParentDirectory().endsWith(PathFragment.create("bin"))) {
+      } else if (sh.getParentDirectory().endsWith(new PathFragment("bin"))) {
         newPath +=
             ";" + sh.getParentDirectory().replaceName("usr").getRelative("bin").getPathString();
       }
