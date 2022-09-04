@@ -15,22 +15,21 @@
  */
 package org.androidannotations.helper;
 
-import org.androidannotations.process.IsValid;
+import static java.util.Arrays.asList;
+
+import java.util.Arrays;
+import java.util.List;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
-import java.util.Arrays;
-import java.util.List;
 
-import static java.util.Arrays.asList;
+import org.androidannotations.validation.IsValid;
 
 public class ValidatorParameterHelper {
 
 	private static final List<String> ANDROID_SHERLOCK_MENU_ITEM_QUALIFIED_NAMES = asList(CanonicalNameConstants.MENU_ITEM, CanonicalNameConstants.SHERLOCK_MENU_ITEM);
-	private static final List<String> EDITOR_ACTION_ALLOWED_PARAMETER_TYPES = asList(CanonicalNameConstants.TEXT_VIEW,
-		CanonicalNameConstants.INTEGER, "int", CanonicalNameConstants.KEY_EVENT);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -210,45 +209,4 @@ public class ValidatorParameterHelper {
 		}
 	}
 
-	public void hasAtMostOneTextViewParameter(ExecutableElement executableElement, IsValid valid) {
-		hasAtMostOneSpecificParameter(executableElement, CanonicalNameConstants.TEXT_VIEW, valid);
-	}
-
-	public void hasAtMostOneIntegerParameter(ExecutableElement executableElement, IsValid valid) {
-		List<String> integers = Arrays.asList(CanonicalNameConstants.INTEGER, "integer");
-		hasAtMostOneSpecificParameter(executableElement, integers, valid);
-	}
-
-	public void hasAtMostOneKeyEventParameter(ExecutableElement executableElement, IsValid valid) {
-		hasAtMostOneSpecificParameter(executableElement, CanonicalNameConstants.KEY_EVENT, valid);
-
-	}
-
-	public void hasAtMostOneSpecificParameter(ExecutableElement executableElement, String qualifiedName, IsValid valid) {
-		hasAtMostOneSpecificParameter(executableElement, Arrays.asList(qualifiedName), valid);
-	}
-
-	public void hasAtMostOneSpecificParameter(ExecutableElement executableElement, List<String> qualifiedNames, IsValid valid) {
-		boolean hasOneMatchingParameter = false;
-		for (VariableElement parameter : executableElement.getParameters()) {
-			if (qualifiedNames.contains(parameter.asType().toString())) {
-				if (hasOneMatchingParameter) {
-					valid.invalidate();
-					annotationHelper.printAnnotationError(executableElement, "%s can't have more than one parameter of type "+parameter.asType().toString());
-				} else {
-					hasOneMatchingParameter = true;
-				}
-			}
-		}
-	}
-
-	public void hasNoOtherParameterFromATextViewAnIntegerAndAKeyEvent(ExecutableElement executableElement, IsValid valid) {
-		for (VariableElement parameter : executableElement.getParameters()) {
-			String parameterType = parameter.asType().toString();
-			if (!EDITOR_ACTION_ALLOWED_PARAMETER_TYPES.contains(parameterType)) {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(executableElement, "%s can only have TextView, int and/or KeyEvent parameters");
-			}
-		}
-	}
 }
