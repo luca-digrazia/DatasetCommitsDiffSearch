@@ -2,6 +2,8 @@ package io.dropwizard.views;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.collect.ImmutableList;
+import com.sun.jersey.spi.service.ServiceFinder;
 
 import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
@@ -16,17 +18,16 @@ import java.lang.reflect.Type;
 import java.text.MessageFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.ServiceLoader;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
 @Provider
-@Produces({ MediaType.TEXT_HTML, MediaType.APPLICATION_XHTML_XML })
+@Produces(MediaType.WILDCARD)
 public class ViewMessageBodyWriter implements MessageBodyWriter<View> {
     private static final String MISSING_TEMPLATE_MSG =
             "<html>" +
                 "<head><title>Missing Template</title></head>" +
-                "<body><h1>Missing Template</h1><p>Template \"{0}\" not found.</p></body>" +
+                "<body><h1>Missing Template</h1><p>{0}</p></body>" +
             "</html>";
 
     @Context
@@ -38,7 +39,7 @@ public class ViewMessageBodyWriter implements MessageBodyWriter<View> {
 
     @Deprecated
     public ViewMessageBodyWriter(MetricRegistry metricRegistry) {
-        this(metricRegistry, ServiceLoader.load(ViewRenderer.class));
+        this(metricRegistry, ServiceFinder.find(ViewRenderer.class));
     }
 
     public ViewMessageBodyWriter(MetricRegistry metricRegistry, Iterable<ViewRenderer> viewRenderers) {
@@ -78,7 +79,7 @@ public class ViewMessageBodyWriter implements MessageBodyWriter<View> {
             }
             throw new ViewRenderException("Unable to find a renderer for " + t.getTemplateName());
         } catch (FileNotFoundException e) {
-            final String msg = MessageFormat.format(MISSING_TEMPLATE_MSG, t.getTemplateName());
+            final String msg = MessageFormat.format(MISSING_TEMPLATE_MSG, e.getMessage());
             throw new WebApplicationException(Response.serverError()
                                                       .type(MediaType.TEXT_HTML_TYPE)
                                                       .entity(msg)
