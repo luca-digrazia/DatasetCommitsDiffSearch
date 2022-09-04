@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.buildjar.instrumentation;
 
-import com.google.common.io.MoreFiles;
-import com.google.common.io.RecursiveDeleteOption;
 import com.google.devtools.build.buildjar.InvalidCommandLineException;
 import com.google.devtools.build.buildjar.JavaLibraryBuildRequest;
 import com.google.devtools.build.buildjar.jarhelper.JarCreator;
@@ -94,8 +92,7 @@ public final class JacocoInstrumentationProcessor {
 
   public void cleanup() throws IOException {
     if (Files.exists(instrumentedClassesDirectory)) {
-      MoreFiles.deleteRecursively(
-          instrumentedClassesDirectory, RecursiveDeleteOption.ALLOW_INSECURE);
+      recursiveRemove(instrumentedClassesDirectory);
     }
   }
 
@@ -140,6 +137,26 @@ public final class JacocoInstrumentationProcessor {
                     new BufferedOutputStream(Files.newOutputStream(instrumentedCopy))) {
               instr.instrument(input, output, file.toString());
             }
+            return FileVisitResult.CONTINUE;
+          }
+        });
+  }
+
+  // TODO(b/27069912): handle symlinks
+  private static void recursiveRemove(Path path) throws IOException {
+    Files.walkFileTree(
+        path,
+        new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+              throws IOException {
+            Files.delete(file);
+            return FileVisitResult.CONTINUE;
+          }
+
+          @Override
+          public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+            Files.delete(dir);
             return FileVisitResult.CONTINUE;
           }
         });
