@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import javax.annotation.Nullable;
@@ -36,17 +34,10 @@ public final class ResourceApk {
   @Nullable private final Artifact resourceJavaClassJar; // Class jar containing R.class files
   private final ResourceDependencies resourceDeps;
   private final AssetDependencies assetDeps;
-  /**
-   * Validated Android resource information. Will be null when this class is built from transitive
-   * resources only, and will be a superset of primaryResources otherwise.
-   */
-  @Nullable private final ValidatedAndroidData validatedResources;
+  @Nullable private final ResourceContainer primaryResources;
+  @Nullable private final AndroidAssets primaryAssets;
 
-  private final AndroidResources primaryResources;
-  private final AndroidAssets primaryAssets;
-
-  private final Artifact manifest; // The non-binary XML version of AndroidManifest.xml
-  private final Artifact rTxt;
+  @Nullable private final Artifact manifest; // The non-binary XML version of AndroidManifest.xml
   @Nullable private final Artifact resourceProguardConfig;
   @Nullable private final Artifact mainDexProguardConfig;
 
@@ -66,28 +57,10 @@ public final class ResourceApk {
         resourceDeps,
         AssetDependencies.empty(),
         resourceContainer,
-        resourceContainer.getAndroidResources(),
         resourceContainer.getAndroidAssets(),
         resourceContainer.getManifest(),
-        resourceContainer.getRTxt(),
         resourceProguardConfig,
         mainDexProguardConfig);
-  }
-
-  public static ResourceApk of(ValidatedAndroidResources resources, MergedAndroidAssets assets) {
-    return new ResourceApk(
-        resources.getApk(),
-        resources.getJavaSourceJar(),
-        resources.getJavaClassJar(),
-        resources.getResourceDependencies(),
-        assets.getAssetDependencies(),
-        resources,
-        resources,
-        assets,
-        resources.getManifest(),
-        resources.getRTxt(),
-        null,
-        null);
   }
 
   private ResourceApk(
@@ -96,11 +69,9 @@ public final class ResourceApk {
       @Nullable Artifact resourceJavaClassJar,
       ResourceDependencies resourceDeps,
       AssetDependencies assetDeps,
-      @Nullable ValidatedAndroidData validatedResources,
-      AndroidResources primaryResources,
-      AndroidAssets primaryAssets,
-      Artifact manifest,
-      Artifact rTxt,
+      @Nullable ResourceContainer primaryResources,
+      @Nullable AndroidAssets primaryAssets,
+      @Nullable Artifact manifest,
       @Nullable Artifact resourceProguardConfig,
       @Nullable Artifact mainDexProguardConfig) {
     this.resourceApk = resourceApk;
@@ -108,11 +79,9 @@ public final class ResourceApk {
     this.resourceJavaClassJar = resourceJavaClassJar;
     this.resourceDeps = resourceDeps;
     this.assetDeps = assetDeps;
-    this.validatedResources = validatedResources;
     this.primaryResources = primaryResources;
     this.primaryAssets = primaryAssets;
     this.manifest = manifest;
-    this.rTxt = rTxt;
     this.resourceProguardConfig = resourceProguardConfig;
     this.mainDexProguardConfig = mainDexProguardConfig;
   }
@@ -124,11 +93,9 @@ public final class ResourceApk {
         resourceJavaClassJar,
         resourceDeps,
         assetDeps,
-        validatedResources,
         primaryResources,
         primaryAssets,
         manifest,
-        rTxt,
         resourceProguardConfig,
         mainDexProguardConfig);
   }
@@ -137,25 +104,20 @@ public final class ResourceApk {
     return resourceApk;
   }
 
-  @Nullable
-  public ValidatedAndroidData getValidatedResources() {
-    return validatedResources;
-  }
-
-  public AndroidResources getPrimaryResources() {
+  public ResourceContainer getPrimaryResources() {
     return primaryResources;
   }
 
+  /**
+   * TODO(b/77574966): Use MergedAndroidAssets rather than the base class once we have completely
+   * decoupled assets and resources.
+   */
   public AndroidAssets getPrimaryAssets() {
     return primaryAssets;
   }
 
   public Artifact getManifest() {
     return manifest;
-  }
-
-  public Artifact getRTxt() {
-    return rTxt;
   }
 
   public Artifact getResourceJavaSrcJar() {
@@ -166,24 +128,9 @@ public final class ResourceApk {
     return resourceJavaClassJar;
   }
 
-  static ResourceApk fromTransitiveResources(
-      ResourceDependencies resourceDeps,
-      AssetDependencies assetDeps,
-      Artifact manifest,
-      Artifact rTxt) {
-    return new ResourceApk(
-        null,
-        null,
-        null,
-        resourceDeps,
-        assetDeps,
-        null,
-        AndroidResources.empty(),
-        AndroidAssets.empty(),
-        manifest,
-        rTxt,
-        null,
-        null);
+  public static ResourceApk fromTransitiveResources(
+      ResourceDependencies resourceDeps, AssetDependencies assetDeps) {
+    return new ResourceApk(null, null, null, resourceDeps, assetDeps, null, null, null, null, null);
   }
 
   public Artifact getResourceProguardConfig() {
@@ -213,10 +160,10 @@ public final class ResourceApk {
    * and the rest will be transitive.
    */
   private AndroidResourcesInfo toResourceInfo(Label label) {
-    if (validatedResources == null) {
+    if (primaryResources == null) {
       return resourceDeps.toInfo(label);
     }
-    return resourceDeps.toInfo(validatedResources);
+    return resourceDeps.toInfo(primaryResources);
   }
 
   public void addToConfiguredTargetBuilder(RuleConfiguredTargetBuilder builder, Label label) {
@@ -239,33 +186,5 @@ public final class ResourceApk {
 
     builder.addSkylarkTransitiveInfo(
         AndroidSkylarkApiProvider.NAME, new AndroidSkylarkApiProvider(resourceInfo));
-  }
-
-  /**
-   * Registers an action to process just the transitive resources and assets of a library.
-   *
-   * <p>Any local resources and assets will be ignored.
-   */
-  public static ResourceApk processFromTransitiveLibraryData(
-      RuleContext ruleContext,
-      ResourceDependencies resourceDeps,
-      AssetDependencies assetDeps,
-      StampedAndroidManifest manifest)
-      throws InterruptedException {
-
-    return new AndroidResourcesProcessorBuilder(ruleContext)
-        .setLibrary(true)
-        .setRTxtOut(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT))
-        .setManifestOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
-        .setSourceJarOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR))
-        .setJavaPackage(manifest.getPackage())
-        .withResourceDependencies(resourceDeps)
-        .withAssetDependencies(assetDeps)
-        .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
-        .setThrowOnResourceConflict(
-            AndroidCommon.getAndroidConfig(ruleContext).throwOnResourceConflict())
-        .buildWithoutLocalResources(manifest);
   }
 }
