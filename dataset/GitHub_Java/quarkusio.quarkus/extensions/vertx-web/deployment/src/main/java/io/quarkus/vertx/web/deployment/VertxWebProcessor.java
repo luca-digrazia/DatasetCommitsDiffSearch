@@ -59,7 +59,6 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.AssignableResultHandle;
@@ -212,8 +211,7 @@ class VertxWebProcessor {
             BuildProducer<RouteBuildItem> routeProducer,
             BuildProducer<FilterBuildItem> filterProducer,
             List<RequireBodyHandlerBuildItem> bodyHandlerRequired,
-            BeanArchiveIndexBuildItem beanArchive,
-            ShutdownContextBuildItem shutdown) throws IOException {
+            BeanArchiveIndexBuildItem beanArchive) throws IOException {
 
         ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
         IndexView index = beanArchive.getIndex();
@@ -328,8 +326,6 @@ class VertxWebProcessor {
         }
 
         detectConflictingRoutes(matchers);
-
-        recorder.clearCacheOnShutdown(shutdown);
     }
 
     @BuildStep

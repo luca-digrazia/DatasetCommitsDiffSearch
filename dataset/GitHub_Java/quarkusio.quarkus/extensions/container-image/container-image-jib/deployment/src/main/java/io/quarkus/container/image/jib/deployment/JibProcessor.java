@@ -108,9 +108,10 @@ public class JibProcessor {
 
         JibContainerBuilder jibContainerBuilder = createContainerBuilderFromNative(containerImageConfig, jibConfig,
                 nativeImage, containerImageLabels);
+        JibContainer container = containerize(applicationInfo, containerImageConfig, jibContainerBuilder,
+                pushRequest.isPresent());
 
-        containerize(applicationInfo, containerImageConfig, jibContainerBuilder, pushRequest.isPresent());
-
+        ImageReference targetImage = container.getTargetImage();
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
     }
 
@@ -188,7 +189,7 @@ public class JibProcessor {
             throw new IllegalArgumentException("The supplied container-image registry '" + registry + "' is invalid");
         }
 
-        String repository = (containerImageConfig.getEffectiveGroup().map(s -> s + "/").orElse(""))
+        String repository = (containerImageConfig.group.map(s -> s + "/").orElse(""))
                 + containerImageConfig.name.orElse(applicationInfo.getName());
         if (!ImageReference.isValidRepository(repository)) {
             throw new IllegalArgumentException("The supplied container-image repository '" + repository + "' is invalid");

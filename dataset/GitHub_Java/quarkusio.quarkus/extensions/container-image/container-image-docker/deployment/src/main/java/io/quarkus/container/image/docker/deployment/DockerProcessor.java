@@ -9,10 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,7 +40,6 @@ public class DockerProcessor {
     private static final String DOCKER = "docker";
     private static final String DOCKERFILE_JVM = "Dockerfile.jvm";
     private static final String DOCKERFILE_NATIVE = "Dockerfile.native";
-    public static final String DOCKER_BINARY_NAME = "docker";
 
     private final DockerWorking dockerWorking = new DockerWorking();
 
@@ -75,11 +71,9 @@ public class DockerProcessor {
         log.info("Building docker image for jar.");
 
         String image = containerImage.getImage();
-        List<String> additionalImageTags = containerImage.getAdditionalImageTags();
 
         ImageIdReader reader = new ImageIdReader();
-        createContainerImage(containerImageConfig, dockerConfig, image, additionalImageTags, out, reader, false,
-                pushRequest.isPresent());
+        createContainerImage(containerImageConfig, dockerConfig, image, out, reader, false, pushRequest.isPresent());
 
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
     }
@@ -112,32 +106,24 @@ public class DockerProcessor {
         log.info("Starting docker image build");
 
         String image = containerImage.getImage();
-        List<String> additionalImageTags = containerImage.getAdditionalImageTags();
 
         ImageIdReader reader = new ImageIdReader();
-        createContainerImage(containerImageConfig, dockerConfig, image, additionalImageTags, out, reader, true,
-                pushRequest.isPresent());
+        createContainerImage(containerImageConfig, dockerConfig, image, out, reader, true, pushRequest.isPresent());
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
     }
 
     private void createContainerImage(ContainerImageConfig containerImageConfig, DockerConfig dockerConfig, String image,
-            List<String> additionalImageTags,
             OutputTargetBuildItem out, ImageIdReader reader, boolean forNative, boolean pushRequested) {
 
         DockerfilePaths dockerfilePaths = getDockerfilePaths(dockerConfig, forNative, out);
-        String[] dockerArgs = getDockerArgs(image, dockerfilePaths, dockerConfig.buildArgs);
-        log.infof("Executing the following command to build docker image: '%s %s'", DOCKER_BINARY_NAME,
-                String.join(" ", dockerArgs));
-        boolean buildSuccessful = ExecUtil.exec(out.getOutputDirectory().toFile(), reader, DOCKER_BINARY_NAME, dockerArgs);
+        String[] buildArgs = { "build", "-f", dockerfilePaths.getDockerfilePath().toAbsolutePath().toString(), "-t", image,
+                dockerfilePaths.getDockerExecutionPath().toAbsolutePath().toString() };
+        boolean buildSuccessful = ExecUtil.exec(out.getOutputDirectory().toFile(), reader, "docker", buildArgs);
         if (!buildSuccessful) {
-            throw dockerException(dockerArgs);
+            throw dockerException(buildArgs);
         }
 
         log.infof("Built container image %s (%s)\n", image, reader.getImageId());
-
-        if (!additionalImageTags.isEmpty()) {
-            createAdditionalTags(image, additionalImageTags);
-        }
 
         if (pushRequested || containerImageConfig.push) {
             String registry = "docker.io";
@@ -154,43 +140,13 @@ public class DockerProcessor {
                     throw dockerException(new String[] { "-u", containerImageConfig.username.get(), "-p", "********" });
                 }
             }
-
-            List<String> imagesToPush = new ArrayList<>(additionalImageTags);
-            imagesToPush.add(image);
-            for (String imageToPush : imagesToPush) {
-                pushImage(imageToPush);
+            String[] pushArgs = { "push", image };
+            boolean pushSuccessful = ExecUtil.exec("docker", pushArgs);
+            if (!pushSuccessful) {
+                throw dockerException(pushArgs);
             }
+            log.info("Successfully pushed docker image " + image);
         }
-    }
-
-    private String[] getDockerArgs(String image, DockerfilePaths dockerfilePaths, Map<String, String> buildArgs) {
-        List<String> dockerArgs = new ArrayList<>(6 + buildArgs.size());
-        dockerArgs.addAll(Arrays.asList("build", "-f", dockerfilePaths.getDockerfilePath().toAbsolutePath().toString()));
-        for (Map.Entry<String, String> entry : buildArgs.entrySet()) {
-            dockerArgs.addAll(Arrays.asList("--build-arg", entry.getKey() + "=" + entry.getValue()));
-        }
-        dockerArgs.addAll(Arrays.asList("-t", image));
-        dockerArgs.add(dockerfilePaths.getDockerExecutionPath().toAbsolutePath().toString());
-        return dockerArgs.toArray(new String[0]);
-    }
-
-    private void createAdditionalTags(String image, List<String> additionalImageTags) {
-        for (String additionalTag : additionalImageTags) {
-            String[] tagArgs = { "tag", image, additionalTag };
-            boolean tagSuccessful = ExecUtil.exec("docker", tagArgs);
-            if (!tagSuccessful) {
-                throw dockerException(tagArgs);
-            }
-        }
-    }
-
-    private void pushImage(String image) {
-        String[] pushArgs = { "push", image };
-        boolean pushSuccessful = ExecUtil.exec("docker", pushArgs);
-        if (!pushSuccessful) {
-            throw dockerException(pushArgs);
-        }
-        log.info("Successfully pushed docker image " + image);
     }
 
     private RuntimeException dockerException(String[] dockerArgs) {
