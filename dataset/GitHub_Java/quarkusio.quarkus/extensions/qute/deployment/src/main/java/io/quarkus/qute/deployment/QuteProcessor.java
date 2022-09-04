@@ -54,14 +54,12 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanDiscoveryFinishedBuildItem;
-import io.quarkus.arc.deployment.QualifierRegistrarBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
-import io.quarkus.arc.processor.QualifierRegistrar;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.Feature;
@@ -227,14 +225,9 @@ public class QuteProcessor {
         // template path -> checked template method
         Map<String, MethodInfo> checkedTemplateMethods = new HashMap<>();
 
-        Set<AnnotationInstance> checkedTemplateAnnotations = new HashSet<>();
-        checkedTemplateAnnotations.addAll(index.getIndex().getAnnotations(Names.CHECKED_TEMPLATE_OLD));
-        checkedTemplateAnnotations.addAll(index.getIndex().getAnnotations(Names.CHECKED_TEMPLATE));
-
-        for (AnnotationInstance annotation : checkedTemplateAnnotations) {
-            if (annotation.target().kind() != Kind.CLASS) {
+        for (AnnotationInstance annotation : index.getIndex().getAnnotations(Names.CHECKED_TEMPLATE)) {
+            if (annotation.target().kind() != Kind.CLASS)
                 continue;
-            }
             ClassInfo classInfo = annotation.target().asClass();
             NativeCheckedTemplateEnhancer enhancer = new NativeCheckedTemplateEnhancer();
             for (MethodInfo methodInfo : classInfo.methods()) {
@@ -557,15 +550,15 @@ public class QuteProcessor {
             if (root.isTypeInfo()) {
                 // E.g. |org.acme.Item|
                 match.setValues(root.asTypeInfo().rawClass, root.asTypeInfo().resolvedType);
-                if (root.asTypeInfo().hasHints()) {
-                    processHints(templateAnalysis, root.asTypeInfo().hints, match, index, expression, generatedIdsToMatches,
+                if (root.asTypeInfo().hint != null) {
+                    processHints(templateAnalysis, root.asTypeInfo().hint, match, index, expression, generatedIdsToMatches,
                             incorrectExpressions);
                 }
             } else {
-                if (root.isProperty() && root.asProperty().hasHints()) {
+                if (root.isProperty() && root.asProperty().hint != null) {
                     // Root is not a type info but a property with hint
                     // E.g. 'it<loop#123>' and 'STATUS<when#123>'
-                    if (processHints(templateAnalysis, root.asProperty().hints, match, index, expression,
+                    if (processHints(templateAnalysis, root.asProperty().hint, match, index, expression,
                             generatedIdsToMatches, incorrectExpressions)) {
                         // In some cases it's necessary to reset the iterator
                         iterator = parts.iterator();
@@ -687,10 +680,13 @@ public class QuteProcessor {
                         clazz = index.getClassByName(type.name());
                     }
                     match.setValues(clazz, type);
-                    if (info.isProperty() && info.asProperty().hasHints()) {
-                        // For example a loop section needs to validate the type of an element
-                        processHints(templateAnalysis, info.asProperty().hints, match, index, expression, generatedIdsToMatches,
-                                incorrectExpressions);
+                    if (info.isProperty()) {
+                        String hint = info.asProperty().hint;
+                        if (hint != null) {
+                            // For example a loop section needs to validate the type of an element
+                            processHints(templateAnalysis, hint, match, index, expression, generatedIdsToMatches,
+                                    incorrectExpressions);
+                        }
                     }
                 }
             } else {
@@ -1019,15 +1015,13 @@ public class QuteProcessor {
         }
 
         for (InjectionPointInfo injectionPoint : validationPhase.getContext().getInjectionPoints()) {
+
             if (injectionPoint.getRequiredType().name().equals(Names.TEMPLATE)) {
-                AnnotationInstance location = injectionPoint.getRequiredQualifier(Names.LOCATION);
-                if (location == null) {
-                    // Try the deprecated @ResourcePath
-                    location = injectionPoint.getRequiredQualifier(Names.RESOURCE_PATH);
-                }
+
+                AnnotationInstance resourcePath = injectionPoint.getRequiredQualifier(Names.RESOURCE_PATH);
                 String name;
-                if (location != null) {
-                    name = location.value().asString();
+                if (resourcePath != null) {
+                    name = resourcePath.value().asString();
                 } else if (injectionPoint.hasDefaultedQualifier()) {
                     name = getName(injectionPoint);
                 } else {
@@ -1035,7 +1029,7 @@ public class QuteProcessor {
                 }
                 if (name != null) {
                     // For "@Inject Template items" we try to match "items"
-                    // For "@Location("github/pulls") Template pulls" we try to match "github/pulls"
+                    // For "@ResourcePath("github/pulls") Template pulls" we try to match "github/pulls"
                     if (filePaths.stream().noneMatch(path -> path.endsWith(name))) {
                         validationErrors.produce(new ValidationErrorBuildItem(
                                 new TemplateException("No template found for " + injectionPoint.getTargetInfo())));
@@ -1196,17 +1190,6 @@ public class QuteProcessor {
         });
     }
 
-    @BuildStep
-    QualifierRegistrarBuildItem turnLocationIntoQualifier() {
-        return new QualifierRegistrarBuildItem(new QualifierRegistrar() {
-
-            @Override
-            public Map<DotName, Set<String>> getAdditionalQualifiers() {
-                return Collections.singletonMap(Names.LOCATION, Collections.singleton("value"));
-            }
-        });
-    }
-
     /**
      * translates Json types to JDK types
      *
@@ -1275,7 +1258,7 @@ public class QuteProcessor {
 
     /**
      * @param templateAnalysis
-     * @param helperHints
+     * @param helperHint
      * @param match
      * @param index
      * @param expression
@@ -1283,43 +1266,41 @@ public class QuteProcessor {
      * @param incorrectExpressions
      * @return {@code true} if it is necessary to reset the type info part iterator
      */
-    static boolean processHints(TemplateAnalysis templateAnalysis, List<String> helperHints, Match match, IndexView index,
+    static boolean processHints(TemplateAnalysis templateAnalysis, String helperHint, Match match, IndexView index,
             Expression expression, Map<Integer, Match> generatedIdsToMatches,
             BuildProducer<IncorrectExpressionBuildItem> incorrectExpressions) {
-        if (helperHints == null || helperHints.isEmpty()) {
+        if (helperHint == null || helperHint.isEmpty()) {
             return false;
         }
-        for (String helperHint : helperHints) {
-            if (helperHint.equals(LoopSectionHelper.Factory.HINT_ELEMENT)) {
-                // Iterable<Item>, Stream<Item> => Item
-                // Map<String,Long> => Entry<String,Long>
-                processLoopElementHint(match, index, expression, incorrectExpressions);
-            } else if (helperHint.startsWith(LoopSectionHelper.Factory.HINT_PREFIX)) {
-                Expression valueExpr = findExpression(helperHint, LoopSectionHelper.Factory.HINT_PREFIX, templateAnalysis);
-                if (valueExpr != null) {
-                    Match valueExprMatch = generatedIdsToMatches.get(valueExpr.getGeneratedId());
-                    if (valueExprMatch != null) {
-                        match.setValues(valueExprMatch.clazz, valueExprMatch.type);
-                    }
+        if (helperHint.equals(LoopSectionHelper.Factory.HINT_ELEMENT)) {
+            // Iterable<Item>, Stream<Item> => Item
+            // Map<String,Long> => Entry<String,Long>
+            processLoopElementHint(match, index, expression, incorrectExpressions);
+        } else if (helperHint.startsWith(LoopSectionHelper.Factory.HINT_PREFIX)) {
+            Expression valueExpr = findExpression(helperHint, LoopSectionHelper.Factory.HINT_PREFIX, templateAnalysis);
+            if (valueExpr != null) {
+                Match valueExprMatch = generatedIdsToMatches.get(valueExpr.getGeneratedId());
+                if (valueExprMatch != null) {
+                    match.setValues(valueExprMatch.clazz, valueExprMatch.type);
                 }
-            } else if (helperHint.startsWith(WhenSectionHelper.Factory.HINT_PREFIX)) {
-                // If a value expression resolves to an enum we attempt to use the enum type to validate the enum constant  
-                // This basically transforms the type info "ON<when:12345>" into something like "|org.acme.Status|.ON"
-                Expression valueExpr = findExpression(helperHint, WhenSectionHelper.Factory.HINT_PREFIX, templateAnalysis);
-                if (valueExpr != null) {
-                    Match valueExprMatch = generatedIdsToMatches.get(valueExpr.getGeneratedId());
-                    if (valueExprMatch != null && valueExprMatch.clazz.isEnum()) {
-                        match.setValues(valueExprMatch.clazz, valueExprMatch.type);
-                        return true;
-                    }
+            }
+        } else if (helperHint.startsWith(WhenSectionHelper.Factory.HINT_PREFIX)) {
+            // If a value expression resolves to an enum we attempt to use the enum type to validate the enum constant  
+            // This basically transforms the type info "ON<when:12345>" into something like "|org.acme.Status|.ON"
+            Expression valueExpr = findExpression(helperHint, WhenSectionHelper.Factory.HINT_PREFIX, templateAnalysis);
+            if (valueExpr != null) {
+                Match valueExprMatch = generatedIdsToMatches.get(valueExpr.getGeneratedId());
+                if (valueExprMatch != null && valueExprMatch.clazz.isEnum()) {
+                    match.setValues(valueExprMatch.clazz, valueExprMatch.type);
+                    return true;
                 }
-            } else if (helperHint.startsWith(SetSectionHelper.Factory.HINT_PREFIX)) {
-                Expression valueExpr = findExpression(helperHint, SetSectionHelper.Factory.HINT_PREFIX, templateAnalysis);
-                if (valueExpr != null) {
-                    Match valueExprMatch = generatedIdsToMatches.get(valueExpr.getGeneratedId());
-                    if (valueExprMatch != null) {
-                        match.setValues(valueExprMatch.clazz, valueExprMatch.type);
-                    }
+            }
+        } else if (helperHint.startsWith(SetSectionHelper.Factory.HINT_PREFIX)) {
+            Expression valueExpr = findExpression(helperHint, SetSectionHelper.Factory.HINT_PREFIX, templateAnalysis);
+            if (valueExpr != null) {
+                Match valueExprMatch = generatedIdsToMatches.get(valueExpr.getGeneratedId());
+                if (valueExprMatch != null) {
+                    match.setValues(valueExprMatch.clazz, valueExprMatch.type);
                 }
             }
         }

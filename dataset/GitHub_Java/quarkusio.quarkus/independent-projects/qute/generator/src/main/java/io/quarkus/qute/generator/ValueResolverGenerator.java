@@ -34,7 +34,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -70,9 +69,9 @@ public class ValueResolverGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(ValueResolverGenerator.class);
 
-    public static final String GET_PREFIX = "get";
-    public static final String IS_PREFIX = "is";
-    public static final String HAS_PREFIX = "has";
+    private static final String GET_PREFIX = "get";
+    private static final String IS_PREFIX = "is";
+    private static final String HAS_PREFIX = "has";
 
     public static final String TARGET = "target";
     public static final String IGNORE_SUPERCLASSES = "ignoreSuperclasses";
@@ -86,18 +85,16 @@ public class ValueResolverGenerator {
     private final ClassOutput classOutput;
     private final Map<DotName, ClassInfo> nameToClass;
     private final Map<DotName, AnnotationInstance> nameToTemplateData;
-
-    private Function<ClassInfo, Function<FieldInfo, String>> forceGettersFunction;
+    private final Predicate<ClassInfo> forceGettersPredicate;
 
     ValueResolverGenerator(IndexView index, ClassOutput classOutput, Map<DotName, ClassInfo> nameToClass,
-            Map<DotName, AnnotationInstance> nameToTemplateData,
-            Function<ClassInfo, Function<FieldInfo, String>> forceGettersFunction) {
+            Map<DotName, AnnotationInstance> nameToTemplateData, Predicate<ClassInfo> forceGettersPredicate) {
         this.generatedTypes = new HashSet<>();
         this.classOutput = classOutput;
         this.index = index;
         this.nameToClass = new HashMap<>(nameToClass);
         this.nameToTemplateData = new HashMap<>(nameToTemplateData);
-        this.forceGettersFunction = forceGettersFunction;
+        this.forceGettersPredicate = forceGettersPredicate;
     }
 
     public Set<String> getGeneratedTypes() {
@@ -221,7 +218,7 @@ public class ValueResolverGenerator {
         ResultHandle name = resolve.invokeInterfaceMethod(Descriptors.GET_NAME, evalContext);
         ResultHandle params = resolve.invokeInterfaceMethod(Descriptors.GET_PARAMS, evalContext);
         ResultHandle paramsCount = resolve.invokeInterfaceMethod(Descriptors.COLLECTION_SIZE, params);
-        Function<FieldInfo, String> fieldToGetterFun = forceGettersFunction != null ? forceGettersFunction.apply(clazz) : null;
+        boolean forceGetters = forceGettersPredicate != null ? forceGettersPredicate.test(clazz) : false;
 
         // First collect and sort methods (getters must come before is/has properties, etc.)
         List<MethodKey> methods = clazz.methods().stream().filter(filter::test).map(MethodKey::new).sorted()
@@ -245,8 +242,16 @@ public class ValueResolverGenerator {
         if (!fields.isEmpty()) {
             BytecodeCreator zeroParamsBranch = resolve.ifNonZero(paramsCount).falseBranch();
             for (FieldInfo field : fields) {
-                String getterName = fieldToGetterFun != null ? fieldToGetterFun.apply(field) : null;
-                if (getterName != null && noneMethodMatches(methods, getterName)) {
+                String getterName;
+                if ((field.type().kind() == org.jboss.jandex.Type.Kind.PRIMITIVE
+                        && field.type().asPrimitiveType().equals(PrimitiveType.BOOLEAN))
+                        || (field.type().kind() == org.jboss.jandex.Type.Kind.CLASS
+                                && field.type().name().equals(DotNames.BOOLEAN))) {
+                    getterName = IS_PREFIX + capitalize(field.name());
+                } else {
+                    getterName = GET_PREFIX + capitalize(field.name());
+                }
+                if (forceGetters && methods.stream().noneMatch(m -> m.name.equals(getterName))) {
                     LOGGER.debugf("Forced getter added: %s", field);
                     BytecodeCreator getterMatch = zeroParamsBranch.createScope();
                     // Match the getter name
@@ -374,7 +379,7 @@ public class ValueResolverGenerator {
                         paramsCount, evalContext);
             }
         }
-        resolve.returnValue(resolve.invokeStaticMethod(Descriptors.RESULTS_NOT_FOUND_EC, evalContext));
+        resolve.returnValue(resolve.readStaticField(Descriptors.RESULTS_NOT_FOUND));
     }
 
     private void matchMethod(MethodInfo method, ClassInfo clazz, MethodCreator resolve, ResultHandle base, ResultHandle name,
@@ -413,8 +418,6 @@ public class ValueResolverGenerator {
         whenComplete.assign(whenRet, ret);
         AssignableResultHandle whenEvaluatedParams = whenComplete.createVariable(EvaluatedParams.class);
         whenComplete.assign(whenEvaluatedParams, evaluatedParams);
-        AssignableResultHandle whenEvalContext = whenComplete.createVariable(EvalContext.class);
-        whenComplete.assign(whenEvalContext, evalContext);
 
         BranchResult throwableIsNull = whenComplete.ifNull(whenComplete.getMethodParam(1));
 
@@ -434,7 +437,7 @@ public class ValueResolverGenerator {
                         whenEvaluatedParams, success.load(isVarArgs(method)), paramTypesHandle))
                 .falseBranch();
         typeMatchFailed.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE, whenRet,
-                typeMatchFailed.invokeStaticInterfaceMethod(Descriptors.NOT_FOUND_FROM_EC, whenEvalContext));
+                typeMatchFailed.readStaticField(Descriptors.RESULT_NOT_FOUND));
         typeMatchFailed.returnValue(null);
 
         ResultHandle[] paramsHandle = new ResultHandle[methodParams.size()];
@@ -526,8 +529,6 @@ public class ValueResolverGenerator {
         whenComplete.assign(whenRet, ret);
         AssignableResultHandle whenEvaluatedParams = whenComplete.createVariable(EvaluatedParams.class);
         whenComplete.assign(whenEvaluatedParams, evaluatedParams);
-        AssignableResultHandle whenEvalContext = whenComplete.createVariable(EvalContext.class);
-        whenComplete.assign(whenEvalContext, evalContext);
 
         BranchResult throwableIsNull = whenComplete.ifNull(whenComplete.getMethodParam(1));
         // complete
@@ -635,9 +636,9 @@ public class ValueResolverGenerator {
         failure.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE_EXCEPTIONALLY, whenRet,
                 whenComplete.getMethodParam(1));
 
-        // No method matches - result not found
+        // No method matches - return Result.NOT_FOUND
         whenComplete.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE, whenRet,
-                whenComplete.invokeStaticInterfaceMethod(Descriptors.NOT_FOUND_FROM_EC, whenEvalContext));
+                whenComplete.readStaticField(Descriptors.RESULT_NOT_FOUND));
         whenComplete.returnValue(null);
 
         matchScope.returnValue(ret);
@@ -718,7 +719,7 @@ public class ValueResolverGenerator {
         private ClassOutput classOutput;
         private final Map<DotName, ClassInfo> nameToClass = new HashMap<>();
         private final Map<DotName, AnnotationInstance> nameToTemplateData = new HashMap<>();
-        private Function<ClassInfo, Function<FieldInfo, String>> forceGettersFunction;
+        private Predicate<ClassInfo> forceGettersPredicate;
 
         public Builder setIndex(IndexView index) {
             this.index = index;
@@ -731,18 +732,13 @@ public class ValueResolverGenerator {
         }
 
         /**
-         * The function returns:
-         * <ul>
-         * <li>a function that returns the getter name for a specific field or {@code null} if getter should not be forced for
-         * the given field</li>
-         * <li>{@code null} if getters are not forced for the given class</li>
-         * </ul>
+         * If a class for which a value resolver is generated matches the predicate then all fields are accessed via getters.
          * 
-         * @param forceGettersFunction
+         * @param forceGettersPredicate
          * @return self
          */
-        public Builder setForceGettersFunction(Function<ClassInfo, Function<FieldInfo, String>> forceGettersFunction) {
-            this.forceGettersFunction = forceGettersFunction;
+        public Builder setForceGettersPredicate(Predicate<ClassInfo> forceGettersPredicate) {
+            this.forceGettersPredicate = forceGettersPredicate;
             return this;
         }
 
@@ -759,7 +755,7 @@ public class ValueResolverGenerator {
         }
 
         public ValueResolverGenerator build() {
-            return new ValueResolverGenerator(index, classOutput, nameToClass, nameToTemplateData, forceGettersFunction);
+            return new ValueResolverGenerator(index, classOutput, nameToClass, nameToTemplateData, forceGettersPredicate);
         }
 
     }
@@ -868,7 +864,7 @@ public class ValueResolverGenerator {
         return new String(chars);
     }
 
-    public static String capitalize(String name) {
+    static String capitalize(String name) {
         if (name == null || name.length() == 0) {
             return name;
         }
@@ -935,15 +931,6 @@ public class ValueResolverGenerator {
         } else {
             return targetPackage.replace('.', '/') + "/" + baseName + suffix;
         }
-    }
-
-    private static boolean noneMethodMatches(List<MethodKey> methods, String name) {
-        for (MethodKey method : methods) {
-            if (method.name.equals(name)) {
-                return false;
-            }
-        }
-        return true;
     }
 
     public static boolean hasCompletionStageInTypeClosure(ClassInfo classInfo,
