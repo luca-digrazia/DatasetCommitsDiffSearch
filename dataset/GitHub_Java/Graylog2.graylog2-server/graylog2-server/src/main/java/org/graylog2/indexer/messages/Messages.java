@@ -150,18 +150,22 @@ public class Messages {
     }
 
     private void propagateFailure(BulkItemResponse[] items, List<Message> messages, String errorMessage) {
+        LOG.error(
+                "Failed to index [{}] messages. Please check the index error log in your web interface for the reason. Error: {}",
+                items.length,
+                errorMessage);
+
         // Get all failed messages.
-        final List<DeadLetter> deadLetters = Lists.newArrayList();
+        List<DeadLetter> deadLetters = Lists.newArrayList();
         for (BulkItemResponse item : items) {
             if (item.isFailed()) {
                 deadLetters.add(new DeadLetter(item, messages.get(item.getItemId())));
             }
         }
 
-        LOG.error("Failed to index [{}] messages. Please check the index error log in your web interface for the reason. Error: {}",
-                deadLetters.size(), errorMessage);
+        boolean r = deadLetterQueue.offer(deadLetters);
 
-        if (!deadLetterQueue.offer(deadLetters)) {
+        if (!r) {
             LOG.debug("Could not propagate failure to failure queue. Queue is full.");
         }
     }
