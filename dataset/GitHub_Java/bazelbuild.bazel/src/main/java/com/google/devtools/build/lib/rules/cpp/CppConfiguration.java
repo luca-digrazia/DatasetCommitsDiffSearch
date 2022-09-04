@@ -162,7 +162,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   private final PathFragment crosstoolTopPathFragment;
 
   private final Path fdoProfileAbsolutePath;
-  private final Label fdoOptimizeLabel;
+  private final Label fdoProfileLabel;
 
   // TODO(bazel-team): All these labels (except for ccCompilerRuleLabel) can be removed once the
   // transition to the cc_compiler rule is complete.
@@ -199,9 +199,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   private final boolean shouldProvideMakeVariables;
   private final boolean dropFullyStaticLinkingMode;
 
+
   /**
    * If true, the ConfiguredTarget is only used to get the necessary cross-referenced {@code
-   * CcCompilationContextInfo}s, but registering build actions is disabled.
+   * CcCompilationInfo}s, but registering build actions is disabled.
    */
   private final boolean lipoContextCollector;
 
@@ -268,7 +269,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
         cppOptions.convertLipoToThinLto,
         crosstoolTopPathFragment,
         params.fdoProfileAbsolutePath,
-        params.fdoOptimizeLabel,
+        params.fdoProfileLabel,
         params.ccToolchainLabel,
         params.stlLabel,
         params.sysrootLabel == null
@@ -281,33 +282,33 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
             ImmutableList.copyOf(cppOptions.coptList)),
         new FlagList(
             cxxOptsBuilder.build(),
-            ImmutableList.of(),
+            FlagList.convertOptionalOptions(toolchain.getOptionalCxxFlagList()),
             ImmutableList.copyOf(cppOptions.cxxoptList)),
         new FlagList(
             ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
-            ImmutableList.of(),
-            ImmutableList.of()),
+            FlagList.convertOptionalOptions(toolchain.getOptionalUnfilteredCxxFlagList()),
+            ImmutableList.<String>of()),
         ImmutableList.copyOf(cppOptions.conlyoptList),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.FULLY_STATIC),
-            ImmutableList.of(),
-            ImmutableList.of()),
+            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.MOSTLY_STATIC),
-            ImmutableList.of(),
-            ImmutableList.of()),
+            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.MOSTLY_STATIC_LIBRARIES),
-            ImmutableList.of(),
-            ImmutableList.of()),
+            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            ImmutableList.<String>of()),
         new FlagList(
             cppToolchainInfo.configureLinkerOptions(
                 compilationMode, cppOptions.getLipoMode(), LinkingMode.DYNAMIC),
-            ImmutableList.of(),
-            ImmutableList.of()),
+            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            ImmutableList.<String>of()),
         ImmutableList.copyOf(cppOptions.coptList),
         ImmutableList.copyOf(cppOptions.cxxoptList),
         linkoptsBuilder.build(),
@@ -333,7 +334,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       boolean convertLipoToThinLto,
       PathFragment crosstoolTopPathFragment,
       Path fdoProfileAbsolutePath,
-      Label fdoOptimizeLabel,
+      Label fdoProfileLabel,
       Label ccToolchainLabel,
       Label stlLabel,
       PathFragment nonConfiguredSysroot,
@@ -365,7 +366,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     this.convertLipoToThinLto = convertLipoToThinLto;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
     this.fdoProfileAbsolutePath = fdoProfileAbsolutePath;
-    this.fdoOptimizeLabel = fdoOptimizeLabel;
+    this.fdoProfileLabel = fdoProfileLabel;
     this.ccToolchainLabel = ccToolchainLabel;
     this.stlLabel = stlLabel;
     this.nonConfiguredSysroot = nonConfiguredSysroot;
@@ -901,7 +902,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   /**
    * Returns true if LLVM FDO Optimization should be applied for this configuration.
    *
-   * <p>Deprecated: Use {@link CcToolchain#isLLVMOptimizedFdo(boolean, Path)}
+   * <p>Deprecated: Use {@link CppConfiguration#isLLVMOptimizedFdo(boolean)}
    */
   // TODO(b/64384912): Remove in favor of overload with isLLVMCompiler.
   @Deprecated
@@ -911,6 +912,14 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
             || CppFileTypes.LLVM_PROFILE_RAW.matches(cppOptions.getFdoOptimize())
             || (isLLVMCompiler()
                 && cppOptions.getFdoOptimize().endsWith(".zip")));
+  }
+
+  /** Returns true if LLVM FDO Optimization should be applied for this configuration. */
+  public boolean isLLVMOptimizedFdo(boolean isLLVMCompiler) {
+    return cppOptions.getFdoOptimize() != null
+        && (CppFileTypes.LLVM_PROFILE.matches(cppOptions.getFdoOptimize())
+            || CppFileTypes.LLVM_PROFILE_RAW.matches(cppOptions.getFdoOptimize())
+            || (isLLVMCompiler && cppOptions.getFdoOptimize().endsWith(".zip")));
   }
 
   /** Returns true if LIPO optimization is implied by the flags of this build. */
@@ -1212,29 +1221,18 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
       }
     }
 
-    // FDO
-    if (cppOptions.getFdoOptimize() != null && cppOptions.getFdoProfileLabel() != null) {
-      reporter.handle(Event.error("Both --fdo_optimize and --fdo_profile specified"));
-    }
-
     if (cppOptions.getFdoInstrument() != null) {
-      if (cppOptions.getFdoOptimize() != null || cppOptions.getFdoProfileLabel() != null) {
+      if (cppOptions.getFdoOptimize() != null) {
         reporter.handle(
             Event.error(
-                "Cannot instrument and optimize for FDO at the same time. Remove one of the "
-                    + "'--fdo_instrument' and '--fdo_optimize/--fdo_profile' options"));
+                "Cannot instrument and optimize for FDO at the same time. "
+                    + "Remove one of the '--fdo_instrument' and '--fdo_optimize' options"));
       }
       if (!cppOptions.coptList.contains("-Wno-error")) {
         // This is effectively impossible. --fdo_instrument adds this value, and only invocation
         // policy could remove it.
         reporter.handle(Event.error("Cannot instrument FDO without --copt including -Wno-error."));
       }
-    }
-
-    if (cppOptions.getLipoMode() != LipoMode.OFF && cppOptions.getFdoProfileLabel() != null) {
-      reporter.handle(
-          Event.error(
-              "LIPO options can not be used with --fdo_profile. Use --fdo_optimize instead"));
     }
 
     if (cppOptions.getLipoMode() != LipoMode.OFF
@@ -1352,12 +1350,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
     return fdoProfileAbsolutePath;
   }
 
-  public Label getFdoOptimizeLabel() {
-    return fdoOptimizeLabel;
-  }
-
   public Label getFdoProfileLabel() {
-    return cppOptions.getFdoProfileLabel();
+    return fdoProfileLabel;
   }
 
   public boolean useLLVMCoverageMapFormat() {

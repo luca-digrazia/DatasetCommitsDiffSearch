@@ -241,13 +241,12 @@ public class CppHelper {
   }
 
   /**
-   * Returns the default options to use for compiling C, C++, and assembler, excluding those
-   * specified on the command line. This is just the options that should be used for all three
-   * languages. There may be additional C-specific or C++-specific options that should be used, in
-   * addition to the ones returned by this method.
+   * Returns the default options to use for compiling C, C++, and assembler. This is just the
+   * options that should be used for all three languages. There may be additional C-specific or
+   * C++-specific options that should be used, in addition to the ones returned by this method.
    */
-  // TODO(b/70784100): Figure out if these methods can be moved to CcToolchainProvider.
-  public static ImmutableList<String> getCrosstoolCompilerOptions(
+  //TODO(b/70784100): Figure out if these methods can be moved to CcToolchainProvider.
+  public static ImmutableList<String> getCompilerOptions(
       CppConfiguration config, CcToolchainProvider toolchain, Iterable<String> features) {
     ImmutableList.Builder<String> coptsBuilder =
         ImmutableList.<String>builder()
@@ -265,30 +264,16 @@ public class CppHelper {
         new FlagList(
             coptsBuilder.build(),
             FlagList.convertOptionalOptions(toolchain.getOptionalCompilerFlags()),
-            ImmutableList.of());
+            ImmutableList.copyOf(config.getCopts()));
 
     return compilerFlags.evaluate(features);
   }
 
   /**
-   * Returns the default options to use for compiling C, C++, and assembler. This is just the
-   * options that should be used for all three languages. There may be additional C-specific or
-   * C++-specific options that should be used, in addition to the ones returned by this method.
+   * Returns the list of additional C++-specific options to use for compiling C++. These should be
+   * go on the command line after the common options returned by {@link #getCompilerOptions}.
    */
-  public static ImmutableList<String> getCompilerOptions(
-      CppConfiguration config, CcToolchainProvider toolchain, Iterable<String> features) {
-    return ImmutableList.<String>builder()
-        .addAll(getCrosstoolCompilerOptions(config, toolchain, features))
-        .addAll(config.getCopts())
-        .build();
-  }
-
-  /**
-   * Returns the list of additional C++-specific options to use for compiling C++, excluding those
-   * specified on the command line. These should be go on the command line after the common options
-   * returned by {@link #getCompilerOptions}.
-   */
-  public static ImmutableList<String> getCrosstoolCxxOptions(
+  public static ImmutableList<String> getCxxOptions(
       CppConfiguration config, CcToolchainProvider toolchain, Iterable<String> features) {
     ImmutableList.Builder<String> cxxOptsBuilder =
         ImmutableList.<String>builder()
@@ -300,21 +285,9 @@ public class CppHelper {
         new FlagList(
             cxxOptsBuilder.build(),
             FlagList.convertOptionalOptions(toolchain.getOptionalCxxFlags()),
-            ImmutableList.of());
+            ImmutableList.copyOf(config.getCxxopts()));
 
     return cxxFlags.evaluate(features);
-  }
-
-  /**
-   * Returns the list of additional C++-specific options to use for compiling C++. These should be
-   * go on the command line after the common options returned by {@link #getCompilerOptions}.
-   */
-  public static ImmutableList<String> getCxxOptions(
-      CppConfiguration config, CcToolchainProvider toolchain, Iterable<String> features) {
-    return ImmutableList.<String>builder()
-        .addAll(getCrosstoolCxxOptions(config, toolchain, features))
-        .addAll(config.getCxxopts())
-        .build();
   }
 
   /**

@@ -114,8 +114,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .setupCrosstool(
             mockToolsConfig,
             MockCcSupport.NO_LEGACY_FEATURES_FEATURE,
-            MockCcSupport.EMPTY_COMPILE_ACTION_CONFIG,
-            MockCcSupport.PIC_FEATURE);
+            MockCcSupport.EMPTY_COMPILE_ACTION_CONFIG);
     useConfiguration();
 
     checkError(
@@ -132,8 +131,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .setupCrosstool(
             mockToolsConfig,
             MockCcSupport.NO_LEGACY_FEATURES_FEATURE,
-            MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG,
-            MockCcSupport.PIC_FEATURE);
+            MockCcSupport.EMPTY_STATIC_LIBRARY_ACTION_CONFIG);
     useConfiguration();
 
     checkError(
@@ -998,7 +996,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         ")");
     ConfiguredTarget target = getConfiguredTarget("//foo");
     CppCompileAction action = getCppCompileAction(target);
-    String genfilesDir = getConfiguration(target).getGenfilesFragment().toString();
+    String genfilesDir = target.getConfiguration().getGenfilesFragment().toString();
     // Local include paths come first.
     assertContainsSublist(
         action.getCompilerOptions(),
