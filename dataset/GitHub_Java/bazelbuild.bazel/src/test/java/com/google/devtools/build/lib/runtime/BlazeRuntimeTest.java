@@ -120,8 +120,7 @@ public class BlazeRuntimeTest {
             serverDirectories, fs.getPath("/workspace"), fs.getPath("/system_javabase"), "blaze");
     BlazeWorkspace workspace = runtime.initWorkspace(directories, BinTools.empty(directories));
     EventBus eventBus = Mockito.mock(EventBus.class);
-    OptionsParser options =
-        OptionsParser.builder().optionsClasses(COMMAND_ENV_REQUIRED_OPTIONS).build();
+    OptionsParser options = OptionsParser.newOptionsParser(COMMAND_ENV_REQUIRED_OPTIONS);
     CommandEnvironment env =
         new CommandEnvironment(
             runtime,

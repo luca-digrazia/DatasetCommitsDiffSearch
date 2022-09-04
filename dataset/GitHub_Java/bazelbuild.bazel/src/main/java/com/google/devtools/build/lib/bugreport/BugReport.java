@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bugreport;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -39,8 +37,6 @@ import javax.annotation.Nullable;
  * that itself crashes!
  */
 public abstract class BugReport {
-
-  static final BugReporter REPORTER_INSTANCE = BugReport::sendBugReport;
 
   private BugReport() {}
 
@@ -125,7 +121,7 @@ public abstract class BugReport {
       return;
     }
 
-    logException(exception, filterArgs(args), values);
+    logException(exception, filterClientEnv(args), values);
   }
 
   private static void logCrash(Throwable throwable, boolean sendBugReport, String... args) {
@@ -133,7 +129,7 @@ public abstract class BugReport {
     if (sendBugReport) {
       BugReport.sendBugReport(throwable, Arrays.asList(args));
     }
-    BugReport.printBug(OutErr.SYSTEM_OUT_ERR, throwable, /* oomMessage = */ null);
+    BugReport.printBug(OutErr.SYSTEM_OUT_ERR, throwable);
     System.err.println("ERROR: " + getProductName() + " crash in async thread:");
     throwable.printStackTrace();
   }
@@ -231,38 +227,29 @@ public abstract class BugReport {
    * @param outErr where to write the output
    * @param e the exception thrown
    */
-  public static void printBug(OutErr outErr, Throwable e, String oomMessage) {
+  public static void printBug(OutErr outErr, Throwable e) {
     if (e instanceof OutOfMemoryError) {
       outErr.printErr(
-          e.getMessage()
-              + "\n\nERROR: "
-              + getProductName()
-              + " ran out of memory and crashed."
-              + (isNullOrEmpty(oomMessage) ? "" : (" " + oomMessage))
-              + "\n");
+          e.getMessage() + "\n\nERROR: " + getProductName() + " ran out of memory and crashed.\n");
     } else {
       printThrowableTo(outErr, e);
     }
   }
 
   /**
-   * Filters {@code args} by removing superfluous items:
+   * Filters {@code args} by removing any item that starts with "--client_env",
+   * then returns this as an immutable list.
    *
-   * <ul>
-   *   <li>The client's environment variables may contain sensitive data, so we filter it out.
-   *   <li>{@code --default_override} is spammy.
-   * </ul>
+   * <p>The client's environment variables may contain sensitive data, so we filter it out.
    */
-  private static List<String> filterArgs(Iterable<String> args) {
+  private static List<String> filterClientEnv(Iterable<String> args) {
     if (args == null) {
       return null;
     }
 
     ImmutableList.Builder<String> filteredArgs = ImmutableList.builder();
     for (String arg : args) {
-      if (arg != null
-          && !arg.startsWith("--client_env=")
-          && !arg.startsWith("--default_override=")) {
+      if (arg != null && !arg.startsWith("--client_env")) {
         filteredArgs.add(arg);
       }
     }
