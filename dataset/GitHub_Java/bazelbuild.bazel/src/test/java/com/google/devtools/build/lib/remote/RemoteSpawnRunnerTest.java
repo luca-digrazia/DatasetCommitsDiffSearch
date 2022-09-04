@@ -26,13 +26,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
-import build.bazel.remote.execution.v2.Action;
-import build.bazel.remote.execution.v2.ActionResult;
-import build.bazel.remote.execution.v2.Command;
-import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.ExecuteRequest;
-import build.bazel.remote.execution.v2.ExecuteResponse;
-import build.bazel.remote.execution.v2.LogFile;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
@@ -75,6 +68,12 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.Options;
+import com.google.devtools.remoteexecution.v1test.ActionResult;
+import com.google.devtools.remoteexecution.v1test.Digest;
+import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
+import com.google.devtools.remoteexecution.v1test.ExecuteResponse;
+import com.google.devtools.remoteexecution.v1test.LogFile;
+import com.google.protobuf.ByteString;
 import com.google.rpc.Code;
 import java.io.IOException;
 import java.io.InputStream;
@@ -83,7 +82,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.SortedMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -170,7 +168,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -201,15 +199,13 @@ public class RemoteSpawnRunnerTest {
     ArgumentCaptor<ExecuteRequest> requestCaptor = ArgumentCaptor.forClass(ExecuteRequest.class);
     verify(executor).executeRemotely(requestCaptor.capture());
     assertThat(requestCaptor.getValue().getSkipCacheLookup()).isTrue();
-    // TODO(olaola): verify that the uploaded action has the doNotCache set.
+    assertThat(requestCaptor.getValue().getAction().getDoNotCache()).isTrue();
 
     verify(cache, never())
         .getCachedActionResult(any(ActionKey.class));
     verify(cache, never())
         .upload(
             any(ActionKey.class),
-            any(Action.class),
-            any(Command.class),
             any(Path.class),
             any(Collection.class),
             any(FileOutErr.class),
@@ -232,7 +228,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -266,8 +262,6 @@ public class RemoteSpawnRunnerTest {
     verify(cache)
         .upload(
             any(ActionKey.class),
-            any(Action.class),
-            any(Command.class),
             any(Path.class),
             any(Collection.class),
             any(FileOutErr.class),
@@ -288,7 +282,7 @@ public class RemoteSpawnRunnerTest {
                 execRoot,
                 options,
                 Options.getDefaults(ExecutionOptions.class),
-                new AtomicReference<>(localRunner),
+                localRunner,
                 true,
                 /*cmdlineReporter=*/ null,
                 "build-req-id",
@@ -310,21 +304,11 @@ public class RemoteSpawnRunnerTest {
     assertThat(runner.exec(spawn, policy)).isSameAs(res);
 
     verify(localRunner).exec(eq(spawn), eq(policy));
-    verify(runner)
-        .execLocallyAndUpload(
-            eq(spawn),
-            eq(policy),
-            any(SortedMap.class),
-            eq(cache),
-            any(ActionKey.class),
-            any(Action.class),
-            any(Command.class),
-            eq(true));
+    verify(runner).execLocallyAndUpload(eq(spawn), eq(policy), any(SortedMap.class), eq(cache),
+        any(ActionKey.class));
     verify(cache)
         .upload(
             any(ActionKey.class),
-            any(Action.class),
-            any(Command.class),
             any(Path.class),
             any(Collection.class),
             any(FileOutErr.class),
@@ -349,7 +333,7 @@ public class RemoteSpawnRunnerTest {
                 execRoot,
                 options,
                 Options.getDefaults(ExecutionOptions.class),
-                new AtomicReference<>(localRunner),
+                localRunner,
                 true,
                 /*cmdlineReporter=*/ null,
                 "build-req-id",
@@ -385,7 +369,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             false,
             reporter,
             "build-req-id",
@@ -406,8 +390,6 @@ public class RemoteSpawnRunnerTest {
         .when(cache)
         .upload(
             any(ActionKey.class),
-            any(Action.class),
-            any(Command.class),
             any(Path.class),
             any(Collection.class),
             any(FileOutErr.class),
@@ -445,7 +427,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -486,7 +468,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -524,7 +506,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -561,7 +543,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             Options.getDefaults(RemoteOptions.class),
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -584,7 +566,7 @@ public class RemoteSpawnRunnerTest {
                 .build());
     SettableFuture<Void> completed = SettableFuture.create();
     completed.set(null);
-    when(cache.downloadFile(eq(logPath), eq(logDigest))).thenReturn(completed);
+    when(cache.downloadFile(eq(logPath), eq(logDigest), eq(null))).thenReturn(completed);
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
@@ -593,7 +575,7 @@ public class RemoteSpawnRunnerTest {
     assertThat(res.status()).isEqualTo(Status.NON_ZERO_EXIT);
 
     verify(executor).executeRemotely(any(ExecuteRequest.class));
-    verify(cache).downloadFile(eq(logPath), eq(logDigest));
+    verify(cache).downloadFile(eq(logPath), eq(logDigest), eq(null));
   }
 
   @Test
@@ -603,7 +585,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             Options.getDefaults(RemoteOptions.class),
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -629,7 +611,7 @@ public class RemoteSpawnRunnerTest {
                 "", 1, new ExecutionStatusException(resp.getStatus(), resp)));
     SettableFuture<Void> completed = SettableFuture.create();
     completed.set(null);
-    when(cache.downloadFile(eq(logPath), eq(logDigest))).thenReturn(completed);
+    when(cache.downloadFile(eq(logPath), eq(logDigest), eq(null))).thenReturn(completed);
 
     Spawn spawn = newSimpleSpawn();
     SpawnExecutionContext policy = new FakeSpawnExecutionContext(spawn);
@@ -638,7 +620,7 @@ public class RemoteSpawnRunnerTest {
     assertThat(res.status()).isEqualTo(Status.TIMEOUT);
 
     verify(executor).executeRemotely(any(ExecuteRequest.class));
-    verify(cache).downloadFile(eq(logPath), eq(logDigest));
+    verify(cache).downloadFile(eq(logPath), eq(logDigest), eq(null));
   }
 
   @Test
@@ -648,7 +630,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             Options.getDefaults(RemoteOptions.class),
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -678,7 +660,7 @@ public class RemoteSpawnRunnerTest {
 
     verify(executor).executeRemotely(any(ExecuteRequest.class));
     verify(cache).download(eq(result), eq(execRoot), any(FileOutErr.class));
-    verify(cache, never()).downloadFile(any(Path.class), any(Digest.class));
+    verify(cache, never()).downloadFile(any(Path.class), any(Digest.class), any(ByteString.class));
   }
 
   @Test
@@ -688,7 +670,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             Options.getDefaults(RemoteOptions.class),
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -718,7 +700,7 @@ public class RemoteSpawnRunnerTest {
 
     verify(executor).executeRemotely(any(ExecuteRequest.class));
     verify(cache).download(eq(result), eq(execRoot), any(FileOutErr.class));
-    verify(cache, never()).downloadFile(any(Path.class), any(Digest.class));
+    verify(cache, never()).downloadFile(any(Path.class), any(Digest.class), any(ByteString.class));
   }
 
   @Test
@@ -730,7 +712,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -743,10 +725,7 @@ public class RemoteSpawnRunnerTest {
 
     ActionResult cachedResult = ActionResult.newBuilder().setExitCode(0).build();
     when(cache.getCachedActionResult(any(ActionKey.class))).thenReturn(cachedResult);
-    Retrier.RetryException downloadFailure =
-        new Retrier.RetryException(
-            "", 1, new CacheNotFoundException(Digest.getDefaultInstance(), digestUtil));
-    doThrow(downloadFailure)
+    doThrow(CacheNotFoundException.class)
         .when(cache)
         .download(eq(cachedResult), any(Path.class), any(FileOutErr.class));
     ActionResult execResult = ActionResult.newBuilder().setExitCode(31).build();
@@ -776,7 +755,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -825,7 +804,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -872,7 +851,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -914,7 +893,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -952,7 +931,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             options,
             Options.getDefaults(ExecutionOptions.class),
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",
@@ -987,7 +966,7 @@ public class RemoteSpawnRunnerTest {
             execRoot,
             Options.getDefaults(RemoteOptions.class),
             executionOptions,
-            new AtomicReference<>(localRunner),
+            localRunner,
             true,
             /*cmdlineReporter=*/ null,
             "build-req-id",

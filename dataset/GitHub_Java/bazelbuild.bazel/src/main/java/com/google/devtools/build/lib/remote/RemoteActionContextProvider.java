@@ -120,8 +120,5 @@ final class RemoteActionContextProvider extends ActionContextProvider {
     if (cache != null) {
       cache.close();
     }
-    if (executor != null) {
-      executor.close();
-    }
   }
 }

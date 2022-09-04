@@ -21,7 +21,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.remote.Retrier.Backoff;
@@ -147,30 +146,19 @@ public class RetrierTest {
     AtomicInteger attemptsLvl1 = new AtomicInteger();
     AtomicInteger attemptsLvl2 = new AtomicInteger();
     try {
-      r.execute(
-          () -> {
-            attemptsLvl0.incrementAndGet();
-            return r.execute(
-                () -> {
-                  attemptsLvl1.incrementAndGet();
-                  return r.execute(
-                      () -> {
-                        attemptsLvl2.incrementAndGet();
-                        throw new Exception("failure message");
-                      });
-                });
+      r.execute(() -> {
+        attemptsLvl0.incrementAndGet();
+        return r.execute(() -> {
+          attemptsLvl1.incrementAndGet();
+          return r.execute(() -> {
+            attemptsLvl2.incrementAndGet();
+            throw new Exception("call failed");
           });
+        });
+      });
     } catch (RetryException outer) {
       assertThat(outer.getAttempts()).isEqualTo(2);
-      // Propagate original cause.
-      assertThat(outer).hasCauseThat().hasMessageThat().isEqualTo("failure message");
-      // Compose the overall error message.
-      assertThat(outer)
-          .hasMessageThat()
-          .isEqualTo(
-              "Call failed after 1 retry attempts: "
-                  + "Call failed after 1 retry attempts: "
-                  + "Call failed after 1 retry attempts: failure message");
+      assertThat(outer).hasCauseThat().hasMessageThat().isEqualTo("call failed");
       assertThat(attemptsLvl0.get()).isEqualTo(2);
       assertThat(attemptsLvl1.get()).isEqualTo(4);
       assertThat(attemptsLvl2.get()).isEqualTo(8);
@@ -274,68 +262,22 @@ public class RetrierTest {
   }
 
   @Test
-  public void asyncRetryExhaustRetries() throws Exception {
+  public void asyncRetryShouldWork() throws Exception {
     // Test that a call is retried according to the backoff.
     // All calls fail.
 
     Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 2);
     Retrier r = new Retrier(s, RETRY_ALL, retryService, alwaysOpen);
-    ListenableFuture<Void> res =
-        r.executeAsync(
-            () -> {
-              throw new Exception("call failed");
-            });
     try {
-      res.get();
+      r.executeAsync(
+              () -> {
+                throw new Exception("call failed");
+              })
+          .get();
       fail("exception expected.");
     } catch (ExecutionException e) {
-      assertThat(e).hasCauseThat().isInstanceOf(RetryException.class);
+      assertThat(e.getCause()).isInstanceOf(RetryException.class);
       assertThat(((RetryException) e.getCause()).getAttempts()).isEqualTo(3);
-      assertThat(e).hasCauseThat().hasMessageThat().contains("Exhausted retry attempts");
-      assertThat(e).hasCauseThat().hasMessageThat().contains("call failed");
-    }
-  }
-
-  @Test
-  public void asyncRetryNonRetriable() throws Exception {
-    // Test that a call is retried according to the backoff.
-    // All calls fail.
-
-    Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 2);
-    Retrier r = new Retrier(s, RETRY_NONE, retryService, alwaysOpen);
-    ListenableFuture<Void> res =
-        r.executeAsync(
-            () -> {
-              throw new Exception("call failed");
-            });
-    try {
-      res.get();
-      fail("exception expected.");
-    } catch (ExecutionException e) {
-      assertThat(e).hasCauseThat().isInstanceOf(RetryException.class);
-      assertThat(e).hasCauseThat().hasMessageThat().contains("not retriable");
-      assertThat(e).hasCauseThat().hasMessageThat().contains("call failed");
-    }
-  }
-
-  @Test
-  public void asyncRetryEmptyError() throws Exception {
-    // Test that a call is retried according to the backoff.
-    // All calls fail.
-
-    Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 2);
-    Retrier r = new Retrier(s, RETRY_NONE, retryService, alwaysOpen);
-    ListenableFuture<Void> res =
-        r.executeAsync(
-            () -> {
-              throw new Exception("");
-            });
-    try {
-      res.get();
-      fail("exception expected.");
-    } catch (ExecutionException e) {
-      assertThat(e).hasCauseThat().isInstanceOf(RetryException.class);
-      assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("Status not retriable.");
     }
   }
 
