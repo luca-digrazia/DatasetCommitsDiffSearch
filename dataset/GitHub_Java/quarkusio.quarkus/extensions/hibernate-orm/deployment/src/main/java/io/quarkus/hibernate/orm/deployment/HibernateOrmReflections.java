@@ -6,10 +6,10 @@ import org.hibernate.type.EnumType;
 import antlr.CommonToken;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 
 /**
- * This list of classes which any Hibernate ORM using application should register for reflective access in native mode.
+ * This list of classes which any Hibernate ORM using application should register for reflective access on SubstrateVM.
  * <p>
  * FIXME Find a reliable way to identify these and maintain the list accurate: the current list
  * is likely not complete as it was identified via a dumb "trial&error" strategy.
@@ -55,9 +55,7 @@ public final class HibernateOrmReflections {
 
         //Various well known needs:
         simpleConstructor(reflectiveClass, org.hibernate.tuple.entity.PojoEntityTuplizer.class);
-        simpleConstructor(reflectiveClass, org.hibernate.tuple.entity.DynamicMapEntityTuplizer.class);
         allConstructors(reflectiveClass, org.hibernate.tuple.component.PojoComponentTuplizer.class);
-        simpleConstructor(reflectiveClass, org.hibernate.tuple.component.DynamicMapComponentTuplizer.class);
         allConstructors(reflectiveClass, org.hibernate.persister.collection.OneToManyPersister.class);
         allConstructors(reflectiveClass, org.hibernate.persister.collection.BasicCollectionPersister.class);
         simpleConstructor(reflectiveClass, org.hibernate.persister.entity.SingleTableEntityPersister.class);
