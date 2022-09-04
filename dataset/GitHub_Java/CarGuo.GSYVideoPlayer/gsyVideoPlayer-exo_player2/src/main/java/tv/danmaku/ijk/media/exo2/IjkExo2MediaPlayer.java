@@ -8,7 +8,6 @@ import android.os.Looper;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.Size;
 
@@ -16,11 +15,13 @@ import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.ExoPlaybackException;
+import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.LoadControl;
 import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SeekParameters;
 import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.Timeline;
 import com.google.android.exoplayer2.analytics.AnalyticsListener;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
 import com.google.android.exoplayer2.metadata.Metadata;
@@ -29,7 +30,6 @@ import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
-import com.google.android.exoplayer2.video.VideoSize;
 
 import java.io.File;
 import java.io.FileDescriptor;
@@ -47,7 +47,7 @@ import tv.danmaku.ijk.media.player.misc.IjkTrackInfo;
  * Created by guoshuyu on 2018/1/10.
  * Exo
  */
-public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Listener, AnalyticsListener {
+public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.EventListener, AnalyticsListener {
 
 
     public static int ON_POSITION_DISCOUNTINUITY = 2702;
@@ -317,7 +317,7 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
     }
 
     @Override
-    public void setAudioStreamType(int streamType) {
+    public void setAudioStreamType(int streamtype) {
         // do nothing
     }
 
@@ -476,6 +476,12 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
         return mInternalPlayer.getBufferedPercentage();
     }
 
+
+    @Override
+    public void onTimelineChanged(Timeline timeline, Object manifest, int reason) {
+
+    }
+
     public MappingTrackSelector getTrackSelector() {
         return mTrackSelector;
     }
@@ -501,18 +507,24 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
     }
 
     @Override
-    public void onTracksChanged(@NonNull TrackGroupArray trackGroups, @NonNull TrackSelectionArray trackSelections) {
+    public void onTracksChanged(TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
+
     }
 
     @Override
-    public void onPlayerStateChanged(boolean playWhenReady, @Player.State int playbackState) {
+    public void onLoadingChanged(boolean isLoading) {
+
+    }
+
+    @Override
+    public void onPlayerStateChanged(boolean playWhenReady, int playbackState) {
         //重新播放状态顺序为：STATE_IDLE -》STATE_BUFFERING -》STATE_READY
         //缓冲时顺序为：STATE_BUFFERING -》STATE_READY
         //Log.e(TAG, "onPlayerStateChanged: playWhenReady = " + playWhenReady + ", playbackState = " + playbackState);
         if (isLastReportedPlayWhenReady != playWhenReady || lastReportedPlaybackState != playbackState) {
             int buffer = 0;
-            if (mInternalPlayer != null) {
-                buffer = mInternalPlayer.getBufferedPercentage();
+            if(mInternalPlayer != null) {
+                buffer =  mInternalPlayer.getBufferedPercentage();
             }
             if (isBuffering) {
                 switch (playbackState) {
@@ -553,19 +565,27 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
 
     @Override
     public void onRepeatModeChanged(int repeatMode) {
+
     }
 
     @Override
     public void onShuffleModeEnabledChanged(boolean shuffleModeEnabled) {
+
     }
 
     @Override
-    public void onPlayerError(@NonNull ExoPlaybackException error) {
+    public void onPlayerError(ExoPlaybackException error) {
         notifyOnError(IMediaPlayer.MEDIA_ERROR_UNKNOWN, IMediaPlayer.MEDIA_ERROR_UNKNOWN);
     }
 
     @Override
-    public void onPlaybackParametersChanged(@NonNull PlaybackParameters playbackParameters) {
+    public void onPositionDiscontinuity(int reason) {
+
+    }
+
+    @Override
+    public void onPlaybackParametersChanged(PlaybackParameters playbackParameters) {
+
     }
 
     @Override
@@ -575,87 +595,132 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Li
 
     /////////////////////////////////////AudioRendererEventListener/////////////////////////////////////////////
 
+
     @Override
-    public void onTimelineChanged(@NonNull EventTime eventTime, int reason) {
+    public void onPlayerStateChanged(EventTime eventTime, boolean playWhenReady, int playbackState) {
+
     }
 
     @Override
-    public void onPositionDiscontinuity(
-            @NonNull EventTime eventTime,
-            @NonNull Player.PositionInfo oldPosition,
-            @NonNull Player.PositionInfo newPosition,
-            @Player.DiscontinuityReason int reason
-    ) {
+    public void onTimelineChanged(EventTime eventTime, int reason) {
+
+    }
+
+    @Override
+    public void onPositionDiscontinuity(EventTime eventTime, int reason) {
         notifyOnInfo(ON_POSITION_DISCOUNTINUITY, reason);
     }
 
     @Override
-    public void onPlaybackParametersChanged(@NonNull EventTime eventTime, @NonNull PlaybackParameters playbackParameters) {
+    public void onSeekStarted(EventTime eventTime) {
+
     }
 
     @Override
-    public void onRepeatModeChanged(@NonNull EventTime eventTime, int repeatMode) {
+    public void onSeekProcessed(EventTime eventTime) {
+
     }
 
     @Override
-    public void onShuffleModeChanged(@NonNull EventTime eventTime, boolean shuffleModeEnabled) {
+    public void onPlaybackParametersChanged(EventTime eventTime, PlaybackParameters playbackParameters) {
+
     }
 
     @Override
-    public void onPlayerError(@NonNull EventTime eventTime, @NonNull ExoPlaybackException error) {
+    public void onRepeatModeChanged(EventTime eventTime, int repeatMode) {
+
     }
 
     @Override
-    public void onTracksChanged(@NonNull EventTime eventTime, @NonNull TrackGroupArray trackGroups, @NonNull TrackSelectionArray trackSelections) {
+    public void onShuffleModeChanged(EventTime eventTime, boolean shuffleModeEnabled) {
+
     }
 
     @Override
-    public void onBandwidthEstimate(@NonNull EventTime eventTime, int totalLoadTimeMs, long totalBytesLoaded, long bitrateEstimate) {
+    public void onLoadingChanged(EventTime eventTime, boolean isLoading) {
+
     }
 
     @Override
-    public void onMetadata(@NonNull EventTime eventTime, @NonNull Metadata metadata) {
+    public void onPlayerError(EventTime eventTime, ExoPlaybackException error) {
+
     }
 
     @Override
-    public void onDecoderDisabled(@NonNull EventTime eventTime, int trackType, @NonNull DecoderCounters decoderCounters) {
+    public void onTracksChanged(EventTime eventTime, TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {
+
+    }
+
+    @Override
+    public void onBandwidthEstimate(EventTime eventTime, int totalLoadTimeMs, long totalBytesLoaded, long bitrateEstimate) {
+
+    }
+
+    @Override
+    public void onMetadata(EventTime eventTime, Metadata metadata) {
+
+    }
+
+    @Override
+    public void onDecoderEnabled(EventTime eventTime, int trackType, DecoderCounters decoderCounters) {
+
+    }
+
+    @Override
+    public void onDecoderInitialized(EventTime eventTime, int trackType, String decoderName, long initializationDurationMs) {
+
+    }
+
+    @Override
+    public void onDecoderInputFormatChanged(EventTime eventTime, int trackType, Format format) {
+
+    }
+
+    @Override
+    public void onDecoderDisabled(EventTime eventTime, int trackType, DecoderCounters decoderCounters) {
         audioSessionId = C.AUDIO_SESSION_ID_UNSET;
     }
 
     @Override
-    public void onAudioUnderrun(@NonNull EventTime eventTime, int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs) {
+    public void onAudioUnderrun(EventTime eventTime, int bufferSize, long bufferSizeMs, long elapsedSinceLastFeedMs) {
+
     }
 
     @Override
-    public void onDroppedVideoFrames(@NonNull EventTime eventTime, int droppedFrames, long elapsedMs) {
+    public void onDroppedVideoFrames(EventTime eventTime, int droppedFrames, long elapsedMs) {
+
     }
 
     @Override
-    public void onVideoSizeChanged(@NonNull EventTime eventTime, @NonNull VideoSize videoSize) {
-        mVideoWidth = (int) (videoSize.width * videoSize.pixelWidthHeightRatio);
-        mVideoHeight = videoSize.height;
-        notifyOnVideoSizeChanged((int) (videoSize.width * videoSize.pixelWidthHeightRatio), videoSize.height, 1, 1);
-        if (videoSize.unappliedRotationDegrees > 0)
-            notifyOnInfo(IMediaPlayer.MEDIA_INFO_VIDEO_ROTATION_CHANGED, videoSize.unappliedRotationDegrees);
+    public void onVideoSizeChanged(EventTime eventTime, int width, int height, int unappliedRotationDegrees, float pixelWidthHeightRatio) {
+        mVideoWidth = (int) (width * pixelWidthHeightRatio);
+        mVideoHeight = height;
+        notifyOnVideoSizeChanged((int) (width * pixelWidthHeightRatio), height, 1, 1);
+        if (unappliedRotationDegrees > 0)
+            notifyOnInfo(IMediaPlayer.MEDIA_INFO_VIDEO_ROTATION_CHANGED, unappliedRotationDegrees);
     }
 
     @Override
-    public void onRenderedFirstFrame(@NonNull EventTime eventTime, @NonNull Object output, long renderTimeMs) {
+    public void onRenderedFirstFrame(EventTime eventTime, Object output, long renderTimeMs) {
     }
 
     @Override
-    public void onDrmKeysLoaded(@NonNull EventTime eventTime) {
+    public void onDrmKeysLoaded(EventTime eventTime) {
+
     }
 
     @Override
-    public void onDrmSessionManagerError(@NonNull EventTime eventTime, @NonNull Exception error) {
+    public void onDrmSessionManagerError(EventTime eventTime, Exception error) {
+
     }
 
     @Override
-    public void onDrmKeysRestored(@NonNull EventTime eventTime) {
+    public void onDrmKeysRestored(EventTime eventTime) {
+
     }
 
     @Override
-    public void onDrmKeysRemoved(@NonNull EventTime eventTime) {
+    public void onDrmKeysRemoved(EventTime eventTime) {
+
     }
 }
