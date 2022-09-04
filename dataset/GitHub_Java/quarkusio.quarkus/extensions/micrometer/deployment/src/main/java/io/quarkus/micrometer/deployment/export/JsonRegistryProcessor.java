@@ -9,6 +9,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.micrometer.deployment.MicrometerRegistryProviderBuildItem;
 import io.quarkus.micrometer.runtime.config.MicrometerConfig;
 import io.quarkus.micrometer.runtime.export.JsonMeterRegistryProvider;
@@ -34,7 +35,8 @@ public class JsonRegistryProcessor {
             BuildProducer<MicrometerRegistryProviderBuildItem> registryProviders,
             BuildProducer<RouteBuildItem> routes,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            JsonRecorder recorder) {
+            JsonRecorder recorder,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
         additionalBeans.produce(AdditionalBeanBuildItem.builder()
                 .addBeanClass(JsonMeterRegistryProvider.class)
                 .setUnremovable().build());
@@ -44,6 +46,11 @@ public class JsonRegistryProcessor {
                 .handler(recorder.getHandler())
                 .nonApplicationRoute(true)
                 .build());
+        reflectiveClasses.produce(ReflectiveClassBuildItem
+                .builder("org.HdrHistogram.Histogram",
+                        "org.HdrHistogram.DoubleHistogram",
+                        "org.HdrHistogram.ConcurrentHistogram")
+                .constructors(true).build());
         log.debug("Initialized a JSON meter registry on path=" + config.export.json.path);
     }
 
