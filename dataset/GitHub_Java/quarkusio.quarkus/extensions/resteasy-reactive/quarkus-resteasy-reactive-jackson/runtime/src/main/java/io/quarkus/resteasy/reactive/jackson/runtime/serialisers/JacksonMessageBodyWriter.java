@@ -8,6 +8,7 @@ import java.lang.reflect.Type;
 
 import javax.inject.Inject;
 import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
@@ -46,18 +47,10 @@ public class JacksonMessageBodyWriter implements ServerMessageBodyWriter<Object>
     @Override
     public void writeTo(Object o, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, Object> httpHeaders, OutputStream entityStream) throws IOException, WebApplicationException {
+        httpHeaders.putSingle(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON);
         if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
             entityStream.write(((String) o).getBytes());
         } else {
-            if (annotations != null) {
-                for (Annotation annotation : annotations) {
-                    if (JsonView.class.equals(annotation.annotationType())) {
-                        if (handleJsonView(((JsonView) annotation), o, entityStream)) {
-                            return;
-                        }
-                    }
-                }
-            }
             entityStream.write(writer.writeValueAsBytes(o));
         }
     }
@@ -69,6 +62,7 @@ public class JacksonMessageBodyWriter implements ServerMessageBodyWriter<Object>
 
     @Override
     public void writeResponse(Object o, ServerRequestContext context) throws WebApplicationException, IOException {
+        context.serverResponse().setResponseHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON);
         OutputStream stream = context.getOrCreateOutputStream();
         if (o instanceof String) { // YUK: done in order to avoid adding extra quotes...
             stream.write(((String) o).getBytes());
@@ -77,7 +71,9 @@ public class JacksonMessageBodyWriter implements ServerMessageBodyWriter<Object>
             // where JsonView is not used
             if (context.getResteasyReactiveResourceInfo().getMethodAnnotationNames().contains(JSON_VIEW_NAME)) {
                 Method method = context.getResteasyReactiveResourceInfo().getMethod();
-                if (handleJsonView(method.getAnnotation(JsonView.class), o, stream)) {
+                JsonView jsonView = method.getAnnotation(JsonView.class);
+                if ((jsonView != null) && (jsonView.value().length > 0)) {
+                    writer.withView(jsonView.value()[0]).writeValue(stream, o);
                     return;
                 }
             }
@@ -85,13 +81,5 @@ public class JacksonMessageBodyWriter implements ServerMessageBodyWriter<Object>
         }
         // we don't use try-with-resources because that results in writing to the http output without the exception mapping coming into play
         stream.close();
-    }
-
-    private boolean handleJsonView(JsonView jsonView, Object o, OutputStream stream) throws IOException {
-        if ((jsonView != null) && (jsonView.value().length > 0)) {
-            writer.withView(jsonView.value()[0]).writeValue(stream, o);
-            return true;
-        }
-        return false;
     }
 }
