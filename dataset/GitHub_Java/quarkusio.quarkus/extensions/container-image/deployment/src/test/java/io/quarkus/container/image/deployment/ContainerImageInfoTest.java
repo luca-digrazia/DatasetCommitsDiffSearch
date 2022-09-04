@@ -81,9 +81,16 @@ public class ContainerImageInfoTest {
     public void shouldFailWhenSpacesInGroupProperty() {
         givenProperty(GROUP_PROPERTY, "group with space");
         // user error should not be auto-corrected
-        thenImagePublicationFails(
+        IllegalArgumentException thrown = assertThrows(
                 IllegalArgumentException.class,
-                "The supplied combination of container-image group 'group with space' and name 'repo/name' is invalid");
+                this::whenPublishImageInfo,
+                "Expected java.lang.IllegalArgumentException to be thrown from ContainerImageProcessor.publishImageInfo");
+
+        assertTrue(
+                thrown.getMessage().contains(
+                        "The supplied combination of container-image group 'group with space' and name 'repo/name' is invalid"),
+                "Expected the error message to be 'The supplied combination of container-image group 'group with space' and name 'repo/name' is invalid' but was '"
+                        + thrown.getMessage() + "'");
     }
 
     private void givenNoUserName() {
@@ -126,17 +133,5 @@ public class ContainerImageInfoTest {
 
     private void thenImageIs(String expectedImage) {
         assertEquals(expectedImage, actualContainerImageInfo.getImage());
-    }
-
-    private <T extends Throwable> void thenImagePublicationFails(Class<T> expectedErrorType, String expectedErrorMessage) {
-        T thrown = assertThrows(
-                expectedErrorType,
-                this::whenPublishImageInfo,
-                String.format("Expected %s to be thrown from ContainerImageProcessor.publishImageInfo",
-                        expectedErrorType.getName()));
-
-        assertTrue(
-                thrown.getMessage().contains(expectedErrorMessage),
-                String.format("Expected the error message to be '%s' but was '%s'", expectedErrorMessage, thrown.getMessage()));
     }
 }
