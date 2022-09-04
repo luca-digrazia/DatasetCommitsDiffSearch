@@ -1,23 +1,24 @@
 package com.example.sslreload;
 
+import com.google.common.io.CharStreams;
+import com.google.common.io.Resources;
 import io.dropwizard.Configuration;
 import io.dropwizard.testing.ConfigOverride;
 import io.dropwizard.testing.ResourceHelpers;
-import io.dropwizard.testing.junit5.DropwizardAppExtension;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
-import io.dropwizard.util.CharStreams;
-import io.dropwizard.util.Resources;
+import io.dropwizard.testing.junit.DropwizardAppRule;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.After;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
@@ -27,10 +28,11 @@ import java.nio.file.Path;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Java6Assertions.assertThat;
 
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class SslReloadAppTest {
+    @ClassRule
+    public static final TemporaryFolder FOLDER = new TemporaryFolder();
 
     private static final X509TrustManager TRUST_ALL = new X509TrustManager() {
         @Override
@@ -51,27 +53,28 @@ public class SslReloadAppTest {
 
     private static Path keystore;
 
-    public final DropwizardAppExtension<Configuration> rule =
-        new DropwizardAppExtension<>(SslReloadApp.class, ResourceHelpers.resourceFilePath("sslreload/config.yml"),
+    @Rule
+    public final DropwizardAppRule<Configuration> rule =
+        new DropwizardAppRule<>(SslReloadApp.class, ResourceHelpers.resourceFilePath("sslreload/config.yml"),
             ConfigOverride.config("server.applicationConnectors[0].keyStorePath", keystore.toString()),
             ConfigOverride.config("server.adminConnectors[0].keyStorePath", keystore.toString()));
 
-    @BeforeAll
-    public static void setupClass(@TempDir Path tempDir) throws IOException {
-        keystore = tempDir.resolve("keystore.jks");
+    @BeforeClass
+    public static void setupClass() throws IOException {
+        keystore = FOLDER.newFile("keystore.jks").toPath();
         final byte[] keystoreBytes = Resources.toByteArray(Resources.getResource("sslreload/keystore.jks"));
         Files.write(keystore, keystoreBytes);
     }
 
-    @AfterEach
-    void after() throws IOException {
+    @After
+    public void after() throws IOException {
         // Reset keystore to known good keystore
         final byte[] keystoreBytes = Resources.toByteArray(Resources.getResource("sslreload/keystore.jks"));
         Files.write(keystore, keystoreBytes);
     }
 
     @Test
-    void reloadCertificateChangesTheServerCertificate() throws Exception {
+    public void reloadCertificateChangesTheServerCertificate() throws Exception {
         // Copy over our new keystore that has our new certificate to the current
         // location of our keystore
         final byte[] keystore2Bytes = Resources.toByteArray(Resources.getResource("sslreload/keystore2.jks"));
@@ -92,7 +95,7 @@ public class SslReloadAppTest {
     }
 
     @Test
-    void badReloadDoesNotChangeTheServerCertificate() throws Exception {
+    public void badReloadDoesNotChangeTheServerCertificate() throws Exception {
         // This keystore has a different password than what jetty has been configured with
         // the password is "password2"
         final byte[] badKeystore = Resources.toByteArray(Resources.getResource("sslreload/keystore-diff-pwd.jks"));
@@ -101,7 +104,7 @@ public class SslReloadAppTest {
         // Get the bytes for the first certificate. The reload should fail
         byte[] firstCertBytes = certBytes(500, "Keystore was tampered with, or password was incorrect");
 
-        // Issue another request. The returned certificate should be the same as setUp
+        // Issue another request. The returned certificate should be the same as before
         byte[] secondCertBytes = certBytes(500, "Keystore was tampered with, or password was incorrect");
 
         // And just to triple check, a third request will continue with
