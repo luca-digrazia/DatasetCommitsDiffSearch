@@ -16,7 +16,7 @@ import javax.validation.Validator;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * A Dropwizard application's environment.
+ * A Dropwizard service's environment.
  */
 public class Environment {
     private final String name;
@@ -40,8 +40,8 @@ public class Environment {
     /**
      * Creates a new environment.
      *
-     * @param name                the name of the application
-     * @param objectMapper the {@link ObjectMapper} for the application
+     * @param name                the name of the service
+     * @param objectMapper the {@link ObjectMapper} for the service
      */
     public Environment(String name,
                        ObjectMapper objectMapper,
@@ -115,7 +115,7 @@ public class Environment {
 
     // TODO: 5/4/13 <coda> -- figure out how to make these accessors not a public API
 
-    public ServletContextHandler getApplicationContext() {
+    public ServletContextHandler getServletContext() {
         return servletContext;
     }
 
