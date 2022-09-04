@@ -450,47 +450,15 @@ public class BlazeOptionHandlerTest {
   public void testExpandConfigOptions_withConfigForUnapplicableCommand_fixedPoint()
       throws Exception {
     makeFixedPointExpandingConfigOptionHandler();
-    try {
     testExpandConfigOptions_withConfigForUnapplicableCommand();
-      fail();
-    } catch (OptionsParsingException e) {
-      assertThat(e)
-          .hasMessageThat()
-          .contains("Config values are not defined in any .rc file: other");
-    }
-  }
-
-  @Test
-  public void testExpandConfigOptions_withConfigForUnapplicableCommand_inPlace() throws Exception {
-    makeInPlaceExpandingConfigOptionHandler();
-    try {
-      testExpandConfigOptions_withConfigForUnapplicableCommand();
-      fail();
-    } catch (OptionsParsingException e) {
-      assertThat(e).hasMessageThat().contains("Config value other is not defined in any .rc file");
-    }
-  }
-
-  private void testExpandConfigOptions_withConfigForUnapplicableCommand_allowUndefined()
-      throws Exception {
-    parser.parse("--config=other", "--allow_undefined_configs");
-    optionHandler.expandConfigOptions(eventHandler, structuredArgsFrom2SimpleRcsWithOnlyResidue());
-  }
-
-  @Test
-  public void testExpandConfigOptions_withConfigForUnapplicableCommand_allowUndefined_fixedPoint()
-      throws Exception {
-    makeFixedPointExpandingConfigOptionHandler();
-    testExpandConfigOptions_withConfigForUnapplicableCommand_allowUndefined();
     assertThat(eventHandler.getEvents())
         .contains(Event.warn("Config values are not defined in any .rc file: other"));
   }
 
   @Test
-  public void testExpandConfigOptions_withConfigForUnapplicableCommand_allowUndefined_inPlace()
-      throws Exception {
+  public void testExpandConfigOptions_withConfigForUnapplicableCommand_inPlace() throws Exception {
     makeInPlaceExpandingConfigOptionHandler();
-    testExpandConfigOptions_withConfigForUnapplicableCommand_allowUndefined();
+    testExpandConfigOptions_withConfigForUnapplicableCommand();
     assertThat(eventHandler.getEvents())
         .contains(Event.warn("Config value other is not defined in any .rc file"));
   }
@@ -518,8 +486,8 @@ public class BlazeOptionHandlerTest {
         .contains(Event.warn("Config value invalid is not defined in any .rc file"));
   }
 
-  private void testUndefinedConfig() throws OptionsParsingException {
-    parser.parse("--config=invalid");
+  private void testNoAllowUndefinedConfig() throws OptionsParsingException {
+    parser.parse("--config=invalid", "--noallow_undefined_configs");
     optionHandler.expandConfigOptions(eventHandler, ArrayListMultimap.create());
   }
 
@@ -527,7 +495,7 @@ public class BlazeOptionHandlerTest {
   public void testNoAllowUndefinedConfig_fixedPoint() {
     makeFixedPointExpandingConfigOptionHandler();
     try {
-      testUndefinedConfig();
+      testNoAllowUndefinedConfig();
       fail();
     } catch (OptionsParsingException e) {
       assertThat(e)
@@ -540,7 +508,7 @@ public class BlazeOptionHandlerTest {
   public void testNoAllowUndefinedConfig_inPlace() {
     makeInPlaceExpandingConfigOptionHandler();
     try {
-      testUndefinedConfig();
+      testNoAllowUndefinedConfig();
       fail();
     } catch (OptionsParsingException e) {
       assertThat(e)
