@@ -13,13 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.importdeps;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -34,11 +32,7 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import javax.annotation.Nullable;
@@ -54,13 +48,9 @@ public final class ClassCache implements Closeable {
   private final LazyClasspath lazyClasspath;
   private boolean isClosed;
 
-  public ClassCache(
-      ImmutableList<Path> bootclasspath,
-      ImmutableList<Path> directClasspath,
-      ImmutableList<Path> regularClasspath,
-      ImmutableList<Path> inputJars)
+  public ClassCache(ImmutableList<Path> bootclasspath, ImmutableList<Path> regularClasspath)
       throws IOException {
-    lazyClasspath = new LazyClasspath(bootclasspath, directClasspath, regularClasspath, inputJars);
+    lazyClasspath = new LazyClasspath(bootclasspath, regularClasspath);
   }
 
   public AbstractClassEntryState getClassState(String internalName) {
@@ -72,10 +62,6 @@ public final class ClassCache implements Closeable {
     return entry.getState(lazyClasspath);
   }
 
-  public ImmutableList<Path> collectUsedJarsInRegularClasspath() {
-    return lazyClasspath.collectUsedJarsInRegularClasspath();
-  }
-
   @Override
   public void close() throws IOException {
     lazyClasspath.close();
@@ -85,19 +71,15 @@ public final class ClassCache implements Closeable {
   static class LazyClassEntry {
     private final String internalName;
     private final ZipFile zipFile;
-    private final Path jarPath;
-    private final boolean direct;
 
     /**
      * The state of this class entry. If {@literal null}, then this class has not been resolved yet.
      */
     @Nullable private AbstractClassEntryState state = null;
 
-    private LazyClassEntry(String internalName, ZipFile zipFile, Path jarPath, boolean direct) {
+    private LazyClassEntry(String internalName, ZipFile zipFile) {
       this.internalName = internalName;
       this.zipFile = zipFile;
-      this.jarPath = jarPath;
-      this.direct = direct;
     }
 
     ZipFile getZipFile() {
@@ -122,12 +104,8 @@ public final class ClassCache implements Closeable {
           .toString();
     }
 
-    boolean isResolved() {
-      return state != null;
-    }
-
     private void resolveIfNot(LazyClasspath lazyClasspath) {
-      if (isResolved()) {
+      if (state != null) {
         return;
       }
       resolveClassEntry(this, lazyClasspath);
@@ -146,58 +124,51 @@ public final class ClassCache implements Closeable {
               classEntry.zipFile.getEntry(entryName), "The zip entry %s is null.", entryName);
       try (InputStream inputStream = classEntry.zipFile.getInputStream(zipEntry)) {
         ClassReader classReader = new ClassReader(inputStream);
-        ImmutableList.Builder<ResolutionFailureChain> resolutionFailureChainsBuilder =
-            ImmutableList.builder();
+        ImmutableList<String> resolutionFailurePath = null;
         for (String superName :
             combineWithoutNull(classReader.getSuperName(), classReader.getInterfaces())) {
-          Optional<ResolutionFailureChain> failurePath =
-              resolveSuperClassEntry(superName, lazyClasspath);
-          failurePath.map(resolutionFailureChainsBuilder::add);
-        }
-        ClassInfoBuilder classInfoBuilder =
-            new ClassInfoBuilder().setJarPath(classEntry.jarPath).setDirect(classEntry.direct);
-        classReader.accept(classInfoBuilder, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+          LazyClassEntry superClassEntry = lazyClasspath.getLazyEntry(superName);
 
-        ImmutableList<ResolutionFailureChain> resolutionFailureChains =
-            resolutionFailureChainsBuilder.build();
-        if (resolutionFailureChains.isEmpty()) {
+          if (superClassEntry == null) {
+            resolutionFailurePath = ImmutableList.of(superName);
+            break;
+          } else {
+            resolveClassEntry(superClassEntry, lazyClasspath);
+            AbstractClassEntryState superState = superClassEntry.state;
+            if (superState instanceof ExistingState) {
+              // Do nothing. Good to proceed.
+              continue;
+            } else if (superState instanceof IncompleteState) {
+              resolutionFailurePath =
+                  ImmutableList.<String>builder()
+                      .add(superName)
+                      .addAll(((IncompleteState) superState).getResolutionFailurePath())
+                      .build();
+              break;
+            } else {
+              throw new RuntimeException("Cannot reach here. superState is " + superState);
+            }
+          }
+        }
+        ClassInfoBuilder classInfoBuilder = new ClassInfoBuilder();
+        classReader.accept(classInfoBuilder, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        if (resolutionFailurePath == null) {
           classEntry.state =
               ExistingState.create(classInfoBuilder.build(lazyClasspath, /*incomplete=*/ false));
         } else {
-          ClassInfo classInfo = classInfoBuilder.build(lazyClasspath, /*incomplete=*/ true);
           classEntry.state =
               IncompleteState.create(
-                  classInfo,
-                  ResolutionFailureChain.createWithParent(classInfo, resolutionFailureChains));
+                  classInfoBuilder.build(lazyClasspath, /*incomplete=*/ true),
+                  resolutionFailurePath);
         }
       } catch (IOException e) {
-        throw new RuntimeException("Error when resolving class entry " + entryName, e);
+        throw new RuntimeException("Error when resolving class entry " + entryName);
       } catch (RuntimeException e) {
         System.err.println(
             "A runtime exception occurred. The following is the content in the class index. "
                 + e.getMessage());
         lazyClasspath.printClasspath(System.err);
         throw e;
-      }
-    }
-
-    private static Optional<ResolutionFailureChain> resolveSuperClassEntry(
-        String superName, LazyClasspath lazyClasspath) {
-      LazyClassEntry superClassEntry = lazyClasspath.getLazyEntry(superName);
-
-      if (superClassEntry == null) {
-        return Optional.of(ResolutionFailureChain.createMissingClass(superName));
-      } else {
-        resolveClassEntry(superClassEntry, lazyClasspath);
-        AbstractClassEntryState superState = superClassEntry.state;
-        if (superState instanceof ExistingState) {
-          // Do nothing. Good to proceed.
-          return Optional.empty();
-        } else if (superState instanceof IncompleteState) {
-          return Optional.of(superState.asIncompleteState().resolutionFailureChain());
-        } else {
-          throw new RuntimeException("Cannot reach here. superState is " + superState);
-        }
       }
     }
   }
@@ -219,57 +190,30 @@ public final class ClassCache implements Closeable {
   static final class LazyClasspath implements Closeable {
     private final ClassIndex bootclasspath;
     private final ClassIndex regularClasspath;
-    private final ClassIndex inputJars;
-    private final ImmutableList<ClassIndex> orderedClasspath;
-    private final Closer closer = Closer.create();
 
-    public LazyClasspath(
-        ImmutableList<Path> bootclasspath,
-        ImmutableList<Path> directClasspath,
-        ImmutableList<Path> regularClasspath,
-        ImmutableList<Path> inputJars)
+    public LazyClasspath(ImmutableList<Path> bootclasspath, ImmutableList<Path> regularClasspath)
         throws IOException {
-      checkArgument(
-          regularClasspath.containsAll(directClasspath),
-          "Some direct deps %s missing from transitive deps %s",
-          directClasspath,
-          regularClasspath);
-      this.bootclasspath = new ClassIndex("boot classpath", bootclasspath, Predicates.alwaysTrue());
-      this.inputJars = new ClassIndex("input jars", inputJars, Predicates.alwaysTrue());
-      this.regularClasspath =
-          new ClassIndex(
-              "regular classpath",
-              regularClasspath,
-              jar ->
-                  bootclasspath.contains(jar)
-                      || inputJars.contains(jar)
-                      || directClasspath.contains(jar));
-      // Reflect runtime resolution order, with input before classpath similar to javac
-      this.orderedClasspath =
-          ImmutableList.of(this.bootclasspath, this.inputJars, this.regularClasspath);
-      this.orderedClasspath.forEach(closer::register);
+      this.bootclasspath = new ClassIndex("boot classpath", bootclasspath);
+      this.regularClasspath = new ClassIndex("regular classpath", regularClasspath);
     }
 
     public LazyClassEntry getLazyEntry(String internalName) {
-      return orderedClasspath
-          .stream()
-          .map(classIndex -> classIndex.getClassEntry(internalName))
-          .filter(Objects::nonNull)
-          .findFirst()
-          .orElse(null);
-    }
-
-    public ImmutableList<Path> collectUsedJarsInRegularClasspath() {
-      return regularClasspath.collectUsedJarFiles();
+      LazyClassEntry entry = bootclasspath.getClassEntry(internalName);
+      if (entry != null) {
+        return entry;
+      }
+      return regularClasspath.getClassEntry(internalName);
     }
 
     public void printClasspath(PrintStream stream) {
-      orderedClasspath.forEach(c -> c.printClasspath(stream));
+      bootclasspath.printClasspath(stream);
+      regularClasspath.printClasspath(stream);
     }
 
     @Override
     public void close() throws IOException {
-      closer.close();
+      bootclasspath.close();
+      regularClasspath.close();
     }
   }
 
@@ -283,11 +227,10 @@ public final class ClassCache implements Closeable {
     private final ImmutableMap<String, LazyClassEntry> classIndex;
     private final Closer closer;
 
-    public ClassIndex(String name, ImmutableList<Path> jarFiles, Predicate<Path> isDirect)
-        throws IOException {
+    public ClassIndex(String name, ImmutableList<Path> jarFiles) throws IOException {
       this.name = name;
       this.closer = Closer.create();
-      classIndex = buildClassIndex(jarFiles, closer, isDirect);
+      classIndex = buildClassIndex(jarFiles, closer);
     }
 
     @Override
@@ -299,17 +242,6 @@ public final class ClassCache implements Closeable {
       return classIndex.get(internalName);
     }
 
-    public ImmutableList<Path> collectUsedJarFiles() {
-      HashSet<Path> usedJars = new HashSet<>();
-      for (Map.Entry<String, LazyClassEntry> entry : classIndex.entrySet()) {
-        LazyClassEntry clazz = entry.getValue();
-        if (clazz.isResolved()) {
-          usedJars.add(clazz.jarPath);
-        }
-      }
-      return ImmutableList.sortedCopyOf(usedJars);
-    }
-
     private void printClasspath(PrintStream stream) {
       stream.println("Classpath: " + name);
       int counter = 0;
@@ -319,10 +251,9 @@ public final class ClassCache implements Closeable {
     }
 
     private static ImmutableMap<String, LazyClassEntry> buildClassIndex(
-        ImmutableList<Path> jars, Closer closer, Predicate<Path> isDirect) throws IOException {
+        ImmutableList<Path> jars, Closer closer) throws IOException {
       HashMap<String, LazyClassEntry> result = new HashMap<>();
       for (Path jarPath : jars) {
-        boolean jarIsDirect = isDirect.test(jarPath);
         try {
           ZipFile zipFile = closer.register(new ZipFile(jarPath.toFile()));
           zipFile
@@ -334,9 +265,7 @@ public final class ClassCache implements Closeable {
                       return; // Not a class file.
                     }
                     String internalName = name.substring(0, name.lastIndexOf('.'));
-                    result.computeIfAbsent(
-                        internalName,
-                        key -> new LazyClassEntry(key, zipFile, jarPath, jarIsDirect));
+                    result.computeIfAbsent(internalName, key -> new LazyClassEntry(key, zipFile));
                   });
         } catch (Throwable e) {
           throw new RuntimeException("Error in reading zip file " + jarPath, e);
@@ -352,8 +281,6 @@ public final class ClassCache implements Closeable {
     private String internalName;
     private final ImmutableSet.Builder<MemberInfo> members = ImmutableSet.builder();
     private ImmutableList<String> superClasses;
-    private Path jarPath;
-    private boolean directDep;
 
     public ClassInfoBuilder() {
       super(Opcodes.ASM6);
@@ -386,16 +313,6 @@ public final class ClassCache implements Closeable {
       return null;
     }
 
-    public ClassInfoBuilder setJarPath(Path jarPath) {
-      this.jarPath = jarPath;
-      return this;
-    }
-
-    public ClassInfoBuilder setDirect(boolean direct) {
-      this.directDep = direct;
-      return this;
-    }
-
     public ClassInfo build(LazyClasspath lazyClasspath, boolean incomplete) {
       ImmutableList<ClassInfo> superClassInfos =
           superClasses
@@ -411,12 +328,7 @@ public final class ClassCache implements Closeable {
           internalName,
           superClasses,
           superClassInfos);
-      return ClassInfo.create(
-          checkNotNull(internalName),
-          checkNotNull(jarPath),
-          directDep,
-          superClassInfos,
-          members.build());
+      return ClassInfo.create(checkNotNull(internalName), superClassInfos, members.build());
     }
   }
 }

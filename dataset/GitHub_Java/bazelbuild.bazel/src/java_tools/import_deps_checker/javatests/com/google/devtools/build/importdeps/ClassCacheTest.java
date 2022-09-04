@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.importdeps.AbstractClassEntryState.ExistingState;
 import com.google.devtools.build.importdeps.ClassCache.LazyClassEntry;
 import com.google.devtools.build.importdeps.ClassCache.LazyClasspath;
@@ -37,15 +36,14 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   @Test
   public void testLibraryJar() throws Exception {
     try (ClassCache cache =
-        new ClassCache(
-            ImmutableSet.of(bootclasspath),
-            ImmutableSet.of(),
-            ImmutableSet.of(libraryJar, libraryInterfaceJar),
-            ImmutableSet.of())) {
+        new ClassCache(ImmutableList.of(bootclasspath), ImmutableList.of(libraryJar))) {
       assertCache(
           cache,
           libraryJarPositives,
-          combine(libraryAnnotationsJarPositives, libraryExceptionJarPositives));
+          combine(
+              libraryInterfacePositives,
+              libraryAnnotationsJarPositives,
+              libraryExceptionJarPositives));
     }
   }
 
@@ -53,10 +51,8 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   public void testClientJarWithSuperClasses() throws IOException {
     try (ClassCache cache =
         new ClassCache(
-            ImmutableSet.of(bootclasspath),
-            ImmutableSet.of(libraryJar, libraryInterfaceJar),
-            ImmutableSet.of(libraryJar, libraryInterfaceJar),
-            ImmutableSet.of(clientJar))) {
+            ImmutableList.of(bootclasspath),
+            ImmutableList.of(clientJar, libraryJar, libraryInterfaceJar))) {
       assertCache(
           cache,
           clientJarPositives,
@@ -67,31 +63,15 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   @Test
   public void testClientJarWithoutSuperClasses() throws IOException {
     try (ClassCache cache =
-        new ClassCache(
-            ImmutableSet.of(bootclasspath),
-            ImmutableSet.of(),
-            ImmutableSet.of(),
-            ImmutableSet.of(clientJar))) {
+        new ClassCache(ImmutableList.of(bootclasspath), ImmutableList.of(clientJar))) {
       // Client should be incomplete, as its parent class and interfaces are not available on the
       // classpath. The following is the resolution path.
       {
         AbstractClassEntryState state = cache.getClassState(PACKAGE_NAME + "Client");
         assertThat(state.isIncompleteState()).isTrue();
 
-        ImmutableSet<String> successPart =
-            state.asIncompleteState().resolutionFailureChain().getMissingClassesWithSubclasses()
-                .values().stream()
-                .distinct()
-                .sorted()
-                .map(ClassInfo::internalName)
-                .collect(ImmutableSet.toImmutableSet());
-        assertThat(successPart).containsExactly(PACKAGE_NAME + "Client").inOrder();
-        assertThat(state.asIncompleteState().missingAncestors())
-            .containsExactly(
-                PACKAGE_NAME + "Library",
-                PACKAGE_NAME + "LibraryInterface",
-                PACKAGE_NAME + "LibraryInterface$One",
-                PACKAGE_NAME + "LibraryInterface$Two");
+        ImmutableList<String> failureCause = state.asIncompleteState().getResolutionFailurePath();
+        assertThat(failureCause).containsExactly(PACKAGE_NAME + "Library").inOrder();
       }
       assertThat(cache.getClassState(PACKAGE_NAME + "Client").isIncompleteState()).isTrue();
       assertThat(cache.getClassState(PACKAGE_NAME + "Client$NestedAnnotation"))
@@ -106,11 +86,7 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   @Test
   public void testLibraryException() throws IOException {
     try (ClassCache cache =
-        new ClassCache(
-            ImmutableSet.of(bootclasspath),
-            ImmutableSet.of(),
-            ImmutableSet.of(),
-            ImmutableSet.of(libraryExceptionJar))) {
+        new ClassCache(ImmutableList.of(bootclasspath), ImmutableList.of(libraryExceptionJar))) {
       assertCache(
           cache,
           libraryExceptionJarPositives,
@@ -121,11 +97,7 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   @Test
   public void testLibraryAnnotations() throws IOException {
     try (ClassCache cache =
-        new ClassCache(
-            ImmutableSet.of(bootclasspath),
-            ImmutableSet.of(),
-            ImmutableSet.of(),
-            ImmutableSet.of(libraryAnnotationsJar))) {
+        new ClassCache(ImmutableList.of(bootclasspath), ImmutableList.of(libraryAnnotationsJar))) {
       assertCache(
           cache,
           libraryAnnotationsJarPositives,
@@ -135,8 +107,7 @@ public class ClassCacheTest extends AbstractClassCacheTest {
 
   @Test
   public void testCannotAccessClosedCache() throws IOException {
-    ClassCache cache =
-        new ClassCache(ImmutableSet.of(), ImmutableSet.of(), ImmutableSet.of(), ImmutableSet.of());
+    ClassCache cache = new ClassCache(ImmutableList.of(), ImmutableList.of());
     cache.close();
     cache.close(); // Can close multiple times.
     assertThrows(IllegalStateException.class, () -> cache.getClassState("empty"));
@@ -150,10 +121,9 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   public void testSuperNotExistThenSubclassNotExist() throws IOException {
     try (ClassCache cache =
         new ClassCache(
-            ImmutableSet.of(),
-            ImmutableSet.of(libraryJar, libraryJar, libraryAnnotationsJar, libraryInterfaceJar),
-            ImmutableSet.of(libraryJar, libraryJar, libraryAnnotationsJar, libraryInterfaceJar),
-            ImmutableSet.of(clientJar))) {
+            ImmutableList.of(),
+            ImmutableList.of(
+                libraryJar, libraryJar, libraryAnnotationsJar, libraryInterfaceJar, clientJar))) {
       assertThat(
               cache
                   .getClassState("com/google/devtools/build/importdeps/testdata/Library$Class9")
@@ -168,47 +138,10 @@ public class ClassCacheTest extends AbstractClassCacheTest {
   }
 
   @Test
-  public void testJdepsOutput() throws IOException {
-    try (ClassCache cache =
-        new ClassCache(
-            ImmutableSet.of(),
-            ImmutableSet.of(libraryJar, libraryJar, libraryAnnotationsJar, libraryInterfaceJar),
-            ImmutableSet.of(libraryJar, libraryJar, libraryAnnotationsJar, libraryInterfaceJar),
-            ImmutableSet.of(clientJar))) {
-      assertThat(
-              cache
-                  .getClassState("com/google/devtools/build/importdeps/testdata/Library$Class9")
-                  .isIncompleteState())
-          .isTrue();
-      assertThat(cache.collectUsedJarsInRegularClasspath()).containsExactly(libraryJar);
-
-      assertThat(
-              cache
-                  .getClassState("com/google/devtools/build/importdeps/testdata/LibraryAnnotations")
-                  .isIncompleteState())
-          .isTrue();
-      assertThat(cache.collectUsedJarsInRegularClasspath())
-          .containsExactly(libraryJar, libraryAnnotationsJar);
-
-      assertThat(
-              cache
-                  .getClassState("com/google/devtools/build/importdeps/testdata/LibraryInterface")
-                  .isIncompleteState())
-          .isTrue();
-      assertThat(cache.collectUsedJarsInRegularClasspath())
-          .containsExactly(libraryJar, libraryAnnotationsJar, libraryInterfaceJar);
-    }
-  }
-
-  @Test
   public void testLazyClasspathLoadsBootclasspathFirst() throws IOException {
     {
       LazyClasspath classpath =
-          new LazyClasspath(
-              ImmutableSet.of(libraryJar),
-              ImmutableSet.of(libraryWoMembersJar),
-              ImmutableSet.of(libraryWoMembersJar),
-              ImmutableSet.of());
+          new LazyClasspath(ImmutableList.of(libraryJar), ImmutableList.of(libraryWoMembersJar));
       LazyClassEntry entry =
           classpath.getLazyEntry("com/google/devtools/build/importdeps/testdata/Library$Class4");
       AbstractClassEntryState state = entry.getState(classpath);
@@ -226,11 +159,7 @@ public class ClassCacheTest extends AbstractClassCacheTest {
     }
     {
       LazyClasspath classpath =
-          new LazyClasspath(
-              ImmutableSet.of(libraryWoMembersJar),
-              ImmutableSet.of(libraryJar),
-              ImmutableSet.of(libraryJar),
-              ImmutableSet.of());
+          new LazyClasspath(ImmutableList.of(libraryWoMembersJar), ImmutableList.of(libraryJar));
       LazyClassEntry entry =
           classpath.getLazyEntry("com/google/devtools/build/importdeps/testdata/Library$Class4");
       AbstractClassEntryState state = entry.getState(classpath);
@@ -240,36 +169,6 @@ public class ClassCacheTest extends AbstractClassCacheTest {
       assertThat(classInfo.get().declaredMembers()).hasSize(1);
       assertThat(classInfo.get().declaredMembers().iterator().next().memberName())
           .isEqualTo("<init>");
-    }
-  }
-
-  @Test
-  public void testOriginInformation() throws IOException {
-    try (ClassCache cache =
-        new ClassCache(
-            ImmutableSet.of(bootclasspath),
-            ImmutableSet.of(libraryJar),
-            ImmutableSet.of(libraryJar, libraryInterfaceJar),
-            ImmutableSet.of(clientJar))) {
-      assertCache(
-          cache,
-          clientJarPositives,
-          combine(libraryExceptionJarPositives, libraryAnnotationsJarPositives));
-
-      {
-        AbstractClassEntryState state = cache.getClassState(PACKAGE_NAME + "Library");
-        assertThat(state.isExistingState()).isTrue();
-        assertThat(state.classInfo().isPresent()).isTrue();
-        assertThat(state.classInfo().get().directDep()).isTrue();
-        assertThat((Object) state.classInfo().get().jarPath()).isEqualTo(libraryJar);
-      }
-      {
-        AbstractClassEntryState state = cache.getClassState(PACKAGE_NAME + "LibraryInterface");
-        assertThat(state.isExistingState()).isTrue();
-        assertThat(state.classInfo().isPresent()).isTrue();
-        assertThat(state.classInfo().get().directDep()).isFalse();
-        assertThat((Object) state.classInfo().get().jarPath()).isEqualTo(libraryInterfaceJar);
-      }
     }
   }
 
