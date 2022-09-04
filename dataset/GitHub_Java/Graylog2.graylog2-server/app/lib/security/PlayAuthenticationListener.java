@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Kay Roepke <kay@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,7 +15,6 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package lib.security;
 
@@ -34,12 +33,13 @@ public class PlayAuthenticationListener implements AuthenticationListener {
     @Override
     public void onSuccess(AuthenticationToken token, AuthenticationInfo info) {
         final Http.Session session = Http.Context.current().session();
-        log.warn("Authenticated user {}", info.getPrincipals().getPrimaryPrincipal());
+        log.debug("Authenticated user {}", info.getPrincipals().getPrimaryPrincipal());
     }
 
     @Override
     public void onFailure(AuthenticationToken token, AuthenticationException ae) {
-        // TODO keep metric of failed logins. maybe log to some graylog instance
+//        final Http.Session session = Http.Context.current().session();
+//        session.remove("sessionid");
     }
 
     @Override
