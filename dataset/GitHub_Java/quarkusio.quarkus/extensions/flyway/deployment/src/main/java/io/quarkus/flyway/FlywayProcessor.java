@@ -39,8 +39,7 @@ import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
@@ -74,7 +73,7 @@ class FlywayProcessor {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.FLYWAY);
+        return new CapabilityBuildItem(Capabilities.FLYWAY);
     }
 
     @BuildStep
@@ -99,7 +98,7 @@ class FlywayProcessor {
             CombinedIndexBuildItem combinedIndexBuildItem,
             List<JdbcDataSourceBuildItem> jdbcDataSourceBuildItems) throws IOException, URISyntaxException {
 
-        featureProducer.produce(new FeatureBuildItem(Feature.FLYWAY));
+        featureProducer.produce(new FeatureBuildItem(FeatureBuildItem.FLYWAY));
 
         Collection<String> dataSourceNames = getDataSourceNames(jdbcDataSourceBuildItems);
 
