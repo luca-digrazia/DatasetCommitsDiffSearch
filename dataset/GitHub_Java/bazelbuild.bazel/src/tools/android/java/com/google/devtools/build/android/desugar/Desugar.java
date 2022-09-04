@@ -27,19 +27,14 @@ import com.google.common.io.ByteStreams;
 import com.google.common.io.Closer;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
-import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
-import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter.UnprefixingClassWriter;
-import com.google.devtools.build.android.desugar.io.HeaderClassLoader;
-import com.google.devtools.build.android.desugar.io.IndexedInputs;
-import com.google.devtools.build.android.desugar.io.InputFileProvider;
-import com.google.devtools.build.android.desugar.io.OutputFileProvider;
-import com.google.devtools.build.android.desugar.io.ThrowingClassLoader;
+import com.google.devtools.build.android.desugar.CoreLibraryRewriter.UnprefixingClassWriter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
+import com.google.errorprone.annotations.MustBeClosed;
 import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
@@ -391,8 +386,8 @@ class Desugar {
         Files.isDirectory(inputPath) || !Files.isDirectory(outputPath),
         "Input jar file requires an output jar file");
 
-    try (OutputFileProvider outputFileProvider = OutputFileProvider.create(outputPath);
-        InputFileProvider inputFiles = InputFileProvider.open(inputPath)) {
+    try (OutputFileProvider outputFileProvider = toOutputFileProvider(outputPath);
+        InputFileProvider inputFiles = toInputFileProvider(inputPath)) {
       DependencyCollector depsCollector = createDepsCollector();
       IndexedInputs indexedInputFiles = new IndexedInputs(ImmutableList.of(inputFiles));
       // Prepend classpath with input file itself so LambdaDesugaring can load classes with
@@ -524,9 +519,6 @@ class Desugar {
       ImmutableSet.Builder<String> interfaceLambdaMethodCollector)
       throws IOException {
     for (String inputFilename : inputFiles) {
-      if ("module-info.class".equals(inputFilename)) {
-        continue;  // Drop module-info.class since it has no meaning on Android
-      }
       if (OutputFileProvider.DESUGAR_DEPS_FILENAME.equals(inputFilename)) {
         // TODO(kmb): rule out that this happens or merge input file with what's in depsCollector
         continue;  // skip as we're writing a new file like this at the end or don't want it
@@ -950,6 +942,19 @@ class Desugar {
     return ioPairListbuilder.build();
   }
 
+  @VisibleForTesting
+  static class ThrowingClassLoader extends ClassLoader {
+    @Override
+    protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+      if (name.startsWith("java.")) {
+        // Use system class loader for java. classes, since ClassLoader.defineClass gets
+        // grumpy when those don't come from the standard place.
+        return super.loadClass(name, resolve);
+      }
+      throw new ClassNotFoundException();
+    }
+  }
+
   private static void deleteTreeOnExit(final Path directory) {
     Thread shutdownHook =
         new Thread() {
@@ -988,6 +993,26 @@ class Desugar {
     }
   }
 
+  /** Transform a Path to an {@link OutputFileProvider} */
+  @MustBeClosed
+  private static OutputFileProvider toOutputFileProvider(Path path) throws IOException {
+    if (Files.isDirectory(path)) {
+      return new DirectoryOutputFileProvider(path);
+    } else {
+      return new ZipOutputFileProvider(path);
+    }
+  }
+
+  /** Transform a Path to an InputFileProvider that needs to be closed by the caller. */
+  @MustBeClosed
+  private static InputFileProvider toInputFileProvider(Path path) throws IOException {
+    if (Files.isDirectory(path)) {
+      return new DirectoryInputFileProvider(path);
+    } else {
+      return new ZipInputFileProvider(path);
+    }
+  }
+
   /**
    * Transform a list of Path to a list of InputFileProvider and register them with the given
    * closer.
@@ -998,7 +1023,7 @@ class Desugar {
       Closer closer, List<Path> paths) throws IOException {
     ImmutableList.Builder<InputFileProvider> builder = new ImmutableList.Builder<>();
     for (Path path : paths) {
-      builder.add(closer.register(InputFileProvider.open(path)));
+      builder.add(closer.register(toInputFileProvider(path)));
     }
     return builder.build();
   }
