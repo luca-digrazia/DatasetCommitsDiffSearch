@@ -23,7 +23,6 @@ package org.graylog2.messagehandlers.common;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.graylog2.Main;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 
 /**
@@ -39,29 +38,19 @@ public class MessageFilterHook implements MessagePostReceiveHookIF {
      * Process the hook.
      */
     public void process(Object message) {
-		/**
-		 * Convert message Object to string for regex match
-		 */
-    	String msg = new String(((SyslogServerEventIF) message).getRaw());
-    	String regex = null;
-    	Pattern pattern = null;
-    	Matcher matcher = null;
-		 
-    	int regex_count = Integer.parseInt(Main.regexConfig.getProperty("filter.out.count"));
+	// 1. Get regex filters
+    	String regex = ".*(kernel).*";
+    	Pattern pat = Pattern.compile(regex);
     	
-    	for( int i = 0; i < regex_count; i++) {
-    		regex = Main.regexConfig.getProperty("filter.out.regex." + i);
-    		pattern = Pattern.compile(regex);
-    		matcher = pattern.matcher(msg);
-
-    	   	if(matcher.matches()){
-    	   		System.out.println("++++++++++++++++++++++++++++");
-    	   		System.out.println("Filter Matched: " + regex);
-    	   		System.out.println("Message: " + msg);
-    	   		System.out.println("++++++++++++++++++++++++++++");
-    			((SyslogServerEventIF) message).setMessage("GRAYLOG2_FILTEROUT");
-    			break;
-    	   	}
+	// 2. Match message against regular expression
+    	//
+	// 3. Log filter matched or dropped
+    	String msg = new String(((SyslogServerEventIF) message).getRaw());
+    	Matcher m = pat.matcher(msg);
+    	if(m.matches()){
+    		System.out.println("found a match: " + m.group(1));
+    	} else {
+    		System.out.println("no match: " + msg);
     	}
     }
 }
