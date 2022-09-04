@@ -25,21 +25,18 @@ import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
+import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
-import org.androidannotations.holder.EFragmentHolder;
 
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JMethod;
 
-public abstract class AbstractFragmentByHandler extends CoreBaseAnnotationHandler<EComponentWithViewSupportHolder> {
+public abstract class AbstractFragmentByHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
-	protected String findFragmentMethodName;
-
-	public AbstractFragmentByHandler(Class<?> targetClass, AndroidAnnotationsEnvironment environment, String findFragmentMethodName) {
+	public AbstractFragmentByHandler(Class<?> targetClass, AndroidAnnotationsEnvironment environment) {
 		super(targetClass, environment);
-		this.findFragmentMethodName = findFragmentMethodName;
 	}
 
 	@Override
@@ -49,12 +46,6 @@ public abstract class AbstractFragmentByHandler extends CoreBaseAnnotationHandle
 		validatorHelper.extendsFragment(element, validation);
 
 		validatorHelper.isNotPrivate(element, validation);
-
-		coreValidatorHelper.childFragmentUsedOnlyIfEnclosingClassIsFragment(element, validation);
-
-		if (validation.isValid()) {
-			coreValidatorHelper.getChildFragmentManagerMethodIsAvailable(element, validation);
-		}
 	}
 
 	@Override
@@ -64,20 +55,12 @@ public abstract class AbstractFragmentByHandler extends CoreBaseAnnotationHandle
 		TypeElement nativeFragmentElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT);
 		boolean isNativeFragment = nativeFragmentElement != null && annotationHelper.isSubtype(elementType, nativeFragmentElement.asType());
 
+		JMethod findFragmentMethod = getFindFragmentMethod(isNativeFragment, holder);
+
 		String fieldName = element.getSimpleName().toString();
 		JBlock methodBody = holder.getOnViewChangedBody();
 
-		if (holder instanceof EFragmentHolder) {
-			boolean childFragment = annotationHelper.extractAnnotationParameter(element, "childFragment");
-
-			String fragmentManagerGetter = childFragment ? "getChildFragmentManager" : "getFragmentManager";
-
-			methodBody.assign(ref(fieldName), cast(getJClass(typeQualifiedName), invoke(fragmentManagerGetter).invoke(findFragmentMethodName).arg(getFragmentId(element, fieldName))));
-		} else {
-			JMethod findFragmentMethod = getFindFragmentMethod(isNativeFragment, holder);
-
-			methodBody.assign(ref(fieldName), cast(getJClass(typeQualifiedName), invoke(findFragmentMethod).arg(getFragmentId(element, fieldName))));
-		}
+		methodBody.assign(ref(fieldName), cast(getJClass(typeQualifiedName), invoke(findFragmentMethod).arg(getFragmentId(element, fieldName))));
 	}
 
 	protected abstract JMethod getFindFragmentMethod(boolean isNativeFragment, EComponentWithViewSupportHolder holder);
