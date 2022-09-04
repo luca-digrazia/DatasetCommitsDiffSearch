@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -83,15 +82,12 @@ import javax.annotation.Nullable;
  */
 public class ActionExecutionFunction implements SkyFunction, CompletionReceiver {
   private final SkyframeActionExecutor skyframeActionExecutor;
-  private final BlazeDirectories directories;
   private final AtomicReference<TimestampGranularityMonitor> tsgm;
   private ConcurrentMap<Action, ContinuationState> stateMap;
 
   public ActionExecutionFunction(SkyframeActionExecutor skyframeActionExecutor,
-      BlazeDirectories directories,
       AtomicReference<TimestampGranularityMonitor> tsgm) {
     this.skyframeActionExecutor = skyframeActionExecutor;
-    this.directories = directories;
     this.tsgm = tsgm;
     stateMap = Maps.newConcurrentMap();
   }
@@ -217,7 +213,6 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
             new ActionFileSystem(
                 skyframeActionExecutor.getExecutorFileSystem(),
                 skyframeActionExecutor.getExecRoot(),
-                directories.getRelativeOutputPath(),
                 skyframeActionExecutor.getSourceRoots(),
                 checkedInputs.first,
                 optionalInputs,
