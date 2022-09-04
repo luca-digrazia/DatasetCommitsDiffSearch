@@ -14,28 +14,41 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.CommandLineExpansionException;
+import com.google.devtools.build.lib.actions.CommandLines;
+import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
-import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.LtoAction;
+import com.google.devtools.build.lib.server.FailureDetails.LtoAction.Code;
+import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -53,32 +66,36 @@ import javax.annotation.Nullable;
  * http://blog.llvm.org/2016/06/thinlto-scalable-and-incremental-lto.html.
  */
 public final class LtoBackendAction extends SpawnAction {
-  private Collection<Artifact> mandatoryInputs;
-  private Map<PathFragment, Artifact> bitcodeFiles;
-  private Artifact imports;
-
   private static final String GUID = "72ce1eca-4625-4e24-a0d8-bb91bb8b0e0e";
 
+  private final NestedSet<Artifact> mandatoryInputs;
+  private final BitcodeFiles bitcodeFiles;
+  private final Artifact imports;
+
   public LtoBackendAction(
-      Collection<Artifact> inputs,
-      Map<PathFragment, Artifact> allBitcodeFiles,
-      Artifact importsFile,
+      NestedSet<Artifact> inputs,
+      @Nullable BitcodeFiles allBitcodeFiles,
+      @Nullable Artifact importsFile,
       Collection<Artifact> outputs,
+      Artifact primaryOutput,
       ActionOwner owner,
-      CommandLine argv,
+      CommandLines argv,
+      CommandLineLimits commandLineLimits,
       boolean isShellCommand,
       ActionEnvironment env,
       Map<String, String> executionInfo,
-      String progressMessage,
+      CharSequence progressMessage,
       RunfilesSupplier runfilesSupplier,
       String mnemonic) {
     super(
         owner,
-        ImmutableList.<Artifact>of(),
+        NestedSetBuilder.emptySet(Order.STABLE_ORDER),
         inputs,
         outputs,
+        primaryOutput,
         AbstractAction.DEFAULT_RESOURCE_SET,
         argv,
+        commandLineLimits,
         isShellCommand,
         env,
         ImmutableMap.copyOf(executionInfo),
@@ -86,115 +103,151 @@ public final class LtoBackendAction extends SpawnAction {
         runfilesSupplier,
         mnemonic,
         false,
+        null,
         null);
     mandatoryInputs = inputs;
+    Preconditions.checkState(
+        (allBitcodeFiles == null) == (importsFile == null),
+        "Either both or neither bitcodeFiles and imports files should be null");
     bitcodeFiles = allBitcodeFiles;
     imports = importsFile;
   }
 
   @Override
   public boolean discoversInputs() {
-    return true;
+    return imports != null;
   }
 
-  private Set<Artifact> computeBitcodeInputs(Collection<PathFragment> inputPaths) {
-    HashSet<Artifact> bitcodeInputs = new HashSet<>();
-    for (PathFragment inputPath : inputPaths) {
-      Artifact inputArtifact = bitcodeFiles.get(inputPath);
-      if (inputArtifact != null) {
+  private NestedSet<Artifact> computeBitcodeInputs(HashSet<PathFragment> inputPaths) {
+    NestedSetBuilder<Artifact> bitcodeInputs = NestedSetBuilder.stableOrder();
+    for (Artifact inputArtifact : bitcodeFiles.getFiles().toList()) {
+      if (inputPaths.contains(inputArtifact.getExecPath())) {
         bitcodeInputs.add(inputArtifact);
       }
     }
-    return bitcodeInputs;
+    return bitcodeInputs.build();
   }
 
   @Nullable
   @Override
-  public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
+  public NestedSet<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException {
+    List<String> lines;
+    try {
+      lines = FileSystemUtils.readLinesAsLatin1(actionExecutionContext.getInputPath(imports));
+    } catch (IOException e) {
+      String message =
+          String.format(
+              "error reading imports file %s: %s",
+              actionExecutionContext.getInputPath(imports), e.getMessage());
+      DetailedExitCode code = createDetailedExitCode(message, Code.IMPORTS_READ_IO_EXCEPTION);
+      throw new ActionExecutionException(message, e, this, false, code);
+    }
+
     // Build set of files this LTO backend artifact will import from.
     HashSet<PathFragment> importSet = new HashSet<>();
-    try {
-      for (String line : FileSystemUtils.iterateLinesAsLatin1(imports.getPath())) {
-        if (!line.isEmpty()) {
-          PathFragment execPath = PathFragment.create(line);
-          if (execPath.isAbsolute()) {
-            throw new ActionExecutionException(
-                "Absolute paths not allowed in imports file " + imports.getPath() + ": " + execPath,
-                this,
-                false);
-          }
-          importSet.add(PathFragment.create(line));
-        }
+    for (String line : lines) {
+      if (line.isEmpty()) {
+        continue;
       }
-    } catch (IOException e) {
-      throw new ActionExecutionException(
-          "error iterating imports file " + imports.getPath(), e, this, false);
+      PathFragment execPath = PathFragment.create(line);
+      if (execPath.isAbsolute()) {
+        String message =
+            String.format(
+                "Absolute paths not allowed in imports file %s: %s",
+                actionExecutionContext.getInputPath(imports), execPath);
+        DetailedExitCode code =
+            createDetailedExitCode(message, Code.INVALID_ABSOLUTE_PATH_IN_IMPORTS);
+        throw new ActionExecutionException(message, this, false, code);
+      }
+      importSet.add(execPath);
     }
 
     // Convert the import set of paths to the set of bitcode file artifacts.
-    Set<Artifact> bitcodeInputSet = computeBitcodeInputs(importSet);
-    if (bitcodeInputSet.size() != importSet.size()) {
-      throw new ActionExecutionException(
-          "error computing inputs from imports file " + imports.getPath(), this, false);
+    NestedSet<Artifact> bitcodeInputSet = computeBitcodeInputs(importSet);
+    if (bitcodeInputSet.memoizedFlattenAndGetSize() != importSet.size()) {
+      Set<PathFragment> missingInputs =
+          Sets.difference(
+              importSet,
+              bitcodeInputSet.toList().stream()
+                  .map(Artifact::getExecPath)
+                  .collect(Collectors.toSet()));
+      String message =
+          String.format(
+              "error computing inputs from imports file: %s, missing bitcode files (first 10): %s",
+              actionExecutionContext.getInputPath(imports),
+              // Limit the reported count to protect against a large error message.
+              missingInputs.stream()
+                  .map(Object::toString)
+                  .sorted()
+                  .limit(10)
+                  .collect(Collectors.joining(", ")));
+      DetailedExitCode code = createDetailedExitCode(message, Code.MISSING_BITCODE_FILES);
+      throw new ActionExecutionException(message, this, false, code);
     }
-    updateInputs(createInputs(bitcodeInputSet, getMandatoryInputs()));
+    updateInputs(
+        NestedSetBuilder.fromNestedSet(bitcodeInputSet).addTransitive(mandatoryInputs).build());
     return bitcodeInputSet;
   }
 
   @Override
-  public Collection<Artifact> getMandatoryInputs() {
+  protected NestedSet<Artifact> getOriginalInputs() {
     return mandatoryInputs;
   }
 
-  private static Iterable<Artifact> createInputs(
-      Set<Artifact> newInputs, Collection<Artifact> curInputs) {
-    Set<Artifact> result = new LinkedHashSet<>(newInputs);
-    result.addAll(curInputs);
-    return result;
+  private static DetailedExitCode createDetailedExitCode(String message, Code detailedCode) {
+    return DetailedExitCode.of(
+        FailureDetail.newBuilder()
+            .setMessage(message)
+            .setLtoAction(LtoAction.newBuilder().setCode(detailedCode))
+            .build());
   }
 
   @Override
-  public Iterable<Artifact> getAllowedDerivedInputs() {
-    return bitcodeFiles.values();
+  public NestedSet<Artifact> getMandatoryInputs() {
+    return mandatoryInputs;
   }
 
   @Override
-  public void execute(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
-    super.execute(actionExecutionContext);
+  public NestedSet<Artifact> getAllowedDerivedInputs() {
+    return bitcodeFiles.getFiles();
   }
 
   @Override
-  protected String computeKey() {
-    Fingerprint f = new Fingerprint();
-    f.addString(GUID);
-    f.addStrings(getArguments());
-    f.addString(getMnemonic());
-    f.addPaths(getRunfilesSupplier().getRunfilesDirs());
+  protected void computeKey(
+      ActionKeyContext actionKeyContext,
+      @Nullable Artifact.ArtifactExpander artifactExpander,
+      Fingerprint fp)
+      throws InterruptedException {
+    fp.addString(GUID);
+    try {
+      fp.addStrings(getArguments());
+    } catch (CommandLineExpansionException e) {
+      throw new AssertionError("LtoBackendAction command line expansion cannot fail");
+    }
+    fp.addString(getMnemonic());
+    fp.addPaths(getRunfilesSupplier().getRunfilesDirs());
     ImmutableList<Artifact> runfilesManifests = getRunfilesSupplier().getManifests();
     for (Artifact runfilesManifest : runfilesManifests) {
-      f.addPath(runfilesManifest.getExecPath());
+      fp.addPath(runfilesManifest.getExecPath());
     }
-    for (Artifact input : getMandatoryInputs()) {
-      f.addPath(input.getExecPath());
+    for (Artifact input : mandatoryInputs.toList()) {
+      fp.addPath(input.getExecPath());
     }
-    for (PathFragment bitcodePath : bitcodeFiles.keySet()) {
-      f.addPath(bitcodePath);
+    if (imports != null) {
+      bitcodeFiles.addToFingerprint(fp);
+      fp.addPath(imports.getExecPath());
     }
-    f.addPath(imports.getExecPath());
-    f.addStringMap(getEnvironment());
-    f.addStringMap(getExecutionInfo());
-    return f.hexDigestAndReset();
+    env.addTo(fp);
+    fp.addStringMap(getExecutionInfo());
   }
 
   /** Builder class to construct {@link LtoBackendAction} instances. */
   public static class Builder extends SpawnAction.Builder {
-    private Map<PathFragment, Artifact> bitcodeFiles;
+    private BitcodeFiles bitcodeFiles;
     private Artifact imports;
 
-    public Builder addImportsInfo(
-        Map<PathFragment, Artifact> allBitcodeFiles, Artifact importsFile) {
+    public Builder addImportsInfo(BitcodeFiles allBitcodeFiles, Artifact importsFile) {
       this.bitcodeFiles = allBitcodeFiles;
       this.imports = importsFile;
       return this;
@@ -206,21 +259,26 @@ public final class LtoBackendAction extends SpawnAction {
         NestedSet<Artifact> tools,
         NestedSet<Artifact> inputsAndTools,
         ImmutableList<Artifact> outputs,
+        Artifact primaryOutput,
         ResourceSet resourceSet,
-        CommandLine actualCommandLine,
+        CommandLines commandLines,
+        CommandLineLimits commandLineLimits,
         boolean isShellCommand,
         ActionEnvironment env,
+        @Nullable BuildConfiguration configuration,
         ImmutableMap<String, String> executionInfo,
-        String progressMessage,
+        CharSequence progressMessage,
         RunfilesSupplier runfilesSupplier,
         String mnemonic) {
       return new LtoBackendAction(
-          inputsAndTools.toCollection(),
+          inputsAndTools,
           bitcodeFiles,
           imports,
           outputs,
+          primaryOutput,
           owner,
-          actualCommandLine,
+          commandLines,
+          commandLineLimits,
           isShellCommand,
           env,
           executionInfo,

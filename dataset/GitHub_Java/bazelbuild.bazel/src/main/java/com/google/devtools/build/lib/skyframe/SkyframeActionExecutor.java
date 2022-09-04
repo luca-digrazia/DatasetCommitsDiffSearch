@@ -228,21 +228,18 @@ public final class SkyframeActionExecutor {
   private final Supplier<ImmutableList<Root>> sourceRootSupplier;
 
   private NestedSetExpander nestedSetExpander;
-  private final PathFragment relativeOutputPath;
 
   SkyframeActionExecutor(
       ActionKeyContext actionKeyContext,
       MetadataConsumerForMetrics outputArtifactsSeen,
       MetadataConsumerForMetrics outputArtifactsFromActionCache,
       AtomicReference<ActionExecutionStatusReporter> statusReporterRef,
-      Supplier<ImmutableList<Root>> sourceRootSupplier,
-      PathFragment relativeOutputPath) {
+      Supplier<ImmutableList<Root>> sourceRootSupplier) {
     this.actionKeyContext = actionKeyContext;
     this.outputArtifactsSeen = outputArtifactsSeen;
     this.outputArtifactsFromActionCache = outputArtifactsFromActionCache;
     this.statusReporterRef = statusReporterRef;
     this.sourceRootSupplier = sourceRootSupplier;
-    this.relativeOutputPath = relativeOutputPath;
   }
 
   SharedActionCallback getSharedActionCallback(
@@ -324,11 +321,8 @@ public final class SkyframeActionExecutor {
     return executorEngine.getExecRoot();
   }
 
-  boolean useArchivedTreeArtifacts(ActionAnalysisMetadata action) {
-    return options
-        .getOptions(CoreOptions.class)
-        .archivedArtifactsMnemonicsFilter
-        .test(action.getMnemonic());
+  boolean useArchivedTreeArtifacts() {
+    return options.getOptions(CoreOptions.class).sendArchivedTreeArtifactInputs;
   }
 
   boolean publishTargetSummaries() {
@@ -1000,8 +994,7 @@ public final class SkyframeActionExecutor {
               action.prepare(
                   actionExecutionContext.getExecRoot(),
                   actionExecutionContext.getPathResolver(),
-                  outputService != null ? outputService.bulkDeleter() : null,
-                  useArchivedTreeArtifacts(action) ? relativeOutputPath : null);
+                  outputService != null ? outputService.bulkDeleter() : null);
             } catch (IOException e) {
               logger.atWarning().withCause(e).log(
                   "failed to delete output files before executing action: '%s'", action);
@@ -1145,7 +1138,7 @@ public final class SkyframeActionExecutor {
           actionExecutionValue =
               actuallyCompleteAction(eventHandler, nextActionContinuationOrResult.get());
         }
-        return new ActionPostprocessingStep(actionExecutionValue);
+        return new ActionCacheWriteStep(actionExecutionValue);
       } catch (ActionExecutionException e) {
         return ActionStepOrResult.of(e);
       } finally {
@@ -1288,14 +1281,11 @@ public final class SkyframeActionExecutor {
       }
     }
 
-    /**
-     * A closure to post-process the executed action, doing work like updating cached state with any
-     * newly discovered inputs, and writing the result to the action cache.
-     */
-    private class ActionPostprocessingStep extends ActionStep {
+    /** A closure to post-process the action and write the result to the action cache. */
+    private class ActionCacheWriteStep extends ActionStep {
       private final ActionExecutionValue value;
 
-      public ActionPostprocessingStep(ActionExecutionValue value) {
+      public ActionCacheWriteStep(ActionExecutionValue value) {
         this.value = value;
       }
 

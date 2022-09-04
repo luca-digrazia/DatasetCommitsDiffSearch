@@ -86,13 +86,11 @@ import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.FileOutErr;
-import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.IORuntimeException;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -386,7 +384,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   @Override
   public boolean discoversInputs() {
-    return shouldScanIncludes || getDotdFile() != null || shouldParseShowIncludes();
+    return shouldScanIncludes
+        || getDotdFile() != null
+        || featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES);
   }
 
   @Override
@@ -1154,21 +1154,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       }
       if (declaredIncludeDirs.contains(root.relativize(dir))) {
         for (Path dirOrPackage : packagesToCheckForBuildFiles) {
-          FileStatus fileStatus = null;
-          try {
-            // This file system access shouldn't exist at all and has to go away when this is
-            // rewritten in Starlark.
-            // TODO(b/187366935): Consider globbing everything eagerly instead.
-            fileStatus =
-                actionExecutionContext
-                    .getSyscalls()
-                    .statIfFound(dirOrPackage.getRelative(BUILD_PATH_FRAGMENT), Symlinks.FOLLOW);
-          } catch (IOException e) {
-            // Previously, we used Path.exists() to check whether the BUILD file exists. This did
-            // return false on any error. So by ignoring the exception are maintaining current
-            // behaviour.
-          }
-          if (fileStatus != null && fileStatus.isFile()) {
+          if (dirOrPackage.getRelative(BUILD_PATH_FRAGMENT).exists()) {
             return false; // Bad: this is a sub-package, not a subdir of a declared package.
           }
         }
@@ -1421,7 +1407,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     ActionExecutionContext spawnContext;
     ShowIncludesFilter showIncludesFilterForStdout;
     ShowIncludesFilter showIncludesFilterForStderr;
-    if (shouldParseShowIncludes()) {
+    if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
       showIncludesFilterForStdout = new ShowIncludesFilter(getSourceFile().getFilename());
       showIncludesFilterForStderr = new ShowIncludesFilter(getSourceFile().getFilename());
       FileOutErr originalOutErr = actionExecutionContext.getFileOutErr();
@@ -1435,8 +1421,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
     Spawn spawn;
     try {
-      spawn =
-          createSpawn(actionExecutionContext.getExecRoot(), actionExecutionContext.getClientEnv());
+      spawn = createSpawn(actionExecutionContext.getClientEnv());
     } finally {
       clearAdditionalInputs();
     }
@@ -1468,12 +1453,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     return null;
   }
 
-  protected boolean shouldParseShowIncludes() {
-    return featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES);
-  }
-
-  protected Spawn createSpawn(Path execRoot, Map<String, String> clientEnv)
-      throws ActionExecutionException {
+  protected Spawn createSpawn(Map<String, String> clientEnv) throws ActionExecutionException {
     // Intentionally not adding {@link CppCompileAction#inputsForInvalidation}, those are not needed
     // for execution.
     NestedSetBuilder<ActionInput> inputsBuilder =
@@ -1486,8 +1466,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     }
     NestedSet<ActionInput> inputs = inputsBuilder.build();
 
-    ImmutableMap.Builder<String, String> executionInfo =
-        ImmutableMap.<String, String>builder().putAll(getExecutionInfo());
+    ImmutableMap<String, String> executionInfo = getExecutionInfo();
     if (getDotdFile() != null && useInMemoryDotdFiles()) {
       /*
        * CppCompileAction does dotd file scanning locally inside the Bazel process and thus
@@ -1497,18 +1476,13 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
        * in-memory. We can do that via
        * {@link ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS}.
        */
-      executionInfo.put(
-          ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS, getDotdFile().getExecPathString());
-    }
-
-    if (shouldParseShowIncludes()) {
-      // Hack on Windows. The included headers dumped by cl.exe in stdout contain absolute paths.
-      // When compiling the file from different workspace, the shared cache will cause header
-      // dependency checking to fail. This was initially fixed by a hack (see
-      // https://github.com/bazelbuild/bazel/issues/9172 for more details), but is broken again due
-      // to cl/356735700. We require execution service to ignore caches from other workspace.
-      executionInfo.put(
-          ExecutionRequirements.DIFFERENTIATE_WORKSPACE_CACHE, execRoot.getBaseName());
+      executionInfo =
+          ImmutableMap.<String, String>builderWithExpectedSize(executionInfo.size() + 1)
+              .putAll(executionInfo)
+              .put(
+                  ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS,
+                  getDotdFile().getExecPathString())
+              .build();
     }
 
     try {
@@ -1516,7 +1490,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           this,
           ImmutableList.copyOf(getArguments()),
           getEffectiveEnvironment(clientEnv),
-          executionInfo.build(),
+          executionInfo,
           inputs,
           getOutputs(),
           estimateResourceConsumptionLocal());
@@ -1784,11 +1758,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   private static Map<Artifact, NestedSet<? extends Artifact>> computeTransitivelyUsedModules(
       SkyFunction.Environment env, Collection<Artifact.DerivedArtifact> usedModules)
       throws InterruptedException {
-    // Because this env.getValues call does not specify any exceptions, it is impossible for input
-    // discovery to recover from exceptions thrown by spurious module deps (for instance, if a
-    // commented-out include references a header file with an error in it). However, we generally
-    // don't try to recover from errors around spurious includes discovered in the current build.
-    // TODO(janakr): Can errors be aggregated here at least?
     Map<SkyKey, SkyValue> actionExecutionValues =
         env.getValues(
             Iterables.transform(usedModules, Artifact.DerivedArtifact::getGeneratingActionKey));
@@ -1874,7 +1843,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
               .getOptions(BuildLanguageOptions.class)
               .experimentalSiblingRepositoryLayout;
 
-      if (shouldParseShowIncludes()) {
+      if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
         NestedSet<Artifact> discoveredInputs =
             discoverInputsFromShowIncludesFilters(
                 execRoot,
@@ -1914,7 +1883,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     private void copyTempOutErrToActionOutErr() throws ActionExecutionException {
       // If parse_showincludes feature is enabled, instead of parsing dotD file we parse the
       // output of cl.exe caused by /showIncludes option.
-      if (shouldParseShowIncludes()) {
+      if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
         try {
           FileOutErr tempOutErr = spawnExecutionContext.getFileOutErr();
           FileOutErr outErr = actionExecutionContext.getFileOutErr();
