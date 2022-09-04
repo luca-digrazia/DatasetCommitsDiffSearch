@@ -206,11 +206,10 @@ public class ApkActionsBuilder {
 
       actionBuilder
           .addRunfilesSupplier(
-              RunfilesSupplierImpl.create(
+              new RunfilesSupplierImpl(
                   nativeSymlinksDir,
                   nativeSymlinksManifestAndRunfiles.runfiles,
-                  nativeSymlinksManifestAndRunfiles.manifest,
-                  ruleContext.getConfiguration()))
+                  nativeSymlinksManifestAndRunfiles.manifest))
           .addInputs(nativeLibs.getAllNativeLibs());
       if (nativeSymlinksManifestAndRunfiles.manifest != null) {
         actionBuilder.addInput(nativeSymlinksManifestAndRunfiles.manifest);
