@@ -1,16 +1,13 @@
 package org.graylog.plugins.enterprise.search;
 
-import com.fasterxml.jackson.annotation.JsonAnyGetter;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.Maps;
 
 import javax.annotation.Nullable;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -21,7 +18,7 @@ import java.util.Objects;
  */
 @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
-        include = JsonTypeInfo.As.EXISTING_PROPERTY,
+        include = JsonTypeInfo.As.PROPERTY,
         property = SearchType.TYPE_FIELD,
         visible = true,
         defaultImpl = SearchType.Fallback.class)
@@ -29,7 +26,6 @@ import java.util.Objects;
 public interface SearchType {
     String TYPE_FIELD = "type";
 
-    @JsonProperty(TYPE_FIELD)
     String type();
 
     @JsonProperty("id")
@@ -38,6 +34,8 @@ public interface SearchType {
     @Nullable
     @JsonProperty("filter")
     Filter filter();
+
+    SearchType withId(String id);
 
     SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state);
 
@@ -66,8 +64,6 @@ public interface SearchType {
         @JsonProperty
         private String id;
 
-        private Map<String, Object> props = Maps.newHashMap();
-
         @Nullable
         @JsonProperty
         private Filter filter;
@@ -88,18 +84,19 @@ public interface SearchType {
         }
 
         @Override
+        public SearchType withId(String id) {
+            this.id = id;
+            return this;
+        }
+
+        @Override
         public SearchType applyExecutionContext(ObjectMapper objectMapper, JsonNode state) {
             return this;
         }
 
         @JsonAnySetter
-        public void setProperties(String key, Object value) {
-            props.put(key, value);
-        }
-
-        @JsonAnyGetter
-        public Map<String, Object> getProperties() {
-            return props;
+        public void setType(String key, Object value) {
+            // we ignore all the other values, we only want to be able to deserialize unknown search types
         }
 
         @Override
@@ -112,13 +109,12 @@ public interface SearchType {
             }
             Fallback fallback = (Fallback) o;
             return Objects.equals(type, fallback.type) &&
-                    Objects.equals(id, fallback.id) &&
-                    Objects.equals(props, fallback.props);
+                    Objects.equals(id, fallback.id);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(type, id, props);
+            return Objects.hash(type, id);
         }
     }
 }

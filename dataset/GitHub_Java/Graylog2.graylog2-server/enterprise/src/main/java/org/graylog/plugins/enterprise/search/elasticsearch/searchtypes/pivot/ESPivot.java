@@ -48,7 +48,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
 
     @Override
     public void doGenerateQueryPart(SearchJob job, Query query, Pivot pivot, ESGeneratedQueryContext queryContext) {
-        LOG.debug("Generating aggregation for {}", pivot);
+        LOG.info("Generating aggregation for {}", pivot);
         final SearchSourceBuilder searchSourceBuilder = queryContext.searchSourceBuilder();
 
         final Map<Object, Object> contextMap = queryContext.contextMap();
@@ -75,11 +75,9 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
             final BucketSpec bucketSpec = rowBuckets.next();
 
             final String name = queryContext.nextName();
-            LOG.debug("Creating row group aggregation '{}' as {}", bucketSpec.type(), name);
+            LOG.info("Creating row group aggregation '{}' as {}", bucketSpec.type(), name);
             final ESPivotBucketSpecHandler<? extends PivotSpec, ? extends Aggregation> handler = bucketHandlers.get(bucketSpec.type());
-            if (handler == null) {
-                throw new IllegalArgumentException("Unknown row_group type " + bucketSpec.type());
-            }
+            // TODO error handling for missing handlers
             final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext);
             if (generatedAggregation.isPresent()) {
                 final AggregationBuilder aggregationBuilder = generatedAggregation.get();
@@ -107,11 +105,9 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
                 final BucketSpec bucketSpec = colBuckets.next();
 
                 final String name = queryContext.nextName();
-                LOG.debug("Creating column group aggregation '{}' as {}", bucketSpec.type(), name);
+                LOG.info("Creating column group aggregation '{}' as {}", bucketSpec.type(), name);
                 final ESPivotBucketSpecHandler<? extends PivotSpec, ? extends Aggregation> handler = bucketHandlers.get(bucketSpec.type());
-                if (handler == null) {
-                    throw new IllegalArgumentException("Unknown column_group type " + bucketSpec.type());
-                }
+                // TODO error handling for missing handlers
                 final Optional<AggregationBuilder> generatedAggregation = handler.createAggregation(name, pivot, bucketSpec, this, queryContext);
                 if (generatedAggregation.isPresent()) {
                     final AggregationBuilder aggregationBuilder = generatedAggregation.get();
@@ -140,7 +136,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
         return EntryStream.of(pivot.series())
                 .mapKeyValue((integer, seriesSpec) -> {
                     final String seriesName = "series-" + integer;
-                    LOG.debug("Adding {} series '{}' with name '{}'", reason, seriesSpec.type(), seriesName);
+                    LOG.info("Adding {} series '{}' with name '{}'", reason, seriesSpec.type(), seriesName);
                     return seriesHandlers.get(seriesSpec.type()).createAggregation(seriesName, pivot, seriesSpec, this, queryContext);
                 })
                 .filter(Optional::isPresent)
@@ -196,8 +192,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
             // to not calculate them
             final BucketSpec currentBucket = remainingRows.get(0);
 
-            // this handler should never be missing, because we used it above to generate the query
-            // if it is missing for some weird reason, it's ok to fail hard here
+            // TODO handle missing handler
             final ESPivotBucketSpecHandler<? extends PivotSpec, ? extends Aggregation> handler = bucketHandlers.get(currentBucket.type());
             final Aggregation aggregationResult = handler.extractAggregationFromResult(pivot, currentBucket, aggregation, queryContext);
             final Stream<ESPivotBucketSpecHandler.Bucket> bucketStream = handler.handleResult(pivot, currentBucket, searchResult, aggregationResult, this, queryContext);
@@ -240,8 +235,7 @@ public class ESPivot implements ESSearchTypeHandler<Pivot> {
             // and if rollup was requested we'll add intermediate series according to the column keys
             final BucketSpec currentBucket = remainingColumns.get(0);
 
-            // this handler should never be missing, because we used it above to generate the query
-            // if it is missing for some weird reason, it's ok to fail hard here
+            // TODO handle missing handler
             final ESPivotBucketSpecHandler<? extends PivotSpec, ? extends Aggregation> handler = bucketHandlers.get(currentBucket.type());
             final Aggregation aggregationResult = handler.extractAggregationFromResult(pivot, currentBucket, aggregation, queryContext);
             final Stream<ESPivotBucketSpecHandler.Bucket> bucketStream = handler.handleResult(pivot, currentBucket, searchResult, aggregationResult, this, queryContext);
