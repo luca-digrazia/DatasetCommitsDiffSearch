@@ -54,7 +54,7 @@ import io.quarkus.vertx.web.RoutingExchange;
 import io.quarkus.vertx.web.runtime.RouterProducer;
 import io.quarkus.vertx.web.runtime.RoutingExchangeImpl;
 import io.quarkus.vertx.web.runtime.VertxHttpConfiguration;
-import io.quarkus.vertx.web.runtime.VertxWebRecorder;
+import io.quarkus.vertx.web.runtime.VertxWebTemplate;
 import io.vertx.core.Handler;
 import io.vertx.ext.web.RoutingContext;
 
@@ -119,7 +119,7 @@ class VertxWebProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    ServiceStartBuildItem build(VertxWebRecorder recorder, BeanContainerBuildItem beanContainer,
+    ServiceStartBuildItem build(VertxWebTemplate template, BeanContainerBuildItem beanContainer,
             List<RouteHandlerBuildItem> routeHandlerBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass, AnnotationProxyBuildItem annotationProxy,
             LaunchModeBuildItem launchMode,
@@ -142,7 +142,7 @@ class VertxWebProcessor {
             routeConfigs.put(handlerClass, routes);
             reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, handlerClass));
         }
-        recorder.configureRouter(vertx.getVertx(), beanContainer.getValue(), routeConfigs, vertxHttpConfiguration,
+        template.configureRouter(vertx.getVertx(), beanContainer.getValue(), routeConfigs, vertxHttpConfiguration,
                 launchMode.getLaunchMode(),
                 shutdown);
         return new ServiceStartBuildItem("vertx-web");
