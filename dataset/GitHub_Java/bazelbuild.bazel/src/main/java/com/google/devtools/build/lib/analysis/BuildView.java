@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory.CoverageReportActionsWrapper;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
@@ -76,6 +75,8 @@ import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
+import com.google.devtools.build.lib.syntax.SkylarkImport;
+import com.google.devtools.build.lib.syntax.SkylarkImport.SkylarkImportSyntaxException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.skyframe.WalkableGraph;
@@ -265,9 +266,6 @@ public class BuildView {
               new MakeEnvironmentEvent(
                   configurations.getTargetConfigurations().get(0).getMakeEnvironment()));
     }
-    for (BuildConfiguration targetConfig : configurations.getTargetConfigurations()) {
-      eventBus.post(targetConfig.toBuildEvent());
-    }
 
     Collection<TargetAndConfiguration> topLevelTargetsWithConfigs =
         topLevelTargetsWithConfigsResult.getTargetsAndConfigs();
@@ -319,12 +317,12 @@ public class BuildView {
             bzlFileLoadLikeString = bzlFileLoadLikeString + ".bzl";
           }
         }
-        Label skylarkFileLabel;
+        SkylarkImport skylarkImport;
         try {
-          skylarkFileLabel =
-              Label.parseAbsolute(
+          skylarkImport =
+              SkylarkImport.create(
                   bzlFileLoadLikeString, /* repositoryMapping= */ ImmutableMap.of());
-        } catch (LabelSyntaxException e) {
+        } catch (SkylarkImportSyntaxException e) {
           throw new ViewCreationFailedException(
               String.format("Invalid aspect '%s': %s", aspect, e.getMessage()), e);
         }
@@ -345,7 +343,7 @@ public class BuildView {
                   // aspect and the base target while the top-level configuration is untrimmed.
                   targetSpec.getConfiguration(),
                   targetSpec.getConfiguration(),
-                  skylarkFileLabel,
+                  skylarkImport,
                   skylarkFunctionName));
         }
       } else {

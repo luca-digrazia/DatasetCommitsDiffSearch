@@ -303,8 +303,8 @@ class ArtifactFunction implements SkyFunction {
     // Directories are special-cased because their mtimes are used, so should have been constructed
     // during execution of the action (in ActionMetadataHandler#maybeStoreAdditionalData).
     Preconditions.checkState(
-        data.getType() == FileStateType.REGULAR_FILE || data.getType() == FileStateType.SYMLINK,
-        "Should be file or symlink %s (%s)",
+        data.getType() == FileStateType.REGULAR_FILE,
+        "Unexpected not file %s (%s)",
         artifact,
         data);
     return data;
@@ -416,11 +416,9 @@ class ArtifactFunction implements SkyFunction {
 
   private static String constructErrorMessage(Artifact artifact) {
     if (artifact.getOwner() == null) {
-      return String.format("missing input file '%s'", artifact.getExecPathString());
+      return String.format("missing input file '%s'", artifact.getPath().getPathString());
     } else {
-      return String.format(
-          "missing input file '%s', owner: '%s'",
-          artifact.getExecPathString(), artifact.getOwner());
+      return String.format("missing input file '%s'", artifact.getOwner());
     }
   }
 

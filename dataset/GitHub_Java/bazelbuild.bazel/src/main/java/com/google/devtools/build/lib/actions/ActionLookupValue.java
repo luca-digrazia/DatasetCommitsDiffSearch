@@ -18,11 +18,18 @@ import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.math.BigInteger;
 import javax.annotation.Nullable;
 
-/** Base class for all values which can provide the generating action of an artifact. */
+/**
+ * Base class for all values which can provide the generating action of an artifact.
+ */
 public abstract class ActionLookupValue implements SkyValue {
+  @Nullable private final transient BigInteger nonceVersion;
 
+  protected ActionLookupValue(@Nullable BigInteger nonceVersion) {
+    this.nonceVersion = nonceVersion;
+  }
   /** Returns a list of actions registered by this {@link SkyValue}. */
   public abstract ImmutableList<ActionAnalysisMetadata> getActions();
 
@@ -50,7 +57,9 @@ public abstract class ActionLookupValue implements SkyValue {
     return (ActionTemplate<?>) result;
   }
 
-  /** Returns the number of {@link Action} objects present in this value. */
+  /**
+   * Returns the number of {@link Action} objects present in this value.
+   */
   public int getNumActions() {
     return getActions().size();
   }
@@ -59,6 +68,11 @@ public abstract class ActionLookupValue implements SkyValue {
   @Nullable
   public SourceArtifact getSourceArtifact() {
     return null;
+  }
+
+  @Override
+  public BigInteger getValueFingerprint() {
+    return nonceVersion;
   }
 
   /**
