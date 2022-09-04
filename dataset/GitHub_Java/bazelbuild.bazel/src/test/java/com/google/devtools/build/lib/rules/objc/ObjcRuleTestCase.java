@@ -426,22 +426,22 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected ObjcProvider providerForTarget(String label) throws Exception {
-    ObjcProvider objcProvider = getConfiguredTarget(label).get(ObjcProvider.STARLARK_CONSTRUCTOR);
+    ObjcProvider objcProvider = getConfiguredTarget(label).get(ObjcProvider.SKYLARK_CONSTRUCTOR);
     if (objcProvider != null) {
       return objcProvider;
     }
     AppleExecutableBinaryInfo executableProvider =
-        getConfiguredTarget(label).get(AppleExecutableBinaryInfo.STARLARK_CONSTRUCTOR);
+        getConfiguredTarget(label).get(AppleExecutableBinaryInfo.SKYLARK_CONSTRUCTOR);
     if (executableProvider != null) {
       return executableProvider.getDepsObjcProvider();
     }
     AppleDylibBinaryInfo dylibProvider =
-        getConfiguredTarget(label).get(AppleDylibBinaryInfo.STARLARK_CONSTRUCTOR);
+        getConfiguredTarget(label).get(AppleDylibBinaryInfo.SKYLARK_CONSTRUCTOR);
     if (dylibProvider != null) {
       return dylibProvider.getDepsObjcProvider();
     }
     AppleLoadableBundleBinaryInfo loadableBundleProvider =
-        getConfiguredTarget(label).get(AppleLoadableBundleBinaryInfo.STARLARK_CONSTRUCTOR);
+        getConfiguredTarget(label).get(AppleLoadableBundleBinaryInfo.SKYLARK_CONSTRUCTOR);
     if (loadableBundleProvider != null) {
       return loadableBundleProvider.getDepsObjcProvider();
     }
@@ -565,7 +565,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     ruleType.scratchTarget(scratch, "hdrs", "['a.h']", "includes", "['incdir']");
     ObjcProvider provider =
         getConfiguredTarget("//x:x", getAppleCrosstoolConfiguration())
-            .get(ObjcProvider.STARLARK_CONSTRUCTOR);
+            .get(ObjcProvider.SKYLARK_CONSTRUCTOR);
     if (privateHdr.isPresent()) {
       assertThat(provider.header().toList())
           .containsExactly(getSourceArtifact("x/a.h"), getSourceArtifact(privateHdr.get()));
@@ -693,7 +693,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         view.getPrerequisiteConfiguredTargetForTesting(
             reporter, topTarget, Label.parseAbsoluteUnchecked("//libs:objc_lib"), masterConfig);
 
-    ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.STARLARK_CONSTRUCTOR);
+    ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(protoProvider).isNotNull();
     assertThat(
             Artifact.asExecPaths(
@@ -833,7 +833,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         view.getPrerequisiteConfiguredTargetForTesting(
             reporter, topTarget, Label.parseAbsoluteUnchecked("//libs:objc_lib"), masterConfig);
 
-    ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.STARLARK_CONSTRUCTOR);
+    ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
     assertThat(protoProvider).isNotNull();
   }
 

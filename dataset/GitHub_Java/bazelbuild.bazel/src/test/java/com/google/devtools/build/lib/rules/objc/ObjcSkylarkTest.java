@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkInfo;
-import com.google.devtools.build.lib.packages.StarlarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
@@ -87,7 +87,7 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
 
   private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
     return (StructImpl) configuredTarget.get(key);
   }
@@ -1322,7 +1322,9 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
                 createObjcProviderSkylarkTarget(
                     "   created_provider = apple_common.new_objc_provider(library='bar')",
                     "   return created_provider"));
-    assertThat(e).hasMessageThat().contains("for library, got string, want a depset of File");
+    assertThat(e)
+        .hasMessageThat()
+        .contains(String.format(AppleSkylarkCommon.NOT_SET_ERROR, "library", "string"));
   }
 
   @Test
@@ -1336,7 +1338,9 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
                     "   return created_provider"));
     assertThat(e)
         .hasMessageThat()
-        .contains("for 'library', got a depset of 'string', expected a depset of 'File'");
+        .contains(
+            String.format(
+                AppleSkylarkCommon.BAD_SET_TYPE_ERROR, "library", "File", "depset of strings"));
   }
 
   @Test
@@ -1611,10 +1615,10 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
   }
 
   /**
-   * This test verifies that its possible to use the Starlark constructor of ObjcProvider as a
-   * provider key to obtain the provider. This test only needs to exist as long as there are two
-   * methods of retrieving ObjcProvider (which is true for legacy reasons). This is the 'new' method
-   * of retrieving ObjcProvider.
+   * This test verifies that its possible to use the skylark constructor of ObjcProvider as a
+   * provider key to obtain the provider. This test only needs to exist as long as there are
+   * two methods of retrieving ObjcProvider (which is true for legacy reasons). This is the
+   * 'new' method of retrieving ObjcProvider.
    */
   @Test
   public void testObjcProviderSkylarkConstructor() throws Exception {
