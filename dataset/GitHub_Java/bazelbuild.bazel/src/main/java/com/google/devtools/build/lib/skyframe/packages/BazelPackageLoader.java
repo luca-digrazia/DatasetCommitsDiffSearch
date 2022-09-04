@@ -52,12 +52,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * caching or incrementality.
  */
 public class BazelPackageLoader extends AbstractPackageLoader {
-
-  /**
-   * Version is the string BazelPackageLoader reports in native.bazel_version to be used by Skylark.
-   */
-  private final String version;
-
   /** Returns a fresh {@link Builder} instance. */
   public static Builder builder(Path workspaceDir, Path installBase, Path outputBase) {
     // Prevent PackageLoader from fetching any remote repositories; these should only be fetched by
@@ -113,8 +107,6 @@ public class BazelPackageLoader extends AbstractPackageLoader {
 
     private final AtomicBoolean isFetch;
 
-    private String version = "";
-
     private static ConfiguredRuleClassProvider createRuleClassProvider() {
       ConfiguredRuleClassProvider.Builder classProvider = new ConfiguredRuleClassProvider.Builder();
       new BazelRepositoryModule().initializeRuleClasses(classProvider);
@@ -129,7 +121,7 @@ public class BazelPackageLoader extends AbstractPackageLoader {
 
     @Override
     public BazelPackageLoader buildImpl() {
-      return new BazelPackageLoader(this, version);
+      return new BazelPackageLoader(this);
     }
 
     @Override
@@ -143,29 +135,19 @@ public class BazelPackageLoader extends AbstractPackageLoader {
           InvocationPolicy.getDefaultInstance());
     }
 
-    /**
-     * Version is the string BazelPackageLoader reports in native.bazel_version to be used by
-     * Skylark.
-     */
-    public Builder setVersion(String version) {
-      this.version = version;
-      return this;
-    }
-
     Builder setFetchForTesting() {
       this.isFetch.set(true);
       return this;
     }
   }
 
-  private BazelPackageLoader(Builder builder, String version) {
+  private BazelPackageLoader(Builder builder) {
     super(builder);
-    this.version = version;
   }
 
   @Override
-  protected String getVersion() {
-    return version;
+  protected String getName() {
+    return "BazelPackageLoader";
   }
 
   @Override
