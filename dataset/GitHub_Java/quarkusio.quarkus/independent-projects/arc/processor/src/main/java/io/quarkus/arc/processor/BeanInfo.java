@@ -495,7 +495,7 @@ public class BeanInfo implements InjectionTargetInfo {
 
     @Override
     public int hashCode() {
-        return identifier.hashCode();
+        return Objects.hash(identifier);
     }
 
     @Override
