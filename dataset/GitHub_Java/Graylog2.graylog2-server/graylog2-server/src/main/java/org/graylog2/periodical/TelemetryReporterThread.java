@@ -34,7 +34,6 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.graylog2.Configuration;
 import org.graylog2.ServerVersion;
-import org.graylog2.indexer.Indexer;
 import org.graylog2.metrics.MetricUtils;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.periodical.Periodical;
@@ -80,17 +79,12 @@ public class TelemetryReporterThread extends Periodical {
 
     private final MetricRegistry metricRegistry;
     private final ServerStatus serverStatus;
-    private final Indexer indexer;
     private final Configuration configuration;
 
     @Inject
-    public TelemetryReporterThread(MetricRegistry metricRegistry,
-                                   ServerStatus serverStatus,
-                                   Indexer indexer,
-                                   Configuration configuration) {
+    public TelemetryReporterThread(MetricRegistry metricRegistry, ServerStatus serverStatus, Configuration configuration) {
         this.metricRegistry = metricRegistry;
         this.serverStatus = serverStatus;
-        this.indexer = indexer;
         this.configuration = configuration;
     }
 
@@ -106,7 +100,6 @@ public class TelemetryReporterThread extends Periodical {
             report.put("anon_id", DigestUtils.sha256Hex(serverStatus.getNodeId().toString()));
             report.put("server_version", ServerVersion.VERSION.toString());
             report.put("metrics", MetricUtils.mapAllFiltered(metricRegistry.getMetrics(), REPORTED_METRICS));
-            report.put("statistics", buildStatistics());
 
             String json = objectMapper.writeValueAsString(report);
 
@@ -169,17 +162,6 @@ public class TelemetryReporterThread extends Periodical {
         }
     }
 
-    private Map<String, Object> buildStatistics() {
-        Map<String, Object> statistics = Maps.newHashMap();
-
-        statistics.put("total_messages", indexer.counts().total());
-        statistics.put("started_at", serverStatus.getStartedAt());
-        statistics.put("lifecycle", serverStatus.getLifecycle());
-        statistics.put("is_processing", serverStatus.isProcessing());
-
-        return statistics;
-    }
-
     @Override
     public boolean runsForever() {
         return false;
@@ -210,7 +192,7 @@ public class TelemetryReporterThread extends Periodical {
 
     @Override
     public int getInitialDelaySeconds() {
-        return 60;
+        return 0;
     }
 
     @Override
