@@ -1513,12 +1513,7 @@ public class BuildConfiguration {
 
   /**
    * The platform string, suitable for use as a key into a MakeEnvironment.
-   *
-   * <p>Is only there for platform-dependent vardefs. Use
-   * {@link com.google.devtools.build.lib.rules.cpp.CcToolchainProvider#getToolchainIdentifier()
-   * instead.
    */
-  @Deprecated
   public String getPlatformName() {
     return platformName;
   }
