@@ -105,8 +105,7 @@ public class LdapConnector {
                             String principal,
                             boolean activeDirectory,
                             String groupSearchBase,
-                            String groupIdAttribute,
-                            String groupObjectClass) throws LdapException, CursorException {
+                            String groupIdAttribute) throws LdapException, CursorException {
         final LdapEntry ldapEntry = new LdapEntry();
 
         final String filter = MessageFormat.format(searchPattern, sanitizePrincipal(principal));
@@ -143,12 +142,12 @@ public class LdapConnector {
                 LOG.trace("No LDAP entry found for filter {}", filter);
                 return null;
             }
-            if (groupSearchBase != null && groupIdAttribute != null && groupObjectClass != null) {
+            if (groupSearchBase != null && groupIdAttribute != null) {
                 // TODO ActiveDirectory could use the memberOf attribute, but then we'd need to resolve the CN of each group, too.
                 // TODO we do not check for dynamic groups yet.
                 ldapEntry.addGroups(findGroups(connection,
                                                groupSearchBase,
-                                               groupObjectClass,
+                                               "group",
                                                groupIdAttribute,
                                                ldapEntry.getDn()));
                 LOG.trace("LDAP search found entry for DN {} with search filter {}: {}",
@@ -156,7 +155,7 @@ public class LdapConnector {
                           filter,
                           ldapEntry);
             } else {
-                LOG.info("LDAP group search base, id attribute or object class missing, not searching for LDAP groups.");
+                LOG.info("LDAP group search base or group id attribute missing, not searching for LDAP groups.");
             }
             return ldapEntry;
         } finally {
@@ -180,26 +179,13 @@ public class LdapConnector {
                     "(objectClass=" + groupObjectClass + ")",
                     SearchScope.SUBTREE,
                     "*");
-            LOG.trace("LDAP search for groups: {} starting at {}", "(objectClass=" + groupObjectClass + ")", groupSearchBase);
             for (Entry e : groupSearch) {
-                if (LOG.isTraceEnabled()) {
-                    LOG.trace("Group Entry: {}", e.toString("  "));
-                }
                 if (! e.containsAttribute(groupIdAttribute)) {
                     LOG.warn("Unknown group id attribute {}, skipping group entry {}", groupIdAttribute, e);
                     continue;
                 }
                 final String groupId = e.get(groupIdAttribute).getString();
-                String memberAttribute;
-                if (e.hasObjectClass("groupOfUniqueNames")) {
-                    memberAttribute = "uniqueMember";
-                } else if (e.hasObjectClass("groupOfNames") || e.hasObjectClass("group")) {
-                    memberAttribute = "member";
-                } else {
-                    LOG.warn("Unable to auto-detect the LDAP group object class, using assuming 'member' is the correct attribute.");
-                    memberAttribute = "member";
-                }
-                final Attribute members = e.get(memberAttribute);
+                final Attribute members = e.get("member");
                 if (members != null) {
                     for (Value<?> member : members) {
                         LOG.trace("DN {} == {} member?", dn, member.getString());

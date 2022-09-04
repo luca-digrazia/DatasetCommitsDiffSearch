@@ -59,7 +59,4 @@ public class LdapTestConnectionRequest extends ApiRequest {
 
     @JsonProperty("group_id_attribute")
     public String groupIdAttribute;
-
-    @JsonProperty("group_object_class")
-    public String groupObjectClass;
 }
