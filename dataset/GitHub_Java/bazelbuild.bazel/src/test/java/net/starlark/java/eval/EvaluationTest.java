@@ -274,7 +274,10 @@ public final class EvaluationTest {
           }
 
           @Override
-          public Object call(StarlarkThread thread, Tuple args, Dict<String, Object> kwargs) {
+          public Object call(
+              StarlarkThread thread,
+              Tuple<Object> args,
+              Dict<String, Object> kwargs) {
             return kwargs;
           }
         };
@@ -310,6 +313,11 @@ public final class EvaluationTest {
         .testExpression("'1' + '0' * 5", "100000")
         .testExpression("'ab' * -4", "")
         .testExpression("-1 * ''", "");
+  }
+
+  @Test
+  public void testSlashOperatorIsForbidden() throws Exception {
+    ev.new Scenario().testIfErrorContains("The `/` operator is not allowed.", "5 / 2");
   }
 
   @Test
@@ -454,7 +462,7 @@ public final class EvaluationTest {
   public void testDictWithDuplicatedKey() throws Exception {
     ev.new Scenario()
         .testIfErrorContains(
-            "dictionary expression has duplicate key: \"str\"", "{'str': 1, 'x': 2, 'str': 3}");
+            "Duplicated key \"str\" when creating dictionary", "{'str': 1, 'x': 2, 'str': 3}");
   }
 
   @Test

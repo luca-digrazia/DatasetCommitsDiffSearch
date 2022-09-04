@@ -30,8 +30,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
-import net.starlark.java.annot.StarlarkAnnotations;
 import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkInterfaceUtils;
 import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.spelling.SpellChecker;
 import net.starlark.java.syntax.Expression;
@@ -137,20 +137,6 @@ public final class Starlark {
       return ((StarlarkValue) x).isImmutable();
     } else {
       throw new IllegalArgumentException("invalid Starlark value: " + x.getClass());
-    }
-  }
-
-  /**
-   * Returns normally if the Starlark value is hashable and thus suitable as a dict key.
-   *
-   * @throws EvalException otherwise.
-   */
-  public static void checkHashable(Object x) throws EvalException {
-    if (x instanceof StarlarkValue) {
-      ((StarlarkValue) x).checkHashable();
-    } else {
-      Starlark.checkValid(x);
-      // String and Boolean are hashable.
     }
   }
 
@@ -307,7 +293,7 @@ public final class Starlark {
       return "unbound";
     }
 
-    StarlarkBuiltin module = StarlarkAnnotations.getStarlarkBuiltin(c);
+    StarlarkBuiltin module = StarlarkInterfaceUtils.getStarlarkBuiltin(c);
     if (module != null) {
       return module.name();
 
@@ -673,7 +659,7 @@ public final class Starlark {
    *
    * <p>Most callers should use {@link #dir} and {@link #getattr} instead.
    */
-  // TODO(adonovan): move to StarlarkAnnotations; it's a static property of the annotations.
+  // TODO(adonovan): move to StarlarkInterfaceUtils; it's a static property of the annotations.
   public static ImmutableMap<Method, StarlarkMethod> getMethodAnnotations(Class<?> clazz) {
     ImmutableMap.Builder<Method, StarlarkMethod> result = ImmutableMap.builder();
     for (MethodDescriptor desc :
@@ -732,6 +718,19 @@ public final class Starlark {
       // whether the method was disabled by the semantics.
       env.put(name, new BuiltinCallable(v, name));
     }
+  }
+
+  /**
+   * Adds to the environment {@code env} the value {@code v}, under its annotated name. The class of
+   * {@code v} must have or inherit a {@link StarlarkBuiltin} annotation.
+   */
+  public static void addModule(ImmutableMap.Builder<String, Object> env, Object v) {
+    Class<?> cls = v.getClass();
+    StarlarkBuiltin annot = StarlarkInterfaceUtils.getStarlarkBuiltin(cls);
+    if (annot == null) {
+      throw new IllegalArgumentException(cls.getName() + " is not annotated with @StarlarkBuiltin");
+    }
+    env.put(annot.name(), v);
   }
 
   /**

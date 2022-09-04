@@ -27,7 +27,7 @@ import java.lang.annotation.Target;
  * corresponding {@code @StarlarkMethod} annotation, if it has one, by scanning all methods of the
  * same name in its class hierarchy, without worrying about complications like overloading or
  * generics. The lookup functionality is implemented by {@link
- * StarlarkAnnotations#getStarlarkMethod}.
+ * StarlarkInterfaceUtils#getStarlarkMethod}.
  *
  * <p>Methods having this annotation must satisfy the following requirements, which are enforced at
  * compile time by {@link StarlarkMethodProcessor}:
@@ -75,11 +75,6 @@ import java.lang.annotation.Target;
  *   <li>Each class may have up to one method annotated with {@code selfCall}, which must not be
  *       marked {@code structField=true}.
  * </ul>
- *
- * <p>When an annotated method is called from Starlark, it is a dynamic error if it returns null,
- * unless the method is marked as {@link #allowReturnNones}, in which case {@link Starlark#fromJava}
- * converts the Java null value to {@link Starlark#NONE}. This feature prevents a method whose
- * declared (and documented) result type is T from unexpectedly returning a value of type NoneType.
  */
 // TODO(adonovan): rename to StarlarkAttribute and factor Starlark{Method,Field} as subinterfaces.
 @Target({ElementType.METHOD})
@@ -160,8 +155,8 @@ public @interface StarlarkMethod {
   boolean selfCall() default false;
 
   /**
-   * Permits the Java method to return null, which {@link Starlark#fromJava} then converts to {@link
-   * Starlark#NONE}. If false, a null result causes the Starlark call to fail.
+   * Set it to true if the Java method may return <code>null</code> (which will then be converted to
+   * <code>None</code>). If not set and the Java method returns null, an error will be raised.
    */
   boolean allowReturnNones() default false;
 

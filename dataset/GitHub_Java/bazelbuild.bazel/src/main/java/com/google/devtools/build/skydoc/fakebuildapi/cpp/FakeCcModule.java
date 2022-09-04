@@ -233,7 +233,7 @@ public class FakeCcModule
   }
 
   @Override
-  public Tuple compile(
+  public Tuple<Object> compile(
       StarlarkActionFactoryApi starlarkActionFactoryApi,
       FeatureConfigurationApi starlarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> starlarkCcToolchainProvider,
@@ -260,7 +260,7 @@ public class FakeCcModule
   }
 
   @Override
-  public Tuple createLinkingContextFromCompilationOutputs(
+  public Tuple<Object> createLinkingContextFromCompilationOutputs(
       StarlarkActionFactoryApi starlarkActionFactoryApi,
       FeatureConfigurationApi starlarkFeatureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> starlarkCcToolchainProvider,

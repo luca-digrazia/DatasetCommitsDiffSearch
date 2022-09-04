@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.packages.BuildType.Selector;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import net.starlark.java.eval.EvalException;
@@ -51,10 +50,7 @@ public class BuildTypeTest {
   public final void setCurrentRule() throws Exception  {
     this.currentRule = Label.parseAbsolute("//quux:baz", ImmutableMap.of());
     this.labelConversionContext =
-        new LabelConversionContext(
-            currentRule,
-            /* repositoryMapping= */ ImmutableMap.of(),
-            /* convertedLabelsInPackage= */ new HashMap<>());
+        new LabelConversionContext(currentRule, /* repositoryMapping= */ ImmutableMap.of());
   }
 
   @Test
@@ -324,20 +320,11 @@ public class BuildTypeTest {
         new LabelConversionContext(
             currentRule,
             ImmutableMap.of(
-                RepositoryName.create("@orig_repo"), RepositoryName.create("@new_repo")),
-            /* convertedLabelsInPackage= */ new HashMap<>());
+                RepositoryName.create("@orig_repo"), RepositoryName.create("@new_repo")));
     Label label = BuildType.LABEL.convert("@orig_repo//foo:bar", null, context);
     assertThat(label)
         .isEquivalentAccordingToCompareTo(
             Label.parseAbsolute("@new_repo//foo:bar", ImmutableMap.of()));
-  }
-
-  @Test
-  public void testLabelConversionContextCaches() throws ConversionException {
-    assertThat(labelConversionContext.getConvertedLabelsInPackage())
-        .doesNotContainKey("//some:label");
-    BuildType.LABEL.convert("//some:label", "doesntmatter", labelConversionContext);
-    assertThat(labelConversionContext.getConvertedLabelsInPackage()).containsKey("//some:label");
   }
 
   /**

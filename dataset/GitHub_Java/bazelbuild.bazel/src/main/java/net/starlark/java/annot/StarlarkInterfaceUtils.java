@@ -24,8 +24,7 @@ public class StarlarkInterfaceUtils {
 
   /**
    * Returns the more specific class of two classes. Class x is more specific than class y if x is
-   * assignable to y. For example, of Integer.class and Object.class, Integer.class is more
-   * specific.
+   * assignable to y. For example, of String.class and Object.class, String.class is more specific.
    *
    * <p>If either class is null, returns the other class.
    *
@@ -105,15 +104,6 @@ public class StarlarkInterfaceUtils {
   @Nullable
   public static Class<?> getParentWithStarlarkBuiltin(Class<?> classObj) {
     return findAnnotatedAncestor(classObj, StarlarkBuiltin.class);
-  }
-
-  /**
-   * Searches {@code classObj}'s class hierarchy and for a superclass or interface that is annotated
-   * with {@link StarlarkGlobalLibrary} (including possibly {@code classObj} itself), and returns
-   * true if one is found.
-   */
-  public static boolean hasStarlarkGlobalLibrary(Class<?> classObj) {
-    return findAnnotatedAncestor(classObj, StarlarkGlobalLibrary.class) != null;
   }
 
   /**

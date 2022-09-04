@@ -121,7 +121,10 @@ final class StringModule implements StarlarkValue {
               + "joined by this string as a separator. Example:<br>"
               + "<pre class=\"language-python\">\"|\".join([\"a\", \"b\", \"c\"]) == \"a|b|c\""
               + "</pre>",
-      parameters = {@Param(name = "self"), @Param(name = "elements", doc = "The objects to join.")})
+      parameters = {
+        @Param(name = "self", type = String.class),
+        @Param(name = "elements", type = Object.class, doc = "The objects to join.")
+      })
   public String join(String self, Object elements) throws EvalException {
     Iterable<?> items = Starlark.toIterable(elements);
     int i = 0;
@@ -138,7 +141,7 @@ final class StringModule implements StarlarkValue {
   @StarlarkMethod(
       name = "lower",
       doc = "Returns the lower case version of this string.",
-      parameters = {@Param(name = "self")})
+      parameters = {@Param(name = "self", type = String.class)})
   public String lower(String self) {
     return Ascii.toLowerCase(self);
   }
@@ -146,7 +149,7 @@ final class StringModule implements StarlarkValue {
   @StarlarkMethod(
       name = "upper",
       doc = "Returns the upper case version of this string.",
-      parameters = {@Param(name = "self")})
+      parameters = {@Param(name = "self", type = String.class)})
   public String upper(String self) {
     return Ascii.toUpperCase(self);
   }
@@ -197,13 +200,11 @@ final class StringModule implements StarlarkValue {
               + "\"abcba\".lstrip(\"ba\") == \"cba\""
               + "</pre>",
       parameters = {
-        @Param(name = "self"),
+        @Param(name = "self", type = String.class),
         @Param(
             name = "chars",
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = String.class,
+            noneable = true,
             doc = "The characters to remove, or all whitespace if None.",
             defaultValue = "None")
       })
@@ -222,13 +223,11 @@ final class StringModule implements StarlarkValue {
               + "\"abcbaa\".rstrip(\"ab\") == \"abc\""
               + "</pre>",
       parameters = {
-        @Param(name = "self", doc = "This string."),
+        @Param(name = "self", type = String.class, doc = "This string."),
         @Param(
             name = "chars",
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = String.class,
+            noneable = true,
             doc = "The characters to remove, or all whitespace if None.",
             defaultValue = "None")
       })
@@ -248,13 +247,11 @@ final class StringModule implements StarlarkValue {
               + "\"aabcbcbaa\".strip(\"ab\") == \"cbc\""
               + "</pre>",
       parameters = {
-        @Param(name = "self", doc = "This string."),
+        @Param(name = "self", type = String.class, doc = "This string."),
         @Param(
             name = "chars",
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = String.class,
+            noneable = true,
             doc = "The characters to remove, or all whitespace if None.",
             defaultValue = "None")
       })
@@ -270,23 +267,47 @@ final class StringModule implements StarlarkValue {
               + "of <code>old</code> have been replaced with <code>new</code>, optionally "
               + "restricting the number of replacements to <code>maxsplit</code>.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "old", doc = "The string to be replaced."),
-        @Param(name = "new", doc = "The string to replace with."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "old", type = String.class, doc = "The string to be replaced."),
+        @Param(name = "new", type = String.class, doc = "The string to replace with."),
         @Param(
             name = "count",
-            defaultValue = "-1",
+            type = StarlarkInt.class,
+            noneable = true, // TODO(#11244): Set false once incompatible flag is deleted.
+            defaultValue = "unbound",
             doc =
-                "The maximum number of replacements. If omitted, or if the value is negative, "
-                    + "there is no limit.")
+                "The maximum number of replacements. If omitted, there is no limit."
+                    + "<p>If <code>--incompatible_string_replace_count</code> is true, a negative "
+                    + "value is ignored (so there's no limit) and a <code>None</code> value is an "
+                    + "error. Otherwise, a negative value is treated as 0 and a <code>None</code> "
+                    + "value is ignored. (See also issue <a "
+                    + "href='https://github.com/bazelbuild/bazel/issues/11244'>#11244</a>.)")
       },
       useStarlarkThread = true)
   public String replace(
-      String self, String oldString, String newString, StarlarkInt countI, StarlarkThread thread)
+      String self, String oldString, String newString, Object countUnchecked, StarlarkThread thread)
       throws EvalException {
-    int count = countI.toInt("count");
-    if (count < 0) {
-      count = Integer.MAX_VALUE;
+    int count = Integer.MAX_VALUE;
+
+    StarlarkSemantics semantics = thread.getSemantics();
+    if (semantics.getBool(StarlarkSemantics.INCOMPATIBLE_STRING_REPLACE_COUNT)) {
+      if (countUnchecked == Starlark.NONE) {
+        throw Starlark.errorf(
+            "Cannot pass a None count to string.replace(); omit the count argument instead. (You "
+                + "can temporarily opt out of this change by setting "
+                + "--incompatible_string_replace_count=false.)");
+      }
+      if (countUnchecked != Starlark.UNBOUND) {
+        int x = Starlark.toInt(countUnchecked, "count");
+        if (x >= 0) {
+          count = x;
+        }
+      }
+    } else {
+      if (countUnchecked != Starlark.UNBOUND && countUnchecked != Starlark.NONE) {
+        // Negative has same effect as 0 below.
+        count = Starlark.toInt(countUnchecked, "count");
+      }
     }
 
     StringBuilder sb = new StringBuilder();
@@ -318,14 +339,12 @@ final class StringModule implements StarlarkValue {
           "Returns a list of all the words in the string, using <code>sep</code> as the "
               + "separator, optionally limiting the number of splits to <code>maxsplit</code>.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sep", doc = "The string to split on."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sep", type = String.class, doc = "The string to split on."),
         @Param(
             name = "maxsplit",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "The maximum number of splits.")
       },
@@ -360,14 +379,12 @@ final class StringModule implements StarlarkValue {
               + "separator, optionally limiting the number of splits to <code>maxsplit</code>. "
               + "Except for splitting from the right, this method behaves like split().",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sep", doc = "The string to split on."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sep", type = String.class, doc = "The string to split on."),
         @Param(
             name = "maxsplit",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "The maximum number of splits.")
       },
@@ -403,7 +420,10 @@ final class StringModule implements StarlarkValue {
               + " returns the resulting partition as a three-element tuple of the form (before,"
               + " separator, after). If the input string does not contain the separator, partition"
               + " returns (self, '', '').",
-      parameters = {@Param(name = "self"), @Param(name = "sep", doc = "The string to split on.")})
+      parameters = {
+        @Param(name = "self", type = String.class),
+        @Param(name = "sep", type = String.class, doc = "The string to split on.")
+      })
   public Tuple<String> partition(String self, String sep) throws EvalException {
     return partitionCommon(self, sep, /*first=*/ true);
   }
@@ -415,7 +435,10 @@ final class StringModule implements StarlarkValue {
               + " returns the resulting partition as a three-element tuple of the form (before,"
               + " separator, after). If the input string does not contain the separator,"
               + " rpartition returns ('', '', self).",
-      parameters = {@Param(name = "self"), @Param(name = "sep", doc = "The string to split on.")})
+      parameters = {
+        @Param(name = "self", type = String.class),
+        @Param(name = "sep", type = String.class, doc = "The string to split on.")
+      })
   public Tuple<String> rpartition(String self, String sep) throws EvalException {
     return partitionCommon(self, sep, /*first=*/ false);
   }
@@ -455,7 +478,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns a copy of the string with its first character (if any) capitalized and the rest "
               + "lowercased. This method does not support non-ascii characters. ",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public String capitalize(String self) throws EvalException {
     if (self.isEmpty()) {
       return self;
@@ -471,7 +494,7 @@ final class StringModule implements StarlarkValue {
               + "uppercase letter while the remaining letters are lowercase. In this "
               + "context, a word means strictly a sequence of letters. This method does "
               + "not support supplementary Unicode characters.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public String title(String self) throws EvalException {
     char[] data = self.toCharArray();
     boolean previousWasLetter = false;
@@ -521,22 +544,18 @@ final class StringModule implements StarlarkValue {
               + "optionally restricting to <code>[start:end]</code>, "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sub", doc = "The substring to find."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sub", type = String.class, doc = "The substring to find."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Restrict to search from this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
@@ -551,22 +570,18 @@ final class StringModule implements StarlarkValue {
               + "optionally restricting to <code>[start:end]</code>, "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sub", doc = "The substring to find."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sub", type = String.class, doc = "The substring to find."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Restrict to search from this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
@@ -581,22 +596,18 @@ final class StringModule implements StarlarkValue {
               + "index exists, optionally restricting to <code>[start:end]</code>, "
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sub", doc = "The substring to find."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sub", type = String.class, doc = "The substring to find."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Restrict to search from this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
@@ -615,22 +626,18 @@ final class StringModule implements StarlarkValue {
               + " index exists, optionally restricting to <code>[start:end]</code>"
               + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sub", doc = "The substring to find."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sub", type = String.class, doc = "The substring to find."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Restrict to search from this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
@@ -648,10 +655,10 @@ final class StringModule implements StarlarkValue {
           "Splits the string at line boundaries ('\\n', '\\r\\n', '\\r') "
               + "and returns the result as a list.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
+        @Param(name = "self", type = String.class, doc = "This string."),
         @Param(
-            // TODO(b/67740837): clarify whether this is named or positional.
             name = "keepends",
+            type = Boolean.class,
             defaultValue = "False",
             doc = "Whether the line breaks should be included in the resulting list.")
       })
@@ -681,7 +688,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns True if all characters in the string are alphabetic ([a-zA-Z]) and there is "
               + "at least one character.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isAlpha(String self) throws EvalException {
     return matches(self, ALPHA, false);
   }
@@ -691,7 +698,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns True if all characters in the string are alphanumeric ([a-zA-Z0-9]) and there "
               + "is at least one character.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isAlnum(String self) throws EvalException {
     return matches(self, ALNUM, false);
   }
@@ -701,7 +708,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns True if all characters in the string are digits ([0-9]) and there is "
               + "at least one character.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isDigit(String self) throws EvalException {
     return matches(self, DIGIT, false);
   }
@@ -711,7 +718,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns True if all characters are white space characters and the string "
               + "contains at least one character.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isSpace(String self) throws EvalException {
     return matches(self, SPACE, false);
   }
@@ -721,7 +728,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns True if all cased characters in the string are lowercase and there is "
               + "at least one character.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isLower(String self) throws EvalException {
     // Python also accepts non-cased characters, so we cannot use LOWER.
     return matches(self, UPPER.negate(), true);
@@ -732,7 +739,7 @@ final class StringModule implements StarlarkValue {
       doc =
           "Returns True if all cased characters in the string are uppercase and there is "
               + "at least one character.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isUpper(String self) throws EvalException {
     // Python also accepts non-cased characters, so we cannot use UPPER.
     return matches(self, LOWER.negate(), true);
@@ -745,7 +752,7 @@ final class StringModule implements StarlarkValue {
               + "This means that every uppercase character must follow an uncased one (e.g. "
               + "whitespace) and every lowercase character must follow a cased one (e.g. "
               + "uppercase or lowercase).",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Boolean isTitle(String self) throws EvalException {
     if (self.isEmpty()) {
       return false;
@@ -812,22 +819,18 @@ final class StringModule implements StarlarkValue {
               + "string, optionally restricting to <code>[start:end]</code>, <code>start</code> "
               + "being inclusive and <code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
-        @Param(name = "sub", doc = "The substring to count."),
+        @Param(name = "self", type = String.class, doc = "This string."),
+        @Param(name = "sub", type = String.class, doc = "The substring to count."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Restrict to search from this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "optional position before which to restrict to search.")
       })
@@ -855,7 +858,7 @@ final class StringModule implements StarlarkValue {
           "Returns an iterable value containing successive 1-element substrings of the string. "
               + "Equivalent to <code>[s[i] for i in range(len(s))]</code>, except that the "
               + "returned value might not be a list.",
-      parameters = {@Param(name = "self", doc = "This string.")})
+      parameters = {@Param(name = "self", type = String.class, doc = "This string.")})
   public Sequence<String> elems(String self) throws EvalException {
     ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
     for (char c : self.toCharArray()) {
@@ -871,7 +874,7 @@ final class StringModule implements StarlarkValue {
               + "restricting to <code>[start:end]</code>, <code>start</code> being inclusive "
               + "and <code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
+        @Param(name = "self", type = String.class, doc = "This string."),
         @Param(
             name = "sub",
             allowedTypes = {
@@ -881,18 +884,14 @@ final class StringModule implements StarlarkValue {
             doc = "The suffix (or tuple of alternative suffixes) to match."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Test beginning at this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "optional position at which to stop comparing.")
       })
@@ -936,11 +935,20 @@ final class StringModule implements StarlarkValue {
               + "# Access by name:\n"
               + "\"x{key}x\".format(key = 2) == \"x2x\"</pre>\n",
       parameters = {
-        @Param(name = "self", doc = "This string."),
+        @Param(name = "self", type = String.class, doc = "This string."),
       },
-      extraPositionals = @Param(name = "args", defaultValue = "()", doc = "List of arguments."),
+      extraPositionals =
+          @Param(
+              name = "args",
+              type = Tuple.class,
+              defaultValue = "()",
+              doc = "List of arguments."),
       extraKeywords =
-          @Param(name = "kwargs", defaultValue = "{}", doc = "Dictionary of arguments."))
+          @Param(
+              name = "kwargs",
+              type = Dict.class,
+              defaultValue = "{}",
+              doc = "Dictionary of arguments."))
   public String format(String self, Tuple<Object> args, Dict<String, Object> kwargs)
       throws EvalException {
     return new FormatParser().format(self, args, kwargs);
@@ -953,7 +961,7 @@ final class StringModule implements StarlarkValue {
               + "restricting to <code>[start:end]</code>, <code>start</code> being inclusive and "
               + "<code>end</code> being exclusive.",
       parameters = {
-        @Param(name = "self", doc = "This string."),
+        @Param(name = "self", type = String.class, doc = "This string."),
         @Param(
             name = "sub",
             allowedTypes = {
@@ -963,18 +971,14 @@ final class StringModule implements StarlarkValue {
             doc = "The prefix (or tuple of alternative prefixes) to match."),
         @Param(
             name = "start",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "0",
             doc = "Test beginning at this position."),
         @Param(
             name = "end",
-            allowedTypes = {
-              @ParamType(type = StarlarkInt.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = StarlarkInt.class,
+            noneable = true,
             defaultValue = "None",
             doc = "Stop comparing at this position.")
       })

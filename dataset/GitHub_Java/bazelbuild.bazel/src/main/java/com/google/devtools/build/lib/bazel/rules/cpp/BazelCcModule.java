@@ -68,7 +68,7 @@ public class BazelCcModule extends CcModule
   }
 
   @Override
-  public Tuple compile(
+  public Tuple<Object> compile(
       StarlarkActionFactory starlarkActionFactoryApi,
       FeatureConfigurationForStarlark starlarkFeatureConfiguration,
       CcToolchainProvider starlarkCcToolchainProvider,

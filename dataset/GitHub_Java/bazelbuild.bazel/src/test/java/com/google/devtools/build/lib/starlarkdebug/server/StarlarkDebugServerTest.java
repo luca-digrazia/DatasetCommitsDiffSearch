@@ -375,11 +375,7 @@ public class StarlarkDebugServerTest {
             .addScope(
                 Scope.newBuilder()
                     .setName("global")
-                    .addBinding(
-                        getValueProto(
-                            "x",
-                            StarlarkList.immutableOf(
-                                StarlarkInt.of(1), StarlarkInt.of(2), StarlarkInt.of(3)))))
+                    .addBinding(getValueProto("x", StarlarkList.of(/*mutability=*/ null, 1, 2, 3))))
             .build());
   }
 
@@ -402,10 +398,7 @@ public class StarlarkDebugServerTest {
     Value xValue = frames.getFrame(0).getScope(0).getBinding(0);
 
     assertValuesEqualIgnoringId(
-        xValue,
-        getValueProto(
-            "x",
-            StarlarkList.immutableOf(StarlarkInt.of(1), StarlarkInt.of(2), StarlarkInt.of(3))));
+        xValue, getValueProto("x", StarlarkList.of(/*mutability=*/ null, 1, 2, 3)));
 
     List<Value> children = getChildren(xValue);
 
@@ -570,11 +563,7 @@ public class StarlarkDebugServerTest {
 
     ListFramesResponse frames = listFrames(threadId);
     assertThat(frames.getFrame(0).getScope(0).getBindingList())
-        .contains(
-            getValueProto(
-                "x",
-                StarlarkList.immutableOf(
-                    StarlarkInt.of(1), StarlarkInt.of(2), StarlarkInt.of(3), StarlarkInt.of(4))));
+        .contains(getValueProto("x", StarlarkList.of(/*mutability=*/ null, 1, 2, 3, 4)));
   }
 
   @Test
