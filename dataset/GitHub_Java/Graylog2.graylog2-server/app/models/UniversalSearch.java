@@ -25,7 +25,10 @@ import lib.APIException;
 import lib.ApiClient;
 import lib.Tools;
 import lib.timeranges.TimeRange;
-import models.api.responses.*;
+import models.api.responses.DateHistogramResponse;
+import models.api.responses.FieldStatsResponse;
+import models.api.responses.FieldTermsResponse;
+import models.api.responses.SearchResultResponse;
 import models.api.results.DateHistogramResult;
 import models.api.results.SearchResult;
 import play.mvc.Call;
@@ -39,7 +42,6 @@ public class UniversalSearch {
 
     private final ApiClient api;
     private final String query;
-    private final String filter;
     private final TimeRange timeRange;
     private final Integer page;
 
@@ -50,12 +52,6 @@ public class UniversalSearch {
 
     @AssistedInject
     private UniversalSearch(ApiClient api, @Assisted TimeRange timeRange, @Assisted String query, @Assisted Integer page) {
-        this(api, timeRange, query, page, null);
-    }
-
-    @AssistedInject
-    private UniversalSearch(ApiClient api, @Assisted TimeRange timeRange, @Assisted("query") String query, @Assisted Integer page, @Assisted("filter") String filter) {
-        this.filter = filter;
         this.api = api;
         this.query = query;
         this.timeRange = timeRange;
@@ -74,18 +70,15 @@ public class UniversalSearch {
                 .queryParam("query", query)
                 .queryParam("limit", PER_PAGE)
                 .queryParam("offset", page*PER_PAGE)
-                .queryParam("filter", (filter == null ? "*" : filter))
                 .execute();
 
         SearchResult result = new SearchResult(
                 query,
-                response.builtQuery,
                 timeRange,
                 response.total_results,
                 response.time,
                 response.messages,
-                response.fields,
-                response.usedIndices
+                response.fields
         );
 
         return result;
@@ -119,16 +112,6 @@ public class UniversalSearch {
                 .execute();
     }
 
-    public FieldHistogramResponse fieldHistogram(String field, String interval) throws IOException, APIException {
-        return api.get(FieldHistogramResponse.class)
-                .path("/search/universal/{0}/fieldhistogram", timeRange.getType().toString().toLowerCase())
-                .queryParam("field", field)
-                .queryParam("interval", interval)
-                .queryParam("query", query)
-                .queryParams(timeRange.getQueryParams())
-                .execute();
-    }
-
     public Call getRoute(Request request, int page) {
         int relative = Tools.intSearchParamOrEmpty(request, "relative");
         String from = Tools.stringSearchParamOrEmpty(request, "from");
@@ -151,7 +134,6 @@ public class UniversalSearch {
     public interface Factory {
         UniversalSearch queryWithRange(String query, TimeRange timeRange);
         UniversalSearch queryWithRangeAndPage(String query, TimeRange timeRange, Integer page);
-        UniversalSearch queryWithFilterRangeAndPage(@Assisted("query") String query, @Assisted("filter") String filter, TimeRange timeRange, Integer page);
     }
 
 }
