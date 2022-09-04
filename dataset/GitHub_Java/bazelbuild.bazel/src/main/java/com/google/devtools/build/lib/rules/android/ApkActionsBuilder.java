@@ -229,7 +229,7 @@ public class ApkActionsBuilder {
       commandLine.addExecPath(classesDex);
     }
 
-    actionBuilder.addCommandLine(commandLine.build());
+    actionBuilder.setCommandLine(commandLine.build());
     ruleContext.registerAction(actionBuilder.build(ruleContext));
   }
 
@@ -303,7 +303,7 @@ public class ApkActionsBuilder {
               .setProgressMessage("Extracting Java resources from deploy jar for %s", apkName)
               .addInput(javaResourceZip)
               .addOutput(extractedJavaResourceZip)
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .addExecPath(javaResourceZip)
                       .addExecPath(extractedJavaResourceZip)
@@ -332,15 +332,15 @@ public class ApkActionsBuilder {
     }
 
     ImmutableList<String> noCompressExtensions =
-        ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions");
+        ruleContext.getTokenizedStringListAttr("nocompress_extensions");
     if (!noCompressExtensions.isEmpty()) {
       compressedApkCommandLine.addAll("--nocompress_suffixes", noCompressExtensions);
       singleJarCommandLine.addAll("--nocompress_suffixes", noCompressExtensions);
     }
 
-    compressedApkActionBuilder.addCommandLine(compressedApkCommandLine.build());
+    compressedApkActionBuilder.setCommandLine(compressedApkCommandLine.build());
     ruleContext.registerAction(compressedApkActionBuilder.build(ruleContext));
-    singleJarActionBuilder.addCommandLine(singleJarCommandLine.build());
+    singleJarActionBuilder.setCommandLine(singleJarCommandLine.build());
     ruleContext.registerAction(singleJarActionBuilder.build(ruleContext));
   }
 
@@ -355,7 +355,7 @@ public class ApkActionsBuilder {
             .setMnemonic("AndroidZipAlign")
             .addInput(inputApk)
             .addOutput(zipAlignedApk)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("-p") // memory page aligment for stored shared object files
                     .add("4")
@@ -382,7 +382,7 @@ public class ApkActionsBuilder {
             .addInput(signingKey)
             .addOutput(signedAndZipalignedApk)
             .addInput(unsignedApk)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("sign")
                     .add("--ks")
