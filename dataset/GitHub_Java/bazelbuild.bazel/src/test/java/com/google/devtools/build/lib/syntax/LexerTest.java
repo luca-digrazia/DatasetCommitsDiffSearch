@@ -205,6 +205,7 @@ public class LexerTest {
     assertThat(values(tokens("12345-"))).isEqualTo("INT(12345) MINUS NEWLINE EOF");
 
     // octal
+    assertThat(values(tokens("012345-"))).isEqualTo("INT(5349) MINUS NEWLINE EOF");
     assertThat(values(tokens("0o12345-"))).isEqualTo("INT(5349) MINUS NEWLINE EOF");
     assertThat(values(tokens("0O77"))).isEqualTo("INT(63) NEWLINE EOF");
 
@@ -216,10 +217,6 @@ public class LexerTest {
     assertThat(values(tokens("0o"))).isEqualTo("INT(0) NEWLINE EOF");
     assertThat(lastError.toString())
         .isEqualTo("/some/path.txt:1: invalid base-8 integer constant: 0o");
-
-    assertThat(values(tokens("012345"))).isEqualTo("INT(5349) NEWLINE EOF");
-    assertThat(lastError.toString())
-        .isEqualTo("/some/path.txt:1: invalid octal value `012345`, should be: `0o12345`");
 
     // hexadecimal (uppercase)
     assertThat(values(tokens("0X12345F-"))).isEqualTo("INT(1193055) MINUS NEWLINE EOF");
