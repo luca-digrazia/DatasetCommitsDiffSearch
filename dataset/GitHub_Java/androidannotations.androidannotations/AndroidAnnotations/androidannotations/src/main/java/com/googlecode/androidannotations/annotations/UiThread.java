@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,8 +23,12 @@ import java.lang.annotation.Target;
 /**
  * Should be used on method that must be run in the Ui thread
  * 
+ * The annotation parameter delay is the delay (in milliseconds) until the
+ * method will be executed. The default is 0 (no delay).
+ * 
  */
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface UiThread {
+	long delay() default 0;
 }

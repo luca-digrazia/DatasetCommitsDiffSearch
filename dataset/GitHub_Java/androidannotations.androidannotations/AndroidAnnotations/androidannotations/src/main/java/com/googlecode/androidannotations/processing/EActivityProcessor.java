@@ -24,12 +24,14 @@ import static com.sun.codemodel.JMod.PUBLIC;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
 
@@ -45,7 +47,6 @@ import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
@@ -54,7 +55,7 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
-public class EActivityProcessor implements GeneratingElementProcessor {
+public class EActivityProcessor implements ElementProcessor {
 
 	private final IRClass rClass;
 	private List<TypeElement> greendroidActivityElements;
@@ -85,7 +86,9 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
+
+		EBeanHolder holder = activitiesHolder.create(element, getTarget());
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -96,26 +99,36 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 		boolean usesGreenDroid = usesGreenDroid(typeElement);
 
-		int modifiers = JMod.PUBLIC | JMod.FINAL;
+		int modifiers;
+		boolean isAbstract = element.getModifiers().contains(Modifier.ABSTRACT);
+		if (isAbstract) {
+			modifiers = JMod.PUBLIC | JMod.ABSTRACT;
+		} else {
+			modifiers = JMod.PUBLIC | JMod.FINAL;
+		}
 
-		JDefinedClass generatedClass = codeModel._class(modifiers, subActivityQualifiedName, ClassType.CLASS);
-
-		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
+		holder.eBean = codeModel._class(modifiers, subActivityQualifiedName, ClassType.CLASS);
 
 		JClass annotatedActivity = codeModel.directClass(annotatedActivityQualifiedName);
 
-		holder.generatedClass._extends(annotatedActivity);
+		holder.eBean._extends(annotatedActivity);
 
 		holder.contextRef = _this();
 
 		// onCreate
-		JMethod onCreate = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onCreate");
+		int onCreateVisibility;
+		if (isAbstract) {
+			onCreateVisibility = inheritedOnCreateVisibility(typeElement);
+		} else {
+			onCreateVisibility = PUBLIC;
+		}
+		JMethod onCreate = holder.eBean.method(onCreateVisibility, codeModel.VOID, "onCreate");
 		onCreate.annotate(Override.class);
 
 		JClass bundleClass = holder.classes().BUNDLE;
 
 		// beforeSetContentView
-		holder.init = holder.generatedClass.method(PRIVATE, codeModel.VOID, "init_");
+		holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
 		holder.beforeCreateSavedInstanceStateParam = holder.init.param(bundleClass, "savedInstanceState");
 
 		{
@@ -125,7 +138,7 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 		}
 
 		// afterSetContentView
-		holder.afterSetContentView = holder.generatedClass.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
+		holder.afterSetContentView = holder.eBean.method(PRIVATE, codeModel.VOID, "afterSetContentView_");
 
 		JVar onCreateSavedInstanceState = onCreate.param(bundleClass, "savedInstanceState");
 		JBlock onCreateBody = onCreate.body();
@@ -168,7 +181,7 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 		// Handling onBackPressed
 		if (hasOnBackPressedMethod(typeElement)) {
-			JMethod onKeyDownMethod = holder.generatedClass.method(PUBLIC, codeModel.BOOLEAN, "onKeyDown");
+			JMethod onKeyDownMethod = holder.eBean.method(PUBLIC, codeModel.BOOLEAN, "onKeyDown");
 			onKeyDownMethod.annotate(Override.class);
 			JVar keyCodeParam = onKeyDownMethod.param(codeModel.INT, "keyCode");
 			JClass keyEventClass = holder.classes().KEY_EVENT;
@@ -194,12 +207,14 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 		}
 
-		aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder);
+		if (!isAbstract) {
+			aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder);
+		}
 
 	}
 
 	private void setContentViewMethod(String setContentViewMethodName, JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
-		JMethod method = holder.generatedClass.method(JMod.PUBLIC, codeModel.VOID, setContentViewMethodName);
+		JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.VOID, setContentViewMethodName);
 		method.annotate(Override.class);
 
 		ArrayList<JVar> params = new ArrayList<JVar>();
@@ -213,6 +228,36 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 			superCall.arg(arg);
 		}
 		body.invoke(holder.afterSetContentView);
+	}
+
+	private int inheritedOnCreateVisibility(TypeElement activityElement) {
+		List<? extends Element> allMembers = annotationHelper.getElementUtils().getAllMembers(activityElement);
+
+		List<ExecutableElement> activityInheritedMethods = ElementFilter.methodsIn(allMembers);
+
+		for (ExecutableElement activityInheritedMethod : activityInheritedMethods) {
+			if (isOnCreateMethod(activityInheritedMethod)) {
+				Set<Modifier> modifiers = activityInheritedMethod.getModifiers();
+				for (Modifier modifier : modifiers) {
+					if (modifier == Modifier.PUBLIC) {
+						return JMod.PUBLIC;
+					} else if (modifier == Modifier.PROTECTED) {
+						return JMod.PROTECTED;
+					}
+				}
+				return JMod.PUBLIC;
+			}
+		}
+		return PUBLIC;
+	}
+
+	private boolean isOnCreateMethod(ExecutableElement method) {
+
+		List<? extends VariableElement> parameters = method.getParameters();
+		return method.getSimpleName().toString().equals("onCreate") //
+				&& parameters.size() == 1 //
+				&& parameters.get(0).asType().toString().equals(CanonicalNameConstants.BUNDLE) //
+		;
 	}
 
 	private boolean hasOnBackPressedMethod(TypeElement activityElement) {

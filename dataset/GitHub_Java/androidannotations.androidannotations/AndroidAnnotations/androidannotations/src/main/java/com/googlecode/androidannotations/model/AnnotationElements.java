@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,8 +15,6 @@
  */
 package com.googlecode.androidannotations.model;
 
-import java.lang.annotation.Annotation;
-import java.util.List;
 import java.util.Set;
 
 import javax.lang.model.element.Element;
@@ -24,13 +22,20 @@ import javax.lang.model.element.TypeElement;
 
 public interface AnnotationElements {
 
+	public static class AnnotatedAndRootElements {
+		public final Element annotatedElement;
+		public final TypeElement rootTypeElement;
+
+		public AnnotatedAndRootElements(Element annotatedElement, TypeElement rootTypeElement) {
+			this.annotatedElement = annotatedElement;
+			this.rootTypeElement = rootTypeElement;
+		}
+	}
+
 	Set<? extends Element> getAllElements();
 
-	Set<? extends Element> getAnnotatedElements(Class<? extends Annotation> annotationClass);
+	Set<? extends Element> getRootAnnotatedElements(String annotationName);
 
-	TypeElement annotationElementfromAnnotationClass(Class<? extends Annotation> annotationClass);
-
-	Set<? extends Element> getAnnotatedElements(
-			List<Class<? extends Annotation>> annotationClasses);
+	Set<AnnotatedAndRootElements> getAncestorAnnotatedElements(String annotationName);
 
 }

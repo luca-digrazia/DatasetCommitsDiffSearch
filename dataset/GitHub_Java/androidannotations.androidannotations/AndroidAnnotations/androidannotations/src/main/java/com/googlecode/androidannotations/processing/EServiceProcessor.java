@@ -32,11 +32,10 @@ import com.sun.codemodel.ClassType;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JMethod;
 
-public class EServiceProcessor implements GeneratingElementProcessor {
+public class EServiceProcessor implements ElementProcessor {
 
 	private final APTCodeModelHelper aptCodeModelHelper;
 
@@ -50,7 +49,9 @@ public class EServiceProcessor implements GeneratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
+
+		EBeanHolder holder = activitiesHolder.create(element, getTarget());
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -58,20 +59,18 @@ public class EServiceProcessor implements GeneratingElementProcessor {
 
 		String generatedComponentQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
-		JDefinedClass generatedClass = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
-
-		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
+		holder.eBean = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
 
 		JClass annotatedComponent = codeModel.directClass(annotatedComponentQualifiedName);
 
-		holder.generatedClass._extends(annotatedComponent);
+		holder.eBean._extends(annotatedComponent);
 
 		holder.contextRef = _this();
 
-		holder.init = holder.generatedClass.method(PRIVATE, codeModel.VOID, "init_");
+		holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
 		{
 			// onCreate
-			JMethod onCreate = holder.generatedClass.method(PUBLIC, codeModel.VOID, "onCreate");
+			JMethod onCreate = holder.eBean.method(PUBLIC, codeModel.VOID, "onCreate");
 			onCreate.annotate(Override.class);
 			JBlock onCreateBody = onCreate.body();
 			onCreateBody.invoke(holder.init);
