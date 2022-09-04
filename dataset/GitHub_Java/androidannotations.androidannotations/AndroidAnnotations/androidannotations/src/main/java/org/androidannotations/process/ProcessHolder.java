@@ -15,29 +15,20 @@
  */
 package org.androidannotations.process;
 
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.Serializable;
-import java.sql.SQLException;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.holder.GeneratedClassHolder;
-
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.holder.GeneratedClassHolder;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.Serializable;
+import java.sql.SQLException;
+import java.util.*;
 
 public class ProcessHolder {
 
@@ -63,7 +54,6 @@ public class ProcessHolder {
 		public final JClass HASH_MAP = refClass(HashMap.class);
 		public final JClass LIST = refClass(List.class);
 		public final JClass OBJECT = refClass(Object.class);
-		public final JClass ARRAYS = refClass(Arrays.class);
 
 		/*
 		 * Android
@@ -127,6 +117,11 @@ public class ProcessHolder {
 		public final JClass SHERLOCK_MENU_INFLATER = refClass(CanonicalNameConstants.SHERLOCK_MENU_INFLATER);
 
 		/*
+		 * HoloEverywhre
+		 */
+		public final JClass HOLO_EVERYWHERE_LAYOUT_INFLATER = refClass(CanonicalNameConstants.HOLO_EVERYWHERE_LAYOUT_INFLATER);
+
+		/*
 		 * RoboGuice
 		 */
 		public final JClass ROBO_CONTEXT = refClass(CanonicalNameConstants.ROBO_CONTEXT);
@@ -139,8 +134,6 @@ public class ProcessHolder {
 		public final JClass ON_PAUSE_EVENT = refClass(CanonicalNameConstants.ON_PAUSE_EVENT);
 		public final JClass ON_NEW_INTENT_EVENT = refClass(CanonicalNameConstants.ON_NEW_INTENT_EVENT);
 		public final JClass EVENT_MANAGER = refClass(CanonicalNameConstants.EVENT_MANAGER);
-		public final JClass CONTEXT_SCOPE = refClass(CanonicalNameConstants.CONTEXT_SCOPE);
-		public final JClass VIEW_MEMBERS_INJECTOR = refClass(CanonicalNameConstants.VIEW_MEMBERS_INJECTOR);
 		public final JClass ROBO_GUICE = refClass(CanonicalNameConstants.ROBO_GUICE);
 		public final JClass INJECT = refClass(CanonicalNameConstants.INJECT);
 		public final JClass ON_STOP_EVENT = refClass(CanonicalNameConstants.ON_STOP_EVENT);
@@ -224,7 +217,7 @@ public class ProcessHolder {
 
 	public GeneratedClassHolder getGeneratedClassHolder(Element element) {
 		for (Element key : generatedClassHolders.keySet()) {
-			if (key.asType().toString().equals(element.asType().toString())) {
+			if(key.asType().toString().equals(element.asType().toString())) {
 				return generatedClassHolders.get(key);
 			}
 		}
