@@ -20,14 +20,16 @@ import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterators;
 import org.bson.types.ObjectId;
-import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.dashboards.DashboardImpl;
 import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
+import org.graylog2.dashboards.widgets.FieldChartWidget;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
-import org.graylog2.database.MongoConnection;
+import org.graylog2.dashboards.widgets.QuickvaluesWidget;
+import org.graylog2.dashboards.widgets.SearchResultChartWidget;
+import org.graylog2.dashboards.widgets.SearchResultCountWidget;
+import org.graylog2.dashboards.widgets.StreamSearchResultCountWidget;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.indexer.Indexer;
@@ -57,18 +59,13 @@ import org.graylog2.streams.StreamService;
 import org.graylog2.users.User;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.mongojack.DBCursor;
-import org.mongojack.JacksonDBCollection;
-import org.mongojack.WriteResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -76,7 +73,6 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 @Singleton
 public class BundleService {
     private static final Logger LOG = LoggerFactory.getLogger(BundleService.class);
-    private static final String COLLECTION_NAME = "config_bundles";
 
     private final InputService inputService;
     private final InputRegistry inputRegistry;
@@ -89,11 +85,9 @@ public class BundleService {
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
     private final Indexer indexer;
-    private final JacksonDBCollection<ConfigurationBundle, ObjectId> dbCollection;
 
     @Inject
     public BundleService(
-            final MongoJackObjectMapperProvider mapperProvider,
             final InputService inputService,
             final InputRegistry inputRegistry,
             final ExtractorFactory extractorFactory,
@@ -104,26 +98,7 @@ public class BundleService {
             final DashboardRegistry dashboardRegistry,
             final ServerStatus serverStatus,
             final MetricRegistry metricRegistry,
-            final Indexer indexer,
-            final MongoConnection mongoConnection) {
-        this(inputService, inputRegistry, extractorFactory, streamService, streamRuleService, outputService,
-                dashboardService, dashboardRegistry, serverStatus, metricRegistry, indexer,
-                JacksonDBCollection.wrap(mongoConnection.getDatabase().getCollection(COLLECTION_NAME),
-                        ConfigurationBundle.class, ObjectId.class, mapperProvider.get()));
-    }
-
-    public BundleService(final InputService inputService,
-                         final InputRegistry inputRegistry,
-                         final ExtractorFactory extractorFactory,
-                         final StreamService streamService,
-                         final StreamRuleService streamRuleService,
-                         final OutputService outputService,
-                         final DashboardService dashboardService,
-                         final DashboardRegistry dashboardRegistry,
-                         final ServerStatus serverStatus,
-                         final MetricRegistry metricRegistry,
-                         final Indexer indexer,
-                         final JacksonDBCollection<ConfigurationBundle, ObjectId> dbCollection) {
+            final Indexer indexer) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
@@ -135,47 +110,8 @@ public class BundleService {
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
         this.indexer = indexer;
-        this.dbCollection = dbCollection;
     }
 
-    public ConfigurationBundle load(final String bundleId) throws NotFoundException {
-        final ConfigurationBundle bundle = dbCollection.findOneById(new ObjectId(bundleId));
-
-        if (bundle == null) {
-            throw new NotFoundException();
-        }
-
-        return bundle;
-    }
-
-    public Set<ConfigurationBundle> loadAll() {
-        final DBCursor<ConfigurationBundle> ConfigurationBundles = dbCollection.find();
-        final Set<ConfigurationBundle> bundles = new HashSet<>();
-
-        if (ConfigurationBundles.hasNext()) {
-            Iterators.addAll(bundles, ConfigurationBundles);
-        }
-
-        return bundles;
-    }
-
-    public ConfigurationBundle update(final String bundleId, final ConfigurationBundle bundle) {
-        final WriteResult<ConfigurationBundle, ObjectId> writeResult = dbCollection.updateById(new ObjectId(bundleId), bundle);
-        return writeResult.getSavedObject();
-    }
-
-    public String insert(ConfigurationBundle bundle) {
-        final WriteResult<ConfigurationBundle, ObjectId> writeResult = dbCollection.insert(bundle);
-        return writeResult.getSavedId().toHexString();
-    }
-
-    public int delete(String bundleId) {
-        return dbCollection.removeById(new ObjectId(bundleId)).getN();
-    }
-
-    public void applyConfigurationBundle(final String bundleId, User actingUser) throws NotFoundException {
-        applyConfigurationBundle(load(bundleId), actingUser);
-    }
 
     public void applyConfigurationBundle(final ConfigurationBundle bundle, User actingUser) {
         final String userName = actingUser.getName();
@@ -491,8 +427,56 @@ public class BundleService {
         }
 
         final String widgetId = UUID.randomUUID().toString();
-        return org.graylog2.dashboards.widgets.DashboardWidget.buildDashboardWidget(type, metricRegistry, indexer,
-                widgetId, dashboardWidget.getDescription(), dashboardWidget.getCacheTime(),
-                config, (String) config.get("query"), timeRange, userName);
+
+        // XXX TODO: these long constructors suck and 90% of it can be unified in a step before
+        switch (type) {
+            case SEARCH_RESULT_COUNT:
+                return new SearchResultCountWidget(metricRegistry, indexer,
+                        widgetId,
+                        dashboardWidget.getDescription(),
+                        dashboardWidget.getCacheTime(),
+                        config,
+                        (String) config.get("query"),
+                        timeRange,
+                        userName);
+            case STREAM_SEARCH_RESULT_COUNT:
+                return new StreamSearchResultCountWidget(metricRegistry, indexer,
+                        widgetId,
+                        dashboardWidget.getDescription(),
+                        dashboardWidget.getCacheTime(),
+                        config,
+                        (String) config.get("query"),
+                        timeRange,
+                        userName);
+            case FIELD_CHART:
+                return new FieldChartWidget(metricRegistry, indexer,
+                        widgetId,
+                        dashboardWidget.getDescription(),
+                        dashboardWidget.getCacheTime(),
+                        config,
+                        (String) config.get("query"),
+                        timeRange,
+                        userName);
+            case QUICKVALUES:
+                return new QuickvaluesWidget(metricRegistry, indexer,
+                        widgetId,
+                        dashboardWidget.getDescription(),
+                        dashboardWidget.getCacheTime(),
+                        config,
+                        (String) config.get("query"),
+                        timeRange,
+                        userName);
+            case SEARCH_RESULT_CHART:
+                return new SearchResultChartWidget(metricRegistry, indexer,
+                        widgetId,
+                        dashboardWidget.getDescription(),
+                        dashboardWidget.getCacheTime(),
+                        config,
+                        (String) config.get("query"),
+                        timeRange,
+                        userName);
+            default:
+                throw new org.graylog2.dashboards.widgets.DashboardWidget.NoSuchWidgetTypeException();
+        }
     }
 }

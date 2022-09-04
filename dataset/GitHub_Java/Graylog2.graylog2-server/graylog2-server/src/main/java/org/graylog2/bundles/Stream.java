@@ -32,7 +32,7 @@ public class Stream {
     @JsonProperty
     private List<StreamRule> streamRules = Collections.emptyList();
     @JsonProperty
-    private Set<String> outputs = Collections.emptySet();
+    private Set<Output> outputs = Collections.emptySet();
 
     public String getTitle() {
         return title;
@@ -66,11 +66,11 @@ public class Stream {
         this.streamRules = streamRules;
     }
 
-    public Set<String> getOutputs() {
+    public Set<Output> getOutputs() {
         return outputs;
     }
 
-    public void setOutputs(Set<String> outputs) {
+    public void setOutputs(Set<Output> outputs) {
         this.outputs = outputs;
     }
 }
