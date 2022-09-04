@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,72 +14,220 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.xcode.common.BuildOptionsUtil.DEFAULT_OPTIONS_NAME;
-
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Multimap;
+import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.DottedVersionConverter;
+import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
-
+import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.OptionMetadataTag;
 import java.util.List;
 
-/**
- * Command-line options for building Objective-C targets.
- */
-public class
-    ObjcCommandLineOptions extends FragmentOptions {
-  @Option(name = "ios_sdk_version",
-      defaultValue = DEFAULT_SDK_VERSION,
-      category = "undocumented",
-      help = "Specifies the version of the iOS SDK to use to build iOS applications."
-      )
-  public String iosSdkVersion;
+/** Command-line options for building Objective-C targets. */
+public class ObjcCommandLineOptions extends FragmentOptions {
+  @Option(
+      name = "ios_simulator_version",
+      defaultValue = "null",
+      converter = DottedVersionConverter.class,
+      documentationCategory = OptionDocumentationCategory.TESTING,
+      effectTags = {OptionEffectTag.TEST_RUNNER},
+      help =
+          "The version of iOS to run on the simulator when running or testing. This is ignored "
+              + "for ios_test rules if a target device is specified in the rule.")
+  public DottedVersion.Option iosSimulatorVersion;
 
-  @VisibleForTesting static final String DEFAULT_SDK_VERSION = "8.1";
+  @Option(
+      name = "ios_simulator_device",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.TESTING,
+      effectTags = {OptionEffectTag.TEST_RUNNER},
+      help =
+          "The device to simulate when running an iOS application in the simulator, e.g. "
+              + "'iPhone 6'. You can get a list of devices by running 'xcrun simctl list "
+              + "devicetypes' on the machine the simulator will be run on.")
+  public String iosSimulatorDevice;
 
-  @Option(name = "ios_simulator_version",
-      defaultValue = "7.1",
-      category = "undocumented",
-      help = "The version of iOS to run on the simulator when running tests. This is ignored if the"
-          + " ios_test rule specifies the target device.",
-      deprecationWarning = "This flag is deprecated in favor of the target_device attribute and"
-          + " will eventually removed.")
-  public String iosSimulatorVersion;
+  @Option(
+      name = "watchos_simulator_version",
+      defaultValue = "null",
+      converter = DottedVersionConverter.class,
+      documentationCategory = OptionDocumentationCategory.TESTING,
+      effectTags = {OptionEffectTag.TEST_RUNNER},
+      help = "The version of watchOS to run on the simulator when running or testing.")
+  public DottedVersion.Option watchosSimulatorVersion;
 
-  @Option(name = "ios_cpu",
-      defaultValue = "i386",
-      category = "undocumented",
-      help = "Specifies to target CPU of iOS compilation.")
-  public String iosCpu;
+  @Option(
+      name = "watchos_simulator_device",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.TESTING,
+      effectTags = {OptionEffectTag.TEST_RUNNER},
+      help =
+          "The device to simulate when running an watchOS application in the simulator, e.g. "
+              + "'Apple Watch - 38mm'. You can get a list of devices by running 'xcrun simctl list "
+              + "devicetypes' on the machine the simulator will be run on.")
+  public String watchosSimulatorDevice;
 
-  @Option(name = "xcode_options",
-      defaultValue = DEFAULT_OPTIONS_NAME,
-      category = "undocumented",
-      help = "Specifies the name of the build settings to use.")
-  public String xcodeOptions;
+  @Option(
+      name = "tvos_simulator_version",
+      defaultValue = "null",
+      converter = DottedVersionConverter.class,
+      documentationCategory = OptionDocumentationCategory.TESTING,
+      effectTags = {OptionEffectTag.TEST_RUNNER},
+      help = "The version of tvOS to run on the simulator when running or testing.")
+  public DottedVersion.Option tvosSimulatorVersion;
 
-  @Option(name = "objc_generate_debug_symbols",
-      defaultValue = "false",
-      category = "undocumented",
-      help = "Specifies whether to generate debug symbol(.dSYM) file.")
-  public boolean generateDebugSymbols;
+  @Option(
+      name = "tvos_simulator_device",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.TESTING,
+      effectTags = {OptionEffectTag.TEST_RUNNER},
+      help =
+          "The device to simulate when running an tvOS application in the simulator, e.g. "
+              + "'Apple TV 1080p'. You can get a list of devices by running 'xcrun simctl list "
+              + "devicetypes' on the machine the simulator will be run on.")
+  public String tvosSimulatorDevice;
 
-  @Option(name = "objccopt",
+  @Option(
+    name = "objc_generate_linkmap",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+    help = "Specifies whether to generate a linkmap file."
+  )
+  public boolean generateLinkmap;
+
+  @Option(
+      name = "objccopt",
       allowMultiple = true,
-      defaultValue = "",
-      category = "flags",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
       help = "Additional options to pass to Objective C compilation.")
   public List<String> copts;
 
-  @Option(name = "ios_minimum_os",
-      defaultValue = DEFAULT_MINIMUM_IOS,
-      category = "flags",
-      help = "Minimum compatible iOS version for target simulators and devices.")
-  public String iosMinimumOs;
+  @Option(
+    name = "ios_memleaks",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.TESTING,
+    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    help = "Enable checking for memory leaks in ios_test targets."
+  )
+  public boolean runMemleaks;
 
-  @VisibleForTesting static final String DEFAULT_MINIMUM_IOS = "7.0";
+  @Option(
+    name = "experimental_enable_objc_cc_deps",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+    effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
+    help =
+        "Allows objc_* rules to depend on cc_library and causes any objc dependencies to be "
+            + "built with --cpu set to \"ios_<--ios_cpu>\" for any values in --ios_multi_cpu."
+  )
+  public boolean enableCcDeps;
 
-  @Override
-  public void addAllLabels(Multimap<String, Label> labelMap) {}
+  @Option(
+    name = "experimental_objc_fastbuild_options",
+    defaultValue = "-O0,-DDEBUG=1",
+    converter = CommaSeparatedOptionListConverter.class,
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    help = "Uses these strings as objc fastbuild compiler options."
+  )
+  public List<String> fastbuildOptions;
+
+  @Option(
+      name = "objc_enable_binary_stripping",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+      help =
+          "Whether to perform symbol and dead-code strippings on linked binaries. Binary "
+              + "strippings will be performed if both this flag and --compilation_mode=opt are "
+              + "specified.")
+  public boolean enableBinaryStripping;
+
+  @Option(
+    name = "ios_signing_cert_name",
+    defaultValue = "null",
+    documentationCategory = OptionDocumentationCategory.SIGNING,
+    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    help =
+        "Certificate name to use for iOS signing. If not set will fall back to provisioning "
+            + "profile. May be the certificate's keychain identity preference or (substring) of "
+            + "the certificate's common name, as per codesign's man page (SIGNING IDENTITIES)."
+  )
+  public String iosSigningCertName;
+
+  @Option(
+    name = "objc_debug_with_GLIBCXX",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
+    help =
+        "If set, and compilation mode is set to 'dbg', define GLIBCXX_DEBUG, "
+            + " GLIBCXX_DEBUG_PEDANTIC and GLIBCPP_CONCEPT_CHECKS."
+  )
+  public boolean debugWithGlibcxx;
+
+  @Option(
+    name = "device_debug_entitlements",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.SIGNING,
+    effectTags = {OptionEffectTag.CHANGES_INPUTS},
+    help =
+        "If set, and compilation mode is not 'opt', objc apps will include debug entitlements "
+            + "when signing."
+  )
+  public boolean deviceDebugEntitlements;
+
+  @Option(
+    name = "apple_sdk",
+    defaultValue = "null",
+    converter = LabelConverter.class,
+    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
+    effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
+    help =
+        "Location of target that will provide the appropriate Apple SDK for the current build "
+            + "configuration."
+  )
+  public Label appleSdk;
+
+  @Option(
+      name = "incompatible_avoid_hardcoded_objc_compilation_flags",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {
+        OptionEffectTag.AFFECTS_OUTPUTS,
+        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
+        OptionEffectTag.EXECUTION,
+        OptionEffectTag.ACTION_COMMAND_LINES,
+      },
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
+      },
+      help =
+          "Prevents Bazel from adding compiler options to Objective-C compilation actions. Options"
+              + " set in the crosstool are still applied.")
+  public boolean incompatibleAvoidHardcodedObjcCompilationFlags;
+
+  @Option(
+      name = "incompatible_disable_native_apple_binary_rule",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
+      effectTags = {
+        OptionEffectTag.EAGERNESS_TO_EXIT,
+      },
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If enabled, direct usage of the native apple_binary rule is disabled. Please use the"
+              + " Starlark rule from https://github.com/bazelbuild/rules_apple instead.")
+  public boolean incompatibleDisableNativeAppleBinaryRule;
 }
