@@ -1,23 +1,32 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.deployment.steps;
 
-import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
-import io.quarkus.runtime.LiveReloadConfig;
+import io.quarkus.deployment.builditem.HotDeploymentConfigFileBuildItem;
 
 class DevModeBuildStep {
 
     @BuildStep
-    List<HotDeploymentWatchedFileBuildItem> watchChanges(LiveReloadConfig config) {
-        List<String> names = new ArrayList<>();
-        names.add("META-INF/microprofile-config.properties");
-        names.add("application.properties");
-        names.add(Paths.get(".env").toAbsolutePath().toString());
-        config.watchedResources.ifPresent(names::addAll);
-        return names.stream().map(HotDeploymentWatchedFileBuildItem::new).collect(Collectors.toList());
+    List<HotDeploymentConfigFileBuildItem> config() {
+        return Arrays.asList(new HotDeploymentConfigFileBuildItem("META-INF/microprofile-config.properties"),
+                new HotDeploymentConfigFileBuildItem("application.properties"));
     }
 }
