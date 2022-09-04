@@ -173,7 +173,7 @@ public class FakeOwner implements ActionExecutionMetadata {
 
   @Override
   public String prettyPrint() {
-    return "action '" + describe() + "'";
+    throw new UnsupportedOperationException();
   }
 
   @Override

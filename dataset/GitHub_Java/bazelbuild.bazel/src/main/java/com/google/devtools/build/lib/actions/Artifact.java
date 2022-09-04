@@ -799,7 +799,7 @@ public abstract class Artifact
     if (relativePath.startsWith(LabelConstants.EXTERNAL_PATH_PREFIX)) {
       // Turn external/repo/foo into ../repo/foo.
       relativePath = relativePath.relativeTo(LabelConstants.EXTERNAL_PATH_PREFIX);
-      relativePath = LabelConstants.EXTERNAL_RUNFILES_PATH_PREFIX.getRelative(relativePath);
+      relativePath = PathFragment.create("..").getRelative(relativePath);
     }
     return relativePath;
   }
@@ -1124,7 +1124,6 @@ public abstract class Artifact
       return ArtifactRoot.asDerivedRoot(
           getExecRoot(treeArtifactRoot),
           // e.g. bazel-out/{customDerivedTreeRoot}/k8-fastbuild/bin
-          false,
           getExecPathWithinCustomDerivedRoot(
               derivedPathPrefix, customDerivedTreeRoot, treeArtifactRoot.getExecPath()));
     }
