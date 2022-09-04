@@ -15,7 +15,6 @@ import io.quarkus.devtools.commands.data.QuarkusCommandOutcome;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
 import io.quarkus.devtools.project.QuarkusProjectHelper;
-import io.quarkus.registry.RegistryResolutionException;
 import picocli.CommandLine;
 import picocli.CommandLine.Mixin;
 
@@ -87,7 +86,7 @@ public class ProjectExtensionsCategories extends BaseBuildCommand implements Cal
         return CommandLine.ExitCode.OK;
     }
 
-    Integer listPlatformCategories() throws QuarkusCommandException, RegistryResolutionException {
+    Integer listPlatformCategories() throws QuarkusCommandException {
         QuarkusProject qp = registryClient.createQuarkusProject(projectRoot(), targetQuarkusVersion,
                 BuildTool.MAVEN, output);
 

@@ -15,11 +15,11 @@ import picocli.CommandLine;
 public class RegistryClientMixin {
     final static boolean VALIDATE = !Boolean.parseBoolean(System.getenv("REGISTRY_CLIENT_TEST"));
 
-    @CommandLine.Option(names = { "--refresh" }, description = "Refresh the local Quarkus extension registry cache")
-    boolean refresh;
+    @CommandLine.Option(names = { "--registry-client" }, description = "Use the Quarkus extension catalog", negatable = true)
+    boolean useRegistryClient = false;
 
     public boolean enabled() {
-        return true;
+        return useRegistryClient;
     }
 
     public QuarkusProject createQuarkusProject(Path projectRoot, TargetQuarkusVersionGroup targetVersion, BuildTool buildTool,
@@ -36,7 +36,7 @@ public class RegistryClientMixin {
         log.debug("Resolving Quarkus extension catalog for " + targetVersion);
         QuarkusProjectHelper.setMessageWriter(log);
 
-        if (VALIDATE && targetVersion.isStreamSpecified() && !enabled()) {
+        if (VALIDATE && targetVersion.isStreamSpecified() && !useRegistryClient) {
             throw new UnsupportedOperationException(
                     "Specifying a stream (--stream) requires the registry client to resolve resources. " +
                             "Please try again with the registry client enabled (--registry-client)");
@@ -48,7 +48,7 @@ public class RegistryClientMixin {
                     coords.getVersion(), QuarkusProjectHelper.artifactResolver(), log);
         }
 
-        final ExtensionCatalogResolver catalogResolver = getExtensionCatalogResolver(log);
+        ExtensionCatalogResolver catalogResolver = QuarkusProjectHelper.getCatalogResolver(useRegistryClient, log);
 
         try {
             if (!catalogResolver.hasRegistries()) {
@@ -62,36 +62,14 @@ public class RegistryClientMixin {
                 return catalogResolver.resolveExtensionCatalog(targetVersion.getStream());
             }
 
-            refreshRegistryCache(log);
             return catalogResolver.resolveExtensionCatalog();
         } catch (Exception e) {
             throw new RuntimeException("Failed to resolve the Quarkus extension catalog", e);
         }
     }
 
-    private ExtensionCatalogResolver getExtensionCatalogResolver(OutputOptionMixin log) {
-        return QuarkusProjectHelper.getCatalogResolver(enabled(), log);
-    }
-
-    public void refreshRegistryCache(OutputOptionMixin log) {
-        if (!refresh) {
-            return;
-        }
-        final ExtensionCatalogResolver catalogResolver = getExtensionCatalogResolver(log);
-        if (!catalogResolver.hasRegistries()) {
-            log.warn("Skipping refresh since no registries are configured");
-            return;
-        }
-        log.debug("Refreshing registry cache");
-        try {
-            catalogResolver.clearRegistryCache();
-        } catch (Exception e) {
-            log.warn("Unable to refresh the registry cache: %s", e.getMessage());
-        }
-    }
-
     @Override
     public String toString() {
-        return "RegistryClientMixin [useRegistryClient=" + enabled() + "]";
+        return "RegistryClientMixin [useRegistryClient=" + useRegistryClient + "]";
     }
 }

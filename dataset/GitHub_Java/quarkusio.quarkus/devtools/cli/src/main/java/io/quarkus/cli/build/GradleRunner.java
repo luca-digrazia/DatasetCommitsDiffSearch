@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -129,7 +128,6 @@ public class GradleRunner implements BuildSystemRunner {
             args.add("clean");
         }
         args.add("build");
-
         if (buildOptions.buildNative) {
             args.add("-Dquarkus.package.type=native");
         }
@@ -139,6 +137,9 @@ public class GradleRunner implements BuildSystemRunner {
         if (buildOptions.offline) {
             args.add("--offline");
         }
+
+        // add any other discovered properties
+        args.addAll(flattenMappedProperties(propertiesOptions.properties));
 
         // Add any other unmatched arguments
         args.addAll(params);
@@ -150,29 +151,24 @@ public class GradleRunner implements BuildSystemRunner {
     public List<Supplier<BuildCommandArgs>> prepareDevMode(DevOptions devOptions, DebugOptions debugOptions,
             List<String> params) {
         ArrayDeque<String> args = new ArrayDeque<>();
-        List<String> jvmArgs = new ArrayList<>();
-
         setGradleProperties(args, false);
 
         if (devOptions.clean) {
-            args.add("clean");
+            args.addFirst("clean");
         }
-        args.add("quarkusDev");
+        args.addFirst("quarkusDev");
 
         if (devOptions.skipTests()) { // TODO: does this make sense for dev mode?
             setSkipTests(args);
         }
 
-        debugOptions.addDebugArguments(args, jvmArgs);
-        propertiesOptions.flattenJvmArgs(jvmArgs, args);
+        //TODO: addDebugArguments(args, debugOptions);
 
-        // Add any other unmatched arguments using quarkus.args
-        paramsToQuarkusArgs(params, args);
-
+        // Add any other unmatched arguments
+        args.addAll(params);
         try {
             Path outputFile = Files.createTempFile("quarkus-dev", ".txt");
             args.add("-Dio.quarkus.devmode-args=" + outputFile.toAbsolutePath().toString());
-
             BuildCommandArgs buildCommandArgs = prependExecutable(args);
             return Arrays.asList(new Supplier<BuildCommandArgs>() {
                 @Override
@@ -206,13 +202,13 @@ public class GradleRunner implements BuildSystemRunner {
 
     void setGradleProperties(ArrayDeque<String> args, boolean batchMode) {
         if (output.isShowErrors()) {
-            args.add("--full-stacktrace");
+            args.addFirst("--full-stacktrace");
         }
         // batch mode typically disables ansi/color output
         if (batchMode) {
-            args.add("--console=plain");
+            args.addFirst("--console=plain");
         } else if (output.isAnsiEnabled()) {
-            args.add("--console=rich");
+            args.addFirst("--console=rich");
         }
         args.add("--project-dir=" + projectRoot.toAbsolutePath());
 
