@@ -56,8 +56,8 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationIn
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
+import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OsUtils;
@@ -100,7 +100,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcLinkingOutputs linkingOutputs,
       CcLinkingOutputs ccLibraryLinkingOutputs,
       CcCompilationContextInfo ccCompilationContextInfo,
-      Link.LinkingMode linkingMode,
+      LinkStaticness linkStaticness,
       NestedSet<Artifact> filesToBuild,
       Iterable<Artifact> fakeLinkerInputs,
       boolean fake,
@@ -109,7 +109,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     Runfiles.Builder builder = new Runfiles.Builder(
         context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
     Function<TransitiveInfoCollection, Runfiles> runfilesMapping =
-        CcRunfilesInfo.runfilesFunction(linkingMode != Link.LinkingMode.DYNAMIC);
+        CcRunfilesInfo.runfilesFunction(linkStaticness != LinkStaticness.DYNAMIC);
     builder.addTransitiveArtifacts(filesToBuild);
     // Add the shared libraries to the runfiles. This adds any shared libraries that are in the
     // srcs of this target.
@@ -117,7 +117,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     builder.addRunfiles(context, RunfilesProvider.DEFAULT_RUNFILES);
     builder.add(context, runfilesMapping);
     // Add the C++ runtime libraries if linking them dynamically.
-    if (linkingMode == Link.LinkingMode.DYNAMIC) {
+    if (linkStaticness == LinkStaticness.DYNAMIC) {
       builder.addTransitiveArtifacts(toolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
     }
     if (linkCompileOutputSeparately) {
@@ -213,7 +213,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     List<String> linkopts = common.getLinkopts();
-    LinkingMode linkingMode =
+    LinkStaticness linkStaticness =
         getLinkStaticness(ruleContext, linkopts, cppConfiguration, ccToolchain);
     FdoSupportProvider fdoSupport = common.getFdoSupport();
     FeatureConfiguration featureConfiguration =
@@ -222,7 +222,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             /* requestedFeatures= */ ImmutableSet.<String>builder()
                 .addAll(ruleContext.getFeatures())
                 .add(
-                    linkingMode == Link.LinkingMode.DYNAMIC
+                    linkStaticness == LinkStaticness.DYNAMIC
                         ? DYNAMIC_LINKING_MODE
                         : STATIC_LINKING_MODE)
                 .build(),
@@ -246,7 +246,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     boolean linkCompileOutputSeparately =
         ruleContext.isTestTarget()
             && cppConfiguration.getLinkCompileOutputSeparately()
-            && linkingMode == LinkingMode.DYNAMIC;
+            && linkStaticness == LinkStaticness.DYNAMIC;
     // When linking the object files directly into the resulting binary, we do not need
     // library-level link outputs; thus, we do not let CcCompilationHelper produce link outputs
     // (either shared object files or archives) for a non-library link type [*], and add
@@ -280,7 +280,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CcLinkParams linkParams =
         collectCcLinkParams(
             ruleContext,
-            linkingMode != Link.LinkingMode.DYNAMIC,
+            linkStaticness != LinkStaticness.DYNAMIC,
             isLinkShared(ruleContext),
             linkopts);
     CppLinkActionBuilder linkActionBuilder =
@@ -300,7 +300,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             linkCompileOutputSeparately,
             semantics);
     linkActionBuilder.setUseTestOnlyFlags(ruleContext.isTestTarget());
-    if (linkingMode == Link.LinkingMode.DYNAMIC) {
+    if (linkStaticness == LinkStaticness.DYNAMIC) {
       linkActionBuilder.setRuntimeInputs(
           ArtifactCategory.DYNAMIC_LIBRARY,
           ccToolchain.getDynamicRuntimeLinkMiddleman(featureConfiguration),
@@ -319,7 +319,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     linkActionBuilder.setLinkType(linkType);
-    linkActionBuilder.setLinkingMode(linkingMode);
+    linkActionBuilder.setLinkStaticness(linkStaticness);
     linkActionBuilder.setFake(fake);
 
     if (CppLinkAction.enableSymbolsCounts(
@@ -428,7 +428,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         collectTransitiveDwoArtifacts(
             ruleContext,
             ccCompilationOutputs,
-            linkingMode,
+            linkStaticness,
             CppHelper.useFission(cppConfiguration, ccToolchain),
             usePic,
             ltoBackendArtifacts);
@@ -444,7 +444,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       // For cc_test rules, include the dwp in the runfiles if Fission is enabled and the test was
       // built statically.
       if (TargetUtils.isTestRule(ruleContext.getRule())
-          && linkingMode != Link.LinkingMode.DYNAMIC
+          && linkStaticness != LinkStaticness.DYNAMIC
           && CppHelper.useFission(cppConfiguration, ccToolchain)
           && cppConfiguration.buildTestDwpIsActivated()) {
         filesToBuild = NestedSetBuilder.fromNestedSet(filesToBuild).add(dwpFile).build();
@@ -475,7 +475,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             linkingOutputs,
             ccLinkingOutputs,
             ccCompilationContextInfo,
-            linkingMode,
+            linkStaticness,
             filesToBuild,
             fakeLinkerInputs,
             fake,
@@ -645,20 +645,20 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     return linkopts.contains("-static") || cppConfiguration.hasStaticLinkOption();
   }
 
-  private static final LinkingMode getLinkStaticness(
+  private static final LinkStaticness getLinkStaticness(
       RuleContext context,
       List<String> linkopts,
       CppConfiguration cppConfiguration,
       CcToolchainProvider toolchain) {
     if (CppHelper.getDynamicMode(cppConfiguration, toolchain) == DynamicMode.FULLY) {
-      return LinkingMode.DYNAMIC;
+      return LinkStaticness.DYNAMIC;
     } else if (dashStaticInLinkopts(linkopts, cppConfiguration)) {
-      return Link.LinkingMode.LEGACY_FULLY_STATIC;
+      return LinkStaticness.FULLY_STATIC;
     } else if (CppHelper.getDynamicMode(cppConfiguration, toolchain) == DynamicMode.OFF
         || context.attributes().get("linkstatic", Type.BOOLEAN)) {
-      return LinkingMode.STATIC;
+      return LinkStaticness.MOSTLY_STATIC;
     } else {
-      return LinkingMode.DYNAMIC;
+      return LinkStaticness.DYNAMIC;
     }
   }
 
@@ -673,11 +673,11 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   private static DwoArtifactsCollector collectTransitiveDwoArtifacts(
       RuleContext context,
       CcCompilationOutputs compilationOutputs,
-      Link.LinkingMode linkingMode,
+      LinkStaticness linkStaticness,
       boolean generateDwo,
       boolean ltoBackendArtifactsUsePic,
       Iterable<LtoBackendArtifacts> ltoBackendArtifacts) {
-    if (linkingMode == LinkingMode.DYNAMIC) {
+    if (linkStaticness == LinkStaticness.DYNAMIC) {
       return DwoArtifactsCollector.directCollector(
           compilationOutputs, generateDwo, ltoBackendArtifactsUsePic, ltoBackendArtifacts);
     } else {

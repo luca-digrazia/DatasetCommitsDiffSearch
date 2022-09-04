@@ -52,7 +52,7 @@ import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory
 import com.google.devtools.build.lib.rules.cpp.LibrariesToLinkCollector.CollectedLibrariesToLink;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
+import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -617,9 +617,7 @@ public class CppLinkActionBuilder {
   private ImmutableMap<Artifact, LtoBackendArtifacts> createSharedNonLtoArtifacts(
       boolean isLtoIndexing) {
     // Only create the shared LTO artifacts for a statically linked library that has bitcode files.
-    if (ltoBitcodeFiles == null
-        || isLtoIndexing
-        || linkType.linkerOrArchiver() != LinkerOrArchiver.ARCHIVER) {
+    if (ltoBitcodeFiles == null || isLtoIndexing || linkType.staticness() != Staticness.STATIC) {
       return ImmutableMap.<Artifact, LtoBackendArtifacts>of();
     }
 
@@ -680,7 +678,7 @@ public class CppLinkActionBuilder {
   }
 
   private ImmutableList<String> getToolchainFlags(List<String> linkopts) {
-    if (LinkerOrArchiver.ARCHIVER.equals(linkType.linkerOrArchiver())) {
+    if (Staticness.STATIC.equals(linkType.staticness())) {
       return ImmutableList.of();
     }
     boolean fullyStatic = (linkStaticness == LinkStaticness.FULLY_STATIC);
@@ -999,7 +997,7 @@ public class CppLinkActionBuilder {
 
     Variables variables =
         LinkBuildVariables.setupVariables(
-            getLinkType().linkerOrArchiver().equals(LinkerOrArchiver.LINKER),
+            this,
             configuration,
             output,
             paramFile,
@@ -1036,7 +1034,7 @@ public class CppLinkActionBuilder {
           interfaceOutput == null,
           "interface output may only be non-null for dynamic library links");
     }
-    if (linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER) {
+    if (linkType.staticness() == Staticness.STATIC) {
       // solib dir must be null for static links
       toolchainLibrariesSolibDir = null;
 
@@ -1056,9 +1054,7 @@ public class CppLinkActionBuilder {
             .setLinkTargetType(linkType)
             .setLinkStaticness(linkStaticness)
             .setToolchainLibrariesSolibDir(
-                linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER
-                    ? null
-                    : toolchainLibrariesSolibDir)
+                linkType.staticness() == Staticness.STATIC ? null : toolchainLibrariesSolibDir)
             .setNativeDeps(isNativeDeps)
             .setUseTestOnlyFlags(useTestOnlyFlags)
             .setParamFile(paramFile)
@@ -1086,9 +1082,7 @@ public class CppLinkActionBuilder {
 
     // For now, silently ignore linkopts if this is a static library
     linkoptsForVariables =
-        linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER
-            ? ImmutableList.of()
-            : linkoptsForVariables;
+        linkType.staticness() == Staticness.STATIC ? ImmutableList.of() : linkoptsForVariables;
     linkCommandLineBuilder.setLinkopts(linkoptsForVariables);
 
     Variables patchedVariables =
