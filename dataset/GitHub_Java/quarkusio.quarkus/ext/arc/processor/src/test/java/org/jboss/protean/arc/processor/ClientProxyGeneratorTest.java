@@ -12,6 +12,11 @@ import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Produces;
 
 import org.jboss.jandex.Index;
+import org.jboss.protean.arc.processor.AnnotationLiteralProcessor;
+import org.jboss.protean.arc.processor.BeanDeployment;
+import org.jboss.protean.arc.processor.BeanGenerator;
+import org.jboss.protean.arc.processor.BeanProcessor;
+import org.jboss.protean.arc.processor.ClientProxyGenerator;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.junit.Test;
 
@@ -21,14 +26,14 @@ public class ClientProxyGeneratorTest {
     public void testGenerator() throws IOException {
 
         Index index = index(Producer.class, List.class, Collection.class, Iterable.class, AbstractList.class, MyList.class);
-        BeanDeployment deployment = new BeanDeployment(index, null, null);
+        BeanDeployment deployment = new BeanDeployment(index, null);
         deployment.init();
 
-        BeanGenerator beanGenerator = new BeanGenerator( new AnnotationLiteralProcessor(BeanProcessor.DEFAULT_NAME, true));
+        BeanGenerator beanGenerator = new BeanGenerator();
         ClientProxyGenerator proxyGenerator = new ClientProxyGenerator();
 
         deployment.getBeans().stream().filter(bean -> bean.getScope().isNormal()).forEach(bean -> {
-            for (Resource resource : beanGenerator.generate(bean, ReflectionRegistration.NOOP)) {
+            for (Resource resource : beanGenerator.generate(bean, new AnnotationLiteralProcessor(BeanProcessor.DEFAULT_NAME, true), ReflectionRegistration.NOOP)) {
                 proxyGenerator.generate(bean, resource.getFullyQualifiedName(), ReflectionRegistration.NOOP);
             }
         });

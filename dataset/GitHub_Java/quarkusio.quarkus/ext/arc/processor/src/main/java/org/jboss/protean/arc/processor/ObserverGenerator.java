@@ -18,7 +18,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.enterprise.inject.spi.EventContext;
-import javax.enterprise.inject.spi.ObserverMethod;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
@@ -51,22 +50,13 @@ public class ObserverGenerator extends AbstractGenerator {
 
     private static final AtomicInteger OBSERVER_INDEX = new AtomicInteger();
 
-    private final AnnotationLiteralProcessor annotationLiterals;
-
-    /**
-     *
-     * @param annotationLiterals
-     */
-    public ObserverGenerator(AnnotationLiteralProcessor annotationLiterals) {
-        this.annotationLiterals = annotationLiterals;
-    }
-
     /**
      *
      * @param observer
+     * @param annotationLiterals
      * @return a collection of resources
      */
-    Collection<Resource> generate(ObserverInfo observer, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generate(ObserverInfo observer, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
 
         ClassInfo declaringClass = observer.getObserverMethod().declaringClass();
         String declaringClassBase;
@@ -104,9 +94,6 @@ public class ObserverGenerator extends AbstractGenerator {
         }
         createGetBeanClass(observerCreator, observer.getDeclaringBean().getTarget().asClass().name());
         createNotify(observer, observerCreator, injectionPointToProviderField, reflectionRegistration);
-        if (observer.getPriority() != ObserverMethod.DEFAULT_PRIORITY) {
-            createGetPriority(observerCreator, observer);
-        }
 
         observerCreator.close();
         return classOutput.getResources();
@@ -135,13 +122,7 @@ public class ObserverGenerator extends AbstractGenerator {
         getBeanClass.returnValue(getBeanClass.loadClass(beanClass.toString()));
     }
 
-    protected void createGetPriority(ClassCreator observerCreator, ObserverInfo observer) {
-        MethodCreator getPriority = observerCreator.getMethodCreator("getPriority", int.class).setModifiers(ACC_PUBLIC);
-        getPriority.returnValue(getPriority.load(observer.getPriority()));
-    }
-
-    protected void createNotify(ObserverInfo observer, ClassCreator observerCreator, Map<InjectionPointInfo, String> injectionPointToProviderField,
-            ReflectionRegistration reflectionRegistration) {
+    protected void createNotify(ObserverInfo observer, ClassCreator observerCreator, Map<InjectionPointInfo, String> injectionPointToProviderField, ReflectionRegistration reflectionRegistration) {
         MethodCreator notify = observerCreator.getMethodCreator("notify", void.class, EventContext.class).setModifiers(ACC_PUBLIC);
 
         ResultHandle declaringProviderHandle = notify
