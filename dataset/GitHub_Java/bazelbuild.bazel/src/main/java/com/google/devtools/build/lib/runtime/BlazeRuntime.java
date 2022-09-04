@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
 import com.google.devtools.build.lib.bugreport.BugReport;
-import com.google.devtools.build.lib.bugreport.BugReporter;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
@@ -161,7 +160,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
   private final QueryRuntimeHelper.Factory queryRuntimeHelperFactory;
   @Nullable private final InvocationPolicy moduleInvocationPolicy;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
-  private final BugReporter bugReporter;
   private final String productName;
   private final BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap;
   private final ActionKeyContext actionKeyContext;
@@ -186,7 +184,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
       OptionsParsingResult startupOptionsProvider,
       Iterable<BlazeModule> blazeModules,
       SubscriberExceptionHandler eventBusExceptionHandler,
-      BugReporter bugReporter,
       ProjectFile.Provider projectFileProvider,
       QueryRuntimeHelper.Factory queryRuntimeHelperFactory,
       InvocationPolicy moduleInvocationPolicy,
@@ -215,7 +212,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     this.queryFunctions = queryFunctions;
     this.queryOutputFormatters = queryOutputFormatters;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
-    this.bugReporter = bugReporter;
 
     CommandNameCache.CommandNameCacheInstance.INSTANCE.setCommandNameCache(
         new CommandNameCacheImpl(getCommandMap()));
@@ -716,15 +712,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
    */
   public Clock getClock() {
     return clock;
-  }
-
-  /**
-   * Returns the {@link BugReporter} that should be used when filing bug reports, if possible. Use
-   * this in preference to {@link BugReport#sendBugReport} for ease of testing codepaths that file
-   * bug reports.
-   */
-  public BugReporter getBugReporter() {
-    return bugReporter;
   }
 
   public OptionsParsingResult getStartupOptionsProvider() {
@@ -1472,7 +1459,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     private UUID instanceId;
     private String productName;
     private ActionKeyContext actionKeyContext;
-    private BugReporter bugReporter = BugReporter.defaultInstance();
 
     public BlazeRuntime build() throws AbruptExitException {
       Preconditions.checkNotNull(productName);
@@ -1575,7 +1561,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
           startupOptionsProvider,
           ImmutableList.copyOf(blazeModules),
           eventBusExceptionHandler,
-          bugReporter,
           projectFileProvider,
           queryRuntimeHelperFactory,
           serverBuilder.getInvocationPolicy(),
@@ -1629,12 +1614,6 @@ public final class BlazeRuntime implements BugReport.BlazeRuntimeInterface {
     public Builder setEventBusExceptionHandler(
         SubscriberExceptionHandler eventBusExceptionHandler) {
       this.eventBusExceptionHandler = eventBusExceptionHandler;
-      return this;
-    }
-
-    @VisibleForTesting
-    public Builder setBugReporter(BugReporter bugReporter) {
-      this.bugReporter = bugReporter;
       return this;
     }
 
