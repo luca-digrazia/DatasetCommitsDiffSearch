@@ -100,6 +100,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   /** All the flags that can be passed to {@link BuildView#update}. */
   public enum Flag {
     KEEP_GOING,
+    SKYFRAME_LOADING_PHASE,
     // Configurations that only include the fragments a target needs to properly analyze.
     TRIMMED_CONFIGURATIONS
   }
@@ -156,7 +157,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         new BlazeDirectories(
             new ServerDirectories(outputBase, outputBase, outputBase),
             rootDirectory,
-            /* defaultSystemJavabase= */ null,
             analysisMock.getProductName());
     workspaceStatusActionFactory =
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
@@ -220,7 +220,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
         ImmutableMap.<RepositoryName, PathFragment>of())));
     packageManager = skyframeExecutor.getPackageManager();
-    loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(pkgFactory.getRuleClassNames());
+    loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
+        pkgFactory.getRuleClassNames(), defaultFlags().contains(Flag.SKYFRAME_LOADING_PHASE));
     buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
 
   }
@@ -248,8 +249,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
                     BuildRequestOptions.class,
                     BuildView.Options.class,
                     KeepGoingOption.class,
-                    LoadingPhaseThreadsOption.class,
-                    LoadingOptions.class),
+                    LoadingPhaseThreadsOption.class),
                 ruleClassProvider.getConfigurationOptions()));
     optionsParser.parse(new String[] {"--default_visibility=public" });
     optionsParser.parse(args);
@@ -309,7 +309,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
           throws Exception {
     Set<Flag> flags = config.flags;
 
-    LoadingOptions loadingOptions = optionsParser.getOptions(LoadingOptions.class);
+    LoadingOptions loadingOptions = Options.getDefaults(LoadingOptions.class);
 
     BuildView.Options viewOptions = optionsParser.getOptions(BuildView.Options.class);
     // update --keep_going option if test requested it.
