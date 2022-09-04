@@ -22,7 +22,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.Provider;
 
 import com.codahale.metrics.MetricRegistry;
 
@@ -59,7 +58,6 @@ import org.graylog2.plugin.Messages;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.filters.MessageFilter;
-import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rules.DroolsEngine;
 import org.graylog2.shared.journal.Journal;
 import org.graylog2.streams.StreamFaultManager;
@@ -213,10 +211,9 @@ public class FilterchainVsPipeline {
                         true).build());
                 when(engineFactory.create(any(), any())).thenReturn(
                         new StreamRouterEngine(Collections.emptyList(),
-                                daemonExecutor,
-                                streamFaultManager,
-                                streamMetrics,
-                                (Provider<Stream>) () -> null)
+                                               daemonExecutor,
+                                               streamFaultManager,
+                                               streamMetrics)
                 );
                 final StreamRouter streamRouter = new StreamRouter(streamService,
                                                                    serverStatus,
