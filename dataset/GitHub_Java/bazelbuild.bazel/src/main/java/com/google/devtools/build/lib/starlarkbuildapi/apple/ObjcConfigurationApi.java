@@ -75,6 +75,12 @@ public interface ObjcConfigurationApi<ApplePlatformTypeApiT extends ApplePlatfor
   DottedVersionApi<?> getSimulatorVersionForPlatformType(ApplePlatformTypeApiT platformType);
 
   @StarlarkMethod(
+      name = "generate_dsym",
+      doc = "Whether to generate debug symbol(.dSYM) artifacts.",
+      structField = true)
+  boolean generateDsym();
+
+  @StarlarkMethod(
       name = "generate_linkmap",
       doc = "Whether to generate linkmap artifacts.",
       structField = true)
