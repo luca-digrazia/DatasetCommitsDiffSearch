@@ -2,13 +2,8 @@ package io.dropwizard.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Optional;
-import io.dropwizard.client.proxy.ProxyConfiguration;
-import io.dropwizard.client.ssl.TlsConfiguration;
 import io.dropwizard.util.Duration;
-import org.hibernate.validator.valuehandling.UnwrapValidatedValue;
 
-import javax.annotation.Nullable;
-import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
@@ -49,23 +44,12 @@ public class HttpClientConfiguration {
     private int retries = 0;
 
     @NotNull
-    @UnwrapValidatedValue(false)
     private Optional<String> userAgent = Optional.absent();
 
-    @Valid
-    @Nullable
-    private ProxyConfiguration proxyConfiguration;
-
-    @NotNull
-    private Duration validateAfterInactivityPeriod = Duration.microseconds(0);
-
+    @JsonProperty
     public Duration getKeepAlive() {
         return keepAlive;
     }
-
-    @Valid
-    @Nullable
-    private TlsConfiguration tlsConfiguration;
 
     @JsonProperty
     public void setKeepAlive(Duration keepAlive) {
@@ -160,35 +144,5 @@ public class HttpClientConfiguration {
     @JsonProperty
     public void setUserAgent(Optional<String> userAgent) {
         this.userAgent = userAgent;
-    }
-
-    @JsonProperty("proxy")
-    public ProxyConfiguration getProxyConfiguration() {
-        return proxyConfiguration;
-    }
-
-    @JsonProperty("proxy")
-    public void setProxyConfiguration(ProxyConfiguration proxyConfiguration) {
-        this.proxyConfiguration = proxyConfiguration;
-    }
-
-    @JsonProperty
-    public Duration getValidateAfterInactivityPeriod() {
-        return validateAfterInactivityPeriod;
-    }
-
-    @JsonProperty
-    public void setValidateAfterInactivityPeriod(Duration validateAfterInactivityPeriod) {
-        this.validateAfterInactivityPeriod = validateAfterInactivityPeriod;
-    }
-
-    @JsonProperty("tls")
-    public TlsConfiguration getTlsConfiguration() {
-        return tlsConfiguration;
-    }
-
-    @JsonProperty("tls")
-    public void setTlsConfiguration(TlsConfiguration tlsConfiguration) {
-        this.tlsConfiguration = tlsConfiguration;
     }
 }
