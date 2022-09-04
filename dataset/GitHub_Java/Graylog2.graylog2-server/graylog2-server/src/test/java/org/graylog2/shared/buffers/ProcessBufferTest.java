@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,23 +14,21 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.shared.buffers;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
-import com.lmax.disruptor.BlockingWaitStrategy;
-import org.graylog2.inputs.BasicCache;
-import org.graylog2.plugin.Message;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.shared.ServerStatus;
+import org.graylog2.plugin.journal.RawMessage;
+import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import javax.inject.Provider;
 
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -66,17 +62,15 @@ public class ProcessBufferTest {
     }
 
     public void testBasicInsert() throws Exception {
-        ProcessBuffer processBuffer = new ProcessBuffer(metricRegistry, serverStatus, new BasicCache(), new AtomicInteger());
+        final Provider provider = mock(Provider.class);
+        when(provider.get()).thenReturn(mock(ProcessBufferProcessor.class));
+        ProcessBuffer processBuffer = new ProcessBuffer(metricRegistry, serverStatus, mock(DecodingProcessor.Factory.class),
+                provider, 1, 1, "blocking");
 
-        ProcessBufferProcessor processBufferProcessor = mock(ProcessBufferProcessor.class);
-        ProcessBufferProcessor[] processBufferProcessors = new ProcessBufferProcessor[1];
-        processBufferProcessors[0] = processBufferProcessor;
 
-        processBuffer.initialize(processBufferProcessors, 1, new BlockingWaitStrategy(), 1);
-
-        Message message = mock(Message.class);
+        RawMessage message = mock(RawMessage.class);
         MessageInput messageInput = mock(MessageInput.class);
 
-        processBuffer.insertFailFast(message, messageInput);
+        processBuffer.insertBlocking(message);
     }
 }
