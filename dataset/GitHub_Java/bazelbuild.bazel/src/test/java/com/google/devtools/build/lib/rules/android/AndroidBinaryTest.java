@@ -19,7 +19,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.expectThrows;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
@@ -116,7 +116,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "--android_crosstool_top=//android/crosstool:everything");
 
     AssertionError noToolchainError =
-        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test/skylark:test"));
+        expectThrows(AssertionError.class, () -> getConfiguredTarget("//test/skylark:test"));
     assertThat(noToolchainError)
         .hasMessageThat()
         .contains("No default_toolchain found for cpu 'doesnotexist'");
@@ -685,9 +685,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
   }
 
   @Test
-  public void testIncrementalDexingAfterProguard_autoShardedMultidexAutoOptIn() throws Exception {
-    useConfiguration("--experimental_incremental_dexing_after_proguard=3",
-        "--experimental_incremental_dexing_after_proguard_by_default");
+  public void testIncrementalDexingAfterProguard_autoShardedMultidex() throws Exception {
+    useConfiguration("--experimental_incremental_dexing_after_proguard=3");
     // Use "legacy" multidex mode so we get a main dex list file and can test that it's passed to
     // the splitter action (similar to _withDexShards below), unlike without the dex splitter where
     // the main dex list goes to the merging action.
@@ -697,10 +696,11 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "  name = 'top',",
         "  srcs = ['foo.java', 'bar.srcjar'],",
         "  manifest = 'AndroidManifest.xml',",
+        "  incremental_dexing = 1,",
         "  multidex = 'legacy',",
         "  dexopts = ['--minimal-main-dex', '--positions=none'],",
         "  proguard_specs = ['b.pro'],",
-        ")"); // incremental_dexing = 1 attribute not needed
+        ")");
 
     ConfiguredTarget topTarget = getConfiguredTarget("//java/com/google/android:top");
     assertNoEvents();
