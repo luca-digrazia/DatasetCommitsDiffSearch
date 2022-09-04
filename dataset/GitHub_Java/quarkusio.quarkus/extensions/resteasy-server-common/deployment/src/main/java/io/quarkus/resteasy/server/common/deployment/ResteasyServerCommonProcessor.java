@@ -16,6 +16,8 @@ import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
+import javax.servlet.DispatcherType;
+
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationTarget.Kind;
@@ -51,6 +53,8 @@ import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.Transformation;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
@@ -64,6 +68,7 @@ import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.resteasy.common.deployment.ResteasyCommonProcessor.ResteasyCommonConfig;
 import io.quarkus.resteasy.common.runtime.QuarkusInjectorFactory;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
+import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.resteasy.server.common.runtime.QuarkusResteasyDeployment;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
@@ -71,6 +76,7 @@ import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodParamA
 import io.quarkus.resteasy.server.common.spi.AllowedJaxRsAnnotationPrefixBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
+import io.quarkus.undertow.deployment.FilterBuildItem;
 
 /**
  * Processor that builds the RESTEasy server configuration.
@@ -137,12 +143,7 @@ public class ResteasyServerCommonProcessor {
         String path;
 
         /**
-         * Whether or not detailed JAX-RS metrics should be enabled if the smallrye-metrics
-         * extension is present.
-         * 
-         * See <a href=
-         * "https://github.com/eclipse/microprofile-metrics/blob/2.3.x/spec/src/main/asciidoc/required-metrics.adoc#optional-rest">MicroProfile
-         * Metrics: Optional REST metrics</a>
+         * Whether or not JAX-RS metrics should be enabled if the Metrics capability is present and Vert.x is being used.
          */
         @ConfigItem(name = "metrics.enabled", defaultValue = "false")
         public boolean metricsEnabled;
@@ -446,6 +447,33 @@ public class ResteasyServerCommonProcessor {
         beanDefiningAnnotations
                 .produce(new BeanDefiningAnnotationBuildItem(ResteasyDotNames.APPLICATION_PATH,
                         BuiltinScope.SINGLETON.getName()));
+    }
+
+    @BuildStep
+    void enableMetrics(ResteasyConfig buildConfig,
+            BuildProducer<ResteasyJaxrsProviderBuildItem> jaxRsProviders,
+            BuildProducer<FilterBuildItem> servletFilters,
+            Capabilities capabilities) {
+        if (buildConfig.metricsEnabled && capabilities.isPresent(Capability.METRICS)) {
+            if (capabilities.isPresent(Capability.SERVLET)) {
+                // if running with servlet, use the MetricsFilter implementation from SmallRye
+                jaxRsProviders.produce(
+                        new ResteasyJaxrsProviderBuildItem("io.smallrye.metrics.jaxrs.JaxRsMetricsFilter"));
+                servletFilters.produce(
+                        FilterBuildItem.builder("metricsFilter", "io.smallrye.metrics.jaxrs.JaxRsMetricsServletFilter")
+                                .setAsyncSupported(true)
+                                .addFilterUrlMapping("*", DispatcherType.FORWARD)
+                                .addFilterUrlMapping("*", DispatcherType.INCLUDE)
+                                .addFilterUrlMapping("*", DispatcherType.REQUEST)
+                                .addFilterUrlMapping("*", DispatcherType.ASYNC)
+                                .addFilterUrlMapping("*", DispatcherType.ERROR)
+                                .build());
+            } else {
+                // if running with vert.x, use the MetricsFilter implementation from Quarkus codebase
+                jaxRsProviders.produce(
+                        new ResteasyJaxrsProviderBuildItem("io.quarkus.smallrye.metrics.runtime.QuarkusJaxRsMetricsFilter"));
+            }
+        }
     }
 
     private boolean hasAutoInjectAnnotation(Set<DotName> autoInjectAnnotationNames, ClassInfo clazz) {
