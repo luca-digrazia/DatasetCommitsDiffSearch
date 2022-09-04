@@ -23,24 +23,25 @@ import java.util.Map;
  */
 public interface OptionsParsingResult extends OptionsProvider {
 
-
   /**
-   * Returns the skylark options in a name:value map.
+   * Returns a description of the option value.
    *
-   * <p>These follow the basics of the option syntax, --<name>=<value> but are parsed and stored
-   * differently than native options based on <name> starting with "//". This is a sufficient
-   * demarcation between skylark flags and native flags for now since all skylark flags are targets
-   * and are identified by their package path. But in the future when we implement short names for
-   * skylark options, this will need to change.
+   * @return value for the option or null if the value has not been set
+   * @throws IllegalArgumentException if there is no option by the given name
    */
-  Map<String, Object> getSkylarkOptions();
-
+  OptionValueDescription getOptionValueDescription(String name);
 
   /**
    * Returns an immutable copy of the residue, that is, the arguments that
    * have not been parsed.
    */
   List<String> getResidue();
+
+  /**
+   * Returns an immutable copy of the residue before the " -- " signals the remainder of the
+   * arguments are not options.
+   */
+  List<String> getPreDoubleDashResidue();
 
   /**
    * Returns if the named option was specified explicitly in a call to parse.
@@ -58,6 +59,7 @@ public interface OptionsParsingResult extends OptionsProvider {
    * and the options it expanded to, and so blindly using this list for a new invocation will cause
    * double-application of these options.
    */
+  // TODO(b/150222792): make this aware of starlark options.
   List<ParsedOptionDescription> asCompleteListOfParsedOptions();
 
   /**
@@ -68,6 +70,8 @@ public interface OptionsParsingResult extends OptionsProvider {
    *
    * <p>The list includes undocumented options.
    */
+  // TODO(b/150222792): make this aware of Starlark options. This might be tricky because we don't
+  // store Starlark option values that are explicitly specified to the same value as the default.
   List<ParsedOptionDescription> asListOfExplicitOptions();
 
   /**
@@ -78,12 +82,14 @@ public interface OptionsParsingResult extends OptionsProvider {
    *
    * <p>The list includes undocumented options.
    */
+  // TODO(b/150222792): make this aware of Starlark options.
   List<ParsedOptionDescription> asListOfCanonicalOptions();
 
   /**
    * Returns a list of all options, including undocumented ones, and their effective values. There
    * is no guaranteed ordering for the result.
    */
+  // TODO(b/150222792): make this aware of Starlark options
   List<OptionValueDescription> asListOfOptionValues();
 
   /**
@@ -96,4 +102,10 @@ public interface OptionsParsingResult extends OptionsProvider {
    * do not reorder flags to further simplify the list.
    */
   List<String> canonicalize();
+
+  /**
+   * Returns a map of all the flag aliases that have been registered using --flag_alias. The keys
+   * are the aliases and the values are the actual flag names.
+   */
+  Map<String, String> getAliases();
 }
