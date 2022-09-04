@@ -61,10 +61,8 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
-import com.google.devtools.build.lib.syntax.Environment.GlobalFrame;
 import com.google.devtools.build.lib.syntax.Environment.Phase;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.Type;
@@ -241,8 +239,8 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap.Builder<String, Object> skylarkAccessibleTopLevels =
         ImmutableMap.builder();
-     private ImmutableList.Builder<Class<?>> skylarkModules =
-        ImmutableList.<Class<?>>builder();
+    private ImmutableList.Builder<Class<?>> skylarkModules =
+        ImmutableList.<Class<?>>builder().addAll(SkylarkModules.MODULES);
     private ImmutableList.Builder<NativeProvider> nativeProviders = ImmutableList.builder();
     private Set<String> reservedActionMnemonics = new TreeSet<>();
     private BuildConfiguration.ActionEnvironmentProvider actionEnvironmentProvider =
@@ -792,17 +790,21 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   }
 
   private Environment.GlobalFrame createGlobals(
-      ImmutableMap<String, Object> skylarkAccessibleTopLevels,
+      ImmutableMap<String, Object> skylarkAccessibleToplLevels,
       ImmutableList<Class<?>> modules) {
-    ImmutableMap.Builder<String, Object> envBuilder = ImmutableMap.builder();
-
-    SkylarkModules.addSkylarkGlobalsToBuilder(envBuilder);
-    for (Class<?> module : modules) {
-      Runtime.setupModuleGlobals(envBuilder, module);
+    try (Mutability mutability = Mutability.create("ConfiguredRuleClassProvider globals")) {
+      Environment env = createSkylarkRuleClassEnvironment(
+          mutability,
+          SkylarkModules.getGlobals(modules),
+          SkylarkSemantics.DEFAULT_SEMANTICS,
+          /*eventHandler=*/ null,
+          /*astFileContentHashCode=*/ null,
+          /*importMap=*/ null);
+      for (Map.Entry<String, Object> entry : skylarkAccessibleToplLevels.entrySet()) {
+        env.setup(entry.getKey(), entry.getValue());
+      }
+      return env.getGlobals();
     }
-    envBuilder.putAll(skylarkAccessibleTopLevels.entrySet());
-
-    return GlobalFrame.createForBuiltins(envBuilder.build());
   }
 
   private static ImmutableMap<String, Class<?>> createFragmentMap(
