@@ -27,7 +27,7 @@ import com.googlecode.androidannotations.model.AnnotationElements;
 
 public class TraceValidator implements ElementValidator {
 
-	private final ValidatorHelper validatorHelper;
+	private ValidatorHelper validatorHelper;
 
 	public TraceValidator(ProcessingEnvironment processingEnv) {
 		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
@@ -41,10 +41,10 @@ public class TraceValidator implements ElementValidator {
 
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
-		
+
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
+		validatorHelper.enclosingElementHasEActivity(element, validatedElements, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
 

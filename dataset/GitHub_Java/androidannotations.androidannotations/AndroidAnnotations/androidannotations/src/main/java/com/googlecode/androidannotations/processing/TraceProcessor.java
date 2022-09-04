@@ -57,11 +57,9 @@ public class TraceProcessor implements ElementProcessor {
 		JClass systemClass = holder.refClass(System.class);
 
 		JMethod method = helper.overrideAnnotatedMethod(executableElement, holder);
-		
-		JBlock previousMethodBody = helper.removeBody(method);
 
 		JBlock methodBody = method.body();
-		
+
 		JInvocation isLoggableInvocation = logClass.staticInvoke("isLoggable");
 		isLoggableInvocation.arg(JExpr.lit(tag)).arg(logLevelFromInt(level, logClass));
 
@@ -71,9 +69,8 @@ public class TraceProcessor implements ElementProcessor {
 		JVar startDeclaration = ifStatement._then().decl(codeModel.LONG, "start", currentTimeInvoke);
 
 		JTryBlock tryBlock = ifStatement._then()._try();
-		
-		tryBlock.body().add(previousMethodBody);
-		
+		helper.callSuperMethod(method, codeModel, holder, tryBlock.body());
+
 		JBlock finallyBlock = tryBlock._finally();
 
 		JVar durationDeclaration = finallyBlock.decl(codeModel.LONG, "duration", currentTimeInvoke.minus(startDeclaration));
@@ -88,8 +85,7 @@ public class TraceProcessor implements ElementProcessor {
 		finallyBlock.add(logInvoke);
 
 		JBlock elseBlock = ifStatement._else();
-		
-		elseBlock.add(previousMethodBody);
+		helper.callSuperMethod(method, codeModel, holder, elseBlock);
 	}
 
 	private String logMethodNameFromLevel(int level) {
