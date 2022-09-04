@@ -42,8 +42,7 @@ public abstract class AbstractParam<T> {
      */
     protected Response error(String input, Exception e) {
         return Response.status(getErrorStatus())
-                       .entity(new ErrorMessage(getErrorStatus().getStatusCode(),
-                               errorMessage(input, e)))
+                       .entity(new ErrorMessage(errorMessage(input, e)))
                        .type(mediaType())
                        .build();
     }
