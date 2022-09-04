@@ -14,10 +14,8 @@
 
 package com.google.devtools.build.lib.remote.options;
 
-import com.google.common.base.Strings;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
@@ -26,17 +24,27 @@ import com.google.devtools.common.options.OptionsBase;
 
 /** Options for remote execution and distributed caching. */
 public final class RemoteOptions extends OptionsBase {
+  @Option(
+      name = "remote_http_cache",
+      oldName = "remote_rest_cache",
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.REMOTE,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "A base URL of a HTTP caching service. Both http:// and https:// are supported. BLOBs"
+              + " are stored with PUT and retrieved with GET. See remote/README.md for more"
+              + " information.")
+  public String remoteHttpCache;
 
   @Option(
-      name = "remote_proxy",
-      oldName = "remote_cache_proxy",
+      name = "remote_cache_proxy",
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Connect to the remote cache through a proxy. Currently this flag can only be used to "
               + "configure a Unix domain socket (unix:/path/to/socket) for the HTTP cache.")
-  public String remoteProxy;
+  public String remoteCacheProxy;
 
   @Option(
       name = "remote_max_connections",
@@ -59,14 +67,10 @@ public final class RemoteOptions extends OptionsBase {
 
   @Option(
       name = "remote_cache",
-      oldName = "remote_http_cache",
       defaultValue = "null",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "A URI of a caching endpoint. The supported schemas are http(s) and grpc. "
-              + "If no schema is provided we'll default to grpc. "
-              + "See https://docs.bazel.build/versions/master/remote-caching.html")
+      help = "HOST or HOST:PORT of a remote caching endpoint.")
   public String remoteCache;
 
   @Option(
@@ -244,26 +248,6 @@ public final class RemoteOptions extends OptionsBase {
   public boolean allowSymlinkUpload;
 
   @Option(
-      name = "experimental_remote_download_outputs",
-      defaultValue = "all",
-      category = "remote",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      converter = RemoteOutputsStrategyConverter.class,
-      help =
-          "If set to 'minimal' doesn't download any remote build outputs to the local machine, "
-              + "except the ones required by local actions. This option can significantly reduce"
-              + " build times if network bandwidth is a bottleneck.")
-  public RemoteOutputsMode remoteOutputsMode;
-
-  /** Outputs strategy flag parser */
-  public static class RemoteOutputsStrategyConverter extends EnumConverter<RemoteOutputsMode> {
-    public RemoteOutputsStrategyConverter() {
-      super(RemoteOutputsMode.class, "download remote outputs");
-    }
-  }
-
-  @Option(
       name = "remote_result_cache_priority",
       defaultValue = "0",
       documentationCategory = OptionDocumentationCategory.REMOTE,
@@ -311,8 +295,4 @@ public final class RemoteOptions extends OptionsBase {
 
   /** The maximum size of an outbound message sent via a gRPC channel. */
   public int maxOutboundMessageSize = 1024 * 1024;
-
-  public boolean isRemoteEnabled() {
-    return !Strings.isNullOrEmpty(remoteCache) || !Strings.isNullOrEmpty(remoteExecutor);
-  }
 }
