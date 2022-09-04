@@ -74,7 +74,6 @@ import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
 import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.DevModeMain;
 import io.quarkus.deployment.dev.QuarkusDevModeLauncher;
-import io.quarkus.maven.MavenDevModeLauncher.Builder;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.utilities.MojoUtils;
 
@@ -205,12 +204,6 @@ public class DevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${quarkus.args}")
     private String argsString;
 
-    @Parameter
-    private Map<String, String> environmentVariables = Collections.emptyMap();
-
-    @Parameter
-    private Map<String, String> systemProperties = Collections.emptyMap();
-
     @Parameter(defaultValue = "${session}")
     private MavenSession session;
 
@@ -271,14 +264,6 @@ public class DevMojo extends AbstractMojo {
     @Parameter(defaultValue = "${quarkus.enforceBuildGoal}")
     private boolean enforceBuildGoal = true;
 
-    /**
-     * Whether or not Quarkus should disable it's ability to not do a full restart
-     * when changes to classes are compatible with JVM instrumentation.
-     * If this is set to true, Quarkus will always restart on changes and never perform class redefinition.
-     */
-    @Parameter(defaultValue = "${disableInstrumentation}")
-    private boolean disableInstrumentation = false;
-
     @Component
     private WorkspaceReader wsReader;
 
@@ -315,6 +300,11 @@ public class DevMojo extends AbstractMojo {
                         " on this project make sure the quarkus-maven-plugin is configured with a build goal.");
                 return;
             }
+        }
+
+        // don't warn if running in a module of a multi-module project
+        if (!sourceDir.isDirectory() && (project.getParentFile() == null || !project.getParentFile().exists())) {
+            getLog().warn("The project's sources directory does not exist " + sourceDir);
         }
 
         try {
@@ -589,14 +579,11 @@ public class DevMojo extends AbstractMojo {
             if (getLog().isDebugEnabled()) {
                 getLog().debug("Launching JVM with command line: " + String.join(" ", launcher.args()));
             }
-            final ProcessBuilder processBuilder = new ProcessBuilder(launcher.args())
+            process = new ProcessBuilder(launcher.args())
                     .redirectErrorStream(true)
                     .inheritIO()
-                    .directory(workingDir == null ? buildDir : workingDir);
-            if (!environmentVariables.isEmpty()) {
-                processBuilder.environment().putAll(environmentVariables);
-            }
-            process = processBuilder.start();
+                    .directory(workingDir == null ? buildDir : workingDir)
+                    .start();
 
             //https://github.com/quarkusio/quarkus/issues/232
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -639,7 +626,9 @@ public class DevMojo extends AbstractMojo {
                 .debugPortOk(debugPortOk)
                 .deleteDevJar(deleteDevJar);
 
-        setJvmArgs(builder);
+        if (jvmArgs != null) {
+            builder.jvmArgs(Arrays.asList(CommandLineUtils.translateCommandline(jvmArgs)));
+        }
 
         builder.projectDir(project.getFile().getParentFile());
         builder.buildSystemProperties((Map) project.getProperties());
@@ -753,24 +742,6 @@ public class DevMojo extends AbstractMojo {
         return builder.build();
     }
 
-    private void setJvmArgs(Builder builder) throws Exception {
-        String jvmArgs = this.jvmArgs;
-        if (!systemProperties.isEmpty()) {
-            final StringBuilder buf = new StringBuilder();
-            if (jvmArgs != null) {
-                buf.append(jvmArgs);
-            }
-            for (Map.Entry<String, String> prop : systemProperties.entrySet()) {
-                buf.append(" -D").append(prop.getKey()).append("=\"").append(prop.getValue()).append("\"");
-            }
-            jvmArgs = buf.toString();
-        }
-        if (jvmArgs != null) {
-            builder.jvmArgs(Arrays.asList(CommandLineUtils.translateCommandline(jvmArgs)));
-        }
-
-    }
-
     private void propagateUserProperties(MavenDevModeLauncher.Builder builder) {
         Properties userProps = BootstrapMavenOptions.newInstance().getSystemProperties();
         if (userProps == null) {
@@ -831,9 +802,7 @@ public class DevMojo extends AbstractMojo {
                     && appDep.getArtifact().getArtifactId().equals("quarkus-ide-launcher"))) {
                 if (appDep.getArtifact().getGroupId().equals("io.quarkus")
                         && appDep.getArtifact().getArtifactId().equals("quarkus-class-change-agent")) {
-                    if (!disableInstrumentation) {
-                        builder.jvmArgs("-javaagent:" + appDep.getArtifact().getFile().getAbsolutePath());
-                    }
+                    builder.jvmArgs("-javaagent:" + appDep.getArtifact().getFile().getAbsolutePath());
                 } else {
                     builder.classpathEntry(appDep.getArtifact().getFile());
                 }
