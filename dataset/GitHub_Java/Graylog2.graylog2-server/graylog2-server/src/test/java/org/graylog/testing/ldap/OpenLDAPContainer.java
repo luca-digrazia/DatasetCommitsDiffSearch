@@ -16,16 +16,12 @@
  */
 package org.graylog.testing.ldap;
 
-import org.graylog.security.authservice.ldap.LDAPConnectorConfig;
-import org.graylog.security.authservice.ldap.LDAPTransportSecurity;
-import org.graylog2.security.encryption.EncryptedValueService;
 import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Locale;
 
 /**
@@ -71,19 +67,6 @@ public class OpenLDAPContainer extends GenericContainer<OpenLDAPContainer> {
         withNetwork(Network.newNetwork());
         withNetworkAliases("openldap");
         withStartupTimeout(Duration.ofSeconds(10));
-    }
-
-    /**
-     * Returns the {@link LDAPConnectorConfig} for the running container.
-     */
-    public LDAPConnectorConfig createLDAPConnectorConfig(EncryptedValueService encryptedValueService) {
-        return LDAPConnectorConfig.builder()
-                .systemUsername(bindDn())
-                .systemPassword(encryptedValueService.encrypt(bindPassword()))
-                .serverList(Collections.singletonList(LDAPConnectorConfig.LDAPServer.fromUrl(ldapURL())))
-                .transportSecurity(LDAPTransportSecurity.NONE)
-                .verifyCertificates(false)
-                .build();
     }
 
     public String bindDn() {
