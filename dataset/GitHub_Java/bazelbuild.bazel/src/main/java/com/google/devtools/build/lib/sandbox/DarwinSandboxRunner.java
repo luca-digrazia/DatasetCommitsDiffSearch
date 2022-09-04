@@ -42,7 +42,7 @@ final class DarwinSandboxRunner extends SandboxRunner {
   private static final String SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
   private final Path sandboxExecRoot;
-  private final Path sandboxConfigPath;
+  private final Path argumentsFilePath;
   private final Set<Path> writableDirs;
   private final Path runUnderPath;
 
@@ -54,7 +54,7 @@ final class DarwinSandboxRunner extends SandboxRunner {
       boolean verboseFailures) {
     super(verboseFailures);
     this.sandboxExecRoot = sandboxExecRoot;
-    this.sandboxConfigPath = sandboxPath.getRelative("sandbox.sb");
+    this.argumentsFilePath = sandboxPath.getRelative("sandbox.sb");
     this.writableDirs = writableDirs;
     this.runUnderPath = runUnderPath;
   }
@@ -105,7 +105,7 @@ final class DarwinSandboxRunner extends SandboxRunner {
   @Override
   protected Command getCommand(
       List<String> arguments,
-      Map<String, String> env,
+      Map<String, String> environment,
       int timeout,
       boolean allowNetwork,
       boolean useFakeHostname,
@@ -116,16 +116,17 @@ final class DarwinSandboxRunner extends SandboxRunner {
     List<String> commandLineArgs = new ArrayList<>();
     commandLineArgs.add(SANDBOX_EXEC);
     commandLineArgs.add("-f");
-    commandLineArgs.add(sandboxConfigPath.getPathString());
+    commandLineArgs.add(argumentsFilePath.getPathString());
     commandLineArgs.addAll(arguments);
-    return new Command(commandLineArgs.toArray(new String[0]), env, sandboxExecRoot.getPathFile());
+    return new Command(
+        commandLineArgs.toArray(new String[0]), environment, sandboxExecRoot.getPathFile());
   }
 
   private void writeConfig(boolean allowNetwork) throws IOException {
     try (PrintWriter out =
         new PrintWriter(
             new BufferedWriter(
-                new OutputStreamWriter(sandboxConfigPath.getOutputStream(), UTF_8)))) {
+                new OutputStreamWriter(argumentsFilePath.getOutputStream(), UTF_8)))) {
       // Note: In Apple's sandbox configuration language, the *last* matching rule wins.
       out.println("(version 1)");
       out.println("(debug deny)");
