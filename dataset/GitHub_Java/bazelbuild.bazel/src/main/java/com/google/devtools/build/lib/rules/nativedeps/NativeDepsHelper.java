@@ -14,13 +14,11 @@
 
 package com.google.devtools.build.lib.rules.nativedeps;
 
-import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.NATIVE_DEPS_LINK;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.STATIC_LINKING_MODE;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -209,20 +207,15 @@ public abstract class NativeDepsHelper {
                     CppBuildInfo.KEY,
                     configuration);
 
-    ImmutableSortedSet.Builder<String> requestedFeaturesBuilder =
-        ImmutableSortedSet.<String>naturalOrder()
-            .addAll(ruleContext.getFeatures())
-            .add(STATIC_LINKING_MODE)
-            .add(NATIVE_DEPS_LINK);
+    ImmutableSet.Builder<String> requestedFeatures =
+        ImmutableSet.<String>builder().addAll(ruleContext.getFeatures()).add(STATIC_LINKING_MODE);
     if (!ruleContext.getDisabledFeatures().contains(CppRuleClasses.LEGACY_WHOLE_ARCHIVE)) {
-      requestedFeaturesBuilder.add(CppRuleClasses.LEGACY_WHOLE_ARCHIVE);
+      requestedFeatures.add(CppRuleClasses.LEGACY_WHOLE_ARCHIVE);
     }
-    ImmutableSortedSet<String> requestedFeatures = requestedFeaturesBuilder.build();
-
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(
             ruleContext,
-            requestedFeatures,
+            /* requestedFeatures= */ requestedFeatures.build(),
             /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
             toolchain,
             cppSemantics);
@@ -244,7 +237,7 @@ public abstract class NativeDepsHelper {
                   .map(CcLinkingContext.Linkstamp::getArtifact)
                   .collect(ImmutableList.toImmutableList()),
               buildInfoArtifacts,
-              requestedFeatures,
+              ruleContext.getFeatures(),
               isTestOrTestOnlyTarget && isThinLtoDisabledOnlyForLinkStaticTestAndTestOnlyTargets);
 
       sharedLibrary = ruleContext.getShareableArtifact(
