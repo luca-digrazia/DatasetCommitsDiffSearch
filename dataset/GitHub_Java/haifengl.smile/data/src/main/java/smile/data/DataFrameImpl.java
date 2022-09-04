@@ -448,7 +448,7 @@ class DataFrameImpl implements DataFrame {
         int ncols = ncols();
         DataType[] types = types();
 
-        DenseMatrix m = Matrix.of(nrows, ncols, 0);
+        DenseMatrix m = Matrix.newInstance(nrows, ncols, 0);
         for (int j = 0; j < ncols; j++) {
             DataType type = types[j];
             if (type == DataTypes.DoubleType) {
@@ -571,7 +571,7 @@ class DataFrameImpl implements DataFrame {
 
         @Override
         public String toString() {
-            return schema.toString(this);
+            return toString(",");
         }
     }
 }

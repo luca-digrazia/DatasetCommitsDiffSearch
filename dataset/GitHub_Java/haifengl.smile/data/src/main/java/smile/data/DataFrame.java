@@ -15,14 +15,14 @@
  *******************************************************************************/
 package smile.data;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import smile.data.type.*;
+import smile.data.type.DataType;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
 import smile.data.vector.*;
 import smile.data.vector.Vector;
 import smile.math.matrix.DenseMatrix;
@@ -70,15 +70,9 @@ public interface DataFrame extends Dataset<Tuple> {
 
     /** Returns the structure of data frame. */
     default DataFrame structure() {
-        Measure[] measures = new Measure[ncols()];
-        for (Map.Entry<String, Measure> e : schema().measure().entrySet()) {
-            measures[columnIndex(e.getKey())] = e.getValue();
-        }
-
         List<BaseVector> vectors = Arrays.asList(
                 Vector.of("Column", names()),
-                Vector.of("Type", types()),
-                Vector.of("Measure", measures)
+                Vector.of("Type", types())
         );
 
         return new DataFrameImpl(vectors);
@@ -409,7 +403,8 @@ public interface DataFrame extends Dataset<Tuple> {
         List<String[]> rows = stream().limit(numRows).map( row -> {
             String[] cells = new String[numCols];
             for (int i = 0; i < numCols; i++) {
-                String str = row.toString(i);
+                Object x = row.get(i);
+                String str = x == null ? "null" : types[i].toString(x);
                 cells[i] = (truncate && str.length() > maxColumnWidth) ? str.substring(0, maxColumnWidth - 3) + "..." : str;
             }
             return cells;
@@ -472,7 +467,7 @@ public interface DataFrame extends Dataset<Tuple> {
     }
 
     /**
-     * Creates a DataFrame from a set of vectors.
+     * Creates a default columnar implementation of DataFrame from a set of vectors.
      * @param vectors The column vectors.
      */
     static DataFrame of(BaseVector... vectors) {
@@ -480,7 +475,7 @@ public interface DataFrame extends Dataset<Tuple> {
     }
 
     /**
-     * Creates a DataFrame from a collection.
+     * Creates a default columnar implementation of DataFrame from a collection.
      * @param data The data collection.
      * @param clazz The class type of elements.
      * @param <T> The type of elements.
@@ -490,25 +485,11 @@ public interface DataFrame extends Dataset<Tuple> {
     }
 
     /**
-     * Creates a DataFrame from a set of tuples.
+     * Creates a default columnar implementation of DataFrame from a set of tuples.
      * @param data The data collection.
      */
     static DataFrame of(List<Tuple> data) {
         return new DataFrameImpl(data);
-    }
-
-    /**
-     * Creates a DataFrame from a JDBC ResultSet.
-     * @param rs The JDBC result set.
-     */
-    static DataFrame of(ResultSet rs) throws SQLException {
-        StructType schema = DataTypes.struct(rs);
-        List<Tuple> rows = new ArrayList<>();
-        while (rs.next()) {
-            rows.add(Tuple.of(rs, schema));
-        }
-
-        return of(rows);
     }
 
     /**
@@ -564,7 +545,7 @@ public interface DataFrame extends Dataset<Tuple> {
                     }
                     int nrows = container.size();
                     int ncols = container.get(0).size();
-                    DenseMatrix m = Matrix.of(nrows, ncols, 0);
+                    DenseMatrix m = Matrix.newInstance(nrows, ncols, 0);
                     for (int i = 0; i < nrows; i++) {
                         for (int j = 0; j < ncols; j++) {
                             m.set(i, j, container.get(i).getDouble(j));
