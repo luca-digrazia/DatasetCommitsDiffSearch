@@ -10,7 +10,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 
-import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -22,7 +21,6 @@ import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.hibernate.orm.rest.data.panache.PanacheEntityResource;
 import io.quarkus.hibernate.orm.rest.data.panache.PanacheRepositoryResource;
 import io.quarkus.hibernate.orm.rest.data.panache.runtime.RestDataPanacheExceptionMapper;
-import io.quarkus.hibernate.orm.rest.data.panache.runtime.jta.TransactionalUpdateExecutor;
 import io.quarkus.rest.data.panache.deployment.ResourceMetadata;
 import io.quarkus.rest.data.panache.deployment.RestDataResourceBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
@@ -43,11 +41,6 @@ class HibernateOrmPanacheRestProcessor {
     @BuildStep
     ResteasyJaxrsProviderBuildItem registerRestDataPanacheExceptionMapper() {
         return new ResteasyJaxrsProviderBuildItem(RestDataPanacheExceptionMapper.class.getName());
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem registerTransactionalExecutor() {
-        return AdditionalBeanBuildItem.unremovableOf(TransactionalUpdateExecutor.class);
     }
 
     /**

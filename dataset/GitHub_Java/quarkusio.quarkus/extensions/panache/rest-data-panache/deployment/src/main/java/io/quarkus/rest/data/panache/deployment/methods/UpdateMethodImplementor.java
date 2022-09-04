@@ -2,7 +2,6 @@ package io.quarkus.rest.data.panache.deployment.methods;
 
 import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
-import javax.validation.Valid;
 import javax.ws.rs.core.Response;
 
 import io.quarkus.gizmo.BranchResult;
@@ -26,12 +25,6 @@ public final class UpdateMethodImplementor extends StandardMethodImplementor {
     private static final String RESOURCE_GET_METHOD_NAME = "get";
 
     private static final String REL = "update";
-
-    private final boolean withValidation;
-
-    public UpdateMethodImplementor(boolean withValidation) {
-        this.withValidation = withValidation;
-    }
 
     /**
      * Generate JAX-RS UPDATE method that exposes {@link RestDataResource#update(Object, Object)}.
@@ -86,10 +79,6 @@ public final class UpdateMethodImplementor extends StandardMethodImplementor {
         addConsumesAnnotation(methodCreator, APPLICATION_JSON);
         addProducesAnnotation(methodCreator, APPLICATION_JSON);
         addLinksAnnotation(methodCreator, resourceMetadata.getEntityType(), REL);
-        // Add parameter annotations
-        if (withValidation) {
-            methodCreator.getParameterAnnotations(1).addAnnotation(Valid.class);
-        }
 
         ResultHandle resource = methodCreator.readInstanceField(resourceField, methodCreator.getThis());
         ResultHandle id = methodCreator.getMethodParam(0);

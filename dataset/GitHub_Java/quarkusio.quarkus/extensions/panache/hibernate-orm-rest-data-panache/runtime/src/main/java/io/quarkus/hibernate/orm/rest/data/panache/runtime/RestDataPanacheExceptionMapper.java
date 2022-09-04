@@ -6,17 +6,14 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 
 import org.hibernate.exception.ConstraintViolationException;
-import org.jboss.logging.Logger;
 
 import io.quarkus.arc.ArcUndeclaredThrowableException;
 import io.quarkus.rest.data.panache.RestDataPanacheException;
 
 public class RestDataPanacheExceptionMapper implements ExceptionMapper<RestDataPanacheException> {
-    private static final Logger LOGGER = Logger.getLogger(RestDataPanacheExceptionMapper.class);
-
     @Override
     public Response toResponse(RestDataPanacheException exception) {
-        LOGGER.warnf(exception, "Mapping an unhandled %s", RestDataPanacheException.class.getSimpleName());
+        exception.printStackTrace();
 
         if (exception.getCause() instanceof ArcUndeclaredThrowableException) {
             return toResponse((ArcUndeclaredThrowableException) exception.getCause(), exception.getMessage());

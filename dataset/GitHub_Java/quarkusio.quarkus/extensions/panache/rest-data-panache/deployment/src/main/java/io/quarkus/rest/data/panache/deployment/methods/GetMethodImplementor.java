@@ -1,4 +1,4 @@
-package io.quarkus.rest.data.panache.deployment.methods.hal;
+package io.quarkus.rest.data.panache.deployment.methods;
 
 import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
@@ -14,28 +14,33 @@ import io.quarkus.rest.data.panache.RestDataResource;
 import io.quarkus.rest.data.panache.deployment.ResourceMetadata;
 import io.quarkus.rest.data.panache.deployment.properties.ResourceProperties;
 import io.quarkus.rest.data.panache.deployment.utils.ResponseImplementor;
-import io.quarkus.rest.data.panache.runtime.hal.HalEntityWrapper;
 
-public final class GetHalMethodImplementor extends HalMethodImplementor {
+public final class GetMethodImplementor extends StandardMethodImplementor {
 
-    private static final String METHOD_NAME = "getHal";
+    private static final String METHOD_NAME = "get";
 
     private static final String RESOURCE_METHOD_NAME = "get";
 
+    private static final String REL = "self";
+
     /**
-     * Expose {@link RestDataResource#get(Object)} via HAL JAX-RS method.
+     * Generate JAX-RS GET method that exposes {@link RestDataResource#get(Object)}.
      * Generated code looks more or less like this:
      *
      * <pre>
      * {@code
      *     &#64;GET
-     *     &#64;Produces({"application/hal+json"})
+     *     &#64;Produces({"application/json"})
      *     &#64;Path("{id}")
-     *     public Response getHal(@PathParam("id") ID id) {
+     *     &#64;LinkResource(
+     *         rel = "self",
+     *         entityClassName = "com.example.Entity"
+     *     )
+     *     public Response get(@PathParam("id") ID id) {
      *         try {
-     *             Entity entity = resource.get(id);
+     *             Entity entity = restDataResource.get(id);
      *             if (entity != null) {
-     *                 return Response.ok(new HalEntityWrapper(entity)).build();
+     *                 return entity;
      *             } else {
      *                 return Response.status(404).build();
      *             }
@@ -55,8 +60,9 @@ public final class GetHalMethodImplementor extends HalMethodImplementor {
         // Add method annotations
         addPathAnnotation(methodCreator, appendToPath(resourceProperties.getPath(RESOURCE_METHOD_NAME), "{id}"));
         addGetAnnotation(methodCreator);
-        addProducesAnnotation(methodCreator, APPLICATION_HAL_JSON);
+        addProducesAnnotation(methodCreator, APPLICATION_JSON);
         addPathParamAnnotation(methodCreator.getParameterAnnotations(0), "id");
+        addLinksAnnotation(methodCreator, resourceMetadata.getEntityType(), REL);
 
         ResultHandle resource = methodCreator.readInstanceField(resourceField, methodCreator.getThis());
         ResultHandle id = methodCreator.getMethodParam(0);
@@ -67,11 +73,10 @@ public final class GetHalMethodImplementor extends HalMethodImplementor {
                 ofMethod(resourceMetadata.getResourceClass(), RESOURCE_METHOD_NAME, Object.class, Object.class),
                 resource, id);
 
-        // Wrap and return response
+        // Return response
         BranchResult wasNotFound = tryBlock.ifNull(entity);
         wasNotFound.trueBranch().returnValue(ResponseImplementor.notFound(wasNotFound.trueBranch()));
-        wasNotFound.falseBranch().returnValue(
-                ResponseImplementor.ok(wasNotFound.falseBranch(), wrapHalEntity(wasNotFound.falseBranch(), entity)));
+        wasNotFound.falseBranch().returnValue(ResponseImplementor.ok(wasNotFound.falseBranch(), entity));
 
         tryBlock.close();
         methodCreator.close();
