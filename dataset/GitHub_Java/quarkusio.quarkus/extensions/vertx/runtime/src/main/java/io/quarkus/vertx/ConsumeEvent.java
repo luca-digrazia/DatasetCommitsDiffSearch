@@ -6,9 +6,6 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
-import io.quarkus.vertx.runtime.GenericMessageCodec;
-import io.vertx.core.eventbus.MessageCodec;
-
 /**
  * Marks a business method to be automatically registered as a Vertx message consumer.
  * <p>
@@ -74,12 +71,5 @@ public @interface ConsumeEvent {
      * @see io.vertx.core.Vertx#executeBlocking(io.vertx.core.Handler, boolean, io.vertx.core.Handler)
      */
     boolean blocking() default false;
-
-    /**
-     * 
-     * @return {@code null} if it should use a default MessageCodec
-     * @see io.quarkus.vertx.runtime.deployment.GenericMessageCodec
-     */
-    Class<? extends MessageCodec<?, ?>> codec() default GenericMessageCodec.class;
 
 }
