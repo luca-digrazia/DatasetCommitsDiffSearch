@@ -1425,16 +1425,14 @@ public final class CcCompilationHelper {
             result.addHeaderTokenFile(headerTokenFile);
             break;
           case SOURCE:
-            if (generateNoPicAction) {
-              Artifact objectFile =
-                  createCompileActionTemplate(
-                      source,
-                      outputName,
-                      builder,
-                      ImmutableList.of(ArtifactCategory.OBJECT_FILE),
-                      /*usePic=*/ false);
-              result.addObjectFile(objectFile);
-            }
+            Artifact objectFile =
+                createCompileActionTemplate(
+                    source,
+                    outputName,
+                    builder,
+                    ImmutableList.of(ArtifactCategory.OBJECT_FILE),
+                    false);
+            result.addObjectFile(objectFile);
 
             if (generatePicAction) {
               Artifact picObjectFile =
@@ -1443,7 +1441,7 @@ public final class CcCompilationHelper {
                       outputName,
                       builder,
                       ImmutableList.of(ArtifactCategory.PIC_OBJECT_FILE),
-                      /*usePic=*/ true);
+                      true);
               result.addPicObjectFile(picObjectFile);
             }
             break;
@@ -1463,9 +1461,6 @@ public final class CcCompilationHelper {
       CppCompileActionBuilder builder,
       Iterable<ArtifactCategory> outputCategories,
       boolean usePic) {
-    if (usePic) {
-      builder = new CppCompileActionBuilder(builder).setPicMode(true);
-    }
     SpecialArtifact sourceArtifact = (SpecialArtifact) source.getSource();
     SpecialArtifact outputFiles =
         CppHelper.getCompileOutputTreeArtifact(
