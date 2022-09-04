@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
@@ -57,13 +58,14 @@ public class MultiArchBinarySupport {
    */
   static ImmutableMap<BuildConfiguration, CcToolchainProvider> getChildConfigurationsAndToolchains(
       RuleContext ruleContext) {
-    ImmutableListMultimap<BuildConfiguration, CcToolchainProvider> configToProvider =
+    ImmutableListMultimap<BuildConfiguration, ToolchainInfo> configToProvider =
         ruleContext.getPrerequisitesByConfiguration(
-            ObjcRuleClasses.CHILD_CONFIG_ATTR, CcToolchainProvider.PROVIDER);
+            ObjcRuleClasses.CHILD_CONFIG_ATTR, ToolchainInfo.PROVIDER);
 
     ImmutableMap.Builder<BuildConfiguration, CcToolchainProvider> result = ImmutableMap.builder();
     for (BuildConfiguration config : configToProvider.keySet()) {
-      CcToolchainProvider toolchain = Iterables.getOnlyElement(configToProvider.get(config));
+      CcToolchainProvider toolchain =
+          (CcToolchainProvider) Iterables.getOnlyElement(configToProvider.get(config));
       result.put(config, toolchain);
     }
 
@@ -312,7 +314,7 @@ public class MultiArchBinarySupport {
             .setCompilationAttributes(
                 CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
             .addDeps(propagatedConfiguredTargetAndDataDeps)
-            .addObjcProviders(additionalDepProviders)
+            .addDepObjcProviders(additionalDepProviders)
             .setIntermediateArtifacts(intermediateArtifacts)
             .setAlwayslink(false)
             .setLinkedBinary(intermediateArtifacts.strippedSingleArchitectureBinary());

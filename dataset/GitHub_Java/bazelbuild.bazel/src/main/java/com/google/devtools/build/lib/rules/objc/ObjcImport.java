@@ -14,18 +14,16 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import java.util.Map;
-import java.util.TreeMap;
+import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 
 /**
  * Implementation for {@code objc_import}.
@@ -34,6 +32,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
+    CcCommon.checkRuleLoadedThroughMacro(ruleContext);
 
     CompilationAttributes compilationAttributes =
         CompilationAttributes.Builder.fromRuleContext(ruleContext).build();
@@ -42,10 +41,9 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     CompilationArtifacts compilationArtifacts = new CompilationArtifacts.Builder().build();
 
     ObjcCommon common =
-        new ObjcCommon.Builder(ObjcCommon.Purpose.COMPILE_AND_LINK, ruleContext)
+        new ObjcCommon.Builder(ObjcCommon.Purpose.LINK_ONLY, ruleContext)
             .setCompilationArtifacts(compilationArtifacts)
             .setCompilationAttributes(compilationAttributes)
-            .addDeps(ruleContext.getPrerequisiteConfiguredTargets("deps"))
             .setIntermediateArtifacts(intermediateArtifacts)
             .setAlwayslink(ruleContext.attributes().get("alwayslink", Type.BOOLEAN))
             .setHasModuleMap()
@@ -54,24 +52,19 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
 
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
-    Map<String, NestedSet<Artifact>> outputGroupCollector = new TreeMap<>();
-    ImmutableList.Builder<Artifact> objectFilesCollector = ImmutableList.builder();
+    Iterable<Artifact> publicHeaders = compilationAttributes.hdrs().toList();
+    CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
 
-    CompilationSupport compilationSupport =
-        new CompilationSupport.Builder()
-            .setRuleContext(ruleContext)
-            .setOutputGroupCollector(outputGroupCollector)
-            .setObjectFilesCollector(objectFilesCollector)
-            .build();
-
-    compilationSupport.registerCompileAndArchiveActions(common).validateAttributes();
+    new CompilationSupport.Builder()
+        .setRuleContext(ruleContext)
+        .build()
+        .registerGenerateModuleMapAction(moduleMap, publicHeaders)
+        .validateAttributes();
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
         .addNativeDeclaredProvider(common.getObjcProvider())
         .addNativeDeclaredProvider(
-            CcInfo.builder()
-                .setCcCompilationContext(compilationSupport.getCcCompilationContext())
-                .build())
+            CcInfo.builder().setCcCompilationContext(common.getCcCompilationContext()).build())
         .addStarlarkTransitiveInfo(ObjcProvider.STARLARK_NAME, common.getObjcProvider())
         .build();
   }

@@ -51,12 +51,11 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "   return_kwargs = {}",
         "   for cpu_value in ctx.split_attr.deps:",
         "     for child_target in ctx.split_attr.deps[cpu_value]:",
-        "       return_kwargs[cpu_value] = struct(objc=child_target[apple_common.Objc])",
+        "       return_kwargs[cpu_value] = struct(objc=child_target.objc)",
         "   return MyInfo(**return_kwargs)",
         "my_rule = rule(implementation = my_rule_impl,",
         "   attrs = {",
-        "       'deps': attr.label_list(cfg=apple_common.multi_arch_split, providers=[['objc'],"
-            + " [apple_common.Objc]]),",
+        "       'deps': attr.label_list(cfg=apple_common.multi_arch_split, providers=[['objc']]),",
         "       'platform_type': attr.string(mandatory=True),",
         "       'minimum_os_version': attr.string(mandatory=True)},",
         "   fragments = ['apple'],",
@@ -102,13 +101,13 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "def my_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   return MyInfo(",
-        "      found_libs = dep[apple_common.Objc].library,",
+        "      found_libs = dep.objc.library,",
         "      found_hdrs = dep[CcInfo].compilation_context.headers,",
         "    )",
         "my_rule = rule(implementation = my_rule_impl,",
         "   attrs = {",
         "   'deps': attr.label_list(allow_files = False, mandatory = False,",
-        "                           providers = [['objc', CcInfo], [apple_common.Objc, CcInfo]]),",
+        "                           providers = ['objc', CcInfo]),",
         "})");
     scratch.file("examples/apple_starlark/a.m");
     scratch.file(
@@ -148,11 +147,11 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "def _root_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   return MyInfo(",
-        "      linkopt = dep[apple_common.Objc].linkopt,",
+        "      linkopt = dep.objc.linkopt,",
         "   )",
         "",
         "root_rule = rule(implementation = _root_rule_impl,",
-        "   attrs = {'deps': attr.label_list(providers = [['objc'], [apple_common.Objc]]),",
+        "   attrs = {'deps': attr.label_list(providers = ['objc']),",
         "})",
         "dep_rule = rule(implementation = _dep_rule_impl)");
     scratch.file(
@@ -180,7 +179,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "examples/rule/apple_rules.bzl",
         "def my_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
-        "   objc_provider = dep[apple_common.Objc]", // this is line 3
+        "   objc_provider = dep.objc", // this is line 3
         "   return []",
         "my_rule = rule(implementation = my_rule_impl,",
         "   attrs = {",
@@ -215,7 +214,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         .hasMessageThat()
         .contains(
             "<target //examples/apple_starlark:lib> (rule 'cc_library') "
-                + "doesn't contain declared provider 'objc'");
+                + "doesn't have provider 'objc'");
   }
 
   @Test
@@ -225,8 +224,8 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "examples/rule/apple_rules.bzl",
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def my_rule_impl(ctx):",
-        "   cc_has_provider = apple_common.Objc in ctx.attr.deps[0]",
-        "   objc_has_provider = apple_common.Objc in ctx.attr.deps[1]",
+        "   cc_has_provider = hasattr(ctx.attr.deps[0], 'objc')",
+        "   objc_has_provider = hasattr(ctx.attr.deps[1], 'objc')",
         "   return MyInfo(cc_has_provider=cc_has_provider, objc_has_provider=objc_has_provider)",
         "my_rule = rule(implementation = my_rule_impl,",
         "   attrs = {",
@@ -265,12 +264,11 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "examples/rule/apple_rules.bzl",
         "def my_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
-        "   objc_provider = dep[apple_common.Objc]",
+        "   objc_provider = dep.objc",
         "   return [objc_provider]",
         "swift_library = rule(implementation = my_rule_impl,",
         "   attrs = {",
-        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = [['objc'],"
-            + " [apple_common.Objc]])",
+        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = ['objc'])",
         "})");
 
     scratch.file("examples/apple_starlark/a.m");
@@ -687,12 +685,14 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "   ios_simulator_device = ctx.fragments.objc.ios_simulator_device",
         "   ios_simulator_version = ctx.fragments.objc.ios_simulator_version",
         "   signing_certificate_name = ctx.fragments.objc.signing_certificate_name",
+        "   generate_dsym = ctx.fragments.objc.generate_dsym",
         "   return MyInfo(",
         "      copts=copts,",
         "      compilation_mode_copts=compilation_mode_copts,",
         "      ios_simulator_device=ios_simulator_device,",
         "      ios_simulator_version=str(ios_simulator_version),",
         "      signing_certificate_name=signing_certificate_name,",
+        "      generate_dsym=generate_dsym,",
         "   )",
         "swift_binary = rule(",
         "implementation = swift_binary_impl,",
@@ -713,7 +713,8 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "--objccopt=-DTestObjcCopt",
         "--ios_simulator_device='iPhone 6'",
         "--ios_simulator_version=8.4",
-        "--ios_signing_cert_name='Apple Developer'");
+        "--ios_signing_cert_name='Apple Developer'",
+        "--apple_generate_dsym");
     ConfiguredTarget starlarkTarget = getConfiguredTarget("//examples/objc_starlark:my_target");
     StructImpl myInfo = getMyInfoFromTarget(starlarkTarget);
 
@@ -724,12 +725,14 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
     Object iosSimulatorDevice = myInfo.getValue("ios_simulator_device");
     Object iosSimulatorVersion = myInfo.getValue("ios_simulator_version");
     Object signingCertificateName = myInfo.getValue("signing_certificate_name");
+    Boolean generateDsym = (Boolean) myInfo.getValue("generate_dsym");
 
     assertThat(copts).contains("-DTestObjcCopt");
     assertThat(compilationModeCopts).containsExactlyElementsIn(ObjcConfiguration.OPT_COPTS);
     assertThat(iosSimulatorDevice).isEqualTo("'iPhone 6'");
     assertThat(iosSimulatorVersion).isEqualTo("8.4");
     assertThat(signingCertificateName).isEqualTo("'Apple Developer'");
+    assertThat(generateDsym).isTrue();
   }
 
   @Test
@@ -874,8 +877,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
               "implementation = swift_binary_impl,",
               "attrs = {",
               "   'deps': attr.label_list(",
-              "allow_files = False, mandatory = False, providers = [['objc'],"
-                  + " [apple_common.Objc]])",
+              "allow_files = False, mandatory = False, providers = ['objc'])",
               "})"
             },
             String.class);
@@ -1015,7 +1017,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
             "   dep = ctx.attr.deps[0]",
             "   frameworks = depset(['framework_from_impl'])",
             "   created_provider = apple_common.new_objc_provider\\",
-            "(providers=[dep[apple_common.Objc]], sdk_framework=frameworks)",
+            "(providers=[dep.objc], sdk_framework=frameworks)",
             "   return [created_provider]");
 
     Depset foundFrameworks = starlarkTarget.get(ObjcProvider.STARLARK_CONSTRUCTOR).sdkFramework();
@@ -1099,7 +1101,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "examples/rule/apple_rules.bzl",
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def swift_binary_impl(ctx):",
-        "   objc_provider = ctx.attr.deps[0][apple_common.Objc]",
+        "   objc_provider = ctx.attr.deps[0].objc",
         "   return MyInfo(",
         "      empty_value=objc_provider.linkopt,",
         "   )",
@@ -1107,8 +1109,7 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "implementation = swift_binary_impl,",
         "fragments = ['apple'],",
         "attrs = {",
-        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = [['objc'],"
-            + " [apple_common.Objc]])",
+        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = ['objc'])",
         "})");
 
     scratch.file("examples/apple_starlark/a.m");
@@ -1137,14 +1138,13 @@ public class ObjcStarlarkTest extends ObjcRuleTestCase {
         "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _test_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
-        "   objc_provider = dep[apple_common.Objc]",
+        "   objc_provider = dep.objc",
         "   return MyInfo(",
         "      sdk_frameworks=objc_provider.sdk_framework,",
         "   )",
         "test_rule = rule(implementation = _test_rule_impl,",
         "   attrs = {",
-        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = [['objc'],"
-            + " [apple_common.Objc]])",
+        "   'deps': attr.label_list(allow_files = False, mandatory = False, providers = ['objc'])",
         "})");
 
     scratch.file(

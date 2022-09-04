@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
-import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -68,7 +67,6 @@ final class ProtobufSupport {
   private static final String UNIQUE_DIRECTORY_NAME = "_generated_objc_protos";
 
   private final RuleContext ruleContext;
-  private final CppSemantics cppSemantics;
   private final BuildConfiguration buildConfiguration;
   private final ProtoAttributes attributes;
   private final Collection<ObjcProtoProvider> objcProtoProviders;
@@ -84,7 +82,6 @@ final class ProtobufSupport {
    * really needed to the actions.
    *
    * @param ruleContext context this proto library is constructed in
-   * @param cppSemantics the cpp semantics to use
    * @param buildConfiguration the configuration from which to get prerequisites when building proto
    *     targets in a split configuration
    * @param dylibHandledProtos a set of protos linked into dynamic libraries that the current rule
@@ -96,14 +93,12 @@ final class ProtobufSupport {
    */
   ProtobufSupport(
       RuleContext ruleContext,
-      CppSemantics cppSemantics,
       BuildConfiguration buildConfiguration,
       NestedSet<Artifact> dylibHandledProtos,
       Collection<ObjcProtoProvider> objcProtoProviders,
       NestedSet<Artifact> portableProtoFilters,
       CcToolchainProvider toolchain) {
     this.ruleContext = ruleContext;
-    this.cppSemantics = cppSemantics;
     this.buildConfiguration = buildConfiguration;
     this.attributes = new ProtoAttributes(ruleContext);
     this.objcProtoProviders = objcProtoProviders;
@@ -132,7 +127,8 @@ final class ProtobufSupport {
         getCommon(getUniqueIntermediateArtifactsForSourceCompile(), compilationArtifacts);
 
     CompilationSupport compilationSupport =
-        new CompilationSupport.Builder(ruleContext, cppSemantics)
+        new CompilationSupport.Builder()
+            .setRuleContext(ruleContext)
             .setConfig(buildConfiguration)
             .setIntermediateArtifacts(getUniqueIntermediateArtifactsForSourceCompile())
             .setCompilationAttributes(new CompilationAttributes.Builder().build())
@@ -263,7 +259,7 @@ final class ProtobufSupport {
             .addTransitiveInputs(getAllProtos())
             .addOutputs(getGeneratedProtoOutputs(getAllProtos(), HEADER_SUFFIX))
             .addOutputs(getGeneratedProtoOutputs(getOutputProtos(), SOURCE_SUFFIX))
-            .setExecutable(attributes.getProtoCompiler())
+            .setExecutable(attributes.getProtoCompiler().getExecPath())
             .addCommandLine(getGenerationCommandLine(outputGroupFile, skipGroupFile))
             .build(ruleContext));
 

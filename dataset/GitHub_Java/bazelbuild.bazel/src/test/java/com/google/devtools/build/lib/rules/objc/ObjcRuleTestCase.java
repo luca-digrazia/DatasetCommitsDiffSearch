@@ -295,7 +295,13 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     Artifact moduleMapArtifact =
         getGenfilesArtifact(
             targetName + ".modulemaps/module.modulemap", packagePath + ":" + targetName);
-    String moduleName = packagePath + ":" + targetName;
+    String moduleName =
+        (packagePath + "_" + targetName)
+            .replace("//", "")
+            .replace("@", "")
+            .replace("-", "_")
+            .replace("/", "_")
+            .replace(":", "_");
 
     return ImmutableList.of("-iquote",
         moduleMapArtifact.getExecPath().getParentDirectory().toString(),
@@ -665,7 +671,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   private void assertObjcProtoProviderArtifactsArePropagated(ConfiguredTarget topTarget)
       throws Exception {
-    ConfiguredTarget libTarget = getDirectPrerequisite(topTarget, "//libs:objc_lib");
+    ConfiguredTarget libTarget =
+        view.getPrerequisiteConfiguredTargetForTesting(
+            reporter, topTarget, Label.parseAbsoluteUnchecked("//libs:objc_lib"), masterConfig);
 
     ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.STARLARK_CONSTRUCTOR);
     assertThat(protoProvider).isNotNull();
@@ -803,7 +811,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     ConfiguredTarget topTarget = getConfiguredTarget("//x:x");
 
-    ConfiguredTarget libTarget = getDirectPrerequisite(topTarget, "//libs:objc_lib");
+    ConfiguredTarget libTarget =
+        view.getPrerequisiteConfiguredTargetForTesting(
+            reporter, topTarget, Label.parseAbsoluteUnchecked("//libs:objc_lib"), masterConfig);
 
     ObjcProtoProvider protoProvider = libTarget.get(ObjcProtoProvider.STARLARK_CONSTRUCTOR);
     assertThat(protoProvider).isNotNull();
