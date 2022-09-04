@@ -41,7 +41,6 @@ import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.util.JandexUtil;
 import io.quarkus.gizmo.DescriptorUtils;
 import io.quarkus.jackson.spi.JacksonModuleBuildItem;
@@ -77,7 +76,6 @@ public abstract class BasePanacheMongoResourceProcessor {
     public void buildImperative(CombinedIndexBuildItem index,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             List<PanacheMethodCustomizerBuildItem> methodCustomizersBuildItems) {
 
@@ -85,7 +83,7 @@ public abstract class BasePanacheMongoResourceProcessor {
                 .map(bi -> bi.getMethodCustomizer()).collect(Collectors.toList());
 
         MetamodelInfo modelInfo = new MetamodelInfo();
-        processTypes(index, transformers, reflectiveClass, reflectiveHierarchy, propertyMappingClass, getImperativeTypeBundle(),
+        processTypes(index, transformers, reflectiveClass, propertyMappingClass, getImperativeTypeBundle(),
                 createRepositoryEnhancer(index, methodCustomizers),
                 createEntityEnhancer(index, methodCustomizers, modelInfo),
                 modelInfo);
@@ -94,7 +92,6 @@ public abstract class BasePanacheMongoResourceProcessor {
     @BuildStep
     public void buildReactive(CombinedIndexBuildItem index,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             List<PanacheMethodCustomizerBuildItem> methodCustomizersBuildItems) {
@@ -102,7 +99,7 @@ public abstract class BasePanacheMongoResourceProcessor {
                 .map(bi -> bi.getMethodCustomizer()).collect(Collectors.toList());
 
         MetamodelInfo modelInfo = new MetamodelInfo();
-        processTypes(index, transformers, reflectiveClass, reflectiveHierarchy, propertyMappingClass, getReactiveTypeBundle(),
+        processTypes(index, transformers, reflectiveClass, propertyMappingClass, getReactiveTypeBundle(),
                 createReactiveRepositoryEnhancer(index, methodCustomizers),
                 createReactiveEntityEnhancer(index, methodCustomizers, modelInfo),
                 modelInfo);
@@ -332,7 +329,7 @@ public abstract class BasePanacheMongoResourceProcessor {
 
     protected void processRepositories(CombinedIndexBuildItem index,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
-            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             PanacheRepositoryEnhancer repositoryEnhancer, TypeBundle typeBundle) {
 
@@ -362,7 +359,7 @@ public abstract class BasePanacheMongoResourceProcessor {
 
         for (Type parameterType : daoTypeParameters) {
             // Register for reflection the type parameters of the repository: this should be the entity class and the ID class
-            reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem.Builder().type(parameterType).build());
+            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, parameterType.name().toString()));
 
             // Register for building the property mapping cache
             propertyMappingClass.produce(new PropertyMappingClassBuildStep(parameterType.name().toString()));
@@ -372,11 +369,10 @@ public abstract class BasePanacheMongoResourceProcessor {
     protected void processTypes(CombinedIndexBuildItem index,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             TypeBundle typeBundle, PanacheRepositoryEnhancer repositoryEnhancer,
             PanacheEntityEnhancer entityEnhancer, MetamodelInfo modelInfo) {
-        processRepositories(index, transformers, reflectiveHierarchy, propertyMappingClass,
+        processRepositories(index, transformers, reflectiveClass, propertyMappingClass,
                 repositoryEnhancer, typeBundle);
         processEntities(index, transformers, reflectiveClass, propertyMappingClass,
                 entityEnhancer, typeBundle, modelInfo);
