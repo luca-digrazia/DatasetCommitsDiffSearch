@@ -18,8 +18,10 @@ package smile.data;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Arrays;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -30,7 +32,6 @@ import java.util.Spliterator;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
-import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
 import smile.data.type.StructType;
@@ -43,8 +44,6 @@ import smile.math.matrix.Matrix;
  * @author Haifeng Li
  */
 class DataFrameImpl implements DataFrame {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DataFrameImpl.class);
-
     /** DataFrame schema. */
     private StructType schema;
     /** The column vectors. */
@@ -67,7 +66,7 @@ class DataFrameImpl implements DataFrame {
                 .map(v -> new StructField(v.name(), v.type()))
                 .collect(Collectors.toList())
                 .toArray(new StructField[columns.size()]);
-        this.schema = DataTypes.struct(fields);
+        this.schema = new StructType(fields);
 
         Set<String> set = new HashSet<>();
         for (BaseVector v : columns) {
@@ -92,226 +91,131 @@ class DataFrameImpl implements DataFrame {
      * @param <T> The type of elements.
      */
     @SuppressWarnings("unchecked")
-    public <T> DataFrameImpl(List<T> data, Class<T> clazz) {
+    public <T> DataFrameImpl(Collection<T> data, Class<T> clazz) {
         this.size = data.size();
         this.columns = new ArrayList<>();
+        List<StructField> structFields = new ArrayList<>();
 
-        try {
-            BeanInfo info = Introspector.getBeanInfo(clazz);
-            PropertyDescriptor[] props = info.getPropertyDescriptors();
-            List<StructField> fields = Arrays.stream(props)
-                    .filter(prop -> !prop.getName().equals("class"))
-                    .map(this::field)
-                    .collect(Collectors.toList());
+        Field[] fields = clazz.getFields();
+        for (Field field : fields) {
+            String name = field.getName();
+            Class<?> type = field.getType();
 
-            this.schema = DataTypes.struct(fields);
-            for (PropertyDescriptor prop : props) {
-                if (!prop.getName().equals("class")) {
-                    String name = prop.getName();
-                    Class<?> type = prop.getPropertyType();
-                    Method read = prop.getReadMethod();
-
-                    if (type == int.class) {
-                        int[] values = new int[size];
-                        for (int i = 0; i < size; i++) values[i] = (int) read.invoke(data.get(i));
-                        IntVector vector = IntVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == double.class) {
-                        double[] values = new double[size];
-                        for (int i = 0; i < size; i++) values[i] = (double) read.invoke(data.get(i));
-                        DoubleVector vector = DoubleVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == boolean.class) {
-                        boolean[] values = new boolean[size];
-                        for (int i = 0; i < size; i++) values[i] = (boolean) read.invoke(data.get(i));
-                        BooleanVector vector = BooleanVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == short.class) {
-                        short[] values = new short[size];
-                        for (int i = 0; i < size; i++) values[i] = (short) read.invoke(data.get(i));
-                        ShortVector vector = ShortVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == long.class) {
-                        long[] values = new long[size];
-                        for (int i = 0; i < size; i++) values[i] = (long) read.invoke(data.get(i));
-                        LongVector vector = LongVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == float.class) {
-                        float[] values = new float[size];
-                        for (int i = 0; i < size; i++) values[i] = (float) read.invoke(data.get(i));
-                        FloatVector vector = FloatVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == byte.class) {
-                        byte[] values = new byte[size];
-                        for (int i = 0; i < size; i++) values[i] = (byte) read.invoke(data.get(i));
-                        ByteVector vector = ByteVector.of(name, values);
-                        columns.add(vector);
-                    } else if (type == char.class) {
-                        char[] values = new char[size];
-                        for (int i = 0; i < size; i++) values[i] = (char) read.invoke(data.get(i));
-                        CharVector vector = CharVector.of(name, values);
-                        columns.add(vector);
-                    } else {
-                        Object[] values = new Object[size];
-                        for (int i = 0; i < size; i++) values[i] = read.invoke(data.get(i));
-                        Vector<?> vector = Vector.of(name, values);
-                        columns.add(vector);
+            if (type == int.class) {
+                int[] values = data.stream().mapToInt(o -> {
+                    try {
+                        return field.getInt(o);
+                    } catch (ReflectiveOperationException ex) {
+                        throw new RuntimeException(ex);
                     }
+                }).toArray();
+                IntVector vector = IntVector.of(name, values);
+                columns.add(vector);
+                structFields.add(new StructField(name, DataTypes.IntegerType));
+            } else if (type == long.class) {
+                long[] values = data.stream().mapToLong(o -> {
+                    try {
+                        return field.getLong(o);
+                    } catch (ReflectiveOperationException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }).toArray();
+                LongVector vector = LongVector.of(name, values);
+                columns.add(vector);
+                structFields.add(new StructField(name, DataTypes.LongType));
+            } else if (type == double.class) {
+                double[] values = data.stream().mapToDouble(o -> {
+                    try {
+                        return field.getDouble(o);
+                    } catch (ReflectiveOperationException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }).toArray();
+                DoubleVector vector = DoubleVector.of(name, values);
+                columns.add(vector);
+                structFields.add(new StructField(name, DataTypes.DoubleType));
+            } else {
+                T[] values = (T[]) data.stream().map(o -> {
+                    try {
+                        return (T) field.get(o);
+                    } catch (ReflectiveOperationException ex) {
+                        throw new RuntimeException(ex);
+                    }
+                }).toArray();
+                Vector<T> vector = Vector.of(name, values);
+                columns.add(vector);
+                if (type == String.class) {
+                    structFields.add(new StructField(name, DataTypes.StringType));
+                } else if (type == LocalDate.class) {
+                    structFields.add(new StructField(name, DataTypes.DateType));
+                } else if (type == LocalDateTime.class) {
+                    structFields.add(new StructField(name, DataTypes.DateTimeType));
                 }
             }
+        }
+
+        BeanInfo info;
+        try {
+            info = Introspector.getBeanInfo(clazz);
         } catch (java.beans.IntrospectionException ex) {
-            logger.error("Failed to introspect a bean: ", ex);
-            throw new RuntimeException(ex);
-        } catch (ReflectiveOperationException ex) {
-            logger.error("Failed to call property read method: ", ex);
             throw new RuntimeException(ex);
         }
-    }
 
-    /** Returns the struct field of a property. */
-    private StructField field(PropertyDescriptor prop) {
-        return new StructField(prop.getName(), DataType.of(prop.getPropertyType()));
-    }
+        PropertyDescriptor[] props = info.getPropertyDescriptors();
 
-    /**
-     * Constructor.
-     * @param data The data collection.
-     */
-    public DataFrameImpl(List<Tuple> data) {
-        if (data.isEmpty()) {
-            throw new IllegalArgumentException("Empty tuple collections");
-        }
+        for (PropertyDescriptor prop : props) {
+            if (!prop.getName().equals("class")) {
+                String name = prop.getName();
+                Class<?> type = prop.getPropertyType();
 
-        this.size = data.size();
-        this.schema = data.get(0).schema();
-        StructField[] fields = schema.fields();
-        this.columns = new ArrayList<>(fields.length);
-
-        for (int j = 0; j < fields.length; j++) {
-            StructField field = fields[j];
-            if (field.type == DataTypes.IntegerType) {
-                int[] values = new int[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getInt(j);
-                IntVector vector = IntVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.LongType) {
-                long[] values = new long[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getLong(j);
-                LongVector vector = LongVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.DoubleType) {
-                double[] values = new double[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getDouble(j);
-                DoubleVector vector = DoubleVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.FloatType) {
-                float[] values = new float[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getFloat(j);
-                FloatVector vector = FloatVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.BooleanType) {
-                boolean[] values = new boolean[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getBoolean(j);
-                BooleanVector vector = BooleanVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.CharType) {
-                char[] values = new char[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getChar(j);
-                CharVector vector = CharVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.ByteType) {
-                byte[] values = new byte[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getByte(j);
-                ByteVector vector = ByteVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.ShortType) {
-                short[] values = new short[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getShort(j);
-                ShortVector vector = ShortVector.of(field.name, values);
-                columns.add(vector);
-            } else {
-                Object[] values = new Object[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).get(j);
-                Vector vector = Vector.of(field.name, values);
-                columns.add(vector);
-            }
-        }
-    }
-
-    /**
-     * Constructor.
-     * @param df The input DataFrame.
-     * @param formula The formula that transforms from the input DataFrame.
-     */
-    public DataFrameImpl(DataFrame df, smile.data.formula.Formula formula) {
-        this.size = df.size();
-        this.schema = formula.bind(df.schema());
-        StructField[] fields = schema.fields();
-        this.columns = new ArrayList<>(fields.length);
-
-        smile.data.formula.Factor[] factors = formula.factors();
-        for (int j = 0; j < fields.length; j++) {
-            StructField field = fields[j];
-            if (factors[j].isColumn()) {
-                columns.add(df.column(field.name));
-            }
-        }
-
-        // We are done if all factors are raw columns.
-        if (columns.size() == factors.length) return;
-
-        List<Tuple> data = df.stream().map(formula::apply).collect(Collectors.toList());
-        for (int j = 0; j < fields.length; j++) {
-            StructField field = fields[j];
-            if (formula.factors()[j].isColumn()) {
-                continue;
-            }
-
-            if (field.type == DataTypes.IntegerType) {
-                int[] values = new int[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getInt(j);
-                IntVector vector = IntVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.LongType) {
-                long[] values = new long[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getLong(j);
-                LongVector vector = LongVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.DoubleType) {
-                double[] values = new double[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getDouble(j);
-                DoubleVector vector = DoubleVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.FloatType) {
-                float[] values = new float[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getFloat(j);
-                FloatVector vector = FloatVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.BooleanType) {
-                boolean[] values = new boolean[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getBoolean(j);
-                BooleanVector vector = BooleanVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.CharType) {
-                char[] values = new char[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getChar(j);
-                CharVector vector = CharVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.ByteType) {
-                byte[] values = new byte[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getByte(j);
-                ByteVector vector = ByteVector.of(field.name, values);
-                columns.add(vector);
-            } else if (field.type == DataTypes.ShortType) {
-                short[] values = new short[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).getShort(j);
-                ShortVector vector = ShortVector.of(field.name, values);
-                columns.add(vector);
-            } else {
-                Object[] values = new Object[size];
-                for (int i = 0; i < size; i++) values[i] = data.get(i).get(j);
-                Vector vector = Vector.of(field.name, values);
-                columns.add(vector);
+                if (type == int.class) {
+                    Method read = prop.getReadMethod();
+                    int[] values = data.stream().mapToInt(o -> {
+                        try {
+                            return (Integer) read.invoke(o);
+                        } catch (ReflectiveOperationException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }).toArray();
+                    IntVector vector = IntVector.of(name, values);
+                    columns.add(vector);
+                    structFields.add(new StructField(name, DataTypes.IntegerType));
+                } else if (type == long.class) {
+                    Method read = prop.getReadMethod();
+                    long[] values = data.stream().mapToLong(o -> {
+                        try {
+                            return (Long) read.invoke(o);
+                        } catch (ReflectiveOperationException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }).toArray();
+                    LongVector vector = LongVector.of(name, values);
+                    columns.add(vector);
+                    structFields.add(new StructField(name, DataTypes.LongType));
+                } else if (type == double.class) {
+                    Method read = prop.getReadMethod();
+                    double[] values = data.stream().mapToDouble(o -> {
+                        try {
+                            return (Double) read.invoke(o);
+                        } catch (ReflectiveOperationException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }).toArray();
+                    DoubleVector vector = DoubleVector.of(name, values);
+                    columns.add(vector);
+                    structFields.add(new StructField(name, DataTypes.DoubleType));
+                } else {
+                    Method read = prop.getReadMethod();
+                    T[] values = (T[]) data.stream().map(o -> {
+                        try {
+                            return (T) read.invoke(o);
+                        } catch (ReflectiveOperationException ex) {
+                            throw new RuntimeException(ex);
+                        }
+                    }).toArray();
+                    Vector<T> vector = Vector.of(name, values);
+                    columns.add(vector);
+                }
             }
         }
     }
@@ -347,54 +251,24 @@ class DataFrameImpl implements DataFrame {
         return java.util.stream.StreamSupport.stream(spliterator, true);
     }
 
-    @Override
-    public BaseVector column(int i) {
-        return columns.get(i);
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
-    public <T> Vector<T> vector(int i) {
+    @Override
+    public <T> Vector<T> column(int i) {
         return (Vector<T>) columns.get(i);
     }
 
     @Override
-    public BooleanVector booleanVector(int i) {
-        return (BooleanVector) columns.get(i);
-    }
-
-    @Override
-    public CharVector charVector(int i) {
-        return (CharVector) columns.get(i);
-    }
-
-    @Override
-    public ByteVector byteVector(int i) {
-        return (ByteVector) columns.get(i);
-    }
-
-    @Override
-    public ShortVector shortVector(int i) {
-        return (ShortVector) columns.get(i);
-    }
-
-    @Override
-    public IntVector intVector(int i) {
+    public IntVector intColumn(int i) {
         return (IntVector) columns.get(i);
     }
 
     @Override
-    public LongVector longVector(int i) {
+    public LongVector longColumn(int i) {
         return (LongVector) columns.get(i);
     }
 
     @Override
-    public FloatVector floatVector(int i) {
-        return (FloatVector) columns.get(i);
-    }
-
-    @Override
-    public DoubleVector doubleVector(int i) {
+    public DoubleVector doubleColumn(int i) {
         return (DoubleVector) columns.get(i);
     }
 
@@ -481,32 +355,32 @@ class DataFrameImpl implements DataFrame {
 
         @Override
         public byte getByte(int j) {
-            return columns.get(j).getByte(i);
+            return ((ByteVector) columns.get(j)).getByte(i);
         }
 
         @Override
         public short getShort(int j) {
-            return columns.get(j).getShort(i);
+            return ((ShortVector) columns.get(j)).getShort(i);
         }
 
         @Override
         public int getInt(int j) {
-            return columns.get(j).getInt(i);
+            return ((IntVector) columns.get(j)).getInt(i);
         }
 
         @Override
         public long getLong(int j) {
-            return columns.get(j).getLong(i);
+            return ((LongVector) columns.get(j)).getLong(i);
         }
 
         @Override
         public float getFloat(int j) {
-            return columns.get(j).getFloat(i);
+            return ((FloatVector) columns.get(j)).getFloat(i);
         }
 
         @Override
         public double getDouble(int j) {
-            return columns.get(j).getDouble(i);
+            return ((DoubleVector) columns.get(j)).getDouble(i);
         }
 
         @Override
