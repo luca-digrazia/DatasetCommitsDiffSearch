@@ -1065,8 +1065,7 @@ public class CppLinkActionBuilder {
     } else {
       List<String> opts = new ArrayList<>(linkopts);
       opts.addAll(
-          featureConfiguration.getCommandLine(
-              "lto-indexing", buildVariables, /* expander= */ null));
+          featureConfiguration.getCommandLine("lto-indexing", buildVariables, null /* expander */));
       opts.addAll(cppConfiguration.getLtoIndexOptions());
       linkoptsForVariables = ImmutableList.copyOf(opts);
     }
