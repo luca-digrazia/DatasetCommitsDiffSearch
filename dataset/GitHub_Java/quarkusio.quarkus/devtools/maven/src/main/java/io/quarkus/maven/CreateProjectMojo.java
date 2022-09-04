@@ -1,5 +1,6 @@
 package io.quarkus.maven;
 
+import static io.quarkus.generators.ProjectGenerator.BUILD_FILE;
 import static org.fusesource.jansi.Ansi.ansi;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.artifactId;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.configuration;
@@ -16,12 +17,16 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.lang.model.SourceVersion;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
@@ -43,8 +48,10 @@ import org.fusesource.jansi.Ansi;
 
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+import io.quarkus.cli.commands.AddExtensionResult;
 import io.quarkus.cli.commands.AddExtensions;
 import io.quarkus.cli.commands.CreateProject;
+import io.quarkus.cli.commands.file.BuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
 import io.quarkus.generators.BuildTool;
 import io.quarkus.generators.SourceType;
@@ -144,8 +151,8 @@ public class CreateProjectMojo extends AbstractMojo {
         } catch (AppModelResolverException e1) {
             throw new MojoExecutionException("Failed to initialize Maven artifact resolver", e1);
         }
-        final QuarkusPlatformDescriptor platform = CreateUtils.resolvePlatformDescriptor(bomGroupId, bomArtifactId, bomVersion,
-                mvn, getLog());
+        final QuarkusPlatformDescriptor platform = CreateUtils.setGlobalPlatformDescriptor(bomGroupId, bomArtifactId,
+                bomVersion, mvn, getLog());
 
         // We detect the Maven version during the project generation to indicate the user immediately that the installed
         // version may not be supported.
@@ -187,6 +194,13 @@ public class CreateProjectMojo extends AbstractMojo {
             final SourceType sourceType = CreateProject.determineSourceType(extensions);
             sanitizeOptions(sourceType);
 
+            if (className != null && !isClassNameValid(className)) {
+                throw new MojoExecutionException("Unable to create the project, " + className + " is not valid FQCN.");
+            }
+
+            final Map<String, Object> context = new HashMap<>();
+            context.put("path", path);
+
             BuildTool buildToolEnum;
             try {
                 buildToolEnum = BuildTool.valueOf(buildTool.toUpperCase());
@@ -196,32 +210,31 @@ public class CreateProjectMojo extends AbstractMojo {
                 throw new IllegalArgumentException("Choose a valid build tool. Accepted values are: " + validBuildTools);
             }
 
-            final FileProjectWriter projectWriter = new FileProjectWriter(projectRoot);
-            final CreateProject createProject = new CreateProject(projectWriter, platform)
-                    .buildTool(buildToolEnum)
+            success = new CreateProject(new FileProjectWriter(projectRoot))
                     .groupId(projectGroupId)
                     .artifactId(projectArtifactId)
                     .version(projectVersion)
                     .sourceType(sourceType)
                     .className(className)
-                    .extensions(extensions);
-            if (path != null) {
-                createProject.setProperty("path", path);
-            }
-
-            success = createProject.execute().isSuccess();
+                    .buildTool(buildToolEnum)
+                    .extensions(extensions)
+                    .doCreateProject(context);
 
             File createdDependenciesBuildFile = new File(projectRoot, buildToolEnum.getDependenciesFile());
             File buildFile = new File(createdDependenciesBuildFile.getAbsolutePath());
             if (success) {
-                success = new AddExtensions(projectWriter, platform).extensions(extensions).execute().isSuccess();
+                AddExtensionResult result = new AddExtensions((BuildFile) context.get(BUILD_FILE))
+                        .addExtensions(extensions);
+                if (!result.succeeded()) {
+                    success = false;
+                }
             }
             if (BuildTool.MAVEN.equals(buildToolEnum)) {
                 createMavenWrapper(createdDependenciesBuildFile, ToolsUtils.readQuarkusProperties(platform));
             } else if (BuildTool.GRADLE.equals(buildToolEnum)) {
                 createGradleWrapper(buildFile.getParentFile(), ToolsUtils.readQuarkusProperties(platform));
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             throw new MojoExecutionException("Failed to generate Quarkus project", e);
         }
         if (success) {
@@ -368,10 +381,16 @@ public class CreateProjectMojo extends AbstractMojo {
 
             if (StringUtils.isBlank(path)) {
                 path = "/hello";
-            } else if (!path.startsWith("/")) {
+            }
+
+            if (!path.startsWith("/")) {
                 path = "/" + path;
             }
         }
+    }
+
+    private boolean isClassNameValid(String className) {
+        return SourceVersion.isName(className) && !SourceVersion.isKeyword(className);
     }
 
     private void sanitizeExtensions() {
