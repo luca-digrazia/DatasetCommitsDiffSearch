@@ -20,17 +20,6 @@ import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
-import build.bazel.remote.execution.v2.Action;
-import build.bazel.remote.execution.v2.ActionResult;
-import build.bazel.remote.execution.v2.Command;
-import build.bazel.remote.execution.v2.Command.EnvironmentVariable;
-import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.ExecuteRequest;
-import build.bazel.remote.execution.v2.ExecuteResponse;
-import build.bazel.remote.execution.v2.ExecutionGrpc.ExecutionImplBase;
-import build.bazel.remote.execution.v2.Platform;
-import build.bazel.remote.execution.v2.RequestMetadata;
-import build.bazel.remote.execution.v2.WaitExecutionRequest;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -44,19 +33,26 @@ import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.DigestUtil.ActionKey;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
+import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.shell.FutureCommandResult;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.remoteexecution.v1test.Action;
+import com.google.devtools.remoteexecution.v1test.ActionResult;
+import com.google.devtools.remoteexecution.v1test.Command.EnvironmentVariable;
+import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
+import com.google.devtools.remoteexecution.v1test.ExecuteResponse;
+import com.google.devtools.remoteexecution.v1test.ExecutionGrpc.ExecutionImplBase;
+import com.google.devtools.remoteexecution.v1test.Platform;
+import com.google.devtools.remoteexecution.v1test.RequestMetadata;
 import com.google.longrunning.Operation;
-import com.google.protobuf.Any;
 import com.google.protobuf.util.Durations;
 import com.google.rpc.Code;
 import com.google.rpc.Status;
 import io.grpc.Context;
 import io.grpc.StatusException;
-import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.StreamObserver;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -70,7 +66,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -80,6 +75,7 @@ import java.util.logging.Logger;
 /** A basic implementation of an {@link ExecutionImplBase} service. */
 final class ExecutionServer extends ExecutionImplBase {
   private static final Logger logger = Logger.getLogger(ExecutionServer.class.getName());
+
 
   // The name of the container image entry in the Platform proto
   // (see third_party/googleapis/devtools/remoteexecution/*/remote_execution.proto and
@@ -114,89 +110,22 @@ final class ExecutionServer extends ExecutionImplBase {
     this.cache = cache;
     this.operationsCache = operationsCache;
     this.digestUtil = digestUtil;
-    ThreadPoolExecutor realExecutor =
-        new ThreadPoolExecutor(
-            // This is actually the max number of concurrent jobs.
-            workerOptions.jobs,
-            // Since we use an unbounded queue, the executor ignores this value, but it still checks
-            // that it is greater or equal to the value above.
-            workerOptions.jobs,
-            // Shut down idle threads after one minute. Threads aren't all that expensive, but we
-            // also
-            // don't need to keep them around if we don't need them.
-            1,
-            TimeUnit.MINUTES,
-            // We use an unbounded queue for now.
-            // TODO(ulfjack): We need to reject work eventually.
-            new LinkedBlockingQueue<>(),
-            new ThreadFactoryBuilder().setNameFormat("subprocess-handler-%d").build());
+    ThreadPoolExecutor realExecutor = new ThreadPoolExecutor(
+        // This is actually the max number of concurrent jobs.
+        workerOptions.jobs,
+        // Since we use an unbounded queue, the executor ignores this value, but it still checks
+        // that it is greater or equal to the value above.
+        workerOptions.jobs,
+        // Shut down idle threads after one minute. Threads aren't all that expensive, but we also
+        // don't need to keep them around if we don't need them.
+        1, TimeUnit.MINUTES,
+        // We use an unbounded queue for now.
+        // TODO(ulfjack): We need to reject work eventually.
+        new LinkedBlockingQueue<>(),
+        new ThreadFactoryBuilder().setNameFormat("subprocess-handler-%d").build());
     // Allow the core threads to die.
     realExecutor.allowCoreThreadTimeOut(true);
     this.executorService = MoreExecutors.listeningDecorator(realExecutor);
-  }
-
-  @Override
-  public void waitExecution(WaitExecutionRequest wr, StreamObserver<Operation> responseObserver) {
-    final String opName = wr.getName();
-    ListenableFuture<ActionResult> future = operationsCache.get(opName);
-    if (future == null) {
-      responseObserver.onError(
-          StatusProto.toStatusRuntimeException(
-              Status.newBuilder()
-                  .setCode(Code.NOT_FOUND.getNumber())
-                  .setMessage("Operation not found: " + opName)
-                  .build()));
-      return;
-    }
-    waitExecution(opName, future, responseObserver);
-  }
-
-  private void waitExecution(
-      String opName,
-      ListenableFuture<ActionResult> future,
-      StreamObserver<Operation> responseObserver) {
-    future.addListener(
-        () -> {
-          try {
-            try {
-              ActionResult result = future.get();
-              responseObserver.onNext(
-                  Operation.newBuilder()
-                      .setName(opName)
-                      .setDone(true)
-                      .setResponse(Any.pack(ExecuteResponse.newBuilder().setResult(result).build()))
-                      .build());
-              responseObserver.onCompleted();
-            } catch (ExecutionException e) {
-              Throwables.throwIfUnchecked(e.getCause());
-              throw (Exception) e.getCause();
-            }
-          } catch (Exception e) {
-            ExecuteResponse resp;
-            if (e instanceof ExecutionStatusException) {
-              resp = ((ExecutionStatusException) e).getResponse();
-            } else {
-              logger.log(Level.SEVERE, "Work failed: " + opName, e);
-              resp =
-                  ExecuteResponse.newBuilder()
-                      .setStatus(StatusUtils.internalErrorStatus(e))
-                      .build();
-            }
-            responseObserver.onNext(
-                Operation.newBuilder()
-                    .setName(opName)
-                    .setDone(true)
-                    .setResponse(Any.pack(resp))
-                    .build());
-            responseObserver.onCompleted();
-            if (e instanceof InterruptedException) {
-              Thread.currentThread().interrupt();
-            }
-          } finally {
-            operationsCache.remove(opName);
-          }
-        },
-        MoreExecutors.directExecutor());
   }
 
   @Override
@@ -205,10 +134,8 @@ final class ExecutionServer extends ExecutionImplBase {
     ListenableFuture<ActionResult> future =
         executorService.submit(Context.current().wrap(() -> execute(request, opName)));
     operationsCache.put(opName, future);
-    // Send the first operation.
     responseObserver.onNext(Operation.newBuilder().setName(opName).build());
-    // When the operation completes, send the result.
-    waitExecution(opName, future, responseObserver);
+    responseObserver.onCompleted();
   }
 
   private ActionResult execute(ExecuteRequest request, String id)
@@ -223,7 +150,7 @@ final class ExecutionServer extends ExecutionImplBase {
               "build-request-id: %s command-id: %s action-id: %s",
               meta.getCorrelatedInvocationsId(), meta.getToolInvocationId(), meta.getActionId());
       logger.log(FINE, "Received work for: {0}", workDetails);
-      ActionResult result = execute(request.getActionDigest(), tempRoot);
+      ActionResult result = execute(request.getAction(), tempRoot);
       logger.log(FINE, "Completed {0}.", workDetails);
       return result;
     } catch (Exception e) {
@@ -236,8 +163,7 @@ final class ExecutionServer extends ExecutionImplBase {
         try {
           FileSystemUtils.deleteTree(tempRoot);
         } catch (IOException e) {
-          logger.log(
-              SEVERE,
+          logger.log(SEVERE,
               String.format(
                   "Failed to delete tmp directory %s: %s",
                   tempRoot, Throwables.getStackTraceAsString(e)));
@@ -246,21 +172,20 @@ final class ExecutionServer extends ExecutionImplBase {
     }
   }
 
-  private ActionResult execute(Digest actionDigest, Path execRoot)
+  private ActionResult execute(Action action, Path execRoot)
       throws IOException, InterruptedException, StatusException {
-    Command command = null;
-    Action action = null;
-    ActionKey actionKey = digestUtil.asActionKey(actionDigest);
+    com.google.devtools.remoteexecution.v1test.Command command = null;
     try {
-      action = Action.parseFrom(getFromFuture(cache.downloadBlob(actionDigest)));
-      command = Command.parseFrom(getFromFuture(cache.downloadBlob(action.getCommandDigest())));
+      command =
+          com.google.devtools.remoteexecution.v1test.Command.parseFrom(
+              getFromFuture(cache.downloadBlob(action.getCommandDigest())));
       cache.downloadTree(action.getInputRootDigest(), execRoot);
     } catch (CacheNotFoundException e) {
       throw StatusUtils.notFoundError(e.getMissingDigest());
     }
 
-    List<Path> outputs = new ArrayList<>(command.getOutputFilesList().size());
-    for (String output : command.getOutputFilesList()) {
+    List<Path> outputs = new ArrayList<>(action.getOutputFilesList().size());
+    for (String output : action.getOutputFilesList()) {
       Path file = execRoot.getRelative(output);
       if (file.exists()) {
         throw new FileAlreadyExistsException("Output file already exists: " + file);
@@ -268,7 +193,7 @@ final class ExecutionServer extends ExecutionImplBase {
       FileSystemUtils.createDirectoryAndParents(file.getParentDirectory());
       outputs.add(file);
     }
-    for (String output : command.getOutputDirectoriesList()) {
+    for (String output : action.getOutputDirectoriesList()) {
       Path file = execRoot.getRelative(output);
       if (file.exists()) {
         throw new FileAlreadyExistsException("Output directory/file already exists: " + file);
@@ -279,7 +204,12 @@ final class ExecutionServer extends ExecutionImplBase {
 
     // TODO(ulfjack): This is basically a copy of LocalSpawnRunner. Ideally, we'd use that
     // implementation instead of copying it.
-    com.google.devtools.build.lib.shell.Command cmd = getCommand(command, execRoot.getPathString());
+    Command cmd =
+        getCommand(
+            action,
+            command.getArgumentsList(),
+            getEnvironmentVariables(command),
+            execRoot.getPathString());
     long startTime = System.currentTimeMillis();
     CommandResult cmdResult = null;
 
@@ -327,9 +257,8 @@ final class ExecutionServer extends ExecutionImplBase {
     }
 
     ActionResult.Builder result = ActionResult.newBuilder();
-    boolean setResult = exitCode == 0 && !action.getDoNotCache();
     try {
-      cache.upload(result, actionKey, action, command, execRoot, outputs, setResult);
+      cache.upload(result, execRoot, outputs);
     } catch (ExecException e) {
       if (errStatus == null) {
         errStatus =
@@ -347,7 +276,8 @@ final class ExecutionServer extends ExecutionImplBase {
     if (errStatus != null) {
       resp.setStatus(errStatus);
       throw new ExecutionStatusException(errStatus, resp.build());
-    } else if (setResult) {
+    } else if (exitCode == 0 && !action.getDoNotCache()) {
+      ActionKey actionKey = digestUtil.computeActionKey(action);
       cache.setCachedActionResult(actionKey, finalResult);
     }
     return finalResult;
@@ -362,7 +292,8 @@ final class ExecutionServer extends ExecutionImplBase {
     return timeoutMillis > 0 && wallTimeMillis > timeoutMillis;
   }
 
-  private Map<String, String> getEnvironmentVariables(Command command) {
+  private Map<String, String> getEnvironmentVariables(
+      com.google.devtools.remoteexecution.v1test.Command command) {
     HashMap<String, String> result = new HashMap<>();
     for (EnvironmentVariable v : command.getEnvironmentVariablesList()) {
       result.put(v.getName(), v.getValue());
@@ -377,11 +308,11 @@ final class ExecutionServer extends ExecutionImplBase {
   // only a small handful of cases where uid is vital (e.g., if strict permissions are set on the
   // output files), so most use cases would work without setting uid.
   private long getUid() {
-    com.google.devtools.build.lib.shell.Command cmd =
-        new com.google.devtools.build.lib.shell.Command(
+    Command cmd =
+        new Command(
             new String[] {"id", "-u"},
-            /*environmentVariables=*/ null,
-            /*workingDirectory=*/ null,
+            /*environmentVariables=*/null,
+            /*workingDirectory=*/null,
             uidTimeout);
     try {
       ByteArrayOutputStream stdout = new ByteArrayOutputStream();
@@ -397,9 +328,9 @@ final class ExecutionServer extends ExecutionImplBase {
 
   // Checks Action for docker container definition. If no docker container specified, returns
   // null. Otherwise returns docker container name from the parameters.
-  private String dockerContainer(Command cmd) throws StatusException {
+  private String dockerContainer(Action action) throws StatusException {
     String result = null;
-    for (Platform.Property property : cmd.getPlatform().getPropertiesList()) {
+    for (Platform.Property property : action.getPlatform().getPropertiesList()) {
       if (property.getName().equals(CONTAINER_IMAGE_ENTRY_NAME)) {
         if (result != null) {
           // Multiple container name entries
@@ -423,17 +354,19 @@ final class ExecutionServer extends ExecutionImplBase {
     return result;
   }
 
-  // Converts the Command proto into the shell Command object.
-  // If no docker container is specified, creates a Command straight from the
+  // Takes an Action and parameters that can be used to create a Command. Returns the Command.
+  // If no docker container is specified inside Action, creates a Command straight from the
   // arguments. Otherwise, returns a Command that would run the specified command inside the
   // specified docker container.
-  private com.google.devtools.build.lib.shell.Command getCommand(Command cmd, String pathString)
-      throws StatusException {
-    Map<String, String> environmentVariables = getEnvironmentVariables(cmd);
-    String container = dockerContainer(cmd);
+  private Command getCommand(
+      Action action,
+      List<String> commandLineElements,
+      Map<String, String> environmentVariables,
+      String pathString) throws StatusException {
+    String container = dockerContainer(action);
     if (container != null) {
       // Run command inside a docker container.
-      ArrayList<String> newCommandLineElements = new ArrayList<>(cmd.getArgumentsCount());
+      ArrayList<String> newCommandLineElements = new ArrayList<>(commandLineElements.size());
       newCommandLineElements.add("docker");
       newCommandLineElements.add("run");
 
@@ -463,13 +396,12 @@ final class ExecutionServer extends ExecutionImplBase {
 
       newCommandLineElements.add(container);
 
-      newCommandLineElements.addAll(cmd.getArgumentsList());
+      newCommandLineElements.addAll(commandLineElements);
 
-      return new com.google.devtools.build.lib.shell.Command(
-          newCommandLineElements.toArray(new String[0]), null, new File(pathString));
+      return new Command(newCommandLineElements.toArray(new String[0]), null, new File(pathString));
     } else if (sandboxPath != null) {
       // Run command with sandboxing.
-      ArrayList<String> newCommandLineElements = new ArrayList<>(cmd.getArgumentsCount());
+      ArrayList<String> newCommandLineElements = new ArrayList<>(commandLineElements.size());
       newCommandLineElements.add(sandboxPath.getPathString());
       if (workerOptions.sandboxingBlockNetwork) {
         newCommandLineElements.add("-N");
@@ -483,17 +415,15 @@ final class ExecutionServer extends ExecutionImplBase {
         newCommandLineElements.add(tmpfsDir);
       }
       newCommandLineElements.add("--");
-      newCommandLineElements.addAll(cmd.getArgumentsList());
-      return new com.google.devtools.build.lib.shell.Command(
+      newCommandLineElements.addAll(commandLineElements);
+      return new Command(
           newCommandLineElements.toArray(new String[0]),
           environmentVariables,
           new File(pathString));
     } else {
       // Just run the command.
-      return new com.google.devtools.build.lib.shell.Command(
-          cmd.getArgumentsList().toArray(new String[0]),
-          environmentVariables,
-          new File(pathString));
+      return new Command(
+          commandLineElements.toArray(new String[0]), environmentVariables, new File(pathString));
     }
   }
 }
