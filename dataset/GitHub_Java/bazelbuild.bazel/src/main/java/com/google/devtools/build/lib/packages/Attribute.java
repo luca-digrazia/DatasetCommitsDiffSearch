@@ -680,6 +680,7 @@ public final class Attribute implements Comparable<Attribute> {
      */
     public Builder<TYPE> value(LateBoundDefault<?, ? extends TYPE> defaultValue) {
       Preconditions.checkState(!valueSet, "the default value is already set");
+      Preconditions.checkState(name.isEmpty() || isLateBound(name));
       value = defaultValue;
       valueSource = AttributeValueSource.LATE_BOUND;
       valueSet = true;
@@ -1081,9 +1082,6 @@ public final class Attribute implements Comparable<Attribute> {
      */
     public Attribute build(String name) {
       Preconditions.checkState(!name.isEmpty(), "name has not been set");
-      if (valueSource == AttributeValueSource.LATE_BOUND) {
-        Preconditions.checkState(isLateBound(name));
-      }
       // TODO(bazel-team): Set the default to be no file type, then remove this check, and also
       // remove all allowedFileTypes() calls without parameters.
 
@@ -1717,7 +1715,7 @@ public final class Attribute implements Comparable<Attribute> {
     private static final LateBoundDefault<Void, Void> ALWAYS_NULL =
         new SimpleLateBoundDefault<>(false, Void.class, null, (rule, attributes, unused) -> null);
 
-    protected LateBoundDefault(
+    private LateBoundDefault(
         boolean useHostConfiguration,
         Class<FragmentT> fragmentClass,
         ValueT defaultValue) {
