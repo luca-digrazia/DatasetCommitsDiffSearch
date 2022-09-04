@@ -217,80 +217,6 @@ public class RuleClass {
     }
   }
 
-  /** Possible values for setting whether a rule uses toolchain resolution. */
-  public enum ToolchainResolutionMode {
-    /** The rule should use toolchain resolution. */
-    ENABLED,
-    /** The rule should not use toolchain resolution. */
-    DISABLED,
-    /** The rule should inherit the value from its parent rules. */
-    INHERIT;
-
-    /** Determine the correct value to use based on the current setting and the parent's value. */
-    public ToolchainResolutionMode apply(String name, ToolchainResolutionMode parent) {
-      if (this == INHERIT) {
-        return parent;
-      } else if (parent == INHERIT) {
-        return this;
-      } else if (this != parent) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Rule %s has useToolchainResolution set to %s, but the parent is trying to set it"
-                    + " to %s",
-                name, this, parent));
-      }
-      return this;
-    }
-
-    public boolean isActive() {
-      switch (this) {
-        case ENABLED:
-          return true;
-        case DISABLED:
-          return false;
-        default:
-      }
-      return true; // Default is that toolchain resolution is enabled.
-    }
-  }
-
-  /** Possible values for setting whether a rule uses the toolchain transition. */
-  public enum ToolchainTransitionMode {
-    /** The rule should use the toolchain transition. */
-    ENABLED,
-    /** The rule should not use the toolchain transition. */
-    DISABLED,
-    /** The rule should inherit the value from its parent rules. */
-    INHERIT;
-
-    /** Determine the correct value to use based on the current setting and the parent's value. */
-    public ToolchainTransitionMode apply(String name, ToolchainTransitionMode parent) {
-      if (this == INHERIT) {
-        return parent;
-      } else if (parent == INHERIT) {
-        return this;
-      } else if (this != parent) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Rule %s has useToolchainTransition set to %s, but the parent is trying to set it"
-                    + " to %s",
-                name, this, parent));
-      }
-      return this;
-    }
-
-    public boolean isActive() {
-      switch (this) {
-        case ENABLED:
-          return true;
-        case DISABLED:
-          return false;
-        default:
-      }
-      return false; // Default is that toolchain transition is disabled.
-    }
-  }
-
   /** A factory or builder class for rule implementations. */
   public interface ConfiguredTargetFactory<
       TConfiguredTarget, TContext, TActionConflictException extends Throwable> {
@@ -803,8 +729,8 @@ public class RuleClass {
 
     private final Map<String, Attribute> attributes = new LinkedHashMap<>();
     private final Set<Label> requiredToolchains = new HashSet<>();
-    private ToolchainResolutionMode useToolchainResolution = ToolchainResolutionMode.INHERIT;
-    private ToolchainTransitionMode useToolchainTransition = ToolchainTransitionMode.INHERIT;
+    private boolean useToolchainResolution = true;
+    private boolean useToolchainTransition = false;
     private final Set<Label> executionPlatformConstraints = new HashSet<>();
     private OutputFile.Kind outputFileKind = OutputFile.Kind.FILE;
     private final Map<String, ExecGroup> execGroups = new HashMap<>();
@@ -840,10 +766,8 @@ public class RuleClass {
         supportsConstraintChecking = parent.supportsConstraintChecking;
 
         addRequiredToolchains(parent.getRequiredToolchains());
-        this.useToolchainResolution =
-            this.useToolchainResolution.apply(name, parent.useToolchainResolution);
-        this.useToolchainTransition =
-            this.useToolchainTransition.apply(name, parent.useToolchainTransition);
+        useToolchainResolution = parent.useToolchainResolution;
+        useToolchainTransition = parent.useToolchainTransition;
         addExecutionPlatformConstraints(parent.getExecutionPlatformConstraints());
         try {
           ImmutableMap.Builder<String, ExecGroup> cleanedExecGroups = new ImmutableMap.Builder<>();
@@ -953,8 +877,8 @@ public class RuleClass {
 
         // Build setting rules should opt out of toolchain resolution, since they form part of the
         // configuration.
-        this.useToolchainResolution(ToolchainResolutionMode.DISABLED);
-        this.useToolchainTransition(ToolchainTransitionMode.DISABLED);
+        this.useToolchainResolution(false);
+        this.useToolchainTransition(false);
       }
 
       // Any exec groups that have entirely empty toolchains and constraints inherit the rule's
@@ -1595,32 +1519,17 @@ public class RuleClass {
       }
     }
 
-    public Builder useToolchainResolution(boolean flag) {
-      if (flag) {
-        return this.useToolchainResolution(ToolchainResolutionMode.ENABLED);
-      }
-      return this.useToolchainResolution(ToolchainResolutionMode.DISABLED);
-    }
-
     /**
      * Causes rules to use toolchain resolution to determine the execution platform and toolchains.
-     * Rules that are part of configuring toolchains and platforms should set this to {@code
-     * DISABLED}.
+     * Rules that are part of configuring toolchains and platforms should set this to {@code false}.
      */
-    public Builder useToolchainResolution(ToolchainResolutionMode mode) {
-      this.useToolchainResolution = mode;
+    public Builder useToolchainResolution(boolean flag) {
+      this.useToolchainResolution = flag;
       return this;
     }
 
     public Builder useToolchainTransition(boolean flag) {
-      if (flag) {
-        return this.useToolchainTransition(ToolchainTransitionMode.ENABLED);
-      }
-      return this.useToolchainTransition(ToolchainTransitionMode.DISABLED);
-    }
-
-    public Builder useToolchainTransition(ToolchainTransitionMode mode) {
-      this.useToolchainTransition = mode;
+      this.useToolchainTransition = flag;
       return this;
     }
 
@@ -1776,8 +1685,8 @@ public class RuleClass {
   private final ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy;
 
   private final ImmutableSet<Label> requiredToolchains;
-  private final ToolchainResolutionMode useToolchainResolution;
-  private final ToolchainTransitionMode useToolchainTransition;
+  private final boolean useToolchainResolution;
+  private final boolean useToolchainTransition;
   private final ImmutableSet<Label> executionPlatformConstraints;
   private final ImmutableMap<String, ExecGroup> execGroups;
 
@@ -1833,8 +1742,8 @@ public class RuleClass {
       boolean supportsConstraintChecking,
       ThirdPartyLicenseExistencePolicy thirdPartyLicenseExistencePolicy,
       Set<Label> requiredToolchains,
-      ToolchainResolutionMode useToolchainResolution,
-      ToolchainTransitionMode useToolchainTransition,
+      boolean useToolchainResolution,
+      boolean useToolchainTransition,
       Set<Label> executionPlatformConstraints,
       Map<String, ExecGroup> execGroups,
       OutputFile.Kind outputFileKind,
@@ -2763,11 +2672,11 @@ public class RuleClass {
   }
 
   public boolean useToolchainResolution() {
-    return this.useToolchainResolution.isActive();
+    return useToolchainResolution;
   }
 
   public boolean useToolchainTransition() {
-    return this.useToolchainTransition.isActive();
+    return useToolchainTransition;
   }
 
   public ImmutableSet<Label> getExecutionPlatformConstraints() {
