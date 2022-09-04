@@ -24,6 +24,7 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.AbstractAction;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineItem;
 import com.google.devtools.build.lib.actions.CommandLineItem.CapturingMapFn;
@@ -56,6 +57,7 @@ public class ProtoCompileActionBuilder {
       "--direct_dependencies_violation_msg=" + StrictProtoDepsViolationMessage.MESSAGE;
 
   private static final String MNEMONIC = "GenProto";
+  private static final Action[] NO_ACTIONS = new Action[0];
 
   private final RuleContext ruleContext;
   private final ProtoInfo protoInfo;
@@ -186,16 +188,15 @@ public class ProtoCompileActionBuilder {
     }
   }
 
-  @Nullable
-  public SpawnAction maybeBuild() {
+  public Action[] build() {
     if (isEmpty(outputs)) {
-      return null;
+      return NO_ACTIONS;
     }
 
     try {
       return createAction().build(ruleContext);
     } catch (MissingPrerequisiteException e) {
-      return null;
+      return NO_ACTIONS;
     }
   }
 
