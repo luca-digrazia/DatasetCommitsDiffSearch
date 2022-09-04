@@ -55,12 +55,12 @@ public final class NestedSetVisitor<E> {
    *
    * @param nestedSet the nested set to visit transitively.
    */
-  public void visit(NestedSet<E> nestedSet) throws InterruptedException {
+  public void visit(NestedSet<E> nestedSet) {
     Preconditions.checkArgument(nestedSet.getOrder() == Order.STABLE_ORDER);
     // We can short-circuit empty nested set visitation here, avoiding load on the shared map
     // VisitedState#seenNodes.
     if (!nestedSet.isEmpty()) {
-      visitRaw(nestedSet.getChildrenInterruptibly());
+      visitRaw(nestedSet.getChildren());
     }
   }
 
