@@ -73,8 +73,8 @@ public class ToolchainUtilTest extends ToolchainTestCase {
   @Test
   public void createToolchainContext() throws Exception {
     useConfiguration(
-        "--host_platform=//platforms:linux",
-        "--platforms=//platforms:mac");
+        "--experimental_host_platform=//platforms:linux",
+        "--experimental_platforms=//platforms:mac");
     CreateToolchainContextKey key =
         CreateToolchainContextKey.create("test", ImmutableSet.of(testToolchainType), targetConfig);
 
@@ -86,7 +86,7 @@ public class ToolchainUtilTest extends ToolchainTestCase {
 
     assertThat(toolchainContext.getRequiredToolchains()).containsExactly(testToolchainType);
     assertThat(toolchainContext.getResolvedToolchainLabels())
-        .containsExactly(Label.parseAbsoluteUnchecked("//toolchain:toolchain_1_impl"));
+        .containsExactly(Label.parseAbsoluteUnchecked("//toolchain:test_toolchain_1"));
 
     assertThat(toolchainContext.getExecutionPlatform()).isNotNull();
     assertThat(toolchainContext.getExecutionPlatform().label())
@@ -100,8 +100,8 @@ public class ToolchainUtilTest extends ToolchainTestCase {
   @Test
   public void createToolchainContext_unavailableToolchainType_single() throws Exception {
     useConfiguration(
-        "--host_platform=//platforms:linux",
-        "--platforms=//platforms:mac");
+        "--experimental_host_platform=//platforms:linux",
+        "--experimental_platforms=//platforms:mac");
     CreateToolchainContextKey key =
         CreateToolchainContextKey.create(
             "test",
@@ -131,8 +131,8 @@ public class ToolchainUtilTest extends ToolchainTestCase {
   @Test
   public void createToolchainContext_unavailableToolchainType_multiple() throws Exception {
     useConfiguration(
-        "--host_platform=//platforms:linux",
-        "--platforms=//platforms:mac");
+        "--experimental_host_platform=//platforms:linux",
+        "--experimental_platforms=//platforms:mac");
     CreateToolchainContextKey key =
         CreateToolchainContextKey.create(
             "test",

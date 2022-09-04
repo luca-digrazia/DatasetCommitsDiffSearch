@@ -144,11 +144,11 @@ public class ToolchainUtil {
     SkyKey executionPlatformKey =
         LegacySkyKey.create(
             SkyFunctions.CONFIGURED_TARGET,
-            ConfiguredTargetKey.of(executionPlatformLabel, configuration));
+            new ConfiguredTargetKey(executionPlatformLabel, configuration));
     SkyKey targetPlatformKey =
         LegacySkyKey.create(
             SkyFunctions.CONFIGURED_TARGET,
-            ConfiguredTargetKey.of(targetPlatformLabel, configuration));
+            new ConfiguredTargetKey(targetPlatformLabel, configuration));
 
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> values =
         env.getValuesOrThrow(

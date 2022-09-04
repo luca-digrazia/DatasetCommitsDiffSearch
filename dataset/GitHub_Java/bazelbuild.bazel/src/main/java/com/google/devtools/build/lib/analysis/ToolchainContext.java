@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
@@ -112,8 +111,7 @@ public class ToolchainContext {
     return requiredToolchains;
   }
 
-  public void resolveToolchains(
-      OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> prerequisiteMap) {
+  public void resolveToolchains(OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap) {
     if (!this.requiredToolchains.isEmpty()) {
       this.resolvedToolchainProviders =
           new ResolvedToolchainProviders(findToolchains(resolvedToolchainLabels, prerequisiteMap));
@@ -164,7 +162,7 @@ public class ToolchainContext {
 
   private static ImmutableMap<Label, ToolchainInfo> findToolchains(
       ResolvedToolchainLabels resolvedToolchainLabels,
-      OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> prerequisiteMap) {
+      OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap) {
     // Find the prerequisites associated with the $toolchains attribute.
     Optional<Attribute> toolchainAttribute =
         prerequisiteMap
@@ -178,11 +176,11 @@ public class ToolchainContext {
         "No toolchains attribute found while loading resolved toolchains");
 
     ImmutableMap.Builder<Label, ToolchainInfo> toolchains = new ImmutableMap.Builder<>();
-    for (ConfiguredTargetAndTarget target : prerequisiteMap.get(toolchainAttribute.get())) {
-      Label discoveredLabel = target.getTarget().getLabel();
+    for (ConfiguredTarget target : prerequisiteMap.get(toolchainAttribute.get())) {
+      Label discoveredLabel = target.getLabel();
       Label toolchainType = resolvedToolchainLabels.getType(discoveredLabel);
       if (toolchainType != null) {
-        ToolchainInfo toolchainInfo = PlatformProviderUtils.toolchain(target.getConfiguredTarget());
+        ToolchainInfo toolchainInfo = PlatformProviderUtils.toolchain(target);
         toolchains.put(toolchainType, toolchainInfo);
       }
     }
