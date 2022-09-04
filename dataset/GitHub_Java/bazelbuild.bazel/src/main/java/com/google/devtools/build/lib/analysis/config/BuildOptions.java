@@ -189,7 +189,7 @@ public final class BuildOptions implements Cloneable, Serializable {
   }
 
   public String computeChecksum() {
-    return Fingerprint.getHexDigest(computeCacheKey());
+    return Fingerprint.md5Digest(computeCacheKey());
   }
 
   /** String representation of build options. */
