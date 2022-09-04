@@ -13,11 +13,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package org.graylog2.radio;
 
 import com.beust.jcommander.internal.Lists;
@@ -48,8 +47,7 @@ import org.graylog2.plugin.system.NodeId;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
 import org.graylog2.radio.cluster.Ping;
 import org.graylog2.radio.inputs.RadioInputRegistry;
-import org.graylog2.radio.transports.RadioTransport;
-import org.graylog2.radio.transports.kafka.KafkaProducer;
+import org.graylog2.shared.MetricsHost;
 import org.graylog2.shared.ProcessingHost;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
@@ -61,6 +59,8 @@ import org.graylog2.shared.ProcessingHost;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.inputs.InputRegistry;
+import org.graylog2.shared.periodical.MasterCacheWorkerThread;
+import org.graylog2.shared.periodical.ThroughputCounterManagerThread;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
@@ -116,6 +116,8 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     private ProcessBuffer.Factory processBufferFactory;
     @Inject
     private RadioProcessBufferProcessor.Factory processBufferProcessorFactory;
+    @Inject
+    private ThroughputCounterManagerThread.Factory throughputCounterThreadFactory;
     @Inject
     private ThroughputStats throughputStats;
 
@@ -181,11 +183,11 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
                 new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
         );
 
-        /*ThroughputCounterManagerThread tt = throughputCounterThreadFactory.create();
-        scheduler.scheduleAtFixedRate(tt, 0, 1, TimeUnit.SECONDS);*/
+        ThroughputCounterManagerThread tt = throughputCounterThreadFactory.create();
+        scheduler.scheduleAtFixedRate(tt, 0, 1, TimeUnit.SECONDS);
 
-        /*MasterCacheWorkerThread masterCacheWorker = new MasterCacheWorkerThread(this, inputCache, processBuffer);
-        scheduler.scheduleAtFixedRate(masterCacheWorker, 0, 1, TimeUnit.SECONDS);*/
+        MasterCacheWorkerThread masterCacheWorker = new MasterCacheWorkerThread(this, inputCache, processBuffer);
+        scheduler.scheduleAtFixedRate(masterCacheWorker, 0, 1, TimeUnit.SECONDS);
     }
 
     public void launchPersistedInputs() throws InterruptedException, ExecutionException, IOException {
