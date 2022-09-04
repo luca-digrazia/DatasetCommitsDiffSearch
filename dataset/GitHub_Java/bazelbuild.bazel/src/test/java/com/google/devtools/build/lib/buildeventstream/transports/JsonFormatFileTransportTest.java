@@ -87,6 +87,7 @@ public class JsonFormatFileTransportTest {
             outputStream,
             defaultOpts,
             new LocalFilesArtifactUploader(),
+            (e) -> {},
             artifactGroupNamer);
     transport.sendBuildEvent(buildEvent);
 
@@ -102,39 +103,44 @@ public class JsonFormatFileTransportTest {
 
   /**
    * A thin wrapper around an OutputStream that counts number of bytes written and verifies flushes.
-   *
-   * <p>The methods below need to be syncrhonized because they override methods from {@link
-   * BufferedOutputStream} *not* because there's a concurrent access to the stream.
    */
-  private static final class WrappedOutputStream extends BufferedOutputStream {
+  private static final class WrappedOutputStream extends OutputStream {
+    private final OutputStream out;
     private long byteCount;
     private int flushCount;
 
-    WrappedOutputStream(OutputStream out) {
-      super(out);
+    public WrappedOutputStream(OutputStream out) {
       this.out = out;
     }
 
+    public long getByteCount() {
+      return byteCount;
+    }
+
+    public int getFlushCount() {
+      return flushCount;
+    }
+
     @Override
-    public synchronized void write(int b) throws IOException {
+    public void write(int b) throws IOException {
       out.write(b);
       byteCount++;
     }
 
     @Override
-    public synchronized void write(byte[] b) throws IOException {
+    public void write(byte[] b) throws IOException {
       out.write(b);
       byteCount += b.length;
     }
 
     @Override
-    public synchronized void write(byte[] b, int off, int len) throws IOException {
+    public void write(byte[] b, int off, int len) throws IOException {
       out.write(b, off, len);
       byteCount += len;
     }
 
     @Override
-    public synchronized void flush() throws IOException {
+    public void flush() throws IOException {
       out.flush();
       flushCount++;
     }
@@ -145,29 +151,32 @@ public class JsonFormatFileTransportTest {
     File output = tmp.newFile();
     BufferedOutputStream outputStream =
         new BufferedOutputStream(Files.newOutputStream(Paths.get(output.getAbsolutePath())));
-    WrappedOutputStream wrappedOutputStream = new WrappedOutputStream(outputStream);
 
     BuildEventStreamProtos.BuildEvent started =
         BuildEventStreamProtos.BuildEvent.newBuilder()
             .setStarted(BuildStarted.newBuilder().setCommand("build"))
             .build();
     when(buildEvent.asStreamProto(Matchers.<BuildEventContext>any())).thenReturn(started);
-
     JsonFormatFileTransport transport =
         new JsonFormatFileTransport(
-            wrappedOutputStream, defaultOpts, new LocalFilesArtifactUploader(), artifactGroupNamer);
-
+            outputStream,
+            defaultOpts,
+            new LocalFilesArtifactUploader(),
+            (e) -> {},
+            artifactGroupNamer);
+    WrappedOutputStream out = new WrappedOutputStream(transport.writer.out);
+    transport.writer.out = out;
     transport.sendBuildEvent(buildEvent);
-    Thread.sleep(transport.getFlushInterval().toMillis() * 3);
+    Thread.sleep(FileTransport.SequentialWriter.FLUSH_INTERVAL.toMillis() * 3);
 
     // Some users, e.g. Tulsi, use JSON build event output for interactive use and expect the stream
     // to be flushed at regular short intervals.
-    assertThat(wrappedOutputStream.flushCount).isGreaterThan(0);
+    assertThat(out.getFlushCount()).isGreaterThan(0);
 
     // We know that large writes get flushed; test is valuable only if we check small writes,
     // meaning smaller than 8192, the default buffer size used by BufferedOutputStream.
-    assertThat(wrappedOutputStream.byteCount).isLessThan(8192L);
-    assertThat(wrappedOutputStream.byteCount).isGreaterThan(0L);
+    assertThat(out.getByteCount()).isLessThan(8192L);
+    assertThat(out.getByteCount()).isGreaterThan(0L);
 
     transport.close().get();
   }

@@ -14,46 +14,49 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
+import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
+import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
+import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.buildeventstream.PathConverter;
+import com.google.devtools.build.lib.util.AbruptExitException;
+import com.google.protobuf.CodedOutputStream;
 import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.function.Consumer;
 
 /**
- * A simple {@link BuildEventTransport} that writes varint delimited binary representation of event
- * {@link BuildEvent} protocol-buffers to a file. Files written by this Transport can be read by
- * successive calls of {code BuildEvent.Builder#mergeDelimitedFrom(InputStream)} (or the static
- * method {@code BuildEvent.parseDelimitedFrom(InputStream)}).
+ * A simple {@link BuildEventTransport} that writes a varint delimited binary representation of
+ * {@link BuildEvent} protocol buffers to a file.
  */
-public final class BinaryFormatFileTransport implements BuildEventTransport {
-  private final BufferedOutputStream out;
-  private final PathConverter pathConverter;
-
-  public BinaryFormatFileTransport(String path, PathConverter pathConverter)
-      throws IOException {
-    this.out = new BufferedOutputStream(new FileOutputStream(new File(path)));
-    this.pathConverter = pathConverter;
+public final class BinaryFormatFileTransport extends FileTransport {
+  public BinaryFormatFileTransport(
+      BufferedOutputStream outputStream,
+      BuildEventProtocolOptions options,
+      BuildEventArtifactUploader uploader,
+      Consumer<AbruptExitException> abruptExitCallback,
+      ArtifactGroupNamer namer) {
+    super(outputStream, options, uploader, abruptExitCallback, namer);
   }
 
   @Override
-  public synchronized void sendBuildEvent(BuildEvent event) throws IOException {
-    BuildEventConverters converters =
-        new BuildEventConverters() {
-          @Override
-          public PathConverter pathConverter() {
-            return pathConverter;
-          }
-        };
-    event.asStreamProto(converters).writeDelimitedTo(out);
-    out.flush();
+  public String name() {
+    return this.getClass().getSimpleName();
   }
 
   @Override
-  public void close() throws IOException {
-    out.close();
+  protected byte[] serializeEvent(BuildEventStreamProtos.BuildEvent buildEvent) {
+    final int size = buildEvent.getSerializedSize();
+    ByteArrayOutputStream bos =
+        new ByteArrayOutputStream(CodedOutputStream.computeUInt32SizeNoTag(size) + size);
+    try {
+      buildEvent.writeDelimitedTo(bos);
+    } catch (IOException e) {
+      throw new RuntimeException(
+          "Unexpected error serializing protobuf to in memory outputstream.", e);
+    }
+    return bos.toByteArray();
   }
 }

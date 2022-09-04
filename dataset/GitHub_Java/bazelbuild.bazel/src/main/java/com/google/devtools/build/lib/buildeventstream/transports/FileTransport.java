@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
-import com.google.devtools.build.lib.buildeventstream.BuildEventServiceAbruptExitCallback;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
@@ -72,7 +71,7 @@ abstract class FileTransport implements BuildEventTransport {
       BufferedOutputStream outputStream,
       BuildEventProtocolOptions options,
       BuildEventArtifactUploader uploader,
-      BuildEventServiceAbruptExitCallback abruptExitCallback,
+      Consumer<AbruptExitException> abruptExitCallback,
       ArtifactGroupNamer namer) {
     this.uploader = uploader;
     this.options = options;
@@ -106,7 +105,7 @@ abstract class FileTransport implements BuildEventTransport {
     SequentialWriter(
         BufferedOutputStream outputStream,
         Function<BuildEventStreamProtos.BuildEvent, byte[]> serializeFunc,
-        BuildEventServiceAbruptExitCallback abruptExitCallback,
+        Consumer<AbruptExitException> abruptExitCallback,
         BuildEventArtifactUploader uploader) {
       checkNotNull(outputStream);
       checkNotNull(serializeFunc);
@@ -163,12 +162,11 @@ abstract class FileTransport implements BuildEventTransport {
     private void exitFailure(Throwable e) {
       abruptExitCallback.accept(
           new AbruptExitException(
-              "Unable to write all BEP events to file due to " + e.getMessage(),
+              "Failed to write BEP events to file.",
               ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR,
               e));
       pendingWrites.clear();
-      logger.log(
-          Level.SEVERE, "Unable to write all BEP events to file due to " + e.getMessage(), e);
+      logger.log(Level.SEVERE, "Failed to write BEP events to file.", e);
     }
 
     void closeNow() {

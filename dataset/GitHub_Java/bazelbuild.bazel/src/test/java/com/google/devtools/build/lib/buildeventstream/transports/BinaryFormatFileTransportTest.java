@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.buildeventstream.transports;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,7 +49,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
@@ -104,6 +102,7 @@ public class BinaryFormatFileTransportTest {
             outputStream,
             defaultOpts,
             new LocalFilesArtifactUploader(),
+            (e) -> {},
             artifactGroupNamer);
     transport.sendBuildEvent(buildEvent);
 
@@ -150,14 +149,10 @@ public class BinaryFormatFileTransportTest {
     BufferedOutputStream outputStream =
         new BufferedOutputStream(Files.newOutputStream(Paths.get(output.getAbsolutePath())));
     BinaryFormatFileTransport transport =
-        new BinaryFormatFileTransport(outputStream, defaultOpts, uploader, artifactGroupNamer);
+        new BinaryFormatFileTransport(
+            outputStream, defaultOpts, uploader, (e) -> {}, artifactGroupNamer);
     transport.sendBuildEvent(event1);
-
-    ExecutionException expected =
-        assertThrows(ExecutionException.class, () -> transport.close().get());
-    assertThat(expected)
-        .hasMessageThat()
-        .contains("Unable to write all BEP events to file due to 'Task was cancelled.'");
+    transport.close().get();
 
     assertThat(transport.writer.pendingWrites).isEmpty();
     try (InputStream in = new FileInputStream(output)) {
@@ -183,6 +178,7 @@ public class BinaryFormatFileTransportTest {
             outputStream,
             defaultOpts,
             new LocalFilesArtifactUploader(),
+            (e) -> {},
             artifactGroupNamer);
 
     // Close the stream.
@@ -216,6 +212,7 @@ public class BinaryFormatFileTransportTest {
             outputStream,
             defaultOpts,
             new LocalFilesArtifactUploader(),
+            (e) -> {},
             artifactGroupNamer);
 
     transport.sendBuildEvent(buildEvent);
@@ -263,7 +260,8 @@ public class BinaryFormatFileTransportTest {
     BufferedOutputStream outputStream =
         new BufferedOutputStream(Files.newOutputStream(Paths.get(output.getAbsolutePath())));
     BinaryFormatFileTransport transport =
-        new BinaryFormatFileTransport(outputStream, defaultOpts, uploader, artifactGroupNamer);
+        new BinaryFormatFileTransport(
+            outputStream, defaultOpts, uploader, (e) -> {}, artifactGroupNamer);
     transport.sendBuildEvent(event1);
     transport.sendBuildEvent(event2);
     transport.close().get();
@@ -305,7 +303,8 @@ public class BinaryFormatFileTransportTest {
     BufferedOutputStream outputStream =
         new BufferedOutputStream(Files.newOutputStream(Paths.get(output.getAbsolutePath())));
     BinaryFormatFileTransport transport =
-        new BinaryFormatFileTransport(outputStream, defaultOpts, uploader, artifactGroupNamer);
+        new BinaryFormatFileTransport(
+            outputStream, defaultOpts, uploader, (e) -> {}, artifactGroupNamer);
     transport.sendBuildEvent(event1);
     transport.close().get();
 
@@ -342,7 +341,8 @@ public class BinaryFormatFileTransportTest {
     BufferedOutputStream outputStream =
         new BufferedOutputStream(Files.newOutputStream(Paths.get(output.getAbsolutePath())));
     BinaryFormatFileTransport transport =
-        new BinaryFormatFileTransport(outputStream, defaultOpts, uploader, artifactGroupNamer);
+        new BinaryFormatFileTransport(
+            outputStream, defaultOpts, uploader, (e) -> {}, artifactGroupNamer);
     transport.sendBuildEvent(event);
     ListenableFuture<Void> closeFuture = transport.close();
 
