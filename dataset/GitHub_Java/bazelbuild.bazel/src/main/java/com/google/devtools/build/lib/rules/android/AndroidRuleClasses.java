@@ -541,7 +541,7 @@ public final class AndroidRuleClasses {
       return builder
           .add(
               attr(":android_sdk", LABEL)
-                  .allowedRuleClasses("android_sdk")
+                  .allowedRuleClasses("android_sdk", "filegroup")
                   .value(getAndroidSdkLabel(env.getToolsLabel(AndroidRuleClasses.DEFAULT_SDK))))
           /* <!-- #BLAZE_RULE($android_base).ATTRIBUTE(plugins) -->
           Java compiler plugins to run at compile-time.
@@ -1071,7 +1071,7 @@ public final class AndroidRuleClasses {
           .setUndocumented()
           .add(
               attr(":android_sdk", LABEL)
-                  .allowedRuleClasses("android_sdk")
+                  .allowedRuleClasses("android_sdk", "filegroup")
                   .value(getAndroidSdkLabel(environment.getToolsLabel(DEFAULT_SDK))));
       if (compatibleWithAndroidEnvironments.length > 0) {
         builder.compatibleWith(compatibleWithAndroidEnvironments);
