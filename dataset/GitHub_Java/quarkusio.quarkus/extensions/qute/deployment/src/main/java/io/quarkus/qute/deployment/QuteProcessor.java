@@ -956,7 +956,7 @@ public class QuteProcessor {
                 }
             }
             DotName superName = clazz.superName();
-            if (superName == null) {
+            if (superName == null || DotNames.OBJECT.equals(superName)) {
                 clazz = null;
             } else {
                 clazz = index.getClassByName(clazz.superName());
