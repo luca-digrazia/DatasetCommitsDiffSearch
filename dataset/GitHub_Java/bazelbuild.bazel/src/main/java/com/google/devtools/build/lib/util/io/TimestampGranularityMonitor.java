@@ -126,16 +126,12 @@ public class TimestampGranularityMonitor {
    */
   @ThreadSafe
   public void notifyDependenceOnFileTime(PathFragment path, long ctimeMillis) {
-    if (!this.waitAMillisecond && ctimeMillis == this.commandStartTimeMillis) {
-      if (path != null) {
-        logger.info("Will have to wait for a millisecond on completion because of " + path);
-      }
+    if (ctimeMillis == this.commandStartTimeMillis) {
+      logger.info("Will have to wait for a millisecond on completion because of " + path);
       this.waitAMillisecond = true;
     }
-    if (!this.waitASecond && ctimeMillis == this.commandStartTimeMillisRounded) {
-      if (path != null) {
-        logger.info("Will have to wait for a second on completion because of " + path);
-      }
+    if (ctimeMillis == this.commandStartTimeMillisRounded) {
+      logger.info("Will have to wait for a second on completion because of " + path);
       this.waitASecond = true;
     }
   }
@@ -197,13 +193,6 @@ public class TimestampGranularityMonitor {
               + "ms for file system"
               + " to catch up");
     }
-  }
-
-  /** Wait enough such that changes to a file with the given ctime will have observable effects. */
-  public void waitForTimestampGranularity(long ctimeMillis, OutErr outErr) {
-    setCommandStartTime();
-    notifyDependenceOnFileTime(null, ctimeMillis);
-    waitForTimestampGranularity(outErr);
   }
 
   /**
