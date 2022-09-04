@@ -22,19 +22,20 @@ import com.tencent.angel.client.AngelClient;
 import com.tencent.angel.client.AngelClientFactory;
 import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.ml.matrix.MatrixContext;
-import com.tencent.angel.protobuf.generated.MLProtos;
+import com.tencent.angel.ml.matrix.RowType;
 import org.apache.hadoop.conf.Configuration;
 
-/**
- * Created by payniexiao on 2017/7/18.
- */
 public class PSFTestSubmit implements AppSubmitter {
   @Override public void submit(Configuration conf) throws Exception {
     conf.setBoolean(AngelConf.ANGEL_AM_USE_DUMMY_DATASPLITER, true);
+    //conf.setInt(AngelConf.ANGEL_STALENESS, -1);
     AngelClient angelClient = AngelClientFactory.get(conf);
-    int blockCol = conf.getInt("blockcol", 500000);
-    MatrixContext context = new MatrixContext("psf_test", 1, 100000000, 1, blockCol);
-    context.setRowType(MLProtos.RowType.T_DOUBLE_DENSE);
+    long col = conf.getLong("col", 1000000);
+    long blockCol = conf.getLong("blockcol", -1);
+    long modelSize = conf.getLong("model.size", 100000);
+
+    MatrixContext context = new MatrixContext("psf_test", 1, col, modelSize, 1, blockCol);
+    context.setRowType(RowType.T_DOUBLE_SPARSE_LONGKEY);
     angelClient.addMatrix(context);
     angelClient.startPSServer();
     angelClient.run();

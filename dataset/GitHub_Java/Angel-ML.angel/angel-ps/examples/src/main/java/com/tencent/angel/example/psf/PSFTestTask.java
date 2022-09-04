@@ -19,14 +19,17 @@ package com.tencent.angel.example.psf;
 
 import com.tencent.angel.exception.AngelException;
 import com.tencent.angel.ml.math.TVector;
-import com.tencent.angel.ml.math.vector.DenseDoubleVector;
-import com.tencent.angel.ml.matrix.psf.aggr.Pull;
+import com.tencent.angel.ml.math.vector.SparseLongKeyDoubleVector;
+import com.tencent.angel.ml.matrix.psf.get.enhance.indexed.LongIndexGetFunc;
+import com.tencent.angel.ml.matrix.psf.get.enhance.indexed.LongIndexGetParam;
 import com.tencent.angel.ml.matrix.psf.get.single.GetRowResult;
 import com.tencent.angel.psagent.matrix.MatrixClient;
 import com.tencent.angel.worker.task.BaseTask;
 import com.tencent.angel.worker.task.TaskContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import java.util.Random;
 
 /**
  * Created by payniexiao on 2017/7/18.
@@ -45,23 +48,62 @@ public class PSFTestTask extends BaseTask<Long, Long, Long> {
   @Override public void preProcess(TaskContext taskContext) { }
 
   @Override public void run(TaskContext taskContext) throws AngelException {
+    long col = conf.getLong("col", 1000000);
+    int len = conf.getInt("len", 500000);
     try{
       MatrixClient client = taskContext.getMatrix("psf_test");
-      Pull func = new Pull(client.getMatrixId(), 0);
+      int exeTime = 1000000000;
+      long pullTime = 0L;
+      long pushTime = 0L;
 
-      int iteration = 0;
-      while (iteration++ < 100) {
+      for(int time = 0; time < exeTime; time++) {
         long startTs = System.currentTimeMillis();
+        long[] indexes = generateIndexes(col, len);
+        LongIndexGetFunc
+          func = new LongIndexGetFunc(new LongIndexGetParam(client.getMatrixId(), 0, indexes));
         TVector row = ((GetRowResult) client.get(func)).getRow();
-        LOG.info("Task " + taskContext.getTaskId() + " in iteration " + iteration
-          + " pull use time=" + (System.currentTimeMillis() - startTs));
+        pullTime += (System.currentTimeMillis() - startTs);
+        if(time % 1000 == 0) {
+          LOG.info("Task " + taskContext.getTaskId() + " in iteration " + taskContext.getEpoch()
+            + " pull use time=" + (pullTime / 1000) + ", sum of row 0=" + sum((SparseLongKeyDoubleVector)row));
+          pullTime = 0;
+        }
+
+        double [] delta = new double[len];
+        for(int i = 0; i < len; i++) {
+          delta[i] = 1.0;
+        }
+        SparseLongKeyDoubleVector deltaV = new SparseLongKeyDoubleVector(col, indexes, delta);
+        deltaV.setMatrixId(client.getMatrixId());
+        deltaV.setRowId(0);
+
+        startTs = System.currentTimeMillis();
+        client.increment(deltaV);
+        client.clock().get();
+        pushTime += (System.currentTimeMillis() - startTs);
+
+        if(time % 1000 == 0) {
+          LOG.info("Task " + taskContext.getTaskId() + " in iteration " + taskContext.getEpoch()
+            + " push use time=" + (pushTime / 1000));
+          pushTime = 0;
+          taskContext.incEpoch();
+        }
       }
     } catch (Throwable x) {
       throw new AngelException("run task failed ", x);
     }
   }
 
-  private double sum(DenseDoubleVector row) {
+  private long [] generateIndexes(long range, int size) {
+    Random r = new Random();
+    long [] result = new long[size];
+    for(int i = 0; i < size; i++) {
+      result[i] = Math.abs(r.nextLong()) % range;
+    }
+    return result;
+  }
+
+  private double sum(SparseLongKeyDoubleVector row) {
     double [] data = row.getValues();
     double ret = 0.0;
     for(int i = 0; i < data.length; i++) {
