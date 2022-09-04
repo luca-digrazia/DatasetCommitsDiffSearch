@@ -535,9 +535,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     }
 
     public void addCloseTask(Runnable task) {
-        synchronized (closeTasks) {
-            closeTasks.add(task);
-        }
+        closeTasks.add(task);
     }
 
     @Override
@@ -548,11 +546,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             }
             closed = true;
         }
-        List<Runnable> tasks;
-        synchronized (closeTasks) {
-            tasks = new ArrayList<>(closeTasks);
-        }
-        for (Runnable i : tasks) {
+        for (Runnable i : closeTasks) {
             try {
                 i.run();
             } catch (Throwable t) {
