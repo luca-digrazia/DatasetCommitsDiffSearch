@@ -81,6 +81,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     TemplateVariableInfo templateVariableInfo =
         createMakeVariableProvider(
             ccToolchainProvider,
+            ccToolchainProvider.getSysrootPathFragment(),
             ruleContext.getRule().getLocation());
 
     ruleConfiguredTargetBuilder
@@ -93,6 +94,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   static TemplateVariableInfo createMakeVariableProvider(
       CcToolchainProvider toolchainProvider,
+      PathFragment sysroot,
       Location location) {
 
     HashMap<String, String> makeVariables =
@@ -104,10 +106,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     makeVariables.putAll(ccProviderMakeVariables.build());
 
     // Overwrite the CC_FLAGS variable to include sysroot, if it's available.
-    // TODO(katre): move this into CcFlagsSupplier.
-    PathFragment sysroot = toolchainProvider.getSysrootPathFragment();
-    if (sysroot != null
-        && makeVariables.containsKey(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME)) {
+    if (sysroot != null) {
       String sysrootFlag = "--sysroot=" + sysroot;
       String ccFlags = makeVariables.get(CppConfiguration.CC_FLAGS_MAKE_VARIABLE_NAME);
       ccFlags = ccFlags.isEmpty() ? sysrootFlag : ccFlags + " " + sysrootFlag;

@@ -14,25 +14,30 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.AutoCpuConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader.CppConfigurationParameters;
+import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CppConfigurationApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import javax.annotation.Nullable;
 
 /**
@@ -165,14 +170,16 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
    */
   public static final String FDO_STAMP_MACRO = "BUILD_FDO_TYPE";
 
+  private final Label crosstoolTop;
+
   private final String transformedCpuFromOptions;
+  private final String compilerFromOptions;
   // TODO(lberki): desiredCpu *should* be always the same as targetCpu, except that we don't check
   // that the CPU we get from the toolchain matches BuildConfiguration.Options.cpu . So we store
   // it here so that the output directory doesn't depend on the CToolchain. When we will eventually
   // verify that the two are the same, we can remove one of desiredCpu and targetCpu.
   private final String desiredCpu;
 
-  private final Label redirectChasedCrosstoolTop;
   private final PathFragment fdoPath;
   private final Label fdoOptimizeLabel;
 
@@ -191,11 +198,26 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   private final boolean stripBinaries;
   private final CompilationMode compilationMode;
 
-  static CppConfiguration create(CppConfigurationParameters params) {
-    CppOptions cppOptions = params.cppOptions;
+  private final CppToolchainInfo cppToolchainInfo;
 
-    Options commonOptions = params.commonOptions;
-    CompilationMode compilationMode = commonOptions.compilationMode;
+  static CppConfiguration create(CppConfigurationParameters params)
+      throws InvalidConfigurationException {
+    CppOptions cppOptions = params.cppOptions;
+    CppToolchainInfo cppToolchainInfo;
+    try {
+      cppToolchainInfo =
+          CppToolchainInfo.create(
+              params.crosstoolTop.getPackageIdentifier().getPathUnderExecRoot(),
+              params.ccToolchainLabel,
+              params.ccToolchainConfigInfo,
+              cppOptions.disableLegacyCrosstoolFields,
+              cppOptions.disableCompilationModeFlags,
+              cppOptions.disableLinkingModeFlags);
+    } catch (EvalException e) {
+      throw new InvalidConfigurationException(e);
+    }
+
+    CompilationMode compilationMode = params.commonOptions.compilationMode;
 
     ImmutableList.Builder<String> linkoptsBuilder = ImmutableList.builder();
     linkoptsBuilder.addAll(cppOptions.linkoptList);
@@ -204,9 +226,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     }
 
     return new CppConfiguration(
-        params.transformedCpu,
         params.crosstoolTop,
-        Preconditions.checkNotNull(commonOptions.cpu),
+        params.transformedCpu,
+        params.compiler,
+        Preconditions.checkNotNull(params.commonOptions.cpu),
         params.fdoPath,
         params.fdoOptimizeLabel,
         ImmutableList.copyOf(cppOptions.conlyoptList),
@@ -219,12 +242,14 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         (cppOptions.stripBinaries == StripMode.ALWAYS
             || (cppOptions.stripBinaries == StripMode.SOMETIMES
                 && compilationMode == CompilationMode.FASTBUILD)),
-        compilationMode);
+        compilationMode,
+        cppToolchainInfo);
   }
 
   private CppConfiguration(
+      Label crosstoolTop,
       String transformedCpuFromOptions,
-      Label redirectChasedCrosstoolTop,
+      String compilerFromOptions,
       String desiredCpu,
       PathFragment fdoPath,
       Label fdoOptimizeLabel,
@@ -236,9 +261,11 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       ImmutableList<String> ltobackendOptions,
       CppOptions cppOptions,
       boolean stripBinaries,
-      CompilationMode compilationMode) {
+      CompilationMode compilationMode,
+      CppToolchainInfo cppToolchainInfo) {
+    this.crosstoolTop = crosstoolTop;
     this.transformedCpuFromOptions = transformedCpuFromOptions;
-    this.redirectChasedCrosstoolTop = redirectChasedCrosstoolTop;
+    this.compilerFromOptions = compilerFromOptions;
     this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
     this.fdoOptimizeLabel = fdoOptimizeLabel;
@@ -251,6 +278,65 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     this.cppOptions = cppOptions;
     this.stripBinaries = stripBinaries;
     this.compilationMode = compilationMode;
+    this.cppToolchainInfo = cppToolchainInfo;
+  }
+
+  @VisibleForTesting
+  static LinkingMode importLinkingMode(CrosstoolConfig.LinkingMode mode) {
+    switch (mode.name()) {
+      case "FULLY_STATIC":
+        return LinkingMode.LEGACY_FULLY_STATIC;
+      case "MOSTLY_STATIC_LIBRARIES":
+        return LinkingMode.LEGACY_MOSTLY_STATIC_LIBRARIES;
+      case "MOSTLY_STATIC":
+        return LinkingMode.STATIC;
+      case "DYNAMIC":
+        return LinkingMode.DYNAMIC;
+      default:
+        throw new IllegalArgumentException(
+            String.format("Linking mode '%s' not known.", mode.name()));
+    }
+  }
+
+  /** Returns the {@link CppToolchainInfo} used by this configuration. */
+  public CppToolchainInfo getCppToolchainInfo() {
+    return cppToolchainInfo;
+  }
+
+  /**
+   * Returns the toolchain identifier, which uniquely identifies the compiler version, target libc
+   * version, and target cpu.
+   */
+  public String getToolchainIdentifier() {
+    return cppToolchainInfo.getToolchainIdentifier();
+  }
+
+  /** Returns the label of the CROSSTOOL for this configuration. */
+  public Label getCrosstoolTop() {
+    return crosstoolTop;
+  }
+
+  /**
+   * Returns the path of the crosstool.
+   */
+  public PathFragment getCrosstoolTopPathFragment() {
+    return cppToolchainInfo.getCrosstoolTopPathFragment();
+  }
+
+  @Override
+  public String toString() {
+    return cppToolchainInfo.toString();
+  }
+
+  /**
+   * Returns the path fragment that is either absolute or relative to the execution root that can be
+   * used to execute the given tool.
+   *
+   * <p>Deprecated: Use {@link CcToolchainProvider#getToolPathFragment(Tool)}
+   */
+  @Deprecated
+  public PathFragment getToolPathFragment(CppConfiguration.Tool tool) {
+    return cppToolchainInfo.getToolPathFragment(tool);
   }
 
   /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
@@ -260,7 +346,15 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       defaultLabel = "//tools/cpp:crosstool",
       defaultInToolRepository = true)
   public Label getRuleProvidingCcToolchainProvider() {
-    return redirectChasedCrosstoolTop;
+      return crosstoolTop;
+  }
+
+  /**
+   * Returns the configured features of the toolchain. Rules should not call this directly, but
+   * instead use {@code CcToolchainProvider.getFeatures}.
+   */
+  public CcToolchainFeatures getFeatures() {
+    return cppToolchainInfo.getFeatures();
   }
 
   /**
@@ -300,6 +394,20 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean getLinkCompileOutputSeparately() {
     return cppOptions.linkCompileOutputSeparately;
+  }
+
+  @SkylarkConfigurationField(
+      name = "stl",
+      doc = "The label of the STL target",
+      defaultLabel = "//third_party/stl",
+      defaultInToolRepository = false
+  )
+  public Label getSkylarkStl() {
+    try {
+      return Label.parseAbsolute("//third_party/stl", ImmutableMap.of());
+    } catch (LabelSyntaxException e) {
+      throw new IllegalStateException("STL label not formatted correctly", e);
+    }
   }
 
   public boolean isFdo() {
@@ -394,7 +502,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   /** @return value from --compiler option, null if the option was not passed. */
   @Nullable
   public String getCompilerFromOptions() {
-    return cppOptions.cppCompiler;
+    return compilerFromOptions;
   }
 
   public boolean legacyWholeArchive() {
@@ -575,10 +683,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   boolean enableCcToolchainConfigInfoFromSkylark() {
     return cppOptions.enableCcToolchainConfigInfoFromSkylark;
-  }
-
-  public Label getCrosstoolTop() {
-    return cppOptions.crosstoolTop;
   }
 
   /**

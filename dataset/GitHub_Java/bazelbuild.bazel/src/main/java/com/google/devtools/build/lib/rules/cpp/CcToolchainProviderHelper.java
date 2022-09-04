@@ -399,7 +399,8 @@ public class CcToolchainProviderHelper {
             (CcSkyframeSupportValue)
                 skyframeEnv.getValueOrThrow(ccSupportKey, CcSkyframeSupportException.class);
       } catch (CcSkyframeSupportException e) {
-        throw ruleContext.throwWithRuleError(e.getMessage());
+        ruleContext.throwWithRuleError(e.getMessage());
+        throw new IllegalStateException("Should not be reached");
       }
       if (skyframeEnv.valuesMissing()) {
         return null;
@@ -539,7 +540,7 @@ public class CcToolchainProviderHelper {
     for (String s : toolchainInfo.getRawBuiltInIncludeDirectories()) {
       try {
         builtInIncludeDirectoriesBuilder.add(
-            resolveIncludeDir(s, sysroot, toolchainInfo.getToolsDirectory()));
+            resolveIncludeDir(s, sysroot, toolchainInfo.getCrosstoolTopPathFragment()));
       } catch (InvalidConfigurationException e) {
         ruleContext.ruleError(e.getMessage());
       }
@@ -580,7 +581,7 @@ public class CcToolchainProviderHelper {
         getToolchainForSkylark(toolchainInfo),
         cppConfiguration,
         toolchainInfo,
-        toolchainInfo.getToolsDirectory(),
+        cppConfiguration.getCrosstoolTopPathFragment(),
         attributes.getCrosstool(),
         attributes.getFullInputsForCrosstool(),
         attributes.getCompile(),
@@ -671,6 +672,7 @@ public class CcToolchainProviderHelper {
       if (configInfo != null) {
         try {
           return CppToolchainInfo.create(
+              ruleContext.getLabel().getPackageIdentifier().getPathUnderExecRoot(),
               ruleContext.getLabel(),
               configInfo,
               cppConfiguration.disableLegacyCrosstoolFields(),
@@ -698,9 +700,10 @@ public class CcToolchainProviderHelper {
     try {
       toolchain =
           CppToolchainInfo.addLegacyFeatures(
-              toolchain, CppToolchainInfo.getToolsDirectory(attributes.getCcToolchainLabel()));
+              toolchain, cppConfiguration.getCrosstoolTopPathFragment());
       CcToolchainConfigInfo ccToolchainConfigInfo = CcToolchainConfigInfo.fromToolchain(toolchain);
       return CppToolchainInfo.create(
+          cppConfiguration.getCrosstoolTopPathFragment(),
           attributes.getCcToolchainLabel(),
           ccToolchainConfigInfo,
           cppConfiguration.disableLegacyCrosstoolFields(),
