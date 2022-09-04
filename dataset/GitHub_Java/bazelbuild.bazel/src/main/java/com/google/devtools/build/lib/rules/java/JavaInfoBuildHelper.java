@@ -466,6 +466,7 @@ final class JavaInfoBuildHelper {
             javaSemantics,
             toolchainProvider,
             javaRuntimeInfo,
+            SkylarkList.createImmutable(ImmutableList.of()),
             outputJarsBuilder,
             /*createOutputSourceJar=*/ true,
             outputSourceJar,

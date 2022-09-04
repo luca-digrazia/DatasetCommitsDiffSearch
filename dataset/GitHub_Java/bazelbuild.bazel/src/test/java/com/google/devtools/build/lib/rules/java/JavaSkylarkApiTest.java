@@ -21,7 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -52,28 +51,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "a/BUILD",
         "load(':rule.bzl', 'jrule')",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:java_toolchain_alias.bzl', 'java_runtime_alias')",
         "java_runtime(name='jvm', srcs=[], java_home='/foo/bar')",
         "java_runtime_alias(name='alias')",
-        "jrule(name='r')",
-        "constraint_value(",
-        "    name = 'constraint',",
-        "    constraint_setting = '" + TestConstants.PLATFORM_BASE + "/java/constraints:runtime',",
-        ")",
-        "toolchain(",
-        "    name = 'java_runtime_toolchain',",
-        "    toolchain = ':jvm',",
-        "    toolchain_type = '"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:runtime_toolchain_type',",
-        "    target_compatible_with = [':constraint'],",
-        ")",
-        "platform(",
-        "    name = 'platform',",
-        "    constraint_values = [':constraint'],",
-        ")");
+        "jrule(name='r')");
 
     scratch.file(
         "a/rule.bzl",
@@ -87,8 +67,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration(
-        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration("--javabase=//a:jvm");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked")
     PathFragment javaHomeExecPath = (PathFragment) ct.get("java_home_exec_path");
@@ -109,28 +88,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "a/BUILD",
         "load(':rule.bzl', 'jrule')",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:java_toolchain_alias.bzl', 'java_runtime_alias')",
         "java_runtime(name='jvm', srcs=[], java_home='foo/bar')",
         "java_runtime_alias(name='alias')",
-        "jrule(name='r')",
-        "constraint_value(",
-        "    name = 'constraint',",
-        "    constraint_setting = '" + TestConstants.PLATFORM_BASE + "/java/constraints:runtime',",
-        ")",
-        "toolchain(",
-        "    name = 'java_runtime_toolchain',",
-        "    toolchain = ':jvm',",
-        "    toolchain_type = '"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:runtime_toolchain_type',",
-        "    target_compatible_with = [':constraint'],",
-        ")",
-        "platform(",
-        "    name = 'platform',",
-        "    constraint_values = [':constraint'],",
-        ")");
+        "jrule(name='r')");
 
     scratch.file(
         "a/rule.bzl",
@@ -144,8 +104,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration(
-        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration("--javabase=//a:jvm");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked")
     PathFragment javaHomeExecPath = (PathFragment) ct.get("java_home_exec_path");
@@ -166,29 +125,10 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "a/BUILD",
         "load(':rule.bzl', 'jrule')",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:java_toolchain_alias.bzl', 'java_runtime_alias')",
         "genrule(name='gen', cmd='', outs=['foo/bar/bin/java'])",
         "java_runtime(name='jvm', srcs=[], java='foo/bar/bin/java')",
         "java_runtime_alias(name='alias')",
-        "jrule(name='r')",
-        "constraint_value(",
-        "    name = 'constraint',",
-        "    constraint_setting = '" + TestConstants.PLATFORM_BASE + "/java/constraints:runtime',",
-        ")",
-        "toolchain(",
-        "    name = 'java_runtime_toolchain',",
-        "    toolchain = ':jvm',",
-        "    toolchain_type = '"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:runtime_toolchain_type',",
-        "    target_compatible_with = [':constraint'],",
-        ")",
-        "platform(",
-        "    name = 'platform',",
-        "    constraint_values = [':constraint'],",
-        ")");
+        "jrule(name='r')");
 
     scratch.file(
         "a/rule.bzl",
@@ -202,19 +142,16 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration(
-        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
-    // TODO(b/129637690): the runtime shouldn't be resolved in the host config
-    ConfiguredTarget genrule = getHostConfiguredTarget("//a:gen");
+    useConfiguration("--javabase=//a:jvm");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked")
     PathFragment javaHomeExecPath = (PathFragment) ct.get("java_home_exec_path");
     assertThat(javaHomeExecPath.getPathString())
-        .isEqualTo(getGenfilesArtifact("foo/bar", genrule).getExecPathString());
+        .isEqualTo(getGenfilesArtifactWithNoOwner("a/foo/bar").getExecPathString());
     @SuppressWarnings("unchecked")
     PathFragment javaExecutableExecPath = (PathFragment) ct.get("java_executable_exec_path");
     assertThat(javaExecutableExecPath.getPathString())
-        .startsWith(getGenfilesArtifact("foo/bar/bin/java", genrule).getExecPathString());
+        .startsWith(getGenfilesArtifactWithNoOwner("a/foo/bar/bin/java").getExecPathString());
     @SuppressWarnings("unchecked")
     PathFragment javaHomeRunfilesPath = (PathFragment) ct.get("java_home_runfiles_path");
     assertThat(javaHomeRunfilesPath.getPathString()).isEqualTo("a/foo/bar");
@@ -259,7 +196,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//a:r");
-    assertContainsEvent("expected value of type 'JavaRuntimeInfo' for parameter 'host_javabase'");
+    assertContainsEvent("must point to a Java runtime");
   }
 
   @Test
@@ -1943,7 +1880,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "foo/rule.bzl",
         "result = provider()",
         "def _impl(ctx):",
-        "  return [result(java_toolchain_label=ctx.attr._java_toolchain)]",
+        "  return [result(java_toolchain_label=ctx.attr._java_toolchain.label)]",
         "myrule = rule(",
         "  implementation=_impl,",
         "  fragments = ['java'],",
@@ -1952,9 +1889,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/BUILD",
         "load(':rule.bzl', 'myrule')",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:java_toolchain_alias.bzl', 'java_toolchain_alias')",
         "java_toolchain_alias(name='alias')",
         "myrule(name='myrule')");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
@@ -1962,15 +1896,10 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         (StructImpl)
             configuredTarget.get(
                 new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
-    Label javaToolchainLabel =
-        ((JavaToolchainProvider)
-                ((ConfiguredTarget) info.getValue("java_toolchain_label"))
-                    .get(ToolchainInfo.PROVIDER))
-            .getToolchainLabel();
+    Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
     assertThat(
             javaToolchainLabel.toString().endsWith("jdk:remote_toolchain")
                 || javaToolchainLabel.toString().endsWith("jdk:toolchain"))
-        .named(javaToolchainLabel.toString())
         .isTrue();
   }
 
@@ -1981,7 +1910,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "foo/rule.bzl",
         "result = provider()",
         "def _impl(ctx):",
-        "  return [result(java_toolchain_label=ctx.attr._java_toolchain)]",
+        "  return [result(java_toolchain_label=ctx.attr._java_toolchain.label)]",
         "myrule = rule(",
         "  implementation=_impl,",
         "  fragments = ['java'],",
@@ -1990,25 +1919,15 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/BUILD",
         "load(':rule.bzl', 'myrule')",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:java_toolchain_alias.bzl', 'java_toolchain_alias')",
         "java_toolchain_alias(name='alias')",
         "myrule(name='myrule')");
-    useConfiguration(
-        "--java_toolchain=//java/com/google/test:toolchain",
-        "--extra_toolchains=//java/com/google/test:all",
-        "--platforms=//java/com/google/test:platform");
+    useConfiguration("--java_toolchain=//java/com/google/test:toolchain");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
     StructImpl info =
         (StructImpl)
             configuredTarget.get(
                 new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl", ImmutableMap.of()), "result"));
-    Label javaToolchainLabel =
-        ((JavaToolchainProvider)
-                ((ConfiguredTarget) info.getValue("java_toolchain_label"))
-                    .get(ToolchainInfo.PROVIDER))
-            .getToolchainLabel();
+    Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
     assertThat(javaToolchainLabel.toString()).isEqualTo("//java/com/google/test:toolchain");
   }
 
@@ -2326,6 +2245,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
   @Test
   public void testConfiguredTargetHostJavabase() throws Exception {
     writeBuildFileForJavaToolchain();
+    setSkylarkSemanticsOptions("--incompatible_use_toolchain_providers_in_java_common=true");
 
     scratch.file(
         "a/BUILD",
@@ -2359,12 +2279,13 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//a:r");
-    assertContainsEvent("expected value of type 'JavaRuntimeInfo' for parameter 'host_javabase'");
+    assertContainsEvent("java_common.JavaRuntimeInfo");
   }
 
   @Test
   public void testConfiguredTargetToolchain() throws Exception {
     writeBuildFileForJavaToolchain();
+    setSkylarkSemanticsOptions("--incompatible_use_toolchain_providers_in_java_common=true");
 
     scratch.file(
         "a/BUILD",
@@ -2398,8 +2319,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//a:r");
-    assertContainsEvent(
-        "expected value of type 'JavaToolchainSkylarkApiProvider' for parameter 'java_toolchain'");
+    assertContainsEvent("java_common.JavaToolchainInfo");
   }
 
   @Test
@@ -2478,14 +2398,14 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void testIsToolchainResolutionEnabled_disabled() throws Exception {
-    useConfiguration("--incompatible_use_toolchain_resolution_for_java_rules=false");
+    useConfiguration("--experimental_use_toolchain_resolution_for_java_rules=false");
 
     assertThat(toolchainResolutionEnabled()).isFalse();
   }
 
   @Test
   public void testIsToolchainResolutionEnabled_enabled() throws Exception {
-    useConfiguration("--incompatible_use_toolchain_resolution_for_java_rules");
+    useConfiguration("--experimental_use_toolchain_resolution_for_java_rules");
 
     assertThat(toolchainResolutionEnabled()).isTrue();
   }
@@ -2496,28 +2416,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "a/BUILD",
         "load(':rule.bzl', 'jrule')",
-        "load('"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:java_toolchain_alias.bzl', 'java_runtime_alias')",
         "java_runtime(name='jvm', srcs=['a.txt'], java_home='foo/bar')",
         "java_runtime_alias(name='alias')",
-        "jrule(name='r')",
-        "constraint_value(",
-        "    name = 'constraint',",
-        "    constraint_setting = '" + TestConstants.PLATFORM_BASE + "/java/constraints:runtime',",
-        ")",
-        "toolchain(",
-        "    name = 'java_runtime_toolchain',",
-        "    toolchain = ':jvm',",
-        "    toolchain_type = '"
-            + TestConstants.TOOLS_REPOSITORY
-            + "//tools/jdk:runtime_toolchain_type',",
-        "    target_compatible_with = [':constraint'],",
-        ")",
-        "platform(",
-        "    name = 'platform',",
-        "    constraint_values = [':constraint'],",
-        ")");
+        "jrule(name='r')");
 
     scratch.file(
         "a/rule.bzl",
@@ -2528,8 +2429,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "  )",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration(
-        "--javabase=//a:jvm", "--extra_toolchains=//a:all", "--platforms=//a:platform");
+    useConfiguration("--javabase=//a:jvm");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked")
     SkylarkNestedSet files = (SkylarkNestedSet) ct.get("files");
