@@ -442,7 +442,6 @@ public class CppCompileActionBuilder {
             configuration);
     if (CppFileTypes.headerDiscoveryRequired(sourceFile)
         && !useHeaderModules()
-        && cppSemantics.needsDotdInputPruning()
         && !featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
       String dotdFileName =
           CppHelper.getDotdFileName(ruleErrorConsumer, ccToolchain, outputCategory, outputName);
