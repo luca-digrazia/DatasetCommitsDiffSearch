@@ -1,34 +1,19 @@
-/*
- * Copyright (c) 2014, Oracle America, Inc.
- * All rights reserved.
+/**
+ * This file is part of Graylog Pipeline Processor.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Graylog Pipeline Processor is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- *  * Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
+ * Graylog Pipeline Processor is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *  * Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- *  * Neither the name of Oracle nor the names of its contributors may be used
- *    to endorse or promote products derived from this software without
- *    specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
- * THE POSSIBILITY OF SUCH DAMAGE.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog Pipeline Processor.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog.benchmarks.pipeline;
 
 import com.codahale.metrics.MetricRegistry;
@@ -39,17 +24,17 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
-import org.graylog.plugins.pipelineprocessor.db.PipelineSourceService;
-import org.graylog.plugins.pipelineprocessor.db.PipelineStreamAssignmentService;
-import org.graylog.plugins.pipelineprocessor.db.RuleSourceService;
-import org.graylog.plugins.pipelineprocessor.functions.StringCoercion;
+import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
+import org.graylog.plugins.pipelineprocessor.db.PipelineService;
+import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
+import org.graylog.plugins.pipelineprocessor.db.RuleDao;
+import org.graylog.plugins.pipelineprocessor.db.RuleService;
+import org.graylog.plugins.pipelineprocessor.functions.conversion.StringConversion;
 import org.graylog.plugins.pipelineprocessor.functions.messages.SetField;
 import org.graylog.plugins.pipelineprocessor.parser.FunctionRegistry;
 import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineSource;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineStreamAssignment;
-import org.graylog.plugins.pipelineprocessor.rest.RuleSource;
+import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.graylog2.Configuration;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.filters.ExtractorFilter;
@@ -62,12 +47,12 @@ import org.graylog2.messageprocessors.MessageFilterChainProcessor;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.Message;
+import org.graylog2.plugin.Messages;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.rules.DroolsEngine;
 import org.graylog2.shared.journal.Journal;
-import org.graylog2.shared.stats.ThroughputStats;
 import org.graylog2.streams.StreamFaultManager;
 import org.graylog2.streams.StreamMetrics;
 import org.graylog2.streams.StreamRouter;
@@ -107,49 +92,49 @@ public class PipelineBenchmark {
         private final PipelineInterpreter interpreter;
 
         public InterpreterState() {
-            final RuleSourceService ruleSourceService = mock(RuleSourceService.class);
-            when(ruleSourceService.loadAll()).thenReturn(Collections.singleton(
-                    RuleSource.create("abc",
-                                      "title",
-                                      "description",
-                                      "rule \"add\"\n" +
-                                              "when string(message.`message`) == \"original message\"\n" +
-                                              "then\n" +
-                                              "  set_field(\"field\", \"derived message\");\n" +
-                                              "end",
-                                      Tools.nowUTC(),
-                                      null)
+            final RuleService ruleService = mock(RuleService.class);
+            when(ruleService.loadAll()).thenReturn(Collections.singleton(
+                    RuleDao.create("abc",
+                                   "title",
+                                   "description",
+                                   "rule \"add\"\n" +
+                                           "when tostring($message.message) == \"original message\"\n" +
+                                           "then\n" +
+                                           "  set_field(\"field\", \"derived message\");\n" +
+                                           "end",
+                                   Tools.nowUTC(),
+                                   null)
             ));
 
-            final PipelineSourceService pipelineSourceService = mock(PipelineSourceService.class);
-            when(pipelineSourceService.loadAll()).thenReturn(Collections.singleton(
-                    PipelineSource.create("cde", "title", "description",
-                                          "pipeline \"pipeline\"\n" +
-                                                  "stage 0 match all\n" +
-                                                  "    rule \"add\";\n" +
-                                                  "end\n",
-                                          Tools.nowUTC(),
-                                          null)
+            final PipelineService pipelineService = mock(PipelineService.class);
+            when(pipelineService.loadAll()).thenReturn(Collections.singleton(
+                    PipelineDao.create("cde", "title", "description",
+                                       "pipeline \"pipeline\"\n" +
+                                               "stage 0 match all\n" +
+                                               "    rule \"add\";\n" +
+                                               "end\n",
+                                       Tools.nowUTC(),
+                                       null)
             ));
 
-            final PipelineStreamAssignmentService pipelineStreamAssignmentService = mock(PipelineStreamAssignmentService.class);
-            final PipelineStreamAssignment pipelineStreamAssignment = PipelineStreamAssignment.create(null,
+            final PipelineStreamConnectionsService pipelineStreamConnectionsService = mock(PipelineStreamConnectionsService.class);
+            final PipelineConnections pipelineStreamConnection = PipelineConnections.create(null,
                                                                                                       "default",
                                                                                                       newHashSet("cde"));
-            when(pipelineStreamAssignmentService.loadAll()).thenReturn(
-                    newHashSet(pipelineStreamAssignment)
+            when(pipelineStreamConnectionsService.loadAll()).thenReturn(
+                    newHashSet(pipelineStreamConnection)
             );
 
             final Map<String, Function<?>> functions = Maps.newHashMap();
             functions.put(SetField.NAME, new SetField());
-            functions.put(StringCoercion.NAME, new StringCoercion());
+            functions.put(StringConversion.NAME, new StringConversion());
 
             final PipelineRuleParser parser = setupParser(functions);
 
             interpreter = new PipelineInterpreter(
-                    ruleSourceService,
-                    pipelineSourceService,
-                    pipelineStreamAssignmentService,
+                    ruleService,
+                    pipelineService,
+                    pipelineStreamConnectionsService,
                     parser,
                     mock(Journal.class),
                     mock(MetricRegistry.class),
@@ -166,9 +151,9 @@ public class PipelineBenchmark {
     }
 
     @Benchmark
-    public void testPipeline(final InterpreterState state) {
+    public Messages testPipeline(final InterpreterState state) {
         Message msg = new Message("original message", "test", Tools.nowUTC());
-        state.interpreter.process(msg);
+        return state.interpreter.process(msg);
     }
 
     @State(Scope.Benchmark)
@@ -188,7 +173,8 @@ public class PipelineBenchmark {
                 final ServerStatus serverStatus = mock(ServerStatus.class);
                 when(serverStatus.getDetailedMessageRecordingStrategy()).thenReturn(ServerStatus.MessageDetailRecordingStrategy.NEVER);
 
-                final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setDaemon(true).build());
+                final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setDaemon(
+                        true).build());
 
                 final InputService inputService = mock(InputService.class);
                 // extractors for the single input we are pretending to have
@@ -210,7 +196,8 @@ public class PipelineBenchmark {
                         mock(NotificationService.class),
                         streamService
                 );
-                ExecutorService daemonExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setDaemon(true).build());
+                ExecutorService daemonExecutor = Executors.newSingleThreadExecutor(new ThreadFactoryBuilder().setDaemon(
+                        true).build());
                 when(engineFactory.create(any(), any())).thenReturn(
                         new StreamRouterEngine(Collections.emptyList(),
                                                daemonExecutor,
@@ -229,7 +216,7 @@ public class PipelineBenchmark {
 
                 filters.add(new ExtractorFilter(inputService));
                 filters.add(new StaticFieldFilter(inputService));
-                filters.add(new StreamMatcherFilter(streamRouter, mock(ThroughputStats.class)));
+                filters.add(new StreamMatcherFilter(streamRouter));
                 if (!noDrools) {
                     filters.add(new RulesFilter(droolsEngine, filterService));
                 }
@@ -245,9 +232,9 @@ public class PipelineBenchmark {
     }
 
     @Benchmark
-    public void testMessageFilterChain(final MessageFilterState state) {
+    public Messages testMessageFilterChain(final MessageFilterState state) {
         Message msg = new Message("original message", "test", Tools.nowUTC());
-        state.filterChain.process(msg);
+        return state.filterChain.process(msg);
     }
 
     public static <T> T mock(Class<T> classToMock) {
