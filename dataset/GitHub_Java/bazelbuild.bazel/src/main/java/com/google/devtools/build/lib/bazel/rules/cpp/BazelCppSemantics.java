@@ -20,26 +20,24 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.AspectLegalCppSemantics;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationInfo.Builder;
+import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
+import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.cpp.NoProcessing;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SingletonCodec;
 
-/** C++ compilation semantics. */
+/**
+ * C++ compilation semantics.
+ */
 public class BazelCppSemantics implements AspectLegalCppSemantics {
   public static final BazelCppSemantics INSTANCE = new BazelCppSemantics();
-
-  public static final ObjectCodec<BazelCppSemantics> CODEC =
-      SingletonCodec.of(INSTANCE, "BazelCppSemantics");
 
   private final IncludeProcessing includeProcessing;
 
   private BazelCppSemantics() {
-    this.includeProcessing = NoProcessing.INSTANCE;
+    this.includeProcessing = new NoProcessing();
   }
 
   @Override
@@ -47,6 +45,7 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
       RuleContext ruleContext, CppCompileActionBuilder actionBuilder) {
     actionBuilder
         .setCppConfiguration(ruleContext.getFragment(CppConfiguration.class))
+        .setActionContext(CppCompileActionContext.class)
         // Because Bazel does not support include scanning, we need the entire crosstool filegroup,
         // including header files, as opposed to just the "compile" filegroup.
         .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getCrosstool())
@@ -54,7 +53,8 @@ public class BazelCppSemantics implements AspectLegalCppSemantics {
   }
 
   @Override
-  public void setupCcCompilationInfo(RuleContext ruleContext, Builder ccCompilationInfoBuilder) {}
+  public void setupCompilationContext(RuleContext ruleContext, Builder contextBuilder) {
+  }
 
   @Override
   public NestedSet<Artifact> getAdditionalPrunableIncludes() {
