@@ -129,9 +129,7 @@ public class ApiClient {
             log.error("Could not create target URI", e);
             return null;
         }
-        final String s = targetAddress.toASCIIString();
-        // FIXME this steht ab (fixes https://github.com/Graylog2/graylog2-server/issues/223)
-        return new URL(s.replace("+", "%2b"));
+        return new URL(targetAddress.toASCIIString());
     }
 
 
@@ -288,7 +286,7 @@ public class ApiClient {
             return null;
         }
 
-        URL prepareUrl() {
+        private URL prepareUrl() {
             // if this is null there's not much we can do anyway...
             Preconditions.checkNotNull(pathTemplate, "pathTemplate() needs to be set to a non-null value.");
 

@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Kay Roepke <kay@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,15 +15,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package lib.security;
 
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
 import lib.APIException;
 import lib.ApiClient;
 import models.User;
-import models.UserService;
 import models.api.responses.system.UserResponse;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.*;
@@ -38,22 +36,12 @@ import play.libs.Crypto;
 import play.mvc.Http;
 
 import java.io.IOException;
-import java.net.ConnectException;
 
 /**
  * Shiro Realm implementation that uses a Graylog2-server as the source of the subject's information.
  */
-@Singleton
 public class ServerRestInterfaceRealm extends AuthorizingRealm {
     private static final Logger log = LoggerFactory.getLogger(ServerRestInterfaceRealm.class);
-    private final ApiClient api;
-    private final User.Factory userFactory;
-
-    @Inject
-    private ServerRestInterfaceRealm(ApiClient api, User.Factory userFactory) {
-        this.api = api;
-        this.userFactory = userFactory;
-    }
 
     @Override
     protected AuthorizationInfo doGetAuthorizationInfo(PrincipalCollection principals) {
@@ -70,17 +58,18 @@ public class ServerRestInterfaceRealm extends AuthorizingRealm {
         }
         UsernamePasswordToken token = (UsernamePasswordToken) authToken;
         try {
-            final SimpleHash sha2 = new SimpleHash("SHA-256", token.getPassword());
-            final String passwordHash = sha2.toString();
+            final SimpleHash sha1 = new SimpleHash("SHA1", token.getPassword());
+            final String passwordHash = sha1.toString();
 
             log.debug("Trying to log in {} via REST", token.getUsername());
-            response = api.get(UserResponse.class)
+            // TODO string concat in url sucks, use messageformat or something that actually encodes, too
+            response = ApiClient.get(UserResponse.class)
                     .path("/users/{0}", token.getUsername())
                     .credentials(token.getUsername(), passwordHash)
                     .execute();
-            final User user = userFactory.fromResponse(response, passwordHash);
+            final User user = new User(response, passwordHash);
 
-            UserService.setCurrent(user);
+            User.setCurrent(user);
 
             // well, "sessiondid"
             final String sessionid = Crypto.encryptAES(token.getUsername() + "\t" + passwordHash);
@@ -89,14 +78,9 @@ public class ServerRestInterfaceRealm extends AuthorizingRealm {
                     .authenticated(true)
                     .buildSubject();
         } catch (IOException e) {
-            throw new Graylog2ServerUnavailableException("Could not connect to Graylog2 Server.", e);
+            throw new AuthenticationException("Unable to communicate with graylog2-server backend", e);
         } catch (APIException e) {
-            if (e.getCause() != null && e.getCause() instanceof ConnectException) {
-                throw new Graylog2ServerUnavailableException("Could not connect to Graylog2 Server.", e);
-            } else {
-                throw new AuthenticationException("Unable to communicate with graylog2-server backend", e);
-            }
-
+            throw new Graylog2ServerUnvavailableException("Could not connect to Graylog2 Server.", e);
             // throw new AuthenticationException("Server responded with non-200 code", e);
         }
         return new SimpleAuthenticationInfo(response.username, authToken.getCredentials(), "rest-interface");

@@ -22,7 +22,9 @@ import java.util.concurrent.ExecutionException;
 public class Api {
 	private static final Logger log = LoggerFactory.getLogger(Api.class);
 
-    private static AsyncHttpClient client;
+	public static final String ERROR_MSG_IO = "Could not connect to graylog2-server. Please make sure that it is running and you configured the correct REST URI.";
+
+	private static AsyncHttpClient client;
 	static {
 		AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
 		builder.setAllowPoolingConnection(false);

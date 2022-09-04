@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,11 +15,19 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package models;
 
+import com.google.common.collect.Lists;
+import lib.APIException;
+import lib.ApiClient;
+import models.api.responses.system.GetSystemMessagesResponse;
 import models.api.responses.system.SystemMessageSummaryResponse;
 import org.joda.time.DateTime;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -39,6 +47,23 @@ public class SystemMessage {
         this.caller = sms.caller;
         this.content = sms.content;
         this.nodeId = sms.nodeId;
+    }
+
+    public static List<SystemMessage> all(int page) throws IOException, APIException {
+        GetSystemMessagesResponse r = ApiClient.get(GetSystemMessagesResponse.class)
+                .path("/system/messages")
+                .queryParam("page", page)
+                .execute();
+        List<SystemMessage> messages = Lists.newArrayList();
+        for (SystemMessageSummaryResponse message : r.messages) {
+            messages.add(new SystemMessage(message));
+        }
+
+        return messages;
+    }
+
+    public static int total() throws IOException, APIException {
+        return ApiClient.get(GetSystemMessagesResponse.class).path("/system/messages").execute().total;
     }
 
     public DateTime getTimestamp() {

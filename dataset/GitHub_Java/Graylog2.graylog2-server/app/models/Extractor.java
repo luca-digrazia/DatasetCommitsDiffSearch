@@ -151,7 +151,6 @@ public class Extractor {
                 .path("/system/inputs/{0}/extractors", input.getId())
                 .node(node)
                 .expect(Http.Status.CREATED)
-                .body(request)
                 .execute();
     }
 

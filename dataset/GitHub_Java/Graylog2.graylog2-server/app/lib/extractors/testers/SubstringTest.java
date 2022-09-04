@@ -1,46 +1,43 @@
 /**
- * This file is part of Graylog.
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * This file is part of Graylog2.
+ *
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package lib.extractors.testers;
 
 import com.google.common.collect.Maps;
-import com.google.inject.Inject;
-import org.graylog2.rest.models.tools.requests.SubstringTestRequest;
-import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.models.api.responses.SubstringTestResponse;
+import lib.APIException;
+import lib.ApiClient;
+import models.api.responses.SubstringTestResponse;
 
 import java.io.IOException;
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class SubstringTest {
 
-
-    private final ApiClient api;
-
-    @Inject
-    private SubstringTest(ApiClient api) {
-        this.api = api;
-    }
-
-    public Map<String, Object> test(SubstringTestRequest request) throws IOException, APIException {
-        SubstringTestResponse r = api.post(SubstringTestResponse.class)
+    public static Map<String, Object> test(int start, int end, String string) throws IOException, APIException {
+        SubstringTestResponse r = ApiClient.get(SubstringTestResponse.class)
                 .path("/tools/substring_tester")
-                .body(request)
+                .queryParam("begin_index", start)
+                .queryParam("end_index", end)
+                .queryParam("string", string)
                 .execute();
 
         Map<String, Object> match = Maps.newHashMap();

@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,15 +15,21 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package models;
 
+import com.google.common.collect.Lists;
+import lib.APIException;
+import lib.ApiClient;
 import lib.notifications.DeflectorExistsAsIndexNotification;
-import lib.notifications.EsOpenFilesNotification;
-import lib.notifications.MultiMasterNotification;
 import lib.notifications.NotificationType;
+import models.api.responses.system.GetNotificationsResponse;
 import models.api.responses.system.NotificationSummaryResponse;
 import org.joda.time.DateTime;
+
+import java.io.IOException;
+import java.util.List;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -31,13 +37,7 @@ import org.joda.time.DateTime;
 public class Notification {
 
     public enum Type {
-        DEFLECTOR_EXISTS_AS_INDEX,
-        MULTI_MASTER,
-        ES_OPEN_FILES;
-
-        public static Type fromString(String name) {
-            return valueOf(name.toUpperCase());
-        }
+        DEFLECTOR_EXISTS_AS_INDEX
     }
 
     public enum Severity {
@@ -55,11 +55,7 @@ public class Notification {
     public NotificationType get() {
         switch (type) {
             case DEFLECTOR_EXISTS_AS_INDEX:
-                return new DeflectorExistsAsIndexNotification();
-            case MULTI_MASTER:
-                return new MultiMasterNotification();
-            case ES_OPEN_FILES:
-                return new EsOpenFilesNotification();
+                return new DeflectorExistsAsIndexNotification(timestamp);
         }
 
         throw new RuntimeException("No notification registered for " + type);
@@ -71,6 +67,17 @@ public class Notification {
 
     public DateTime getTimestamp() {
         return timestamp;
+    }
+
+    public static List<Notification> all() throws IOException, APIException {
+        GetNotificationsResponse r = ApiClient.get(GetNotificationsResponse.class).path("/system/notifications").execute();
+
+        List<Notification> notifications = Lists.newArrayList();
+        for (NotificationSummaryResponse notification : r.notifications) {
+            notifications.add(new Notification(notification));
+        }
+
+        return notifications;
     }
 
 }
