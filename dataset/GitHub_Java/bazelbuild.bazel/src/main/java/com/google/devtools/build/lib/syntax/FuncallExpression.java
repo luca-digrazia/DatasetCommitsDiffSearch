@@ -22,10 +22,8 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
@@ -41,6 +39,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -51,7 +50,6 @@ import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /** Syntax node for a function call expression. */
-// TODO(adonovan): rename CallExpression.
 public final class FuncallExpression extends Expression {
 
   /**
@@ -236,7 +234,7 @@ public final class FuncallExpression extends Expression {
 
   private final int numPositionalArgs;
 
-  FuncallExpression(Expression function, ImmutableList<Argument.Passed> arguments) {
+  public FuncallExpression(Expression function, ImmutableList<Argument.Passed> arguments) {
     this.function = Preconditions.checkNotNull(function);
     this.arguments = Preconditions.checkNotNull(arguments);
     this.numPositionalArgs = countPositionalArguments();
@@ -500,16 +498,15 @@ public final class FuncallExpression extends Expression {
         "struct field methods should be handled by DotExpression separately");
 
     ImmutableList<ParamDescriptor> parameters = method.getParameters();
-    List<Object> builder = new ArrayList<>(parameters.size() + EXTRA_ARGS_COUNT);
+    ImmutableList.Builder<Object> builder =
+        ImmutableList.builderWithExpectedSize(parameters.size() + EXTRA_ARGS_COUNT);
     boolean acceptsExtraArgs = method.isAcceptsExtraArgs();
     boolean acceptsExtraKwargs = method.isAcceptsExtraKwargs();
 
     int argIndex = 0;
 
     // Process parameters specified in callable.parameters()
-    // Many methods don't have any kwargs, so don't allocate a new hash set in that case.
-    Set<String> keys =
-        kwargs.isEmpty() ? ImmutableSet.of() : CompactHashSet.create(kwargs.keySet());
+    Set<String> keys = new LinkedHashSet<>(kwargs.keySet());
     // Positional parameters are always enumerated before non-positional parameters,
     // And default-valued positional parameters are always enumerated after other positional
     // parameters. These invariants are validated by the SkylarkCallable annotation processor.
@@ -544,7 +541,7 @@ public final class FuncallExpression extends Expression {
         }
         argIndex++;
       } else { // No more positional arguments, or no more positional parameters.
-        if (param.isNamed() && !keys.isEmpty() && keys.remove(param.getName())) {
+        if (param.isNamed() && keys.remove(param.getName())) {
           // Param specified by keyword argument.
           value = kwargs.get(param.getName());
           if (!type.contains(value)) {
@@ -610,7 +607,7 @@ public final class FuncallExpression extends Expression {
     }
     appendExtraInterpreterArgs(builder, method, this, getLocation(), environment);
 
-    return builder.toArray();
+    return builder.build().toArray();
   }
 
   private EvalException unspecifiedParameterException(
@@ -704,9 +701,9 @@ public final class FuncallExpression extends Expression {
    */
   public static List<Object> extraInterpreterArgs(
       MethodDescriptor method, @Nullable FuncallExpression ast, Location loc, Environment env) {
-    List<Object> builder = new ArrayList<>();
+    ImmutableList.Builder<Object> builder = ImmutableList.builder();
     appendExtraInterpreterArgs(builder, method, ast, loc, env);
-    return ImmutableList.copyOf(builder);
+    return builder.build();
   }
 
   /**
@@ -717,7 +714,7 @@ public final class FuncallExpression extends Expression {
    * @see #extraInterpreterArgs(MethodDescriptor, FuncallExpression, Location, Environment)
    */
   private static void appendExtraInterpreterArgs(
-      List<Object> builder,
+      ImmutableList.Builder<Object> builder,
       MethodDescriptor method,
       @Nullable FuncallExpression ast,
       Location loc,
