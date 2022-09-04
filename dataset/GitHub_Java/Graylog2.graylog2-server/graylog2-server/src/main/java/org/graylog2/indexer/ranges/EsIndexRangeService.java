@@ -51,6 +51,7 @@ import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.searches.TimestampStats;
 import org.graylog2.plugin.Tools;
+import org.graylog2.shared.system.activities.ActivityWriter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.joda.time.format.DateTimeFormat;
@@ -68,12 +69,14 @@ public class EsIndexRangeService implements IndexRangeService {
     private static final Logger LOG = LoggerFactory.getLogger(EsIndexRangeService.class);
 
     private final Client client;
+    private final ActivityWriter activityWriter;
     private final ObjectMapper objectMapper;
     private final Indices indices;
 
     @Inject
-    public EsIndexRangeService(Client client, ObjectMapper objectMapper, Indices indices) {
+    public EsIndexRangeService(Client client, ActivityWriter activityWriter, ObjectMapper objectMapper, Indices indices) {
         this.client = client;
+        this.activityWriter = activityWriter;
         this.objectMapper = objectMapper;
         this.indices = indices;
     }
@@ -105,10 +108,10 @@ public class EsIndexRangeService implements IndexRangeService {
         try {
             return IndexRange.create(
                     index,
-                    parseFromDateString((String) fields.get(IndexRange.FIELD_BEGIN)),
-                    parseFromDateString((String) fields.get(IndexRange.FIELD_END)),
-                    parseFromDateString((String) fields.get(IndexRange.FIELD_CALCULATED_AT)),
-                    (int) fields.get(IndexRange.FIELD_TOOK_MS)
+                    parseFromDateString((String) fields.get("begin")),
+                    parseFromDateString((String) fields.get("end")),
+                    parseFromDateString((String) fields.get("calculated_at")),
+                    (int) fields.get("took_ms")
             );
         } catch (Exception e) {
             return null;
@@ -121,16 +124,14 @@ public class EsIndexRangeService implements IndexRangeService {
 
     @Override
     public SortedSet<IndexRange> find(DateTime begin, DateTime end) {
-        final RangeQueryBuilder beginRangeQuery = QueryBuilders.rangeQuery(IndexRange.FIELD_BEGIN).gte(begin.getMillis());
-        final RangeQueryBuilder endRangeQuery = QueryBuilders.rangeQuery(IndexRange.FIELD_END).lte(end.getMillis());
+        final RangeQueryBuilder beginRangeQuery = QueryBuilders.rangeQuery("begin").gte(begin.getMillis());
+        final RangeQueryBuilder endRangeQuery = QueryBuilders.rangeQuery("end").lte(end.getMillis());
         final BoolQueryBuilder completeRangeQuery = QueryBuilders.boolQuery()
                 .must(beginRangeQuery)
                 .must(endRangeQuery);
         final SearchRequest request = client.prepareSearch()
                 .setTypes(IndexMapping.TYPE_INDEX_RANGE)
-                .setIndices(indices.allIndicesAlias())
                 .setQuery(completeRangeQuery)
-                .setSize(Integer.MAX_VALUE)
                 .request();
 
         final SearchResponse response = client.search(request).actionGet();
@@ -149,9 +150,7 @@ public class EsIndexRangeService implements IndexRangeService {
     public SortedSet<IndexRange> findAll() {
         final SearchRequest request = client.prepareSearch()
                 .setTypes(IndexMapping.TYPE_INDEX_RANGE)
-                .setIndices(indices.allIndicesAlias())
                 .setQuery(QueryBuilders.matchAllQuery())
-                .setSize(Integer.MAX_VALUE)
                 .request();
 
         final SearchResponse response = client.search(request).actionGet();

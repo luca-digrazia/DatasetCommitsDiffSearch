@@ -27,7 +27,6 @@ import org.elasticsearch.common.settings.ImmutableSettings;
 import org.elasticsearch.indices.IndexMissingException;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.nosqlunit.IndexCreatingLoadStrategyFactory;
@@ -57,13 +56,7 @@ public class EsIndexRangeServiceTest {
     public static final EmbeddedElasticsearch EMBEDDED_ELASTICSEARCH = newEmbeddedElasticsearchRule()
             .settings(ImmutableSettings.settingsBuilder().put("action.auto_create_index", false).build())
             .build();
-    private static final ImmutableSet<String> INDEX_NAMES = ImmutableSet.of("graylog", "graylog_1", "graylog_2", "ignored");
-    private static final ElasticsearchConfiguration ELASTICSEARCH_CONFIGURATION = new ElasticsearchConfiguration() {
-        @Override
-        public String getIndexPrefix() {
-            return "graylog";
-        }
-    };
+    private static final ImmutableSet<String> INDEX_NAMES = ImmutableSet.of("graylog", "graylog_1", "graylog_2");
 
     @Rule
     public ElasticsearchRule elasticsearchRule;
@@ -71,7 +64,6 @@ public class EsIndexRangeServiceTest {
     @Inject
     private Client client;
     private Indices indices;
-    private Deflector deflector;
 
     private EsIndexRangeService indexRangeService;
 
@@ -82,9 +74,9 @@ public class EsIndexRangeServiceTest {
 
     @Before
     public void setUp() throws Exception {
-        indices = new Indices(client, ELASTICSEARCH_CONFIGURATION, new IndexMapping(client));
-        deflector = new Deflector(null, ELASTICSEARCH_CONFIGURATION, new NullActivityWriter(), null, null, null, indices);
-        indexRangeService = new EsIndexRangeService(client, new ObjectMapperProvider().get(), indices, deflector);
+        final NullActivityWriter activityWriter = new NullActivityWriter();
+        indices = new Indices(client, new ElasticsearchConfiguration(), new IndexMapping(client));
+        indexRangeService = new EsIndexRangeService(client, activityWriter, new ObjectMapperProvider().get(), indices);
     }
 
     @Test
