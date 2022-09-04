@@ -50,18 +50,18 @@ public class QuarkusRestSseEventSource implements SseEventSource, Handler<Long> 
     }
 
     @Override
-    public synchronized void register(Consumer<InboundSseEvent> onEvent) {
+    public void register(Consumer<InboundSseEvent> onEvent) {
         consumers.add(onEvent);
     }
 
     @Override
-    public synchronized void register(Consumer<InboundSseEvent> onEvent, Consumer<Throwable> onError) {
+    public void register(Consumer<InboundSseEvent> onEvent, Consumer<Throwable> onError) {
         consumers.add(onEvent);
         errorListeners.add(onError);
     }
 
     @Override
-    public synchronized void register(Consumer<InboundSseEvent> onEvent, Consumer<Throwable> onError, Runnable onComplete) {
+    public void register(Consumer<InboundSseEvent> onEvent, Consumer<Throwable> onError, Runnable onComplete) {
         consumers.add(onEvent);
         errorListeners.add(onError);
         completionListeners.add(onComplete);
@@ -175,11 +175,14 @@ public class QuarkusRestSseEventSource implements SseEventSource, Handler<Long> 
         }
     }
 
-    public synchronized void fireEvent(QuarkusRestInboundSseEvent event) {
+    public void fireEvent(QuarkusRestInboundSseEvent event) {
         // spec says to do this
         if (event.isReconnectDelaySet()) {
-            reconnectDelay = event.getReconnectDelay();
-            reconnectUnit = TimeUnit.MILLISECONDS;
+            // this needs to be atomic
+            synchronized (this) {
+                reconnectDelay = event.getReconnectDelay();
+                reconnectUnit = TimeUnit.MILLISECONDS;
+            }
         }
         for (Consumer<InboundSseEvent> consumer : consumers) {
             consumer.accept(event);
