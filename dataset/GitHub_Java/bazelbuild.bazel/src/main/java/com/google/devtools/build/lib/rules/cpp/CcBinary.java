@@ -45,7 +45,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -279,19 +279,17 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
 
     LinkingMode linkingMode = getLinkStaticness(ruleContext, cppConfiguration);
-    ImmutableSet.Builder<String> requestedFeaturesBuilder = new ImmutableSet.Builder<>();
-    requestedFeaturesBuilder
-        .addAll(ruleContext.getFeatures())
-        .add(linkingMode == Link.LinkingMode.DYNAMIC ? DYNAMIC_LINKING_MODE : STATIC_LINKING_MODE);
-    if (fake) {
-      requestedFeaturesBuilder.add(CppRuleClasses.IS_CC_FAKE_BINARY);
-    }
-
     FdoProvider fdoProvider = common.getFdoProvider();
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(
             ruleContext,
-            requestedFeaturesBuilder.build(),
+            /* requestedFeatures= */ ImmutableSet.<String>builder()
+                .addAll(ruleContext.getFeatures())
+                .add(
+                    linkingMode == Link.LinkingMode.DYNAMIC
+                        ? DYNAMIC_LINKING_MODE
+                        : STATIC_LINKING_MODE)
+                .build(),
             /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
             ccToolchain);
 
@@ -915,7 +913,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     List<Artifact> instrumentedObjectFiles = new ArrayList<>();
     instrumentedObjectFiles.addAll(ccCompilationOutputs.getObjectFiles(false));
     instrumentedObjectFiles.addAll(ccCompilationOutputs.getObjectFiles(true));
-    InstrumentedFilesInfo instrumentedFilesProvider =
+    InstrumentedFilesProvider instrumentedFilesProvider =
         common.getInstrumentedFilesProvider(
             instrumentedObjectFiles,
             !TargetUtils.isTestRule(ruleContext.getRule()) && !fake,
@@ -936,7 +934,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             new CcNativeLibraryProvider(
                 collectTransitiveCcNativeLibraries(
                     ruleContext, linkingOutputs.getDynamicLibrariesForLinking())))
-        .addNativeDeclaredProvider(instrumentedFilesProvider)
+        .addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
         .addProvider(
             CppDebugFileProvider.class,
             new CppDebugFileProvider(

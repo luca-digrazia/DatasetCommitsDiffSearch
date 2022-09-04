@@ -336,16 +336,14 @@ public class BuildConfiguration implements BuildConfigurationApi {
         OptionsParser.getOptionDefinitionByName(Options.class, "cpu");
 
     @Option(
-        name = "incompatible_merge_genfiles_directory",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        help = "If true, the genfiles directory is folded into the bin directory.")
-    public boolean mergeGenfilesDirectory;
+      name = "experimental_separate_genfiles_directory",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help = "Whether to have a separate genfiles directory or fold it into the bin directory"
+    )
+    public boolean separateGenfilesDirectory;
 
     @Option(
       name = "define",
@@ -944,7 +942,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
       host.executionInfoModifier = executionInfoModifier;
       host.commandLineBuildVariables = commandLineBuildVariables;
       host.enforceConstraints = enforceConstraints;
-      host.mergeGenfilesDirectory = mergeGenfilesDirectory;
+      host.separateGenfilesDirectory = separateGenfilesDirectory;
       host.cpu = hostCpu;
 
       // === Runfiles ===
@@ -1076,7 +1074,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
   private final ArtifactRoot testlogsDirectoryForMainRepository;
   private final ArtifactRoot middlemanDirectoryForMainRepository;
 
-  private final boolean mergeGenfilesDirectory;
+  private final boolean separateGenfilesDirectory;
 
   /**
    * The global "make variables" such as "$(TARGET_CPU)"; these get applied to all rules analyzed in
@@ -1235,7 +1233,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     this.buildOptions = buildOptions.clone();
     this.buildOptionsDiff = buildOptionsDiff;
     this.options = buildOptions.get(Options.class);
-    this.mergeGenfilesDirectory = options.mergeGenfilesDirectory;
+    this.separateGenfilesDirectory = options.separateGenfilesDirectory;
     this.mainRepositoryName = mainRepositoryName;
 
     // We can't use an ImmutableMap.Builder here; we need the ability to add entries with keys that
@@ -1436,7 +1434,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
   }
 
   public ArtifactRoot getGenfilesDirectory(RepositoryName repositoryName) {
-    if (mergeGenfilesDirectory) {
+    if (!separateGenfilesDirectory) {
       return getBinDirectory(repositoryName);
     }
 
@@ -1574,11 +1572,12 @@ public class BuildConfiguration implements BuildConfigurationApi {
    * Returns a new, unordered mapping of names to values of "Make" variables defined by this
    * configuration.
    *
-   * <p>This does *not* include package-defined overrides (e.g. vardef) and so should not be used by
-   * the build logic. This is used only for the 'info' command.
+   * <p>This does *not* include package-defined overrides (e.g. vardef)
+   * and so should not be used by the build logic.  This is used only for
+   * the 'info' command.
    *
-   * <p>Command-line definitions of make environments override variables defined by {@code
-   * Fragment.addGlobalMakeVariables()}.
+   * <p>Command-line definitions of make enviroments override variables defined by
+   * {@code Fragment.addGlobalMakeVariables()}.
    */
   public Map<String, String> getMakeEnvironment() {
     Map<String, String> makeEnvironment = new HashMap<>();

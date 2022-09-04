@@ -52,6 +52,8 @@ public class ToolchainTypeTest extends BuildViewTestCase {
         "    linker_files = ':empty',",
         "    strip_files = ':empty',",
         "    objcopy_files = ':empty',",
+        "    dynamic_runtime_libs = [':empty'],",
+        "    static_runtime_libs = [':empty'],",
         "    proto='''",
         "      toolchain_identifier: 'banana'",
         "      abi_version: 'banana'",
@@ -70,7 +72,9 @@ public class ToolchainTypeTest extends BuildViewTestCase {
         ")");
 
     useConfiguration(
-        "--incompatible_enable_cc_toolchain_resolution",
+        "--enabled_toolchain_types="
+            + TestConstants.TOOLS_REPOSITORY
+            + "//tools/cpp:toolchain_type",
         "--experimental_platforms=//a:mock-platform",
         "--extra_toolchains=//a:toolchain_b");
 
