@@ -93,11 +93,11 @@ public class FakeSkylarkNativeModuleApi implements SkylarkNativeModuleApi, Class
     // "native".
     return new StarlarkCallable() {
       @Override
-      public Object callImpl(
-          StarlarkThread thread,
-          @Nullable FuncallExpression call,
+      public Object call(
           List<Object> args,
-          Map<String, Object> kwargs) {
+          @Nullable Map<String, Object> kwargs,
+          @Nullable FuncallExpression call,
+          StarlarkThread thread) {
         return Starlark.NONE;
       }
 

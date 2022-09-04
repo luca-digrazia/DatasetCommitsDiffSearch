@@ -192,7 +192,7 @@ class MethodLibrary {
       }
     } else if (key instanceof StarlarkCallable) {
       final StarlarkCallable keyfn = (StarlarkCallable) key;
-      final FuncallExpression call = new FuncallExpression(Identifier.of(""), ImmutableList.of());
+      final FuncallExpression ast = new FuncallExpression(Identifier.of(""), ImmutableList.of());
 
       class KeyComparator implements Comparator<Object> {
         Exception e;
@@ -210,8 +210,7 @@ class MethodLibrary {
         }
 
         Object callKeyFunc(Object x) throws EvalException, InterruptedException {
-          return Starlark.call(
-              thread, keyfn, call, Collections.singletonList(x), ImmutableMap.of());
+          return keyfn.call(Collections.singletonList(x), ImmutableMap.of(), ast, thread);
         }
       }
 
@@ -717,14 +716,12 @@ class MethodLibrary {
             legacyNamed = true)
       },
       useStarlarkThread = true)
-  public Boolean hasattr(Object obj, String name, StarlarkThread thread) throws EvalException {
-    // TODO(adonovan): factor the core logic of hasattr, getattr, and dir into three adjacent
-    // functions so that we can convince ourselves of their ongoing consistency.
-    // Are we certain that getValue doesn't sometimes return None to mean 'no field'?
+  public Boolean hasAttr(Object obj, String name, StarlarkThread thread) throws EvalException {
     if (obj instanceof ClassObject && ((ClassObject) obj).getValue(name) != null) {
       return true;
     }
-    return CallUtils.getMethodNames(thread.getSemantics(), obj.getClass()).contains(name);
+    // shouldn't this filter things with struct_field = false?
+    return EvalUtils.hasMethod(thread.getSemantics(), obj, name);
   }
 
   @SkylarkCallable(
@@ -759,7 +756,7 @@ class MethodLibrary {
       },
       useLocation = true,
       useStarlarkThread = true)
-  public Object getattr(
+  public Object getAttr(
       Object obj, String name, Object defaultValue, Location loc, StarlarkThread thread)
       throws EvalException, InterruptedException {
     Object result = EvalUtils.getAttr(thread, loc, obj, name);
@@ -767,7 +764,7 @@ class MethodLibrary {
       if (defaultValue != Starlark.UNBOUND) {
         return defaultValue;
       }
-      throw EvalUtils.getMissingAttrException(obj, name, thread.getSemantics());
+      throw EvalUtils.getMissingFieldException(obj, name, thread.getSemantics(), "attribute");
     }
     return result;
   }

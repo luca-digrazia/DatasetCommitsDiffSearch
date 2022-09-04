@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
@@ -110,7 +109,7 @@ import javax.annotation.Nullable;
  * object and makes it impossible to accidentally use this object where it's not supposed to be used
  * (such attempts will result in {@link EvalException}s).
  */
-public final class SkylarkRuleContext implements SkylarkRuleContextApi<ConstraintValueInfo> {
+public final class SkylarkRuleContext implements SkylarkRuleContextApi {
 
   public static final Function<Attribute, Object> ATTRIBUTE_VALUE_EXTRACTOR_FOR_ASPECT =
       new Function<Attribute, Object>() {
@@ -693,11 +692,6 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
   }
 
   @Override
-  public boolean targetPlatformHasConstraint(ConstraintValueInfo constraintValue) {
-    return ruleContext.targetPlatformHasConstraint(constraintValue);
-  }
-
-  @Override
   public String toString() {
     return ruleLabelCanonicalName;
   }
@@ -932,7 +926,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
               executionRequirementsUnchecked,
               inputManifestsUnchecked,
               loc,
-              thread);
+              thread.getSemantics());
     }
     return Starlark.NONE;
   }
@@ -1071,7 +1065,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
     // TODO(lberki): This flattens a NestedSet.
     // However, we can't turn this into a Depset because it's an incompatible change to
     // Skylark.
-    inputs.addAll(helper.getResolvedTools().toList());
+    Iterables.addAll(inputs, helper.getResolvedTools());
 
     ImmutableMap<String, String> executionRequirements =
         ImmutableMap.copyOf(
@@ -1179,7 +1173,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi<Constrain
     for (TransitiveInfoCollection current : knownLabels) {
       builder.put(
           AliasProvider.getDependencyLabel(current),
-          current.getProvider(FileProvider.class).getFilesToBuild().toList());
+          ImmutableList.copyOf(current.getProvider(FileProvider.class).getFilesToBuild()));
     }
 
     return builder.build();
