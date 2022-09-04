@@ -152,6 +152,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
+  public abstract boolean incompatibleDepsetIsNotIterable();
+
   public abstract boolean incompatibleDepsetUnion();
 
   public abstract boolean incompatibleDisableTargetProviderFields();
@@ -206,8 +208,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalAllowTagsPropagation();
 
-  public abstract boolean incompatibleUseCcConfigureFromRulesCc();
-
   @Memoized
   @Override
   public abstract int hashCode();
@@ -254,6 +254,7 @@ public abstract class StarlarkSemantics {
           .experimentalStarlarkUnusedInputsList(true)
           .experimentalCcSharedLibrary(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
+          .incompatibleDepsetIsNotIterable(true)
           .incompatibleDepsetUnion(true)
           .incompatibleDisableTargetProviderFields(false)
           .incompatibleDisableThirdPartyLicenseChecking(true)
@@ -269,8 +270,8 @@ public abstract class StarlarkSemantics {
           .incompatibleNoRuleOutputsParam(false)
           .incompatibleNoSupportToolsInActionInputs(true)
           .incompatibleNoTargetOutputGroup(true)
-          .incompatibleRemapMainRepo(true)
-          .incompatibleRemoveNativeMavenJar(true)
+          .incompatibleRemapMainRepo(false)
+          .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRunShellCommandString(false)
           .incompatibleRestrictNamedParams(true)
           .incompatibleStringJoinRequiresStrings(true)
@@ -280,8 +281,6 @@ public abstract class StarlarkSemantics {
           .incompatibleDepsetForLibrariesToLinkGetter(true)
           .incompatibleRestrictStringEscapes(false)
           .incompatibleDisallowDictLookupUnhashableKeys(false)
-          .incompatibleUseCcConfigureFromRulesCc(false)
-          .incompatibleDisallowDictLookupUnhashableKeys(true)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
@@ -314,6 +313,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalCcSharedLibrary(boolean value);
 
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
+
+    public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
 
     public abstract Builder incompatibleDepsetUnion(boolean value);
 
@@ -366,8 +367,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleRestrictStringEscapes(boolean value);
 
     public abstract Builder incompatibleDisallowDictLookupUnhashableKeys(boolean value);
-
-    public abstract Builder incompatibleUseCcConfigureFromRulesCc(boolean value);
 
     public abstract StarlarkSemantics build();
   }

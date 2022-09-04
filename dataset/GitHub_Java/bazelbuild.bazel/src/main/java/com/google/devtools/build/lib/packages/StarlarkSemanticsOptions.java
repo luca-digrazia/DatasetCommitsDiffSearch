@@ -225,6 +225,21 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean incompatibleDepsetUnion;
 
   @Option(
+      name = "incompatible_depset_is_not_iterable",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If set to true, depset type is not iterable. For loops and functions expecting an "
+              + "iterable will reject depset objects. Use the `.to_list` method to explicitly "
+              + "convert to a list.")
+  public boolean incompatibleDepsetIsNotIterable;
+
+  @Option(
       name = "incompatible_disable_target_provider_fields",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -291,7 +306,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_disallow_dict_lookup_unhashable_keys",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -481,7 +496,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_remap_main_repo",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
       metadataTags = {
@@ -494,7 +509,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_remove_native_maven_jar",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -502,10 +517,8 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
       help =
-          "If set to true, the native maven_jar rule is disabled. Use rules_jvm_external to "
-              + "manage your Maven dependencies transitively. rules_jvm_external also includes "
-              + "a migration tool to automatically convert maven_jar usages to rules_jvm_external "
-              + "Visit https://github.com/bazelbuild/rules_jvm_external for more information.")
+          "If set to true, the native maven_jar rule is disabled; only the Starlark version "
+              + "will be available")
   public boolean incompatibleRemoveNativeMavenJar;
 
   @Option(
@@ -542,21 +555,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
               + "doesn't selectively decide which flags go to the param file and which don't.  "
               + "See https://github.com/bazelbuild/bazel/issues/7670 for details.")
   public boolean incompatibleDoNotSplitLinkingCmdline;
-
-  @Option(
-      name = "incompatible_use_cc_configure_from_rules_cc",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "When true, Bazel will no longer allow using cc_configure from @bazel_tools. "
-              + "Please see https://github.com/bazelbuild/bazel/issues/10134 for details and "
-              + "migration instructions.")
-  public boolean incompatibleUseCcConfigureFromRulesCc;
 
   @Option(
       name = "incompatible_restrict_named_params",
@@ -625,6 +623,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .experimentalStarlarkUnusedInputsList(experimentalStarlarkUnusedInputsList)
             .experimentalCcSharedLibrary(experimentalCcSharedLibrary)
             .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
+            .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
             .incompatibleDepsetUnion(incompatibleDepsetUnion)
             .incompatibleDisableTargetProviderFields(incompatibleDisableTargetProviderFields)
             .incompatibleDisableThirdPartyLicenseChecking(
@@ -651,7 +650,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
                 incompatibleVisibilityPrivateAttributesAtDefinition)
             .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
             .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
-            .incompatibleUseCcConfigureFromRulesCc(incompatibleUseCcConfigureFromRulesCc)
             .incompatibleDepsetForLibrariesToLinkGetter(incompatibleDepsetForLibrariesToLinkGetter)
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
             .incompatibleDisallowDictLookupUnhashableKeys(

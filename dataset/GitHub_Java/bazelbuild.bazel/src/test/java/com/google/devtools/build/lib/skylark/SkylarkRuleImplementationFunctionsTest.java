@@ -58,6 +58,7 @@ import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
+import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
@@ -65,7 +66,6 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -186,18 +186,13 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     return (StructImpl) configuredTarget.get(key);
   }
 
-  // Defines all @SkylarkCallable-annotated methods (mock, throw, ...) in the environment.
-  private void defineTestMethods() throws Exception {
-    ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
-    Starlark.addMethods(env, this);
-    for (Map.Entry<String, Object> entry : env.build().entrySet()) {
-      update(entry.getKey(), entry.getValue());
-    }
+  private void setupSkylarkFunction(String line) throws Exception {
+    update("mock", CallUtils.getBuiltinCallable(this, "mock"));
+    exec(line);
   }
 
   private void checkSkylarkFunctionError(String errorSubstring, String line) throws Exception {
-    defineTestMethods();
-    EvalException e = assertThrows(EvalException.class, () -> exec(line));
+    EvalException e = assertThrows(EvalException.class, () -> setupSkylarkFunction(line));
     assertThat(e).hasMessageThat().contains(errorSubstring);
   }
 
@@ -205,8 +200,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testSkylarkFunctionPosArgs() throws Exception {
-    defineTestMethods();
-    exec("a = mock('a', 'b', mandatory_key='c')");
+    setupSkylarkFunction("a = mock('a', 'b', mandatory_key='c')");
     Map<?, ?> params = (Map<?, ?>) lookup("a");
     assertThat(params.get("mandatory")).isEqualTo("a");
     assertThat(params.get("optional")).isEqualTo("b");
@@ -216,8 +210,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testSkylarkFunctionKwArgs() throws Exception {
-    defineTestMethods();
-    exec("a = mock(optional='b', mandatory='a', mandatory_key='c')");
+    setupSkylarkFunction("a = mock(optional='b', mandatory='a', mandatory_key='c')");
     Map<?, ?> params = (Map<?, ?>) lookup("a");
     assertThat(params.get("mandatory")).isEqualTo("a");
     assertThat(params.get("optional")).isEqualTo("b");
@@ -1900,9 +1893,10 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testStackTraceWithoutOriginalMessage() throws Exception {
-    defineTestMethods();
+    update("throw", CallUtils.getBuiltinCallable(this, "throw1"));
     checkEvalErrorContains(
-        "There Is No Message: SkylarkRuleImplementationFunctionsTest", "throw1()");
+        "There Is No Message: SkylarkRuleImplementationFunctionsTest",
+        "throw()");
   }
 
   @SkylarkCallable(name = "throw2", documented = false)
@@ -1912,8 +1906,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testNoStackTraceOnInterrupt() throws Exception {
-    defineTestMethods();
-    assertThrows(InterruptedException.class, () -> eval("throw2()"));
+    update("throw", CallUtils.getBuiltinCallable(this, "throw2"));
+    assertThrows(InterruptedException.class, () -> eval("throw()"));
   }
 
   @Test

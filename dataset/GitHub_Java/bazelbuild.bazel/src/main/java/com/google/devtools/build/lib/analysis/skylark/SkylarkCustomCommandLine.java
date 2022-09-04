@@ -36,12 +36,12 @@ import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.FileRootApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -465,7 +465,7 @@ public class SkylarkCustomCommandLine extends CommandLine {
     }
 
     static class Builder {
-      @Nullable private final Sequence<?> list;
+      @Nullable private final SkylarkList<?> list;
       @Nullable private final NestedSet<?> nestedSet;
       private Location location;
       public String argName;
@@ -480,7 +480,7 @@ public class SkylarkCustomCommandLine extends CommandLine {
       private boolean uniquify;
       private String terminateWith;
 
-      Builder(Sequence<?> list) {
+      Builder(SkylarkList<?> list) {
         this.list = list;
         this.nestedSet = null;
       }
@@ -796,7 +796,7 @@ public class SkylarkCustomCommandLine extends CommandLine {
               .setSemantics(starlarkSemantics)
               .setEventHandler(NullEventHandler.INSTANCE)
               .build();
-      return Starlark.call(thread, mapFn, /*call=*/ null, args, /*kwargs=*/ ImmutableMap.of());
+      return mapFn.call(args, ImmutableMap.of(), null, thread);
     } catch (EvalException e) {
       throw new CommandLineExpansionException(errorMessage(e.getMessage(), location, e.getCause()));
     } catch (InterruptedException e) {
@@ -820,19 +820,15 @@ public class SkylarkCustomCommandLine extends CommandLine {
               // TODO(b/77140311): Error if we issue print statements
               .setEventHandler(NullEventHandler.INSTANCE)
               .build();
+      Object[] args = new Object[1];
       int count = originalValues.size();
       for (int i = 0; i < count; ++i) {
-        Object ret =
-            Starlark.call(
-                thread,
-                mapFn,
-                /*call=*/ null,
-                originalValues.subList(i, i + 1),
-                /*kwargs=*/ ImmutableMap.of());
+        args[0] = originalValues.get(i);
+        Object ret = mapFn.callWithArgArray(args, null, thread, location);
         if (ret instanceof String) {
           consumer.accept((String) ret);
-        } else if (ret instanceof Sequence) {
-          for (Object val : ((Sequence) ret)) {
+        } else if (ret instanceof SkylarkList) {
+          for (Object val : ((SkylarkList) ret)) {
             if (!(val instanceof String)) {
               throw new CommandLineExpansionException(
                   "Expected map_each to return string, None, or list of strings, "
@@ -841,7 +837,7 @@ public class SkylarkCustomCommandLine extends CommandLine {
             }
             consumer.accept((String) val);
           }
-        } else if (ret != Starlark.NONE) {
+        } else if (ret != Runtime.NONE) {
           throw new CommandLineExpansionException(
               "Expected map_each to return string, None, or list of strings, found "
                   + ret.getClass().getSimpleName());
@@ -1010,7 +1006,7 @@ public class SkylarkCustomCommandLine extends CommandLine {
     }
 
     @Override
-    public void repr(Printer printer) {
+    public void repr(SkylarkPrinter printer) {
       if (isSourceArtifact()) {
         printer.append("<source file " + getRunfilesPathString() + ">");
       } else {

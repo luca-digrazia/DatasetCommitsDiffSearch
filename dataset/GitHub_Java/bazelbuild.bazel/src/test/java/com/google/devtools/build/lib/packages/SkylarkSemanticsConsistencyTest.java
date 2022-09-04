@@ -135,6 +135,7 @@ public class SkylarkSemanticsConsistencyTest {
         "--experimental_cc_shared_library=" + rand.nextBoolean(),
         "--incompatible_bzl_disallow_load_after_statement=" + rand.nextBoolean(),
         "--incompatible_depset_for_libraries_to_link_getter=" + rand.nextBoolean(),
+        "--incompatible_depset_is_not_iterable=" + rand.nextBoolean(),
         "--incompatible_depset_union=" + rand.nextBoolean(),
         "--incompatible_disable_target_provider_fields=" + rand.nextBoolean(),
         "--incompatible_disable_deprecated_attr_params=" + rand.nextBoolean(),
@@ -159,7 +160,6 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_visibility_private_attributes_at_definition=" + rand.nextBoolean(),
         "--incompatible_restrict_string_escapes=" + rand.nextBoolean(),
         "--incompatible_disallow_dict_lookup_unhashable_keys=" + rand.nextBoolean(),
-        "--incompatible_use_cc_configure_from_rules_cc=" + rand.nextBoolean(),
         "--internal_skylark_flag_test_canary=" + rand.nextBoolean());
   }
 
@@ -185,6 +185,7 @@ public class SkylarkSemanticsConsistencyTest {
         .experimentalCcSharedLibrary(rand.nextBoolean())
         .incompatibleBzlDisallowLoadAfterStatement(rand.nextBoolean())
         .incompatibleDepsetForLibrariesToLinkGetter(rand.nextBoolean())
+        .incompatibleDepsetIsNotIterable(rand.nextBoolean())
         .incompatibleDepsetUnion(rand.nextBoolean())
         .incompatibleDisableTargetProviderFields(rand.nextBoolean())
         .incompatibleDisableDeprecatedAttrParams(rand.nextBoolean())
@@ -209,7 +210,6 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleVisibilityPrivateAttributesAtDefinition(rand.nextBoolean())
         .incompatibleRestrictStringEscapes(rand.nextBoolean())
         .incompatibleDisallowDictLookupUnhashableKeys(rand.nextBoolean())
-        .incompatibleUseCcConfigureFromRulesCc(rand.nextBoolean())
         .internalSkylarkFlagTestCanary(rand.nextBoolean())
         .build();
   }
