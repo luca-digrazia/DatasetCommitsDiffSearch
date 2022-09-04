@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.skyframe.NotComparableSkyValue;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.util.List;
 
 /** A {@link SkyValue} for a {@link ConfiguredTarget}. */
 public interface ConfiguredTargetValue extends NotComparableSkyValue {
@@ -53,8 +54,10 @@ public interface ConfiguredTargetValue extends NotComparableSkyValue {
    */
   NestedSet<Package> getTransitivePackagesForPackageRootResolution();
 
-  /** Returns the actions registered by the configured target for this value. */
-  ImmutableList<ActionAnalysisMetadata> getActions();
+  /**
+   * Returns the actions registered by the configured target for this value.
+   */
+  List<ActionAnalysisMetadata> getActions();
 
   /**
    * Returns the number of {@link Action} objects present in this value.
@@ -70,9 +73,4 @@ public interface ConfiguredTargetValue extends NotComparableSkyValue {
    * called.
    */
   void clear(boolean clearEverything);
-
-  @Override
-  default boolean mustBeReferenceComparedOnRecomputation() {
-    return true;
-  }
 }
