@@ -1,10 +1,10 @@
 package io.dropwizard.db;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.base.Optional;
 import io.dropwizard.util.Duration;
 
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Interface of a factory that produces JDBC data sources
@@ -50,7 +50,7 @@ public interface PooledDataSourceFactory {
      *
      * @return the SQL query as a string
      */
-    Optional<String> getValidationQuery();
+    String getValidationQuery();
 
     /**
      * Returns the SQL query, which is being used for the database
