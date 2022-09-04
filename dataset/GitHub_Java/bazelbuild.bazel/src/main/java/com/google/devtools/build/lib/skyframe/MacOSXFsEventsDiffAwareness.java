@@ -72,7 +72,14 @@ public final class MacOSXFsEventsDiffAwareness extends LocalDiffAwareness {
     opened = true;
     create(new String[] {watchRootPath.toAbsolutePath().toString()}, latency);
     // Start a thread that just contains the OS X run loop.
-    new Thread(() -> MacOSXFsEventsDiffAwareness.this.run(), "osx-fs-events").start();
+    new Thread(
+            new Runnable() {
+              @Override
+              public void run() {
+                MacOSXFsEventsDiffAwareness.this.run();
+              }
+            })
+        .start();
   }
 
   /**
