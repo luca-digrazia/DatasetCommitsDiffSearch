@@ -18,7 +18,6 @@ import java.util.stream.Stream;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.openapi.OASConfig;
 import org.eclipse.microprofile.openapi.OASFilter;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
@@ -39,21 +38,18 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.index.IndexingUtil;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.resteasy.deployment.ResteasyJaxrsConfigBuildItem;
 import io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig;
 import io.quarkus.smallrye.openapi.runtime.OpenApiDocumentProducer;
-import io.quarkus.smallrye.openapi.runtime.OpenApiHandler;
-import io.quarkus.vertx.http.deployment.RouteBuildItem;
-import io.quarkus.vertx.http.runtime.HandlerType;
+import io.quarkus.smallrye.openapi.runtime.OpenApiServlet;
+import io.quarkus.undertow.deployment.GeneratedWebResourceBuildItem;
+import io.quarkus.undertow.deployment.ServletBuildItem;
 import io.smallrye.openapi.api.OpenApiConfig;
 import io.smallrye.openapi.api.OpenApiConfigImpl;
 import io.smallrye.openapi.api.OpenApiDocument;
@@ -98,13 +94,13 @@ public class SmallRyeOpenApiProcessor {
     }
 
     @BuildStep
-    RouteBuildItem handler() {
-        return new RouteBuildItem(openapi.path, new OpenApiHandler(), HandlerType.BLOCKING);
+    ServletBuildItem servlet() {
+        return ServletBuildItem.builder("openapi", OpenApiServlet.class.getName()).addMapping(openapi.path).build();
     }
 
     @BuildStep
     AdditionalBeanBuildItem beans() {
-        return new AdditionalBeanBuildItem(OpenApiDocumentProducer.class);
+        return new AdditionalBeanBuildItem(OpenApiServlet.class, OpenApiDocumentProducer.class);
     }
 
     @BuildStep
@@ -166,11 +162,7 @@ public class SmallRyeOpenApiProcessor {
 
             AnnotationInstance[] contents = contentAnnotationValue.asNestedArray();
             for (AnnotationInstance content : contents) {
-                AnnotationValue annotationValue = content.value(OPENAPI_RESPONSE_SCHEMA);
-                if (annotationValue == null) {
-                    continue;
-                }
-                AnnotationInstance schema = annotationValue.asNested();
+                AnnotationInstance schema = content.value(OPENAPI_RESPONSE_SCHEMA).asNested();
                 AnnotationValue schemaImplementationClass = schema.value(OPENAPI_SCHEMA_IMPLEMENTATION);
                 if (schemaImplementationClass != null) {
                     reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(schemaImplementationClass.asClass()));
@@ -209,35 +201,24 @@ public class SmallRyeOpenApiProcessor {
     public void build(ApplicationArchivesBuildItem archivesBuildItem,
             BuildProducer<FeatureBuildItem> feature,
             Optional<ResteasyJaxrsConfigBuildItem> resteasyJaxrsConfig,
-            BuildProducer<GeneratedResourceBuildItem> resourceBuildItemBuildProducer,
-            BuildProducer<SubstrateResourceBuildItem> substrateResources,
-            OpenApiFilteredIndexViewBuildItem openApiFilteredIndexViewBuildItem,
-            DeploymentClassLoaderBuildItem deploymentClassLoaderBuildItem) throws Exception {
-        ClassLoader old = Thread.currentThread().getContextClassLoader();
-        try {
-            Thread.currentThread().setContextClassLoader(deploymentClassLoaderBuildItem.getClassLoader());
-            FilteredIndexView index = openApiFilteredIndexViewBuildItem.getIndex();
+            BuildProducer<GeneratedWebResourceBuildItem> resourceBuildItemBuildProducer,
+            OpenApiFilteredIndexViewBuildItem openApiFilteredIndexViewBuildItem) throws Exception {
 
-            feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_OPENAPI));
-            OpenAPI staticModel = generateStaticModel(archivesBuildItem);
+        FilteredIndexView index = openApiFilteredIndexViewBuildItem.getIndex();
 
-            OpenAPI annotationModel;
-            Config config = ConfigProvider.getConfig();
-            boolean scanDisable = config.getOptionalValue(OASConfig.SCAN_DISABLE, Boolean.class).orElse(false);
-            if (resteasyJaxrsConfig.isPresent() && !scanDisable) {
-                annotationModel = generateAnnotationModel(index, resteasyJaxrsConfig.get());
-            } else {
-                annotationModel = null;
-            }
-            OpenApiDocument finalDocument = loadDocument(staticModel, annotationModel);
-            for (OpenApiSerializer.Format format : OpenApiSerializer.Format.values()) {
-                String name = OpenApiHandler.BASE_NAME + format;
-                resourceBuildItemBuildProducer.produce(new GeneratedResourceBuildItem(name,
-                        OpenApiSerializer.serialize(finalDocument.get(), format).getBytes(StandardCharsets.UTF_8)));
-                substrateResources.produce(new SubstrateResourceBuildItem(name));
-            }
-        } finally {
-            Thread.currentThread().setContextClassLoader(old);
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.SMALLRYE_OPENAPI));
+        OpenAPI staticModel = generateStaticModel(archivesBuildItem);
+        OpenAPI annotationModel;
+        if (resteasyJaxrsConfig.isPresent()) {
+            annotationModel = generateAnnotationModel(index, resteasyJaxrsConfig.get());
+        } else {
+            annotationModel = null;
+        }
+        OpenApiDocument finalDocument = loadDocument(staticModel, annotationModel);
+        for (OpenApiSerializer.Format format : OpenApiSerializer.Format.values()) {
+            String name = OpenApiServlet.GENERATED_DOC_BASE + format;
+            resourceBuildItemBuildProducer.produce(new GeneratedWebResourceBuildItem(name,
+                    OpenApiSerializer.serialize(finalDocument.get(), format).getBytes(StandardCharsets.UTF_8)));
         }
     }
 
