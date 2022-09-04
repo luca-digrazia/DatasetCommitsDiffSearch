@@ -173,13 +173,12 @@ public final class RuleConfiguredTargetBuilder {
     if (!ruleContext.getRule().getRuleClassObject().supportsConstraintChecking()) {
       return;
     }
-    ConstraintSemantics constraintSemantics = ruleContext.getConstraintSemantics();
     EnvironmentCollection supportedEnvironments =
-        constraintSemantics.getSupportedEnvironments(ruleContext);
+        ConstraintSemantics.getSupportedEnvironments(ruleContext);
     if (supportedEnvironments != null) {
       EnvironmentCollection.Builder refinedEnvironments = new EnvironmentCollection.Builder();
       Map<Label, LabelAndLocation> removedEnvironmentCulprits = new LinkedHashMap<>();
-      constraintSemantics.checkConstraints(ruleContext, supportedEnvironments, refinedEnvironments,
+      ConstraintSemantics.checkConstraints(ruleContext, supportedEnvironments, refinedEnvironments,
           removedEnvironmentCulprits);
       add(SupportedEnvironmentsProvider.class,
           new SupportedEnvironments(supportedEnvironments, refinedEnvironments.build(),
