@@ -15,19 +15,16 @@
 package com.google.devtools.build.lib.skylarkdebug.server;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos;
-import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Breakpoint;
-import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Error;
-import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.PauseReason;
-import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.Value;
+import com.google.devtools.build.lib.syntax.Debuggable;
+import com.google.devtools.build.lib.syntax.Debuggable.ReadyToPause;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.EvalUtils;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -39,259 +36,222 @@ import javax.annotation.concurrent.GuardedBy;
 /** Handles all thread-related state and debugging tasks. */
 final class ThreadHandler {
 
-  /** The state of a thread that is paused. */
-  private static class PausedThreadState {
+  private static class ThreadState {
     final long id;
     final String name;
-    final Environment env;
-    /** The {@link Location} where execution is currently paused. */
-    final Location location;
-    /** Used to block execution of threads */
-    final Semaphore semaphore;
+    final Debuggable debuggable;
+    /** Non-null if the thread is currently paused. */
+    @Nullable volatile PausedThreadState pausedState;
+    /** Determines when execution should next be paused. Non-null if currently stepping. */
+    @Nullable volatile ReadyToPause readyToPause;
 
-    final ThreadObjectMap objectMap;
-
-    PausedThreadState(long id, String name, Environment env, Location location) {
+    ThreadState(
+        long id,
+        String name,
+        Debuggable debuggable,
+        @Nullable PausedThreadState pausedState,
+        @Nullable ReadyToPause readyToPause) {
       this.id = id;
       this.name = name;
-      this.env = env;
-      this.location = location;
-      this.semaphore = new Semaphore(0);
-      this.objectMap = new ThreadObjectMap();
-    }
-  }
-
-  /**
-   * The state of a thread that is stepping, i.e. currently running but expected to stop at a
-   * subsequent statement even without a breakpoint. This may include threads that have completed
-   * running while stepping, since the ThreadHandler doesn't know when a thread terminates.
-   */
-  private static class SteppingThreadState {
-    /** Determines when execution should next be paused. */
-    final Environment.ReadyToPause readyToPause;
-
-    SteppingThreadState(Environment.ReadyToPause readyToPause) {
+      this.debuggable = debuggable;
+      this.pausedState = pausedState;
       this.readyToPause = readyToPause;
     }
   }
 
-  /** Whether threads are globally paused, and if so, why. */
-  private enum DebuggerState {
-    INITIALIZING, // no StartDebuggingRequest has yet been received; all threads are paused
-    ALL_THREADS_PAUSED, // all threads are paused in response to a PauseThreadRequest with id=0
-    RUNNING, // normal running: threads are not globally paused
+  /** Information about a paused thread. */
+  private static class PausedThreadState {
+
+    /** The {@link Location} where execution is currently paused. */
+    final Location location;
+
+    /** Used to block execution of threads */
+    final Semaphore semaphore;
+
+    PausedThreadState(Location location) {
+      this.location = location;
+      this.semaphore = new Semaphore(0);
+    }
   }
 
-  /** The debugger starts with all threads paused, until a StartDebuggingRequest is received. */
-  private volatile DebuggerState debuggerState = DebuggerState.INITIALIZING;
+  /**
+   * If true, all threads will pause at the earliest possible opportunity. New threads will also be
+   * immediately paused upon creation.
+   *
+   * <p>The debugger starts with all threads paused, until a StartDebuggingRequest is received.
+   */
+  private volatile boolean pausingAllThreads = true;
 
-  /** A map from identifiers of paused threads to their state info. */
-  @GuardedBy("this")
-  private final Map<Long, PausedThreadState> pausedThreads = new HashMap<>();
-
-  /** A map from identifiers of stepping threads to their state. */
-  @GuardedBy("this")
-  private final Map<Long, SteppingThreadState> steppingThreads = new HashMap<>();
+  /** A map from thread identifiers to their state info. */
+  @GuardedBy("itself")
+  private final Map<Long, ThreadState> threads = new HashMap<>();
 
   /** All location-based breakpoints (the only type of breakpoint currently supported). */
-  private volatile ImmutableMap<SkylarkDebuggingProtos.Location, SkylarkDebuggingProtos.Breakpoint>
-      breakpoints = ImmutableMap.of();
+  private volatile ImmutableSet<SkylarkDebuggingProtos.Location> breakpoints = ImmutableSet.of();
 
   /**
-   * True if the thread is currently performing a debugger-requested evaluation. If so, we don't
-   * check for breakpoints during the evaluation.
-   */
-  private final ThreadLocal<Boolean> servicingEvalRequest = ThreadLocal.withInitial(() -> false);
-
-  /**
-   * Threads which are not paused now, but that are set to be paused in the next checked execution
-   * step as the result of a PauseThreadRequest.
+   * Threads which are set to be paused in the next checked execution step.
    *
-   * <p>Invariant: Every thread id in this set is also in {@link #steppingThreads}, provided that we
-   * are not in a synchronized block on the class instance.
+   * <p>Invariant: Every thread id in this set is also in {@link #threads}, provided that we are not
+   * in a synchronized block on that map.
    */
   private final Set<Long> threadsToPause = ConcurrentHashMap.newKeySet();
 
+  /** Registers a Skylark thread with the {@link ThreadHandler}. */
+  void registerThread(long threadId, String threadName, Debuggable debuggable) {
+    doRegisterThread(threadId, threadName, debuggable);
+  }
+
+  private ThreadState doRegisterThread(long threadId, String threadName, Debuggable debuggable) {
+    ThreadState thread = new ThreadState(threadId, threadName, debuggable, null, null);
+    synchronized (threads) {
+      threads.put(threadId, thread);
+    }
+    return thread;
+  }
+
   /** Mark all current and future threads paused. Will take effect asynchronously. */
   void pauseAllThreads() {
-    debuggerState = DebuggerState.ALL_THREADS_PAUSED;
+    synchronized (threads) {
+      threadsToPause.addAll(threads.keySet());
+    }
+    pausingAllThreads = true;
   }
 
   /** Mark the given thread paused. Will take effect asynchronously. */
   void pauseThread(long threadId) throws DebugRequestException {
-    synchronized (this) {
-      if (!steppingThreads.containsKey(threadId)) {
-        String error =
-            pausedThreads.containsKey(threadId)
-                ? "Thread is already paused"
-                : "Unknown thread: only threads which are currently stepping can be paused";
-        throw new DebugRequestException(error);
+    synchronized (threads) {
+      if (!threads.containsKey(threadId)) {
+        throw new DebugRequestException("Unknown thread: " + threadId);
       }
       threadsToPause.add(threadId);
     }
   }
 
-  void setBreakpoints(Collection<Breakpoint> breakpoints) {
-    Map<SkylarkDebuggingProtos.Location, SkylarkDebuggingProtos.Breakpoint> map = new HashMap<>();
-    for (SkylarkDebuggingProtos.Breakpoint breakpoint : breakpoints) {
-      if (breakpoint.getConditionCase()
-          != SkylarkDebuggingProtos.Breakpoint.ConditionCase.LOCATION) {
-        continue;
-      }
-      // all breakpoints cover the entire line, so unset the column number
-      SkylarkDebuggingProtos.Location location =
-          breakpoint.getLocation().toBuilder().clearColumnNumber().build();
-      map.put(location, breakpoint);
+  /** Called when Skylark execution for this thread is complete. */
+  void unregisterThread(long threadId) {
+    synchronized (threads) {
+      threads.remove(threadId);
+      threadsToPause.remove(threadId);
     }
-    this.breakpoints = ImmutableMap.copyOf(map);
   }
 
-  /**
-   * Resumes all threads. Any currently stepping threads have their stepping behavior cleared, so
-   * will run unconditionally.
-   */
+  void setBreakpoints(ImmutableSet<SkylarkDebuggingProtos.Location> breakpoints) {
+    // all breakpoints cover the entire line, so unset the column number.
+    this.breakpoints =
+        breakpoints
+            .stream()
+            .map(location -> location.toBuilder().clearColumnNumber().build())
+            .collect(toImmutableSet());
+  }
+
+  /** Resumes all threads. */
   void resumeAllThreads() {
     threadsToPause.clear();
-    debuggerState = DebuggerState.RUNNING;
-    synchronized (this) {
-      for (PausedThreadState thread : ImmutableList.copyOf(pausedThreads.values())) {
+    pausingAllThreads = false;
+    synchronized (threads) {
+      for (ThreadState thread : threads.values()) {
         // continue-all doesn't support stepping.
-        resumePausedThread(thread, SkylarkDebuggingProtos.Stepping.NONE);
+        resumeThread(thread, SkylarkDebuggingProtos.Stepping.NONE);
       }
-      steppingThreads.clear();
     }
   }
 
   /**
-   * Unpauses the given thread if it is currently paused. Also sets {@link #debuggerState} to
-   * RUNNING. If the thread is not paused, but currently stepping, it clears the stepping behavior
-   * so it will run unconditionally.
+   * Unpauses the given thread if it is currently paused. Also unsets {@link #pausingAllThreads}.
    */
   void resumeThread(long threadId, SkylarkDebuggingProtos.Stepping stepping)
       throws DebugRequestException {
-    // once the user has requested any thread be resumed, don't continue pausing future threads
-    debuggerState = DebuggerState.RUNNING;
-    synchronized (this) {
-      threadsToPause.remove(threadId);
-      if (steppingThreads.remove(threadId) != null) {
-        return;
-      }
-      PausedThreadState thread = pausedThreads.get(threadId);
+    synchronized (threads) {
+      ThreadState thread = threads.get(threadId);
       if (thread == null) {
-        throw new DebugRequestException(
-            String.format("Unknown thread %s: cannot resume.", threadId));
+        throw new DebugRequestException(String.format("Thread %s is not running.", threadId));
       }
-      resumePausedThread(thread, stepping);
+      if (thread.pausedState == null) {
+        throw new DebugRequestException(String.format("Thread %s is not paused.", threadId));
+      }
+      resumeThread(thread, stepping);
     }
   }
 
-  /** Unpauses a currently-paused thread. */
-  @GuardedBy("this")
-  private void resumePausedThread(
-      PausedThreadState thread, SkylarkDebuggingProtos.Stepping stepping) {
-    pausedThreads.remove(thread.id);
-    Environment.ReadyToPause readyToPause =
-        thread.env.stepControl(DebugEventHelper.convertSteppingEnum(stepping));
-    if (readyToPause != null) {
-      steppingThreads.put(thread.id, new SteppingThreadState(readyToPause));
+  /**
+   * Unpauses the given thread if it is currently paused. Also unsets {@link #pausingAllThreads}.
+   */
+  @GuardedBy("threads")
+  private void resumeThread(ThreadState thread, SkylarkDebuggingProtos.Stepping stepping) {
+    PausedThreadState pausedState = thread.pausedState;
+    if (pausedState == null) {
+      return;
     }
-    thread.semaphore.release();
+    // once the user has resumed any thread, don't continue pausing future threads
+    pausingAllThreads = false;
+    thread.readyToPause =
+        thread.debuggable.stepControl(DebugEventHelper.convertSteppingEnum(stepping));
+    thread.pausedState = null;
+    pausedState.semaphore.release();
   }
 
   void pauseIfNecessary(Environment env, Location location, DebugServerTransport transport) {
-    if (servicingEvalRequest.get()) {
-      return;
+    if (shouldPauseCurrentThread(env, location)) {
+      pauseCurrentThread(env, location, transport);
     }
-    PauseReason pauseReason;
-    Error error = null;
-    try {
-      pauseReason = shouldPauseCurrentThread(env, location);
-    } catch (ConditionalBreakpointException e) {
-      pauseReason = PauseReason.CONDITIONAL_BREAKPOINT_ERROR;
-      error = Error.newBuilder().setMessage(e.getMessage()).build();
+  }
+
+  ImmutableList<SkylarkDebuggingProtos.Thread> listThreads() {
+    ImmutableList.Builder<SkylarkDebuggingProtos.Thread> list = ImmutableList.builder();
+    synchronized (threads) {
+      for (ThreadState thread : threads.values()) {
+        list.add(getThreadProto(thread));
+      }
     }
-    if (pauseReason == null) {
-      return;
-    }
-    long threadId = Thread.currentThread().getId();
-    threadsToPause.remove(threadId);
-    synchronized (this) {
-      steppingThreads.remove(threadId);
-    }
-    pauseCurrentThread(env, location, transport, pauseReason, error);
+    return list.build();
   }
 
   /** Handles a {@code ListFramesRequest} and returns its response. */
   ImmutableList<SkylarkDebuggingProtos.Frame> listFrames(long threadId)
       throws DebugRequestException {
-    synchronized (this) {
-      PausedThreadState thread = pausedThreads.get(threadId);
+    Debuggable debuggable;
+    PausedThreadState pausedState;
+    synchronized (threads) {
+      ThreadState thread = threads.get(threadId);
       if (thread == null) {
-        throw new DebugRequestException(
-            String.format("Thread %s is not paused or does not exist.", threadId));
+        throw new DebugRequestException(String.format("Thread %s is not running.", threadId));
       }
-      return thread.env.listFrames(thread.location).stream()
-          .map(frame -> DebugEventHelper.getFrameProto(thread.objectMap, frame))
-          .collect(toImmutableList());
+      pausedState = thread.pausedState;
+      if (pausedState == null) {
+        throw new DebugRequestException(String.format("Thread %s is not paused.", threadId));
+      }
+      debuggable = thread.debuggable;
     }
+    // no need to list frames within the synchronize block: threads can only be resumed in response
+    // to a client request, and requests are handled serially
+    return debuggable
+        .listFrames(pausedState.location)
+        .stream()
+        .map(DebugEventHelper::getFrameProto)
+        .collect(toImmutableList());
   }
 
-  ImmutableList<Value> getChildrenForValue(long threadId, long valueId)
+  SkylarkDebuggingProtos.Value evaluate(long threadId, String expression)
       throws DebugRequestException {
-    ThreadObjectMap objectMap;
-    synchronized (this) {
-      PausedThreadState thread = pausedThreads.get(threadId);
+    Debuggable debuggable;
+    synchronized (threads) {
+      ThreadState thread = threads.get(threadId);
       if (thread == null) {
-        throw new DebugRequestException(
-            String.format("Thread %s is not paused or does not exist.", threadId));
+        throw new DebugRequestException(String.format("Thread %s is not running.", threadId));
       }
-      objectMap = thread.objectMap;
-    }
-    Object value = objectMap.getValue(valueId);
-    if (value == null) {
-      throw new DebugRequestException("Couldn't retrieve children; object not found.");
-    }
-    return DebuggerSerialization.getChildren(objectMap, value);
-  }
-
-  SkylarkDebuggingProtos.Value evaluate(long threadId, String statement)
-      throws DebugRequestException {
-    Environment env;
-    ThreadObjectMap objectMap;
-    synchronized (this) {
-      PausedThreadState thread = pausedThreads.get(threadId);
-      if (thread == null) {
-        throw new DebugRequestException(
-            String.format("Thread %s is not paused or does not exist.", threadId));
+      if (thread.pausedState == null) {
+        throw new DebugRequestException(String.format("Thread %s is not paused.", threadId));
       }
-      env = thread.env;
-      objectMap = thread.objectMap;
+      debuggable = thread.debuggable;
     }
-    // no need to evaluate within the synchronize block: for paused threads, the env and
-    // object map are only accessed in response to a client request, and requests are handled
-    // serially
-    // TODO(bazel-team): support asynchronous replies, and use finer-grained locks
+    // no need to evaluate within the synchronize block: threads can only be resumed in response
+    // to a client request, and requests are handled serially
     try {
-      Object result = doEvaluate(env, statement);
-      return DebuggerSerialization.getValueProto(objectMap, "Evaluation result", result);
+      Object result = debuggable.evaluate(expression);
+      return DebuggerSerialization.getValueProto("Evaluation result", result);
     } catch (EvalException | InterruptedException e) {
       throw new DebugRequestException(e.getMessage());
-    }
-  }
-
-  /**
-   * Evaluate the given expression in the environment defined by the provided {@link Environment}.
-   *
-   * <p>The caller is responsible for ensuring that the associated skylark thread isn't currently
-   * running.
-   */
-  private Object doEvaluate(Environment env, String expression)
-      throws EvalException, InterruptedException {
-    try {
-      servicingEvalRequest.set(true);
-      return env.evaluate(expression);
-    } finally {
-      servicingEvalRequest.set(false);
     }
   }
 
@@ -300,99 +260,77 @@ final class ThreadHandler {
    * ContinueExecutionRequest.
    */
   private void pauseCurrentThread(
-      Environment env,
-      Location location,
-      DebugServerTransport transport,
-      PauseReason pauseReason,
-      @Nullable Error conditionalBreakpointError) {
+      Environment env, Location location, DebugServerTransport transport) {
     long threadId = Thread.currentThread().getId();
 
-    PausedThreadState pausedState =
-        new PausedThreadState(threadId, Thread.currentThread().getName(), env, location);
-    synchronized (this) {
-      pausedThreads.put(threadId, pausedState);
+    SkylarkDebuggingProtos.Thread threadProto;
+    PausedThreadState pausedState;
+    synchronized (threads) {
+      ThreadState thread = threads.get(threadId);
+      if (thread == null) {
+        // this skylark entry point didn't call DebugServer#runWithDebugging. Now that we've hit a
+        // breakpoint, register it anyway.
+        // TODO(bazel-team): once all skylark evaluation routes through
+        // DebugServer#runWithDebugging, report an error here instead
+        String fallbackThreadName = "Untracked thread: " + threadId;
+        transport.postEvent(DebugEventHelper.threadStartedEvent(threadId, fallbackThreadName));
+        thread = doRegisterThread(threadId, fallbackThreadName, env);
+      }
+      pausedState = new PausedThreadState(location);
+      thread.pausedState = pausedState;
+      // get proto after setting the paused state, so that it's up to date
+      threadProto = getThreadProto(thread);
     }
-    SkylarkDebuggingProtos.PausedThread threadProto =
-        getPausedThreadProto(pausedState, pauseReason, conditionalBreakpointError);
+
     transport.postEvent(DebugEventHelper.threadPausedEvent(threadProto));
     pausedState.semaphore.acquireUninterruptibly();
-    transport.postEvent(DebugEventHelper.threadContinuedEvent(threadId));
+    transport.postEvent(
+        DebugEventHelper.threadContinuedEvent(
+            threadProto.toBuilder().clearLocation().setIsPaused(false).build()));
   }
 
-  @Nullable
-  private PauseReason shouldPauseCurrentThread(Environment env, Location location)
-      throws ConditionalBreakpointException {
+  private boolean shouldPauseCurrentThread(Environment env, Location location) {
     long threadId = Thread.currentThread().getId();
-    DebuggerState state = debuggerState;
-    if (state == DebuggerState.ALL_THREADS_PAUSED) {
-      return PauseReason.ALL_THREADS_PAUSED;
+    if (threadsToPause.remove(threadId) || pausingAllThreads) {
+      return true;
     }
-    if (state == DebuggerState.INITIALIZING) {
-      return PauseReason.INITIALIZING;
-    }
-    if (threadsToPause.contains(threadId)) {
-      return PauseReason.PAUSE_THREAD_REQUEST;
-    }
-    if (hasBreakpointMatchedAtLocation(env, location)) {
-      return PauseReason.HIT_BREAKPOINT;
+    if (hasBreakpointAtLocation(location)) {
+      return true;
     }
 
     // TODO(bazel-team): if contention becomes a problem, consider changing 'threads' to a
     // concurrent map, and synchronizing on individual entries
-    synchronized (this) {
-      SteppingThreadState steppingState = steppingThreads.get(threadId);
-      if (steppingState != null && steppingState.readyToPause.test(env)) {
-        return PauseReason.STEPPING;
+    synchronized (threads) {
+      ThreadState thread = threads.get(threadId);
+      if (thread != null && thread.readyToPause != null && thread.readyToPause.test(env)) {
+        return true;
       }
     }
-    return null;
+    return false;
   }
 
-  /**
-   * Returns true if there's a breakpoint at the current location, with a satisfied condition if
-   * relevant.
-   */
-  private boolean hasBreakpointMatchedAtLocation(Environment env, Location location)
-      throws ConditionalBreakpointException {
+  private boolean hasBreakpointAtLocation(Location location) {
     // breakpoints is volatile, so taking a local copy
-    ImmutableMap<SkylarkDebuggingProtos.Location, SkylarkDebuggingProtos.Breakpoint> breakpoints =
-        this.breakpoints;
+    ImmutableSet<SkylarkDebuggingProtos.Location> breakpoints = this.breakpoints;
     if (breakpoints.isEmpty()) {
       return false;
     }
     SkylarkDebuggingProtos.Location locationProto = DebugEventHelper.getLocationProto(location);
-    if (locationProto == null) {
-      return false;
-    }
-    locationProto = locationProto.toBuilder().clearColumnNumber().build();
-    SkylarkDebuggingProtos.Breakpoint breakpoint = breakpoints.get(locationProto);
-    if (breakpoint == null) {
-      return false;
-    }
-    String condition = breakpoint.getExpression();
-    if (condition.isEmpty()) {
-      return true;
-    }
-    try {
-      return EvalUtils.toBoolean(doEvaluate(env, condition));
-    } catch (EvalException | InterruptedException e) {
-      throw new ConditionalBreakpointException(e.getMessage());
-    }
+    // column data ignored for breakpoints
+    return locationProto != null
+        && breakpoints.contains(locationProto.toBuilder().clearColumnNumber().build());
   }
 
   /** Returns a {@code Thread} proto builder with information about the given thread. */
-  private static SkylarkDebuggingProtos.PausedThread getPausedThreadProto(
-      PausedThreadState thread,
-      PauseReason pauseReason,
-      @Nullable Error conditionalBreakpointError) {
-    SkylarkDebuggingProtos.PausedThread.Builder builder =
-        SkylarkDebuggingProtos.PausedThread.newBuilder()
-            .setId(thread.id)
-            .setName(thread.name)
-            .setPauseReason(pauseReason)
-            .setLocation(DebugEventHelper.getLocationProto(thread.location));
-    if (conditionalBreakpointError != null) {
-      builder.setConditionalBreakpointError(conditionalBreakpointError);
+  private static SkylarkDebuggingProtos.Thread getThreadProto(ThreadState thread) {
+    SkylarkDebuggingProtos.Thread.Builder builder =
+        SkylarkDebuggingProtos.Thread.newBuilder().setId(thread.id).setName(thread.name);
+
+    PausedThreadState pausedState = thread.pausedState;
+    if (pausedState != null) {
+      builder
+          .setIsPaused(true)
+          .setLocation(DebugEventHelper.getLocationProto(pausedState.location));
     }
     return builder.build();
   }
