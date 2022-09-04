@@ -35,9 +35,9 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -49,13 +49,13 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
     private final RuleContext ruleContext;
 
     /** The platform used to build $(PLATFORM_DIR). */
-    private final ApplePlatform platform;
+    private final Platform platform;
 
     /** The complete set of variables that may be used in paths. */
     public static final ImmutableList<String> DEFINED_VARS =
         ImmutableList.of("$(SDKROOT)", "$(PLATFORM_DIR)");
 
-    public XcenvBasedPathVariableContext(RuleContext ruleContext, ApplePlatform platform) {
+    public XcenvBasedPathVariableContext(RuleContext ruleContext, Platform platform) {
       super(
           ImmutableMap.<String, String>of(),
           ruleContext.getRule().getPackage(),
@@ -109,10 +109,9 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
-    ApplePlatform platform = appleConfiguration.getMultiArchPlatform(platformType);
+    Platform platform = appleConfiguration.getMultiArchPlatform(platformType);
     ImmutableListMultimap<BuildConfiguration, ObjcProvider> configurationToDepsMap =
-        ruleContext.getPrerequisitesByConfiguration(
-            "deps", Mode.SPLIT, ObjcProvider.SKYLARK_CONSTRUCTOR);
+        ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT, ObjcProvider.class);
 
     Artifact outputArtifact =
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureBinary();
@@ -132,7 +131,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
 
     ObjcProvider objcProvider = objcProviderBuilder.build();
     // TODO(cparsons): Stop propagating ObjcProvider directly from this rule.
-    targetBuilder.addNativeDeclaredProvider(objcProvider);
+    targetBuilder.addProvider(ObjcProvider.class, objcProvider);
 
     targetBuilder.addNativeDeclaredProvider(
         new AppleExecutableBinaryProvider(outputArtifact, objcProvider));
@@ -148,7 +147,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
   private static void registerActions(
       RuleContext ruleContext,
       AppleConfiguration appleConfiguration,
-      ApplePlatform platform,
+      Platform platform,
       Artifact outputBinary)
       throws RuleErrorException {
     CustomCommandLine copyCommandLine =
@@ -178,7 +177,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
    * @throws RuleErrorException If the path string was invalid because it was not rooted at one of
    *     the allowed environment variables or it was not normalized
    */
-  private static String resolveXcenvBasedPath(RuleContext ruleContext, ApplePlatform platform)
+  private static String resolveXcenvBasedPath(RuleContext ruleContext, Platform platform)
       throws RuleErrorException {
     String pathString =
         ruleContext.attributes().get(AppleStubBinaryRule.XCENV_BASED_PATH_ATTR, STRING);

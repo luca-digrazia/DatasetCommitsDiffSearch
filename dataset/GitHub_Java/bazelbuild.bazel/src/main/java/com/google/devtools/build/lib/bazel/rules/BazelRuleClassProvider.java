@@ -27,8 +27,6 @@ import com.google.devtools.build.lib.analysis.PlatformConfigurationLoader;
 import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
-import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyLoader;
-import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyOptions;
 import com.google.devtools.build.lib.bazel.rules.BazelToolchainType.BazelToolchainTypeRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
@@ -61,7 +59,6 @@ import com.google.devtools.build.lib.bazel.rules.java.proto.BazelJavaProtoLibrar
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuleClasses;
-import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuntimeRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyTestRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShBinaryRule;
@@ -97,7 +94,6 @@ import com.google.devtools.build.lib.rules.apple.cpp.AppleCcToolchainRule;
 import com.google.devtools.build.lib.rules.apple.swift.SwiftCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagConfiguration;
-import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagFeatureVisibility;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses;
 import com.google.devtools.build.lib.rules.config.ConfigSkylarkCommon;
 import com.google.devtools.build.lib.rules.cpp.CcIncLibraryRule;
@@ -226,17 +222,10 @@ public class BazelRuleClassProvider {
         }
       };
 
-  public static final ImmutableSet<String> FEATURE_POLICY_FEATURES = ImmutableSet.<String>of(
-    ConfigFeatureFlagFeatureVisibility.POLICY_NAME
-  );
-
   public static final RuleSet CORE_RULES =
       new RuleSet() {
         @Override
         public void init(Builder builder) {
-          builder.addConfigurationOptions(FeaturePolicyOptions.class);
-          builder.addConfigurationFragment(new FeaturePolicyLoader(FEATURE_POLICY_FEATURES));
-
           builder.addRuleDefinition(new BaseRuleClasses.RootRule());
           builder.addRuleDefinition(new BaseRuleClasses.BaseRule());
           builder.addRuleDefinition(new BaseRuleClasses.RuleBase());
@@ -542,7 +531,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new BazelPyLibraryRule());
           builder.addRuleDefinition(new BazelPyBinaryRule());
           builder.addRuleDefinition(new BazelPyTestRule());
-          builder.addRuleDefinition(new BazelPyRuntimeRule());
         }
 
         @Override
