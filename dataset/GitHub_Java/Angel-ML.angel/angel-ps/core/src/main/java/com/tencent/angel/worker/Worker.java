@@ -1,41 +1,44 @@
 /*
  * Tencent is pleased to support the open source community by making Angel available.
  *
- * Copyright (C) 2017 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the BSD 3-Clause License (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
  * compliance with the License. You may obtain a copy of the License at
  *
- * https://opensource.org/licenses/BSD-3-Clause
+ * https://opensource.org/licenses/Apache-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is
- * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
- * either express or implied. See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
+ *
  */
+
 
 package com.tencent.angel.worker;
 
 import com.google.protobuf.ServiceException;
 import com.tencent.angel.AngelDeployMode;
 import com.tencent.angel.common.AngelEnvironment;
-import com.tencent.angel.common.Location;
-import com.tencent.angel.conf.AngelConfiguration;
+import com.tencent.angel.common.location.Location;
+import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.ipc.TConnection;
 import com.tencent.angel.ipc.TConnectionManager;
-import com.tencent.angel.psagent.CounterUpdater;
-import com.tencent.angel.psagent.PSAgent;
-import com.tencent.angel.psagent.client.MasterClient;
-import com.tencent.angel.psagent.executor.Executor;
-import com.tencent.angel.worker.storage.DataBlockManager;
-import com.tencent.angel.worker.task.TaskManager;
+import com.tencent.angel.plugin.AngelServiceLoader;
+import com.tencent.angel.worker.task.Task;
 import com.tencent.angel.protobuf.ProtobufUtil;
 import com.tencent.angel.protobuf.generated.MLProtos.WorkerAttemptIdProto;
 import com.tencent.angel.protobuf.generated.MLProtos.WorkerIdProto;
 import com.tencent.angel.protobuf.generated.WorkerMasterServiceProtos.WorkerCommandProto;
 import com.tencent.angel.protobuf.generated.WorkerMasterServiceProtos.WorkerRegisterResponse;
 import com.tencent.angel.protobuf.generated.WorkerMasterServiceProtos.WorkerReportResponse;
-
+import com.tencent.angel.psagent.CounterUpdater;
+import com.tencent.angel.psagent.PSAgent;
+import com.tencent.angel.psagent.client.MasterClient;
+import com.tencent.angel.psagent.executor.Executor;
+import com.tencent.angel.worker.storage.DataBlockManager;
+import com.tencent.angel.worker.task.TaskManager;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -57,16 +60,16 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 
 /**
- * Angel Worker,it run a group of {@link com.tencent.angel.worker.task.Task} backed by a thread-pool.
+ * Angel Worker,it run a group of {@link Task} backed by a thread-pool.
  * The Information is shared by {@link WorkerContext}.
- *@see PSAgent
  *
+ * @see PSAgent
  */
 public class Worker implements Executor {
 
   private static final Log LOG = LogFactory.getLog(Worker.class);
 
-  private WorkerGroup workerGroup;
+  private volatile WorkerGroup workerGroup;
 
   private final Configuration conf;
 
@@ -88,33 +91,33 @@ public class Worker implements Executor {
 
   private final Map<String, String> workerMetrics;
 
-  private TaskManager taskManager;
+  private volatile TaskManager taskManager;
 
-  private DataBlockManager dataBlockManager;
+  private volatile DataBlockManager dataBlockManager;
 
-  private boolean test = false;
+  private volatile boolean test = false;
 
-  private int initMinClock;
+  private volatile int initMinClock;
 
-  private Lock readLockForTaskNum;
+  private volatile Lock readLockForTaskNum;
 
-  private Lock writeLockForTaskNum;
+  private volatile Lock writeLockForTaskNum;
 
-  private int activeTaskNum;
+  private volatile int activeTaskNum;
 
   private final AtomicBoolean workerInitFinishedFlag;
 
-  private Thread heartbeatThread;
+  private volatile Thread heartbeatThread;
 
-  private CounterUpdater counterUpdater;
+  private volatile CounterUpdater counterUpdater;
 
-  private PSAgent psAgent;
+  private volatile PSAgent psAgent;
 
-  private MasterClient masterClient;
+  private volatile MasterClient masterClient;
 
   private final AtomicBoolean exitedFlag;
 
-  private WorkerService workerService;
+  private volatile WorkerService workerService;
 
   /**
    * Instantiates a new Worker.
@@ -128,8 +131,7 @@ public class Worker implements Executor {
    * @param isLeader        the is leader
    */
   public Worker(Configuration conf, ApplicationId appId, String user,
-      WorkerAttemptId workerAttemptId, Location masterLocation, int initMinClock,
-      boolean isLeader) {
+    WorkerAttemptId workerAttemptId, Location masterLocation, int initMinClock, boolean isLeader) {
     this.conf = conf;
     this.stopped = new AtomicBoolean(false);
     this.workerInitFinishedFlag = new AtomicBoolean(false);
@@ -141,7 +143,7 @@ public class Worker implements Executor {
     readLockForTaskNum = readWriteLock.readLock();
     writeLockForTaskNum = readWriteLock.writeLock();
 
-    activeTaskNum = conf.getInt(AngelConfiguration.ANGEL_TASK_ACTUAL_NUM, 1);
+    activeTaskNum = conf.getInt(AngelConf.ANGEL_TASK_ACTUAL_NUM, 1);
 
     this.appId = appId;
     this.user = user;
@@ -177,7 +179,7 @@ public class Worker implements Executor {
   public static void main(String[] args) {
     // get configuration from config file
     Configuration conf = new Configuration();
-    conf.addResource(AngelConfiguration.ANGEL_JOB_CONF_FILE);
+    conf.addResource(AngelConf.ANGEL_JOB_CONF_FILE);
 
     String containerIdStr = System.getenv(Environment.CONTAINER_ID.name());
     ContainerId containerId = ConverterUtils.toContainerId(containerIdStr);
@@ -187,10 +189,9 @@ public class Worker implements Executor {
 
     // set localDir with enviroment set by nm.
     String[] localSysDirs =
-        StringUtils.getTrimmedStrings(System.getenv(Environment.LOCAL_DIRS.name()));
-    conf.setStrings(AngelConfiguration.LOCAL_DIR, localSysDirs);
-    LOG.info(
-        AngelConfiguration.LOCAL_DIR + " for child: " + conf.get(AngelConfiguration.LOCAL_DIR));
+      StringUtils.getTrimmedStrings(System.getenv(Environment.LOCAL_DIRS.name()));
+    conf.setStrings(AngelConf.LOCAL_DIR, localSysDirs);
+    LOG.info(AngelConf.LOCAL_DIR + " for child: " + conf.get(AngelConf.LOCAL_DIR));
     int workerGroupIndex = Integer.parseInt(System.getenv(AngelEnvironment.WORKER_GROUP_ID.name()));
     int workerIndex = Integer.parseInt(System.getenv(AngelEnvironment.WORKER_ID.name()));
     int attemptIndex = Integer.parseInt(System.getenv(AngelEnvironment.WORKER_ATTEMPT_ID.name()));
@@ -199,18 +200,16 @@ public class Worker implements Executor {
     WorkerId workerId = new WorkerId(workerGroupId, workerIndex);
     WorkerAttemptId workerAttemptId = new WorkerAttemptId(workerId, attemptIndex);
 
-    conf.set(AngelConfiguration.ANGEL_WORKERGROUP_ACTUAL_NUM,
-        System.getenv(AngelEnvironment.WORKERGROUP_NUMBER.name()));
+    conf.set(AngelConf.ANGEL_WORKERGROUP_ACTUAL_NUM,
+      System.getenv(AngelEnvironment.WORKERGROUP_NUMBER.name()));
 
-    conf.set(AngelConfiguration.ANGEL_TASK_ACTUAL_NUM,
-        System.getenv(AngelEnvironment.TASK_NUMBER.name()));
-    
-    conf.set(AngelConfiguration.ANGEL_TASK_USER_TASKCLASS,
-        System.getenv(AngelEnvironment.ANGEL_USER_TASK.name()));
+    conf.set(AngelConf.ANGEL_TASK_ACTUAL_NUM, System.getenv(AngelEnvironment.TASK_NUMBER.name()));
 
-    LOG.info(
-        "actual workergroup number:" + conf.get(AngelConfiguration.ANGEL_WORKERGROUP_ACTUAL_NUM));
-    LOG.info("actual task number:" + conf.get(AngelConfiguration.ANGEL_TASK_ACTUAL_NUM));
+    conf.set(AngelConf.ANGEL_TASK_USER_TASKCLASS,
+      System.getenv(AngelEnvironment.ANGEL_USER_TASK.name()));
+
+    LOG.info("actual workergroup number:" + conf.get(AngelConf.ANGEL_WORKERGROUP_ACTUAL_NUM));
+    LOG.info("actual task number:" + conf.get(AngelConf.ANGEL_TASK_ACTUAL_NUM));
 
     // get master location
     String masterAddr = System.getenv(AngelEnvironment.LISTEN_ADDR.name());
@@ -218,8 +217,8 @@ public class Worker implements Executor {
     Location masterLocation = new Location(masterAddr, Integer.valueOf(portStr));
 
     String startClock = System.getenv(AngelEnvironment.INIT_MIN_CLOCK.name());
-    Worker worker = new Worker(AngelConfiguration.clone(conf), appId, user, workerAttemptId,
-        masterLocation, Integer.valueOf(startClock), false);
+    Worker worker = new Worker(AngelConf.clone(conf), appId, user, workerAttemptId, masterLocation,
+      Integer.valueOf(startClock), false);
 
     try {
       worker.initAndStart();
@@ -236,47 +235,50 @@ public class Worker implements Executor {
    * @throws Exception the exception
    */
   public void initAndStart() throws Exception {
-    LOG.info("init and start worker");
-    psAgent = new PSAgent(conf, masterLocation.getIp(), masterLocation.getPort(),
-        workerAttemptId.getWorkerId().getIndex(), false, this);
+    LOG.info("Init and start worker");
 
-    LOG.info("after init psagent");
+    psAgent = new PSAgent(conf, masterLocation.getIp(), masterLocation.getPort(),
+      workerAttemptId.getWorkerId().getIndex(), false, this);
     dataBlockManager = new DataBlockManager();
-    
-    LOG.info("after init datablockmanager");
     taskManager = new TaskManager();
 
+    LOG.info("Init and start psagent for worker");
     psAgent.initAndStart();
+
+    LOG.info("Init data block manager");
     dataBlockManager.init();
 
+    LOG.info("Init and start worker rpc server");
     workerService = new WorkerService();
     workerService.start();
 
-
+    LOG.info("Init counter updater");
     counterUpdater.initialize();
 
     // init task manager and start tasks
     masterClient = psAgent.getMasterClient();
 
     // start heartbeat thread
+    LOG.info("Register to master and start the heartbeat thread");
     startHeartbeatThread();
 
+    LOG.info("Get data splits from master");
     workerGroup = masterClient.getWorkerGroupMetaInfo();
     dataBlockManager.setSplitClassification(workerGroup.getSplits());
 
+    LOG.info("Init and start task manager and all task");
     taskManager.init();
     taskManager.startAllTasks(
-        workerGroup.getWorkerRef(workerAttemptId.getWorkerId()).getTaskIdToContextMap());
+      workerGroup.getWorkerRef(workerAttemptId.getWorkerId()).getTaskIdToContextMap());
     workerInitFinishedFlag.set(true);
   }
 
   private void startHeartbeatThread() {
-    final int heartbeatInterval = conf.getInt(AngelConfiguration.ANGEL_WORKER_HEARTBEAT_INTERVAL,
-        AngelConfiguration.DEFAULT_ANGEL_WORKER_HEARTBEAT_INTERVAL);
+    final int heartbeatInterval = conf.getInt(AngelConf.ANGEL_WORKER_HEARTBEAT_INTERVAL_MS,
+      AngelConf.DEFAULT_ANGEL_WORKER_HEARTBEAT_INTERVAL);
 
     heartbeatThread = new Thread(new Runnable() {
-      @Override
-      public void run() {
+      @Override public void run() {
         try {
           register();
         } catch (Exception x) {
@@ -287,19 +289,22 @@ public class Worker implements Executor {
         while (!stopped.get() && !Thread.currentThread().isInterrupted()) {
           try {
             Thread.sleep(heartbeatInterval);
-            try {
-              heartbeat();
-            } catch (YarnRuntimeException e) {
-              LOG.error("Error communicating with AM: " + e.getMessage(), e);
-              return;
-            } catch (Exception e) {
-              LOG.error("ERROR IN CONTACTING RM. ", e);
-            }
           } catch (InterruptedException e) {
             if (!stopped.get()) {
               LOG.warn("Allocated thread interrupted. Returning.");
             }
             return;
+          }
+
+          try {
+            if (!stopped.get()) {
+              heartbeat();
+            }
+          } catch (YarnRuntimeException e) {
+            LOG.error("Error communicating with AM: " + e.getMessage(), e);
+            return;
+          } catch (Exception e) {
+            LOG.error("ERROR IN CONTACTING RM. ", e);
           }
         }
       }
@@ -338,23 +343,26 @@ public class Worker implements Executor {
           // todo
           register();
           break;
+
         case W_SHUTDOWN:
           // if worker timeout, it may be knocked off.
           LOG.fatal("received SHUTDOWN command from am! to exit......");
-          System.exit(-1);
+          workerExit(-1);
           break;
+
         default:
           int activeTaskNum = response.getActiveTaskNum();
           if (activeTaskNum < getActiveTaskNum()) {
-            LOG.warn("Received message that activeTaskNum is changed! oldTaskNum: "
-                + getActiveTaskNum() + ", newTaskNum: " + activeTaskNum);
+            LOG.warn(
+              "Received message that activeTaskNum is changed! oldTaskNum: " + getActiveTaskNum()
+                + ", newTaskNum: " + activeTaskNum);
             setActiveTaskNum(activeTaskNum);
           }
           // SUCCESS, do nothing
       }
       // heartbeatFailedTime = 0;
     } catch (Exception netException) {
-      if(!stopped.get()) {
+      if (!stopped.get()) {
         LOG.error("report to appmaster failed, err: ", netException);
       }
     }
@@ -373,7 +381,6 @@ public class Worker implements Executor {
 
   /**
    * Notify Master worker is done.
-   *
    */
   public void workerDone() {
     if (exitedFlag.compareAndSet(false, true)) {
@@ -402,8 +409,11 @@ public class Worker implements Executor {
   public void workerError(String msg) {
     if (exitedFlag.compareAndSet(false, true)) {
       try {
-        masterClient.workerError(msg);
-        LOG.info("worker failed message : " + msg + ", send it to appmaster success");
+        if (masterClient != null) {
+          masterClient.workerError(msg);
+          LOG.info("worker failed message : " + msg + ", send it to appmaster success");
+          masterClient = null;
+        }
       } catch (ServiceException e) {
         LOG.error("send error message error ", e);
       } finally {
@@ -422,8 +432,9 @@ public class Worker implements Executor {
   /**
    * Stop Worker
    */
-  public void stop() {
+  public void stop(int exitCode) {
     LOG.info("stop workerService");
+
     if (workerService != null) {
       workerService.stop();
     }
@@ -434,7 +445,6 @@ public class Worker implements Executor {
         psAgent.stop();
         psAgent = null;
       }
-
 
       LOG.info("stop heartbeat thread");
       if (heartbeatThread != null) {
@@ -468,7 +478,7 @@ public class Worker implements Executor {
    */
   public void workerExit(int exitValue) {
     LOG.info("start to close all modules in worker");
-    stop();
+    stop(exitValue);
     exit(exitValue);
   }
 
@@ -586,18 +596,15 @@ public class Worker implements Executor {
     return psAgent;
   }
 
-  @Override
-  public void error(String msg) {
+  @Override public void error(String msg) {
     workerError(msg);
   }
 
-  @Override
-  public void done() {
+  @Override public void done() {
     workerDone();
   }
 
-  @Override
-  public int getTaskNum() {
+  @Override public int getTaskNum() {
     return workerGroup.getWorkerRef(workerAttemptId.getWorkerId()).getTaskNum();
   }
 
@@ -648,7 +655,7 @@ public class Worker implements Executor {
   }
 
   /**
-   *Is Worker Initialized
+   * Is Worker Initialized
    *
    * @return true if Worker initialization Finished,else false
    */
