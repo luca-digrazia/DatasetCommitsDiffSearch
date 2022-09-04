@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.bazel.rules.ninja.lexer.NinjaToken;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget.InputKind;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget.InputOutputKind;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget.OutputKind;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.nio.charset.StandardCharsets;
@@ -38,18 +39,21 @@ import javax.annotation.Nullable;
 
 /** Ninja files parser. The types of tokens: {@link NinjaToken}. Ninja lexer: {@link NinjaLexer}. */
 public class NinjaParserStep {
+  /**
+   * An interner for {@link PathFragment} instances for the inputs and outputs of {@link
+   * NinjaTarget}.
+   */
+  // TODO(lberki): Make this non-static.
+  // The reason why this field is static is that I haven't grokked yet what the lifetime of each
+  // object in Ninja parsing is. Once I figure out which object has the lifetime of "exactly as long
+  // as the parsing is running", I can just put this in a field of that object and plumb it here.
+  private static final Interner<PathFragment> PATH_FRAGMENT_INTERNER =
+      BlazeInterners.newWeakInterner();
 
   private final NinjaLexer lexer;
-  private final Interner<PathFragment> pathFragmentInterner;
-  private final Interner<String> nameInterner;
 
-  public NinjaParserStep(
-      NinjaLexer lexer,
-      Interner<PathFragment> pathFragmentInterner,
-      Interner<String> nameInterner) {
+  public NinjaParserStep(NinjaLexer lexer) {
     this.lexer = lexer;
-    this.pathFragmentInterner = pathFragmentInterner;
-    this.nameInterner = nameInterner;
   }
 
   /** Parses variable at the current lexer position. */
@@ -58,7 +62,7 @@ public class NinjaParserStep {
     parseExpected(NinjaToken.EQUALS);
 
     NinjaVariableValue value = parseVariableValue();
-    return Pair.of(nameInterner.intern(name), value);
+    return Pair.of(name, value);
   }
 
   @VisibleForTesting
@@ -202,7 +206,7 @@ public class NinjaParserStep {
         parseExpected(NinjaToken.NEWLINE);
       }
     }
-    return new NinjaRule(nameInterner.intern(name), variablesBuilder.build());
+    return new NinjaRule(variablesBuilder.build());
   }
 
   /** Parses Ninja pool at the current lexer position. */
@@ -292,7 +296,7 @@ public class NinjaParserStep {
    */
   public NinjaTarget parseNinjaTarget(NinjaScope fileScope, long offset)
       throws GenericParsingException {
-    NinjaTarget.Builder builder = NinjaTarget.builder(fileScope, offset, nameInterner);
+    NinjaTarget.Builder builder = NinjaTarget.builder(fileScope, offset);
     parseExpected(NinjaToken.BUILD);
 
     Map<InputOutputKind, List<NinjaVariableValue>> pathValuesMap =
@@ -307,7 +311,7 @@ public class NinjaParserStep {
           entry.getValue().stream()
               .map(
                   value ->
-                      pathFragmentInterner.intern(
+                      PATH_FRAGMENT_INTERNER.intern(
                           PathFragment.create(targetScope.getExpandedValue(Long.MAX_VALUE, value))))
               .collect(Collectors.toList());
       InputOutputKind inputOutputKind = entry.getKey();
