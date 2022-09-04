@@ -37,7 +37,6 @@ import org.opentest4j.TestAbortedException;
 
 import io.quarkus.bootstrap.BootstrapClassLoaderFactory;
 import io.quarkus.bootstrap.BootstrapException;
-import io.quarkus.bootstrap.DefineClassVisibleURLClassLoader;
 import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.bootstrap.util.PropertyUtils;
 import io.quarkus.builder.BuildChainBuilder;
@@ -281,7 +280,7 @@ public class QuarkusTestExtension
                     throw new IllegalStateException("Failed to parse a deployment classpath entry " + entry, e);
                 }
             }
-            return new DefineClassVisibleURLClassLoader(list.toArray(new URL[list.size()]), getClass().getClassLoader());
+            return new URLClassLoader(list.toArray(new URL[list.size()]), getClass().getClassLoader());
         }
         try {
             return BootstrapClassLoaderFactory.newInstance()
@@ -299,14 +298,16 @@ public class QuarkusTestExtension
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
+        boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
         restAssuredURLManager.clearURL();
-        TestScopeManager.tearDown();
+        TestScopeManager.tearDown(substrateTest);
     }
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
+        boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
         restAssuredURLManager.setURL();
-        TestScopeManager.setup();
+        TestScopeManager.setup(substrateTest);
     }
 
     @Override
