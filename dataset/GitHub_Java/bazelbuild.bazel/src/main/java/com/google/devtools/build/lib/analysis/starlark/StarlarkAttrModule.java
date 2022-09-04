@@ -55,7 +55,6 @@ import net.starlark.java.eval.Printer;
 import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 
 /**
@@ -136,13 +135,11 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
       } else if (defaultValue instanceof StarlarkLateBoundDefault) {
         builder.value((StarlarkLateBoundDefault) defaultValue); // unchecked cast
       } else {
-        BazelStarlarkContext bazelStarlarkContext = BazelStarlarkContext.from(thread);
         builder.defaultValue(
             defaultValue,
             new BuildType.LabelConversionContext(
                 BazelModuleContext.of(Module.ofInnermostEnclosingStarlarkFunction(thread)).label(),
-                bazelStarlarkContext.getRepoMapping(),
-                bazelStarlarkContext.getConvertedLabelsInPackage()),
+                BazelStarlarkContext.from(thread).getRepoMapping()),
             DEFAULT_ARG);
       }
     }
@@ -403,7 +400,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
 
   @Override
   public Descriptor intAttribute(
-      StarlarkInt defaultValue,
+      Integer defaultValue,
       String doc,
       Boolean mandatory,
       Sequence<?> values,
