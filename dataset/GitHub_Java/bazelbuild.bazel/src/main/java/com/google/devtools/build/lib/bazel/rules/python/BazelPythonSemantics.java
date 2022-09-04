@@ -23,7 +23,7 @@ import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.Runfiles;
+import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.ShToolchain;
@@ -39,7 +39,7 @@ import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.In
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.cpp.AbstractCcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.rules.python.PythonConfiguration;
 import com.google.devtools.build.lib.rules.python.PythonSemantics;
@@ -69,18 +69,17 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   @Override
-  public void collectRunfilesForBinary(
-      RuleContext ruleContext, Runfiles.Builder builder, PyCommon common) {
+  public void collectRunfilesForBinary(RuleContext ruleContext, Builder builder, PyCommon common) {
     addRuntime(ruleContext, builder);
   }
 
   @Override
-  public void collectDefaultRunfilesForBinary(RuleContext ruleContext, Runfiles.Builder builder) {
+  public void collectDefaultRunfilesForBinary(RuleContext ruleContext, Builder builder) {
     addRuntime(ruleContext, builder);
   }
 
   @Override
-  public void collectDefaultRunfiles(RuleContext ruleContext, Runfiles.Builder builder) {
+  public void collectDefaultRunfiles(RuleContext ruleContext, Builder builder) {
     builder.addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
   }
 
@@ -128,7 +127,7 @@ public class BazelPythonSemantics implements PythonSemantics {
   public Artifact createExecutable(
       RuleContext ruleContext,
       PyCommon common,
-      AbstractCcLinkParamsStore ccLinkParamsStore,
+      CcLinkParamsStore ccLinkParamsStore,
       NestedSet<PathFragment> imports)
       throws InterruptedException {
     String main = common.determineMainExecutableSource(/*withWorkspaceName=*/ true);
@@ -310,7 +309,7 @@ public class BazelPythonSemantics implements PythonSemantics {
             .build(ruleContext));
   }
 
-  private static void addRuntime(RuleContext ruleContext, Runfiles.Builder builder) {
+  private static void addRuntime(RuleContext ruleContext, Builder builder) {
     BazelPyRuntimeProvider provider = ruleContext.getPrerequisite(
         ":py_interpreter", Mode.TARGET, BazelPyRuntimeProvider.class);
     if (provider != null && provider.interpreter() != null) {
