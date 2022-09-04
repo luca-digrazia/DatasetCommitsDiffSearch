@@ -220,7 +220,17 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
                 ? request.excludedKeys
                 : depKeys.getAllElementsAsIterable());
     if (batchMap.size() != depKeys.numElements()) {
+      NodeEntry inFlightEntry = null;
+      try {
+        inFlightEntry = evaluatorContext.getGraph().get(null, Reason.OTHER, requestor);
+      } catch (InterruptedException e) {
+        logger.atWarning().withCause(e).log(
+            "Interrupted while getting parent entry for %s for crash", requestor);
+        // We're crashing, don't mask it.
+        Thread.currentThread().interrupt();
+      }
       Set<SkyKey> difference = Sets.difference(depKeys.toSet(), batchMap.keySet());
+      logger.atSevere().log("Missing keys for %s: %s\n\n%s", requestor, difference, inFlightEntry);
       evaluatorContext
           .getGraphInconsistencyReceiver()
           .noteInconsistencyAndMaybeThrow(
@@ -775,6 +785,11 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     // the data being written now is the same as the data already present in the entry.
     Set<SkyKey> reverseDeps =
         primaryEntry.setValue(valueWithMetadata, evaluationVersion, depFingerprintList);
+    if (AbstractParallelEvaluator.matchesMissingSkyKey(skyKey)) {
+      logger.atInfo().log(
+          "Set value for %s with %s (%s)",
+          skyKey, primaryEntry, System.identityHashCode(primaryEntry));
+    }
 
     // Note that if this update didn't actually change the entry, this version may not be
     // evaluationVersion.
