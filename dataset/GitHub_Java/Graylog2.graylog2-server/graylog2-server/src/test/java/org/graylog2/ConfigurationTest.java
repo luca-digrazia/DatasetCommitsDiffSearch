@@ -1,235 +1,175 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
-
-import junit.framework.Assert;
-
-import org.bson.types.ObjectId;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
 import com.github.joschi.jadconfig.JadConfig;
+import com.github.joschi.jadconfig.ParameterException;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
-import com.google.common.collect.Maps;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.rules.TemporaryFolder;
 
-/**
- * Unit tests for {@link Configuration} class
- *
- * @author Jochen Schalanda <jochen@schalanda.name>
- */
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.HashMap;
+import java.util.Map;
+
+import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
+import static java.nio.file.StandardOpenOption.WRITE;
+import static org.assertj.core.api.Assertions.assertThat;
+
 public class ConfigurationTest {
+    @Rule
+    public final ExpectedException expectedException = ExpectedException.none();
 
-    Map<String, String> validProperties;
-    private File tempFile;
+    @Rule
+    public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    private Map<String, String> validProperties;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
+        validProperties = new HashMap<>();
 
-        validProperties = Maps.newHashMap();
-
-        try {
-            tempFile = File.createTempFile("graylog", null);
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
         // Required properties
         validProperties.put("password_secret", "ipNUnWxmBLCxTEzXcyamrdy0Q3G7HxdKsAvyg30R9SCof0JydiZFiA3dLSkRsbLF");
-        validProperties.put("elasticsearch_config_file", tempFile.getAbsolutePath());
-        validProperties.put("force_syslog_rdns", "false");
-        validProperties.put("syslog_listen_port", "514");
-        validProperties.put("syslog_protocol", "udp");
-        validProperties.put("mongodb_useauth", "true");
-        validProperties.put("mongodb_user", "user");
-        validProperties.put("mongodb_password", "pass");
-        validProperties.put("mongodb_database", "test");
-        validProperties.put("mongodb_host", "localhost");
-        validProperties.put("mongodb_port", "27017");
-        validProperties.put("use_gelf", "true");
-        validProperties.put("gelf_listen_port", "12201");
-
-        // Additional numerical properties
-        validProperties.put("mongodb_max_connections", "100");
-        validProperties.put("mongodb_threads_allowed_to_block_multiplier", "50");
-        validProperties.put("amqp_port", "5672");
-        validProperties.put("forwarder_loggly_timeout", "3");
+        // SHA-256 of "admin"
+        validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918");
     }
 
-    @After
-    public void tearDown() {
-        tempFile.delete();
-    }
+    @Test
+    public void testPasswordSecretIsTooShort() throws ValidationException, RepositoryException {
+        validProperties.put("password_secret", "too short");
 
-    @Test(expected = ValidationException.class)
-    public void testValidateMongoDbAuth() throws RepositoryException, ValidationException {
-
-        validProperties.put("mongodb_useauth", "true");
-        validProperties.remove("mongodb_user");
-        validProperties.remove("mongodb_password");
+        expectedException.expect(ValidationException.class);
+        expectedException.expectMessage("The minimum length for \"password_secret\" is 16 characters.");
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
     }
 
     @Test
-    public void testGetElasticSearchIndexPrefix() throws RepositoryException, ValidationException {
+    public void testPasswordSecretIsEmpty() throws ValidationException, RepositoryException {
+        validProperties.put("password_secret", "");
+
+        expectedException.expect(ValidationException.class);
+        expectedException.expectMessage("Parameter password_secret should not be blank");
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("graylog2", configuration.getElasticSearchIndexPrefix());
     }
 
     @Test
-    public void testGetMaximumMongoDBConnections() throws RepositoryException, ValidationException {
+    public void testPasswordSecretIsNull() throws ValidationException, RepositoryException {
+        validProperties.put("password_secret", null);
 
-        validProperties.put("mongodb_max_connections", "12345");
+        expectedException.expect(ParameterException.class);
+        expectedException.expectMessage("Required parameter \"password_secret\" not found.");
+
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(12345, configuration.getMongoMaxConnections());
     }
 
     @Test
-    public void testGetMaximumMongoDBConnectionsDefault() throws RepositoryException, ValidationException {
+    public void testPasswordSecretIsValid() throws ValidationException, RepositoryException {
+        validProperties.put("password_secret", "abcdefghijklmnopqrstuvwxyz");
 
-        validProperties.remove("mongodb_max_connections");
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
-        Assert.assertEquals(1000, configuration.getMongoMaxConnections());
+        assertThat(configuration.getPasswordSecret()).isEqualTo("abcdefghijklmnopqrstuvwxyz");
     }
 
     @Test
-    public void testGetThreadsAllowedToBlockMultiplier() throws RepositoryException, ValidationException {
+    public void testNodeIdFilePermissions() throws IOException {
+        final File nonEmptyNodeIdFile = temporaryFolder.newFile("non-empty-node-id");
+        final File emptyNodeIdFile = temporaryFolder.newFile("empty-node-id");
 
-        validProperties.put("mongodb_threads_allowed_to_block_multiplier", "12345");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+        // create a node-id file and write some id
+        Files.write(nonEmptyNodeIdFile.toPath(), "test-node-id".getBytes(StandardCharsets.UTF_8), WRITE, TRUNCATE_EXISTING);
+        assertThat(nonEmptyNodeIdFile.length()).isGreaterThan(0);
 
-        Assert.assertEquals(12345, configuration.getMongoThreadsAllowedToBlockMultiplier());
+        // parent "directory" is not a directory is not ok
+        final File parentNotDirectory = new File(emptyNodeIdFile, "parent-is-file");
+        assertThat(validateWithPermissions(parentNotDirectory, "rw-------")).isFalse();
+
+        // file missing and parent directory doesn't exist is not ok
+        final File directoryNotExist = temporaryFolder.newFolder("not-readable");
+        assertThat(directoryNotExist.delete()).isTrue();
+        final File parentNotExist = new File(directoryNotExist, "node-id");
+        assertThat(validateWithPermissions(parentNotExist, "rw-------")).isFalse();
+
+        // file missing and parent directory not readable is not ok
+        final File directoryNotReadable = temporaryFolder.newFolder("not-readable");
+        assertThat(directoryNotReadable.setReadable(false)).isTrue();
+        final File parentNotReadable = new File(directoryNotReadable, "node-id");
+        assertThat(validateWithPermissions(parentNotReadable, "rw-------")).isFalse();
+
+        // file missing and parent directory not writable is not ok
+        final File directoryNotWritable = temporaryFolder.newFolder("not-writable");
+        assertThat(directoryNotWritable.setWritable(false)).isTrue();
+        final File parentNotWritable = new File(directoryNotWritable, "node-id");
+        assertThat(validateWithPermissions(parentNotWritable, "rw-------")).isFalse();
+
+        // file missing and parent directory readable and writable is ok
+        final File parentDirectory = temporaryFolder.newFolder();
+        assertThat(parentDirectory.setReadable(true)).isTrue();
+        assertThat(parentDirectory.setWritable(true)).isTrue();
+        final File parentOk = new File(parentDirectory, "node-id");
+        assertThat(validateWithPermissions(parentOk, "rw-------")).isTrue();
+
+        // read/write permissions should make the validation pass
+        assertThat(validateWithPermissions(nonEmptyNodeIdFile, "rw-------")).isTrue();
+        assertThat(validateWithPermissions(emptyNodeIdFile, "rw-------")).isTrue();
+
+        // existing, but not writable is ok if the file is not empty
+        assertThat(validateWithPermissions(nonEmptyNodeIdFile, "r--------")).isTrue();
+
+        // existing, but not writable is not ok if the file is empty
+        assertThat(validateWithPermissions(emptyNodeIdFile, "r--------")).isFalse();
+
+        // existing, but not readable is not ok
+        assertThat(validateWithPermissions(nonEmptyNodeIdFile, "-w-------")).isFalse();
     }
 
-    @Test
-    public void testGetThreadsAllowedToBlockMultiplierDefault() throws RepositoryException, ValidationException {
-
-        validProperties.remove("mongodb_threads_allowed_to_block_multiplier");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(5, configuration.getMongoThreadsAllowedToBlockMultiplier());
+    /**
+     * Run the NodeIDFileValidator on a file with the given permissions.
+     * @param nodeIdFile the path to the node id file, can be missing
+     * @param permissions the posix permission to set the file to, if it exists, before running the validator
+     * @return true if the validation was successful, false otherwise
+     * @throws IOException if any file related problem occurred
+     */
+    private static boolean validateWithPermissions(File nodeIdFile, String permissions) throws IOException {
+        try {
+            final Configuration.NodeIdFileValidator validator = new Configuration.NodeIdFileValidator();
+            if (nodeIdFile.exists()) {
+                Files.setPosixFilePermissions(nodeIdFile.toPath(), PosixFilePermissions.fromString(permissions));
+            }
+            validator.validate("node-id", nodeIdFile.toString());
+        } catch (ValidationException ve) {
+            return false;
+        }
+        return true;
     }
-
-    /*@Test
-    public void testGetAMQPSubscribedQueuesEmpty() throws RepositoryException, ValidationException {
-        validProperties.put("amqp_subscribed_queues", "");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertNull(configuration.getAmqpSubscribedQueues());
-    }
-
-    @Test
-    public void testGetAMQPSubscribedQueuesMalformed() throws RepositoryException, ValidationException {
-        validProperties.put("amqp_subscribed_queues", "queue-invalid");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertNull(configuration.getAmqpSubscribedQueues());
-    }
-
-    @Test
-    public void testGetAMQPSubscribedQueuesInvalidQueueType() throws RepositoryException, ValidationException {
-        validProperties.put("amqp_subscribed_queues", "queue1:gelf,queue2:invalid");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertNull(configuration.getAmqpSubscribedQueues());
-    }
-
-    @Test
-    public void testGetAMQPSubscribedQueues() throws RepositoryException, ValidationException {
-        validProperties.put("amqp_subscribed_queues", "queue1:gelf,queue2:syslog");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(2, configuration.getAmqpSubscribedQueues().size());
-    }*/
-
-    @Test
-    public void testGetMongoDBReplicaSetServersEmpty() throws RepositoryException, ValidationException {
-        validProperties.put("mongodb_replica_set", "");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertNull(configuration.getMongoReplicaSet());
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServersMalformed() throws RepositoryException, ValidationException {
-        validProperties.put("mongodb_replica_set", "malformed");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertNull(configuration.getMongoReplicaSet());
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServersUnknownHost() throws RepositoryException, ValidationException {
-        validProperties.put("mongodb_replica_set", "this-host-hopefully-does-not-exist.:27017");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertNull(configuration.getMongoReplicaSet());
-    }
-
-    @Test
-    public void testGetMongoDBReplicaSetServers() throws RepositoryException, ValidationException {
-        validProperties.put("mongodb_replica_set", "127.0.0.1:27017,127.0.0.1:27018");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(2, configuration.getMongoReplicaSet().size());
-    }
-
-    @Test
-    public void testGetLibratoMetricsStreamFilter() throws RepositoryException, ValidationException {
-        ObjectId id1 = new ObjectId();
-        ObjectId id2 = new ObjectId();
-        ObjectId id3 = new ObjectId();
-        validProperties.put("libratometrics_stream_filter", id1.toString() + "," + id2.toString() + "," + id3.toString());
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(3, configuration.getLibratoMetricsStreamFilter().size());
-        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id1.toString()));
-        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id2.toString()));
-        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id3.toString()));
-    }
-
-    @Test
-    public void testGetLibratoMetricsPrefix() throws RepositoryException, ValidationException {
-        validProperties.put("libratometrics_prefix", "lolwut");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("lolwut", configuration.getLibratoMetricsPrefix());
-    }
-
-    @Test
-    public void testGetLibratoMetricsPrefixHasStandardValue() throws RepositoryException, ValidationException {
-        // Nothing set.
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("gl2-", configuration.getLibratoMetricsPrefix());
-    }
-    
 }
