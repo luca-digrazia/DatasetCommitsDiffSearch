@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.util.Objects;
@@ -33,6 +34,8 @@ import javax.annotation.Nullable;
  */
 @AutoCodec
 public class ConfiguredTargetKey extends ActionLookupKey {
+  public static final ObjectCodec<ConfiguredTargetKey> CODEC = new ConfiguredTargetKey_AutoCodec();
+
   private final Label label;
   @Nullable private final BuildConfigurationValue.Key configurationKey;
 
@@ -43,19 +46,13 @@ public class ConfiguredTargetKey extends ActionLookupKey {
     this.configurationKey = configurationKey;
   }
 
-  /** Use {@link #of(ConfiguredTarget, BuildConfiguration)} instead of this. */
-  @Deprecated
   public static ConfiguredTargetKey of(ConfiguredTarget configuredTarget) {
-    return of(configuredTarget, configuredTarget.getConfiguration());
-  }
-
-  public static ConfiguredTargetKey of(
-      ConfiguredTarget configuredTarget, BuildConfiguration buildConfiguration) {
     AliasProvider aliasProvider = configuredTarget.getProvider(AliasProvider.class);
     Label label =
         aliasProvider != null ? aliasProvider.getAliasChain().get(0) : configuredTarget.getLabel();
-    return of(label, buildConfiguration);
+    return of(label, configuredTarget.getConfiguration());
   }
+
   /**
    * Caches so that the number of ConfiguredTargetKey instances is {@code O(configured targets)} and
    * not {@code O(edges between configured targets)}.
@@ -86,7 +83,7 @@ public class ConfiguredTargetKey extends ActionLookupKey {
         ? KeyAndHost.NULL_INSTANCE
         : new KeyAndHost(
             BuildConfigurationValue.key(
-                configuration.fragmentClasses(), configuration.getBuildOptionsDiff()),
+                configuration.fragmentClasses(), configuration.getOptions()),
             configuration.isHostConfiguration());
   }
 
@@ -175,6 +172,8 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   static class HostConfiguredTargetKey extends ConfiguredTargetKey {
+    public static final ObjectCodec<ConfiguredTargetKey> CODEC = ConfiguredTargetKey.CODEC;
+
     private HostConfiguredTargetKey(
         Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
       super(label, configurationKey);
