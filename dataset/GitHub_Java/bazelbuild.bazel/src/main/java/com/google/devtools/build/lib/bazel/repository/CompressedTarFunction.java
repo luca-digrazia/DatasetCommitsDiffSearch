@@ -16,18 +16,20 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.common.base.Optional;
 import com.google.devtools.build.lib.bazel.repository.DecompressorValue.Decompressor;
+import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+
+import java.util.Date;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Set;
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 
 /**
  * Common code for unarchiving a compressed TAR file.
@@ -37,10 +39,9 @@ public abstract class CompressedTarFunction implements Decompressor {
       throws IOException;
 
   @Override
-  public Path decompress(DecompressorDescriptor descriptor) throws IOException {
+  public Path decompress(DecompressorDescriptor descriptor) throws RepositoryFunctionException {
     Optional<String> prefix = descriptor.prefix();
     boolean foundPrefix = false;
-    Set<String> availablePrefixes = new HashSet<>();
 
     try (InputStream decompressorStream = getDecompressorStream(descriptor)) {
       TarArchiveInputStream tarStream = new TarArchiveInputStream(decompressorStream);
@@ -48,15 +49,6 @@ public abstract class CompressedTarFunction implements Decompressor {
       while ((entry = tarStream.getNextTarEntry()) != null) {
         StripPrefixedPath entryPath = StripPrefixedPath.maybeDeprefix(entry.getName(), prefix);
         foundPrefix = foundPrefix || entryPath.foundPrefix();
-
-        if (prefix.isPresent() && !foundPrefix) {
-          Optional<String> suggestion =
-              CouldNotFindPrefixException.maybeMakePrefixSuggestion(entryPath.getPathFragment());
-          if (suggestion.isPresent()) {
-            availablePrefixes.add(suggestion.get());
-          }
-        }
-
         if (entryPath.skip()) {
           continue;
         }
@@ -98,10 +90,14 @@ public abstract class CompressedTarFunction implements Decompressor {
           }
         }
       }
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
+    }
 
-      if (prefix.isPresent() && !foundPrefix) {
-        throw new CouldNotFindPrefixException(prefix.get(), availablePrefixes);
-      }
+    if (prefix.isPresent() && !foundPrefix) {
+      throw new RepositoryFunctionException(
+          new IOException("Prefix " + prefix.get() + " was given, but not found in the archive"),
+          Transience.PERSISTENT);
     }
 
     return descriptor.repositoryPath();
