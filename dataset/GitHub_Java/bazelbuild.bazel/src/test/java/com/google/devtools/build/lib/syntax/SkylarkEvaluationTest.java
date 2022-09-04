@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkContext;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.testutil.TestMode;
@@ -45,7 +46,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests of Starlark evaluation. */
+/**
+ * Evaluation tests with Skylark Environment.
+ */
 @RunWith(JUnit4.class)
 public class SkylarkEvaluationTest extends EvaluationTest {
 
@@ -312,18 +315,25 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         documented = false,
         useLocation = true,
         useAst = true,
-        useStarlarkThread = true,
-        useStarlarkSemantics = true)
+        useEnvironment = true,
+        useStarlarkSemantics = true,
+        useContext = true)
     public String withExtraInterpreterParams(
-        Location location, FuncallExpression func, StarlarkThread thread, StarlarkSemantics sem) {
+        Location location,
+        FuncallExpression func,
+        Environment env,
+        StarlarkSemantics sem,
+        StarlarkContext context) {
       return "with_extra("
           + location.getStartLine()
           + ", "
           + func.getArguments().size()
           + ", "
-          + thread.isGlobal()
+          + env.isGlobal()
           + ", "
           + (sem != null)
+          + ", "
+          + (context != null)
           + ")";
     }
 
@@ -373,7 +383,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         },
         useAst = true,
         useLocation = true,
-        useStarlarkThread = true,
+        useEnvironment = true,
         useStarlarkSemantics = true)
     public String withParamsAndExtraInterpreterParams(
         Integer pos1,
@@ -386,7 +396,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         Object multi,
         Location location,
         FuncallExpression func,
-        StarlarkThread thread,
+        Environment env,
         StarlarkSemantics sem) {
       return "with_params_and_extra("
           + pos1
@@ -407,7 +417,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           + ", "
           + func.getArguments().size()
           + ", "
-          + thread.isGlobal()
+          + env.isGlobal()
           + ", "
           + (sem != null)
           + ")";
@@ -425,20 +435,21 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     }
 
     @SkylarkCallable(
-        name = "with_args_and_thread",
-        documented = false,
-        parameters = {
-          @Param(name = "pos1", type = Integer.class),
-          @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
-          @Param(name = "named", type = Boolean.class, positional = false, named = true),
-        },
-        extraPositionals = @Param(name = "args"),
-        useStarlarkThread = true)
-    public String withArgsAndThread(
-        Integer pos1, boolean pos2, boolean named, SkylarkList<?> args, StarlarkThread thread) {
+      name = "with_args_and_env",
+      documented = false,
+      parameters = {
+        @Param(name = "pos1", type = Integer.class),
+        @Param(name = "pos2", defaultValue = "False", type = Boolean.class),
+        @Param(name = "named", type = Boolean.class, positional = false, named = true),
+      },
+      extraPositionals = @Param(name = "args"),
+      useEnvironment = true
+    )
+    public String withArgsAndEnv(
+        Integer pos1, boolean pos2, boolean named, SkylarkList<?> args, Environment env) {
       String argsString =
           "args(" + args.stream().map(Printer::debugPrint).collect(joining(", ")) + ")";
-      return "with_args_and_thread("
+      return "with_args_and_env("
           + pos1
           + ", "
           + pos2
@@ -447,7 +458,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           + ", "
           + argsString
           + ", "
-          + thread.isGlobal()
+          + env.isGlobal()
           + ")";
     }
 
@@ -1076,7 +1087,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
             "    modified_list = v + ['extra_string']",
             "  return modified_list",
             "m = func(mock)")
-        .testLookup("m", MutableList.of(thread, "b", "c", "extra_string"));
+        .testLookup("m", MutableList.of(env, "b", "c", "extra_string"));
   }
 
   @Test
@@ -1308,7 +1319,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.with_extra()")
-        .testLookup("v", "with_extra(1, 0, true, true)");
+        .testLookup("v", "with_extra(1, 0, true, true, true)");
   }
 
   @Test
@@ -1328,19 +1339,19 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testJavaFunctionWithExtraArgsAndThread() throws Exception {
+  public void testJavaFunctionWithExtraArgsAndEnv() throws Exception {
     new SkylarkTest()
         .update("mock", new Mock())
-        .setUp("b = mock.with_args_and_thread(1, True, 'extraArg1', 'extraArg2', named=True)")
-        .testLookup("b", "with_args_and_thread(1, true, true, args(extraArg1, extraArg2), true)");
+        .setUp("b = mock.with_args_and_env(1, True, 'extraArg1', 'extraArg2', named=True)")
+        .testLookup("b", "with_args_and_env(1, true, true, args(extraArg1, extraArg2), true)");
 
     // Use an args list.
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp(
             "myargs = ['extraArg2']",
-            "b = mock.with_args_and_thread(1, True, 'extraArg1', named=True, *myargs)")
-        .testLookup("b", "with_args_and_thread(1, true, true, args(extraArg1, extraArg2), true)");
+            "b = mock.with_args_and_env(1, True, 'extraArg1', named=True, *myargs)")
+        .testLookup("b", "with_args_and_env(1, true, true, args(extraArg1, extraArg2), true)");
   }
 
   @Test
@@ -1550,30 +1561,28 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testAugmentedAssignmentHasNoSideEffects() throws Exception {
     // Check object position.
-    new SkylarkTest()
-        .setUp(
-            "counter = [0]",
-            "value = [1, 2]",
-            "",
-            "def f():",
-            "  counter[0] = counter[0] + 1",
-            "  return value",
-            "",
-            "f()[1] += 1") // `f()` should be called only once here
-        .testLookup("counter", MutableList.of(thread, 1));
+    new SkylarkTest().setUp(
+        "counter = [0]",
+        "value = [1, 2]",
+        "",
+        "def f():",
+        "  counter[0] = counter[0] + 1",
+        "  return value",
+        "",
+        "f()[1] += 1")  // `f()` should be called only once here
+        .testLookup("counter", MutableList.of(env, 1));
 
     // Check key position.
-    new SkylarkTest()
-        .setUp(
-            "counter = [0]",
-            "value = [1, 2]",
-            "",
-            "def f():",
-            "  counter[0] = counter[0] + 1",
-            "  return 1",
-            "",
-            "value[f()] += 1") // `f()` should be called only once here
-        .testLookup("counter", MutableList.of(thread, 1));
+    new SkylarkTest().setUp(
+        "counter = [0]",
+        "value = [1, 2]",
+        "",
+        "def f():",
+        "  counter[0] = counter[0] + 1",
+        "  return 1",
+        "",
+        "value[f()] += 1")  // `f()` should be called only once here
+        .testLookup("counter", MutableList.of(env, 1));
   }
 
   @Test
@@ -1593,24 +1602,23 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testAssignmentEvaluationOrder() throws Exception {
-    new SkylarkTest()
-        .setUp(
-            "ordinary = []",
-            "augmented = []",
-            "value = [1, 2]",
-            "",
-            "def f(record):",
-            "  record.append('f')",
-            "  return value",
-            "",
-            "def g(record):",
-            "  record.append('g')",
-            "  return value",
-            "",
-            "f(ordinary)[0] = g(ordinary)[1]",
-            "f(augmented)[0] += g(augmented)[1]")
-        .testLookup("ordinary", MutableList.of(thread, "g", "f")) // This order is consistent
-        .testLookup("augmented", MutableList.of(thread, "f", "g")); // with Python
+    new SkylarkTest().setUp(
+        "ordinary = []",
+        "augmented = []",
+        "value = [1, 2]",
+        "",
+        "def f(record):",
+        "  record.append('f')",
+        "  return value",
+        "",
+        "def g(record):",
+        "  record.append('g')",
+        "  return value",
+        "",
+        "f(ordinary)[0] = g(ordinary)[1]",
+        "f(augmented)[0] += g(augmented)[1]")
+        .testLookup("ordinary", MutableList.of(env, "g", "f"))    // This order is consistent
+        .testLookup("augmented", MutableList.of(env, "f", "g"));  // with Python
   }
 
   @Test
@@ -1950,8 +1958,8 @@ public class SkylarkEvaluationTest extends EvaluationTest {
             "struct_field_with_extra",
             "value_of",
             "voidfunc",
+            "with_args_and_env",
             "with_args_and_kwargs",
-            "with_args_and_thread",
             "with_extra",
             "with_kwargs",
             "with_params",
@@ -2204,6 +2212,41 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   public void testListComprehensionsShadowGlobalVariable() throws Exception {
     eval("a = 18", "def foo():", "  b = [a for a in range(3)]", "  return a", "x = foo()");
     assertThat(lookup("x")).isEqualTo(18);
+  }
+
+  @Test
+  public void testLoadStatementWithAbsolutePath() throws Exception {
+    checkEvalErrorContains(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "load('/tmp/foo.bzl', 'arg')");
+  }
+
+  @Test
+  public void testLoadStatementWithRelativePath() throws Exception {
+    checkEvalErrorContains(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "load('foo.bzl', 'arg')");
+  }
+
+  @Test
+  public void testLoadStatementWithExternalLabel() throws Exception {
+    checkEvalErrorDoesNotContain(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "load('@other//foo.bzl', 'arg')");
+  }
+
+  @Test
+  public void testLoadStatementWithAbsoluteLabel() throws Exception {
+    checkEvalErrorDoesNotContain(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "load('//foo.bzl', 'arg')");
+  }
+
+  @Test
+  public void testLoadStatementWithRelativeLabel() throws Exception {
+    checkEvalErrorDoesNotContain(
+        "First argument of 'load' must be a label and start with either '//', ':', or '@'",
+        "load(':foo.bzl', 'arg')");
   }
 
   @Test

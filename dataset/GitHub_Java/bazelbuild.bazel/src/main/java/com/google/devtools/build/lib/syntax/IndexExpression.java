@@ -13,22 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.events.Location;
+import java.io.IOException;
 
-/** Syntax node for an index expression. e.g. obj[field], but not obj[from:to] */
+/**
+ * An index expression ({@code obj[field]}). Not to be confused with a slice expression ({@code
+ * obj[from:to]}). The object may be either a sequence or an associative mapping (most commonly
+ * lists and dictionaries).
+ */
 public final class IndexExpression extends Expression {
 
-  private final Expression obj;
+  private final Expression object;
 
   private final Expression key;
 
-  public IndexExpression(Expression obj, Expression key) {
-    this.obj = obj;
+  IndexExpression(Expression object, Expression key) {
+    this.object = object;
     this.key = key;
   }
 
   public Expression getObject() {
-    return obj;
+    return object;
   }
 
   public Expression getKey() {
@@ -36,40 +40,20 @@ public final class IndexExpression extends Expression {
   }
 
   @Override
-  public String toString() {
-    return String.format("%s[%s]", obj, key);
+  public void prettyPrint(Appendable buffer) throws IOException {
+    object.prettyPrint(buffer);
+    buffer.append('[');
+    key.prettyPrint(buffer);
+    buffer.append(']');
   }
 
   @Override
-  Object doEval(Environment env) throws EvalException, InterruptedException {
-    Object objValue = obj.eval(env);
-    Object keyValue = key.eval(env);
-    Location loc = getLocation();
-
-    if (objValue instanceof SkylarkIndexable) {
-      Object result = ((SkylarkIndexable) objValue).getIndex(keyValue, loc);
-      return SkylarkType.convertToSkylark(result, env);
-    } else if (objValue instanceof String) {
-      String string = (String) objValue;
-      int index = MethodLibrary.getListIndex(keyValue, string.length(), loc);
-      return string.substring(index, index + 1);
-    }
-
-    throw new EvalException(
-        loc,
-        Printer.format(
-            "Type %s has no operator [](%s)",
-            EvalUtils.getDataTypeName(objValue),
-            EvalUtils.getDataTypeName(keyValue)));
-  }
-
-  @Override
-  public void accept(SyntaxTreeVisitor visitor) {
+  public void accept(NodeVisitor visitor) {
     visitor.visit(this);
   }
 
   @Override
-  void validate(ValidationEnvironment env) throws EvalException {
-    obj.validate(env);
+  public Kind kind() {
+    return Kind.INDEX;
   }
 }

@@ -190,9 +190,8 @@ public class WorkspaceFactory {
                 new BazelStarlarkContext(
                     /* toolsRepository= */ null,
                     /* fragmentNameToClass= */ null,
-                    /* repoMapping= */ ImmutableMap.of(),
-                    new SymbolGenerator<>(workspaceFileKey),
-                    /* analysisRuleLabel= */ null))
+                    ImmutableMap.of(),
+                    new SymbolGenerator<>(workspaceFileKey)))
             .build();
     SkylarkUtils.setPhase(workspaceEnv, Phase.WORKSPACE);
     addWorkspaceFunctions(workspaceEnv, localReporter);
@@ -324,10 +323,7 @@ public class WorkspaceFactory {
                   ast);
           if (!WorkspaceGlobals.isLegalWorkspaceName(rule.getName())) {
             throw new EvalException(
-                ast.getLocation(),
-                rule
-                    + "'s name field must be a legal workspace name;"
-                    + " workspace names may contain only A-Z, a-z, 0-9, '-', '_' and '.'");
+                ast.getLocation(), rule + "'s name field must be a legal workspace name");
           }
         } catch (RuleFactory.InvalidRuleException
             | Package.NameConflictException

@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.MethodDescriptor;
 import java.util.Map;
 
 /** Base class for native implementations of {@link StructImpl}. */
@@ -31,18 +31,14 @@ public class NativeInfo extends StructImpl {
   // Initialized lazily.
   private ImmutableSet<String> fieldNames;
 
-  // TODO(adonovan): logically this should be a parameter of getValue
-  // and getFieldNames or an instance field of this object.
-  private static final StarlarkSemantics SEMANTICS = StarlarkSemantics.DEFAULT_SEMANTICS;
-
   @Override
   public Object getValue(String name) throws EvalException {
-    Object x = values.get(name);
-    if (x != null) {
-      return x;
+    if (values.containsKey(name)) {
+      return values.get(name);
     } else if (hasField(name)) {
+      MethodDescriptor methodDescriptor = CallUtils.getStructField(this.getClass(), name);
       try {
-        return CallUtils.getField(SEMANTICS, this, name);
+        return CallUtils.invokeStructField(methodDescriptor, name, this);
       } catch (InterruptedException exception) {
         // Struct fields on NativeInfo objects are supposed to behave well and not throw
         // exceptions, as they should be logicless field accessors. If this occurs, it's
@@ -67,7 +63,7 @@ public class NativeInfo extends StructImpl {
       fieldNames =
           ImmutableSet.<String>builder()
               .addAll(values.keySet())
-              .addAll(CallUtils.getFieldNames(SEMANTICS, this))
+              .addAll(CallUtils.getStructFieldNames(this.getClass()))
               .build();
     }
     return fieldNames;

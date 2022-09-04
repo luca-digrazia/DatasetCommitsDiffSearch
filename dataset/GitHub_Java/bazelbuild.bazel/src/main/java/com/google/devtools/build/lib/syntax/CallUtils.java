@@ -443,7 +443,8 @@ public final class CallUtils {
 
       if (param.isDisabledInCurrentSemantics()) {
         value =
-            SkylarkSignatureProcessor.getDefaultValue(param.getName(), param.getValueOverride());
+            SkylarkSignatureProcessor.getDefaultValue(
+                param.getName(), param.getValueOverride(), null);
         builder.add(value);
         continue;
       }
@@ -483,7 +484,8 @@ public final class CallUtils {
             throw unspecifiedParameterException(call, param, method, objClass, kwargs);
           }
           value =
-              SkylarkSignatureProcessor.getDefaultValue(param.getName(), param.getDefaultValue());
+              SkylarkSignatureProcessor.getDefaultValue(
+                  param.getName(), param.getDefaultValue(), null);
         }
       }
       if (!param.isNoneable() && value instanceof NoneType) {

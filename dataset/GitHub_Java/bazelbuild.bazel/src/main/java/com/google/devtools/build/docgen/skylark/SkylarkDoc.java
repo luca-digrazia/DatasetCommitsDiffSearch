@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
+import com.google.devtools.build.lib.syntax.StringModule;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Map;
@@ -45,9 +46,6 @@ abstract class SkylarkDoc {
    * Returns a string containing the formatted HTML documentation of the entity being documented.
    */
   public abstract String getDocumentation();
-
-  /** Returns true if this entity should be considered "deprecated" for documentation purposes. */
-  public abstract boolean isDeprecated();
 
   protected String getTypeAnchor(Class<?> returnType, Class<?> generic1) {
     return getTypeAnchor(returnType) + " of " + getTypeAnchor(generic1) + "s";
@@ -101,14 +99,11 @@ abstract class SkylarkDoc {
   // Omit self parameter from parameters in class methods.
   protected static Param[] withoutSelfParam(SkylarkCallable annotation, Method method) {
     Param[] params = annotation.parameters();
-    if (params.length > 0) {
-      SkylarkModule module = method.getClass().getAnnotation(SkylarkModule.class);
-      if (module != null && module.name().equals("string")) {
-        // Skip the self parameter, which is the first mandatory
-        // positional parameter in each method of the "string" module.
-        return Arrays.copyOfRange(params, 1, params.length);
-      }
+    if (method.getDeclaringClass().equals(StringModule.class)) {
+      // Skip the self parameter, which is the first mandatory positional parameter.
+      return Arrays.copyOfRange(params, 1, params.length);
+    } else {
+      return params;
     }
-    return params;
   }
 }

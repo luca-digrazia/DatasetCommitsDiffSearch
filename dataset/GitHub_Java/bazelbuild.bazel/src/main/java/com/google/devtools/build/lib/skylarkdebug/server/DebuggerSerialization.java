@@ -163,6 +163,7 @@ final class DebuggerSerialization {
 
   private static ImmutableList<Value> getChildren(
       ThreadObjectMap objectMap, SkylarkNestedSet nestedSet) {
+    Class<?> type = nestedSet.getContentType().getType();
     return ImmutableList.<Value>builder()
         .add(
             Value.newBuilder()
@@ -170,7 +171,7 @@ final class DebuggerSerialization {
                 .setType("Traversal order")
                 .setDescription(nestedSet.getOrder().getSkylarkName())
                 .build())
-        .addAll(getChildren(objectMap, new NestedSetView<>(nestedSet.getSet())))
+        .addAll(getChildren(objectMap, new NestedSetView<>(nestedSet.getSet(type))))
         .build();
   }
 

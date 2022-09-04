@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.MethodDescriptor;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.BufferedOutputStream;
@@ -157,15 +158,15 @@ public class ApiExporter {
   }
 
   private static Value.Builder collectFunctionInfo(
-      String funcName, FunctionSignature.WithValues sig) {
+      String funcName, FunctionSignature.WithValues<Object, SkylarkType> funcSignature) {
     Value.Builder value = Value.newBuilder();
     value.setName(funcName);
     Callable.Builder callable = Callable.newBuilder();
 
-    ImmutableList<String> paramNames = sig.getSignature().getParameterNames();
-    List<?> defaultValues = sig.getDefaultValues();
-    int positionals = sig.getSignature().numMandatoryPositionals();
-    int optionals = sig.getSignature().numOptionals();
+    ImmutableList<String> paramNames = funcSignature.getSignature().getNames();
+    List<Object> defaultValues = funcSignature.getDefaultValues();
+    int positionals = funcSignature.getSignature().getShape().getMandatoryPositionals();
+    int optionals = funcSignature.getSignature().getShape().getOptionals();
     int nameIndex = 0;
 
     for (int i = 0; i < positionals; i++) {
@@ -185,7 +186,7 @@ public class ApiExporter {
       nameIndex++;
     }
 
-    if (sig.getSignature().hasVarargs()) {
+    if (funcSignature.getSignature().getShape().hasStarArg()) {
       Param.Builder param = Param.newBuilder();
       param.setName("*" + paramNames.get(nameIndex));
       param.setIsMandatory(false);
@@ -193,7 +194,7 @@ public class ApiExporter {
       nameIndex++;
       callable.addParam(param);
     }
-    if (sig.getSignature().hasKwargs()) {
+    if (funcSignature.getSignature().getShape().hasKwArg()) {
       Param.Builder param = Param.newBuilder();
       param.setIsMandatory(false);
       param.setIsStarStarArg(true);

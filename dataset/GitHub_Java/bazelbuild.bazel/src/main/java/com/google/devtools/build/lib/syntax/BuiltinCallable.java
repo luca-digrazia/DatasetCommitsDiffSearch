@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
@@ -43,9 +42,9 @@ public final class BuiltinCallable implements StarlarkCallable {
       List<Object> args,
       @Nullable Map<String, Object> kwargs,
       FuncallExpression ast,
-      StarlarkThread thread)
+      Environment env)
       throws EvalException, InterruptedException {
-    MethodDescriptor methodDescriptor = getMethodDescriptor(thread.getSemantics());
+    MethodDescriptor methodDescriptor = getMethodDescriptor(env.getSemantics());
     Class<?> clazz;
     Object objValue;
 
@@ -63,23 +62,13 @@ public final class BuiltinCallable implements StarlarkCallable {
         Profiler.instance().profile(ProfilerTask.STARLARK_BUILTIN_FN, methodName)) {
       Object[] javaArguments =
           CallUtils.convertStarlarkArgumentsToJavaMethodArguments(
-              thread, ast, methodDescriptor, clazz, args, kwargs);
-      return methodDescriptor.call(objValue, javaArguments, ast.getLocation(), thread);
+              env, ast, methodDescriptor, clazz, args, kwargs);
+      return methodDescriptor.call(objValue, javaArguments, ast.getLocation(), env);
     }
   }
 
   public MethodDescriptor getMethodDescriptor(StarlarkSemantics semantics) {
     return CallUtils.getMethod(semantics, obj.getClass(), methodName);
-  }
-
-  @Override
-  public Location getLocation() {
-    return Location.BUILTIN;
-  }
-
-  @Override
-  public String getName() {
-    return methodName;
   }
 
   @Override
