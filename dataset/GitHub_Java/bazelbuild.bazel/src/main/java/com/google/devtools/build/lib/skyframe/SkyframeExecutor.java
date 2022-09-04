@@ -74,6 +74,7 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.Transition;
@@ -1133,7 +1134,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // apply LIPO.
     BuildConfiguration firstTargetConfig = topLevelTargetConfigs.get(0);
     Transition dataTransition =
-        ((ConfiguredRuleClassProvider) ruleClassProvider).getLipoDataTransition();
+        ((ConfiguredRuleClassProvider) ruleClassProvider)
+            .getDynamicTransitionMapper()
+            .map(ConfigurationTransitionProxy.DATA);
     BuildOptions dataOptions = dataTransition != NoTransition.INSTANCE
         ? ((PatchTransition) dataTransition).apply(firstTargetConfig.getOptions())
         : firstTargetConfig.getOptions();

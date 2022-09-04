@@ -604,21 +604,9 @@ public class BuildConfiguration implements BuildEvent {
       category = "semantics", // Should this be "flags"?
       documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
       effectTags = { OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES },
-      help = "Specify the mode the binary will be built in. Values: 'fastbuild', 'dbg', 'opt'."
+      help = "Specify the mode the binary will be built in. " + "Values: 'fastbuild', 'dbg', 'opt'."
     )
     public CompilationMode compilationMode;
-
-    @Option(
-        name = "host_compilation_mode",
-        converter = CompilationMode.Converter.class,
-        defaultValue = "opt",
-        category = "semantics", // Should this be "flags"?
-        documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-        effectTags = { OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES },
-        help = "Specify the mode the tools used during the build will be built in. Values: "
-            + "'fastbuild', 'dbg', 'opt'."
-    )
-    public CompilationMode hostCompilationMode;
 
     /**
      * This option is used internally to set output directory name of the <i>host</i> configuration
@@ -1078,7 +1066,7 @@ public class BuildConfiguration implements BuildEvent {
       Options host = (Options) getDefault();
 
       host.outputDirectoryName = "host";
-      host.compilationMode = hostCompilationMode;
+      host.compilationMode = CompilationMode.OPT;
       host.isHost = true;
       host.configsMode = configsMode;
       host.enableRunfiles = enableRunfiles;

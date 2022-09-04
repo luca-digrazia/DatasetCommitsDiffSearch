@@ -13,18 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.causes.Cause;
-import com.google.devtools.build.lib.causes.LoadingFailedCause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
@@ -38,8 +34,6 @@ import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -51,7 +45,8 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
 
   private final Environment env;
 
-  public SkyframeDependencyResolver(Environment env) {
+  public SkyframeDependencyResolver(Environment env, DynamicTransitionMapper transitionMapper) {
+    super(transitionMapper);
     this.env = env;
   }
 
@@ -93,67 +88,49 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
 
   @Nullable
   @Override
-  protected Map<Label, Target> getTargets(
-      Iterable<Label> labels,
-      Target fromTarget,
-      NestedSetBuilder<Cause> rootCauses,
-      int labelsSizeHint)
+  protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses)
       throws InterruptedException {
-    Map<SkyKey, ValueOrException<NoSuchPackageException>> packages =
-        env.getValuesOrThrow(
-            Iterables.transform(labels, label -> PackageValue.key(label.getPackageIdentifier())),
-            NoSuchPackageException.class);
-    if (env.valuesMissing()) {
+    SkyKey key = PackageValue.key(label.getPackageIdentifier());
+    PackageValue packageValue;
+    try {
+      packageValue = (PackageValue) env.getValueOrThrow(key, NoSuchPackageException.class);
+    } catch (NoSuchPackageException e) {
+      rootCauses.add(label);
+      missingEdgeHook(from, label, e);
       return null;
     }
-    if (labels instanceof Collection) {
-      labelsSizeHint = ((Collection<Label>) labels).size();
-    } else if (labelsSizeHint <= 0) {
-      labelsSizeHint = 2 * packages.size();
+    if (packageValue == null) {
+      return null;
     }
-    // Duplicates can occur, so we can't use ImmutableMap.
-    HashMap<Label, Target> result = Maps.newHashMapWithExpectedSize(labelsSizeHint);
-    for (Label label : labels) {
-      PackageValue packageValue;
-      try {
-        packageValue =
-            Preconditions.checkNotNull(
-                (PackageValue) packages.get(PackageValue.key(label.getPackageIdentifier())).get(),
-                label);
-      } catch (NoSuchPackageException e) {
-        rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
-        missingEdgeHook(fromTarget, label, e);
-        continue;
-      }
-      Package pkg = packageValue.getPackage();
-      try {
-        Target target = pkg.getTarget(label.getName());
-        if (pkg.containsErrors()) {
-          NoSuchTargetException e = new NoSuchTargetException(target);
-          missingEdgeHook(fromTarget, label, e);
-          rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
+    Package pkg = packageValue.getPackage();
+    try {
+      Target target = pkg.getTarget(label.getName());
+      if (pkg.containsErrors()) {
+        NoSuchTargetException e = new NoSuchTargetException(target);
+        missingEdgeHook(from, label, e);
+        if (target != null) {
+          rootCauses.add(label);
+          return target;
+        } else {
+          return null;
         }
-        result.put(label, target);
-      } catch (NoSuchTargetException e) {
-        rootCauses.add(new LoadingFailedCause(label, e.getMessage()));
-        missingEdgeHook(fromTarget, label, e);
       }
+      return target;
+    } catch (NoSuchTargetException e) {
+      rootCauses.add(label);
+      missingEdgeHook(from, label, e);
+      return null;
     }
-    return result;
   }
 
   @Nullable
   @Override
   protected List<BuildConfiguration> getConfigurations(
-      FragmentClassSet fragments,
-      Iterable<BuildOptions> buildOptions,
-      BuildOptions defaultBuildOptions)
+      FragmentClassSet fragments, Iterable<BuildOptions> buildOptions)
       throws InvalidConfigurationException, InterruptedException {
     List<SkyKey> keys = new ArrayList<>();
     for (BuildOptions options : buildOptions) {
-      keys.add(
-          BuildConfigurationValue.key(
-              fragments, BuildOptions.diffForReconstruction(defaultBuildOptions, options)));
+      keys.add(BuildConfigurationValue.key(fragments, options));
     }
     Map<SkyKey, ValueOrException<InvalidConfigurationException>> configValues =
         env.getValuesOrThrow(keys, InvalidConfigurationException.class);

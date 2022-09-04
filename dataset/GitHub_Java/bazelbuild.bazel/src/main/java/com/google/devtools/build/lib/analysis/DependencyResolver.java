@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.AspectCollection.AspectCycleOnPath
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -65,6 +66,12 @@ import javax.annotation.Nullable;
  * <p>Includes logic to derive the right configurations depending on transition type.
  */
 public abstract class DependencyResolver {
+  private final TransitionResolver transitionResolver;
+
+  protected DependencyResolver(DynamicTransitionMapper transitionMapper) {
+    this.transitionResolver = new TransitionResolver(transitionMapper);
+  }
+
   /**
    * Returns ids for dependent nodes of a given node, sorted by attribute. Note that some
    * dependencies do not have a corresponding attribute here, and we use the null attribute to
@@ -718,7 +725,7 @@ public abstract class DependencyResolver {
       if (toTarget == null) {
         return; // Skip this round: we still need to Skyframe-evaluate the dep's target.
       }
-      Transition transition = TransitionResolver.evaluateTransition(
+      Transition transition = transitionResolver.evaluateTransition(
           ruleConfig, rule, attributeAndOwner.attribute, toTarget, attributeMap);
       outgoingEdges.put(
           attributeAndOwner.attribute,
@@ -745,7 +752,7 @@ public abstract class DependencyResolver {
       }
       outgoingEdges.put(
           attributeAndOwner.attribute,
-          TransitionResolver.usesNullConfiguration(toTarget)
+          transitionResolver.usesNullConfiguration(toTarget)
               ? Dependency.withNullConfiguration(depLabel)
               : Dependency.withTransitionAndAspects(depLabel, new FixedTransition(
                     config.getOptions()), requiredAspects(attributeAndOwner, toTarget)));

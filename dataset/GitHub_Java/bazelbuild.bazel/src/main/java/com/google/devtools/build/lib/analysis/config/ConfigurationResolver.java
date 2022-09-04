@@ -26,10 +26,10 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.events.Event;
@@ -182,7 +182,7 @@ public final class ConfigurationResolver {
       }
 
       boolean sameFragments = depFragments.equals(ctgFragments.fragmentClasses());
-      ConfigurationTransition transition = dep.getTransition();
+      Transition transition = dep.getTransition();
 
       if (sameFragments) {
         if (transition == NoTransition.INSTANCE) {
@@ -299,11 +299,11 @@ public final class ConfigurationResolver {
     // Treat this as immutable. The only reason this isn't an ImmutableSet is because it
     // gets bound to a NestedSet.toSet() reference, which returns a Set interface.
     final Set<Class<? extends BuildConfiguration.Fragment>> fragments;
-    final ConfigurationTransition transition;
+    final Transition transition;
     private final int hashCode;
 
     FragmentsAndTransition(Set<Class<? extends BuildConfiguration.Fragment>> fragments,
-        ConfigurationTransition transition) {
+        Transition transition) {
       this.fragments = fragments;
       this.transition = transition;
       hashCode = Objects.hash(this.fragments, this.transition);
@@ -415,7 +415,7 @@ public final class ConfigurationResolver {
    */
   @VisibleForTesting
   public static List<BuildOptions> applyTransition(BuildOptions fromOptions,
-      ConfigurationTransition transition,
+      Transition transition,
       Iterable<Class<? extends BuildConfiguration.Fragment>> requiredFragments,
       RuleClassProvider ruleClassProvider, boolean trimResults) {
     List<BuildOptions> result;

@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -60,7 +59,9 @@ public class DependencyResolverTest extends AnalysisTestCase {
 
   @Before
   public final void createResolver() throws Exception {
-    dependencyResolver = new DependencyResolver() {
+    dependencyResolver =
+        new DependencyResolver(ruleClassProvider.getDynamicTransitionMapper()) {
+
           @Override
           protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
             throw new IllegalStateException();
@@ -109,7 +110,7 @@ public class DependencyResolverTest extends AnalysisTestCase {
         getHostConfiguration(),
         aspect != null ? Aspect.forNative(aspect) : null,
         ImmutableMap.<Label, ConfigMatchingProvider>of(),
-        /*toolchainLabels=*/ ImmutableSet.of());
+        /*toolchainContext=*/ null);
   }
 
   @SafeVarargs
