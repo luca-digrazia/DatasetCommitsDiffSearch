@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.skylark;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ExecGroup;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.PredicateWithMessage;
 import com.google.devtools.build.lib.packages.RequiredProviders;
@@ -54,8 +53,6 @@ import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.FileOptions;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
@@ -732,11 +729,12 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     assertThat(c.hasAttr("a1", Type.STRING)).isTrue();
   }
 
+  // TODO(adonovan): rename execAndExport
   private void evalAndExport(String... lines) throws Exception {
     ParserInput input = ParserInput.fromLines(lines);
     StarlarkThread thread = ev.getStarlarkThread();
-    Module module = thread.getGlobals();
-    StarlarkFile file = EvalUtils.parseAndValidate(input, FileOptions.DEFAULT, module);
+    StarlarkFile file =
+        EvalUtils.parseAndValidate(input, thread.getGlobals(), thread.getSemantics());
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
@@ -1791,23 +1789,5 @@ public final class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
     assertThat(lookup("p")).isEqualTo("Provider");
     assertThat(lookup("s")).isEqualTo("struct");
-  }
-
-  @Test
-  public void testCreateExecGroup() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_exec_groups=true");
-    reset();
-
-    scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
-    evalAndExport(
-        "group = exec_group(",
-        "  toolchains=['//test:my_toolchain_type'],",
-        "  exec_compatible_with=['//constraint:cv1', '//constraint:cv2'],",
-        ")");
-    ExecGroup group = ((ExecGroup) lookup("group"));
-    assertThat(group.getRequiredToolchains())
-        .containsExactly(makeLabel("//test:my_toolchain_type"));
-    assertThat(group.getExecutionPlatformConstraints())
-        .containsExactly(makeLabel("//constraint:cv1"), makeLabel("//constraint:cv2"));
   }
 }
