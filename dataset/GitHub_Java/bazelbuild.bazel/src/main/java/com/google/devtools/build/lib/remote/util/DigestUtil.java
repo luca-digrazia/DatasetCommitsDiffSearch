@@ -15,16 +15,19 @@ package com.google.devtools.build.lib.remote.util;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import build.bazel.remote.execution.v2.Action;
-import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.DigestFunction;
+import com.google.common.base.Preconditions;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashingOutputStream;
 import com.google.common.io.BaseEncoding;
+import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.FileArtifactValue;
+import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.remoteexecution.v1test.Action;
+import com.google.devtools.remoteexecution.v1test.Digest;
 import com.google.protobuf.Message;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -44,7 +47,7 @@ public class DigestUtil {
       return digest;
     }
 
-    public ActionKey(Digest digest) {
+    private ActionKey(Digest digest) {
       this.digest = digest;
     }
   }
@@ -53,18 +56,6 @@ public class DigestUtil {
 
   public DigestUtil(DigestHashFunction hashFn) {
     this.hashFn = hashFn;
-  }
-
-  /** Returns the currently used digest function. */
-  public DigestFunction.Value getDigestFunction() {
-    for (String name : hashFn.getNames()) {
-      try {
-        return DigestFunction.Value.valueOf(name);
-      } catch (IllegalArgumentException e) {
-        // continue.
-      }
-    }
-    return DigestFunction.Value.UNKNOWN;
   }
 
   public Digest compute(byte[] blob) {
@@ -110,11 +101,6 @@ public class DigestUtil {
     return new DigestUtil.ActionKey(digest);
   }
 
-  /** Returns the hash of {@code data} in binary. */
-  public byte[] hash(byte[] data) {
-    return hashFn.getHashFunction().hashBytes(data).asBytes();
-  }
-
   public static Digest buildDigest(byte[] hash, long size) {
     return buildDigest(HashCode.fromBytes(hash).toString(), size);
   }
@@ -135,7 +121,14 @@ public class DigestUtil {
     return digest.getHash() + "/" + digest.getSizeBytes();
   }
 
-  public static byte[] toBinaryDigest(Digest digest) {
-    return HashCode.fromString(digest.getHash()).asBytes();
+  public static Digest getFromInputCache(ActionInput input, MetadataProvider cache)
+      throws IOException {
+    FileArtifactValue metadata = cache.getMetadata(input);
+    Preconditions.checkNotNull(metadata, "Input cache %s returned no value for %s", cache, input);
+    Preconditions.checkNotNull(
+        metadata.getDigest(),
+        "Null digest for %s, possible directory. Data dependencies on directories are not allowed.",
+        input);
+    return buildDigest(metadata.getDigest(), metadata.getSize());
   }
 }

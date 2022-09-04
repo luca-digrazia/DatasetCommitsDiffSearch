@@ -18,7 +18,6 @@ import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -56,7 +55,7 @@ public final class Fingerprint implements Consumer<String> {
   public Fingerprint() {
     // TODO(b/112460990): Use the value from DigestHashFunction.getDefault(), but check for
     // contention.
-    this(DigestHashFunction.SHA256);
+    this(DigestHashFunction.MD5);
   }
 
   /**
@@ -100,19 +99,6 @@ public final class Fingerprint implements Consumer<String> {
     return hexDigest(digestAndReset());
   }
 
-  /**
-   * Updates the digest with 0 or more bytes. Same as {@link #addBytes(byte[])}, but potentially
-   * more performant when only a {@link ByteString} is available.
-   */
-  public Fingerprint addBytes(ByteString bytes) {
-    try {
-      codedOut.writeRawBytes(bytes);
-    } catch (IOException e) {
-      throw new IllegalStateException("failed to write bytes", e);
-    }
-    return this;
-  }
-
   /** Updates the digest with 0 or more bytes. */
   public Fingerprint addBytes(byte[] input) {
     addBytes(input, 0, input.length);
@@ -134,7 +120,7 @@ public final class Fingerprint implements Consumer<String> {
     try {
       codedOut.writeBoolNoTag(input);
     } catch (IOException e) {
-      throw new IllegalStateException(e);
+      throw new IllegalStateException();
     }
     return this;
   }
@@ -154,16 +140,6 @@ public final class Fingerprint implements Consumer<String> {
   public Fingerprint addInt(int input) {
     try {
       codedOut.writeInt32NoTag(input);
-    } catch (IOException e) {
-      throw new IllegalStateException(e);
-    }
-    return this;
-  }
-
-  /** Updates the digest with the signed varint representation of input. */
-  Fingerprint addSInt(int input) {
-    try {
-      codedOut.writeSInt32NoTag(input);
     } catch (IOException e) {
       throw new IllegalStateException(e);
     }
@@ -291,12 +267,12 @@ public final class Fingerprint implements Consumer<String> {
    * @param input the String from which to compute the digest
    */
   public static String getHexDigest(String input) {
-    // TODO(b/112460990): This convenience method should
+    // TODO(b/112460990): This convenience method, if kept should not use MD5 by default, but should
     // use the value from DigestHashFunction.getDefault(). However, this gets called during class
     // loading in a few places, before setDefault() has been called, so these call-sites should be
     // removed before this can be done safely.
     return hexDigest(
-        DigestHashFunction.SHA256
+        DigestHashFunction.MD5
             .cloneOrCreateMessageDigest()
             .digest(input.getBytes(StandardCharsets.UTF_8)));
   }

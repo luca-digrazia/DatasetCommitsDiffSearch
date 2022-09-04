@@ -18,7 +18,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
-import com.google.devtools.build.lib.vfs.DigestHashFunction.DigestLength.DigestLengthImpl;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.security.MessageDigest;
@@ -40,31 +39,6 @@ public class DigestHashFunction {
   // This map must be declared first to make sure that calls to register() have it ready.
   private static final HashMap<String, DigestHashFunction> hashFunctionRegistry = new HashMap<>();
 
-  /** Describes the length of a digest. */
-  public interface DigestLength {
-    /** Returns the length of a digest by inspecting its bytes. Used for variable-length digests. */
-    default int getDigestLength(byte[] bytes, int offset) {
-      return getDigestMaximumLength();
-    }
-
-    /** Returns the maximum length a digest can turn into. */
-    int getDigestMaximumLength();
-
-    /** Default implementation that simply returns a fixed length. */
-    class DigestLengthImpl implements DigestLength {
-      private final int length;
-
-      DigestLengthImpl(HashFunction hashFunction) {
-        this.length = hashFunction.bits() / 8;
-      }
-
-      @Override
-      public int getDigestMaximumLength() {
-        return length;
-      }
-    }
-  }
-
   public static final DigestHashFunction MD5 = register(Hashing.md5(), "MD5");
   public static final DigestHashFunction SHA1 = register(Hashing.sha1(), "SHA-1", "SHA1");
   public static final DigestHashFunction SHA256 = register(Hashing.sha256(), "SHA-256", "SHA256");
@@ -73,22 +47,15 @@ public class DigestHashFunction {
   private static boolean defaultHasBeenSet = false;
 
   private final HashFunction hashFunction;
-  private final DigestLength digestLength;
   private final String name;
   private final MessageDigest messageDigestPrototype;
   private final boolean messageDigestPrototypeSupportsClone;
 
-  private DigestHashFunction(HashFunction hashFunction, DigestLength digestLength, String name) {
+  private DigestHashFunction(HashFunction hashFunction, String name) {
     this.hashFunction = hashFunction;
-    this.digestLength = digestLength;
     this.name = name;
     this.messageDigestPrototype = getMessageDigestInstance();
     this.messageDigestPrototypeSupportsClone = supportsClone(messageDigestPrototype);
-  }
-
-  public static DigestHashFunction register(
-      HashFunction hash, String hashName, String... altNames) {
-    return register(hash, new DigestLengthImpl(hash), hashName, altNames);
   }
 
   /**
@@ -103,7 +70,7 @@ public class DigestHashFunction {
    * @throws IllegalArgumentException if the name is already registered.
    */
   public static DigestHashFunction register(
-      HashFunction hash, DigestLength digestLength, String hashName, String... altNames) {
+      HashFunction hash, String hashName, String... altNames) {
     try {
       MessageDigest.getInstance(hashName);
     } catch (NoSuchAlgorithmException e) {
@@ -113,7 +80,7 @@ public class DigestHashFunction {
           e);
     }
 
-    DigestHashFunction hashFunction = new DigestHashFunction(hash, digestLength, hashName);
+    DigestHashFunction hashFunction = new DigestHashFunction(hash, hashName);
     List<String> names = ImmutableList.<String>builder().add(hashName).add(altNames).build();
     synchronized (hashFunctionRegistry) {
       for (String name : names) {
@@ -210,10 +177,6 @@ public class DigestHashFunction {
     }
   }
 
-  public DigestLength getDigestLength() {
-    return digestLength;
-  }
-
   public boolean isValidDigest(byte[] digest) {
     // TODO(b/109764197): Remove this check to accept variable-length hashes.
     return digest != null && digest.length * 8 == hashFunction.bits();
@@ -247,13 +210,4 @@ public class DigestHashFunction {
   static Collection<DigestHashFunction> getPossibleHashFunctions() {
     return hashFunctionRegistry.values();
   }
-
-  /**
-   * For tests that are testing the FileSystems themselves, those test should be parametrized and
-   * run with all the standard hash functions that Bazel supports using {@link
-   * #getPossibleHashFunctions} above. For tests that just need a FileSystem to test some adjacent
-   * behavior, though, we use this default.
-   */
-  @VisibleForTesting
-  public static final DigestHashFunction DEFAULT_HASH_FOR_TESTS = DigestHashFunction.MD5;
 }

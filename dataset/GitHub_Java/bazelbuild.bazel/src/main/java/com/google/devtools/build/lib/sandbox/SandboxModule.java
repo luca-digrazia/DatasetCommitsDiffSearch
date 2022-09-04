@@ -269,8 +269,7 @@ public final class SandboxModule extends BlazeModule {
             env.getExecRoot(),
             localExecutionOptions,
             ResourceManager.instance(),
-            localEnvProvider,
-            env.getBlazeWorkspace().getBinTools());
+            localEnvProvider);
   }
 
   private static final class SandboxFallbackSpawnRunner implements SpawnRunner {

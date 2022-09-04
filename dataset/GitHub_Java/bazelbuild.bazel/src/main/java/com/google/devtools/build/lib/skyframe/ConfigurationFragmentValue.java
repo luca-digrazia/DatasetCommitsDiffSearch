@@ -15,27 +15,27 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
-import java.io.Serializable;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
 
-/**
- * A Skyframe node representing a build configuration fragment.
- */
+/** A Skyframe node representing a build configuration fragment. */
 @Immutable
 @ThreadSafe
+@AutoCodec
 public class ConfigurationFragmentValue implements SkyValue {
-  
   @Nullable
   private final BuildConfiguration.Fragment fragment;
 
@@ -46,38 +46,51 @@ public class ConfigurationFragmentValue implements SkyValue {
   public BuildConfiguration.Fragment getFragment() {
     return fragment;
   }
-  
+
   @ThreadSafe
-  public static SkyKey key(BuildOptions buildOptions, Class<? extends Fragment> fragmentType,
+  public static ConfigurationFragmentKey key(
+      BuildOptions buildOptions,
+      Class<? extends Fragment> fragmentType,
       RuleClassProvider ruleClassProvider) {
-    // Trim the options down to just those used by this fragment. This ensures we don't end
-    // up with different Skyframe keys due to trimming of unrelated options.
-    BuildOptions optionsUsedByFragment = buildOptions.trim(
-        BuildConfiguration.getOptionsClasses(
-            ImmutableList.<Class<? extends BuildConfiguration.Fragment>>of(fragmentType),
-            ruleClassProvider));
-    return new SkyKey(SkyFunctions.CONFIGURATION_FRAGMENT,
-        new ConfigurationFragmentKey(optionsUsedByFragment, fragmentType));
+    BuildOptions optionsKey =
+        buildOptions.trim(
+            BuildConfiguration.getOptionsClasses(
+                ImmutableList.<Class<? extends BuildConfiguration.Fragment>>of(fragmentType),
+                ruleClassProvider));
+    return ConfigurationFragmentKey.of(optionsKey, fragmentType);
   }
-  
-  static final class ConfigurationFragmentKey implements Serializable {
+
+  /** {@link SkyKey} for {@link ConfigurationFragmentValue}. */
+  @AutoCodec
+  public static final class ConfigurationFragmentKey implements SkyKey {
+    private static Interner<ConfigurationFragmentKey> interner = BlazeInterners.newWeakInterner();
+
     private final BuildOptions buildOptions;
+    private final String checksum;
     private final Class<? extends Fragment> fragmentType;
-    
-    public ConfigurationFragmentKey(BuildOptions buildOptions,
-        Class<? extends Fragment> fragmentType) {
+
+    private ConfigurationFragmentKey(
+        BuildOptions buildOptions, Class<? extends Fragment> fragmentType) {
       this.buildOptions = Preconditions.checkNotNull(buildOptions);
-      this.fragmentType = Preconditions.checkNotNull(fragmentType);      
+      this.checksum = Fingerprint.getHexDigest(buildOptions.computeCacheKey());
+      this.fragmentType = Preconditions.checkNotNull(fragmentType);
     }
-    
+
+    @AutoCodec.VisibleForSerialization
+    @AutoCodec.Instantiator
+    static ConfigurationFragmentKey of(
+        BuildOptions buildOptions, Class<? extends Fragment> fragmentType) {
+      return interner.intern(new ConfigurationFragmentKey(buildOptions, fragmentType));
+    }
+
     public BuildOptions getBuildOptions() {
       return buildOptions;
     }
-    
+
     public Class<? extends Fragment> getFragmentType() {
       return fragmentType;
     }
-    
+
     @Override
     public boolean equals(Object o) {
       if (this == o) {
@@ -94,6 +107,17 @@ public class ConfigurationFragmentValue implements SkyValue {
     @Override
     public int hashCode() {
       return Objects.hash(buildOptions, fragmentType);
+    }
+
+    @Override
+    public String toString() {
+      return String.format("ConfigurationFragmentKey(class=%s, checksum=%s)",
+          fragmentType.getName(), checksum);
+    }
+
+    @Override
+    public SkyFunctionName functionName() {
+      return SkyFunctions.CONFIGURATION_FRAGMENT;
     }
   }
 }
