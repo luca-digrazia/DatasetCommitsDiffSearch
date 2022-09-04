@@ -79,7 +79,6 @@ import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.Cookie;
 import io.vertx.core.http.CookieSameSite;
-import io.vertx.core.http.HttpConnection;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServer;
@@ -478,12 +477,11 @@ public class VertxHttpRecorder {
             ioThreads = eventLoopCount;
         }
         CompletableFuture<String> futureResult = new CompletableFuture<>();
-        AtomicInteger connectionCount = new AtomicInteger();
         vertx.deployVerticle(new Supplier<Verticle>() {
             @Override
             public Verticle get() {
                 return new WebDeploymentVerticle(httpServerOptions, sslConfig, domainSocketOptions, launchMode,
-                        httpConfiguration.insecureRequests, httpConfiguration, connectionCount);
+                        httpConfiguration.insecureRequests);
             }
         }, new DeploymentOptions().setInstances(ioThreads), new Handler<AsyncResult<String>>() {
             @Override
@@ -859,19 +857,15 @@ public class VertxHttpRecorder {
         private volatile boolean clearHttpsProperty = false;
         private volatile Map<String, String> portPropertiesToRestore;
         private final HttpConfiguration.InsecureRequests insecureRequests;
-        private final HttpConfiguration quarkusConfig;
-        private final AtomicInteger connectionCount;
 
         public WebDeploymentVerticle(HttpServerOptions httpOptions, HttpServerOptions httpsOptions,
                 HttpServerOptions domainSocketOptions, LaunchMode launchMode,
-                InsecureRequests insecureRequests, HttpConfiguration quarkusConfig, AtomicInteger connectionCount) {
+                HttpConfiguration.InsecureRequests insecureRequests) {
             this.httpOptions = httpOptions;
             this.httpsOptions = httpsOptions;
             this.launchMode = launchMode;
             this.domainSocketOptions = domainSocketOptions;
             this.insecureRequests = insecureRequests;
-            this.quarkusConfig = quarkusConfig;
-            this.connectionCount = connectionCount;
         }
 
         @Override
@@ -923,7 +917,7 @@ public class VertxHttpRecorder {
                         }
                     });
                 }
-                setupTcpHttpServer(httpServer, httpOptions, false, startFuture, remainingCount, connectionCount);
+                setupTcpHttpServer(httpServer, httpOptions, false, startFuture, remainingCount);
             }
 
             if (domainSocketOptions != null) {
@@ -935,7 +929,7 @@ public class VertxHttpRecorder {
             if (httpsOptions != null) {
                 httpsServer = vertx.createHttpServer(httpsOptions);
                 httpsServer.requestHandler(ACTUAL_ROOT);
-                setupTcpHttpServer(httpsServer, httpsOptions, true, startFuture, remainingCount, connectionCount);
+                setupTcpHttpServer(httpsServer, httpsOptions, true, startFuture, remainingCount);
             }
         }
 
@@ -954,33 +948,7 @@ public class VertxHttpRecorder {
         }
 
         private void setupTcpHttpServer(HttpServer httpServer, HttpServerOptions options, boolean https,
-                Promise<Void> startFuture, AtomicInteger remainingCount, AtomicInteger currentConnectionCount) {
-            if (quarkusConfig.limits.maxConnections.isPresent() && quarkusConfig.limits.maxConnections.getAsInt() > 0) {
-                final int maxConnections = quarkusConfig.limits.maxConnections.getAsInt();
-                httpServer.connectionHandler(new Handler<HttpConnection>() {
-
-                    @Override
-                    public void handle(HttpConnection event) {
-                        int current;
-                        do {
-                            current = currentConnectionCount.get();
-                            if (current == maxConnections) {
-                                //just close the connection
-                                LOGGER.debug("Rejecting connection as there are too many active connections");
-                                event.close();
-                                return;
-                            }
-                        } while (!currentConnectionCount.compareAndSet(current, current + 1));
-                        event.closeHandler(new Handler<Void>() {
-                            @Override
-                            public void handle(Void event) {
-                                LOGGER.debug("Connection closed");
-                                connectionCount.decrementAndGet();
-                            }
-                        });
-                    }
-                });
-            }
+                Promise<Void> startFuture, AtomicInteger remainingCount) {
             httpServer.listen(options.getPort(), options.getHost(), event -> {
                 if (event.cause() != null) {
                     startFuture.fail(event.cause());
