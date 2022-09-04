@@ -536,6 +536,8 @@ public final class CcLinkingHelper {
     if (emitCcNativeLibrariesProvider) {
       providers.add(new CcNativeLibraryProvider(collectNativeCcLibraries(ccLinkingOutputs)));
     }
+    providers.put(
+        collectExecutionDynamicLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
 
     Runfiles cppStaticRunfiles = collectCppRunfiles(ccLinkingOutputs, true);
     Runfiles cppSharedRunfiles = collectCppRunfiles(ccLinkingOutputs, false);
@@ -543,8 +545,6 @@ public final class CcLinkingHelper {
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
     ccLinkingInfoBuilder.setCcRunfilesInfo(
         new CcRunfilesInfo(cppStaticRunfiles, cppSharedRunfiles));
-    ccLinkingInfoBuilder.setCcExecutionDynamicLibrariesInfo(
-        collectExecutionDynamicLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
 
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     boolean forcePic = cppConfiguration.forcePic();
@@ -683,13 +683,9 @@ public final class CcLinkingHelper {
     }
 
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
-    for (CcLinkingInfo dep : AnalysisUtils.getProviders(deps, CcLinkingInfo.PROVIDER)) {
-      CcExecutionDynamicLibrariesInfo ccExecutionDynamicLibrariesInfo =
-          dep.getCcExecutionDynamicLibrariesInfo();
-      if (ccExecutionDynamicLibrariesInfo != null) {
-        builder.addTransitive(
-            ccExecutionDynamicLibrariesInfo.getExecutionDynamicLibraryArtifacts());
-      }
+    for (CcExecutionDynamicLibrariesInfo dep :
+        AnalysisUtils.getProviders(deps, CcExecutionDynamicLibrariesInfo.PROVIDER)) {
+      builder.addTransitive(dep.getExecutionDynamicLibraryArtifacts());
     }
     return builder.isEmpty()
         ? CcExecutionDynamicLibrariesInfo.EMPTY
