@@ -1,7 +1,5 @@
 package io.quarkus.arc.processor;
 
-import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
-
 import io.quarkus.arc.GenericArrayTypeImpl;
 import io.quarkus.arc.ParameterizedTypeImpl;
 import io.quarkus.arc.TypeVariableImpl;
@@ -142,7 +140,7 @@ final class Types {
             types.add(OBJECT_TYPE);
             return types;
         } else {
-            ClassInfo returnTypeClassInfo = getClassByName(beanDeployment.getIndex(), returnType.name());
+            ClassInfo returnTypeClassInfo = beanDeployment.getIndex().getClassByName(returnType.name());
             if (returnTypeClassInfo == null) {
                 throw new IllegalArgumentException(
                         "Producer method return type not found in index: " + producerMethod.returnType().name());
@@ -169,7 +167,7 @@ final class Types {
             types.add(fieldType);
             types.add(OBJECT_TYPE);
         } else {
-            ClassInfo fieldClassInfo = getClassByName(beanDeployment.getIndex(), producerField.type().name());
+            ClassInfo fieldClassInfo = beanDeployment.getIndex().getClassByName(producerField.type().name());
             if (fieldClassInfo == null) {
                 throw new IllegalArgumentException("Producer field type not found in index: " + producerField.type().name());
             }
@@ -224,7 +222,7 @@ final class Types {
         }
         // Interfaces
         for (Type interfaceType : classInfo.interfaceTypes()) {
-            ClassInfo interfaceClassInfo = getClassByName(beanDeployment.getIndex(), interfaceType.name());
+            ClassInfo interfaceClassInfo = beanDeployment.getIndex().getClassByName(interfaceType.name());
             if (interfaceClassInfo != null) {
                 Map<TypeVariable, Type> resolved = Collections.emptyMap();
                 if (Kind.PARAMETERIZED_TYPE.equals(interfaceType.kind())) {
@@ -236,7 +234,7 @@ final class Types {
         }
         // Superclass
         if (classInfo.superClassType() != null) {
-            ClassInfo superClassInfo = getClassByName(beanDeployment.getIndex(), classInfo.superName());
+            ClassInfo superClassInfo = beanDeployment.getIndex().getClassByName(classInfo.superName());
             if (superClassInfo != null) {
                 Map<TypeVariable, Type> resolved = Collections.emptyMap();
                 if (Kind.PARAMETERIZED_TYPE.equals(classInfo.superClassType().kind())) {
@@ -295,7 +293,7 @@ final class Types {
             return resolvedTypeParameters.getOrDefault(typeParam, typeParam);
         } else if (typeParam.kind() == Kind.PARAMETERIZED_TYPE) {
             ParameterizedType parameterizedType = typeParam.asParameterizedType();
-            ClassInfo classInfo = getClassByName(index, parameterizedType.name());
+            ClassInfo classInfo = index.getClassByName(parameterizedType.name());
             if (classInfo != null) {
                 List<TypeVariable> typeParameters = classInfo.typeParameters();
                 List<Type> arguments = parameterizedType.arguments();
