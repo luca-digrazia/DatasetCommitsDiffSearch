@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,21 +22,17 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * <p>
  * This annotation is intended to be used on methods of an {@link EActivity}, {@link EFragment} or {@link EService}.
  * When this annotation is used, a {@link android.content.BroadcastReceiver}
  * will be created to receive the Intent corresponding to the given actions
  * and it will call the annotated method.
- * </p>
- * <p>
+ * <p/>
  * The annotated method MUST return void and MAY have one parameter:
- * </p>
  * <ul>
  *     <li>An {@link android.content.Intent}</li>
  * </ul>
- * <p>
+ * <p/>
  * The annotation has three parameters:
- * </p>
  * <ul>
  *     <li>
  *         {@link #actions()}: One or several {@link java.lang.String} indicating the actions which will spark the method.
@@ -49,12 +45,12 @@ import java.lang.annotation.Target;
  *
  *     </li>
  *     <li>
- *          {@link #local()}: Specify whether android.support.v4.content.LocalBroadcastManager should be used.
- *          To use android.support.v4.content.LocalBroadcastManager, you MUST have android support-v4 in your classpath.
+ *          {@link #local()}: Specify whether {@link android.support.v4.content.LocalBroadcastManager} should be used.
+ *          To use {@link android.support.v4.content.LocalBroadcastManager}, you MUST have android support-v4 in your classpath.
  *          Default value is false.
  *     </li>
  * </ul>
- *
+ * <p/>
  * <blockquote>
  *
  * Example :
@@ -63,16 +59,14 @@ import java.lang.annotation.Target;
  * &#064;EActivity
  * public class MyActivity {
  *
- *      &#064;Receiver(actions={{@link android.net.wifi.WifiManager#WIFI_STATE_CHANGED_ACTION}})
+ *      &#064;Receiver(actions={{@link android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION}}
  *      public void onWifiStateChanged(Intent intent);
  *
- *      &#064;Receiver(actions={{@link android.net.wifi.WifiManager#WIFI_STATE_CHANGED_ACTION}}, registerAt=RegisterAt.OnResumeOnPause}
+ *      &#064;Receiver(actions={{@link android.net.wifi.WifiManager.WIFI_STATE_CHANGED_ACTION}, registerAt=RegisterAt.OnResumeOnPause}
  *      public void onWifiStateChangedWithoutIntent();
  *
  * }
  * </pre>
- *
- * </blockquote>
  *
  */
 @Retention(RetentionPolicy.CLASS)
@@ -80,8 +74,6 @@ import java.lang.annotation.Target;
 public @interface Receiver {
 
 	String[] actions();
-
-	String[] dataSchemes() default {};
 
 	RegisterAt registerAt() default RegisterAt.OnCreateOnDestroy;
 

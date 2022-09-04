@@ -15,20 +15,27 @@
  */
 package org.androidannotations.process;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JClassAlreadyExistsException;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JDefinedClass;
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.holder.GeneratedClassHolder;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+
+import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.holder.GeneratedClassHolder;
+
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 
 public class ProcessHolder {
 
@@ -77,6 +84,9 @@ public class ProcessHolder {
 		public final JClass KEY_EVENT = refClass(CanonicalNameConstants.KEY_EVENT);
 		public final JClass CONTEXT = refClass(CanonicalNameConstants.CONTEXT);
 		public final JClass INTENT = refClass(CanonicalNameConstants.INTENT);
+		public final JClass INTENT_FILTER = refClass(CanonicalNameConstants.INTENT_FILTER);
+		public final JClass BROADCAST_RECEIVER = refClass(CanonicalNameConstants.BROADCAST_RECEIVER);
+		public final JClass LOCAL_BROADCAST_MANAGER = refClass(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER);
 		public final JClass COMPONENT_NAME = refClass(CanonicalNameConstants.COMPONENT_NAME);
 		public final JClass VIEW_GROUP = refClass(CanonicalNameConstants.VIEW_GROUP);
 		public final JClass LAYOUT_INFLATER = refClass(CanonicalNameConstants.LAYOUT_INFLATER);
@@ -207,12 +217,7 @@ public class ProcessHolder {
 	}
 
 	public GeneratedClassHolder getGeneratedClassHolder(Element element) {
-		for (Element key : generatedClassHolders.keySet()) {
-			if(key.asType().toString().equals(element.asType().toString())) {
-				return generatedClassHolders.get(key);
-			}
-		}
-		return null;
+		return generatedClassHolders.get(element);
 	}
 
 	public JClass refClass(Class<?> clazz) {

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,42 +18,26 @@ package org.androidannotations.test15.receiver;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.wifi.WifiManager;
-
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.Receiver;
 
 @EActivity
 public class ActivityWithReceiver extends Activity {
 
-	public boolean localWifiChangeIntentReceived = false;
-	public boolean dataSchemeHttpIntentReceived = false;
-	public boolean wifiChangeIntentReceived = false;
-	public boolean action1Fired = false;
-	public boolean action2Fired = false;
-
 	@Receiver(actions = WifiManager.NETWORK_STATE_CHANGED_ACTION, registerAt = Receiver.RegisterAt.OnResumeOnPause)
 	protected void onWifiStateChanged(Intent intent) {
-		wifiChangeIntentReceived = true;
+
 	}
 
 	@Receiver(actions = WifiManager.NETWORK_STATE_CHANGED_ACTION, registerAt = Receiver.RegisterAt.OnStartOnStop, local = true)
-	protected void onLocalWifiStateChanged() {
-		localWifiChangeIntentReceived = true;
+	protected void onWifiStateChangedWithSameActions() {
+
 	}
 
-	@Receiver(actions = "CUSTOM_HTTP_ACTION", dataSchemes = "http", registerAt = Receiver.RegisterAt.OnCreateOnDestroy)
-	protected void onDataShemeHttp(Intent intent) {
-		dataSchemeHttpIntentReceived = true;
-	}
-
-	@Receiver(actions = { "org.androidannotations.ACTION_1",
-			"org.androidannotations.ACTION_2" }, registerAt = Receiver.RegisterAt.OnCreateOnDestroy)
+	@Receiver(actions = {"org.androidannotations.ACTION_1", "org.androidannotations.ACTION_2"},
+				registerAt = Receiver.RegisterAt.OnCreateOnDestroy)
 	protected void onBroadcastWithTwoActions(Intent intent) {
-		String action = intent.getAction();
-		if (action.equals("org.androidannotations.ACTION_1")) {
-			action1Fired = true;
-		} else if (action.equals("org.androidannotations.ACTION_2")) {
-			action2Fired = true;
-		}
+
 	}
+
 }
