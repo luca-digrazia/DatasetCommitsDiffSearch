@@ -1,6 +1,4 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,35 +13,29 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.inputs.random.generators;
 
 import java.util.Random;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
 public class Tools {
-
-    public static int deviation(int val, int maxDeviation, Random rand) {
+    public static long deviation(int val, int maxDeviation, Random rand) {
         int deviationPercent = rand.nextInt(maxDeviation);
 
-        double x = val/100.0*deviationPercent;
+        double x = val / 100.0d * deviationPercent;
 
         // Add or substract?
-        double result = 0;
+        final double result;
         if (rand.nextBoolean()) {
-            result = val-x;
+            result = val - x;
         } else {
-            result = val+x;
+            result = val + x;
         }
 
-        if (result < 0) {
-            return 1;
+        if (result < 0.0d) {
+            return 1l;
         } else {
-            return Math.round((int) result);
+            return Math.round(result);
         }
     }
-
 }
