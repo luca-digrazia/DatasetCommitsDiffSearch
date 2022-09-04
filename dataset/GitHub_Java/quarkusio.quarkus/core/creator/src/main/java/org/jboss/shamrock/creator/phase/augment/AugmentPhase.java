@@ -25,7 +25,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -61,7 +60,6 @@ import org.jboss.shamrock.creator.util.IoUtils;
 import org.jboss.shamrock.creator.util.ZipUtils;
 import org.jboss.shamrock.deployment.ClassOutput;
 import org.jboss.shamrock.deployment.ShamrockAugmentor;
-import org.jboss.shamrock.deployment.ShamrockClassWriter;
 import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
 import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateOutputBuildItem;
@@ -81,7 +79,6 @@ import io.smallrye.config.SmallRyeConfigProviderResolver;
 public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutcome {
 
     private static final String DEPENDENCIES_RUNTIME = "dependencies.runtime";
-    private static final String FILENAME_STEP_CLASSES = "META-INF/shamrock-build-steps.list";
     private static final String PROVIDED = "provided";
 
     private static final Logger log = Logger.getLogger(AugmentPhase.class);
@@ -238,11 +235,11 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                         }
                         problems.add("Artifact " + appDep + " is a deployment artifact, however it does not have scope required. This will result in unnecessary jars being included in the final image");
                     }
-                    ZipEntry entry = zip.getEntry(DEPENDENCIES_RUNTIME);
-                    if (entry != null) {
+                    ZipEntry deps = zip.getEntry(DEPENDENCIES_RUNTIME);
+                    if (deps != null) {
                         whitelist.add(getDependencyConflictId(appDep.getArtifact()));
-                        try (InputStream in = zip.getInputStream(entry)) {
-                            BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+                        try (InputStream in = zip.getInputStream(deps)) {
+                            BufferedReader reader = new BufferedReader(new InputStreamReader(in));
                             String line;
                             while ((line = reader.readLine()) != null) {
                                 String[] parts = line.trim().split(":");
@@ -346,7 +343,7 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                                         throw new RuntimeException("Can't process class files larger than Integer.MAX_VALUE bytes");
                                     }
                                     ClassReader cr = new ClassReader(Files.readAllBytes(path));
-                                    ClassWriter writer = new ShamrockClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+                                    ClassWriter writer = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
                                     ClassVisitor visitor = writer;
                                     for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
                                         visitor = i.apply(className, visitor);

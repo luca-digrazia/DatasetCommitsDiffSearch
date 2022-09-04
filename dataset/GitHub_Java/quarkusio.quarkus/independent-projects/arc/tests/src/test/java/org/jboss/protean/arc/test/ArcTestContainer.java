@@ -52,6 +52,8 @@ import org.junit.runners.model.Statement;
 
 public class ArcTestContainer implements TestRule {
 
+    private static final String TARGET_TEST_CLASSES = "target/test-classes";
+
     public static Builder builder() {
         return new Builder();
     }
@@ -115,29 +117,29 @@ public class ArcTestContainer implements TestRule {
             Collections.addAll(this.beanDeploymentValidators, validators);
             return this;
         }
-        
+
         public Builder removeUnusedBeans(boolean value) {
             this.removeUnusedBeans = value;
             return this;
         }
-        
+
         public Builder addRemovalExclusion(Predicate<BeanInfo> exclusion) {
             this.exclusions.add(exclusion);
             return this;
         }
-        
+
         public Builder shouldFail() {
             this.shouldFail = true;
             return this;
         }
-        
+
         public ArcTestContainer build() {
             return new ArcTestContainer(resourceReferenceProviders, beanClasses, resourceAnnotations, beanRegistrars, annotationsTransformers,
                     deploymentEnhancers, beanDeploymentValidators, shouldFail, removeUnusedBeans, exclusions);
         }
 
     }
-    
+
     private final List<Class<?>> resourceReferenceProviders;
 
     private final List<Class<?>> beanClasses;
@@ -151,12 +153,14 @@ public class ArcTestContainer implements TestRule {
     private final List<DeploymentEnhancer> deploymentEnhancers;
 
     private final List<BeanDeploymentValidator> beanDeploymentValidators;
-    
+
     private final boolean shouldFail;
     private final AtomicReference<Throwable> buildFailure;
-    
+
     private final boolean removeUnusedBeans;
     private final List<Predicate<BeanInfo>> exclusions;
+
+    private URLClassLoader testClassLoader;
 
     public ArcTestContainer(Class<?>... beanClasses) {
         this(Collections.emptyList(), Arrays.asList(beanClasses), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
@@ -189,6 +193,13 @@ public class ArcTestContainer implements TestRule {
                     base.evaluate();
                 } finally {
                     Thread.currentThread().setContextClassLoader(oldTccl);
+                    if(testClassLoader != null) {
+                        try {
+                            testClassLoader.close();
+                        } catch(IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
                     shutdown();
                 }
             }
@@ -198,7 +209,7 @@ public class ArcTestContainer implements TestRule {
     public Throwable getFailure() {
         return buildFailure.get();
     }
-    
+
     private void shutdown() {
         Arc.shutdown();
     }
@@ -220,8 +231,12 @@ public class ArcTestContainer implements TestRule {
                 .getContextClassLoader();
 
         try {
+            String arcContainerAbsolutePath =
+                    ArcTestContainer.class.getClassLoader().getResource(ArcTestContainer.class.getName().replace(".", "/") + ".class").getFile();
+            int targetClassesIndex = arcContainerAbsolutePath.indexOf(TARGET_TEST_CLASSES);
+            String testClassesRootPath = arcContainerAbsolutePath.substring(0, targetClassesIndex);
             File generatedSourcesDirectory = new File("target/generated-arc-sources");
-            File testOutputDirectory = new File("target/test-classes");
+            File testOutputDirectory = new File(testClassesRootPath + TARGET_TEST_CLASSES);
             File componentsProviderFile = new File(generatedSourcesDirectory + "/" + nameToPath(testClass.getPackage()
                     .getName()), ComponentsProvider.class.getSimpleName());
 
@@ -296,7 +311,7 @@ public class ArcTestContainer implements TestRule {
                 throw new IllegalStateException("Error generating resources", e);
             }
 
-            ClassLoader testClassLoader = new URLClassLoader(new URL[] {}, old) {
+            testClassLoader = new URLClassLoader(new URL[] {}, old) {
                 @Override
                 public Enumeration<URL> getResources(String name) throws IOException {
                     if (("META-INF/services/" + ComponentsProvider.class.getName()).equals(name)) {
@@ -318,7 +333,7 @@ public class ArcTestContainer implements TestRule {
 
         } catch (Throwable e) {
             if (shouldFail) {
-                buildFailure.set(e);    
+                buildFailure.set(e);
             } else {
                 throw e;
             }

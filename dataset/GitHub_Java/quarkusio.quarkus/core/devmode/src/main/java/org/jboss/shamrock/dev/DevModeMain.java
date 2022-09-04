@@ -19,12 +19,14 @@ package org.jboss.shamrock.dev;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
-import org.jboss.shamrock.runner.RuntimeRunner;
-import org.jboss.shamrock.runtime.LaunchMode;
 import org.jboss.shamrock.runtime.Timing;
 
 import io.smallrye.config.PropertiesConfigSource;
@@ -37,6 +39,7 @@ public class DevModeMain {
 
     private static final Logger log = Logger.getLogger(DevModeMain.class);
 
+    private static volatile boolean keepCl = false;
     private static volatile ClassLoader currentAppClassLoader;
     private static volatile URLClassLoader runtimeCl;
     private static File classesRoot;
@@ -106,21 +109,19 @@ public class DevModeMain {
 
     private static synchronized void doStart() {
         try {
-            runtimeCl = new URLClassLoader(new URL[]{classesRoot.toURL()}, ClassLoader.getSystemClassLoader());
+            if (runtimeCl == null || !keepCl) {
+                runtimeCl = new URLClassLoader(new URL[]{classesRoot.toURL()}, ClassLoader.getSystemClassLoader());
+            }
             currentAppClassLoader = runtimeCl;
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             //we can potentially throw away this class loader, and reload the app
             try {
                 Thread.currentThread().setContextClassLoader(runtimeCl);
-                RuntimeRunner runner = RuntimeRunner.builder()
-                        .setLaunchMode(LaunchMode.DEVELOPMENT)
-                        .setClassLoader(runtimeCl)
-                        .setTarget(classesRoot.toPath())
-                        .setFrameworkClassesPath(wiringDir.toPath())
-                        .setTransformerCache(cacheDir.toPath())
-                        .build();
-                runner.run();
-                closeable = runner;
+                Class<?> runnerClass = runtimeCl.loadClass("org.jboss.shamrock.runner.RuntimeRunner");
+                Constructor ctor = runnerClass.getDeclaredConstructor(ClassLoader.class, Path.class, Path.class, Path.class, List.class);
+                Object runner = ctor.newInstance(runtimeCl, classesRoot.toPath(), wiringDir.toPath(), cacheDir.toPath(), new ArrayList<>());
+                ((Runnable) runner).run();
+                closeable = ((Closeable) runner);
                 deploymentProblem = null;
             } finally {
                 Thread.currentThread().setContextClassLoader(old);
@@ -131,8 +132,10 @@ public class DevModeMain {
         }
     }
 
-    public static synchronized void restartApp() {
+    public static synchronized void restartApp(boolean keepClassloader) {
+        keepCl = keepClassloader;
         if (closeable != null) {
+
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(runtimeCl);
             try {
