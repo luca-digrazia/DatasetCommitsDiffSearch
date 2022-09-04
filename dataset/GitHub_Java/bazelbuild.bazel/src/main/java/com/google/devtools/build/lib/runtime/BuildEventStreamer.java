@@ -30,9 +30,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
-import com.google.devtools.build.lib.actions.EventReportingArtifacts.ReportedArtifacts;
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
@@ -64,7 +62,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -399,8 +396,7 @@ public class BuildEventStreamer implements EventHandler {
     }
   }
 
-  private void maybeReportArtifactSet(
-      ArtifactPathResolver pathResolver, NestedSetView<Artifact> view) {
+  private void maybeReportArtifactSet(NestedSetView<Artifact> view) {
     String name = artifactGroupNamer.maybeName(view);
     if (name == null) {
       return;
@@ -414,13 +410,13 @@ public class BuildEventStreamer implements EventHandler {
       view = view.splitIfExceedsMaximumSize(options.maxNamedSetEntries);
     }
     for (NestedSetView<Artifact> transitive : view.transitives()) {
-      maybeReportArtifactSet(pathResolver, transitive);
+      maybeReportArtifactSet(transitive);
     }
-    post(new NamedArtifactGroup(name, pathResolver, view));
+    post(new NamedArtifactGroup(name, view));
   }
 
-  private void maybeReportArtifactSet(ArtifactPathResolver pathResolver, NestedSet<Artifact> set) {
-    maybeReportArtifactSet(pathResolver, new NestedSetView<Artifact>(set));
+  private void maybeReportArtifactSet(NestedSet<Artifact> set) {
+    maybeReportArtifactSet(new NestedSetView<Artifact>(set));
   }
 
   private void maybeReportConfiguration(BuildEvent configuration) {
@@ -486,9 +482,9 @@ public class BuildEventStreamer implements EventHandler {
     }
 
     if (event instanceof EventReportingArtifacts) {
-      ReportedArtifacts reportedArtifacts = ((EventReportingArtifacts) event).reportedArtifacts();
-      for (NestedSet<Artifact> artifactSet : reportedArtifacts.artifacts) {
-        maybeReportArtifactSet(reportedArtifacts.pathResolver, artifactSet);
+      for (NestedSet<Artifact> artifactSet :
+          ((EventReportingArtifacts) event).reportedArtifacts()) {
+        maybeReportArtifactSet(artifactSet);
       }
     }
 
@@ -593,15 +589,6 @@ public class BuildEventStreamer implements EventHandler {
       // In case of "bazel test" ignore the BuildCompleteEvent, as it will be followed by a
       // TestingCompleteEvent that contains the correct exit code.
       return true;
-    }
-
-    if (event instanceof TargetParsingCompleteEvent) {
-      // If there is only one pattern and we have one failed pattern, then we already posted a
-      // pattern expanded error, so we don't post the completion event.
-      // TODO(ulfjack): This is brittle. It would be better to always post one PatternExpanded event
-      // for each pattern given on the command line instead of one event for all of them combined.
-      return ((TargetParsingCompleteEvent) event).getOriginalTargetPattern().size() == 1
-          && !((TargetParsingCompleteEvent) event).getFailedTargetPatterns().isEmpty();
     }
 
     return false;
