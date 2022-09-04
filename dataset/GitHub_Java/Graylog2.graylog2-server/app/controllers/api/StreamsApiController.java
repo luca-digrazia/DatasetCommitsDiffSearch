@@ -1,74 +1,40 @@
 package controllers.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.inject.Inject;
 import controllers.AuthenticatedController;
-import org.graylog2.restclient.lib.APIException;
-import org.graylog2.restclient.models.Stream;
-import org.graylog2.restclient.models.StreamService;
-import org.graylog2.restclient.models.api.requests.streams.CreateStreamRequest;
-import org.graylog2.restclient.models.api.requests.streams.TestMatchRequest;
-import org.graylog2.restclient.models.api.responses.streams.TestMatchResponse;
-import play.libs.Json;
+import lib.APIException;
+import models.Stream;
+import models.StreamRule;
+import models.StreamService;
+import models.api.requests.streams.TestMatchRequest;
+import models.api.responses.streams.TestMatchResponse;
+import play.data.Form;
 import play.mvc.BodyParser;
+import play.mvc.Controller;
+import play.mvc.Http;
 import play.mvc.Result;
 
-import javax.inject.Inject;
 import java.io.IOException;
-import java.util.List;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class StreamsApiController extends AuthenticatedController {
-    private final StreamService streamService;
-
     @Inject
-    public StreamsApiController(StreamService streamService) {
-        this.streamService = streamService;
-    }
-
-    public Result list() throws IOException, APIException {
-        final List<Stream> streams  = this.streamService.all();
-
-        return ok(Json.toJson(streams));
-    }
-
-    public Result delete(String streamId) throws APIException, IOException {
-        this.streamService.delete(streamId);
-        return ok();
-    }
-
-    public Result create() throws APIException, IOException {
-        final JsonNode json = request().body().asJson();
-        final CreateStreamRequest request = Json.fromJson(json, CreateStreamRequest.class);
-
-        return ok(Json.toJson(this.streamService.create(request)));
-    }
-
-    public Result resume(String streamId) throws APIException, IOException {
-        this.streamService.resume(streamId);
-        return ok();
-    }
-
-    public Result update(String streamId) throws APIException, IOException {
-        final JsonNode json = request().body().asJson();
-        final CreateStreamRequest request = Json.fromJson(json, CreateStreamRequest.class);
-
-        this.streamService.update(streamId, request);
-        return ok();
-    }
-
-    public Result cloneStream(String streamId) throws APIException, IOException {
-        final JsonNode json = request().body().asJson();
-        final CreateStreamRequest request = Json.fromJson(json, CreateStreamRequest.class);
-
-        this.streamService.cloneStream(streamId, request);
-        return ok();
-    }
+    StreamService streamService;
 
     @BodyParser.Of(BodyParser.Json.class)
     public Result testMatch(String stream_id) {
+        JsonNode json = request().body().asJson();
 
+        ObjectMapper mapper = new ObjectMapper();
         TestMatchResponse response = null;
+
         try {
-            TestMatchRequest tmr = Json.fromJson(request().body().asJson(), TestMatchRequest.class);
+            TestMatchRequest tmr = mapper.readValue(json.toString(), TestMatchRequest.class);
             response = streamService.testMatch(stream_id, tmr);
         } catch (APIException e) {
             String message = "Could not test stream rule matching. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
@@ -77,6 +43,6 @@ public class StreamsApiController extends AuthenticatedController {
             return status(504, e.toString());
         }
 
-        return ok(Json.toJson(response));
+        return ok(new Gson().toJson(response)).as("application/json");
     }
 }
