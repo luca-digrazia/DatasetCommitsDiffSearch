@@ -141,13 +141,10 @@ public class BuildRequestOptions extends OptionsBase {
       effectTags = {OptionEffectTag.EXECUTION, OptionEffectTag.AFFECTS_OUTPUTS},
       defaultValue = "null",
       help =
-          "A list of comma-separated output group names, each of which optionally prefixed by a +"
-              + " or a -. A group prefixed by + is added to the default set of output groups,"
-              + " while a group prefixed by - is removed from the default set. If at least one"
-              + " group is not prefixed, the default set of output groups is omitted. For example,"
-              + " --output_groups=+foo,+bar builds the union of the default set, foo, and bar,"
-              + " while --output_groups=foo,bar overrides the default set such that only foo and"
-              + " bar are built.")
+          "Specifies which output groups of the top-level targets to build. If omitted, a default "
+              + "set of output groups are built. When specified the default set is overridden. "
+              + "However you may use --output_groups=+<output_group> or "
+              + "--output_groups=-<output_group> to instead modify the set of output groups.")
   public List<String> outputGroups;
 
   @Option(
@@ -476,31 +473,6 @@ public class BuildRequestOptions extends OptionsBase {
           "If this flag is set to true, the <product>-out symlink will not be created if "
               + "--symlink_prefix is used.")
   public boolean experimentalNoProductNameOutSymlink;
-
-  @Option(
-      name = "experimental_aquery_dump_after_build_format",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      help =
-          "Writes the state of Skyframe (which includes previous invocations on this blaze"
-              + " instance as well) to stdout after a build, in the same format as aquery's."
-              + " Possible formats: proto|textproto|jsonproto.")
-  @Nullable
-  public String aqueryDumpAfterBuildFormat;
-
-  @Option(
-      name = "experimental_aquery_dump_after_build_output_file",
-      defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      converter = OptionsUtils.PathFragmentConverter.class,
-      help =
-          "Specify the output file for the aquery dump after a build. Use in conjunction with"
-              + " --experimental_aquery_dump_after_build_format. The path provided is relative to"
-              + " Bazel's output base, unless it's an absolute path.")
-  @Nullable
-  public PathFragment aqueryDumpAfterBuildOutputFile;
 
   /**
    * Converter for jobs: Takes keyword ({@value #FLAG_SYNTAX}). Values must be between 1 and
