@@ -57,9 +57,15 @@ public class HibernateSearchElasticsearchRecorder {
                     EngineSettings.BACKGROUND_FAILURE_HANDLER,
                     buildTimeConfig.backgroundFailureHandler);
 
+            if (buildTimeConfig.additionalBackends.defaultBackend.isPresent()) {
+                // we have a named default backend (deprecated, but still supported)
+                addConfig(propertyCollector, EngineSettings.DEFAULT_BACKEND,
+                        buildTimeConfig.additionalBackends.defaultBackend.get());
+            }
+
             contributeBackendBuildTimeProperties(propertyCollector, null, buildTimeConfig.defaultBackend);
 
-            for (Entry<String, ElasticsearchBackendBuildTimeConfig> backendEntry : buildTimeConfig.namedBackends.backends
+            for (Entry<String, ElasticsearchBackendBuildTimeConfig> backendEntry : buildTimeConfig.additionalBackends.backends
                     .entrySet()) {
                 contributeBackendBuildTimeProperties(propertyCollector, backendEntry.getKey(), backendEntry.getValue());
             }
@@ -92,7 +98,7 @@ public class HibernateSearchElasticsearchRecorder {
 
             contributeBackendRuntimeProperties(propertyCollector, null, runtimeConfig.defaultBackend);
 
-            for (Entry<String, ElasticsearchBackendRuntimeConfig> backendEntry : runtimeConfig.namedBackends.backends
+            for (Entry<String, ElasticsearchBackendRuntimeConfig> backendEntry : runtimeConfig.additionalBackends.backends
                     .entrySet()) {
                 contributeBackendRuntimeProperties(propertyCollector, backendEntry.getKey(), backendEntry.getValue());
             }
