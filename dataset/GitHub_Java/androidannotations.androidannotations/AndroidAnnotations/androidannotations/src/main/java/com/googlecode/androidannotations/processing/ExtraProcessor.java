@@ -191,4 +191,5 @@ public class ExtraProcessor implements ElementProcessor {
 	private void injectExtrasOnInit(EBeanHolder holder, JClass intentClass, JMethod injectExtrasMethod) {
 		holder.init.body().invoke(injectExtrasMethod);
 	}
+
 }
