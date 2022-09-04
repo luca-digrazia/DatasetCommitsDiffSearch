@@ -61,7 +61,7 @@ public class DockerProcessor {
         }
 
         if (!dockerWorking.getAsBoolean()) {
-            throw new RuntimeException("Unable to build docker image. Please check your docker installation");
+            return;
         }
 
         log.info("Building docker image for jar.");
@@ -94,7 +94,7 @@ public class DockerProcessor {
         }
 
         if (!dockerWorking.getAsBoolean()) {
-            throw new RuntimeException("Unable to build docker image. Please check your docker installation");
+            return;
         }
 
         if (!NativeBinaryUtil.nativeIsLinuxBinary(nativeImage)) {
