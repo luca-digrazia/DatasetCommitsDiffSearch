@@ -13,7 +13,6 @@ import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -30,16 +29,12 @@ import io.smallrye.config.SmallRyeConfig;
 public class NativeImageLauncher implements Closeable {
 
     private static final int DEFAULT_PORT = 8081;
-    private static final int DEFAULT_HTTPS_PORT = 8444;
     private static final long DEFAULT_IMAGE_WAIT_TIME = 60;
-
-    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows");
 
     private final Class<?> testClass;
     private final String profile;
     private Process quarkusProcess;
     private final int port;
-    private final int httpsPort;
     private final long imageWaitTime;
     private final Map<String, String> systemProps = new HashMap<>();
     private List<NativeImageStartedNotifier> startedNotifiers;
@@ -47,7 +42,6 @@ public class NativeImageLauncher implements Closeable {
     private NativeImageLauncher(Class<?> testClass, Config config) {
         this(testClass,
                 config.getValue("quarkus.http.test-port", OptionalInt.class).orElse(DEFAULT_PORT),
-                config.getValue("quarkus.http.test-ssl-port", OptionalInt.class).orElse(DEFAULT_HTTPS_PORT),
                 config.getValue("quarkus.test.native-image-wait-time", OptionalLong.class).orElse(DEFAULT_IMAGE_WAIT_TIME),
                 config.getOptionalValue("quarkus.test.native-image-profile", String.class)
                         .orElse(null));
@@ -72,10 +66,9 @@ public class NativeImageLauncher implements Closeable {
         return config;
     }
 
-    public NativeImageLauncher(Class<?> testClass, int port, int httpsPort, long imageWaitTime, String profile) {
+    public NativeImageLauncher(Class<?> testClass, int port, long imageWaitTime, String profile) {
         this.testClass = testClass;
         this.port = port;
-        this.httpsPort = httpsPort;
         this.imageWaitTime = imageWaitTime;
         List<NativeImageStartedNotifier> startedNotifiers = new ArrayList<>();
         for (NativeImageStartedNotifier i : ServiceLoader.load(NativeImageStartedNotifier.class)) {
@@ -96,7 +89,6 @@ public class NativeImageLauncher implements Closeable {
         List<String> args = new ArrayList<>();
         args.add(path);
         args.add("-Dquarkus.http.port=" + port);
-        args.add("-Dquarkus.http.ssl-port=" + httpsPort);
         args.add("-Dtest.url=" + TestHTTPResourceManager.getUri());
         args.add("-Dquarkus.log.file.path=" + PropertyTestUtil.getLogFileLocation());
         if (profile != null) {
@@ -153,7 +145,7 @@ public class NativeImageLauncher implements Closeable {
             //we have the maven test classes dir
             File testClasses = new File(url.getPath());
             for (File file : testClasses.getParentFile().listFiles()) {
-                if (isNativeExecutable(file)) {
+                if (file.getName().endsWith("-runner")) {
                     logGuessedPath(file.getAbsolutePath());
                     return file.getAbsolutePath();
                 }
@@ -162,7 +154,7 @@ public class NativeImageLauncher implements Closeable {
             //we have the gradle test classes dir, build/classes/java/test
             File testClasses = new File(url.getPath());
             for (File file : testClasses.getParentFile().getParentFile().getParentFile().listFiles()) {
-                if (isNativeExecutable(file)) {
+                if (file.getName().endsWith("-runner")) {
                     logGuessedPath(file.getAbsolutePath());
                     return file.getAbsolutePath();
                 }
@@ -173,7 +165,7 @@ public class NativeImageLauncher implements Closeable {
             int index = path.lastIndexOf("/target/");
             File targetDir = new File(path.substring(0, index) + "/target/");
             for (File file : targetDir.listFiles()) {
-                if (isNativeExecutable(file)) {
+                if (file.getName().endsWith("-runner")) {
                     logGuessedPath(file.getAbsolutePath());
                     return file.getAbsolutePath();
                 }
@@ -181,14 +173,6 @@ public class NativeImageLauncher implements Closeable {
 
         }
         return null;
-    }
-
-    private static boolean isNativeExecutable(File file) {
-        if (IS_WINDOWS) {
-            return file.getName().endsWith("-runner.exe");
-        } else {
-            return file.getName().endsWith("-runner");
-        }
     }
 
     private static void logGuessedPath(String guessedPath) {
