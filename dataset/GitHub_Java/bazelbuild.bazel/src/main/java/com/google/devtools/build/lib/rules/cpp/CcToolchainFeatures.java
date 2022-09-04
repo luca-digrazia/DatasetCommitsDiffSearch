@@ -2147,10 +2147,6 @@ public class CcToolchainFeatures implements Serializable {
           enabledFeatureNames,
           enabledFeatures);
     }
-
-    public ImmutableSet<String> getEnabledFeatureNames() {
-      return enabledFeatureNames;
-    }
   }
 
   /** All artifact name patterns defined in this feature configuration. */
