@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -33,7 +33,6 @@ import static smile.math.MathEx.lfactorial;
  * describes the distribution of the number of white balls drawn from the urn.
  * A random variable X follows the hypergeometric distribution with parameters
  * N, m and n if the probability is given by
- * <p>
  * <pre>
  *              <sub>m</sub>C<sub>k</sub> <sub>(N-m)</sub>C<sub>(n-k)</sub>
  * P(X = k) = ----------------
