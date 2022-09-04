@@ -130,7 +130,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
   }
 
   @Override
-  protected ConfiguredRuleClassProvider createRuleClassProvider() {
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
     builder.addRuleDefinition(new FeatureFlagSetterRule());

@@ -38,11 +38,13 @@ import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationOptionDetails;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.config.CoreOptions;
+import com.google.devtools.build.lib.analysis.config.CoreOptions.IncludeConfigFragmentsEnum;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions.SelectRestriction;
 import com.google.devtools.build.lib.analysis.config.TransitiveOptionDetails;
@@ -56,6 +58,7 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses.ConfigSettingRule;
 import com.google.devtools.build.lib.util.ClassName;
@@ -128,14 +131,21 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
       return null;
     }
 
+    // For config_setting, transitive and direct are the same (it has no transitive deps).
+    boolean includeRequiredFragments =
+        ruleContext
+                .getConfiguration()
+                .getOptions()
+                .get(CoreOptions.class)
+                .includeRequiredConfigFragmentsProvider
+            != IncludeConfigFragmentsEnum.OFF;
+
     ConfigMatchingProvider configMatcher =
         new ConfigMatchingProvider(
             ruleContext.getLabel(),
             nativeFlagSettings,
             userDefinedFlags.getSpecifiedFlagValues(),
-            ruleContext.shouldIncludeRequiredConfigFragmentsProvider()
-                ? requiredFragmentOptions.build()
-                : ImmutableSet.of(),
+            includeRequiredFragments ? requiredFragmentOptions.build() : ImmutableSet.<String>of(),
             nativeFlagsMatch && userDefinedFlags.matches() && constraintValuesMatch);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
@@ -157,7 +167,8 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
   boolean constraintValuesMatch(RuleContext ruleContext) {
     List<ConstraintValueInfo> constraintValues = new ArrayList<>();
     for (TransitiveInfoCollection dep :
-        ruleContext.getPrerequisites(ConfigSettingRule.CONSTRAINT_VALUES_ATTRIBUTE)) {
+        ruleContext.getPrerequisites(
+            ConfigSettingRule.CONSTRAINT_VALUES_ATTRIBUTE, TransitionMode.DONT_CHECK)) {
       if (!PlatformProviderUtils.hasConstraintValue(dep)) {
         ruleContext.attributeError(
             ConfigSettingRule.CONSTRAINT_VALUES_ATTRIBUTE,
@@ -301,7 +312,7 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
           if (selectRestriction.isVisibleWithinToolsPackage()) {
             errorMessage +=
                 String.format(
-                    " (it is allowlisted to %s//tools/... only)",
+                    " (it is whitelisted to %s//tools/... only)",
                     getToolsRepository(ruleContext).getDefaultCanonicalForm());
           }
           if (selectRestriction.getErrorMessage() != null) {
@@ -441,7 +452,8 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
 
       // Get the actual targets the 'flag_values' keys reference.
       Iterable<? extends TransitiveInfoCollection> prerequisites =
-          ruleContext.getPrerequisites(ConfigSettingRule.FLAG_SETTINGS_ATTRIBUTE);
+          ruleContext.getPrerequisites(
+              ConfigSettingRule.FLAG_SETTINGS_ATTRIBUTE, TransitionMode.TARGET);
 
       for (TransitiveInfoCollection target : prerequisites) {
         Label actualLabel = target.getLabel();
