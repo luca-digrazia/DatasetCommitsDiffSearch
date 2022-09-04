@@ -715,7 +715,7 @@ public class BazelJavaSemantics implements JavaSemantics {
             && !ruleContext.attributes().isAttributeValueExplicitlySpecified("args")) {
           ImmutableList.Builder<String> builder = ImmutableList.builder();
           for (Artifact artifact : sources) {
-            PathFragment path = artifact.getRepositoryRelativePath();
+            PathFragment path = artifact.getOutputDirRelativePath();
             String className = JavaUtil.getJavaFullClassname(FileSystemUtils.removeExtension(path));
             if (className != null) {
               builder.add(className);

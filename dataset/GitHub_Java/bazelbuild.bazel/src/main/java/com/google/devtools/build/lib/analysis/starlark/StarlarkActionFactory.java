@@ -82,9 +82,9 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     this.ruleContext = ruleContext;
   }
 
-  ArtifactRoot newFileRoot() {
+  ArtifactRoot newFileRoot() throws EvalException {
     return context.isForAspect()
-        ? ruleContext.getBinDirectory()
+        ? ruleContext.getConfiguration().getBinDirectory(ruleContext.getRule().getRepository())
         : ruleContext.getBinOrGenfilesDirectory();
   }
 
@@ -234,7 +234,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     String progressMessage =
         (progressMessageUnchecked != Starlark.NONE)
             ? (String) progressMessageUnchecked
-            : "Creating symlink " + outputArtifact.getExecPathString();
+            : "Creating symlink " + outputArtifact.getOutputDirRelativePathString();
 
     SymlinkAction action;
     if (targetFile != Starlark.NONE) {

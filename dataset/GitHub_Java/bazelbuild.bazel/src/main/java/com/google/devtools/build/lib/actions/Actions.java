@@ -274,11 +274,11 @@ public final class Actions {
         outputFileNames != null ? ImmutableMap.builderWithExpectedSize(outputFiles.size()) : null;
     @Nullable Label label = actionLookupKey.getLabel();
     @Nullable
-    PathFragment packageName =
+    PathFragment packageDirectory =
         outputFileNames != null
             ? Preconditions.checkNotNull(label, actionLookupKey)
                 .getPackageIdentifier()
-                .getPackageFragment()
+                .getPackagePath()
             : null;
     // Loop over the actions, looking at all outputs for conflicts.
     int actionIndex = 0;
@@ -309,9 +309,9 @@ public final class Actions {
         } else {
           // No: populate the output label map with this artifact if applicable: if this
           // artifact corresponds to a target that is an OutputFile with associated rule this label.
-          PathFragment outputPath = output.getRepositoryRelativePath();
-          if (packageName != null && outputPath.startsWith(packageName)) {
-            PathFragment packageRelativePath = outputPath.relativeTo(packageName);
+          PathFragment ouputPath = output.getOutputDirRelativePath();
+          if (packageDirectory != null && ouputPath.startsWith(packageDirectory)) {
+            PathFragment packageRelativePath = ouputPath.relativeTo(packageDirectory);
             Label outputLabel = outputFileNames.get(packageRelativePath.getPathString());
             if (outputLabel != null) {
               artifactsByOutputLabel.put(outputLabel, artifact);

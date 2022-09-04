@@ -85,12 +85,8 @@ public final class LocationExpander {
       Label root,
       Supplier<Map<Label, Collection<Artifact>>> locationMap,
       boolean execPaths,
-      boolean legacyExternalRunfiles,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
-    this(
-        ruleErrorConsumer,
-        allLocationFunctions(root, locationMap, execPaths, legacyExternalRunfiles),
-        repositoryMapping);
+    this(ruleErrorConsumer, allLocationFunctions(root, locationMap, execPaths), repositoryMapping);
   }
 
   /**
@@ -115,7 +111,6 @@ public final class LocationExpander {
         Suppliers.memoize(
             () -> LocationExpander.buildLocationMap(ruleContext, labelMap, allowData)),
         execPaths,
-        ruleContext.getConfiguration().legacyExternalRunfiles(),
         ruleContext.getRule().getPackage().getRepositoryMapping());
   }
 
@@ -235,19 +230,16 @@ public final class LocationExpander {
     private final Label root;
     private final Supplier<Map<Label, Collection<Artifact>>> locationMapSupplier;
     private final boolean execPaths;
-    private final boolean legacyExternalRunfiles;
     private final boolean multiple;
 
     LocationFunction(
         Label root,
         Supplier<Map<Label, Collection<Artifact>>> locationMapSupplier,
         boolean execPaths,
-        boolean legacyExternalRunfiles,
         boolean multiple) {
       this.root = root;
       this.locationMapSupplier = locationMapSupplier;
       this.execPaths = execPaths;
-      this.legacyExternalRunfiles = legacyExternalRunfiles;
       this.multiple = multiple;
     }
 
@@ -287,7 +279,7 @@ public final class LocationExpander {
                 unresolved, functionName()));
       }
 
-      Set<String> paths = getPaths(artifacts);
+      Set<String> paths = getPaths(artifacts, execPaths);
       if (paths.isEmpty()) {
         throw new IllegalStateException(
             String.format(
@@ -312,17 +304,14 @@ public final class LocationExpander {
      * Extracts list of all executables associated with given collection of label artifacts.
      *
      * @param artifacts to get the paths of
+     * @param takeExecPath if false, the location path will be taken
      * @return all associated executable paths
      */
-    private Set<String> getPaths(Collection<Artifact> artifacts) {
+    private Set<String> getPaths(Collection<Artifact> artifacts, boolean takeExecPath) {
       TreeSet<String> paths = Sets.newTreeSet();
       for (Artifact artifact : artifacts) {
         PathFragment execPath =
-            execPaths
-                ? artifact.getExecPath()
-                : legacyExternalRunfiles
-                    ? artifact.getPathForLocationExpansion()
-                    : artifact.getRunfilesPath();
+            takeExecPath ? artifact.getExecPath() : artifact.getPathForLocationExpansion();
         if (execPath != null) {  // omit middlemen etc
           paths.add(execPath.getCallablePathString());
         }
@@ -340,34 +329,16 @@ public final class LocationExpander {
   }
 
   static ImmutableMap<String, LocationFunction> allLocationFunctions(
-      Label root,
-      Supplier<Map<Label, Collection<Artifact>>> locationMap,
-      boolean execPaths,
-      boolean legacyExternalRunfiles) {
+      Label root, Supplier<Map<Label, Collection<Artifact>>> locationMap, boolean execPaths) {
     return new ImmutableMap.Builder<String, LocationFunction>()
-        .put(
-            "location",
-            new LocationFunction(root, locationMap, execPaths, legacyExternalRunfiles, EXACTLY_ONE))
-        .put(
-            "locations",
-            new LocationFunction(
-                root, locationMap, execPaths, legacyExternalRunfiles, ALLOW_MULTIPLE))
-        .put(
-            "rootpath",
-            new LocationFunction(
-                root, locationMap, USE_LOCATION_PATHS, legacyExternalRunfiles, EXACTLY_ONE))
+        .put("location", new LocationFunction(root, locationMap, execPaths, EXACTLY_ONE))
+        .put("locations", new LocationFunction(root, locationMap, execPaths, ALLOW_MULTIPLE))
+        .put("rootpath", new LocationFunction(root, locationMap, USE_LOCATION_PATHS, EXACTLY_ONE))
         .put(
             "rootpaths",
-            new LocationFunction(
-                root, locationMap, USE_LOCATION_PATHS, legacyExternalRunfiles, ALLOW_MULTIPLE))
-        .put(
-            "execpath",
-            new LocationFunction(
-                root, locationMap, USE_EXEC_PATHS, legacyExternalRunfiles, EXACTLY_ONE))
-        .put(
-            "execpaths",
-            new LocationFunction(
-                root, locationMap, USE_EXEC_PATHS, legacyExternalRunfiles, ALLOW_MULTIPLE))
+            new LocationFunction(root, locationMap, USE_LOCATION_PATHS, ALLOW_MULTIPLE))
+        .put("execpath", new LocationFunction(root, locationMap, USE_EXEC_PATHS, EXACTLY_ONE))
+        .put("execpaths", new LocationFunction(root, locationMap, USE_EXEC_PATHS, ALLOW_MULTIPLE))
         .build();
   }
 
