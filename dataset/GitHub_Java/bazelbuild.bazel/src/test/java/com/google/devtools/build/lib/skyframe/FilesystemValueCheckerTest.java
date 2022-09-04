@@ -919,6 +919,9 @@ public class FilesystemValueCheckerTest {
               SpecialArtifact output, Map<TreeFileArtifact, FileArtifactValue> children) {
             treeArtifactData.put(output, TreeArtifactValue.create(children));
           }
+
+          @Override
+          public void markOmitted(Artifact output) {}
         });
 
     return ActionExecutionValue.create(
