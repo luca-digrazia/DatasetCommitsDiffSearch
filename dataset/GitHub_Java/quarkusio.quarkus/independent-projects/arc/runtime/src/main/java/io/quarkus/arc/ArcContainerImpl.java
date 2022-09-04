@@ -293,33 +293,27 @@ class ArcContainerImpl implements ArcContainer {
         return beanInstanceHandle(getBean(type, qualifiers), null);
     }
 
-    <T> InstanceHandle<T> beanInstanceHandle(InjectableBean<T> bean, CreationalContextImpl<T> parentContext,
-            boolean resetCurrentInjectionPoint) {
+    <T> InstanceHandle<T> beanInstanceHandle(InjectableBean<T> bean, CreationalContextImpl<T> parentContext) {
         if (bean != null) {
             if (parentContext == null && Dependent.class.equals(bean.getScope())) {
                 parentContext = new CreationalContextImpl<>();
             }
             CreationalContextImpl<T> creationalContext = parentContext != null ? parentContext.child()
                     : new CreationalContextImpl<>();
-            InjectionPoint prev = null;
-            if (resetCurrentInjectionPoint) {
-                prev = InjectionPointProvider.set(CurrentInjectionPointProvider.EMPTY);
-            }
-
+            InjectionPoint prev = InjectionPointProvider.CURRENT.get();
+            InjectionPointProvider.CURRENT.set(CurrentInjectionPointProvider.EMPTY);
             try {
                 return new InstanceHandleImpl<T>(bean, bean.get(creationalContext), creationalContext, parentContext);
             } finally {
-                if (resetCurrentInjectionPoint) {
-                    InjectionPointProvider.set(prev);
+                if (prev != null) {
+                    InjectionPointProvider.CURRENT.set(prev);
+                } else {
+                    InjectionPointProvider.CURRENT.remove();
                 }
             }
         } else {
             return InstanceHandleImpl.unavailable();
         }
-    }
-
-    <T> InstanceHandle<T> beanInstanceHandle(InjectableBean<T> bean, CreationalContextImpl<T> parentContext) {
-        return beanInstanceHandle(bean, parentContext, true);
     }
 
     @SuppressWarnings("unchecked")
