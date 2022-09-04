@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.Rule;
@@ -69,7 +68,6 @@ import javax.annotation.Nullable;
 public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
 
   private static final String SPEED_PROTO_TOOLCHAIN_ATTR = ":aspect_java_proto_toolchain";
-  private final LateBoundLabel<BuildConfiguration> hostJdkAttribute;
 
   private static Attribute.LateBoundLabel<BuildConfiguration> getSpeedProtoToolchainLabel(
       String defaultValue) {
@@ -92,13 +90,11 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       JavaSemantics javaSemantics,
       @Nullable String jacocoLabel,
       RpcSupport rpcSupport,
-      String defaultSpeedProtoToolchainLabel,
-      LateBoundLabel<BuildConfiguration> hostJdkAttribute) {
+      String defaultSpeedProtoToolchainLabel) {
     this.javaSemantics = javaSemantics;
     this.jacocoLabel = jacocoLabel;
     this.rpcSupport = rpcSupport;
     this.defaultSpeedProtoToolchainLabel = defaultSpeedProtoToolchainLabel;
-    this.hostJdkAttribute = hostJdkAttribute;
   }
 
   @Override
@@ -138,7 +134,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                     // once it's in a Bazel release.
                     .legacyAllowAnyFileType()
                     .value(getSpeedProtoToolchainLabel(defaultSpeedProtoToolchainLabel)))
-            .add(attr(":host_jdk", LABEL).cfg(HOST).value(hostJdkAttribute))
+            .add(attr(":host_jdk", LABEL).cfg(HOST).value(JavaSemantics.HOST_JDK))
             .add(
                 attr(":java_toolchain", LABEL)
                     .useOutputLicenses()
