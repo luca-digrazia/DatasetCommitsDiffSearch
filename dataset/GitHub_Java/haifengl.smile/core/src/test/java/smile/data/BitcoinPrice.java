@@ -18,6 +18,7 @@
 package smile.data;
 
 import org.apache.commons.csv.CSVFormat;
+import smile.data.vector.BaseVector;
 import smile.io.Read;
 import smile.timeseries.TimeSeries;
 import smile.util.Paths;
@@ -33,36 +34,23 @@ import smile.util.Paths;
  *   "Feb 18, 2018",11123.40,11349.80,10326.00,10551.80,"8,744,010,000","187,663,000,000"
  *   ...
  * </pre>
- *
- * <h2>References</h2>
- * <ol>
- * <li>https://www.kaggle.com/sudalairajkumar/cryptocurrencypricehistory</li>
- * <li>https://arxiv.org/pdf/1904.05315.pdf</li>
- * </ol>
- *
+ * 
+ * @see https://www.kaggle.com/sudalairajkumar/cryptocurrencypricehistory
+ * @see https://arxiv.org/pdf/1904.05315.pdf
+ * 
  * @author rayeaster
  */
 public class BitcoinPrice {
 
     public static DataFrame data;
-    // The price series are commonly believed to be nonstationary.
-    public static double[] price;
-    // The log price series, log(price), is unit-root nonstationary,
-    // which can be treated as an ARIMA process.
-    public static double[] logPrice;
-    // The log return series, log(p_t) - log(p_t-1), is stationary.
-    public static double[] logReturn;
+    public static double[] timeseries;
 
     static {
         try {
             data = Read.csv(Paths.getTestData("timeseries/bitcoin_price.csv"), CSVFormat.DEFAULT.withFirstRecordAsHeader().withTrim());
 
-            price = data.doubleVector("Close").toDoubleArray();
-            logPrice = new double[price.length];
-            for (int i = 0; i < price.length; i++) {
-                logPrice[i] = Math.log(price[i]);
-            }
-            logReturn = TimeSeries.diff(logPrice, 1);
+            double[] close = data.doubleVector("Close").toDoubleArray();
+            timeseries = TimeSeries.diff(close, 1, 1)[0];
         } catch (Exception ex) {
             System.err.println("Failed to load 'BitcoinPrice': " + ex);
             System.exit(-1);

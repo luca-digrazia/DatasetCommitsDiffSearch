@@ -14,6 +14,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  ******************************************************************************/
+
 package smile.timeseries;
 
 import java.io.Serializable;
@@ -21,37 +22,32 @@ import java.util.Arrays;
 import java.util.stream.IntStream;
 
 import smile.math.MathEx;
-import smile.math.matrix.Cholesky;
-import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.Matrix.QR;
+import smile.math.matrix.Matrix.SVD;
 import smile.math.matrix.Matrix;
 import smile.stat.distribution.GaussianDistribution;
 
 /**
- * An Auto-Regressive Integrated Moving-Average (ARIMA) model is a
- * generalization of an Auto-Regressive Moving-Average (ARMA) model for
- * timeseries data. This implementation only support non-seasonal cases.
+ * Auto-regressive integrated moving-average. ARIMA models are applied
+ * in some cases where data show evidence of non-stationarity, where
+ * an initial differencing step (corresponding to the "integrated" part
+ * of the model) can be applied one or more times to eliminate the
+ * non-stationarity.
  * <p>
  * The AR part of ARIMA indicates that the evolving variable of interest is
- * regressed on its own lagged (i.e., prior) values.
- * <p>
- * The MA part indicates that the regression error is actually a linear
- * combination of error terms whose values occurred contemporaneously and at
- * various times in the past.
- * <p>
+ * regressed on its own lagged (i.e., prior) values. The MA part indicates
+ * that the regression error is actually a linear combination of error terms
+ * whose values occurred contemporaneously and at various times in the past.
  * The I (for "integrated") indicates that the data values have been replaced
  * with the difference between their values and the previous values (and this
  * differencing process may have been performed more than once).
- * <p>
  * 
  * <h2>References</h2>
  * <ol>
- * <li>E. J. Hannan and J. Rissanen, Recursive Estimation of Mixed
- * Autoregressive-Moving Average Order, Biometrika Vol. 69, No. 1 (Apr., 1982),
- * pp. 81-94</li>
+ * <li>E. J. Hannan and J. Rissanen, Recursive Estimation of Mixed Autoregressive-Moving Average Order, Biometrika Vol. 69, No. 1 (Apr., 1982), pp. 81-94</li>
  * </ol>
  * 
  * @author rayeaster
- *
  */
 public class ARIMA implements Serializable {
 
@@ -447,75 +443,15 @@ public class ARIMA implements Serializable {
         }
 
         // model fit for linear combination
-        DenseMatrix toeplitz = Matrix.toeplitz(Arrays.copyOfRange(r, 0, p));
+        Matrix toeplitz = Matrix.toeplitz(Arrays.copyOfRange(r, 0, p));
         double[] y = Arrays.copyOfRange(r, 1, r.length);
 
-        Cholesky ols = toeplitz.cholesky();
-        ols.solve(y);
+        y = solveLinearReg(toeplitz, y);
         assert (y != null && y.length == p);
 
         y = restrictCoefficients(y);
 
         return y;
-    }
-
-    /**
-     * calculate the Auto Correlation Function (ACF) for given data array and
-     * lag
-     * 
-     * @param data
-     *            timeseries to calculate the ACF
-     * @param k
-     *            lag within the given timeseries data
-     * @return ACF value for given timeseries and lag
-     */
-    public static double acf(double[] data, int k) {
-
-        if (k == 0) {
-            return 1;
-        }
-
-        double ret = 0;
-        int N = data.length;
-        double mean = MathEx.mean(data);
-        double selfSSE = Arrays.stream(data).map(v -> Math.pow(v - mean, 2)).sum();
-        double lagSSE = IntStream.range(k, N - 1).mapToDouble(i -> (data[i] - mean) * (data[i - k] - mean)).sum();
-        ret = (N / (N - k)) * (lagSSE / selfSSE);
-        return ret;
-    }
-
-    /**
-     * calculate the Partial Auto Correlation Function (PACF) for given data
-     * array and lag
-     * 
-     * @param data
-     *            timeseries to calculate the PACF
-     * @param k
-     *            lag within the given timeseries data
-     * @return PACF value for given timeseries and lag
-     */
-    public static double pacf(double[] data, int k) {
-        if (k == 0) {
-            return 1;
-        } else if (k == 1) {
-            return acf(data, k);
-        }
-
-        double[] acfs = new double[k];
-        for (int i = 0; i < acfs.length; i++) {
-            acfs[i] = acf(data, i);
-        }
-
-        DenseMatrix toeplitz = Matrix.toeplitz(acfs);
-        double[] y = new double[k];
-        y[k - 1] = acf(data, k);
-        System.arraycopy(acfs, 1, y, 0, k - 1);
-
-        Cholesky ols = toeplitz.cholesky();
-        ols.solve(y);
-        assert (y != null && y.length == k);
-
-        return y[k - 1];
     }
 
     /**
@@ -662,13 +598,13 @@ public class ARIMA implements Serializable {
 
             // model fit for linear combination
             double[] rVector = new double[colSize];
-            DenseMatrix x = Matrix.of(iterationData);
+            Matrix x = new Matrix(iterationData);
             double[] y = Arrays.copyOfRange(trainingData, start, trainingEndIndex);
             x = x.transpose();
-            DenseMatrix xtx = x.aat();
-            rVector = x.ax(y, rVector);
-            Cholesky ols = xtx.cholesky();
-            ols.solve(rVector);
+            Matrix xtx = x.aat();
+            x.mv(y, rVector);
+            
+            rVector = solveLinearReg(xtx, rVector);
 
             assert (rVector != null && rVector.length == colSize);
             rVector = restrictCoefficients(rVector);
@@ -807,6 +743,54 @@ public class ARIMA implements Serializable {
             val += coeff[i - 1] * lags[index - i];
         }
         return val;
+    }
+
+    /**
+     * solve linear regression for given matrix and save coefficients into y
+     * 
+     * @param X
+     *            matrix to be solved
+     * @param y
+     *            solved coefficients of linear regression
+     * @return solved coefficients of linear regression
+     */
+    private static double[] solveLinearReg(Matrix X, double[] y) {
+        try {          
+//            // copied from deprecated JMatrix, but not working as expected
+//            int n = X.nrows();
+//            for (int j = 0; j < n; j++) {
+//                double d = 0.0;
+//                for (int k = 0; k < j; k++) {
+//                    double s = 0.0;
+//                    for (int i = 0; i < k; i++) {
+//                        s += X.get(k, i) * X.get(j, i);
+//                    }
+//                    s = (X.get(j, k) - s) / X.get(k, k);
+//                    X.set(j, k, s);
+//                    d = d + s * s;
+//                }
+//                d = X.get(j, j) - d;
+//
+//                if (d < 0.0) {
+//                    throw new IllegalArgumentException("The matrix is not positive definite.");
+//                }
+//
+//                X.set(j, j, Math.sqrt(d));
+//            }
+//            Cholesky ols = new Cholesky(X); 
+            
+//            Cholesky ols = X.cholesky();
+//            y = ols.solve(y);   
+            
+            QR qr = X.qr();
+            y = qr.solve(y);
+
+        } catch (ArithmeticException e) {
+            logger.warn("Matrix is not of full rank, try SVD instead : " + e.getMessage());
+            SVD svd = X.svd();
+            y = svd.solve(y);
+        }
+        return y;
     }
 
     /**
