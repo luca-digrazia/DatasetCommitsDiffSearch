@@ -149,18 +149,12 @@ import smile.util.Strings;
             logger.info("{} epoch", Strings.ordinal(epoch));
             int[] permutation = MathEx.permutate(x.length);
             for (int i = 0; i < x.length; i += batch) {
-                int size = Math.min(batch, x.length - i);
-                for (int j = 0; j < size; j++) {
-                    int index = permutation[i + j];
-                    batchx[j] = x[index];
-                    batchy[j] = y[index];
+                for (int j = 0; j < batch; j++) {
+                    int pi = permutation[(i+j) % x.length];
+                    batchx[j] = x[pi];
+                    batchy[j] = y[pi];
                 }
-
-                if (size < batch) {
-                    model.update(Arrays.copyOf(batchx, size), Arrays.copyOf(batchy, size));
-                } else {
-                    model.update(batchx, batchy);
-                }
+                model.update(batchx, batchy);
             }
         }
 
