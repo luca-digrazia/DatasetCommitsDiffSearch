@@ -748,7 +748,7 @@ final class Eval {
   private static Object evalComprehension(StarlarkThread.Frame fr, Comprehension comp)
       throws EvalException, InterruptedException {
     final Dict<Object, Object> dict = comp.isDict() ? Dict.of(fr.thread.mutability()) : null;
-    final StarlarkList.Builder<Object> list = comp.isDict() ? null : StarlarkList.builder();
+    final ArrayList<Object> list = comp.isDict() ? null : new ArrayList<>();
 
     // Save previous value (if any) of local variables bound in a 'for' clause
     // so we can restore them later.
@@ -836,7 +836,7 @@ final class Eval {
       }
     }
 
-    return comp.isDict() ? dict : list.build(fr.thread.mutability());
+    return comp.isDict() ? dict : StarlarkList.copyOf(fr.thread.mutability(), list);
   }
 
   private static final Object[] EMPTY = {};

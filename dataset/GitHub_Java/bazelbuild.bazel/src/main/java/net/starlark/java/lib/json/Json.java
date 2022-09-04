@@ -24,12 +24,12 @@ import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Mutability;
 import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkFloat;
 import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkIterable;
 import net.starlark.java.eval.StarlarkList;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.syntax.Location;
 
 // Tests at //src/test/java/net/starlark/java/eval:testdata/json.sky
 
@@ -45,7 +45,10 @@ public final class Json implements StarlarkValue {
 
   private Json() {}
 
-  /** Call {@code Starlark.addModule(env, Json.INSTANCE)} to add json to the environment. */
+  /**
+   * The module instance. You may wish to add this to your predeclared environment under the name
+   * "json".
+   */
   public static final Json INSTANCE = new Json();
 
   /** An interface for StarlarkValue subclasses to define their own JSON encoding. */
@@ -117,13 +120,13 @@ public final class Json implements StarlarkValue {
         return;
       }
 
-      // if (x instanceof StarlarkFloat) {
-      //   if (!Double.isFinite(((StarlarkFloat) x).toDouble())) {
-      //     throw Starlark.errorf("cannot encode non-finite float %s", x);
-      //   }
-      //   out.append(x.toString()); // always contains a decimal point or exponent
-      //   return;
-      // }
+      if (x instanceof StarlarkFloat) {
+        if (!Double.isFinite(((StarlarkFloat) x).toDouble())) {
+          throw Starlark.errorf("cannot encode non-finite float %s", x);
+        }
+        out.append(x.toString()); // always contains a decimal point or exponent
+        return;
+      }
 
       if (x instanceof Encodable) {
         // Application-defined Starlark value types
@@ -280,8 +283,9 @@ public final class Json implements StarlarkValue {
               + "It returns the Starlark value that the string denotes.\n"
               + "<ul>"
               + "<li>'null', 'true', and 'false' are parsed as None, True, and False.\n"
-              + "<li>Numbers are parsed as int or float, depending on whether they contain either"
-              + " a decimal point or an exponent.\n"
+              + "<li>Numbers are parsed as int, or as a float if they contain"
+              + " a decimal point or an exponent. Although JSON has no syntax "
+              + " for non-finite values, very large values may be decoded as infinity.\n"
               + "<li>a JSON object is parsed as a new unfrozen Starlark dict."
               + " Keys must be unique strings.\n"
               + "<li>a JSON array is parsed as new unfrozen Starlark list.\n"
@@ -362,7 +366,7 @@ public final class Json implements StarlarkValue {
           if (c != ']') {
             while (true) {
               Object elem = parse();
-              list.add(elem, (Location) null); // can't fail
+              list.addElement(elem); // can't fail
               c = next();
               if (c != ',') {
                 if (c != ']') {
@@ -395,7 +399,7 @@ public final class Json implements StarlarkValue {
               i++; // ':'
               Object value = parse();
               int sz = dict.size();
-              dict.put((String) key, value, (Location) null); // can't fail
+              dict.putEntry((String) key, value); // can't fail
               if (dict.size() == sz) {
                 throw Starlark.errorf("object has duplicate key: %s", Starlark.repr(key));
               }
@@ -540,9 +544,8 @@ public final class Json implements StarlarkValue {
       // parse number literal
       try {
         if (isfloat) {
-          Double.parseDouble(num);
-          throw Starlark.errorf("floats not yet supported");
-          // return StarlarkFloat.of(x);
+          double x = Double.parseDouble(num);
+          return StarlarkFloat.of(x);
         } else {
           return StarlarkInt.parse(num, 10);
         }

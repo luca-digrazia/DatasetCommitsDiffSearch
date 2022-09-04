@@ -443,7 +443,7 @@ final class EvalUtils {
       String string = (String) object;
       int index = Starlark.toInt(key, "string index");
       index = getSequenceIndex(index, string.length());
-      return StringModule.memoizedCharToString(string.charAt(index));
+      return string.substring(index, index + 1);
     } else {
       throw Starlark.errorf(
           "type '%s' has no operator [](%s)", Starlark.type(object), Starlark.type(key));
@@ -477,8 +477,8 @@ final class EvalUtils {
 
   /** Updates the named field of x as if by the Starlark statement {@code x.field = value}. */
   static void setField(Object x, String field, Object value) throws EvalException {
-    if (x instanceof Structure) {
-      ((Structure) x).setField(field, value);
+    if (x instanceof ClassObject) {
+      ((ClassObject) x).setField(field, value);
     } else {
       throw Starlark.errorf("cannot set .%s field of %s value", field, Starlark.type(x));
     }
