@@ -296,9 +296,8 @@ public class SkylarkRepositoryContext
       Integer timeout,
       SkylarkDict<String, String> environment,
       boolean quiet,
-      String workingDirectory,
       Location location)
-      throws EvalException, RepositoryFunctionException, InterruptedException {
+      throws EvalException, RepositoryFunctionException {
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newExecuteEvent(
             arguments,
@@ -311,15 +310,9 @@ public class SkylarkRepositoryContext
             location);
     env.getListener().post(w);
     createDirectory(outputDirectory);
-
-    Path workingDirectoryPath = outputDirectory;
-    if (workingDirectory != null && !workingDirectory.isEmpty()) {
-      workingDirectoryPath = getPath("execute()", workingDirectory).getPath();
-    }
-    createDirectory(workingDirectoryPath);
     return SkylarkExecutionResult.builder(osObject.getEnvironmentVariables())
         .addArguments(arguments)
-        .setDirectory(workingDirectoryPath.getPathFile())
+        .setDirectory(outputDirectory.getPathFile())
         .addEnvironmentVariables(environment)
         .setTimeout(Math.round(timeout.longValue() * 1000 * timeoutScaling))
         .setQuiet(quiet)
@@ -406,8 +399,7 @@ public class SkylarkRepositoryContext
               Optional.<String>absent(),
               outputPath.getPath(),
               env.getListener(),
-              osObject.getEnvironmentVariables(),
-              getName());
+              osObject.getEnvironmentVariables());
       if (executable) {
         outputPath.getPath().setExecutable(true);
       }
@@ -493,8 +485,7 @@ public class SkylarkRepositoryContext
               Optional.of(type),
               outputPath.getPath(),
               env.getListener(),
-              osObject.getEnvironmentVariables(),
-              getName());
+              osObject.getEnvironmentVariables());
     } catch (InterruptedException e) {
       env.getListener().post(w);
       throw new RepositoryFunctionException(
