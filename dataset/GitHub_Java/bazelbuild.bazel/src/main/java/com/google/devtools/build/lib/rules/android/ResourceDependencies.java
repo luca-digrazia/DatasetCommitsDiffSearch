@@ -202,8 +202,10 @@ public final class ResourceDependencies {
     return AndroidResourcesProvider.create(label, transitiveResources, directResources);
   }
 
-  /** Provides an NestedSet of the direct and transitive resources. */
-  public NestedSet<ResourceContainer> getResources() {
+  /**
+   * Provides an NestedSet of the direct and transitive resources.
+   */
+  public Iterable<ResourceContainer> getResources() {
     return NestedSetBuilder.<ResourceContainer>naiveLinkOrder()
         .addTransitive(directResources)
         .addTransitive(transitiveResources)

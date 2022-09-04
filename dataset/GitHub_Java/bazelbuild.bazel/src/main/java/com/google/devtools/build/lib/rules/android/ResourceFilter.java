@@ -28,8 +28,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.common.options.EnumConverter;
-import com.google.devtools.common.options.OptionsParsingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -67,12 +65,6 @@ public class ResourceFilter {
      * processing actions or to reverse dependencies.
      */
     FILTER_IN_ANALYSIS_WITH_DYNAMIC_CONFIGURATION;
-
-    private static final class Converter extends EnumConverter<FilterBehavior> {
-      Converter() {
-        super(FilterBehavior.class, "resource filter behavior");
-      }
-    }
   }
 
   static final FilterBehavior DEFAULT_BEHAVIOR = FilterBehavior.FILTER_IN_EXECUTION;
@@ -164,14 +156,7 @@ public class ResourceFilter {
   static ResourceFilter fromRuleContext(RuleContext ruleContext) {
     Preconditions.checkNotNull(ruleContext);
 
-    if (!ruleContext.isLegalFragment(AndroidConfiguration.class)) {
-      return empty(DEFAULT_BEHAVIOR);
-    }
-
-    return ruleContext
-        .getFragment(AndroidConfiguration.class)
-        .getResourceFilter()
-        .withAttrsFrom(ruleContext.attributes());
+    return empty(ruleContext).withAttrsFrom(ruleContext.attributes());
   }
 
   /**
@@ -232,7 +217,15 @@ public class ResourceFilter {
   }
 
   static ResourceFilter empty(RuleContext ruleContext) {
-    return empty(fromRuleContext(ruleContext).filterBehavior);
+    if (!ruleContext.isLegalFragment(AndroidConfiguration.class)) {
+      return empty(DEFAULT_BEHAVIOR);
+    }
+
+    FilterBehavior filterBehavior =
+        ruleContext.getFragment(AndroidConfiguration.class).useResourcePrefiltering()
+            ? FilterBehavior.FILTER_IN_ANALYSIS
+            : FilterBehavior.FILTER_IN_EXECUTION;
+    return empty(filterBehavior);
   }
 
   private static ResourceFilter empty(FilterBehavior filterBehavior) {
@@ -527,25 +520,5 @@ public class ResourceFilter {
    */
   ImmutableList<String> getFilteredResources() {
     return filteredResources.build().asList();
-  }
-
-  /**
-   * Converts command line settings for the filter behavior into an empty {@link ResourceFilter}
-   * object.
-   */
-  public static final class Converter
-      implements com.google.devtools.common.options.Converter<ResourceFilter> {
-    private final FilterBehavior.Converter filterEnumConverter = new FilterBehavior.Converter();
-
-    @Override
-    public ResourceFilter convert(String input) throws OptionsParsingException {
-
-      return ResourceFilter.empty(filterEnumConverter.convert(input));
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return filterEnumConverter.getTypeDescription();
-    }
   }
 }
