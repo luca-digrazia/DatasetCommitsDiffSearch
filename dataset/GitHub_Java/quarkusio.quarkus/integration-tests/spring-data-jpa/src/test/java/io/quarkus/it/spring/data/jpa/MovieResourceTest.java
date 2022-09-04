@@ -8,13 +8,16 @@ import static org.hamcrest.Matchers.is;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.common.mapper.TypeRef;
 
 @QuarkusTest
 public class MovieResourceTest {
@@ -182,6 +185,13 @@ public class MovieResourceTest {
         when().get("/movie/customFind/page/10/0").then()
                 .statusCode(200)
                 .body(containsString("false /"));
+
+        List<Movie> movies = when().get("/movie/customFind/all").then()
+                .statusCode(200)
+                .extract().body().as(new TypeRef<List<Movie>>() {
+                });
+        List<Long> ids = movies.stream().map(MovieSuperclass::getId).collect(Collectors.toList());
+        assertThat(ids).isNotEmpty().isSortedAccordingTo(Comparator.reverseOrder());
     }
 
     @Test
@@ -189,6 +199,31 @@ public class MovieResourceTest {
         when().get("/movie/count/rating").then()
                 .statusCode(200)
                 .body(containsString("rating"));
+    }
+
+    @Test
+    void testFindAllRatings() {
+        when().get("/movie/ratings").then()
+                .statusCode(200)
+                .body(containsString("PG"))
+                .body(containsString("PG-13"));
+    }
+
+    @Test
+    void testFindRatingByTitle() {
+        when().get("/movie/rating/forTitle/Interstellar").then()
+                .statusCode(200)
+                .body(containsString("Interstellar"))
+                .body(containsString("PG-13"))
+                .body(not(containsString("duration")));
+    }
+
+    @Test
+    void testFindOptionalRatingByTitle() {
+        when().get("/movie/rating/opt/forTitle/Aladdin").then()
+                .statusCode(200)
+                .body(containsString("Aladdin"))
+                .body(not(containsString("duration")));
     }
 
     @Test
@@ -210,5 +245,12 @@ public class MovieResourceTest {
         when().get("/movie/delete/title/" + title).then()
                 .statusCode(200)
                 .body(is("1"));
+    }
+
+    @Test
+    void getTitle() {
+        when().get("/movie/titles/rating/PG-13").then()
+                .statusCode(200)
+                .body(containsString("Godzilla"));
     }
 }
