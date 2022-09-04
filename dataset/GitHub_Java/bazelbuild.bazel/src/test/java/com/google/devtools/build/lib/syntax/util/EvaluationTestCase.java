@@ -33,7 +33,7 @@ import com.google.devtools.build.lib.syntax.Environment.FailFastException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.Statement;
@@ -68,10 +68,8 @@ public class EvaluationTestCase {
     BazelStarlarkContext context =
         new BazelStarlarkContext(
             TestConstants.TOOLS_REPOSITORY,
-            /* fragmentNameToClass= */ null,
             /* repoMapping= */ ImmutableMap.of(),
-            new SymbolGenerator<>(new Object()),
-            /* analysisRuleLabel= */ null);
+            new SymbolGenerator<>(new Object()));
     Environment env =
         Environment.builder(mutability)
             .useDefaultSemantics()
@@ -161,7 +159,7 @@ public class EvaluationTestCase {
   }
 
   protected final BuildFileAST parseBuildFileASTWithoutValidation(String... lines) {
-    ParserInput input = ParserInput.fromLines(lines);
+    ParserInputSource input = ParserInputSource.fromLines(lines);
     return BuildFileAST.parse(input, getEventHandler());
   }
 
@@ -185,7 +183,7 @@ public class EvaluationTestCase {
 
   /** Parses an expression. */
   protected final Expression parseExpression(String... lines) {
-    return Expression.parse(ParserInput.fromLines(lines), getEventHandler());
+    return Expression.parse(ParserInputSource.fromLines(lines), getEventHandler());
   }
 
   public EvaluationTestCase update(String varname, Object value) throws Exception {
@@ -198,7 +196,7 @@ public class EvaluationTestCase {
   }
 
   public Object eval(String... lines) throws Exception {
-    ParserInput input = ParserInput.fromLines(lines);
+    ParserInputSource input = ParserInputSource.fromLines(lines);
     if (testMode == TestMode.SKYLARK) {
       // TODO(adonovan): inline this call and factor with 'else' case.
       return BuildFileAST.eval(input, env);
