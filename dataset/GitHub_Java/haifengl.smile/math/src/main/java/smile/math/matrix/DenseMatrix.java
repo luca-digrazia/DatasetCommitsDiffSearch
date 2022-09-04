@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.math.matrix;
@@ -47,11 +46,6 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
     }
 
     /**
-     * Fill the matrix with a value.
-     */
-    void fill(double x);
-
-    /**
      * Set the entry value at row i and column j.
      */
     double set(int i, int j, double x);
@@ -61,28 +55,6 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      */
     default double update(int i, int j, double x) {
         return set(i, j, x);
-    }
-
-    /**
-     * Returns the submatrix which top left at (i, j) and bottom right at (k, l).
-     */
-    default DenseMatrix apply(int i, int j, int k, int l) {
-        return submat(i, j, k, l);
-    }
-
-    /**
-     * Returns the submatrix which top left at (i, j) and bottom right at (k, l).
-     */
-    default DenseMatrix submat(int i, int j, int k, int l) {
-        DenseMatrix w = Matrix.zeros(k - i + 1, l - j + 1);
-
-        for (int n = 0; j <= l; n++, j++) {
-            for (int m = 0; i <= k; m++, i++) {
-                w.set(m, n, get(i, j));
-            }
-        }
-
-        return w;
     }
 
     /**
