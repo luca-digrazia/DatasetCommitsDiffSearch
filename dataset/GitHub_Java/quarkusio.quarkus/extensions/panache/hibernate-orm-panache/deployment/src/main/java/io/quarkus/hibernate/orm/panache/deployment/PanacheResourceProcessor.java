@@ -134,7 +134,7 @@ public final class PanacheResourceProcessor {
                 modelEnhancer.collectFields(classInfo);
         }
         for (String modelClass : modelClasses) {
-            transformers.produce(new BytecodeTransformerBuildItem(true, modelClass, modelEnhancer));
+            transformers.produce(new BytecodeTransformerBuildItem(modelClass, modelEnhancer));
 
             // lookup for `@NamedQuery` on the hierarchy and produce NamedQueryEntityClassBuildStep
             Set<String> typeNamedQueries = new HashSet<>();
