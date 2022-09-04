@@ -2,10 +2,12 @@ package com.yammer.dropwizard.logging;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.PatternLayout;
 import ch.qos.logback.classic.filter.ThresholdFilter;
 import ch.qos.logback.classic.net.SyslogAppender;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.ConsoleAppender;
+import ch.qos.logback.core.Context;
 import ch.qos.logback.core.rolling.DefaultTimeBasedFileNamingAndTriggeringPolicy;
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
@@ -20,10 +22,11 @@ public class LogbackFactory {
 
 
     public static SyslogAppender buildSyslogAppender(SyslogConfiguration syslog,
-                                                     LoggerContext context,
+                                                     Context context,
                                                      String name) {
-        final SyslogFormatter layout = new SyslogFormatter(context, syslog.getTimeZone(), name);
+        final PatternLayout layout = new PatternLayout();
         layout.setContext(context);
+        layout.setPattern('[' + name + "] %logger %msg");
         layout.start();
 
         final SyslogAppender appender = new SyslogAppender();
