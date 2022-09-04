@@ -48,7 +48,7 @@ public abstract class DirectoryTreeTest {
   public void setup() {
     FileSystem fs = new InMemoryFileSystem(new JavaClock(), DigestHashFunction.SHA256);
     execRoot = fs.getPath("/exec");
-    artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, false, "srcs");
+    artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, "srcs");
     digestUtil = new DigestUtil(fs.getDigestFunction());
   }
 
@@ -74,10 +74,9 @@ public abstract class DirectoryTreeTest {
     assertThat(directoriesAtDepth(1, tree)).containsExactly("fizz");
     assertThat(directoriesAtDepth(2, tree)).isEmpty();
 
-    FileNode expectedFooNode = new FileNode("foo.cc", foo, digestUtil.computeAsUtf8("foo"), false);
-    FileNode expectedBarNode = new FileNode("bar.cc", bar, digestUtil.computeAsUtf8("bar"), false);
-    FileNode expectedBuzzNode =
-        new FileNode("buzz.cc", buzz, digestUtil.computeAsUtf8("buzz"), false);
+    FileNode expectedFooNode = new FileNode("foo.cc", foo, digestUtil.computeAsUtf8("foo"));
+    FileNode expectedBarNode = new FileNode("bar.cc", bar, digestUtil.computeAsUtf8("bar"));
+    FileNode expectedBuzzNode = new FileNode("buzz.cc", buzz, digestUtil.computeAsUtf8("buzz"));
     assertThat(fileNodesAtDepth(tree, 0)).isEmpty();
     assertThat(fileNodesAtDepth(tree, 1)).containsExactly(expectedFooNode, expectedBarNode);
     assertThat(fileNodesAtDepth(tree, 2)).containsExactly(expectedBuzzNode);

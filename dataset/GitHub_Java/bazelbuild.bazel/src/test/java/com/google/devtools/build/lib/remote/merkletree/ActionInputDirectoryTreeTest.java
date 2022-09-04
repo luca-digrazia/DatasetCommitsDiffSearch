@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.remote.merkletree.DirectoryTree.FileNode;
 import com.google.devtools.build.lib.remote.util.StaticMetadataProvider;
+import com.google.devtools.build.lib.remote.util.StringActionInput;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -132,9 +133,8 @@ public class ActionInputDirectoryTreeTest extends DirectoryTreeTest {
 
   private static VirtualActionInput addVirtualFile(
       String path, String content, SortedMap<PathFragment, ActionInput> sortedInputs) {
-    PathFragment pathFragment = PathFragment.create(path);
-    VirtualActionInput input = ActionsTestUtil.createVirtualActionInput(pathFragment, content);
-    sortedInputs.put(pathFragment, input);
+    VirtualActionInput input = new StringActionInput(content, PathFragment.create(path));
+    sortedInputs.put(PathFragment.create(path), input);
     return input;
   }
 
