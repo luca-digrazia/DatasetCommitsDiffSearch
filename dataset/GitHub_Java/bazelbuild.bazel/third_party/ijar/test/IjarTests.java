@@ -13,7 +13,6 @@
 // limitations under the License.
 
 import static com.google.common.truth.Truth.assertThat;
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
@@ -21,23 +20,28 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.java.bazel.BazelJavaCompiler;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
+import org.objectweb.asm.Opcodes;
+
 import java.io.File;
 import java.io.IOException;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.TypeElement;
@@ -47,12 +51,6 @@ import javax.tools.JavaCompiler;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
-import org.objectweb.asm.Opcodes;
 
 /**
  * JUnit tests for ijar tool.
@@ -272,24 +270,6 @@ public class IjarTests {
   @Test
   public void moduleInfo() throws Exception {
     Map<String, byte[]> lib = readJar("third_party/ijar/test/module_info-interface.jar");
-    assertThat(lib.keySet())
-        .containsExactly("java/lang/String.class", "module-info.class", "foo/module-info.class");
-    // ijar passes module-infos through unmodified, so it doesn't care that these ones are bogus
-    assertThat(new String(lib.get("module-info.class"), UTF_8)).isEqualTo("hello");
-    assertThat(new String(lib.get("foo/module-info.class"), UTF_8)).isEqualTo("goodbye");
-  }
-
-  @Test
-  public void testTargetLabel() throws Exception {
-    try (JarFile jf =
-        new JarFile("third_party/ijar/test/interface_ijar_testlib_with_target_label.jar")) {
-      Manifest manifest = jf.getManifest();
-      Attributes attributes = manifest.getMainAttributes();
-      assertThat(attributes.getValue("Target-Label")).isEqualTo("//foo:foo");
-      assertThat(attributes.getValue("Injecting-Rule-Kind")).isEqualTo("foo_library");
-      assertThat(jf.getEntry(JarFile.MANIFEST_NAME).getLastModifiedTime().toInstant())
-          .isEqualTo(
-              Instant.ofEpochMilli(new GregorianCalendar(1980, 0, 1, 0, 0, 0).getTimeInMillis()));
-    }
+    assertThat(lib.keySet()).containsExactly("java/lang/String.class");
   }
 }
