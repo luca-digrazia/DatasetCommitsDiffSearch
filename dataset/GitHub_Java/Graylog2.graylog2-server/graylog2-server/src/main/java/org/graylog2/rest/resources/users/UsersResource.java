@@ -31,7 +31,6 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Configuration;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.plugin.database.users.User;
 import org.graylog2.rest.models.users.requests.ChangePasswordRequest;
 import org.graylog2.rest.models.users.requests.ChangeUserRequest;
 import org.graylog2.rest.models.users.requests.CreateUserRequest;
@@ -55,7 +54,6 @@ import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
@@ -82,7 +80,6 @@ import java.util.Set;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static org.graylog2.shared.security.RestPermissions.USERS_EDIT;
 import static org.graylog2.shared.security.RestPermissions.USERS_PERMISSIONSEDIT;
-import static org.graylog2.shared.security.RestPermissions.USERS_ROLESEDIT;
 
 @RequiresAuthentication
 @Path("/users")
@@ -167,7 +164,16 @@ public class UsersResource extends RestResource {
         user.setFullName(cr.fullName());
         user.setEmail(cr.email());
         user.setPermissions(cr.permissions());
-        setUserRoles(cr.roles(), user);
+        final List<String> roles = cr.roles();
+        if (roles != null) {
+            try {
+                final Map<String, Role> nameMap = roleService.loadAllLowercaseNameMap();
+                final Iterable<String> roleIds = Iterables.transform(roles, Roles.roleNameToIdFunction(nameMap));
+                user.setRoleIds(Sets.newHashSet(roleIds));
+            } catch (org.graylog2.database.NotFoundException e) {
+                throw new InternalServerErrorException(e);
+            }
+        }
 
         if (cr.timezone() != null) {
             user.setTimeZone(cr.timezone());
@@ -191,18 +197,6 @@ public class UsersResource extends RestResource {
                 .build(user.getName());
 
         return Response.created(userUri).build();
-    }
-
-    private void setUserRoles(@Nullable List<String> roles, User user) {
-        if (roles != null) {
-            try {
-                final Map<String, Role> nameMap = roleService.loadAllLowercaseNameMap();
-                final Iterable<String> roleIds = Iterables.transform(roles, Roles.roleNameToIdFunction(nameMap));
-                user.setRoleIds(Sets.newHashSet(roleIds));
-            } catch (org.graylog2.database.NotFoundException e) {
-                throw new InternalServerErrorException(e);
-            }
-        }
     }
 
     @PUT
@@ -236,10 +230,6 @@ public class UsersResource extends RestResource {
         final boolean permitted = isPermitted(USERS_PERMISSIONSEDIT, user.getName());
         if (permitted && cr.permissions() != null) {
             user.setPermissions(cr.permissions());
-        }
-
-        if (isPermitted(USERS_ROLESEDIT, user.getName())) {
-            setUserRoles(cr.roles(), user);
         }
 
         final String timezone = cr.timezone();
