@@ -14,13 +14,12 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.analysis.config.BuildOptions.DiffToByteCache;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiff;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiffForReconstruction;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.TestUtils;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.protobuf.ByteString;
 import java.util.AbstractMap;
 import java.util.stream.Collectors;
 import org.junit.Test;
@@ -41,9 +39,9 @@ import org.junit.runners.JUnit4;
 /**
  * A test for {@link BuildOptions}.
  *
- * <p>Currently this tests native options and Starlark options completely separately since these two
+ * <p>Currently this tests native options and skylark options completely separately since these two
  * types of options do not interact. In the future when we begin to migrate native options to
- * Starlark options, the format of this test class will need to accommodate that overlap.
+ * skylark options, the format of this test class will need to accommodate that overlap.
  */
 @RunWith(JUnit4.class)
 public final class BuildOptionsTest {
@@ -569,28 +567,6 @@ public final class BuildOptionsTest {
     BuildOptions original = BuildOptions.of(ImmutableList.of(CppOptions.class, JavaOptions.class));
     BuildOptions trimmed = original.trim(ImmutableSet.of(CppOptions.class, JavaOptions.class));
     assertThat(trimmed).isSameInstanceAs(original);
-  }
-
-  @Test
-  public void noSharingBetweenDiffToBytesCacheInstances() {
-    BuildOptions options = BuildOptions.builder().build();
-    OptionsDiffForReconstruction diff = BuildOptions.diffForReconstruction(options, options);
-    ByteString serialized1 = ByteString.copyFromUtf8("1");
-    ByteString serialized2 = ByteString.copyFromUtf8("2");
-    DiffToByteCache cache1 = new DiffToByteCache();
-    DiffToByteCache cache2 = new DiffToByteCache();
-
-    cache1.putBytesFromOptionsDiff(diff, serialized1);
-    assertThat(cache1.getBytesFromOptionsDiff(diff)).isEqualTo(serialized1);
-    assertThat(cache1.getOptionsDiffFromBytes(serialized1)).isEqualTo(diff);
-    assertThat(cache2.getBytesFromOptionsDiff(diff)).isNull();
-    assertThat(cache2.getOptionsDiffFromBytes(serialized1)).isNull();
-
-    cache2.putBytesFromOptionsDiff(diff, serialized2);
-    assertThat(cache1.getBytesFromOptionsDiff(diff)).isEqualTo(serialized1);
-    assertThat(cache1.getOptionsDiffFromBytes(serialized2)).isNull();
-    assertThat(cache2.getBytesFromOptionsDiff(diff)).isEqualTo(serialized2);
-    assertThat(cache2.getOptionsDiffFromBytes(serialized2)).isEqualTo(diff);
   }
 
   private static OptionsDiffForReconstruction uncachedDiffForReconstruction(

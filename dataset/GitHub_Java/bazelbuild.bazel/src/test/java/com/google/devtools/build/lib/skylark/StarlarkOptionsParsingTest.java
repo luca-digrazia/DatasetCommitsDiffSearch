@@ -23,12 +23,17 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
+import com.google.devtools.build.lib.runtime.BlazeCommand;
+import com.google.devtools.build.lib.runtime.BlazeCommandEventHandler.Options;
+import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.ClientOptions;
+import com.google.devtools.build.lib.runtime.Command;
+import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.CommonCommandOptions;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.StarlarkOptionsParser;
-import com.google.devtools.build.lib.runtime.UiOptions;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
@@ -54,7 +59,7 @@ public class StarlarkOptionsParsingTest extends SkylarkTestCase {
           KeepGoingOption.class,
           LoadingOptions.class,
           ClientOptions.class,
-          UiOptions.class,
+          Options.class,
           CommonCommandOptions.class);
 
   @Before
@@ -70,9 +75,36 @@ public class StarlarkOptionsParsingTest extends SkylarkTestCase {
             skyframeExecutor, reporter, PathFragment.EMPTY_FRAGMENT, optionsParser);
   }
 
+  @Command(
+      name = "residue",
+      builds = true,
+      options = {
+        PackageCacheOptions.class,
+        StarlarkSemanticsOptions.class,
+        KeepGoingOption.class,
+        LoadingOptions.class,
+        ClientOptions.class,
+        Options.class,
+      },
+      allowResidue = true,
+      shortDescription =
+          "a dummy command for testing that allows residue and recognizes all"
+              + " relevant options for starlark options parsing.",
+      help = "")
+  private static class ResidueCommand implements BlazeCommand {
+    @Override
+    public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
+      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+    }
+
+    @Override
+    public void editOptions(OptionsParser optionsParser) {}
+  }
+
   private OptionsParsingResult parseStarlarkOptions(String options) throws Exception {
     starlarkOptionsParser.setResidueForTesting(Arrays.asList(options.split(" ")));
-    starlarkOptionsParser.parse(new StoredEventHandler());
+    starlarkOptionsParser.parse(
+        ResidueCommand.class.getAnnotation(Command.class), new StoredEventHandler());
     return starlarkOptionsParser.getNativeOptionsParserFortesting();
   }
 
@@ -126,21 +158,6 @@ public class StarlarkOptionsParsingTest extends SkylarkTestCase {
 
     assertThat(result.getStarlarkOptions()).hasSize(1);
     assertThat(result.getStarlarkOptions().get("//test:my_int_setting")).isEqualTo(666);
-    assertThat(result.getResidue()).isEmpty();
-  }
-
-  // test --@workspace//flag=value
-  @Test
-  public void testFlagNameWithWorkspace() throws Exception {
-    writeBasicIntFlag();
-    rewriteWorkspace("workspace(name = 'starlark_options_test')");
-
-    OptionsParsingResult result =
-        parseStarlarkOptions("--@starlark_options_test//test:my_int_setting=666");
-
-    assertThat(result.getStarlarkOptions()).hasSize(1);
-    assertThat(result.getStarlarkOptions().get("@starlark_options_test//test:my_int_setting"))
-        .isEqualTo(666);
     assertThat(result.getResidue()).isEmpty();
   }
 
@@ -388,15 +405,5 @@ public class StarlarkOptionsParsingTest extends SkylarkTestCase {
     OptionsParsingResult result = parseStarlarkOptions("--//test:my_int_setting=42");
 
     assertThat(result.getStarlarkOptions()).isEmpty();
-  }
-
-  @Test
-  public void testOptionsAreParsedWithBuildTestsOnly() throws Exception {
-    writeBasicIntFlag();
-    optionsParser.parse("--build_tests_only");
-
-    OptionsParsingResult result = parseStarlarkOptions("--//test:my_int_setting=15");
-
-    assertThat(result.getStarlarkOptions().get("//test:my_int_setting")).isEqualTo(15);
   }
 }

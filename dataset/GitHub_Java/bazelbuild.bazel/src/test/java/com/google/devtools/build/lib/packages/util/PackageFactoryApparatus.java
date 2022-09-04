@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
+import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.GlobCache;
@@ -32,7 +33,7 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -59,6 +60,7 @@ public class PackageFactoryApparatus {
     factory =
         new PackageFactory(
             ruleClassProvider,
+            AttributeContainer::new,
             ImmutableList.copyOf(environmentExtensions),
             "test",
             Package.Builder.DefaultHelper.INSTANCE);
@@ -139,8 +141,8 @@ public class PackageFactoryApparatus {
    */
   public BuildFileAST ast(Path buildFile) throws IOException {
     byte[] bytes = FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
-    ParserInput input = ParserInput.create(bytes, buildFile.asFragment());
-    return BuildFileAST.parse(input, eventHandler);
+    ParserInputSource inputSource = ParserInputSource.create(bytes, buildFile.asFragment());
+    return BuildFileAST.parseBuildFile(inputSource, eventHandler);
   }
 
   /** Evaluates the {@code buildFileAST} into a {@link Package}. */

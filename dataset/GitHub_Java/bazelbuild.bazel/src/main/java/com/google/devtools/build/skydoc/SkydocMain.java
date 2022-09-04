@@ -52,8 +52,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformBootstrap;
 import com.google.devtools.build.lib.skylarkbuildapi.proto.ProtoBootstrap;
 import com.google.devtools.build.lib.skylarkbuildapi.python.PyBootstrap;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryBootstrap;
-import com.google.devtools.build.lib.skylarkbuildapi.stubs.ProviderStub;
-import com.google.devtools.build.lib.skylarkbuildapi.stubs.SkylarkAspectStub;
 import com.google.devtools.build.lib.skylarkbuildapi.test.TestingBootstrap;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
@@ -163,14 +161,6 @@ public class SkydocMain {
   private final SkylarkFileAccessor fileAccessor;
   private final List<String> depRoots;
   private final String workspaceName;
-  private static final String HEADER_TEMPLATE_PATH =
-      "com/google/devtools/build/skydoc/rendering/templates/header.vm";
-  private static final String RULE_TEMPLATE_PATH =
-      "com/google/devtools/build/skydoc/rendering/templates/rule.vm";
-  private static final String PROVIDER_TEMPLATE_PATH =
-      "com/google/devtools/build/skydoc/rendering/templates/provider.vm";
-  private static final String FUNCTION_TEMPLATE_PATH =
-      "com/google/devtools/build/skydoc/rendering/templates/func.vm";
 
   public SkydocMain(SkylarkFileAccessor fileAccessor, String workspaceName, List<String> depRoots) {
     this.fileAccessor = fileAccessor;
@@ -203,20 +193,31 @@ public class SkydocMain {
     ImmutableSet<String> symbolNames;
     ImmutableList<String> depRoots;
 
+    // TODO(cparsons): Remove optional positional arg parsing.
+    List<String> residualArgs = parser.getResidue();
     if (Strings.isNullOrEmpty(skydocOptions.targetFileLabel)
         || Strings.isNullOrEmpty(skydocOptions.outputFilePath)) {
-      throw new IllegalArgumentException("Expected a target file label and an output file path.");
-    }
+      if (residualArgs.size() < 2) {
+        throw new IllegalArgumentException(
+            "Expected two or more arguments. Usage:\n"
+                + "{skydoc_bin} {target_skylark_file_label} {output_file} [symbol_names]...");
+      }
 
-    targetFileLabelString = skydocOptions.targetFileLabel;
-    outputPath = skydocOptions.outputFilePath;
-    symbolNames = ImmutableSet.copyOf(skydocOptions.symbolNames);
-    depRoots = ImmutableList.copyOf(skydocOptions.depRoots);
+      targetFileLabelString = residualArgs.get(0);
+      outputPath = residualArgs.get(1);
+      symbolNames = getSymbolNames(residualArgs);
+      depRoots = ImmutableList.of();
+    } else {
+      targetFileLabelString = skydocOptions.targetFileLabel;
+      outputPath = skydocOptions.outputFilePath;
+      symbolNames = ImmutableSet.copyOf(skydocOptions.symbolNames);
+      depRoots = ImmutableList.copyOf(skydocOptions.depRoots);
+    }
 
     Label targetFileLabel = Label.parseAbsolute(targetFileLabelString, ImmutableMap.of());
 
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMap = ImmutableMap.builder();
-    ImmutableMap.Builder<String, ProviderInfo> providerInfoMap = ImmutableMap.builder();
+    ImmutableMap.Builder<String, ProviderInfoWrapper> providerInfoMap = ImmutableMap.builder();
     ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctions = ImmutableMap.builder();
 
     try {
@@ -236,7 +237,7 @@ public class SkydocMain {
         ruleInfoMap.build().entrySet().stream()
             .filter(entry -> validSymbolName(symbolNames, entry.getKey()))
             .collect(ImmutableMap.toImmutableMap(Entry::getKey, Entry::getValue));
-    Map<String, ProviderInfo> filteredProviderInfos =
+    Map<String, ProviderInfoWrapper> filteredProviderInfos =
         providerInfoMap.build().entrySet().stream()
             .filter(entry -> validSymbolName(symbolNames, entry.getKey()))
             .collect(ImmutableMap.toImmutableMap(Entry::getKey, Entry::getValue));
@@ -254,12 +255,7 @@ public class SkydocMain {
             .writeModuleInfo(out);
       }
     } else if (skydocOptions.outputFormat == OutputFormat.MARKDOWN) {
-      MarkdownRenderer renderer =
-          new MarkdownRenderer(
-              HEADER_TEMPLATE_PATH,
-              RULE_TEMPLATE_PATH,
-              PROVIDER_TEMPLATE_PATH,
-              FUNCTION_TEMPLATE_PATH);
+      MarkdownRenderer renderer = new MarkdownRenderer();
       try (PrintWriter printWriter = new PrintWriter(outputPath, "UTF-8")) {
         printWriter.println(renderer.renderMarkdownHeader());
         printRuleInfos(printWriter, renderer, filteredRuleInfos);
@@ -282,6 +278,14 @@ public class SkydocMain {
     return false;
   }
 
+  private static ImmutableSet<String> getSymbolNames(List<String> args) {
+    ImmutableSet.Builder<String> symbolNameSet = ImmutableSet.builder();
+    for (int argi = 2; argi < args.size(); argi++) {
+      symbolNameSet.add(args.get(argi));
+    }
+    return symbolNameSet.build();
+  }
+
   private static void printRuleInfos(
       PrintWriter printWriter, MarkdownRenderer renderer, Map<String, RuleInfo> ruleInfos)
       throws IOException {
@@ -292,11 +296,13 @@ public class SkydocMain {
   }
 
   private static void printProviderInfos(
-      PrintWriter printWriter, MarkdownRenderer renderer, Map<String, ProviderInfo> providerInfos)
+      PrintWriter printWriter,
+      MarkdownRenderer renderer,
+      Map<String, ProviderInfoWrapper> providerInfos)
       throws IOException {
-    for (Entry<String, ProviderInfo> entry : providerInfos.entrySet()) {
-      ProviderInfo providerInfo = entry.getValue();
-      printProviderInfo(printWriter, renderer, entry.getKey(), providerInfo);
+    for (Entry<String, ProviderInfoWrapper> entry : providerInfos.entrySet()) {
+      ProviderInfoWrapper infoWrapper = entry.getValue();
+      printProviderInfo(printWriter, renderer, entry.getKey(), infoWrapper.getProviderInfo());
       printWriter.println();
     }
   }
@@ -363,7 +369,7 @@ public class SkydocMain {
       StarlarkSemantics semantics,
       Label label,
       ImmutableMap.Builder<String, RuleInfo> ruleInfoMap,
-      ImmutableMap.Builder<String, ProviderInfo> providerInfoMap,
+      ImmutableMap.Builder<String, ProviderInfoWrapper> providerInfoMap,
       ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctionMap)
       throws InterruptedException, IOException, LabelSyntaxException, EvalException,
           StarlarkEvaluationException {
@@ -387,14 +393,11 @@ public class SkydocMain {
 
     for (Entry<String, Object> envEntry : sortedBindings.entrySet()) {
       if (ruleFunctions.containsKey(envEntry.getValue())) {
-        RuleInfo.Builder ruleInfoBuild = ruleFunctions.get(envEntry.getValue()).getRuleInfo();
-        RuleInfo ruleInfo = ruleInfoBuild.setRuleName(envEntry.getKey()).build();
+        RuleInfo ruleInfo = ruleFunctions.get(envEntry.getValue()).getRuleInfo();
         ruleInfoMap.put(envEntry.getKey(), ruleInfo);
       }
       if (providerInfos.containsKey(envEntry.getValue())) {
-        ProviderInfo.Builder providerInfoBuild =
-            providerInfos.get(envEntry.getValue()).getProviderInfo();
-        ProviderInfo providerInfo = providerInfoBuild.setProviderName(envEntry.getKey()).build();
+        ProviderInfoWrapper providerInfo = providerInfos.get(envEntry.getValue());
         providerInfoMap.put(envEntry.getKey(), providerInfo);
       }
       if (envEntry.getValue() instanceof UserDefinedFunction) {
@@ -402,38 +405,17 @@ public class SkydocMain {
         userDefinedFunctionMap.put(envEntry.getKey(), userDefinedFunction);
       }
       if (envEntry.getValue() instanceof FakeStructApi) {
-        String namespaceName = envEntry.getKey();
-        FakeStructApi namespace = (FakeStructApi) envEntry.getValue();
-        putStructFields(namespaceName, namespace, userDefinedFunctionMap);
+        FakeStructApi struct = (FakeStructApi) envEntry.getValue();
+        for (String field : struct.getFieldNames()) {
+          if (struct.getValue(field) instanceof UserDefinedFunction) {
+            UserDefinedFunction userDefinedFunction = (UserDefinedFunction) struct.getValue(field);
+            userDefinedFunctionMap.put(envEntry.getKey() + "." + field, userDefinedFunction);
+          }
+        }
       }
     }
 
     return env;
-  }
-
-  /**
-   * Recursively adds functions defined in {@code namespace}, and in its nested namespaces, to
-   * {@code userDefinedFunctionMap}.
-   *
-   * <p>Each entry's key is the fully qualified function name, e.g. {@code
-   * "outernamespace.innernamespace.func"}. {@code namespaceName} is the fully qualified name of
-   * {@code namespace} itself.
-   */
-  private static void putStructFields(
-      String namespaceName,
-      FakeStructApi namespace,
-      ImmutableMap.Builder<String, UserDefinedFunction> userDefinedFunctionMap)
-      throws EvalException {
-    for (String field : namespace.getFieldNames()) {
-      String qualifiedFieldName = namespaceName + "." + field;
-      if (namespace.getValue(field) instanceof UserDefinedFunction) {
-        UserDefinedFunction userDefinedFunction = (UserDefinedFunction) namespace.getValue(field);
-        userDefinedFunctionMap.put(qualifiedFieldName, userDefinedFunction);
-      } else if (namespace.getValue(field) instanceof FakeStructApi) {
-        FakeStructApi innerNamespace = (FakeStructApi) namespace.getValue(field);
-        putStructFields(qualifiedFieldName, innerNamespace, userDefinedFunctionMap);
-      }
-    }
   }
 
   /**
@@ -584,11 +566,7 @@ public class SkydocMain {
             new FakeJavaCcLinkParamsProvider.Provider());
     PlatformBootstrap platformBootstrap = new PlatformBootstrap(new FakePlatformCommon());
     ProtoBootstrap protoBootstrap =
-        new ProtoBootstrap(
-            new FakeProtoInfoApiProvider(),
-            new FakeProtoModule(),
-            new SkylarkAspectStub(),
-            new ProviderStub());
+        new ProtoBootstrap(new FakeProtoInfoApiProvider(), new FakeProtoModule());
     PyBootstrap pyBootstrap =
         new PyBootstrap(new FakePyInfoProvider(), new FakePyRuntimeInfoProvider());
     RepositoryBootstrap repositoryBootstrap =
@@ -639,6 +617,8 @@ public class SkydocMain {
     ProguardMappingProviderApi.NAME,
     GeneratedExtensionRegistryProviderApi.NAME,
     AndroidBinaryDataInfoApi.NAME,
+    "ProtoRegistryAspect",
+    "JspbInfo",
   };
 
   /**

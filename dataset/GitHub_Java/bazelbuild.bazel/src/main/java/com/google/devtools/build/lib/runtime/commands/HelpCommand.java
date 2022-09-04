@@ -116,6 +116,9 @@ public final class HelpCommand implements BlazeCommand {
   }
 
   @Override
+  public void editOptions(OptionsParser optionsParser) {}
+
+  @Override
   public BlazeCommandResult exec(CommandEnvironment env, OptionsParsingResult options) {
     env.getEventBus().post(new NoBuildEvent());
 

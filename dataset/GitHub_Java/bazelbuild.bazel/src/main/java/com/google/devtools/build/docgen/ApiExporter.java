@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuiltinCallable;
-import com.google.devtools.build.lib.syntax.CallUtils;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.MethodDescriptor;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
@@ -122,9 +122,11 @@ public class ApiExporter {
       } else {
         SkylarkModule typeModule = SkylarkInterfaceUtils.getSkylarkModule(obj.getClass());
         if (typeModule != null) {
-          if (CallUtils.hasSelfCallMethod(StarlarkSemantics.DEFAULT_SEMANTICS, obj.getClass())) {
+          if (FuncallExpression.hasSelfCallMethod(
+              StarlarkSemantics.DEFAULT_SEMANTICS, obj.getClass())) {
             MethodDescriptor descriptor =
-                CallUtils.getSelfCallMethodDescriptor(StarlarkSemantics.DEFAULT_SEMANTICS, obj);
+                FuncallExpression.getSelfCallMethodDescriptor(
+                    StarlarkSemantics.DEFAULT_SEMANTICS, obj);
 
             value = collectFunctionInfo(
                 descriptor.getName(),

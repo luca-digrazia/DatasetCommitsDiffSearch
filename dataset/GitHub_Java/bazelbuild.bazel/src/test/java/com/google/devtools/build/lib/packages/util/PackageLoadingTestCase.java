@@ -117,6 +117,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             .setFileSystem(fileSystem)
             .setDirectories(directories)
             .setActionKeyContext(actionKeyContext)
+            .setBuildInfoFactories(ruleClassProvider.getBuildInfoFactories())
             .setDefaultBuildOptions(
                 DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
             .build();

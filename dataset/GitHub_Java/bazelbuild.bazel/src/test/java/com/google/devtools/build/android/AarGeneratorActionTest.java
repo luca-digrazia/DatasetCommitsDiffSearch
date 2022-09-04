@@ -308,7 +308,8 @@ public class AarGeneratorActionTest {
 
     String[] args = new String[] {"--manifest", manifest.toString(), "--rtxt", rtxt.toString(),
         "--classes", classes.toString()};
-    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
+    OptionsParser optionsParser =
+        OptionsParser.builder().optionsClasses(AarGeneratorOptions.class).build();
     optionsParser.parse(args);
     AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
     AarGeneratorAction.checkFlags(options);
@@ -321,7 +322,8 @@ public class AarGeneratorActionTest {
     Files.createFile(rtxt);
 
     String[] args = new String[] {"--manifest", manifest.toString(), "--rtxt", rtxt.toString()};
-    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
+    OptionsParser optionsParser =
+        OptionsParser.builder().optionsClasses(AarGeneratorOptions.class).build();
     optionsParser.parse(args);
     AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
     thrown.expect(IllegalArgumentException.class);
@@ -334,7 +336,8 @@ public class AarGeneratorActionTest {
     Path manifest = tempDir.resolve("AndroidManifest.xml");
     Files.createFile(manifest);
     String[] args = new String[] {"--manifest", manifest.toString()};
-    OptionsParser optionsParser = OptionsParser.newOptionsParser(AarGeneratorOptions.class);
+    OptionsParser optionsParser =
+        OptionsParser.builder().optionsClasses(AarGeneratorOptions.class).build();
     optionsParser.parse(args);
     AarGeneratorOptions options = optionsParser.getOptions(AarGeneratorOptions.class);
     thrown.expect(IllegalArgumentException.class);
@@ -667,7 +670,7 @@ public class AarGeneratorActionTest {
     Path assetsOut = working.resolve("assets");
 
     MergedAndroidData mergedData =
-        AndroidResourceMerger.mergeData(
+        AndroidResourceMerger.mergeDataAndWrite(
             primary,
             ImmutableList.of(d1, d2),
             ImmutableList.<DependencyAndroidData>of(),
@@ -730,14 +733,16 @@ public class AarGeneratorActionTest {
         aarData.proguardSpecs);
     Set<String> zipEntries = getZipEntries(aar);
     assertThat(zipEntries).contains("proguard.txt");
-    ZipReader aarReader = new ZipReader(aar.toFile());
-    List<String> proguardTxtContents =
-        new BufferedReader(
-                new InputStreamReader(
-                    aarReader.getInputStream(aarReader.getEntry("proguard.txt")),
-                    StandardCharsets.UTF_8))
-            .lines()
-            .collect(Collectors.toList());
+    List<String> proguardTxtContents = null;
+    try (ZipReader aarReader = new ZipReader(aar.toFile())) {
+      try (BufferedReader entryReader =
+          new BufferedReader(
+              new InputStreamReader(
+                  aarReader.getInputStream(aarReader.getEntry("proguard.txt")),
+                  StandardCharsets.UTF_8))) {
+        proguardTxtContents = entryReader.lines().collect(Collectors.toList());
+      }
+    }
     assertThat(proguardTxtContents).containsExactly("foo", "bar", "baz").inOrder();
   }
 }
