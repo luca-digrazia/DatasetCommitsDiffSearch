@@ -16,18 +16,16 @@
  */
 package org.graylog2.indexer.retention.strategies;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Stopwatch;
-import org.graylog2.auditlog.AuditLogger;
 import org.graylog2.indexer.Deflector;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.plugin.indexer.retention.RetentionStrategyConfig;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionStrategy {
@@ -40,9 +38,8 @@ public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionS
     public DeletionRetentionStrategy(Deflector deflector,
                                      Indices indices,
                                      ActivityWriter activityWriter,
-                                     ClusterConfigService clusterConfigService,
-                                     AuditLogger auditLogger) {
-        super(deflector, indices, activityWriter, auditLogger);
+                                     ClusterConfigService clusterConfigService) {
+        super(deflector, indices, activityWriter);
         this.indices = indices;
         this.clusterConfigService = clusterConfigService;
     }
@@ -54,7 +51,7 @@ public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionS
         if (config != null) {
             return Optional.of(config.maxNumberOfIndices());
         } else {
-            return Optional.empty();
+            return Optional.absent();
         }
     }
 
@@ -69,12 +66,7 @@ public class DeletionRetentionStrategy extends AbstractIndexCountBasedRetentionS
     }
 
     @Override
-    public Class<? extends RetentionStrategyConfig> configurationClass() {
+    public Class<?> configurationClass() {
         return DeletionRetentionStrategyConfig.class;
-    }
-
-    @Override
-    public RetentionStrategyConfig defaultConfiguration() {
-        return DeletionRetentionStrategyConfig.createDefault();
     }
 }
