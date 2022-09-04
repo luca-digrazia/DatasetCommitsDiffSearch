@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.BlockingQueue;
@@ -42,7 +43,6 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -84,7 +84,7 @@ abstract class FileTransport implements BuildEventTransport {
     private static final Duration FLUSH_INTERVAL = Duration.ofMillis(250);
 
     private final Thread writerThread;
-    private final BufferedOutputStream out;
+    private final OutputStream out;
     private final Function<BuildEventStreamProtos.BuildEvent, byte[]> serializeFunc;
     private final BuildEventArtifactUploader uploader;
     private final AtomicBoolean isClosed = new AtomicBoolean();
@@ -149,21 +149,12 @@ abstract class FileTransport implements BuildEventTransport {
     }
 
     private void exitFailure(Throwable e) {
-      final String message;
-      // Print a more useful error message when the upload times out.
-      // An {@link ExecutionException} may be wrapping a {@link TimeoutException} if the
-      // Future was created with {@link Futures#withTimeout}.
-      if (e instanceof ExecutionException
-          && e.getCause() instanceof TimeoutException) {
-        message = "Unable to write all BEP events to file due to timeout";
-      } else {
-        message =
-            String.format("Unable to write all BEP events to file due to '%s'", e.getMessage());
-      }
+      String msg =
+          String.format("Unable to write all BEP events to file due to '%s'", e.getMessage());
       closeFuture.setException(
-          new AbruptExitException(message, ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR, e));
+          new AbruptExitException(msg, ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR, e));
       pendingWrites.clear();
-      logger.log(Level.SEVERE, message, e);
+      logger.log(Level.SEVERE, msg, e);
     }
 
     private void closeNow() {
