@@ -276,7 +276,6 @@ public class GrpcRemoteExecutionClientTest {
 
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
-    assertThat(result.isCacheHit()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
     assertThat(outErr.hasRecordedOutput()).isFalse();
     assertThat(outErr.hasRecordedStderr()).isFalse();
@@ -305,7 +304,6 @@ public class GrpcRemoteExecutionClientTest {
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.isCacheHit()).isTrue();
     assertThat(outErr.outAsLatin1()).isEqualTo("stdout");
     assertThat(outErr.errAsLatin1()).isEqualTo("stderr");
   }
@@ -329,7 +327,6 @@ public class GrpcRemoteExecutionClientTest {
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.isCacheHit()).isTrue();
     assertThat(outErr.outAsLatin1()).isEqualTo("stdout");
     assertThat(outErr.errAsLatin1()).isEqualTo("stderr");
   }
@@ -485,7 +482,6 @@ public class GrpcRemoteExecutionClientTest {
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.isCacheHit()).isFalse();
     assertThat(outErr.outAsLatin1()).isEqualTo("stdout");
     assertThat(outErr.errAsLatin1()).isEqualTo("stderr");
   }
@@ -683,7 +679,6 @@ public class GrpcRemoteExecutionClientTest {
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.isCacheHit()).isFalse();
     assertThat(outErr.outAsLatin1()).isEqualTo("stdout");
     assertThat(outErr.errAsLatin1()).isEqualTo("stderr");
     Mockito.verify(mockExecutionImpl, Mockito.times(4))
@@ -938,7 +933,6 @@ public class GrpcRemoteExecutionClientTest {
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.isCacheHit()).isFalse();
     assertThat(outErr.outAsLatin1()).isEqualTo("stdout");
   }
 }
