@@ -266,12 +266,4 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
   public XmlResourceValue combineWith(XmlResourceValue value) {
     throw new IllegalArgumentException(this + " is not a combinable resource.");
   }
-  
-  @Override
-  public String asConflictStringWith(DataSource source) {
-    if (value != null) {
-      return String.format(" %s (with value %s)", source.asConflictString(), value);
-    }
-    return source.asConflictString();
-  }
 }
