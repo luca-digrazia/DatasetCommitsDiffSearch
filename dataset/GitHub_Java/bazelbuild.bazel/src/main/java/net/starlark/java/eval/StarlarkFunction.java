@@ -35,27 +35,14 @@ import net.starlark.java.syntax.StringLiteral;
     doc = "The type of functions declared in Starlark.")
 public final class StarlarkFunction implements StarlarkCallable {
 
-  final Resolver.Function rfn;
-  final int[] globalIndex; // index in Module.globals of ith Program global (binding index)
+  private final Resolver.Function rfn;
   private final Module module; // a function closes over its defining module
   private final Tuple defaultValues;
 
-  StarlarkFunction(Resolver.Function rfn, Tuple defaultValues, Module module, int[] globalIndex) {
+  StarlarkFunction(Resolver.Function rfn, Tuple defaultValues, Module module) {
     this.rfn = rfn;
-    this.globalIndex = globalIndex;
     this.module = module;
     this.defaultValues = defaultValues;
-  }
-
-  // Sets a global variable, given its index in this function's compiled Program.
-  void setGlobal(int progIndex, Object value) {
-    module.setGlobalByIndex(globalIndex[progIndex], value);
-  }
-
-  // Gets the value of a global variable, given its index in this function's compiled Program.
-  @Nullable
-  Object getGlobal(int progIndex) {
-    return module.getGlobalByIndex(globalIndex[progIndex]);
   }
 
   boolean isToplevel() {
@@ -165,8 +152,11 @@ public final class StarlarkFunction implements StarlarkCallable {
     Object[] arguments = processArgs(thread.mutability(), positional, named);
 
     StarlarkThread.Frame fr = thread.frame(0);
-    fr.locals = new Object[rfn.getLocals().size()];
-    System.arraycopy(arguments, 0, fr.locals, 0, rfn.getParameterNames().size());
+    ImmutableList<String> names = rfn.getParameterNames();
+    for (int i = 0; i < names.size(); ++i) {
+      fr.locals.put(names.get(i), arguments[i]);
+    }
+
     return Eval.execFunctionBody(fr, rfn.getBody());
   }
 

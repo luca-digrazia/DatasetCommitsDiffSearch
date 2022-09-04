@@ -126,6 +126,8 @@ public final class StarlarkThread {
     @Nullable
     final Debug.Debugger dbg = Debug.debugger.get(); // the debugger, if active for this frame
 
+    int compcount = 0; // number of enclosing comprehensions
+
     Object result = Starlark.NONE; // the operand of a Starlark return statement
 
     // Current PC location. Initially fn.getLocation(); for Starlark functions,
