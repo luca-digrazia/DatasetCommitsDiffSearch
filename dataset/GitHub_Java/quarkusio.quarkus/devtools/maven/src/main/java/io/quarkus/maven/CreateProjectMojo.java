@@ -15,7 +15,6 @@ import static org.twdata.maven.mojoexecutor.MojoExecutor.version;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -62,6 +61,12 @@ public class CreateProjectMojo extends AbstractMojo {
 
     final private static boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows");
 
+    private static String pluginKey;
+
+    public static String getPluginKey() {
+        return pluginKey == null ? pluginKey = MojoUtils.getPluginGroupId() + ":" + MojoUtils.getPluginArtifactId() : pluginKey;
+    }
+
     private static final String DEFAULT_GROUP_ID = "org.acme.quarkus.sample";
 
     @Parameter(defaultValue = "${project}")
@@ -97,17 +102,8 @@ public class CreateProjectMojo extends AbstractMojo {
     @Parameter(property = "extensions")
     private Set<String> extensions;
 
-    @Parameter(property = "outputDirectory", defaultValue = "${basedir}")
-    private File outputDirectory;
-
     @Parameter(defaultValue = "${session}")
     private MavenSession session;
-
-    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true)
-    private List<RemoteRepository> repos;
-
-    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
-    private RepositorySystemSession repoSession;
 
     @Component
     private Prompter prompter;
@@ -124,6 +120,12 @@ public class CreateProjectMojo extends AbstractMojo {
     @Component
     private RepositorySystem repoSystem;
 
+    @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
+    private RepositorySystemSession repoSession;
+
+    @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true)
+    private List<RemoteRepository> repos;
+
     @Override
     public void execute() throws MojoExecutionException {
 
@@ -133,12 +135,8 @@ public class CreateProjectMojo extends AbstractMojo {
         // We detect the Maven version during the project generation to indicate the user immediately that the installed
         // version may not be supported.
         mavenVersionEnforcer.ensureMavenVersion(getLog(), session);
-        try {
-            Files.createDirectories(outputDirectory.toPath());
-        } catch (IOException e) {
-            throw new MojoExecutionException("Could not create directory " + outputDirectory, e);
-        }
-        File projectRoot = outputDirectory;
+
+        File projectRoot = new File(".");
         File pom = new File(projectRoot, "pom.xml");
 
         if (pom.isFile()) {
@@ -158,7 +156,7 @@ public class CreateProjectMojo extends AbstractMojo {
         } else {
             askTheUserForMissingValues();
             if (!isDirectoryEmpty(projectRoot)) {
-                projectRoot = new File(outputDirectory, projectArtifactId);
+                projectRoot = new File(projectArtifactId);
                 if (projectRoot.exists()) {
                     throw new MojoExecutionException("Unable to create the project - the current directory is not empty and" +
                             " the directory " + projectArtifactId + " exists");
