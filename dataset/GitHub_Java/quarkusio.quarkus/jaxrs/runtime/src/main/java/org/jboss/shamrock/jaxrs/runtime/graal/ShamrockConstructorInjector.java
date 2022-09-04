@@ -1,9 +1,8 @@
 package org.jboss.shamrock.jaxrs.runtime.graal;
 
 import java.lang.reflect.Constructor;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 
+import javax.enterprise.inject.Instance;
 import javax.ws.rs.WebApplicationException;
 
 import org.jboss.resteasy.spi.ApplicationException;
@@ -11,53 +10,41 @@ import org.jboss.resteasy.spi.ConstructorInjector;
 import org.jboss.resteasy.spi.Failure;
 import org.jboss.resteasy.spi.HttpRequest;
 import org.jboss.resteasy.spi.HttpResponse;
-import org.jboss.shamrock.runtime.BeanContainer;
 
 /**
  * Created by bob on 7/31/18.
  */
 public class ShamrockConstructorInjector implements ConstructorInjector {
-
-    private volatile BeanContainer.Factory<?> factory;
-
-
     public ShamrockConstructorInjector(Constructor ctor, ConstructorInjector delegate) {
         this.ctor = ctor;
         this.delegate = delegate;
     }
 
     @Override
-    public CompletionStage<Object> construct(boolean unwrapAsync) {
+    public Object construct() {
         System.err.println("construct() " + this.ctor);
-        return this.delegate.construct(unwrapAsync);
+        return this.delegate.construct();
     }
 
     @Override
-    public CompletionStage<Object> construct(HttpRequest request, HttpResponse response, boolean unwrapAsync)
-            throws Failure, WebApplicationException, ApplicationException {
+    public Object construct(HttpRequest request, HttpResponse response) throws Failure, WebApplicationException, ApplicationException {
         System.err.println("construct(req,resp) " + this.ctor);
         System.err.println("CAN WE CDI? " + ShamrockInjectorFactory.CONTAINER);
         if (ShamrockInjectorFactory.CONTAINER == null) {
-            return delegate.construct(request, response, unwrapAsync);
+            return delegate.construct(request, response);
         }
-        if(factory == null) {
-            factory = ShamrockInjectorFactory.CONTAINER.instanceFactory(this.ctor.getDeclaringClass());
-        }
-        if(factory == null) {
-            return delegate.construct(request, response, unwrapAsync);
-        }
-        return CompletableFuture.completedFuture(factory.get());
+        Instance object = ShamrockInjectorFactory.CONTAINER.select(this.ctor.getDeclaringClass());
+        return object.get();
     }
 
     @Override
-    public CompletionStage<Object[]> injectableArguments(boolean unwrapAsync) {
-        return this.delegate.injectableArguments(unwrapAsync);
+    public Object[] injectableArguments() {
+        return this.delegate.injectableArguments();
     }
 
     @Override
-    public CompletionStage<Object[]> injectableArguments(HttpRequest request, HttpResponse response, boolean unwrapAsync)
-            throws Failure {
-        return this.delegate.injectableArguments(request, response, unwrapAsync);
+    public Object[] injectableArguments(HttpRequest request, HttpResponse response) throws Failure {
+        return this.delegate.injectableArguments(request, response);
     }
 
     private final ConstructorInjector delegate;
