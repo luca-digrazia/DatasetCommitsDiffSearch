@@ -28,7 +28,7 @@ import smile.data.Attribute;
  *
  * @author Haifeng Li
  */
-public class Standardizer extends FeatureTransform {
+public class Standardizer implements FeatureTransform {
     /**
      * Mean or median.
      */
@@ -38,23 +38,34 @@ public class Standardizer extends FeatureTransform {
      */
     double[] std;
 
-    /**
-     * Constructor.
-     */
-    public Standardizer() {
+    /** Default constructor. */
+    Standardizer() {
 
     }
 
     /**
-     * Constructor.
-     * @param copy  If false, try to avoid a copy and do inplace scaling instead.
+     * Constructor. Learn the scaling parameters from the data.
+     * @param data The training data to learn scaling parameters.
+     *             The data will not be modified.
      */
-    public Standardizer(boolean copy) {
-        super(copy);
+    public Standardizer(double[][] data) {
+        mu = Math.colMeans(data);
+        std = Math.colSds(data);
+
+        for (int i = 0; i < std.length; i++) {
+            if (Math.isZero(std[i]))
+                std[i] = 1.0;
+        }
     }
 
-    @Override
-    public void learn(Attribute[] attributes, double[][] data) {
+    /**
+     * Constructor. Learn the scaling parameters from the data.
+     * @param attributes The variable attributes. Of which, numeric variables
+     *                   will be standardized.
+     * @param data The training data to learn scaling parameters.
+     *             The data will not be modified.
+     */
+    public Standardizer(Attribute[] attributes, double[][] data) {
         mu = Math.colMeans(data);
         std = Math.colSds(data);
 
@@ -69,35 +80,23 @@ public class Standardizer extends FeatureTransform {
         }
     }
 
+    /**
+     * Standardizes the input vector.
+     * @param x a vector to be standardized. The vector will be modified on output.
+     * @return the input vector.
+     */
     @Override
     public double[] transform(double[] x) {
         if (x.length != mu.length) {
             throw new IllegalArgumentException(String.format("Invalid vector size %d, expected %d", x.length, mu.length));
         }
 
-        double[] y = copy ? new double[x.length] : x;
         for (int i = 0; i < x.length; i++) {
             if (!Double.isNaN(mu[i])) {
-                y[i] = (x[i] - mu[i]) / std[i];
-            } else {
-                y[i] = x[i];
+                x[i] = (x[i] - mu[i]) / std[i];
             }
         }
 
-        return y;
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Standardizer(");
-        if (mu != null) {
-            sb.append("\n");
-            for (int i = 0; i < mu.length; i++) {
-                sb.append(String.format("  [%.4f, %.4f]%n", mu[i], std[i]));
-            }
-        }
-        sb.append(")");
-        return sb.toString();
+        return x;
     }
 }
