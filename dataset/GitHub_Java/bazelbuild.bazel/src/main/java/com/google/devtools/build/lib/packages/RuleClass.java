@@ -676,7 +676,6 @@ public class RuleClass {
     private boolean isAnalysisTest = false;
     private boolean hasAnalysisTestTransition = false;
     private boolean hasFunctionTransitionWhitelist = false;
-    private boolean hasStarlarkRuleTransition = false;
     private boolean ignorePackageLicenses = false;
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
     private RuleTransitionFactory transitionFactory;
@@ -1073,14 +1072,6 @@ public class RuleClass {
       Preconditions.checkNotNull(transitionFactory);
       this.transitionFactory = transitionFactory;
       return this;
-    }
-
-    public void setHasStarlarkRuleTransition() {
-      hasStarlarkRuleTransition = true;
-    }
-
-    public boolean hasStarlarkRuleTransition() {
-      return hasStarlarkRuleTransition;
     }
 
     public Builder factory(ConfiguredTargetFactory<?, ?, ?> factory) {
