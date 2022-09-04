@@ -299,13 +299,13 @@ public class QuarkusTestExtension
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
         restAssuredURLManager.clearURL();
-        TestScopeManager.tearDown();
+        TestScopeManager.setup();
     }
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
         restAssuredURLManager.setURL();
-        TestScopeManager.setup();
+        TestScopeManager.tearDown();
     }
 
     @Override
