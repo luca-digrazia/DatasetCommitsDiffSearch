@@ -1,10 +1,24 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.runner;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -53,7 +67,7 @@ public class RuntimeRunner implements Runnable, Closeable {
             allPaths.add(target);
             allPaths.addAll(builder.additionalHotDeploymentPaths);
             RuntimeClassLoader runtimeClassLoader = new RuntimeClassLoader(builder.classLoader, allPaths,
-                    builder.getWiringClassesDir(), builder.transformerCache);
+                    builder.frameworkClassesPath, builder.transformerCache);
             this.loader = runtimeClassLoader;
             this.classOutput = runtimeClassLoader;
             this.transformerTarget = runtimeClassLoader;
@@ -140,7 +154,6 @@ public class RuntimeRunner implements Runnable, Closeable {
         private ClassLoader classLoader;
         private Path target;
         private Path frameworkClassesPath;
-        private Path wiringClassesDir;
         private Path transformerCache;
         private LaunchMode launchMode = LaunchMode.NORMAL;
         private final List<Path> additionalArchives = new ArrayList<>();
@@ -165,11 +178,6 @@ public class RuntimeRunner implements Runnable, Closeable {
 
         public Builder setFrameworkClassesPath(Path frameworkClassesPath) {
             this.frameworkClassesPath = frameworkClassesPath;
-            return this;
-        }
-
-        public Builder setWiringClassesDir(Path wiringClassesDir) {
-            this.wiringClassesDir = wiringClassesDir;
             return this;
         }
 
@@ -221,16 +229,6 @@ public class RuntimeRunner implements Runnable, Closeable {
         public Builder setLiveReloadState(LiveReloadBuildItem liveReloadState) {
             this.liveReloadState = liveReloadState;
             return this;
-        }
-
-        Path getWiringClassesDir() {
-            if (wiringClassesDir != null) {
-                return wiringClassesDir;
-            }
-            if (frameworkClassesPath != null && Files.isDirectory(frameworkClassesPath)) {
-                return frameworkClassesPath;
-            }
-            return Paths.get("").normalize().resolve("target").resolve("test-classes");
         }
 
         public RuntimeRunner build() {

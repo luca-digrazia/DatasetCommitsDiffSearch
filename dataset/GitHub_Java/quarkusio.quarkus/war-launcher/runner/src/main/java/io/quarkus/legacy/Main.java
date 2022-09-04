@@ -96,21 +96,18 @@ public class Main {
             }
 
             List<URL> urls = new ArrayList<>();
-            List<Path> paths = new ArrayList<>();
             urls.add(archive.toUri().toURL());
             for (Path l : libraries) {
                 urls.add(l.toUri().toURL());
-                paths.add(l);
             }
 
             URLClassLoader ucl = new URLClassLoader(urls.toArray(new URL[urls.size()]), Main.class.getClassLoader());
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(ucl);
-            try(RuntimeRunner runner = RuntimeRunner.builder()
+            try (RuntimeRunner runner = RuntimeRunner.builder()
                     .setClassLoader(ucl).setTarget(archive)
                     .setFrameworkClassesPath(archive)
                     .setTransformerCache(null)
-                    .addAdditionalArchives(paths)
                     .build()) {
                 runner.run();
             } finally {
