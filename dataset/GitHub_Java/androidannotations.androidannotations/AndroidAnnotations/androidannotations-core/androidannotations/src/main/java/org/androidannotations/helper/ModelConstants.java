@@ -54,11 +54,11 @@ public abstract class ModelConstants {
 		classSuffix = environment.getOptionValue(OPTION_CLASS_SUFFIX).trim();
 
 		if (classSuffix.isEmpty()) {
-			throw new IllegalArgumentException("'" + classSuffix + "' may not be an empty string.");
+			throw new IllegalArgumentException("'" + classSuffix + "' may not be an emtpy string.");
 		}
 
 		if (!SourceVersion.isName(classSuffix) || classSuffix.contains(".")) {
-			throw new IllegalArgumentException("'" + classSuffix + "' may not be a valid Java identifier.");
+			throw new IllegalArgumentException("'" + classSuffix + "' is not a valid Java identifier.");
 		}
 	}
 
