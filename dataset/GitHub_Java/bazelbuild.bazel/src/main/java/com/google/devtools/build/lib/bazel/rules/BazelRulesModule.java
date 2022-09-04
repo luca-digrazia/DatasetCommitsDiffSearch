@@ -46,18 +46,6 @@ import java.io.IOException;
 public class BazelRulesModule extends BlazeModule {
   /** This is where deprecated options go to die. */
   public static class GraveyardOptions extends OptionsBase {
-    @Option(
-        name = "incompatible_do_not_emit_buggy_external_repo_import",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.NO_OP},
-        metadataTags = {
-          OptionMetadataTag.DEPRECATED,
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        help = "Deprecated no-op.")
-    public boolean doNotUseBuggyImportPath;
 
     @Option(
         name = "incompatible_disable_crosstool_file",
@@ -348,16 +336,6 @@ public class BazelRulesModule extends BlazeModule {
         },
         help = "This option is deprecated and has no effect.")
     public boolean incompatibleDisableLateBoundOptionDefaults;
-
-    @Deprecated
-    @Option(
-        name = "ui",
-        oldName = "experimental_ui",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help = "No-op.")
-    public boolean experimentalUi;
   }
 
   @Override
