@@ -77,7 +77,6 @@ public class ClusterStatsService {
                 dashboardService.count(),
                 inputService.totalCount(),
                 inputService.globalCount(),
-                inputService.totalCountByType(),
                 inputService.totalExtractorCount(),
                 inputService.totalExtractorCountByType(),
                 bundleService.count()
