@@ -189,7 +189,7 @@ public class AndroidIdlHelper {
     if (aidlLib == null) {
       return;
     }
-    ProguardSpecProvider provider = aidlLib.get(ProguardSpecProvider.PROVIDER);
+    ProguardSpecProvider provider = aidlLib.getProvider(ProguardSpecProvider.class);
     if (provider == null) {
       return;
     }
