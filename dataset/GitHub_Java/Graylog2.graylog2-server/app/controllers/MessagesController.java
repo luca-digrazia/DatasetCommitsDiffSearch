@@ -52,7 +52,6 @@ public class MessagesController extends AuthenticatedController {
     public Result show(String index, String id) {
         try {
             MessageResult message = messagesService.getMessage(index, id);
-            message = FieldMapper.run(message);
             Node sourceNode = getSourceNode(message);
             Radio sourceRadio = getSourceRadio(message);
 
