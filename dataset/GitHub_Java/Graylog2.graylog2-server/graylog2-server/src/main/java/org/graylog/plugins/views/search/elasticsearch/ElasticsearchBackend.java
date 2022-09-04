@@ -40,6 +40,8 @@ import org.graylog.plugins.views.search.SearchJob;
 import org.graylog.plugins.views.search.SearchType;
 import org.graylog.plugins.views.search.elasticsearch.searchtypes.ESSearchTypeHandler;
 import org.graylog.plugins.views.search.engine.QueryBackend;
+import org.graylog.plugins.views.search.errors.QueryError;
+import org.graylog.plugins.views.search.errors.SearchException;
 import org.graylog.plugins.views.search.errors.SearchTypeError;
 import org.graylog.plugins.views.search.errors.SearchTypeErrorParser;
 import org.graylog.plugins.views.search.filter.AndFilter;
@@ -115,6 +117,9 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
         final ElasticsearchQueryString backendQuery = (ElasticsearchQueryString) query.query();
 
         final Set<SearchType> searchTypes = query.searchTypes();
+        if (searchTypes.isEmpty()) {
+            throw new SearchException(new QueryError(query, "Cannot generate query without any search types"));
+        }
 
         final String queryString = this.esQueryDecorators.decorate(backendQuery.queryString(), job, query, results);
         final QueryBuilder normalizedRootQuery = normalizeQueryString(queryString);
@@ -210,13 +215,6 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
 
     @Override
     public QueryResult doRun(SearchJob job, Query query, ESGeneratedQueryContext queryContext, Set<QueryResult> predecessorResults) {
-        if (query.searchTypes().isEmpty()) {
-            return QueryResult.builder()
-                    .query(query)
-                    .searchTypes(Collections.emptyMap())
-                    .errors(new HashSet<>(queryContext.errors()))
-                    .build();
-        }
         LOG.debug("Running query {} for job {}", query.id(), job.getId());
         final HashMap<String, SearchType.Result> resultsMap = Maps.newHashMap();
 
@@ -351,7 +349,7 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
         final String mainQueryString = ((ElasticsearchQueryString) query.query()).queryString();
         final java.util.stream.Stream<String> queryStringStreams = java.util.stream.Stream.concat(
                 java.util.stream.Stream.of(mainQueryString),
-                query.searchTypes().stream().flatMap(this::queryStringsFromSearchType)
+                query.searchTypes().stream().flatMap(searchType -> queryStringsFromFilter(searchType.filter()).stream())
         );
 
         final QueryMetadata metadataForParameters = queryStringStreams
@@ -362,15 +360,5 @@ public class ElasticsearchBackend implements QueryBackend<ESGeneratedQueryContex
 
 
         return metadataForParameters;
-    }
-
-    private java.util.stream.Stream<String> queryStringsFromSearchType(SearchType searchType) {
-        return java.util.stream.Stream.concat(
-                searchType.query().filter(query -> query instanceof ElasticsearchQueryString)
-                        .map(query -> ((ElasticsearchQueryString) query).queryString())
-                        .map(java.util.stream.Stream::of)
-                        .orElse(java.util.stream.Stream.empty()),
-                queryStringsFromFilter(searchType.filter()).stream()
-        );
     }
 }
