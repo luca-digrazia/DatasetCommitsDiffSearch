@@ -11,8 +11,11 @@ import javax.persistence.spi.PersistenceUnitTransactionType;
 
 import org.hibernate.bytecode.enhance.spi.EnhancementContext;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
+import org.jboss.logging.Logger;
 
 public final class LightPersistenceXmlDescriptor implements PersistenceUnitDescriptor {
+
+    private static final Logger log = Logger.getLogger(LightPersistenceXmlDescriptor.class);
 
     private final String name;
     private final String providerClassName;
@@ -36,6 +39,9 @@ public final class LightPersistenceXmlDescriptor implements PersistenceUnitDescr
     }
 
     private static void verifyIgnoredFields(final PersistenceUnitDescriptor toClone) {
+        if (toClone.getNonJtaDataSource() != null) {
+            throw new UnsupportedOperationException("Value found for #getNonJtaDataSource : not supported yet");
+        }
         // This one needs to be ignored:
         // if ( toClone.getPersistenceUnitRootUrl() != null ) {
         // throw new UnsupportedOperationException( "Value found for
