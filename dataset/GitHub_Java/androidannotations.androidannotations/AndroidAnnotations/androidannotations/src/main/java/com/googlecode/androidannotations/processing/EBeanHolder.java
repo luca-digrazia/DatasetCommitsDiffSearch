@@ -18,11 +18,8 @@ package com.googlecode.androidannotations.processing;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.googlecode.androidannotations.annotations.EBean;
-import com.googlecode.androidannotations.annotations.EViewGroup;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
-import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
@@ -39,8 +36,7 @@ public class EBeanHolder {
 	public JVar beforeCreateSavedInstanceStateParam;
 	public JMethod init;
 	/**
-	 * Only defined on activities and components potentially depending on
-	 * activity ( {@link EViewGroup}, {@link EBean}
+	 * Only defined on activities and components potentially depending on activity (@EViewGroup, @Enhanced)
 	 */
 	public JMethod afterSetContentView;
 	public JBlock extrasNotNullBlock;
@@ -55,7 +51,7 @@ public class EBeanHolder {
 	public JSwitch onOptionsItemSelectedSwitch;
 	public JVar onOptionsItemSelectedItem;
 
-	public JMethod restoreSavedInstanceStateMethod;
+	public JBlock restoreInstanceStateBlock;
 	public JBlock saveInstanceStateBlock;
 
 	public JExpression contextRef;
@@ -81,12 +77,7 @@ public class EBeanHolder {
 		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
 
 		if (refClass == null) {
-			JCodeModel codeModel = eBean.owner();
-			try {
-				refClass = codeModel.ref(fullyQualifiedClassName);
-			} catch (Exception e) {
-				refClass = codeModel.directClass(fullyQualifiedClassName);
-			}
+			refClass = eBean.owner().ref(fullyQualifiedClassName);
 			loadedClasses.put(fullyQualifiedClassName, refClass);
 		}
 
