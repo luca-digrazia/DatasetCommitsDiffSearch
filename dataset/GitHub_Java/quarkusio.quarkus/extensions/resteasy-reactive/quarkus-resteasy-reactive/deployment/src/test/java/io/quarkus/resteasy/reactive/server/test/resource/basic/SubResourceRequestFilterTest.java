@@ -14,7 +14,6 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.Provider;
 
 import org.hamcrest.Matchers;
-import org.jboss.resteasy.reactive.RestPath;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
@@ -38,10 +37,9 @@ public class SubResourceRequestFilterTest {
 
     @Test
     public void testAbortingRequestFilter() {
-        RestAssured.get("/sub-resource/geo")
+        RestAssured.get("/sub-resource/hello")
                 .then()
                 .header("single-filter", Matchers.equalTo("once"))
-                .body(Matchers.equalTo("geo"))
                 .statusCode(200);
     }
 
@@ -51,8 +49,8 @@ public class SubResourceRequestFilterTest {
         @Inject
         RestSubResource restSubResource;
 
-        @Path("sub-resource/{name}")
-        public RestSubResource hello(String name) {
+        @Path("sub-resource/hello")
+        public RestSubResource hello() {
             return restSubResource;
         }
     }
@@ -61,8 +59,8 @@ public class SubResourceRequestFilterTest {
     public static class RestSubResource {
 
         @GET
-        public Response hello(HttpHeaders headers, @RestPath String name) {
-            return Response.ok(name).header("single-filter", headers.getHeaderString("single-filter")).build();
+        public Response hello(HttpHeaders headers) {
+            return Response.ok().header("single-filter", headers.getHeaderString("single-filter")).build();
         }
     }
 
