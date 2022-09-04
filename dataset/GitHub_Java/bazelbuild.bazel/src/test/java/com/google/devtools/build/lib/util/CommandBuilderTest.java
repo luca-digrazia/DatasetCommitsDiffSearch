@@ -52,7 +52,7 @@ public class CommandBuilderTest {
       builder.build();
       fail("Expected exception");
     } catch (Exception e) {
-      assertThat(e).hasMessageThat().isEqualTo(expected);
+      assertThat(e).hasMessage(expected);
     }
   }
 
