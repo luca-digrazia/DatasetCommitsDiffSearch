@@ -14,20 +14,21 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.common.truth.Truth.assertWithMessage;
 
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog.InactivityMonitor;
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog.InactivityReporter;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
-
-import junit.framework.TestCase;
-
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /** Tests for ActionExecutionInactivityWatchdog. */
-public final class ActionExecutionInactivityWatchdogTest extends TestCase {
+@RunWith(JUnit4.class)
+public class ActionExecutionInactivityWatchdogTest {
 
-  private void assertInactivityWatchdogReports(final boolean shouldReport) throws Exception {
+  private static void assertInactivityWatchdogReports(final boolean shouldReport) throws Exception {
     // The monitor implementation below is a state machine. This variable indicates which state
     // it is in.
     final int[] monitorState = new int[] {0};
@@ -48,7 +49,7 @@ public final class ActionExecutionInactivityWatchdogTest extends TestCase {
     InactivityMonitor monitor =
         new InactivityMonitor() {
           @Override
-          public int waitForNextCompletion(int timeoutMilliseconds) throws InterruptedException {
+          public int waitForNextCompletion(int timeoutSeconds) throws InterruptedException {
             // Simulate the following sequence of events (see actionCompletions):
             // 1. return in 5s (within timeout), 1 action completed; caller will sleep
             // 2. return in 10s (after timeout), 0 action completed; caller will wait
@@ -128,10 +129,9 @@ public final class ActionExecutionInactivityWatchdogTest extends TestCase {
           try {
             monitorFinishedIndicator.wait(5000);
             done = true;
-            MoreAsserts.assertLessThan(
-                "test didn't finish under 5 seconds",
-                5000L,
-                System.currentTimeMillis() - startTime);
+            assertWithMessage("test didn't finish under 5 seconds")
+                .that(System.currentTimeMillis() - startTime)
+                .isLessThan(5000L);
           } catch (InterruptedException ie) {
             // so-called Spurious Wakeup; ignore
           }
@@ -141,7 +141,7 @@ public final class ActionExecutionInactivityWatchdogTest extends TestCase {
       watchdog.stop();
     }
 
-    assertEquals(shouldReport, didReportInactivity[0]);
+    assertThat(didReportInactivity[0]).isEqualTo(shouldReport);
     assertThat(sleepsAndWaits)
         .containsExactly(
             "wait:5",
@@ -157,10 +157,12 @@ public final class ActionExecutionInactivityWatchdogTest extends TestCase {
         .inOrder();
   }
 
+  @Test
   public void testInactivityWatchdogReportsWhenItShould() throws Exception {
     assertInactivityWatchdogReports(true);
   }
 
+  @Test
   public void testInactivityWatchdogDoesNotReportWhenItShouldNot() throws Exception {
     assertInactivityWatchdogReports(false);
   }

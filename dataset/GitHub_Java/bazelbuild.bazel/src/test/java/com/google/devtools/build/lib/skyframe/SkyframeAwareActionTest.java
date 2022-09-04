@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.testutil.TimestampGranularityUtils;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -44,7 +43,6 @@ import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
-import com.google.devtools.build.skyframe.GraphInconsistencyReceiver;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
@@ -73,13 +71,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
   @Before
   public final void createBuilder() throws Exception {
     progressReceiver = new TrackingEvaluationProgressReceiver();
-    builder =
-        createBuilder(
-            inMemoryCache,
-            1,
-            /*keepGoing=*/ false,
-            progressReceiver,
-            GraphInconsistencyReceiver.THROWING);
+    builder = createBuilder(inMemoryCache, 1, /*keepGoing=*/ false, progressReceiver);
   }
 
   @Before
@@ -209,8 +201,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       try (InputStream in = getInputs().getSingleton().getPath().getInputStream()) {
         inputLen = in.read(input);
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
+        throw new ActionExecutionException(e, this, false);
       }
 
       // This action then writes the contents of the input to the (only) output file, and appends an
@@ -219,8 +210,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         out.write(input, 0, inputLen);
         out.write('x');
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
+        throw new ActionExecutionException(e, this, false);
       }
       return ActionResult.EMPTY;
     }
@@ -231,10 +221,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected void computeKey(
-        ActionKeyContext actionKeyContext,
-        @Nullable Artifact.ArtifactExpander artifactExpander,
-        Fingerprint fp) {
+    protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
       fp.addString(getPrimaryOutput().getExecPathString());
       fp.addInt(executionCounter.get());
     }
@@ -709,8 +696,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       try (InputStream in = getPrimaryInput().getPath().getInputStream()) {
         inputLen = in.read(input, 0, input.length);
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
+        throw new ActionExecutionException(e, this, false);
       }
       return new Buffer(input, inputLen);
     }
@@ -722,8 +708,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         }
         out.write(data.getBytes(StandardCharsets.UTF_8), 0, data.length());
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            e, this, false, CrashFailureDetails.detailedExitCodeForThrowable(e));
+        throw new ActionExecutionException(e, this, false);
       }
     }
 
@@ -733,10 +718,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected void computeKey(
-        ActionKeyContext actionKeyContext,
-        @Nullable Artifact.ArtifactExpander artifactExpander,
-        Fingerprint fp) {
+    protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
       fp.addInt(42);
     }
   }

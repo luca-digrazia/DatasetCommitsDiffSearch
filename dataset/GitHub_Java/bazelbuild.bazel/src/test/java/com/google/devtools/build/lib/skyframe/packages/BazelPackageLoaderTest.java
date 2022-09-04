@@ -95,7 +95,10 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
 
   private void fetchExternalRepo(RepositoryName externalRepo) {
     PackageLoader pkgLoaderForFetch =
-        newPackageLoaderBuilder(root).setFetchForTesting().useDefaultStarlarkSemantics().build();
+        newPackageLoaderBuilder(root)
+            .setFetchForTesting()
+            .useDefaultSkylarkSemantics()
+            .build();
     // Load the package '' in this repo. This package may or may not exist; we don't care since we
     // merely need the side-effects of the 'fetch' work.
     PackageIdentifier pkgId = PackageIdentifier.create(externalRepo, PathFragment.create(""));

@@ -87,16 +87,19 @@ public class EvaluationResult<T extends SkyValue> {
   }
 
   /**
-   * Returns {@link Map} of {@link SkyKey}s to {@link ErrorInfo}. Note that currently some of the
-   * returned SkyKeys may not be the ones requested by the user. Moreover, the SkyKey is not
-   * necessarily the cause of the error -- it is just the value that was being evaluated when the
-   * error was discovered.
+   * Returns {@link Map} of {@link SkyKey}s to {@link ErrorInfo}. Note that currently some
+   * of the returned SkyKeys may not be the ones requested by the user. Moreover, the SkyKey
+   * is not necessarily the cause of the error -- it is just the value that was being evaluated
+   * when the error was discovered. For the cause of the error, use
+   * {@link ErrorInfo#getRootCauses()} on each ErrorInfo.
    */
   public Map<SkyKey, ErrorInfo> errorMap() {
     return ImmutableMap.copyOf(errorMap);
   }
 
-  /** Returns {@link ErrorInfo} for given {@code key} which must be present in errors. */
+  /**
+   * @param key {@link SkyKey} to get {@link ErrorInfo} for.
+   */
   public ErrorInfo getError(SkyKey key) {
     return Preconditions.checkNotNull(errorMap, key).get(key);
   }

@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableClassToInstanceMap;
+import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
@@ -34,13 +34,13 @@ public class ObjectCodecs {
    * ObjectCodec}s.
    */
   public ObjectCodecs(
-      ObjectCodecRegistry codecRegistry, ImmutableClassToInstanceMap<Object> dependencies) {
+      ObjectCodecRegistry codecRegistry, ImmutableMap<Class<?>, Object> dependencies) {
     serializationContext = new SerializationContext(codecRegistry, dependencies);
     deserializationContext = new DeserializationContext(codecRegistry, dependencies);
   }
 
   public ObjectCodecs(ObjectCodecRegistry codecRegistry) {
-    this(codecRegistry, ImmutableClassToInstanceMap.of());
+    this(codecRegistry, ImmutableMap.of());
   }
 
   @VisibleForTesting
@@ -131,7 +131,7 @@ public class ObjectCodecs {
   }
 
   @FunctionalInterface
-  private interface SerializeCall {
+  private static interface SerializeCall {
     void serialize(Object subject, CodedOutputStream codedOut) throws SerializationException;
   }
 

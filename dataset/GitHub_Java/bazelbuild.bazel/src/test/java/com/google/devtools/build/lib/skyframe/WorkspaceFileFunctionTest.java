@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue.WorkspaceFileKey;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledgeImpl;
 import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledgeImpl.ManagedDirectoriesListener;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -136,9 +137,8 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
             ruleClassProvider,
             pkgFactory,
             directories,
-            /*starlarkImportLookupFunctionForInlining=*/ null);
-    externalSkyFunc =
-        new ExternalPackageFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER);
+            /*skylarkImportLookupFunctionForInlining=*/ null);
+    externalSkyFunc = new ExternalPackageFunction();
     astSkyFunc = new WorkspaceASTFunction(ruleClassProvider);
     fakeWorkspaceFileValue = new FakeFileValue();
   }
@@ -221,7 +221,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
             invocation -> {
               SkyKey key = (SkyKey) invocation.getArguments()[0];
               if (key.equals(PrecomputedValue.STARLARK_SEMANTICS.getKeyForTesting())) {
-                return new PrecomputedValue(StarlarkSemantics.DEFAULT);
+                return new PrecomputedValue(StarlarkSemantics.DEFAULT_SEMANTICS);
               } else if (key.equals(
                   RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE
                       .getKeyForTesting())) {
