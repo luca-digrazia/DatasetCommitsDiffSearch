@@ -120,7 +120,8 @@ public class Aapt2ResourcePackagingAction {
                   dataDeserializer,
                   options.throwOnResourceConflict)
               .filter(
-                  new DensitySpecificResourceFilter(densities, filteredResources, mergedResources),
+                  new DensitySpecificResourceFilter(
+                      densities, filteredResources, mergedResources),
                   new DensitySpecificManifestProcessor(densities, densityManifest));
 
       profiler.recordEndOf("merging");

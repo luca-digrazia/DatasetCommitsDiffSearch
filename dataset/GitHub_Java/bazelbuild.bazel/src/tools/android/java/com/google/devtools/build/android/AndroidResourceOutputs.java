@@ -216,6 +216,7 @@ public class AndroidResourceOutputs {
       paths.add(dir);
       return FileVisitResult.CONTINUE;
     }
+
   }
 
   /** A FileVisitor that will add all files to be stored in a zip archive. */
