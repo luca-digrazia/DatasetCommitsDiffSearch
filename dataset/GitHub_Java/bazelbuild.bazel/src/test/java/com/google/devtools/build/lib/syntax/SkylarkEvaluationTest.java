@@ -25,8 +25,8 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -964,8 +964,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testInvalidAugmentedAssignment_ListLiteral() throws Exception {
-    new SkylarkTest().testIfErrorContains(
-        "cannot perform augmented assignment on a list or tuple expression",
+    new SkylarkTest().testIfErrorContains("cannot perform augmented assignment on a list literal",
         "def f(a, b):",
         "  [a, b] += []",
         "f(1, 2)");
@@ -1194,6 +1193,14 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
+  public void testTopLevelDict() throws Exception {
+    new SkylarkTest().setUp("if 1:",
+      "  v = 'a'",
+      "else:",
+      "  v = 'b'").testLookup("v", "a");
+  }
+
+  @Test
   public void testUserFunctionKeywordArgs() throws Exception {
     new SkylarkTest().setUp("def foo(a, b, c):",
         "  return a + b + c", "s = foo(1, c=2, b=3)")
@@ -1311,11 +1318,11 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     // TODO(fwe): cannot be handled by current testing suite
     setFailFast(false);
     eval("print('hello')");
-    assertContainsDebug("hello");
+    assertContainsWarning("hello");
     eval("print('a', 'b')");
-    assertContainsDebug("a b");
+    assertContainsWarning("a b");
     eval("print('a', 'b', sep='x')");
-    assertContainsDebug("axb");
+    assertContainsWarning("axb");
   }
 
   @Test
@@ -1417,10 +1424,11 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "SkylarkClassObjectWithSkylarkCallables", doc = "")
-  static final class SkylarkClassObjectWithSkylarkCallables extends Info {
-    private static final NativeProvider<SkylarkClassObjectWithSkylarkCallables> CONSTRUCTOR =
-        new NativeProvider<SkylarkClassObjectWithSkylarkCallables>(
-            SkylarkClassObjectWithSkylarkCallables.class, "struct_with_skylark_callables") {};
+  static final class SkylarkClassObjectWithSkylarkCallables extends SkylarkClassObject {
+    private static final NativeClassObjectConstructor<SkylarkClassObjectWithSkylarkCallables>
+        CONSTRUCTOR =
+            new NativeClassObjectConstructor<SkylarkClassObjectWithSkylarkCallables>(
+                SkylarkClassObjectWithSkylarkCallables.class, "struct_with_skylark_callables") {};
 
     SkylarkClassObjectWithSkylarkCallables() {
       super(

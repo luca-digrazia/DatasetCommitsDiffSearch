@@ -67,4 +67,10 @@ public final class AugmentedAssignmentStatement extends Statement {
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
   }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    lvalue.validate(env, getLocation());
+    expression.validate(env);
+  }
 }
