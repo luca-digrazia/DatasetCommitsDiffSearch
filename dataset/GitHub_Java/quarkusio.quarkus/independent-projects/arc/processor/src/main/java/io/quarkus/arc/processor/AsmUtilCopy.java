@@ -258,9 +258,6 @@ public class AsmUtilCopy {
      * Returns true if the given type contains parameterized types, type variables or wildcards
      */
     private static boolean needsSignature(Type type) {
-        if (type == null) {
-            return false;
-        }
         switch (type.kind()) {
             case ARRAY:
             case CLASS:
