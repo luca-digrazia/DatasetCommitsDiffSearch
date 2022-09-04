@@ -15,6 +15,7 @@ package com.google.devtools.build.android;
 
 import com.android.builder.core.VariantType;
 import com.android.ide.common.res2.MergingException;
+import com.android.utils.StdLogger;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
@@ -111,6 +112,9 @@ public class AarGeneratorAction {
 
     checkFlags(options);
 
+    AndroidResourceProcessor resourceProcessor =
+        new AndroidResourceProcessor(new StdLogger(com.android.utils.StdLogger.Level.VERBOSE));
+
     try (ScopedTemporaryDirectory scopedTmp = new ScopedTemporaryDirectory("aar_gen_tmp")) {
       Path tmp = scopedTmp.getPath();
       Path resourcesOut = tmp.resolve("merged_resources");
@@ -129,8 +133,7 @@ public class AarGeneratorAction {
               assetsOut,
               null,
               VariantType.LIBRARY,
-              null,
-              /* filteredResources= */ ImmutableList.<String>of());
+              null);
       logger.fine(String.format("Merging finished at %dms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       writeAar(options.aarOutput, mergedData, options.manifest, options.rtxt, options.classes);
