@@ -17,7 +17,6 @@ package com.google.devtools.common.options;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
-import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -93,10 +92,6 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    * multiple values (unordered).
    */
   private final ImmutableMap<Field, Boolean> allowMultiple;
-
-  /** These categories used to indicate OptionUsageRestrictions, but no longer. */
-  private static final ImmutableList<String> DEPRECATED_CATEGORIES = ImmutableList.of(
-      "undocumented", "hidden", "internal");
 
   private IsolatedOptionsData(
       Map<Class<? extends OptionsBase>,
@@ -188,11 +183,11 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
     if (annotation.allowMultiple()) {
       // If the type isn't a List<T>, this is an error in the option's declaration.
       if (!(fieldType instanceof ParameterizedType)) {
-        throw new ConstructionException("Type of multiple occurrence option must be a List<...>");
+        throw new AssertionError("Type of multiple occurrence option must be a List<...>");
       }
       ParameterizedType pfieldType = (ParameterizedType) fieldType;
       if (pfieldType.getRawType() != List.class) {
-        throw new ConstructionException("Type of multiple occurrence option must be a List<...>");
+        throw new AssertionError("Type of multiple occurrence option must be a List<...>");
       }
       fieldType = pfieldType.getActualTypeArguments()[0];
     }
@@ -239,7 +234,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
       Type type = getFieldSingularType(optionField, annotation);
       Converter<?> converter = Converters.DEFAULT_CONVERTERS.get(type);
       if (converter == null) {
-        throw new ConstructionException(
+        throw new AssertionError(
             "No converter found for "
                 + type
                 + "; possible fix: add "
@@ -256,7 +251,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
     } catch (Exception e) {
       // This indicates an error in the Converter, and should be discovered the first time it is
       // used.
-      throw new ConstructionException(e);
+      throw new AssertionError(e);
     }
   }
 
@@ -383,13 +378,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
         Option annotation = field.getAnnotation(Option.class);
         String optionName = annotation.name();
         if (optionName == null) {
-          throw new ConstructionException("Option cannot have a null name");
-        }
-
-        if (DEPRECATED_CATEGORIES.contains(annotation.category())) {
-          throw new ConstructionException(
-              "Documentation level is no longer read from the option category. Category \""
-                  + annotation.category() + "\" in option \"" + optionName + "\" is disallowed.");
+          throw new AssertionError("Option cannot have a null name");
         }
 
         Type fieldType = getFieldSingularType(field, annotation);
@@ -400,14 +389,14 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
         if (converter == Converter.class) {
           Converter<?> actualConverter = Converters.DEFAULT_CONVERTERS.get(fieldType);
           if (actualConverter == null) {
-            throw new ConstructionException("Cannot find converter for field of type "
+            throw new AssertionError("Cannot find converter for field of type "
                 + field.getType() + " named " + field.getName()
                 + " in class " + field.getDeclaringClass().getName());
           }
           converter = actualConverter.getClass();
         }
         if (Modifier.isAbstract(converter.getModifiers())) {
-          throw new ConstructionException("The converter type " + converter
+          throw new AssertionError("The converter type " + converter
               + " must be a concrete type");
         }
         Type converterResultType;
@@ -415,8 +404,8 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
           Method convertMethod = converter.getMethod("convert", String.class);
           converterResultType = GenericTypeHelper.getActualReturnType(converter, convertMethod);
         } catch (NoSuchMethodException e) {
-          throw new ConstructionException(
-              "A known converter object doesn't implement the convert method");
+          throw new AssertionError("A known converter object doesn't implement the convert"
+              + " method");
         }
 
         if (annotation.allowMultiple()) {
@@ -424,33 +413,22 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
             Type elementType =
                 ((ParameterizedType) converterResultType).getActualTypeArguments()[0];
             if (!GenericTypeHelper.isAssignableFrom(fieldType, elementType)) {
-              throw new ConstructionException(
-                  "If the converter return type of a multiple occurrence option is a list, then "
-                      + "the type of list elements ("
-                      + fieldType
-                      + ") must be assignable from the converter list element type ("
-                      + elementType
-                      + ")");
+              throw new AssertionError("If the converter return type of a multiple occurrence " +
+                  "option is a list, then the type of list elements (" + fieldType + ") must be " +
+                  "assignable from the converter list element type (" + elementType + ")");
             }
           } else {
             if (!GenericTypeHelper.isAssignableFrom(fieldType, converterResultType)) {
-              throw new ConstructionException(
-                  "Type of list elements ("
-                      + fieldType
-                      + ") for multiple occurrence option must be assignable from the converter "
-                      + "return type ("
-                      + converterResultType
-                      + ")");
+              throw new AssertionError("Type of list elements (" + fieldType +
+                  ") for multiple occurrence option must be assignable from the converter " +
+                  "return type (" + converterResultType + ")");
             }
           }
         } else {
           if (!GenericTypeHelper.isAssignableFrom(fieldType, converterResultType)) {
-            throw new ConstructionException(
-                "Type of field ("
-                    + fieldType
-                    + ") must be assignable from the converter return type ("
-                    + converterResultType
-                    + ")");
+            throw new AssertionError("Type of field (" + fieldType +
+                ") must be assignable from the converter " +
+                "return type (" + converterResultType + ")");
           }
         }
 
