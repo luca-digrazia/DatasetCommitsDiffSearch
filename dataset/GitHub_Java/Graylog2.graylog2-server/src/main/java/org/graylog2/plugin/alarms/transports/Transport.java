@@ -31,7 +31,9 @@ import org.graylog2.plugin.alarms.Alarm;
 public interface Transport {
     
     public void initialize(Map<String, String> config) throws TransportConfigurationException;
+    public Map<String, String> getRequestedConfiguration();
     public void transportAlarm(Alarm alarm);
     public String getName();
+    public String getUserFieldName();
 
 }
