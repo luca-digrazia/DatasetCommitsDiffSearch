@@ -34,7 +34,7 @@ import javax.annotation.Nullable;
 public class BuiltinFunction extends BaseFunction {
 
   /** ExtraArgKind so you can tweek your function's own calling convention */
-  public enum ExtraArgKind {
+  public static enum ExtraArgKind {
     LOCATION,
     SYNTAX_TREE,
     ENVIRONMENT;
@@ -186,15 +186,17 @@ public class BuiltinFunction extends BaseFunction {
         if (args[i] != null && !types[i].isAssignableFrom(args[i].getClass())) {
           String paramName =
               i < len ? signature.getSignature().getNames().get(i) : extraArgs[i - len].name();
+          int extraArgsCount = (extraArgs == null) ? 0 : extraArgs.length;
           throw new EvalException(
               loc,
               String.format(
-                  "argument '%s' has type '%s', but should be '%s'\nin call to builtin %s %s",
+                  "method %s is not applicable for arguments %s: "
+                      + "'%s' is '%s', but should be '%s'",
+                  getShortSignature(),
+                  printTypeString(args, args.length - extraArgsCount),
                   paramName,
                   EvalUtils.getDataTypeName(args[i]),
-                  EvalUtils.getDataTypeNameFromClass(types[i]),
-                  hasSelfArgument() ? "method" : "function",
-                  getShortSignature()));
+                  EvalUtils.getDataTypeNameFromClass(types[i])));
         }
       }
       throw badCallException(loc, e, args);
@@ -305,7 +307,7 @@ public class BuiltinFunction extends BaseFunction {
       }
     }
     // No need for the enforcedArgumentTypes List if all the types were Simple
-    enforcedArgumentTypes = FunctionSignature.valueListOrNull(enforcedArgumentTypes);
+    enforcedArgumentTypes = FunctionSignature.<SkylarkType>valueListOrNull(enforcedArgumentTypes);
 
     if (returnType != null) {
       Class<?> type = returnType;
