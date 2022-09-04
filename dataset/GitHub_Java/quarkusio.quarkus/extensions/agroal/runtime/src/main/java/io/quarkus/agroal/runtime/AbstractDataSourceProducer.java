@@ -49,32 +49,32 @@ public abstract class AbstractDataSourceProducer {
     private List<AgroalDataSource> dataSources = new ArrayList<>();
 
     @Inject
-    public TransactionManager transactionManager;
+    TransactionManager transactionManager;
 
     @Inject
-    public TransactionSynchronizationRegistry transactionSynchronizationRegistry;
+    TransactionSynchronizationRegistry transactionSynchronizationRegistry;
 
-    public DataSourceBuildTimeConfig getDefaultBuildTimeConfig() {
+    protected DataSourceBuildTimeConfig getDefaultBuildTimeConfig() {
         return buildTimeConfig.defaultDataSource;
     }
 
-    public Optional<DataSourceRuntimeConfig> getDefaultRuntimeConfig() {
+    protected Optional<DataSourceRuntimeConfig> getDefaultRuntimeConfig() {
         checkRuntimeConfig();
 
         return Optional.of(runtimeConfig.defaultDataSource);
     }
 
-    public DataSourceBuildTimeConfig getBuildTimeConfig(String dataSourceName) {
+    protected DataSourceBuildTimeConfig getBuildTimeConfig(String dataSourceName) {
         return buildTimeConfig.namedDataSources.get(dataSourceName);
     }
 
-    public Optional<DataSourceRuntimeConfig> getRuntimeConfig(String dataSourceName) {
+    protected Optional<DataSourceRuntimeConfig> getRuntimeConfig(String dataSourceName) {
         checkRuntimeConfig();
 
         return Optional.ofNullable(runtimeConfig.namedDataSources.get(dataSourceName));
     }
 
-    public AgroalDataSource createDataSource(String dataSourceName,
+    protected AgroalDataSource createDataSource(String dataSourceName,
             DataSourceBuildTimeConfig dataSourceBuildTimeConfig,
             Optional<DataSourceRuntimeConfig> dataSourceRuntimeConfigOptional) throws SQLException {
         if (!dataSourceRuntimeConfigOptional.isPresent() || !dataSourceRuntimeConfigOptional.get().url.isPresent()) {
@@ -185,8 +185,7 @@ public abstract class AbstractDataSourceProducer {
 
     private void checkRuntimeConfig() {
         if (runtimeConfig == null) {
-            throw new IllegalStateException(
-                    "The datasources are not ready to be consumed: the runtime configuration has not been injected yet");
+            throw new IllegalStateException("The datasources are not ready to be consumed: the runtime configuration has not been injected yet");
         }
     }
 
