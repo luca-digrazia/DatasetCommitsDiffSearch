@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -31,7 +30,6 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidManifestMerger;
 import com.google.devtools.build.lib.rules.android.ResourceContainer.Builder.JavaPackageSource;
@@ -49,7 +47,7 @@ public final class ApplicationManifest {
   public ApplicationManifest createSplitManifest(
       RuleContext ruleContext, String splitName, boolean hasCode) {
     Artifact result = createSplitManifest(ruleContext, manifest, splitName, hasCode);
-    return new ApplicationManifest(result, manifestValues, targetAaptVersion);
+    return new ApplicationManifest(ruleContext, result, targetAaptVersion);
   }
 
   static Artifact createSplitManifest(
@@ -90,7 +88,7 @@ public final class ApplicationManifest {
   public ApplicationManifest addMobileInstallStubApplication(RuleContext ruleContext)
       throws InterruptedException {
     Artifact stubManifest = addMobileInstallStubApplication(ruleContext, manifest);
-    return new ApplicationManifest(stubManifest, manifestValues, targetAaptVersion);
+    return new ApplicationManifest(ruleContext, stubManifest, targetAaptVersion);
   }
 
   static Artifact addMobileInstallStubApplication(RuleContext ruleContext, Artifact manifest)
@@ -141,14 +139,13 @@ public final class ApplicationManifest {
    * regardless of the AndroidSemantics implementation being used; that method may do different work
    * depending on the implementation.
    */
-  public static ApplicationManifest renamedFromRule(
-      RuleContext ruleContext, AndroidDataContext dataContext)
+  public static ApplicationManifest renamedFromRule(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
     return fromExplicitManifest(
-        ruleContext, renameManifestIfNeeded(dataContext, getManifestFromAttributes(ruleContext)));
+        ruleContext, renameManifestIfNeeded(ruleContext, getManifestFromAttributes(ruleContext)));
   }
 
-  static Artifact renameManifestIfNeeded(AndroidDataContext dataContext, Artifact manifest)
+  static Artifact renameManifestIfNeeded(RuleContext ruleContext, Artifact manifest)
       throws InterruptedException {
     if (manifest.getFilename().equals("AndroidManifest.xml")) {
       return manifest;
@@ -158,13 +155,14 @@ public final class ApplicationManifest {
        * AndroidManifest.xml to it. aapt requires the manifest to be named as such.
        */
       Artifact manifestSymlink =
-          dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_SYMLINKED_MANIFEST);
-      dataContext.registerAction(
+          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMLINKED_MANIFEST);
+      SymlinkAction symlinkAction =
           new SymlinkAction(
-              dataContext.getActionConstructionContext().getActionOwner(),
+              ruleContext.getActionOwner(),
               manifest,
               manifestSymlink,
-              "Renaming Android manifest for " + dataContext.getLabel()));
+              "Renaming Android manifest for " + ruleContext.getLabel());
+      ruleContext.registerAction(symlinkAction);
       return manifestSymlink;
     }
   }
@@ -172,9 +170,7 @@ public final class ApplicationManifest {
   public static ApplicationManifest fromExplicitManifest(RuleContext ruleContext, Artifact manifest)
       throws RuleErrorException {
     return new ApplicationManifest(
-        manifest,
-        getManifestValues(ruleContext),
-        AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
+        ruleContext, manifest, AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
   }
 
   /**
@@ -196,10 +192,12 @@ public final class ApplicationManifest {
    *
    * @return an artifact for the generated manifest
    */
-  public static Artifact generateManifest(
-      ActionConstructionContext context, String manifestPackage) {
+  public static Artifact generateManifest(RuleContext ruleContext, String manifestPackage) {
     Artifact generatedManifest =
-        context.getUniqueDirectoryArtifact("_generated", "AndroidManifest.xml");
+        ruleContext.getUniqueDirectoryArtifact(
+            ruleContext.getRule().getName() + "_generated",
+            PathFragment.create("AndroidManifest.xml"),
+            ruleContext.getBinOrGenfilesDirectory());
 
     String contents =
         Joiner.on("\n")
@@ -210,21 +208,35 @@ public final class ApplicationManifest {
                 "   <application>",
                 "   </application>",
                 "</manifest>");
-    context.registerAction(
-        FileWriteAction.create(context, generatedManifest, contents, /*makeExecutable=*/ false));
+    ruleContext
+        .getAnalysisEnvironment()
+        .registerAction(
+            FileWriteAction.create(
+                ruleContext, generatedManifest, contents, /*makeExecutable=*/ false));
     return generatedManifest;
   }
 
   /** Gets a map of manifest values from this rule's 'manifest_values' attribute */
-  public static ImmutableMap<String, String> getManifestValues(RuleContext context) {
+  static ImmutableMap<String, String> getManifestValues(RuleContext context) {
+    return getManifestValues(
+        context,
+        context.attributes().isAttributeValueExplicitlySpecified("manifest_values")
+            ? context.attributes().get("manifest_values", Type.STRING_DICT)
+            : null);
+  }
+
+  /** Gets and expands an expanded map of manifest values from some raw map of manifest values. */
+  static ImmutableMap<String, String> getManifestValues(
+      RuleContext ruleContext, @Nullable Map<String, String> rawMap) {
     Map<String, String> manifestValues = new TreeMap<>();
-    if (context.attributes().isAttributeValueExplicitlySpecified("manifest_values")) {
-      manifestValues.putAll(context.attributes().get("manifest_values", Type.STRING_DICT));
+    if (rawMap != null) {
+      manifestValues.putAll(rawMap);
     }
 
     for (String variable : manifestValues.keySet()) {
       manifestValues.put(
-          variable, context.getExpander().expand("manifest_values", manifestValues.get(variable)));
+          variable,
+          ruleContext.getExpander().expand("manifest_values", manifestValues.get(variable)));
     }
     return ImmutableMap.copyOf(manifestValues);
   }
@@ -238,29 +250,26 @@ public final class ApplicationManifest {
   private final AndroidAaptVersion targetAaptVersion;
 
   private ApplicationManifest(
-      Artifact manifest,
-      ImmutableMap<String, String> manifestValues,
-      AndroidAaptVersion targetAaptVersion) {
+      RuleContext ruleContext, Artifact manifest, AndroidAaptVersion targetAaptVersion) {
     this.manifest = manifest;
-    this.manifestValues = manifestValues;
+    this.manifestValues = getManifestValues(ruleContext);
     this.targetAaptVersion = targetAaptVersion;
   }
 
-  public ApplicationManifest mergeWith(
-      RuleContext ruleContext, AndroidDataContext dataContext, ResourceDependencies resourceDeps) {
+  public ApplicationManifest mergeWith(RuleContext ruleContext, ResourceDependencies resourceDeps) {
     return maybeMergeWith(
-            dataContext,
+            ruleContext,
             manifest,
             resourceDeps,
             manifestValues,
             useLegacyMerging(ruleContext),
             AndroidCommon.getJavaPackage(ruleContext))
-        .map(merged -> new ApplicationManifest(merged, manifestValues, targetAaptVersion))
+        .map(merged -> new ApplicationManifest(ruleContext, merged, targetAaptVersion))
         .orElse(this);
   }
 
   static Optional<Artifact> maybeMergeWith(
-      AndroidDataContext dataContext,
+      RuleContext ruleContext,
       Artifact primaryManifest,
       ResourceDependencies resourceDeps,
       Map<String, String> manifestValues,
@@ -272,9 +281,12 @@ public final class ApplicationManifest {
       if (!mergeeManifests.isEmpty()) {
 
         Artifact outputManifest =
-            dataContext.getUniqueDirectoryArtifact("_merged", "AndroidManifest.xml");
+            ruleContext.getUniqueDirectoryArtifact(
+                ruleContext.getRule().getName() + "_merged",
+                "AndroidManifest.xml",
+                ruleContext.getBinOrGenfilesDirectory());
         AndroidManifestMergeHelper.createMergeManifestAction(
-            dataContext.getRuleContext(),
+            ruleContext,
             primaryManifest,
             mergeeManifests.keySet(),
             ImmutableList.of("all"),
@@ -284,10 +296,16 @@ public final class ApplicationManifest {
     } else {
       if (!mergeeManifests.isEmpty() || !manifestValues.isEmpty()) {
         Artifact outputManifest =
-            dataContext.getUniqueDirectoryArtifact("_merged", "AndroidManifest.xml");
+            ruleContext.getUniqueDirectoryArtifact(
+                ruleContext.getRule().getName() + "_merged",
+                "AndroidManifest.xml",
+                ruleContext.getBinOrGenfilesDirectory());
         Artifact mergeLog =
-            dataContext.getUniqueDirectoryArtifact("_merged", "manifest_merger_log.txt");
-        new ManifestMergerActionBuilder(dataContext.getRuleContext())
+            ruleContext.getUniqueDirectoryArtifact(
+                ruleContext.getRule().getName() + "_merged",
+                "manifest_merger_log.txt",
+                ruleContext.getBinOrGenfilesDirectory());
+        new ManifestMergerActionBuilder(ruleContext)
             .setManifest(primaryManifest)
             .setMergeeManifests(mergeeManifests)
             .setLibrary(false)
@@ -295,7 +313,7 @@ public final class ApplicationManifest {
             .setCustomPackage(customPackage)
             .setManifestOutput(outputManifest)
             .setLogOut(mergeLog)
-            .build(dataContext.getActionConstructionContext());
+            .build(ruleContext);
         return Optional.of(outputManifest);
       }
     }
@@ -303,29 +321,23 @@ public final class ApplicationManifest {
   }
 
   /** Checks if the legacy manifest merger should be used, based on a rule attribute */
-  public static boolean useLegacyMerging(RuleContext ruleContext) {
+  static boolean useLegacyMerging(RuleContext ruleContext) {
     return ruleContext.isLegalFragment(AndroidConfiguration.class)
         && ruleContext.getRule().isAttrDefined("manifest_merger", STRING)
-        && useLegacyMerging(
-            ruleContext,
-            AndroidCommon.getAndroidConfig(ruleContext),
-            ruleContext.attributes().get("manifest_merger", STRING));
+        && useLegacyMerging(ruleContext, ruleContext.attributes().get("manifest_merger", STRING));
   }
 
   /**
    * Checks if the legacy manifest merger should be used, based on an optional string specifying the
    * merger to use.
    */
-  public static boolean useLegacyMerging(
-      RuleErrorConsumer errorConsumer,
-      AndroidConfiguration androidConfig,
-      @Nullable String mergerString) {
+  public static boolean useLegacyMerging(RuleContext ruleContext, @Nullable String mergerString) {
     AndroidManifestMerger merger = AndroidManifestMerger.fromString(mergerString);
     if (merger == null) {
-      merger = androidConfig.getManifestMerger();
+      merger = ruleContext.getFragment(AndroidConfiguration.class).getManifestMerger();
     }
     if (merger == AndroidManifestMerger.LEGACY) {
-      errorConsumer.ruleWarning(
+      ruleContext.ruleWarning(
           "manifest_merger 'legacy' is deprecated. Please update to 'android'.\n"
               + "See https://developer.android.com/studio/build/manifest-merge.html for more "
               + "information about the manifest merger.");
@@ -346,29 +358,32 @@ public final class ApplicationManifest {
     return builder.build();
   }
 
-  public ApplicationManifest renamePackage(AndroidDataContext dataContext, String customPackage) {
-    Optional<Artifact> stamped = maybeSetManifestPackage(dataContext, manifest, customPackage);
+  public ApplicationManifest renamePackage(RuleContext ruleContext, String customPackage) {
+    Optional<Artifact> stamped = maybeSetManifestPackage(ruleContext, manifest, customPackage);
 
     if (!stamped.isPresent()) {
       return this;
     }
 
-    return new ApplicationManifest(stamped.get(), manifestValues, targetAaptVersion);
+    return new ApplicationManifest(ruleContext, stamped.get(), targetAaptVersion);
   }
 
   static Optional<Artifact> maybeSetManifestPackage(
-      AndroidDataContext dataContext, Artifact manifest, String customPackage) {
+      RuleContext ruleContext, Artifact manifest, String customPackage) {
     if (isNullOrEmpty(customPackage)) {
       return Optional.empty();
     }
     Artifact outputManifest =
-        dataContext.getUniqueDirectoryArtifact("_renamed", "AndroidManifest.xml");
-    new ManifestMergerActionBuilder(dataContext.getRuleContext())
+        ruleContext.getUniqueDirectoryArtifact(
+            ruleContext.getRule().getName() + "_renamed",
+            "AndroidManifest.xml",
+            ruleContext.getBinOrGenfilesDirectory());
+    new ManifestMergerActionBuilder(ruleContext)
         .setManifest(manifest)
         .setLibrary(true)
         .setCustomPackage(customPackage)
         .setManifestOutput(outputManifest)
-        .build(dataContext.getActionConstructionContext());
+        .build(ruleContext);
 
     return Optional.of(outputManifest);
   }

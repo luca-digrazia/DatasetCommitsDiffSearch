@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.whitelisting.Whitelist;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -118,7 +117,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         new AndroidCommon(
             javaCommon,
             /* asNeverLink= */ true,
-            /* exportDeps= */ Whitelist.isAvailable(ruleContext, "export_deps"));
+            /* exportDeps= */ !AndroidCommon.getAndroidConfig(ruleContext)
+                .getEnforceStrictDepsForBinariesUnderTest());
     ResourceDependencies resourceDeps =
         ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false);
     RuleConfiguredTargetBuilder builder =
@@ -195,11 +195,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     // Retrieve and compile the resources defined on the android_binary rule.
     AndroidResources.validateRuleContext(ruleContext);
 
-    final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
     final ApplicationManifest applicationManifest;
     final ResourceApk resourceApk;
 
-    if (AndroidResources.decoupleDataProcessing(dataContext)) {
+    if (AndroidResources.decoupleDataProcessing(ruleContext)) {
       StampedAndroidManifest manifest =
           AndroidManifest.fromAttributes(ruleContext, androidSemantics).mergeWithDeps(ruleContext);
       applicationManifest =
@@ -325,7 +324,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     MobileInstallResourceApks mobileInstallResourceApks =
         AndroidBinaryMobileInstall.createMobileInstallResourceApks(
-            ruleContext, dataContext, applicationManifest, resourceDeps);
+            ruleContext, applicationManifest, resourceDeps);
 
     return createAndroidBinary(
         ruleContext,

@@ -79,7 +79,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     ruleContext.checkSrcsSamePackage(true);
 
     JavaSemantics javaSemantics = createJavaSemantics();
-    AndroidSemantics androidSemantics = createAndroidSemantics();
     createAndroidMigrationSemantics().validateRuleContext(ruleContext);
     AndroidLocalTestConfiguration androidLocalTestConfiguration =
         ruleContext.getFragment(AndroidLocalTestConfiguration.class);
@@ -90,10 +89,9 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     // since they run on a JVM, not an android device.
     JavaTargetAttributes.Builder attributesBuilder = javaCommon.initCommon();
 
-    final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
     final ResourceApk resourceApk;
 
-    if (AndroidResources.decoupleDataProcessing(dataContext)) {
+    if (AndroidResources.decoupleDataProcessing(ruleContext)) {
       resourceApk =
           buildResourceApk(
               ruleContext,
@@ -581,8 +579,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
   /** Get JavaSemantics */
   protected abstract JavaSemantics createJavaSemantics();
-
-  protected abstract AndroidSemantics createAndroidSemantics();
 
   /** Get AndroidMigrationSemantics */
   protected abstract AndroidMigrationSemantics createAndroidMigrationSemantics();

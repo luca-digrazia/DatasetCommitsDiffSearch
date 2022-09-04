@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
@@ -381,9 +380,13 @@ public abstract class AndroidSkylarkData {
 
       ValidatedAndroidResources validated =
           AndroidResources.from(ctx.getRuleContext(), getFileProviders(resources), "resources")
-              .process(
+              .parse(
                   ctx.getRuleContext(),
                   manifest.asStampedManifest(),
+                  enableDataBinding,
+                  aaptVersion)
+              .merge(
+                  ctx.getRuleContext(),
                   ResourceDependencies.fromProviders(deps, neverlink),
                   enableDataBinding,
                   aaptVersion)
@@ -716,63 +719,6 @@ public abstract class AndroidSkylarkData {
             .put(AndroidAssetsInfo.PROVIDER, assetsInfo)
             .put(AndroidManifestInfo.PROVIDER, manifestInfo)
             .build());
-  }
-
-  /**
-   * Skylark API for doing all resource, asset, and manifest processing for an aar_import target
-   *
-   * <p>TODO(b/79159379): Stop passing SkylarkRuleContext here
-   *
-   * @param ctx the SkylarkRuleContext. We will soon change to using an ActionConstructionContext
-   *     instead. See b/79159379
-   */
-  @SkylarkCallable(
-      name = "process_aar_import_data",
-      // context, resource and asset TreeArtifacts, and manifest artifact are all mandatory
-      mandatoryPositionals = 4,
-      parameters = {
-        @Param(
-            name = "deps",
-            type = SkylarkList.class,
-            generic1 = ConfiguredTarget.class,
-            named = true,
-            positional = false,
-            defaultValue = "[]",
-            doc = "Targets to inherit asset and resource dependencies from.")
-      },
-      doc = "Processes assets, resources, and manifest for aar_import targets")
-  public SkylarkDict<NativeProvider<?>, NativeInfo> processAarImportData(
-      SkylarkRuleContext ctx,
-      SpecialArtifact resources,
-      SpecialArtifact assets,
-      Artifact androidManifestArtifact,
-      SkylarkList<ConfiguredTarget> deps)
-      throws EvalException, InterruptedException {
-
-    AndroidAaptVersion aaptVersion =
-        AndroidCommon.getAndroidConfig(ctx.getRuleContext()).getAndroidAaptVersion();
-
-    ValidatedAndroidResources validatedResources =
-        AndroidResources.forAarImport(resources)
-            .process(
-                ctx.getRuleContext(),
-                AndroidManifest.forAarImport(androidManifestArtifact),
-                ResourceDependencies.fromProviders(
-                    getProviders(deps, AndroidResourcesInfo.PROVIDER), /* neverlink = */ false),
-                /* enableDataBinding = */ false,
-                aaptVersion);
-
-    MergedAndroidAssets mergedAssets =
-        AndroidAssets.forAarImport(assets)
-            .parse(ctx.getRuleContext())
-            .merge(
-                ctx.getRuleContext(),
-                AssetDependencies.fromProviders(
-                    getProviders(deps, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false));
-
-    ResourceApk resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
-
-    return getNativeInfosFrom(resourceApk, ctx.getLabel());
   }
 
   /**
