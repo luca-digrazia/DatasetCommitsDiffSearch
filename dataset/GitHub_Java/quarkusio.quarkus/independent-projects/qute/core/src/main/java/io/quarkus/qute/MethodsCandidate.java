@@ -49,7 +49,7 @@ final class MethodsCandidate implements AccessorCandidate {
                             }
                         }
                         // No method matches the parameter types
-                        result.complete(Results.NotFound.from(context));
+                        result.complete(Results.notFound(context));
                     }
                 });
                 return result;

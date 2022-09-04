@@ -65,50 +65,49 @@ public final class Results {
     /**
      * Represents various types of "result not found" values.
      */
-    public static final class NotFound {
+    public interface NotFound {
 
-        public static final NotFound EMPTY = new NotFound(null, null);
+        static final NotFound EMPTY = new NotFound() {
+
+            @Override
+            public String toString() {
+                return "NOT_FOUND";
+            }
+
+        };
 
         public static NotFound from(EvalContext context) {
-            return new NotFound(Objects.requireNonNull(context), null);
+            return new EvalContextNotFound(Objects.requireNonNull(context));
         }
 
         public static NotFound from(String name) {
-            return new NotFound(null, Objects.requireNonNull(name));
-        }
-
-        private final Optional<String> name;
-        private final EvalContext evalContext;
-
-        private NotFound(EvalContext evalContext, String name) {
-            this.name = Optional.ofNullable(name);
-            this.evalContext = evalContext;
+            return new NameOnlyNotFound(Objects.requireNonNull(name));
         }
 
         /**
          * 
          * @return the base object or empty
          */
-        public Optional<Object> getBase() {
-            return evalContext != null ? Optional.ofNullable(evalContext.getBase()) : Optional.empty();
+        default Optional<Object> getBase() {
+            return Optional.empty();
         }
 
         /**
          * 
          * @return the name of the virtual property/function
          */
-        public Optional<String> getName() {
-            return evalContext != null ? Optional.of(evalContext.getName()) : name;
+        default Optional<String> getName() {
+            return Optional.empty();
         }
 
         /**
          * @return the list of parameters, is never {@code null}
          */
-        public List<Expression> getParams() {
-            return evalContext != null ? evalContext.getParams() : Collections.emptyList();
+        default List<Expression> getParams() {
+            return Collections.emptyList();
         }
 
-        public String asMessage() {
+        default String asMessage() {
             String name = getName().orElse(null);
             if (name != null) {
                 // Property "foo" not found on base object "org.acme.Bar"
@@ -139,10 +138,56 @@ public final class Results {
             }
         }
 
+    }
+
+    static final class NameOnlyNotFound implements NotFound {
+
+        private final Optional<String> name;
+
+        NameOnlyNotFound(String name) {
+            this.name = Optional.of(name);
+        }
+
+        @Override
+        public Optional<String> getName() {
+            return name;
+        }
+
         @Override
         public String toString() {
             return "NOT_FOUND";
         }
+
+    }
+
+    static final class EvalContextNotFound implements NotFound {
+
+        private final EvalContext evalContext;
+
+        EvalContextNotFound(EvalContext evalContext) {
+            this.evalContext = evalContext;
+        }
+
+        @Override
+        public Optional<Object> getBase() {
+            return Optional.ofNullable(evalContext.getBase());
+        }
+
+        @Override
+        public Optional<String> getName() {
+            return Optional.of(evalContext.getName());
+        }
+
+        @Override
+        public List<Expression> getParams() {
+            return evalContext.getParams();
+        }
+
+        @Override
+        public String toString() {
+            return "NOT_FOUND";
+        }
+
     }
 
 }

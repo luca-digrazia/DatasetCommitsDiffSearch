@@ -1,7 +1,12 @@
 package io.quarkus.qute;
 
 /**
- * Value resolver.
+ * Value resolvers are used when evaluating expressions.
+ * <p>
+ * First the resolvers that apply to the given {@link EvalContext} are filtered. Then the resolver with highest priority is used
+ * to resolve the data. If {@link Results#isNotFound(Object)} is returned the next available resolver is tried.
+ * 
+ * @see EvalContext
  */
 public interface ValueResolver extends Resolver, WithPriority {
 
@@ -12,6 +17,14 @@ public interface ValueResolver extends Resolver, WithPriority {
      */
     default boolean appliesTo(EvalContext context) {
         return true;
+    }
+
+    /**
+     * 
+     * @return a new builder
+     */
+    static ValueResolverBuilder builder() {
+        return new ValueResolverBuilder();
     }
 
     // Utility methods
