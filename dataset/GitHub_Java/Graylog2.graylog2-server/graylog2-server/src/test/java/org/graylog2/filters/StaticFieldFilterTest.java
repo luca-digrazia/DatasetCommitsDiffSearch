@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,23 +15,24 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package org.graylog2.filters;
 
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
-import org.testng.annotations.Test;
+import org.joda.time.DateTime;
+import org.junit.Test;
 
 import java.util.Map;
 
-import static org.testng.Assert.assertEquals;
+import static junit.framework.Assert.assertEquals;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -40,7 +41,7 @@ public class StaticFieldFilterTest {
 
     @Test
     public void testFilter() throws Exception {
-        Message msg = new Message("hello", "junit", Tools.iso8601());
+        Message msg = new Message("hello", "junit", new DateTime());
 
         FakeInput fakeInput = new FakeInput();
         fakeInput.addStaticField("foo", "bar");
@@ -48,7 +49,7 @@ public class StaticFieldFilterTest {
         msg.setSourceInput(fakeInput);
 
         StaticFieldFilter filter = new StaticFieldFilter();
-        filter.filter(msg);
+        filter.filter(msg, null);
 
         assertEquals("hello", msg.getMessage());
         assertEquals("junit", msg.getSource());
@@ -57,7 +58,7 @@ public class StaticFieldFilterTest {
 
     @Test
     public void testFilterIsNotOverwritingExistingKeys() throws Exception {
-        Message msg = new Message("hello", "junit", Tools.iso8601());
+        Message msg = new Message("hello", "junit", new DateTime());
         msg.addField("foo", "IWILLSURVIVE");
 
         FakeInput fakeInput = new FakeInput();
@@ -66,7 +67,7 @@ public class StaticFieldFilterTest {
         msg.setSourceInput(fakeInput);
 
         StaticFieldFilter filter = new StaticFieldFilter();
-        filter.filter(msg);
+        filter.filter(msg, null);
 
         assertEquals("hello", msg.getMessage());
         assertEquals("junit", msg.getSource());
@@ -76,12 +77,12 @@ public class StaticFieldFilterTest {
     private class FakeInput extends MessageInput {
 
         @Override
-        public void checkConfiguration(Configuration configuration) throws ConfigurationException {
+        public void checkConfiguration() throws ConfigurationException {
             //To change body of implemented methods use File | Settings | File Templates.
         }
 
         @Override
-        public void launch(Buffer processBuffer) throws MisfireException {
+        public void launch() throws MisfireException {
             //To change body of implemented methods use File | Settings | File Templates.
         }
 

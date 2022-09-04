@@ -46,9 +46,7 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 
 import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.io.Writer;
-import java.util.concurrent.ExecutionException;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -141,25 +139,7 @@ public class Main {
             System.exit(1);
         }
 
-        // Try loading persisted inputs. Retry until server connection succeeds.
-        while(true) {
-            try {
-                radio.launchPersistedInputs();
-                break;
-            } catch (InterruptedException e) {
-                retryPersistedInputs(e);
-                continue;
-            } catch (ExecutionException e) {
-                retryPersistedInputs(e);
-                continue;
-            } catch (IOException e) {
-                retryPersistedInputs(e);
-                continue;
-            } catch(Exception e) {
-                LOG.error("Unexpected error when trying to fetch persisted inputs. Terminating.", e);
-                System.exit(1);
-            }
-        }
+        radio.run();
 
         // Register inputs. (find an automatic way here (annotations?) and do the same in graylog2-server.Main
         radio.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
@@ -199,15 +179,6 @@ public class Main {
             IOUtils.closeQuietly(pidFileWriter);
             // make sure to remove our pid when we exit
             new File(pidFile).deleteOnExit();
-        }
-    }
-
-    public static void retryPersistedInputs(Throwable e) {
-        LOG.error("Could not load persisted inputs. Trying again in one second.", e);
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e1) {
-            return;
         }
     }
 

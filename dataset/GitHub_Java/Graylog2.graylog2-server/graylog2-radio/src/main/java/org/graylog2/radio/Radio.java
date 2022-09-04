@@ -139,8 +139,12 @@ public class Radio implements InputHost {
         scheduler.scheduleAtFixedRate(tt, 0, 1, TimeUnit.SECONDS);
     }
 
-    public void launchPersistedInputs() throws InterruptedException, ExecutionException, IOException {
-        inputs.launchPersisted();
+    public void run() {
+        try {
+            inputs.launchPersisted();
+        } catch (Exception e) {
+            LOG.error("Could not load persisted inputs from server cluster.", e);
+        }
     }
 
     public void startRestApi() throws IOException {

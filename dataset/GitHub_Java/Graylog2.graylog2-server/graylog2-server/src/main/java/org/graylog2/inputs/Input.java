@@ -68,11 +68,7 @@ public class Input extends Persisted {
 
     public static List<Input> allOfThisNode(Core core) {
         List<Input> inputs = Lists.newArrayList();
-        List<BasicDBObject> query = new ArrayList<BasicDBObject>();
-        query.add(new BasicDBObject("node_id", core.getNodeId()));
-        query.add(new BasicDBObject("global", true));
-        List<DBObject> ownInputs = query(new BasicDBObject( "$or", query), core, COLLECTION);
-        for (DBObject o : ownInputs) {
+        for (DBObject o : query(new BasicDBObject("node_id", core.getNodeId()), core, COLLECTION)) {
             inputs.add(new Input(core, (ObjectId) o.get("_id"), o.toMap()));
         }
 
@@ -90,21 +86,6 @@ public class Input extends Persisted {
 
     public static Input find(Core core, String id) {
         DBObject o = findOne(new BasicDBObject("_id", new ObjectId(id)), core, COLLECTION);
-        return new Input(core, (ObjectId) o.get("_id"), o.toMap());
-    }
-
-    public static Input findForThisNode(Core core, String id) {
-        List<BasicDBObject> query = new ArrayList<BasicDBObject>();
-        query.add(new BasicDBObject("_id", new ObjectId(id)));
-
-        List<BasicDBObject> forThisNodeOrGlobal = new ArrayList<BasicDBObject>();
-        forThisNodeOrGlobal.add(new BasicDBObject("node_id", core.getNodeId()));
-        forThisNodeOrGlobal.add(new BasicDBObject("global", true));
-
-        query.add(new BasicDBObject("$or", forThisNodeOrGlobal));
-
-        DBObject o = findOne(new BasicDBObject("$and", query), core, COLLECTION);
-
         return new Input(core, (ObjectId) o.get("_id"), o.toMap());
     }
 
@@ -281,14 +262,6 @@ public class Input extends Persisted {
         }
 
         return cl;
-    }
-
-    public Boolean isGlobal() {
-        Object global = fields.get("global");
-        if (global != null && global instanceof Boolean)
-            return (Boolean) global;
-        else
-            return false;
     }
 
 }

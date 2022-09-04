@@ -17,16 +17,29 @@
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package org.graylog2.radio.inputs.api;
+package org.graylog2.rest.resources.system.radio.requests;
 
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class PersistedInputsResponse {
+public class RegisterInputRequest {
 
-    public List<InputSummaryResponse> inputs;
-    public int total;
+    @JsonProperty("input_id")
+    public String inputId;
+
+    public String title;
+    public String type;
+
+    public Map<String, Object> configuration;
+
+    @JsonProperty("radio_id")
+    public String radioId;
+
+    @JsonProperty("creator_user_id")
+    public String creatorUserId;
 
 }

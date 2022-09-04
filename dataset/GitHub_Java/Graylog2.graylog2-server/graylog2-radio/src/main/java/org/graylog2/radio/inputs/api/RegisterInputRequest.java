@@ -19,14 +19,37 @@
  */
 package org.graylog2.radio.inputs.api;
 
-import java.util.List;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import org.graylog2.plugin.inputs.MessageInput;
+
+import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class PersistedInputsResponse {
+public class RegisterInputRequest {
 
-    public List<InputSummaryResponse> inputs;
-    public int total;
+    @JsonProperty("input_id")
+    public String inputId;
+
+    public String title;
+    public String type;
+
+    public Map<String, Object> configuration;
+
+    @JsonProperty("radio_id")
+    public String radioId;
+
+    @JsonProperty("creator_user_id")
+    public String creatorUserId;
+
+    public RegisterInputRequest(MessageInput input, String radioId) {
+        this.inputId = input.getId();
+        this.title = input.getTitle();
+        this.type = input.getClass().getCanonicalName();
+        this.configuration = input.getConfiguration().getSource();
+        this.radioId = radioId;
+        this.creatorUserId = input.getCreatorUserId();
+    }
 
 }

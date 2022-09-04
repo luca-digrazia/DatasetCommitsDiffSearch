@@ -21,11 +21,8 @@ package org.graylog2.radio.cluster;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.inject.Inject;
-import com.google.inject.name.Named;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.Response;
-import org.graylog2.shared.ServerStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,10 +71,9 @@ public class Ping {
         private final URI serverUri;
         private final URI ourUri;
 
-        @Inject
-        public Pinger(AsyncHttpClient httpClient, @Named("OurRadioUri") URI ourUri, @Named("ServerUri") URI serverUri, ServerStatus serverStatus) {
+        public Pinger(AsyncHttpClient httpClient, String nodeId, URI ourUri, URI serverUri) {
             this.httpClient = httpClient;
-            this.nodeId = serverStatus.getNodeId().toString();
+            this.nodeId = nodeId;
             this.ourUri = ourUri;
             this.serverUri = serverUri;
         }

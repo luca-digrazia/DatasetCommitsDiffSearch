@@ -52,12 +52,12 @@ public class GELFHttpInput extends GELFInputBase {
 
         final ExecutorService bossExecutor = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                        .setNameFormat("input-" + getId() + "-gelfhttp-boss-%d")
+                        .setNameFormat("input-" + inputId + "-gelfhttp-boss-%d")
                         .build());
 
         final ExecutorService workerExecutor = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                        .setNameFormat("input-" + getId() + "-gelfhttp-worker-%d")
+                        .setNameFormat("input-" + inputId + "-gelfhttp-worker-%d")
                         .build());
 
         bootstrap = new ServerBootstrap(
