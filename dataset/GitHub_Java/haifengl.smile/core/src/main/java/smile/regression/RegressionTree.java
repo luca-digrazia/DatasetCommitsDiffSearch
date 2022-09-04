@@ -595,7 +595,7 @@ public class RegressionTree implements Regression<double[]>, Serializable {
         /**
          * Split the node into two children nodes. Returns true if split success.
          */
-        public void split(PriorityQueue<TrainNode> nextSplits) {
+        public boolean split(PriorityQueue<TrainNode> nextSplits) {
             if (node.splitFeature < 0) {
                 throw new IllegalStateException("Split a node with invalid feature.");
             }
@@ -640,7 +640,7 @@ public class RegressionTree implements Regression<double[]>, Serializable {
                 node.splitFeature = -1;
                 node.splitValue = Double.NaN;
                 node.splitScore = 0.0;
-                return;
+                return false;
             }
 
             node.trueChild = new Node(node.trueChildOutput);
@@ -665,6 +665,8 @@ public class RegressionTree implements Regression<double[]>, Serializable {
             }
 
             importance[node.splitFeature] += node.splitScore;
+
+            return true;
         }
     }
 
