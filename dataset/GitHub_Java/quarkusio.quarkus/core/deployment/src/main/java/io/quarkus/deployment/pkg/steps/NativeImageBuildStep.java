@@ -143,8 +143,7 @@ public class NativeImageBuildStep {
             Process versionProcess = new ProcessBuilder(versionCommand.toArray(new String[0]))
                     .redirectErrorStream(true)
                     .start();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(versionProcess.getInputStream(), StandardCharsets.UTF_8))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(versionProcess.getInputStream()))) {
                 graalVMVersion = reader.lines().filter((l) -> l.startsWith("GraalVM Version")).findFirst();
             }
         } catch (Exception e) {
