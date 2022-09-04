@@ -26,10 +26,10 @@ import static org.androidannotations.helper.CanonicalNameConstants.CLIENT_HTTP_R
 import static org.androidannotations.helper.CanonicalNameConstants.HTTP_MESSAGE_CONVERTER;
 import static org.androidannotations.helper.CanonicalNameConstants.INTERNET_PERMISSION;
 import static org.androidannotations.helper.CanonicalNameConstants.WAKELOCK_PERMISSION;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 import static org.androidannotations.helper.ModelConstants.VALID_ANDROID_ANNOTATIONS;
 import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_COMPONENT_ANNOTATIONS;
 import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS;
-import static org.androidannotations.helper.ModelConstants.classSuffix;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -201,13 +201,6 @@ public class ValidatorHelper {
 		if (!annotationHelper.isStatic(element)) {
 			valid.invalidate();
 			annotationHelper.printAnnotationError(element, "%s cannot be used on a non static inner element");
-		}
-	}
-
-	public void enclosingElementIsNotAbstractIfNotAbstract(Element element, IsValid valid) {
-		if (!annotationHelper.isAbstract(element) && annotationHelper.isAbstract(element.getEnclosingElement())) {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "%s cannot be used on a non-abstract inner element whose outer element is abstract");
 		}
 	}
 
@@ -619,7 +612,7 @@ public class ValidatorHelper {
 			TypeElement typeElement = (TypeElement) element;
 
 			String componentQualifiedName = typeElement.getQualifiedName().toString();
-			String generatedComponentQualifiedName = componentQualifiedName + classSuffix();
+			String generatedComponentQualifiedName = componentQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
 			if (!typeElement.getModifiers().contains(Modifier.ABSTRACT) && !applicationClassName.equals(generatedComponentQualifiedName)) {
 				if (applicationClassName.equals(componentQualifiedName)) {
@@ -647,9 +640,9 @@ public class ValidatorHelper {
 			String elementTypeName = type.toString();
 
 			boolean sharedPrefValidatedInRound = false;
-			if (elementTypeName.endsWith(classSuffix())) {
-				String prefTypeName = elementTypeName.substring(0, elementTypeName.length() - classSuffix().length());
-				prefTypeName = prefTypeName.replace(classSuffix() + ".", ".");
+			if (elementTypeName.endsWith(GENERATION_SUFFIX)) {
+				String prefTypeName = elementTypeName.substring(0, elementTypeName.length() - GENERATION_SUFFIX.length());
+				prefTypeName = prefTypeName.replace("_.", ".");
 
 				Set<? extends Element> sharedPrefElements = validatedElements.getRootAnnotatedElements(SharedPref.class.getName());
 
@@ -1112,12 +1105,12 @@ public class ValidatorHelper {
 		}
 
 		String componentQualifiedName = typeElement.getQualifiedName().toString();
-		String generatedComponentQualifiedName = componentQualifiedName + classSuffix();
+		String generatedComponentQualifiedName = componentQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
 		List<String> componentQualifiedNames = androidManifest.getComponentQualifiedNames();
 		if (!componentQualifiedNames.contains(generatedComponentQualifiedName)) {
 			String simpleName = typeElement.getSimpleName().toString();
-			String generatedSimpleName = simpleName + classSuffix();
+			String generatedSimpleName = simpleName + ModelConstants.GENERATION_SUFFIX;
 			if (componentQualifiedNames.contains(componentQualifiedName)) {
 				valid.invalidate();
 				annotationHelper.printAnnotationError(element, "The AndroidManifest.xml file contains the original component, and not the AndroidAnnotations generated component. Please register " + generatedSimpleName + " instead of " + simpleName);
