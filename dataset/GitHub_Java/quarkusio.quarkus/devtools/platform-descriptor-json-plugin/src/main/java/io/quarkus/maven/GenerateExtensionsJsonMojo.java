@@ -56,7 +56,6 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.util.ZipUtils;
 import io.quarkus.dependencies.Extension;
-import io.quarkus.platform.tools.ToolsConstants;
 
 /**
  * This goal generates a list of extensions for a given BOM
@@ -146,7 +145,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
 
         // Create a JSON array of extension descriptors
         final JsonArrayBuilder extListJson = Json.createArrayBuilder();
-        String quarkusCoreVersion = null;
         for (Dependency dep : deps) {
             final Artifact artifact = dep.getArtifact();
             if (!artifact.getExtension().equals("jar")
@@ -154,10 +152,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
                     || "tests".equals(artifact.getClassifier())
                     || "sources".equals(artifact.getClassifier())) {
                 continue;
-            }
-            if (artifact.getArtifactId().equals(ToolsConstants.QUARKUS_CORE_ARTIFACT_ID)
-                    && artifact.getGroupId().equals(ToolsConstants.QUARKUS_CORE_GROUP_ID)) {
-                quarkusCoreVersion = artifact.getVersion();
             }
             ArtifactResult resolved = null;
             try {
@@ -180,10 +174,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
             }
         }
 
-        if (quarkusCoreVersion == null) {
-            throw new MojoExecutionException("Failed to determine the Quarkus Core version for " + bomArtifact);
-        }
-
         // Create the toplevel JSON
         final JsonObjectBuilder platformJson = Json.createObjectBuilder();
         // Add information about the BOM to it
@@ -192,8 +182,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         bomJson.add(Extension.ARTIFACT_ID, bomArtifactId);
         bomJson.add(Extension.VERSION, bomVersion);
         platformJson.add("bom", bomJson.build());
-        // Add Quarkus version
-        platformJson.add("quarkus-core-version", quarkusCoreVersion);
         // And add the list of extensions
         platformJson.add("extensions", extListJson.build());
 
@@ -254,7 +242,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
 
     /**
      * Load and return javax.jsonObject based on yaml, json or properties file.
-     *
+     * 
      * @param artifact
      * @param metaInfDir
      * @return
@@ -334,7 +322,7 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
     }
 
     private JsonObject mergeObject(JsonObject extObject, JsonObject extOverride) {
-        final JsonObjectBuilder mergedObject = Json.createObjectBuilder(extObject);
+        final JsonObjectBuilder mergedObject = Json.createObjectBuilder();
         for (Map.Entry<String, JsonValue> e : extOverride.entrySet()) {
             JsonValue.ValueType tp = e.getValue().getValueType();
             if (tp == JsonValue.ValueType.OBJECT
