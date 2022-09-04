@@ -400,6 +400,19 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean incrementalDexing;
 
+    // TODO(b/31711689): remove this flag from config files and here
+    @Option(
+      name = "host_incremental_dexing",
+      defaultValue = "false",
+      metadataTags = {OptionMetadataTag.HIDDEN},
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "This flag is deprecated in favor of applying --incremental_dexing to both host "
+              + "and target configuration.  This flag will be removed in a future release."
+    )
+    public boolean hostIncrementalDexing;
+
     // Do not use on the command line.
     // The idea is that this option lets us gradually turn on incremental dexing for different
     // binaries.  Users should rely on --noincremental_dexing to turn it off.
@@ -498,10 +511,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     // Do not use on the command line.
     // This flag is intended to be updated as we add supported flags to the incremental dexing tools
+    // TODO(b/31711689): remove --no-optimize and --no-locals as DexFileMerger no longer needs them
     @Option(
       name = "dexopts_supported_in_dexmerger",
       converter = Converters.CommaSeparatedOptionListConverter.class,
-      defaultValue = "--minimal-main-dex,--set-max-idx-number",
+      defaultValue = "--no-optimize,--no-locals,--minimal-main-dex,--set-max-idx-number",
       metadataTags = {OptionMetadataTag.HIDDEN},
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
@@ -715,7 +729,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
         help = "For use in testing before migrating away from android_resources. If false, will"
-            + " fail when non-whitelisted android_resources rules are encountered."
+            + " fail when android_resources rules are encountered"
     )
     public boolean allowAndroidResources;
 
@@ -725,7 +739,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
         help = "For use in testing before migrating away from android_resources. If false, will"
-            + " fail when non-whitelisted instances of the 'resources' attribute are encountered."
+            + " fail when android_resources rules are encountered"
     )
     public boolean allowResourcesAttr;
 

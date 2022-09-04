@@ -404,7 +404,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       NativeLibs nativeLibs,
       ApplicationManifest applicationManifest,
       ResourceApk resourceApk,
-      @Nullable MobileInstallResourceApks mobileInstallResourceApks,
+      MobileInstallResourceApks mobileInstallResourceApks,
       ResourceApk instantRunResourceApk,
       boolean shrinkResources,
       JavaTargetAttributes resourceClasses,
@@ -633,22 +633,20 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       builder.addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, oneVersionEnforcementArtifact);
     }
 
-    if (mobileInstallResourceApks != null) {
-      AndroidBinaryMobileInstall.addMobileInstall(
-          ruleContext,
-          builder,
-          dexingOutput,
-          javaSemantics,
-          nativeLibs,
-          resourceApk,
-          mobileInstallResourceApks,
-          resourceExtractor,
-          nativeLibsZips,
-          signingKey,
-          dataDeps,
-          additionalMergedManifests,
-          applicationManifest);
-    }
+    AndroidBinaryMobileInstall.addMobileInstall(
+        ruleContext,
+        builder,
+        dexingOutput,
+        javaSemantics,
+        nativeLibs,
+        resourceApk,
+        mobileInstallResourceApks,
+        resourceExtractor,
+        nativeLibsZips,
+        signingKey,
+        dataDeps,
+        additionalMergedManifests,
+        applicationManifest);
 
     return builder
         .setFilesToBuild(filesToBuild)

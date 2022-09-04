@@ -15,20 +15,20 @@ package com.google.devtools.build.lib.bazel.rules.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.android.AndroidBinary;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider;
 import com.google.devtools.build.lib.rules.android.AndroidSemantics;
+import com.google.devtools.build.lib.rules.android.ApplicationManifest;
 import com.google.devtools.build.lib.rules.android.ResourceApk;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes.Builder;
-import com.google.devtools.build.lib.rules.java.ProguardHelper.ProguardOutput;
 
 /**
  * Implementation of Bazel-specific behavior in Android rules.
@@ -44,6 +44,17 @@ public class BazelAndroidSemantics implements AndroidSemantics {
       RuleContext ruleContext,
       ResourceApk resourceApk,
       AndroidIdeInfoProvider.Builder ideInfoProviderBuilder) {}
+
+  @Override
+  public ApplicationManifest getManifestForRule(RuleContext ruleContext) throws RuleErrorException {
+    ApplicationManifest result = ApplicationManifest.fromRule(ruleContext);
+    if (!result.getManifest().getExecPath().getBaseName().equals("AndroidManifest.xml")) {
+      ruleContext.attributeError("manifest", "The manifest must be called 'AndroidManifest.xml'");
+      throw new RuleErrorException();
+    }
+
+    return result;
+  }
 
   @Override
   public String getNativeDepsFileName() {
@@ -69,6 +80,11 @@ public class BazelAndroidSemantics implements AndroidSemantics {
       Artifact proguardMap) {}
 
   @Override
+  public Artifact getApkDebugSigningKey(RuleContext ruleContext) {
+    return ruleContext.getPrerequisiteArtifact("$debug_keystore", Mode.HOST);
+  }
+
+  @Override
   public ImmutableList<Artifact> getProguardSpecsForManifest(
       RuleContext ruleContext, Artifact manifest) {
     return ImmutableList.of();
@@ -88,21 +104,5 @@ public class BazelAndroidSemantics implements AndroidSemantics {
       default:
         throw new UnsupportedOperationException("Only supported for top-level binaries");
     }
-  }
-
-  @Override
-  public Artifact getProguardOutputMap(RuleContext ruleContext) throws InterruptedException {
-    return ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_MAP);
-  }
-
-  /** Bazel does not currently support any dex postprocessing. */
-  @Override
-  public AndroidBinary.DexPostprocessingOutput postprocessClassesDexZip(
-      RuleContext ruleContext,
-      NestedSetBuilder<Artifact> filesBuilder,
-      Artifact classesDexZip,
-      ProguardOutput proguardOutput)
-      throws InterruptedException {
-    return AndroidBinary.DexPostprocessingOutput.create(classesDexZip, proguardOutput.getMapping());
   }
 }
