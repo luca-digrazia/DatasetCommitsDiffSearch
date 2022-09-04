@@ -40,7 +40,6 @@ public class RegexExtractor extends Extractor {
 
     public RegexExtractor(String id,
                           String title,
-                          int order,
                           CursorStrategy cursorStrategy,
                           String sourceField,
                           String targetField,
@@ -49,7 +48,7 @@ public class RegexExtractor extends Extractor {
                           List<Converter> converters,
                           ConditionType conditionType,
                           String conditionValue) throws ReservedFieldException, ConfigurationException {
-        super(id, title, order, Type.REGEX, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
+        super(id, title, Type.REGEX, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
 
         if (extractorConfig == null || extractorConfig.get("regex_value") == null || ((String) extractorConfig.get("regex_value")).isEmpty()) {
             throw new ConfigurationException("Missing regex configuration field: regex_value");
