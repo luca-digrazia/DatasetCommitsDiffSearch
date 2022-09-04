@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,9 +17,14 @@ package com.googlecode.androidannotations.helper;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.util.Map;
 
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.type.DeclaredType;
 
 public class TargetAnnotationHelper extends AnnotationHelper implements HasTarget {
 
@@ -32,15 +37,43 @@ public class TargetAnnotationHelper extends AnnotationHelper implements HasTarge
 
 	@SuppressWarnings("unchecked")
 	public <T> T extractAnnotationValue(Element element) {
+		return (T) extractAnnotationValue(element, "value");
+	}
+
+	@SuppressWarnings("unchecked")
+	public <T> T extractAnnotationValue(Element element, String methodName) {
 		Annotation annotation = element.getAnnotation(target);
 
 		Method method;
 		try {
-			method = annotation.getClass().getMethod("value");
+			method = annotation.getClass().getMethod(methodName);
 			return (T) method.invoke(annotation);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	public DeclaredType extractAnnotationClassValue(Element element) {
+
+		AnnotationMirror annotationMirror = findAnnotationMirror(element, target);
+
+		Map<? extends ExecutableElement, ? extends AnnotationValue> elementValues = annotationMirror.getElementValues();
+
+		for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : elementValues.entrySet()) {
+			/*
+			 * "value" is unset when the default value is used
+			 */
+			if ("value".equals(entry.getKey().getSimpleName().toString())) {
+
+				AnnotationValue annotationValue = entry.getValue();
+
+				DeclaredType annotationClass = (DeclaredType) annotationValue.getValue();
+
+				return annotationClass;
+			}
+		}
+
+		return null;
 	}
 
 	@Override
@@ -49,6 +82,9 @@ public class TargetAnnotationHelper extends AnnotationHelper implements HasTarge
 	}
 
 	public String actionName() {
+		if (target.getSimpleName().endsWith("e")) {
+			return target.getSimpleName() + "d";
+		}
 		return target.getSimpleName() + "ed";
 	}
 
