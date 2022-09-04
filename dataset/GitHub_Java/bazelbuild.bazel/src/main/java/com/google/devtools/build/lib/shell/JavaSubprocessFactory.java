@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.shell;
 
 import com.google.devtools.build.lib.shell.SubprocessBuilder.StreamAction;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -97,12 +98,10 @@ public class JavaSubprocessFactory implements Subprocess.Factory {
   }
 
   @Override
-  public boolean supportsTimeout() {
-    return false;
-  }
-
-  @Override
   public Subprocess create(SubprocessBuilder params) throws IOException {
+    if (params.getTimeoutMillis() >= 0) {
+      throw new UnsupportedOperationException("Timeouts are not supported");
+    }
     ProcessBuilder builder = new ProcessBuilder();
     builder.command(params.getArgv());
     if (params.getEnv() != null) {
@@ -118,8 +117,8 @@ public class JavaSubprocessFactory implements Subprocess.Factory {
   }
 
   /**
-   * Returns a {@link java.lang.ProcessBuilder.Redirect} appropriate for the parameters. If a file
-   * redirected to exists, deletes the file before redirecting to it.
+   * Returns a {@link ProcessBuilder.Redirect} appropriate for the parameters. If a file redirected
+   * to exists, deletes the file before redirecting to it.
    */
   private Redirect getRedirect(StreamAction action, File file) {
     switch (action) {
