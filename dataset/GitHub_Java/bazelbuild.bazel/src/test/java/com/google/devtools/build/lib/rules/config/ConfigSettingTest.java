@@ -399,7 +399,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void matchesIfFlagValuesAndValuesBothMatch() throws Exception {
-    useConfiguration("--copt=-Dright", "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -410,7 +410,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -422,7 +421,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void matchesIfFlagValuesMatchAndValuesAreEmpty() throws Exception {
-    useConfiguration("--copt=-Dright", "--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -431,7 +429,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':flag': 'right',",
         "    },",
         "    values = {},",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -458,7 +455,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotMatchIfNeitherFlagValuesNorValuesMatches() throws Exception {
-    useConfiguration("--copt=-Dright", "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -469,7 +466,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dwrong',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -481,7 +477,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotMatchIfFlagValuesDoNotMatchAndValuesAreEmpty() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -490,7 +485,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':flag': 'wrong',",
         "    },",
         "    values = {},",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -502,7 +496,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotMatchIfFlagValuesDoNotMatchButValuesDo() throws Exception {
-    useConfiguration("--copt=-Dright", "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -513,7 +507,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -540,7 +533,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotMatchIfValuesDoNotMatchButFlagValuesDo() throws Exception {
-    useConfiguration("--copt=-Dright", "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -551,7 +544,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dwrong',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -563,7 +555,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotMatchIfEvenOneFlagValueDoesNotMatch() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -573,7 +564,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':flag2': 'bad',",
         "    },",
         "    values = {},",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -590,14 +580,12 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void matchesIfNonDefaultIsSpecifiedAndFlagValueIsThatValue() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "feature_flag_setter(",
         "    name = 'setter',",
         "    exports_setting = ':match',",
         "    flag_values = {':flag': 'actual'},",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_setting(",
         "    name = 'match',",
@@ -605,7 +593,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':flag': 'actual',",
         "    },",
         "    values = {},",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -617,14 +604,12 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotMatchIfDefaultIsSpecifiedAndFlagValueIsNotDefault() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "feature_flag_setter(",
         "    name = 'setter',",
         "    exports_setting = ':match',",
         "    flag_values = {':flag': 'actual'},",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_setting(",
         "    name = 'match',",
@@ -632,7 +617,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':flag': 'default',",
         "    },",
         "    values = {},",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -644,10 +628,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotRefineSettingWithSameValuesAndSameFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -660,7 +641,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -672,7 +652,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -692,10 +671,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotRefineSettingWithDifferentValuesAndSameFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -707,7 +683,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -718,7 +693,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -738,10 +712,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotRefineSettingWithSameValuesAndDifferentFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -753,7 +724,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -764,7 +734,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -784,10 +753,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotRefineSettingWithDifferentValuesAndDifferentFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -798,7 +764,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -808,7 +773,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -828,10 +792,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotRefineSettingWithDifferentValuesAndSubsetFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -843,7 +804,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -853,7 +813,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -873,10 +832,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void doesNotRefineSettingWithSubsetValuesAndDifferentFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -888,7 +844,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -898,7 +853,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -918,10 +872,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void refinesSettingWithSubsetValuesAndSameFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -934,7 +885,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -945,7 +895,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -965,10 +914,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void refinesSettingWithSameValuesAndSubsetFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -981,7 +927,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -992,7 +937,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -1012,10 +956,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void refinesSettingWithSubsetValuesAndSubsetFlagValues() throws Exception {
-    useConfiguration(
-        "--copt=-Dright",
-        "--javacopt=-Dgood",
-        "--enforce_transitive_configs_for_config_feature_flag");
+    useConfiguration("--copt=-Dright", "--javacopt=-Dgood");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -1028,7 +969,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        'copt': '-Dright',",
         "        'javacopt': '-Dgood',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
@@ -1038,7 +978,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    values = {",
         "        'copt': '-Dright',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -1058,7 +997,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void matchesAliasedFlagsInFlagValues() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -1066,12 +1004,10 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    flag_values = {",
         "        ':alias': 'right',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "alias(",
         "    name = 'alias',",
         "    actual = 'flag',",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -1083,7 +1019,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void aliasedFlagsAreCountedInRefining() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     scratch.file(
         "test/BUILD",
         "config_setting(",
@@ -1092,19 +1027,16 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':alias': 'right',",
         "        ':flag2': 'good',",
         "    },",
-        "    transitive_configs = [':flag', ':flag2'],",
         ")",
         "config_setting(",
         "    name = 'other',",
         "    flag_values = {",
         "        ':flag': 'right',",
         "    },",
-        "    transitive_configs = [':flag'],",
         ")",
         "alias(",
         "    name = 'alias',",
         "    actual = 'flag',",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",
@@ -1124,7 +1056,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void referencingSameFlagViaMultipleAliasesFails() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
     checkError(
         "test",
         "multialias",
@@ -1136,12 +1067,10 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "        ':alias': 'right',",
         "        ':direct': 'right',",
         "    },",
-        "    transitive_configs = [':direct'],",
         ")",
         "alias(",
         "    name = 'alias',",
         "    actual = 'direct',",
-        "    transitive_configs = [':direct'],",
         ")",
         "config_feature_flag(",
         "    name = 'direct',",
@@ -1169,19 +1098,15 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void requiresValidValueForFlagValues() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
-    checkError(
-        "test",
-        "invalid_flag",
+    checkError("test", "invalid_flag",
         "in flag_values attribute of config_setting rule //test:invalid_flag: "
-            + "error while parsing user-defined configuration values: "
-            + "'invalid' is not a valid value for '//test:flag'",
+        + "error while parsing user-defined configuration values: "
+        + "'invalid' is not a valid value for '//test:flag'",
         "config_setting(",
         "    name = 'invalid_flag',",
         "    flag_values = {",
         "        ':flag': 'invalid',",
-        "    },",
-        "    transitive_configs = [':flag'])",
+        "    })",
         "config_feature_flag(",
         "    name = 'flag',",
         "    allowed_values = ['right', 'valid'],",
@@ -1191,23 +1116,18 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
   @Test
   public void usesAliasLabelWhenReportingErrorInFlagValues() throws Exception {
-    useConfiguration("--enforce_transitive_configs_for_config_feature_flag");
-    checkError(
-        "test",
-        "invalid_flag",
+    checkError("test", "invalid_flag",
         "in flag_values attribute of config_setting rule //test:invalid_flag: "
-            + "error while parsing user-defined configuration values: "
-            + "'invalid' is not a valid value for '//test:alias'",
+        + "error while parsing user-defined configuration values: "
+        + "'invalid' is not a valid value for '//test:alias'",
         "config_setting(",
         "    name = 'invalid_flag',",
         "    flag_values = {",
         "        ':alias': 'invalid',",
-        "    },",
-        "    transitive_configs = [':flag'])",
+        "    })",
         "alias(",
         "    name = 'alias',",
         "    actual = ':flag',",
-        "    transitive_configs = [':flag'],",
         ")",
         "config_feature_flag(",
         "    name = 'flag',",

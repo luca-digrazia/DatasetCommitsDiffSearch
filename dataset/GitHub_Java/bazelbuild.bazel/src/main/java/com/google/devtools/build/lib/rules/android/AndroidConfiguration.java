@@ -818,21 +818,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean checkForMigrationTag;
 
-    // TODO(eaftan): enable this by default and delete it
-    @Option(
-      name = "experimental_one_version_enforcement_use_transitive_jars_for_binary_under_test",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.ACTION_COMMAND_LINES
-      },
-      help =
-          "If enabled, one version enforcement for android_test uses the binary_under_test's "
-              + "transitive classpath, otherwise it uses the deploy jar"
-    )
-    public boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
-
     @Override
     public FragmentOptions getHost() {
       Options host = (Options) super.getHost();
@@ -856,8 +841,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       host.androidAaptVersion = androidAaptVersion;
       host.allowAndroidLibraryDepsWithoutSrcs = allowAndroidLibraryDepsWithoutSrcs;
       host.enforceStrictDepsForBinariesUnderTest = enforceStrictDepsForBinariesUnderTest;
-      host.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
-          oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
       return host;
     }
   }
@@ -916,7 +899,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean decoupleDataProcessing;
   private final boolean enforceStrictDepsForBinariesUnderTest;
   private final boolean checkForMigrationTag;
-  private final boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
     this.sdk = options.sdk;
@@ -957,8 +939,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.decoupleDataProcessing = options.decoupleDataProcessing;
     this.enforceStrictDepsForBinariesUnderTest = options.enforceStrictDepsForBinariesUnderTest;
     this.checkForMigrationTag = options.checkForMigrationTag;
-    this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
-        options.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
 
     if (incrementalDexingShardsAfterProguard < 0) {
       throw new InvalidConfigurationException(
@@ -1011,8 +991,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       AndroidRobolectricTestDeprecationLevel robolectricTestDeprecationLevel,
       boolean decoupleDataProcessing,
       boolean enforceStrictDepsForBinariesUnderTest,
-      boolean checkForMigrationTag,
-      boolean oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest) {
+      boolean checkForMigrationTag) {
     this.sdk = sdk;
     this.cpu = cpu;
     this.useIncrementalNativeLibs = useIncrementalNativeLibs;
@@ -1048,8 +1027,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.decoupleDataProcessing = decoupleDataProcessing;
     this.enforceStrictDepsForBinariesUnderTest = enforceStrictDepsForBinariesUnderTest;
     this.checkForMigrationTag = checkForMigrationTag;
-    this.oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest =
-        oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   }
 
   public String getCpu() {
@@ -1207,10 +1184,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean checkForMigrationTag() {
     return checkForMigrationTag;
-  }
-
-  public boolean getOneVersionEnforcementUseTransitiveJarsForBinaryUnderTest() {
-    return oneVersionEnforcementUseTransitiveJarsForBinaryUnderTest;
   }
 
   @Override

@@ -18,24 +18,54 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import javax.annotation.Nullable;
 
 /**
- * A factory that instantiates configuration fragments, and which knows some "static" information
- * about these fragments.
+ * A factory that creates configuration fragments.
  */
 public interface ConfigurationFragmentFactory {
   /**
-   * Creates a configuration fragment from the given command-line options.
+   * Creates a configuration fragment.
    *
-   * <p>{@code buildOptions} is only guaranteed to hold those {@link FragmentOptions} that are
-   * listed by {@link #requiredOptions}.
+   * <p>All implementations should override this method unless they have a really good reason
+   * to override {@link #create(ConfigurationEnvironment, BuildOptions)} instead. The latter
+   * interface is slated for removal once we detach legacy callers.
    *
-   * @return the configuration fragment, or null if some required dependencies are missing.
+   * @param buildOptions command-line options (see {@link FragmentOptions})
+   * @return the configuration fragment or null if some required dependencies are missing.
    */
   @Nullable
-  Fragment create(BuildOptions buildOptions) throws InvalidConfigurationException;
+  default BuildConfiguration.Fragment create(BuildOptions buildOptions)
+      throws InvalidConfigurationException, InterruptedException {
+    throw new IllegalStateException(
+        "One of this method's signatures must be overridden to have a valid fragment creator");
+  }
 
-  /** Returns the exact type of the fragment this factory creates. */
+  /**
+   * Creates a configuration fragment: <b>LEGACY VERSION</b>.
+   *
+   * <p>For implementations that cannot override {@link #create(BuildOptions)} because they really
+   * need access to {@link ConfigurationEnvironment}. {@link ConfigurationEnvironment} adds extra
+   * dependencies to fragment creation that makes the whole process more complicated and delicate.
+   * We're also working on Bazel enhancements that will make current calls unnecessary. So this
+   * version really only exists as a stopgap before we can migrate away the legacy calls.
+   *
+   * @param env the ConfigurationEnvironment for querying targets and paths
+   * @param buildOptions command-line options (see {@link FragmentOptions})
+   * @return the configuration fragment or null if some required dependencies are missing.
+   */
+  @Deprecated
+  @Nullable
+  default BuildConfiguration.Fragment create(ConfigurationEnvironment env,
+      BuildOptions buildOptions) throws InvalidConfigurationException, InterruptedException {
+    return create(buildOptions);
+  }
+
+
+  /**
+   * @return the exact type of the fragment this factory creates.
+   */
   Class<? extends Fragment> creates();
 
-  /** Returns the option classes needed to create this fragment. */
+  /**
+   * Returns the option classes needed to load this fragment.
+   */
   ImmutableSet<Class<? extends FragmentOptions>> requiredOptions();
 }
