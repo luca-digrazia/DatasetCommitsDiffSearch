@@ -106,8 +106,10 @@ public class ObjcRuleClasses {
     return new IntermediateArtifacts(ruleContext, /*archiveFileNameSuffix=*/ "");
   }
 
-  /** Attribute name for a dummy target in a child configuration. */
-  static final String CHILD_CONFIG_ATTR = "child_configuration_dummy";
+  /**
+   * Attribute name for a dummy target in a child configuration.
+   */
+  static final String CHILD_CONFIG_ATTR = ":child_configuration_dummy";
 
   /**
    * Returns a {@link IntermediateArtifacts} to be used to compile and link the ObjC source files
@@ -943,9 +945,9 @@ public class ObjcRuleClasses {
           // values of this rule -- this rule does not currently use the actual info provided by
           // this attribute.
           .add(
-              attr("$" + CHILD_CONFIG_ATTR, LABEL)
+              attr(CHILD_CONFIG_ATTR, LABEL)
                   .cfg(splitTransitionProvider)
-                  .value(env.getToolsLabel("//tools/cpp:current_cc_toolchain")))
+                  .value(CppRuleClasses.ccToolchainAttribute(env)))
           /* <!-- #BLAZE_RULE($apple_multiarch_rule).ATTRIBUTE(deps) -->
           The list of targets that are linked together to form the final binary.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
