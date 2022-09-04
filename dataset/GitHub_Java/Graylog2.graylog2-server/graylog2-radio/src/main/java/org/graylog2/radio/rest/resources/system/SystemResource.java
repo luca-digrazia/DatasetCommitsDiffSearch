@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.radio.rest.resources.system;
 
@@ -22,7 +23,7 @@ import com.codahale.metrics.annotation.Timed;
 import com.codahale.metrics.jvm.ThreadDump;
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.Tools;
-import org.graylog2.radio.RadioVersion;
+import org.graylog2.radio.Radio;
 import org.graylog2.radio.rest.resources.RestResource;
 import org.graylog2.shared.ServerStatus;
 
@@ -49,10 +50,10 @@ public class SystemResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         result.put("facility", "graylog2-radio");
         result.put("server_id", serverStatus.getNodeId().toString());
-        result.put("version", RadioVersion.VERSION.toString());
+        result.put("version", Radio.VERSION.toString());
         result.put("started_at", Tools.getISO8601String(serverStatus.getStartedAt()));
         result.put("hostname", Tools.getLocalCanonicalHostname());
-        result.put("lifecycle", serverStatus.getLifecycle().getDescription().toLowerCase());
+        result.put("lifecycle", serverStatus.getLifecycle().getName().toLowerCase());
         result.put("lb_status", serverStatus.getLifecycle().getLoadbalancerStatus().toString().toLowerCase());
 
         return json(result);
