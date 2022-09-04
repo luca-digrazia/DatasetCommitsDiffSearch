@@ -71,7 +71,7 @@ import org.infinispan.quarkus.hibernate.cache.QuarkusInfinispanRegionFactory;
 
 import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
 import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
-import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationStaticInitListener;
+import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
 import io.quarkus.hibernate.orm.runtime.proxies.ProxyDefinitions;
 import io.quarkus.hibernate.orm.runtime.recording.PrevalidatedQuarkusMetadata;
@@ -100,18 +100,18 @@ public class FastBootMetadataBuilder {
     private final MultiTenancyStrategy multiTenancyStrategy;
     private final boolean isReactive;
     private final boolean fromPersistenceXml;
-    private final List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners;
+    private final boolean isEnversPresent;
 
     @SuppressWarnings("unchecked")
     public FastBootMetadataBuilder(final QuarkusPersistenceUnitDefinition puDefinition, Scanner scanner,
             Collection<Class<? extends Integrator>> additionalIntegrators, PreGeneratedProxies preGeneratedProxies) {
         this.persistenceUnit = puDefinition.getActualHibernateDescriptor();
+        this.isEnversPresent = puDefinition.isEnversPresent();
         this.dataSource = puDefinition.getDataSource();
         this.isReactive = puDefinition.isReactive();
         this.fromPersistenceXml = puDefinition.isFromPersistenceXml();
         this.additionalIntegrators = additionalIntegrators;
         this.preGeneratedProxies = preGeneratedProxies;
-        this.integrationStaticInitListeners = puDefinition.getIntegrationStaticInitListeners();
 
         // Copying semantics from: new EntityManagerFactoryBuilderImpl( unit,
         // integration, instance );
@@ -244,9 +244,16 @@ public class FastBootMetadataBuilder {
         cfg.put(WRAP_RESULT_SETS, "false");
 
         //Hibernate Envers requires XML_MAPPING_ENABLED to be activated, but we don't want to enable this for any other use:
-        if (readBooleanConfigurationValue(cfg, XML_MAPPING_ENABLED)) {
-            LOG.warn(
-                    "XML mapping is not supported. It will be partially activated to allow compatibility with Hibernate Envers, but this support is temporary");
+        if (isEnversPresent) {
+            if (readBooleanConfigurationValue(cfg, XML_MAPPING_ENABLED)) {
+                LOG.warn(
+                        "XML mapping is not supported. It will be partially activated to allow compatibility with Hibernate Envers, but this support is temporary");
+            }
+        } else {
+            if (readBooleanConfigurationValue(cfg, XML_MAPPING_ENABLED)) {
+                LOG.warn("XML mapping is not supported. Setting " + XML_MAPPING_ENABLED + " to false.");
+            }
+            cfg.put(XML_MAPPING_ENABLED, "false");
         }
 
         // Note: this one is not a boolean, just having the property enables it
@@ -291,12 +298,7 @@ public class FastBootMetadataBuilder {
         cfg.put(org.hibernate.cfg.AvailableSettings.CACHE_REGION_FACTORY,
                 QuarkusInfinispanRegionFactory.class.getName());
 
-        for (HibernateOrmIntegrationStaticInitListener listener : integrationStaticInitListeners) {
-            if (listener == null) {
-                continue;
-            }
-            listener.contributeBootProperties(cfg::put);
-        }
+        HibernateOrmIntegrations.contributeBootProperties((k, v) -> cfg.put(k, v));
 
         return mergedSettings;
     }
@@ -309,14 +311,8 @@ public class FastBootMetadataBuilder {
         );
 
         IntegrationSettings.Builder integrationSettingsBuilder = new IntegrationSettings.Builder();
-
-        for (HibernateOrmIntegrationStaticInitListener listener : integrationStaticInitListeners) {
-            if (listener == null) {
-                continue;
-            }
-            listener.onMetadataInitialized(fullMeta, metamodelBuilder.getBootstrapContext(),
-                    integrationSettingsBuilder::put);
-        }
+        HibernateOrmIntegrations.onMetadataInitialized(fullMeta, metamodelBuilder.getBootstrapContext(),
+                (k, v) -> integrationSettingsBuilder.put(k, v));
 
         Dialect dialect = extractDialect();
         PrevalidatedQuarkusMetadata storeableMetadata = trimBootstrapMetadata(fullMeta);
