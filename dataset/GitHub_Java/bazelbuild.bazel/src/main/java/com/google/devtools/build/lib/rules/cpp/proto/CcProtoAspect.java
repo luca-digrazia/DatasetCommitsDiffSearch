@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
@@ -214,14 +213,13 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
               requestedFeatures.build(),
               unsupportedFeatures.build(),
               CcLibraryHelper.SourceCategory.CC,
-              ccToolchain(ruleContext));
+              CppHelper.getToolchain(
+                  ruleContext, ruleContext.getPrerequisite(":cc_toolchain", TARGET)));
       return featureConfiguration;
     }
 
     private CcLibraryHelper initializeCcLibraryHelper(FeatureConfiguration featureConfiguration) {
-      CcLibraryHelper helper =
-          new CcLibraryHelper(ruleContext, cppSemantics, featureConfiguration,
-              ccToolchain(ruleContext));
+      CcLibraryHelper helper = new CcLibraryHelper(ruleContext, cppSemantics, featureConfiguration);
       helper.enableCcSpecificLinkParamsProvider();
       helper.enableCcNativeLibrariesProvider();
       // TODO(dougk): Configure output artifact with action_config
@@ -234,11 +232,6 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
         helper.addDeps(ImmutableList.of(runtime));
       }
       return helper;
-    }
-
-    private static CcToolchainProvider ccToolchain(RuleContext ruleContext) {
-      return CppHelper.getToolchain(
-          ruleContext, ruleContext.getPrerequisite(":cc_toolchain", TARGET));
     }
 
     private Collection<Artifact> getHeaders(SupportData supportData) {
