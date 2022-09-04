@@ -55,10 +55,7 @@ public class Notification extends Persisted {
         ES_OPEN_FILES,
         NO_INPUT_RUNNING,
         INPUT_FAILED_TO_START,
-        CHECK_SERVER_CLOCKS,
-        OUTDATED_VERSION,
-        EMAIL_TRANSPORT_CONFIGURATION_INVALID,
-        EMAIL_TRANSPORT_FAILED
+        CHECK_SERVER_CLOCKS
     }
 
     public enum Severity {
