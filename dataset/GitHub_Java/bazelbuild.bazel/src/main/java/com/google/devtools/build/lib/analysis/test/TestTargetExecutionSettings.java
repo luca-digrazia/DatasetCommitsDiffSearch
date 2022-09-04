@@ -80,10 +80,6 @@ public final class TestTargetExecutionSettings {
         : runUnderTarget.getProvider(FilesToRunProvider.class).getExecutable();
   }
 
-  public Artifact getRunUnderExecutable() {
-    return runUnderExecutable;
-  }
-
   public CommandLine getArgs() {
     return testArguments;
   }
@@ -98,6 +94,10 @@ public final class TestTargetExecutionSettings {
 
   public RunUnder getRunUnder() {
     return runUnder;
+  }
+
+  public Artifact getRunUnderExecutable() {
+    return runUnderExecutable;
   }
 
   public Artifact getExecutable() {

@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
@@ -69,25 +68,23 @@ public final class LocationExpander {
 
   private final RuleErrorConsumer ruleErrorConsumer;
   private final ImmutableMap<String, LocationFunction> functions;
-  private final ImmutableMap<RepositoryName, RepositoryName> repositoryMapping;
 
   @VisibleForTesting
   LocationExpander(
       RuleErrorConsumer ruleErrorConsumer,
-      Map<String, LocationFunction> functions,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
+      Map<String, LocationFunction> functions) {
     this.ruleErrorConsumer = ruleErrorConsumer;
     this.functions = ImmutableMap.copyOf(functions);
-    this.repositoryMapping = repositoryMapping;
   }
 
   private LocationExpander(
       RuleErrorConsumer ruleErrorConsumer,
       Label root,
       Supplier<Map<Label, Collection<Artifact>>> locationMap,
-      boolean execPaths,
-      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
-    this(ruleErrorConsumer, allLocationFunctions(root, locationMap, execPaths), repositoryMapping);
+      boolean execPaths) {
+    this(
+        ruleErrorConsumer,
+        allLocationFunctions(root, locationMap, execPaths));
   }
 
   /**
@@ -111,8 +108,7 @@ public final class LocationExpander {
         // Use a memoizing supplier to avoid eagerly building the location map.
         Suppliers.memoize(
             () -> LocationExpander.buildLocationMap(ruleContext, labelMap, allowData)),
-        execPaths,
-        ruleContext.getRule().getPackage().getRepositoryMapping());
+        execPaths);
   }
 
   /**
@@ -122,6 +118,7 @@ public final class LocationExpander {
    * $(execpath)/$(execpaths) using Artifact.getExecPath().
    *
    * @param ruleContext BUILD rule
+   * @param labelMap A mapping of labels to build artifacts.
    */
   public static LocationExpander withRunfilesPaths(RuleContext ruleContext) {
     return new LocationExpander(ruleContext, null, false, false);
@@ -212,7 +209,7 @@ public final class LocationExpander {
       // (2) Call appropriate function to obtain string replacement.
       String functionValue = value.substring(nextWhitespace + 1, end).trim();
       try {
-        String replacement = functions.get(fname).apply(functionValue, repositoryMapping);
+        String replacement = functions.get(fname).apply(functionValue);
         result.append(replacement);
       } catch (IllegalStateException ise) {
         reporter.report(ise.getMessage());
@@ -246,19 +243,15 @@ public final class LocationExpander {
     }
 
     /**
-     * Looks up the label-like string in the locationMap and returns the resolved path string. If
-     * the label-like string begins with a repository name, the repository name may be remapped
-     * using the {@code repositoryMapping}.
+     * Looks up the label-like string in the locationMap and returns the resolved path string.
      *
      * @param arg The label-like string to be expanded, e.g. ":foo" or "//foo:bar"
-     * @param repositoryMapping map of {@code RepositoryName}s defined in the main workspace
      * @return The expanded value
      */
-    public String apply(
-        String arg, ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
+    public String apply(String arg) {
       Label label;
       try {
-        label = root.getRelativeWithRemapping(arg, repositoryMapping);
+        label = root.getRelative(arg);
       } catch (LabelSyntaxException e) {
         throw new IllegalStateException(
             String.format(
@@ -361,15 +354,9 @@ public final class LocationExpander {
       }
     }
 
-    // We don't want to do this if we're processing aspect rules. It will
-    // create output artifacts and unbalance the input/output state, leading
-    // to an error (output artifact with no action to create its inputs).
-    if (ruleContext.getMainAspect() == null) {
-      // Add all destination locations.
-      for (OutputFile out : ruleContext.getRule().getOutputFiles()) {
-        // Not in aspect processing, so explicitly build an artifact & let it verify.
-        mapGet(locationMap, out.getLabel()).add(ruleContext.createOutputArtifact(out));
-      }
+    // Add all destination locations.
+    for (OutputFile out : ruleContext.getRule().getOutputFiles()) {
+      mapGet(locationMap, out.getLabel()).add(ruleContext.createOutputArtifact(out));
     }
 
     if (ruleContext.getRule().isAttrDefined("srcs", BuildType.LABEL_LIST)) {

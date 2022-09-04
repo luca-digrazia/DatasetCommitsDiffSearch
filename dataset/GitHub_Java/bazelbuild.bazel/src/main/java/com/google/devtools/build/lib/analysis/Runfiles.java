@@ -345,7 +345,7 @@ public final class Runfiles implements RunfilesApi {
   @Override
   public NestedSet<Artifact> getArtifacts() {
     NestedSetBuilder<Artifact> allArtifacts = NestedSetBuilder.stableOrder();
-    allArtifacts.addTransitive(unconditionalArtifacts);
+    allArtifacts.addAll(unconditionalArtifacts.toCollection());
     for (PruningManifest manifest : getPruningManifests()) {
       allArtifacts.addTransitive(manifest.getCandidateRunfiles());
     }

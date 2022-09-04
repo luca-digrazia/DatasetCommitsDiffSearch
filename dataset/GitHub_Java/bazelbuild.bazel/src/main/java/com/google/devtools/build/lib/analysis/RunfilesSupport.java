@@ -88,7 +88,8 @@ public final class RunfilesSupport {
    * Creates the RunfilesSupport helper with the given executable and runfiles.
    *
    * @param ruleContext the rule context to create the runfiles support for
-   * @param executable the executable for whose runfiles this runfiles support is responsible
+   * @param executable the executable for whose runfiles this runfiles support is responsible, may
+   *     be null
    * @param runfiles the runfiles
    */
   private static RunfilesSupport create(
@@ -111,6 +112,11 @@ public final class RunfilesSupport {
           .build();
     }
     Preconditions.checkState(!runfiles.isEmpty());
+
+    Map<PathFragment, Artifact> symlinks = runfiles.asMapWithoutRootSymlinks();
+    if (executable != null && !symlinks.containsValue(executable)) {
+      throw new IllegalStateException("main program " + executable + " not included in runfiles");
+    }
 
     Artifact runfilesInputManifest;
     Artifact runfilesManifest;

@@ -307,26 +307,16 @@ public class JavaCommon {
    * @param outDeps output (compile-time) dependency artifact of this target
    */
   public NestedSet<Artifact> collectCompileTimeDependencyArtifacts(@Nullable Artifact outDeps) {
-    return collectCompileTimeDependencyArtifacts(
-        outDeps,
-        JavaInfo.getProvidersFromListOfTargets(
-            JavaCompilationArgsProvider.class, getExports(ruleContext)));
-  }
-
-  /**
-   * Collects Java dependency artifacts for a target.
-   *
-   * @param jdeps dependency artifact of this target
-   * @param exports dependencies with export-like semantics
-   */
-  public static NestedSet<Artifact> collectCompileTimeDependencyArtifacts(
-      @Nullable Artifact jdeps, Iterable<JavaCompilationArgsProvider> exports) {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
-    if (jdeps != null) {
-      builder.add(jdeps);
+    if (outDeps != null) {
+      builder.add(outDeps);
     }
-    exports.forEach(
-        export -> builder.addTransitive(export.getCompileTimeJavaDependencyArtifacts()));
+
+    for (JavaCompilationArgsProvider provider : JavaInfo.getProvidersFromListOfTargets(
+        JavaCompilationArgsProvider.class, getExports(ruleContext))) {
+      builder.addTransitive(provider.getCompileTimeJavaDependencyArtifacts());
+    }
+
     return builder.build();
   }
 
