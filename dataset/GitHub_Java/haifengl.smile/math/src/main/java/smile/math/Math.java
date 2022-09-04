@@ -924,68 +924,64 @@ public class Math {
     }
 
     /** Merges multiple vectors into one. */
-    public static int[] c(int[]... list) {
+    public static int[] c(int[]... x) {
         int n = 0;
-        for (int[] x: list) {
+        for (int i = 0; i < x.length; i++) {
             n += x.length;
         }
 
         int[] y = new int[n];
-        int i = 0;
-        for (int[] x: list) {
-            for (int xi: x) {
-                y[i++] = xi;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (int xi : x[i]) {
+                y[k++] = xi;
             }
         }
         return y;
     }
 
     /** Merges multiple vectors into one. */
-    public static float[] c(float[]... list) {
+    public static float[] c(float[]... x) {
         int n = 0;
-        for (float[] x: list) {
+        for (int i = 0; i < x.length; i++) {
             n += x.length;
         }
 
         float[] y = new float[n];
-        int i = 0;
-        for (float[] x: list) {
-            for (float xi: x) {
-                y[i++] = xi;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (float xi : x[i]) {
+                y[k++] = xi;
             }
         }
         return y;
     }
 
     /** Merges multiple vectors into one. */
-    public static double[] c(double[]... list) {
+    public static double[] c(double[]... x) {
         int n = 0;
-        for (double[] x: list) {
+        for (int i = 0; i < x.length; i++) {
             n += x.length;
         }
 
         double[] y = new double[n];
-        int i = 0;
-        for (double[] x: list) {
-            for (double xi: x) {
-                y[i++] = xi;
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (double xi : x[i]) {
+                y[k++] = xi;
             }
         }
         return y;
     }
 
-    /** Concatenates multiple vectors into one array of strings. Uses .toString(), which is a no-op if already strings. */
-    public static <T> String[] c(T[]... list) {
+    /** Merges multiple vectors into one. */
+    public static String[] c(String[]... x) {
         int n = 0;
-        for (T[] x: list) {
+        for (int i = 0; i < x.length; i++) {
             n += x.length;
         }
 
         String[] y = new String[n];
-        int i = 0;
-        for (T[] x: list) {
-            for (T xi: x) {
-                y[i++] = xi.toString();
+        for (int i = 0, k = 0; i < x.length; i++) {
+            for (String xi : x[i]) {
+                y[k++] = xi;
             }
         }
         return y;
@@ -1007,7 +1003,7 @@ public class Math {
     }
 
     /** Take a sequence of vector arguments and combine by columns. */
-    public static String[] cbind(Object[]... x) {
+    public static String[] cbind(String[]... x) {
         return c(x);
     }
 
