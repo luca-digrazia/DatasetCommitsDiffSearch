@@ -2,6 +2,7 @@ package io.quarkus.hibernate.orm.runtime.recording;
 
 import java.util.Collection;
 
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
 import org.hibernate.integrator.spi.Integrator;
@@ -14,7 +15,7 @@ import io.quarkus.hibernate.orm.runtime.proxies.ProxyDefinitions;
 public final class RecordedState {
 
     private final Dialect dialect;
-    private final PrevalidatedQuarkusMetadata metadata;
+    private final MetadataImplementor metadata;
     private final JtaPlatform jtaPlatform;
     private final BuildTimeSettings settings;
     private final Collection<Integrator> integrators;
@@ -22,7 +23,7 @@ public final class RecordedState {
     private final IntegrationSettings integrationSettings;
     private final ProxyDefinitions proxyClassDefinitions;
 
-    public RecordedState(Dialect dialect, JtaPlatform jtaPlatform, PrevalidatedQuarkusMetadata metadata,
+    public RecordedState(Dialect dialect, JtaPlatform jtaPlatform, MetadataImplementor metadata,
             BuildTimeSettings settings, Collection<Integrator> integrators,
             Collection<ProvidedService> providedServices, IntegrationSettings integrationSettings,
             ProxyDefinitions classDefinitions) {
@@ -40,7 +41,7 @@ public final class RecordedState {
         return dialect;
     }
 
-    public PrevalidatedQuarkusMetadata getMetadata() {
+    public MetadataImplementor getMetadata() {
         return metadata;
     }
 

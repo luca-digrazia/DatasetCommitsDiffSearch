@@ -55,6 +55,7 @@ import org.hibernate.boot.spi.MetadataBuilderImplementor;
 import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cache.internal.CollectionCacheInvalidator;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.cfg.Environment;
 import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.dialect.spi.DialectFactory;
@@ -82,6 +83,7 @@ import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
 import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
 import io.quarkus.hibernate.orm.runtime.customized.QuarkusJtaPlatform;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
+import io.quarkus.hibernate.orm.runtime.proxies.ProxyDefinitions;
 import io.quarkus.hibernate.orm.runtime.recording.RecordableBootstrap;
 import io.quarkus.hibernate.orm.runtime.recording.RecordedState;
 import io.quarkus.hibernate.orm.runtime.recording.RecordingDialectFactory;
@@ -238,9 +240,9 @@ public class FastBootMetadataBuilder {
 
         // unsupported FLUSH_BEFORE_COMPLETION
 
-        if (readBooleanConfigurationValue(cfg, AvailableSettings.FLUSH_BEFORE_COMPLETION)) {
-            cfg.put(AvailableSettings.FLUSH_BEFORE_COMPLETION, "false");
-            LOG.definingFlushBeforeCompletionIgnoredInHem(AvailableSettings.FLUSH_BEFORE_COMPLETION);
+        if (readBooleanConfigurationValue(cfg, Environment.FLUSH_BEFORE_COMPLETION)) {
+            cfg.put(Environment.FLUSH_BEFORE_COMPLETION, "false");
+            LOG.definingFlushBeforeCompletionIgnoredInHem(Environment.FLUSH_BEFORE_COMPLETION);
         }
 
         // Quarkus specific
@@ -369,8 +371,9 @@ public class FastBootMetadataBuilder {
         JtaPlatform jtaPlatform = extractJtaPlatform();
         destroyServiceRegistry(fullMeta);
         MetadataImplementor storeableMetadata = trimBootstrapMetadata(fullMeta);
+        ProxyDefinitions proxyClassDefinitions = ProxyDefinitions.createFromMetadata(storeableMetadata);
         return new RecordedState(dialect, jtaPlatform, storeableMetadata, buildTimeSettings, getIntegrators(),
-                providedServices, integrationSettingsBuilder.build());
+                providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions);
     }
 
     private void destroyServiceRegistry(MetadataImplementor fullMeta) {
