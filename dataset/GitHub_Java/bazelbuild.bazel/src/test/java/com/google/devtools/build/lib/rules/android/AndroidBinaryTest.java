@@ -1400,7 +1400,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
             .getExecutable();
     assertWithMessage("ProGuard implementation was not correctly taken from the configuration")
         .that(proguardAction.getCommandFilename())
-        .endsWith(jkrunchyExecutable.getRepositoryRelativePathString());
+        .endsWith(jkrunchyExecutable.getOutputDirRelativePathString());
   }
 
   @Test
@@ -2502,8 +2502,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         args,
         ImmutableList.of(
             "-include",
-            targetConfig.getBinFragment(RepositoryName.MAIN)
-                + "/java/a/proguard/a/main_dex_a_proguard.cfg"));
+            targetConfig.getBinFragment() + "/java/a/proguard/a/main_dex_a_proguard.cfg"));
   }
 
   @Test
@@ -3778,7 +3777,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         false,
         null,
         /*splitOptimizationPass=*/ false,
-        targetConfig.getBinFragment(RepositoryName.MAIN)
+        targetConfig.getBinFragment()
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars.jar");
   }
 
@@ -4107,7 +4106,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     checkProguardLibJars(
         action,
-        targetConfig.getBinFragment(RepositoryName.MAIN)
+        targetConfig.getBinFragment()
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars.jar");
   }
 
@@ -4133,7 +4132,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     checkProguardLibJars(
         action,
-        targetConfig.getBinFragment(RepositoryName.MAIN)
+        targetConfig.getBinFragment()
             + "/java/com/google/android/hello/proguard/b/legacy_b_combined_library_jars_filtered.jar");
   }
 
