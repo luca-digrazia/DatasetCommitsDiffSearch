@@ -7,7 +7,7 @@ import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
 import io.quarkus.arc.ArcUndeclaredThrowableException;
 import io.quarkus.arc.InjectableInterceptor;
 import io.quarkus.arc.Subclass;
-import io.quarkus.arc.impl.InterceptedMethodMetadata;
+import io.quarkus.arc.impl.SubclassMethodMetadata;
 import io.quarkus.arc.processor.BeanInfo.InterceptionInfo;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.gizmo.BytecodeCreator;
@@ -63,11 +63,11 @@ public class SubclassGenerator extends AbstractGenerator {
 
     protected static final String FIELD_NAME_PREDESTROYS = "preDestroys";
     protected static final String FIELD_NAME_METADATA = "metadata";
-    protected static final FieldDescriptor FIELD_METADATA_METHOD = FieldDescriptor.of(InterceptedMethodMetadata.class, "method",
+    protected static final FieldDescriptor FIELD_METADATA_METHOD = FieldDescriptor.of(SubclassMethodMetadata.class, "method",
             Method.class);
-    protected static final FieldDescriptor FIELD_METADATA_CHAIN = FieldDescriptor.of(InterceptedMethodMetadata.class, "chain",
+    protected static final FieldDescriptor FIELD_METADATA_CHAIN = FieldDescriptor.of(SubclassMethodMetadata.class, "chain",
             List.class);
-    protected static final FieldDescriptor FIELD_METADATA_BINDINGS = FieldDescriptor.of(InterceptedMethodMetadata.class,
+    protected static final FieldDescriptor FIELD_METADATA_BINDINGS = FieldDescriptor.of(SubclassMethodMetadata.class,
             "bindings", Set.class);
 
     private final Predicate<DotName> applicationClassPredicate;
@@ -75,12 +75,7 @@ public class SubclassGenerator extends AbstractGenerator {
     private final Set<String> existingClasses;
 
     static String generatedName(DotName providerTypeName, String baseName) {
-        String packageName = DotNames.packageName(providerTypeName).replace('.', '/');
-        if (packageName.isEmpty()) {
-            return baseName + SUBCLASS_SUFFIX;
-        } else {
-            return packageName + "/" + baseName + SUBCLASS_SUFFIX;
-        }
+        return DotNames.packageName(providerTypeName).replace('.', '/') + "/" + baseName + SUBCLASS_SUFFIX;
     }
 
     private final AnnotationLiteralProcessor annotationLiterals;
@@ -313,9 +308,8 @@ public class SubclassGenerator extends AbstractGenerator {
             ResultHandle bindingsHandle = bindings.computeIfAbsent(
                     interceptedMethod.bindings.stream().map(BindingKey::new).collect(Collectors.toList()), bindingsFun);
 
-            // Now create metadata for the given intercepted method
-            ResultHandle methodMetadataHandle = constructor.newInstance(
-                    MethodDescriptors.INTERCEPTED_METHOD_METADATA_CONSTRUCTOR,
+            //Now create SubclassMethodMetadata for the given intercepted method
+            ResultHandle methodMetadataHandle = constructor.newInstance(MethodDescriptors.SUBCLASS_METHOD_METADATA_CONSTRUCTOR,
                     chainHandle, methodHandle, bindingsHandle);
             // metadata.put("m1", new SubclassMethodMetadata(...))
             constructor.invokeInterfaceMethod(MethodDescriptors.MAP_PUT, metadataHandle, methodIdHandle, methodMetadataHandle);
