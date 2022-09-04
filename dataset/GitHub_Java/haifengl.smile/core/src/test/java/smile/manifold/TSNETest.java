@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.manifold;
 
@@ -22,11 +22,15 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import smile.data.MNIST;
 import smile.io.Read;
 import smile.math.MathEx;
 import smile.projection.PCA;
 import smile.util.Paths;
 import org.apache.commons.csv.CSVFormat;
+
+import java.util.Arrays;
+
 import static org.junit.Assert.*;
 
 /**
@@ -54,31 +58,29 @@ public class TSNETest {
     public void tearDown() {
     }
 
-    @Test(expected = Test.None.class)
+    @Test
     public void test() throws Exception {
         System.out.println("tSNE");
 
         MathEx.setSeed(19650218); // to get repeatable results.
 
-        CSVFormat format = CSVFormat.DEFAULT.withDelimiter(' ');
-        double[][] mnist = Read.csv(Paths.getTestData("mnist/mnist2500_X.txt"), format).toArray();
-
-        PCA pca = PCA.fit(mnist);
+        PCA pca = PCA.fit(MNIST.x);
         pca.setProjection(50);
-        double[][] X = pca.project(mnist);
+        double[][] X = pca.project(MNIST.x);
 
         long start = System.currentTimeMillis();
-        TSNE tsne = new TSNE(X, 2, 20, 200, 1000);
+        TSNE tsne = new TSNE(X, 2, 20, 200, 550);
         long end = System.currentTimeMillis();
         System.out.format("t-SNE takes %.2f seconds\n", (end - start) / 1000.0);
 
-        assertEquals(-9.057511358934908, tsne.coordinates[0][0], 1E-7);
-        assertEquals(-2.2165432722827325, tsne.coordinates[0][1], 1E-7);
-        assertEquals(9.433125273897296, tsne.coordinates[100][0], 1E-7);
-        assertEquals(-8.813645202338213, tsne.coordinates[100][1], 1E-7);
-        assertEquals(-23.665346236554285, tsne.coordinates[1000][0], 1E-7);
-        assertEquals(3.6938603106916954, tsne.coordinates[1000][1], 1E-7);
-        assertEquals(-5.053462644817888, tsne.coordinates[2000][0], 1E-7);
-        assertEquals(-5.659335605767346, tsne.coordinates[2000][1], 1E-7);
+        assertEquals(1.3872256, tsne.cost(), 1E-4);
+        double[] coord0    = {  2.6870328, 16.8175010};
+        double[] coord100  = {-16.3270630,  3.6016438};
+        double[] coord1000 = {-16.2529939, 26.8543395};
+        double[] coord2000 = {-17.0491869,  4.8453648};
+        assertArrayEquals(coord0,    tsne.coordinates[0], 1E-6);
+        assertArrayEquals(coord100,  tsne.coordinates[100], 1E-6);
+        assertArrayEquals(coord1000, tsne.coordinates[1000], 1E-6);
+        assertArrayEquals(coord2000, tsne.coordinates[2000], 1E-6);
     }
 }
