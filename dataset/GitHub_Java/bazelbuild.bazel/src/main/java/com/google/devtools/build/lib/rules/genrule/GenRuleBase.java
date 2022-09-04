@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.genrule;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -57,22 +57,13 @@ import java.util.regex.Pattern;
  */
 public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
 
-  private static final ImmutableList<String> CROSSTOOL_MAKE_VARIABLES = ImmutableList.of("CC",
-      "CC_FLAGS", "AR", "NM", "OBJCOPY", "STRIP", "GCOVTOOL");
-
-  private static final ImmutableList<String> JDK_MAKE_VARIABLES = ImmutableList.of("JAVABASE",
-      "JAVA");
-
-  private static Pattern matchesMakeVariables(Iterable<String> variables) {
-    return Pattern.compile("\\$\\((" + Joiner.on("|").join(variables) + ")\\)");
-  }
-
-  private static final Pattern CROSSTOOL_MAKE_VARIABLE_PATTERN =
-      matchesMakeVariables(CROSSTOOL_MAKE_VARIABLES);
-  private static final Pattern JDK_MAKE_VARIABLE = matchesMakeVariables(JDK_MAKE_VARIABLES);
+  private static final Pattern CROSSTOOL_MAKE_VARIABLE =
+      Pattern.compile("\\$\\((CC|CC_FLAGS|AR|NM|OBJCOPY|STRIP|GCOVTOOL)\\)");
+  private static final Pattern JDK_MAKE_VARIABLE =
+      Pattern.compile("\\$\\((JAVABASE|JAVA)\\)");
 
   protected static boolean requiresCrosstool(String command) {
-    return CROSSTOOL_MAKE_VARIABLE_PATTERN.matcher(command).find();
+    return CROSSTOOL_MAKE_VARIABLE.matcher(command).find();
   }
 
   protected boolean requiresJdk(String command) {
@@ -351,13 +342,24 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
         }
       }
 
-      // Make variables provided by the :cc_toolchain attributes should not be overridden by
-      // those provided by the toolchains attribute.
-      if (!CROSSTOOL_MAKE_VARIABLES.contains(variableName)) {
-        String valueFromToolchains = resolveVariableFromToolchains(variableName);
-        if (valueFromToolchains != null) {
-          return valueFromToolchains;
-        }
+      String valueFromToolchains = resolveVariableFromToolchains(variableName);
+      if (valueFromToolchains != null) {
+        return valueFromToolchains;
+      }
+
+      // We use the presence of the Java Make variable in the current configuration as a proxy for
+      // whether Java Make variables are enabled. This lets us avoid declaring a dependency on the
+      // Jvm fragment (genrules should not depend on Java so they shouldn't do that).
+      if (JDK_MAKE_VARIABLE.matcher("$(" + variableName + ")").find()
+          && ruleContext.getConfiguration().getMakeEnvironment().containsKey(variableName)) {
+        List<String> attributes = new ArrayList<>();
+        attributes.addAll(ConfigurationMakeVariableContext.DEFAULT_MAKE_VARIABLE_ATTRIBUTES);
+        attributes.add(":host_jdk");
+        return new ConfigurationMakeVariableContext(
+                ruleContext.getMakeVariables(attributes),
+                ruleContext.getTarget().getPackage(),
+                ruleContext.getHostConfiguration())
+            .lookupVariable(variableName);
       }
 
       return super.lookupVariable(variableName);
