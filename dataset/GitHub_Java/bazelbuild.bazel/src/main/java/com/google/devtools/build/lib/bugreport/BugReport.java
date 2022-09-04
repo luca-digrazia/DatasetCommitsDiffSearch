@@ -277,6 +277,11 @@ public final class BugReport {
   private static final class DefaultBugReporter implements BugReporter {
 
     @Override
+    public void sendBugReport(Throwable exception) {
+      BugReport.sendBugReport(exception);
+    }
+
+    @Override
     public void sendBugReport(Throwable exception, List<String> args, String... values) {
       BugReport.sendBugReport(exception, args, values);
     }
