@@ -3,20 +3,14 @@ package io.dropwizard.auth;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
-import com.google.common.base.Throwables;
+import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheBuilderSpec;
-import com.google.common.cache.CacheLoader;
 import com.google.common.cache.CacheStats;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Sets;
-import com.google.common.util.concurrent.UncheckedExecutionException;
-
 import java.security.Principal;
-import java.util.Optional;
-import java.util.concurrent.ExecutionException;
-
 import static com.codahale.metrics.MetricRegistry.name;
 
 /**
@@ -27,7 +21,8 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @param <P> the type of principals the authenticator returns
  */
 public class CachingAuthenticator<C, P extends Principal> implements Authenticator<C, P> {
-    private final LoadingCache<C, Optional<P>> cache;
+    private final Authenticator<C, P> underlying;
+    private final Cache<C, Optional<P>> cache;
     private final Meter cacheMisses;
     private final Timer gets;
 
@@ -54,37 +49,25 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
     public CachingAuthenticator(final MetricRegistry metricRegistry,
                                 final Authenticator<C, P> authenticator,
                                 final CacheBuilder<Object, Object> builder) {
+        this.underlying = authenticator;
         this.cacheMisses = metricRegistry.meter(name(authenticator.getClass(), "cache-misses"));
         this.gets = metricRegistry.timer(name(authenticator.getClass(), "gets"));
-        this.cache = builder.recordStats().build(new CacheLoader<C, Optional<P>>() {
-            @Override
-            public Optional<P> load(C key) throws Exception {
-                cacheMisses.mark();
-                final Optional<P> optPrincipal = authenticator.authenticate(key);
-                if (!optPrincipal.isPresent()) {
-                    // Prevent caching of unknown credentials
-                    throw new InvalidCredentialsException();
-                }
-                return optPrincipal;
-            }
-        });
+        this.cache = builder.recordStats().build();
     }
 
     @Override
     public Optional<P> authenticate(C credentials) throws AuthenticationException {
         final Timer.Context context = gets.time();
         try {
-            return cache.get(credentials);
-        } catch (ExecutionException e) {
-            final Throwable cause = e.getCause();
-            if (cause instanceof InvalidCredentialsException) {
-                return Optional.empty();
+            Optional<P> optionalPrincipal = cache.getIfPresent(credentials);
+            if (optionalPrincipal == null) {
+                cacheMisses.mark();
+                optionalPrincipal = underlying.authenticate(credentials);
+                if (optionalPrincipal.isPresent()) {
+                    cache.put(credentials, optionalPrincipal);
+                }
             }
-            // Attempt to re-throw as-is
-            Throwables.propagateIfPossible(cause, AuthenticationException.class);
-            throw new AuthenticationException(cause);
-        } catch (UncheckedExecutionException e) {
-            throw Throwables.propagate(e.getCause());
+            return optionalPrincipal;
         } finally {
             context.stop();
         }
@@ -141,10 +124,4 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
     public CacheStats stats() {
         return cache.stats();
     }
-
-    /**
-     * Exception thrown by {@link CacheLoader#load(Object)} when the authenticator returns {@link Optional#empty()}.
-     * This is used to prevent caching of invalid credentials.
-     */
-    private static class InvalidCredentialsException extends Exception {}
 }

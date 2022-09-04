@@ -1,17 +1,15 @@
 package io.dropwizard.auth;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
 import com.google.common.cache.CacheBuilderSpec;
 import com.google.common.collect.ImmutableSet;
-import org.hamcrest.CoreMatchers;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.InOrder;
 
 import java.security.Principal;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.anyString;
@@ -25,13 +23,11 @@ public class CachingAuthenticatorTest {
     @SuppressWarnings("unchecked")
     private final Authenticator<String, Principal> underlying = mock(Authenticator.class);
     private final CachingAuthenticator<String, Principal> cached =
-        new CachingAuthenticator<>(new MetricRegistry(), underlying, CacheBuilderSpec.parse("maximumSize=1"));
-    @Rule
-    public ExpectedException expected = ExpectedException.none();
+            new CachingAuthenticator<>(new MetricRegistry(), underlying, CacheBuilderSpec.parse("maximumSize=1"));
 
     @Before
     public void setUp() throws Exception {
-        when(underlying.authenticate(anyString())).thenReturn(Optional.of(new PrincipalImpl("principal")));
+        when(underlying.authenticate(anyString())).thenReturn(Optional.<Principal>of(new PrincipalImpl("principal")));
     }
 
     @Test
@@ -74,8 +70,15 @@ public class CachingAuthenticatorTest {
 
     @Test
     public void invalidatesCredentialsMatchingGivenPredicate() throws Exception {
+        Predicate<String> predicate = new Predicate<String>() {
+            @Override
+            public boolean apply(String c) {
+                return c.equals("credentials");
+            }
+        };
+
         cached.authenticate("credentials");
-        cached.invalidateAll("credentials"::equals);
+        cached.invalidateAll(predicate);
         cached.authenticate("credentials");
 
         verify(underlying, times(2)).authenticate("credentials");
@@ -99,31 +102,15 @@ public class CachingAuthenticatorTest {
     @Test
     public void calculatesCacheStats() throws Exception {
         cached.authenticate("credentials1");
-        assertThat(cached.stats().loadCount()).isEqualTo(1);
+        assertThat(cached.stats().loadCount()).isEqualTo(0);
         assertThat(cached.size()).isEqualTo(1);
     }
 
     @Test
     public void shouldNotCacheAbsentPrincipals() throws Exception {
-        when(underlying.authenticate(anyString())).thenReturn(Optional.empty());
-        assertThat(cached.authenticate("credentials")).isEqualTo(Optional.empty());
+        when(underlying.authenticate(anyString())).thenReturn(Optional.<Principal>absent());
+        assertThat(cached.authenticate("credentials")).isEqualTo(Optional.absent());
         verify(underlying).authenticate("credentials");
         assertThat(cached.size()).isEqualTo(0);
-    }
-
-    @Test
-    public void shouldPropagateAuthenticationException() throws AuthenticationException {
-        final AuthenticationException e = new AuthenticationException("Auth failed");
-        when(underlying.authenticate(anyString())).thenThrow(e);
-        expected.expect(CoreMatchers.sameInstance(e));
-        cached.authenticate("credentials");
-    }
-
-    @Test
-    public void shouldPropagateRuntimeException() throws AuthenticationException {
-        final RuntimeException e = new NullPointerException();
-        when(underlying.authenticate(anyString())).thenThrow(e);
-        expected.expect(CoreMatchers.sameInstance(e));
-        cached.authenticate("credentials");
     }
 }
