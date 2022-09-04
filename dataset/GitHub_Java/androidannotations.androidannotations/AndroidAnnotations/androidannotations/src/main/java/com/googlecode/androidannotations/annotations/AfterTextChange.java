@@ -37,7 +37,7 @@ import java.lang.annotation.Target;
  * <li>An android.text.Editable to make changes on modified text.
  * </ul>
  *
- * Some usage examples of &#064;BeforeTextChange annotation :
+ * Some good uses of &#064;BeforeTextChange annotation :
  * <blockquote><pre>
  * &#064;AfterTextChange(<b>R.id.helloTextView</b>)
  * void afterTextChangedOnHelloTextView(Editable text, TextView hello) {
