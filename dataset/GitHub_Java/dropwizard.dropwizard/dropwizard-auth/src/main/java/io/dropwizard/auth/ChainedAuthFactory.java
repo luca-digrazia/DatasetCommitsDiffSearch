@@ -20,7 +20,6 @@ public class ChainedAuthFactory<T> extends AuthFactory<Object, T> {
         this(new ArrayList<AuthFactory<?, T>>());
     }
 
-    @SuppressWarnings("unchecked")
     public ChainedAuthFactory(AuthFactory<?, T>... providers) {
         this(Arrays.asList(providers));
     }
