@@ -149,8 +149,10 @@ public class GrpcRemoteCache extends AbstractRemoteActionCache {
 
   private ListenableFuture<FindMissingBlobsResponse> getMissingDigests(
       FindMissingBlobsRequest request) throws IOException, InterruptedException {
+    final SettableFuture<FindMissingBlobsResponse> outerF = SettableFuture.create();
     Context ctx = Context.current();
-    return retrier.executeAsync(() -> ctx.call(() -> casFutureStub().findMissingBlobs(request)));
+    retrier.executeAsync(() -> ctx.call(() -> casFutureStub().findMissingBlobs(request)), outerF);
+    return outerF;
   }
 
   private ImmutableSet<Digest> getMissingDigests(Iterable<Digest> digests)
