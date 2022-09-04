@@ -216,8 +216,9 @@ public class WindowsProcesses {
 
   private static native int nativeGetpid();
 
-  // TODO(laszlocsomor): Replace this method with ShellUtils.windowsEscapeArg in order to fix
-  // https://github.com/bazelbuild/bazel/issues/7122
+  // TODO(laszlocsomor): Audit this method and fix bugs. This method implements Bash quoting
+  // semantics but Windows quote semantics are different.
+  // More info: http://daviddeley.com/autohotkey/parameters/parameters.htm
   public static String quoteCommandLine(List<String> argv) {
     StringBuilder result = new StringBuilder();
     for (int iArg = 0; iArg < argv.size(); iArg++) {
