@@ -23,7 +23,7 @@ import org.jboss.shamrock.runtime.annotations.Template;
 @Template
 public class DataSourceTemplate {
 
-    public BeanContainerListener addDatasource(DataSourceConfig config, boolean disableSslSupport) {
+    public BeanContainerListener addDatasource(DataSourceConfig config) {
         return new BeanContainerListener() {
             @Override
             public void created(BeanContainer beanContainer) {
@@ -42,9 +42,6 @@ public class DataSourceTemplate {
                 }
                 producer.setMinSize(config.minSize);
                 producer.setMaxSize(config.maxSize);
-                if (disableSslSupport) {
-                    producer.disableSslSupport();
-                }
             }
         };
     }
