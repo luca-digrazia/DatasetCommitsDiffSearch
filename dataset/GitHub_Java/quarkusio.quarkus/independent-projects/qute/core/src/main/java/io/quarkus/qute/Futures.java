@@ -1,10 +1,13 @@
 package io.quarkus.qute;
 
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 
 public final class Futures {
 
@@ -15,6 +18,20 @@ public final class Futures {
         CompletableFuture<T> failure = new CompletableFuture<>();
         failure.completeExceptionally(t);
         return failure;
+    }
+
+    public static EvaluatedParams evaluateParams(EvalContext context) {
+        List<Expression> params = context.getParams();
+        if (params.size() == 1) {
+            return new EvaluatedParams(context.evaluate(params.get(0)));
+        }
+        CompletableFuture<?>[] results = new CompletableFuture<?>[params.size()];
+        int i = 0;
+        Iterator<Expression> it = params.iterator();
+        while (it.hasNext()) {
+            results[i++] = context.evaluate(it.next()).toCompletableFuture();
+        }
+        return new EvaluatedParams(CompletableFuture.allOf(results), results);
     }
 
     @SuppressWarnings("unchecked")
@@ -45,5 +62,26 @@ public final class Futures {
             }
         });
         return result;
+    }
+
+    @SuppressWarnings("rawtypes")
+    public static final class EvaluatedParams {
+
+        public final CompletionStage stage;
+        private final CompletableFuture<?>[] results;
+
+        EvaluatedParams(CompletionStage stage) {
+            this(stage, null);
+        }
+
+        EvaluatedParams(CompletionStage stage, CompletableFuture[] results) {
+            this.stage = stage;
+            this.results = results;
+        }
+
+        public Object getResult(int index) throws InterruptedException, ExecutionException {
+            return results[index].get();
+        }
+
     }
 }
