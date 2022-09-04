@@ -125,7 +125,6 @@ import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.profiler.GoogleAutoProfilerUtils;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
@@ -415,7 +414,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.packageManager =
         new SkyframePackageManager(
             new SkyframePackageLoader(),
-            new SkyframeTransitivePackageLoader(this::getDriver),
+            new SkyframeTransitivePackageLoader(),
             syscalls,
             cyclesReporter,
             pkgLocator,
@@ -1004,7 +1003,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               topLevelAspects, aspect -> aspect.getLabel().getPackageIdentifier()));
     }
     ImmutableSet<PackageIdentifier> topLevelPackages = packageSetBuilder.build();
-    try (AutoProfiler p = GoogleAutoProfilerUtils.logged("discarding analysis cache")) {
+    try (AutoProfiler p = AutoProfiler.logged("discarding analysis cache", logger)) {
       lastAnalysisDiscarded = true;
       Iterator<? extends Map.Entry<SkyKey, ? extends NodeEntry>> it =
           memoizingEvaluator.getGraphEntries().iterator();
@@ -2436,8 +2435,30 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting
   public TransitivePackageLoader pkgLoader() {
     checkActive();
-    return new SkyframeLabelVisitor(
-        new SkyframeTransitivePackageLoader(this::getDriver), cyclesReporter);
+    return new SkyframeLabelVisitor(new SkyframeTransitivePackageLoader(), cyclesReporter);
+  }
+
+  class SkyframeTransitivePackageLoader {
+    /** Loads the specified {@link TransitiveTargetValue}s. */
+    EvaluationResult<TransitiveTargetValue> loadTransitiveTargets(
+        ExtendedEventHandler eventHandler,
+        Iterable<Label> labelsToVisit,
+        boolean keepGoing,
+        int parallelThreads)
+        throws InterruptedException {
+      List<SkyKey> valueNames = new ArrayList<>();
+      for (Label label : labelsToVisit) {
+        valueNames.add(TransitiveTargetKey.of(label));
+      }
+      EvaluationContext evaluationContext =
+          EvaluationContext.newBuilder()
+              .setKeepGoing(keepGoing)
+              .setNumThreads(parallelThreads)
+              .setEventHander(eventHandler)
+              .setUseForkJoinPool(true)
+              .build();
+      return buildDriver.evaluate(valueNames, evaluationContext);
+    }
   }
 
   /**
