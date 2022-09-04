@@ -22,6 +22,7 @@ import com.google.devtools.build.importdeps.AbstractClassEntryState.ExistingStat
 import com.google.devtools.build.importdeps.AbstractClassEntryState.IncompleteState;
 import com.google.devtools.build.importdeps.AbstractClassEntryState.MissingState;
 import com.google.devtools.build.importdeps.ClassInfo.MemberInfo;
+import java.nio.file.Paths;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -32,54 +33,57 @@ public class LazyClassEntryStateTest {
 
   public static final String LIST_CLASS_NAME = "java/util/List";
   public static final ImmutableSet<MemberInfo> METHOD_LIST =
-      ImmutableSet.of(MemberInfo.create(LIST_CLASS_NAME, "hashCode", "()I"));
+      ImmutableSet.of(MemberInfo.create("hashCode", "()I"));
   public static final ClassInfo LIST_CLASS_INFO =
-      ClassInfo.create(LIST_CLASS_NAME, ImmutableList.of(), METHOD_LIST);
+      ClassInfo.create(LIST_CLASS_NAME, Paths.get("a"), true, ImmutableList.of(), METHOD_LIST);
 
   @Test
   public void testExistingState() {
-    ExistingState state = ExistingState.create(LIST_CLASS_INFO);
+    ExistingState state = ExistingState.create(LIST_CLASS_INFO, /* direct= */ true);
 
     assertThat(state.isExistingState()).isTrue();
     assertThat(state.isIncompleteState()).isFalse();
     assertThat(state.isMissingState()).isFalse();
+    assertThat(state.direct()).isTrue();
 
-    assertThat(state.asExistingState()).isSameAs(state);
+    assertThat(state.asExistingState()).isSameInstanceAs(state);
     assertThrows(IllegalStateException.class, () -> state.asIncompleteState());
     assertThrows(IllegalStateException.class, () -> state.asMissingState());
 
     ClassInfo classInfo = state.classInfo().get();
     assertThat(classInfo.internalName()).isEqualTo("java/util/List");
     assertThat(classInfo.declaredMembers()).hasSize(1);
-    assertThat(classInfo.declaredMembers())
-        .containsExactly(MemberInfo.create("java/util/List", "hashCode", "()I"));
+    assertThat(classInfo.declaredMembers()).containsExactly(MemberInfo.create("hashCode", "()I"));
   }
 
   @Test
   public void testIncompleteState() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> IncompleteState.create(LIST_CLASS_INFO, ImmutableList.of()));
+        () ->
+            IncompleteState.create(
+                LIST_CLASS_INFO,
+                ResolutionFailureChain.createWithParent(LIST_CLASS_INFO, ImmutableList.of())));
     IncompleteState state =
-        IncompleteState.create(LIST_CLASS_INFO, ImmutableList.of("java/lang/Object"));
+        IncompleteState.create(
+            LIST_CLASS_INFO, ResolutionFailureChain.createMissingClass("java/lang/Object"));
 
     assertThat(state.isExistingState()).isFalse();
     assertThat(state.isIncompleteState()).isTrue();
     assertThat(state.isMissingState()).isFalse();
 
-    assertThat(state.asIncompleteState()).isSameAs(state);
+    assertThat(state.asIncompleteState()).isSameInstanceAs(state);
     assertThrows(IllegalStateException.class, () -> state.asExistingState());
     assertThrows(IllegalStateException.class, () -> state.asMissingState());
 
     ClassInfo classInfo = state.classInfo().get();
     assertThat(classInfo.internalName()).isEqualTo("java/util/List");
     assertThat(classInfo.declaredMembers()).hasSize(1);
-    assertThat(classInfo.declaredMembers())
-        .containsExactly(MemberInfo.create("java/util/List", "hashCode", "()I"));
+    assertThat(classInfo.declaredMembers()).containsExactly(MemberInfo.create("hashCode", "()I"));
 
-    ImmutableList<String> failurePath = state.getResolutionFailurePath();
-    assertThat(failurePath).hasSize(1);
-    assertThat(failurePath).containsExactly("java/lang/Object");
+    assertThat(state.resolutionFailureChain().getMissingClassesWithSubclasses()).isEmpty();
+    assertThat(state.missingAncestors()).hasSize(1);
+    assertThat(state.missingAncestors()).containsExactly("java/lang/Object");
   }
 
   @Test
@@ -90,7 +94,7 @@ public class LazyClassEntryStateTest {
     assertThat(state.isExistingState()).isFalse();
     assertThat(state.isIncompleteState()).isFalse();
 
-    assertThat(state.asMissingState()).isSameAs(state);
+    assertThat(state.asMissingState()).isSameInstanceAs(state);
     assertThrows(IllegalStateException.class, () -> state.asExistingState());
     assertThrows(IllegalStateException.class, () -> state.asIncompleteState());
   }
