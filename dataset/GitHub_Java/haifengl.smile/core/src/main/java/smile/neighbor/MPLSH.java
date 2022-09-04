@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.neighbor;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -66,12 +65,11 @@ import smile.stat.distribution.GaussianDistribution;
  *
  * @author Haifeng Li
  */
-public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<double[], E>, RNNSearch<double[], E>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<double[], E>, RNNSearch<double[], E> {
     /**
      * The entry in the hash table.
      */
-    class HashEntry implements Serializable {
+    class HashEntry {
 
         /**
          * The bucket id given by the universal bucket hashing.
@@ -104,7 +102,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
     /**
      * The hash function for data in Euclidean spaces.
      */
-    class Hash implements Serializable {
+    class Hash {
 
         /**
          * The random vectors with entries chosen independently from a Gaussian
@@ -394,7 +392,7 @@ public class MPLSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<
     /**
      * Pre-computed posteriori probabilities for generating multiple probes.
      */
-    class PosterioriModel implements Serializable {
+    class PosterioriModel {
 
         /**
          * The hash function to model.

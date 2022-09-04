@@ -16,11 +16,13 @@
 
 package smile.regression;
 
+import java.io.Serializable;
 import java.util.Arrays;
+
 import smile.math.distance.Metric;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.QR;
+import smile.math.matrix.QRDecomposition;
 import smile.math.rbf.GaussianRadialBasis;
 import smile.math.rbf.RadialBasisFunction;
 import smile.util.SmileUtils;
@@ -76,7 +78,7 @@ import smile.util.SmileUtils;
  * 
  * @author Haifeng Li
  */
-public class RBFNetwork<T> implements Regression<T> {
+public class RBFNetwork<T> implements Regression<T>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -269,8 +271,9 @@ public class RBFNetwork<T> implements Regression<T> {
         int n = x.length;
         int m = rbf.length;
 
-        DenseMatrix G = Matrix.zeros(n, m);
+        DenseMatrix G = new ColumnMajorMatrix(n, m);
         double[] b = new double[n];
+        w = new double[m];
         for (int i = 0; i < n; i++) {
             double sum = 0.0;
             for (int j = 0; j < m; j++) {
@@ -286,8 +289,7 @@ public class RBFNetwork<T> implements Regression<T> {
             }
         }
 
-        w = new double[m];
-        QR qr = G.qr();
+        QRDecomposition qr = new QRDecomposition(G);
         qr.solve(b, w);
     }
 

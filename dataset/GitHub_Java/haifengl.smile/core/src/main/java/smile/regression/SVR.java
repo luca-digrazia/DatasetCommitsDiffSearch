@@ -21,8 +21,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.Callable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import smile.math.DoubleArrayList;
 import smile.math.Math;
 import smile.math.kernel.MercerKernel;
@@ -48,7 +50,7 @@ import smile.util.MulticoreExecutor;
  * 
  * @author Haifeng Li
  */
-public class SVR<T> implements Regression<T> {
+public class SVR<T> implements Regression<T>, Serializable {
     private static final long serialVersionUID = 1L;
     private static final Logger logger = LoggerFactory.getLogger(SVR.class);
 

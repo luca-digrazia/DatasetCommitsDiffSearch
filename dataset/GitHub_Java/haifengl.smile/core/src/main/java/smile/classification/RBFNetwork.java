@@ -21,9 +21,9 @@ import java.util.Arrays;
 
 import smile.math.Math;
 import smile.math.distance.Metric;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.QR;
+import smile.math.matrix.QRDecomposition;
 import smile.math.rbf.GaussianRadialBasis;
 import smile.math.rbf.RadialBasisFunction;
 import smile.util.SmileUtils;
@@ -288,7 +288,7 @@ public class RBFNetwork<T> implements Classifier<T>, Serializable {
             }
             
             if (i > 0 && labels[i] - labels[i-1] > 1) {
-                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+                throw new IllegalArgumentException("Missing class: " + labels[i]+1);                 
             }
         }
 
@@ -305,8 +305,9 @@ public class RBFNetwork<T> implements Classifier<T>, Serializable {
         int n = x.length;
         int m = rbf.length;
 
-        DenseMatrix G = Matrix.zeros(n, m+1);
-        DenseMatrix b = Matrix.zeros(n, k);
+        w = new ColumnMajorMatrix(m+1, k);
+        DenseMatrix G = new ColumnMajorMatrix(n, m+1);
+        DenseMatrix b = new ColumnMajorMatrix(n, k);
         for (int i = 0; i < n; i++) {
             double sum = 0.0;
             for (int j = 0; j < m; j++) {
@@ -324,16 +325,8 @@ public class RBFNetwork<T> implements Classifier<T>, Serializable {
             }
         }
 
-        QR qr = G.qr();
-        qr.solve(b);
-
-        // Copy the result from b to w
-        w = Matrix.zeros(m+1, k);
-        for (int j = 0; j < w.ncols(); j++) {
-            for (int i = 0; i < w.nrows(); i++) {
-                w.set(i, j, b.get(i, j));
-            }
-        }
+        QRDecomposition qr = new QRDecomposition(G);
+        qr.solve(b, w);
     }
 
     @Override

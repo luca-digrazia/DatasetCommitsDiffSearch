@@ -374,7 +374,7 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
             search(q, nearer, radius, neighbors);
 
             // now look in further half
-            if (radius >= Math.abs(diff)) {
+            if (radius >= diff * diff) {
                 search(q, further, radius, neighbors);
             }
         }

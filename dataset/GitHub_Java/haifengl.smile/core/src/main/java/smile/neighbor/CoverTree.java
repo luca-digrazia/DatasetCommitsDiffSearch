@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.neighbor;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -57,8 +56,7 @@ import smile.sort.DoubleHeapSelect;
  *
  * @author Haifeng Li
  */
-public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E>, RNNSearch<E, E>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E>, RNNSearch<E, E> {
     private static final Logger logger = LoggerFactory.getLogger(CoverTree.class);
 
     /**
@@ -94,7 +92,7 @@ public class CoverTree<E> implements NearestNeighborSearch<E, E>, KNNSearch<E, E
     /**
      * Node in the cover tree.
      */
-    class Node implements Serializable {
+    class Node {
 
         /** Index of the data point in the dataset. */
         int idx;

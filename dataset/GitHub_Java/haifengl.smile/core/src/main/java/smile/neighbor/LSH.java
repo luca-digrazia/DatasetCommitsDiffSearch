@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.neighbor;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -61,13 +60,12 @@ import smile.stat.distribution.GaussianDistribution;
  *
  * @author Haifeng Li
  */
-public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<double[], E>, RNNSearch<double[], E>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<double[], E>, RNNSearch<double[], E> {
     /**
      * A bucket is a container for points that all have the same value for hash
      * function g (function g is a vector of k LSH functions). A bucket is specified by a vector in integers of length k.
      */
-    static class BucketEntry implements Serializable {
+    static class BucketEntry {
 
         /**
          * The bucket numbers given by the universal bucket hashing.
@@ -120,7 +118,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
     /**
      * The entry of an universal hash table with collision solved by chaining.
      */
-    static class HashEntry implements Serializable {
+    static class HashEntry {
 
         /**
          * The chain of buckets in the slot.
@@ -172,7 +170,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
     /**
      * The hash function for data in Euclidean spaces.
      */
-    class Hash implements Serializable {
+    class Hash {
 
         /**
          * The random vectors with entries chosen independently from a Gaussian

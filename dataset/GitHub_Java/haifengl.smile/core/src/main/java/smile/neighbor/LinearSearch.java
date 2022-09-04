@@ -1,24 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.neighbor;
 
-import java.io.Serializable;
-import java.util.Arrays;
 import java.util.List;
 
 import smile.math.distance.Distance;
@@ -33,8 +30,9 @@ import smile.sort.HeapSelect;
  * partitioning approaches (e.g. K-D trees) on higher dimensional spaces.
  * <p>
  * By default, the query object (reference equality) is excluded from the neighborhood.
- * Note that you may observe weird behavior with String objects. JVM will pool the string
- * literal objects. So the below variables
+ * You may change this behavior with <code>setIdenticalExcluded</code>. Note that
+ * you may observe weird behavior with String objects. JVM will pool the string literal
+ * objects. So the below variables
  * <code>
  *     String a = "ABC";
  *     String b = "ABC";
@@ -49,8 +47,7 @@ import smile.sort.HeapSelect;
  *
  * @author Haifeng Li
  */
-public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,T>, RNNSearch<T,T>, Serializable {
-    private static final long serialVersionUID = 2L;
+public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,T>, RNNSearch<T,T> {
 
     /**
      * The dataset of search space.
@@ -60,6 +57,10 @@ public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,
      * The distance function used to determine nearest neighbors.
      */
     private Distance<T> distance;
+    /**
+     * Whether to exclude query object self from the neighborhood.
+     */
+    private boolean identicalExcluded = true;
 
     /**
      * Constructor. By default, query object self will be excluded from search.
@@ -74,26 +75,45 @@ public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,
         return String.format("Linear Search (%s)", distance);
     }
 
-    @Override
-    public Neighbor<T, T> nearest(T q) {
-        // avoid Stream.reduce as we will create a lot of temporary Neighbor objects.
-        double[] dist = Arrays.stream(data).parallel().mapToDouble(x -> distance.d(q, x)).toArray();
+    /**
+     * Set if exclude query object self from the neighborhood.
+     */
+    public LinearSearch<T> setIdenticalExcluded(boolean excluded) {
+        identicalExcluded = excluded;
+        return this;
+    }
 
-        int index = -1;
-        double nearest = Double.MAX_VALUE;
-        for (int i = 0; i < dist.length; i++) {
-            if (dist[i] < nearest && q != data[i]) {
-                index = i;
-                nearest = dist[i];
-            }
-        }
-
-        return Neighbor.of(data[index], index, nearest);
+    /**
+     * Get whether if query object self be excluded from the neighborhood.
+     */
+    public boolean isIdenticalExcluded() {
+        return identicalExcluded;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public Neighbor<T, T>[] knn(T q, int k) {
+    public Neighbor<T,T> nearest(T q) {
+        T neighbor = null;
+        int index = -1;
+        double dist = Double.MAX_VALUE;
+        for (int i = 0; i < data.length; i++) {
+            if (q == data[i] && identicalExcluded) {
+                continue;
+            }
+
+            double d = distance.d(q, data[i]);
+
+            if (d < dist) {
+                neighbor = data[i];
+                index = i;
+                dist = d;
+            }
+        }
+
+        return new SimpleNeighbor<>(neighbor, index, dist);
+    }
+
+    @Override
+    public Neighbor<T,T>[] knn(T q, int k) {
         if (k <= 0) {
             throw new IllegalArgumentException("Invalid k: " + k);
         }
@@ -102,16 +122,24 @@ public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,
             throw new IllegalArgumentException("Neighbor array length is larger than the dataset size");
         }
 
-        double[] dist = Arrays.stream(data).parallel().mapToDouble(x -> distance.d(q, x)).toArray();
-        HeapSelect<NeighborBuilder<T,T>> heap = new HeapSelect<>(k);
+        SimpleNeighbor<T> neighbor = new SimpleNeighbor<>(null, 0, Double.MAX_VALUE);
+        @SuppressWarnings("unchecked")
+        SimpleNeighbor<T>[] neighbors = (SimpleNeighbor<T>[]) java.lang.reflect.Array.newInstance(neighbor.getClass(), k);
+        HeapSelect<Neighbor<T,T>> heap = new HeapSelect<>(neighbors);
         for (int i = 0; i < k; i++) {
-            heap.add(new NeighborBuilder<>());
+            heap.add(neighbor);
+            neighbor = new SimpleNeighbor<>(null, 0, Double.MAX_VALUE);
         }
 
-        for (int i = 0; i < dist.length; i++) {
-            NeighborBuilder<T,T> datum = heap.peek();
-            if (dist[i] < datum.distance && q != data[i]) {
-                datum.distance = dist[i];
+        for (int i = 0; i < data.length; i++) {
+            if (q == data[i] && identicalExcluded) {
+                continue;
+            }
+
+            double dist = distance.d(q, data[i]);
+            Neighbor<T,T> datum = heap.peek();
+            if (dist < datum.distance) {
+                datum.distance = dist;
                 datum.index = i;
                 datum.key = data[i];
                 datum.value = data[i];
@@ -120,19 +148,24 @@ public class LinearSearch<T> implements NearestNeighborSearch<T,T>, KNNSearch<T,
         }
 
         heap.sort();
-        return Arrays.stream(heap.toArray()).map(NeighborBuilder::toNeighbor).toArray(Neighbor[]::new);
+        return neighbors;
     }
 
     @Override
-    public void range(T q, double radius, List<Neighbor<T, T>> neighbors) {
+    public void range(T q, double radius, List<Neighbor<T,T>> neighbors) {
         if (radius <= 0.0) {
             throw new IllegalArgumentException("Invalid radius: " + radius);
         }
 
-        double[] dist = Arrays.stream(data).parallel().mapToDouble(x -> distance.d(q, x)).toArray();
         for (int i = 0; i < data.length; i++) {
-            if (dist[i] <= radius && q != data[i]) {
-                neighbors.add(Neighbor.of(data[i], i, dist[i]));
+            if (q == data[i] && identicalExcluded) {
+                continue;
+            }
+
+            double d = distance.d(q, data[i]);
+
+            if (d <= radius) {
+                neighbors.add(new SimpleNeighbor<>(data[i], i, d));
             }
         }
     }
