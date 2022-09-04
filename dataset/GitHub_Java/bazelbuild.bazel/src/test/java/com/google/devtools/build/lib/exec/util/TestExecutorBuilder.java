@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.exec.util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionContext;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.actions.FileWriteActionContext;
@@ -28,13 +29,10 @@ import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.BlazeExecutor;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.FileWriteStrategy;
-import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
-import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
-import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
+import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
 import com.google.devtools.build.lib.runtime.CommonCommandOptions;
 import com.google.devtools.build.lib.testutil.TestConstants;
-import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
@@ -52,10 +50,8 @@ public class TestExecutorBuilder {
   private Reporter reporter = new Reporter(new EventBus());
   private OptionsParser optionsParser =
       OptionsParser.builder().optionsClasses(DEFAULT_OPTIONS).build();
-  private final ModuleActionContextRegistry.Builder actionContextRegistryBuilder =
-      ModuleActionContextRegistry.builder();
-  private final SpawnStrategyRegistry.Builder strategyRegistryBuilder =
-      SpawnStrategyRegistry.builder();
+  private final SpawnActionContextMaps.Builder spawnMapsBuilder =
+      new SpawnActionContextMaps.Builder();
 
   public TestExecutorBuilder(
       FileSystem fileSystem, BlazeDirectories directories, BinTools binTools) {
@@ -68,7 +64,6 @@ public class TestExecutorBuilder {
     addContext(FileWriteActionContext.class, new FileWriteStrategy());
     addContext(TemplateExpansionContext.class, new LocalTemplateExpansionStrategy());
     addContext(SymlinkTreeActionContext.class, new SymlinkTreeStrategy(null, binTools));
-    addContext(SpawnStrategyResolver.class, new SpawnStrategyResolver());
   }
 
   public TestExecutorBuilder setReporter(Reporter reporter) {
@@ -94,13 +89,14 @@ public class TestExecutorBuilder {
    */
   public <T extends ActionContext> TestExecutorBuilder addContext(
       Class<T> identifyingType, T context, String... commandlineIdentifiers) {
-    actionContextRegistryBuilder.register(identifyingType, context, commandlineIdentifiers);
+    spawnMapsBuilder.strategyByContextMap().put(identifyingType, "");
+    spawnMapsBuilder.addContext(identifyingType, context, commandlineIdentifiers);
     return this;
   }
 
   /** Makes the given strategy available in the execution phase. */
   public TestExecutorBuilder addStrategy(SpawnStrategy strategy, String... commandlineIdentifiers) {
-    strategyRegistryBuilder.registerStrategy(strategy, commandlineIdentifiers);
+    spawnMapsBuilder.addContext(SpawnStrategy.class, strategy, commandlineIdentifiers);
     return this;
   }
 
@@ -110,26 +106,23 @@ public class TestExecutorBuilder {
    * <p>Replaces any previously set default strategies.
    */
   public TestExecutorBuilder setDefaultStrategies(String... strategies) {
-    strategyRegistryBuilder.setDefaultStrategies(ImmutableList.copyOf(strategies));
+    spawnMapsBuilder.strategyByMnemonicMap().replaceValues("", ImmutableList.copyOf(strategies));
     return this;
   }
 
   public TestExecutorBuilder setExecution(String mnemonic, String strategy) {
-    strategyRegistryBuilder.addMnemonicFilter(mnemonic, ImmutableList.of(strategy));
+    spawnMapsBuilder.strategyByMnemonicMap().replaceValues(mnemonic, ImmutableList.of(strategy));
     return this;
   }
 
-  public BlazeExecutor build() throws AbruptExitException {
-    SpawnStrategyRegistry strategyRegistry = strategyRegistryBuilder.build();
-    addContext(SpawnStrategyRegistry.class, strategyRegistry);
-    ModuleActionContextRegistry actionContextRegistry = actionContextRegistryBuilder.build();
+  public BlazeExecutor build() throws ExecutorInitException {
+    SpawnActionContextMaps spawnActionContextMaps = spawnMapsBuilder.build();
     return new BlazeExecutor(
         fileSystem,
         execRoot,
         reporter,
         BlazeClock.instance(),
         optionsParser,
-        actionContextRegistry,
-        strategyRegistry);
+        spawnActionContextMaps);
   }
 }
