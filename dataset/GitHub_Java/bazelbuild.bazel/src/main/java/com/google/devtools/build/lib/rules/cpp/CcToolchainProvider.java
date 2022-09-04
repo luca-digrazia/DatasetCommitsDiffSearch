@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -39,7 +40,8 @@ import javax.annotation.Nullable;
     doc = "Information about the C++ compiler being used."
 )
 @Immutable
-public final class CcToolchainProvider extends SkylarkClassObject {
+public final class CcToolchainProvider
+    extends SkylarkClassObject implements TransitiveInfoProvider {
   public static final String SKYLARK_NAME = "CcToolchainInfo";
 
   public static final NativeClassObjectConstructor<CcToolchainProvider> SKYLARK_CONSTRUCTOR =
