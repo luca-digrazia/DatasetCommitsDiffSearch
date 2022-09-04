@@ -2,7 +2,6 @@ package com.yammer.dropwizard.json.tests;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
 import com.google.common.base.Optional;
 import com.google.common.cache.CacheBuilderSpec;
 import com.google.common.net.HostAndPort;
@@ -17,7 +16,6 @@ public class GuavaExtrasModuleTest {
 
     @Before
     public void setUp() throws Exception {
-        mapper.registerModule(new GuavaModule());
         mapper.registerModule(new GuavaExtrasModule());
     }
 
