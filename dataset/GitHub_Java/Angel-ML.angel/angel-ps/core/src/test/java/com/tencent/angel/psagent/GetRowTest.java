@@ -403,11 +403,11 @@ public class GetRowTest {
   }
 
   @Test public void test() throws Exception {
-    //testDenseDoubleUDF();
-    //testSparseDoubleUDF();
+    testDenseDoubleUDF();
+    testSparseDoubleUDF();
 
     testDenseDoubleCompUDF();
-    /*testSparseDoubleCompUDF();
+    testSparseDoubleCompUDF();
 
     testDenseFloatUDF();
     testSparseFloatUDF();
@@ -437,7 +437,7 @@ public class GetRowTest {
     testSparseIntLongKeyCompUDF();
 
     testSparseLongLongKeyUDF();
-    testSparseLongLongKeyCompUDF();*/
+    testSparseLongLongKeyCompUDF();
   }
 
 
