@@ -34,6 +34,7 @@ import io.grpc.Status;
 import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -81,7 +82,10 @@ final class ByteStreamServer extends ByteStreamImplBase {
     try {
       // This still relies on the blob size to be small enough to fit in memory.
       // TODO(olaola): refactor to fix this if the need arises.
-      Chunker c = Chunker.builder().setInput(getFromFuture(cache.downloadBlob(digest))).build();
+      Chunker c =
+          Chunker.builder(digestUtil)
+              .setInput(digest, getFromFuture(cache.downloadBlob(digest)))
+              .build();
       while (c.hasNext()) {
         responseObserver.onNext(
             ReadResponse.newBuilder().setData(c.next().getData()).build());
@@ -231,7 +235,9 @@ final class ByteStreamServer extends ByteStreamImplBase {
 
         try {
           Digest d = digestUtil.compute(temp);
-          getFromFuture(cache.uploadFile(d, temp));
+          try (InputStream in = temp.getInputStream()) {
+            cache.uploadStream(d, in);
+          }
           try {
             temp.delete();
           } catch (IOException e) {
