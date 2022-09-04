@@ -187,7 +187,7 @@ public class InputsResource extends RestResource {
         mergedInput.putAll(messageInput.asMap());
 
         final Input newInput = inputService.create(input.getId(), mergedInput);
-        inputService.update(newInput);
+        inputService.save(newInput);
 
         final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
                 .path("{inputId}")
