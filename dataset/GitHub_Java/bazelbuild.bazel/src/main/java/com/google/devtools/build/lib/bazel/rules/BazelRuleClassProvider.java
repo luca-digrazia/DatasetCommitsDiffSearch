@@ -320,7 +320,6 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(Builder builder) {
-          builder.addRuleDefinition(new BaseRuleClasses.RootRule());
           builder.addRuleDefinition(new BaseRuleClasses.BaseRule());
           builder.addRuleDefinition(new BaseRuleClasses.RuleBase());
           builder.addRuleDefinition(new BaseRuleClasses.BinaryBaseRule());
