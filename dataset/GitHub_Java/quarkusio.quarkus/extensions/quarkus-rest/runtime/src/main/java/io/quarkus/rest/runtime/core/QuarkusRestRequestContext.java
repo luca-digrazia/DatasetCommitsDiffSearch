@@ -4,8 +4,6 @@ import java.io.Closeable;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -94,7 +92,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
      */
     private Object result;
     private boolean suspended = false;
-    private volatile boolean requestScopeActivated = false;
+    private volatile boolean resetRequestContext = false;
     private volatile boolean running = false;
     private volatile Executor executor;
     private int position;
@@ -106,14 +104,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     private EntityWriter entityWriter;
     private QuarkusRestContainerRequestContext containerRequestContext;
     private String method;
-    // this is only set if we override the requestUri
     private String path;
-    // this is cached, but only if we override the requestUri
-    private String absoluteUri;
-    // this is only set if we override the requestUri
-    private String scheme;
-    // this is only set if we override the requestUri
-    private String authority;
     private String remaining;
     private MediaType producesMediaType;
     private MediaType consumesMediaType;
@@ -189,6 +180,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
             }
         } else {
             suspended = false;
+            resetRequestContext = true;
             if (executor == null) {
                 ((ConnectionBase) context.request().connection()).getContext().nettyEventLoop().execute(this);
             } else {
@@ -202,8 +194,16 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         running = true;
         //if this is a blocking target we don't activate for the initial non-blocking part
         //unless there are pre-mapping filters as these may require CDI
-        boolean terminateRequestScope = false;
-        boolean disasociateRequestScope = false;
+        boolean activationRequired = target == null || (target.isBlocking() && executor == null) || resetRequestContext;
+        if (activationRequired) {
+            if (currentRequestScope == null) {
+                requestContext.activate();
+                currentVertxRequest.setCurrent(context, this);
+            } else {
+                requestContext.activate(currentRequestScope);
+            }
+            resetRequestContext = false;
+        }
         try {
             while (position < handlers.length) {
                 int pos = position;
@@ -213,15 +213,6 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
                     if (suspended) {
                         Executor exec = null;
                         synchronized (this) {
-                            if (requestScopeActivated) {
-                                if (position == handlers.length) {
-                                    terminateRequestScope = true;
-                                } else {
-                                    currentRequestScope = requestContext.getState();
-                                    disasociateRequestScope = true;
-                                }
-                                requestScopeActivated = false;
-                            }
                             if (this.executor != null) {
                                 //resume happened in the meantime
                                 suspended = false;
@@ -252,28 +243,15 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
             close();
         } finally {
             running = false;
-            if (terminateRequestScope) {
-                requestContext.terminate();
-                close();
-            } else if (disasociateRequestScope) {
-                requestContext.deactivate();
+            if (activationRequired) {
+                if (position == handlers.length) {
+                    requestContext.terminate();
+                    close();
+                } else {
+                    currentRequestScope = requestContext.getState();
+                    requestContext.deactivate();
+                }
             }
-        }
-    }
-
-    public void requireCDIRequestScope() {
-        if (!running) {
-            throw new RuntimeException("Cannot be called when outside a handler chain");
-        }
-        if (requestScopeActivated) {
-            return;
-        }
-        requestScopeActivated = true;
-        if (currentRequestScope == null) {
-            requestContext.activate();
-            currentVertxRequest.setCurrent(context, this);
-        } else {
-            requestContext.activate(currentRequestScope);
         }
     }
 
@@ -571,41 +549,8 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return path;
     }
 
-    public String getAbsoluteURI() {
-        // if we never changed the path we can use the vert.x URI
-        if (path == null)
-            return getContext().request().absoluteURI();
-        // Note: we could store our cache as normalised, but I'm not sure if the vertx one is normalised
-        if (absoluteUri == null) {
-            try {
-                absoluteUri = new URI(scheme, authority, path, null, null).toASCIIString();
-            } catch (URISyntaxException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return absoluteUri;
-    }
-
-    public String getScheme() {
-        if (scheme == null)
-            return getContext().request().scheme();
-        return scheme;
-    }
-
-    public String getAuthority() {
-        if (authority == null)
-            return getContext().request().host();
-        return authority;
-    }
-
-    public QuarkusRestRequestContext setRequestUri(URI requestURI) {
-        this.path = requestURI.getPath();
-        this.authority = requestURI.getRawAuthority();
-        this.scheme = requestURI.getScheme();
-        // FIXME: it's possible we may have to also update the query part
-        // invalidate those
-        this.uriInfo = null;
-        this.absoluteUri = null;
+    public QuarkusRestRequestContext setPath(String path) {
+        this.path = path;
         return this;
     }
 
