@@ -56,11 +56,6 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     this(new JavaClock());
   }
 
-  public JavaIoFileSystem(HashFunction hashFunction) {
-    super(hashFunction);
-    this.clock = new JavaClock();
-  }
-
   @VisibleForTesting
   JavaIoFileSystem(Clock clock) {
     this.clock = clock;
@@ -308,7 +303,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public void renameTo(Path sourcePath, Path targetPath) throws IOException {
+  protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
     synchronized (sourcePath) {
       File sourceFile = getIoFile(sourcePath);
       File targetFile = getIoFile(targetPath);
@@ -382,7 +377,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public void setLastModifiedTime(Path path, long newTime) throws IOException {
+  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     File file = getIoFile(path);
     if (!file.setLastModified(newTime == -1L ? clock.currentTimeMillis() : newTime)) {
       if (!file.exists()) {
