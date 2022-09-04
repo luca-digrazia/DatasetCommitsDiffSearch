@@ -1,7 +1,6 @@
 package io.quarkus.jdbc.db2.deployment;
 
-import io.quarkus.agroal.spi.DefaultDataSourceDbKindBuildItem;
-import io.quarkus.agroal.spi.JdbcDriverBuildItem;
+import io.quarkus.agroal.deployment.JdbcDriverBuildItem;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
@@ -14,7 +13,6 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.NativeImageEnableAllCharsetsBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.jdbc.db2.runtime.DB2AgroalConnectionConfigurer;
 
 public class JDBCDB2Processor {
@@ -30,7 +28,7 @@ public class JDBCDB2Processor {
         jdbcDriver.produce(new JdbcDriverBuildItem(DatabaseKind.DB2, "com.ibm.db2.jcc.DB2Driver",
                 "com.ibm.db2.jcc.DB2XADataSource"));
     }
-
+    
     @BuildStep
     void configureAgroalConnection(BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             Capabilities capabilities) {
@@ -57,15 +55,5 @@ public class JDBCDB2Processor {
     NativeImageEnableAllCharsetsBuildItem enableAllCharsets() {
         // When connecting to DB2 on z/OS the Cp037 charset is required
         return new NativeImageEnableAllCharsetsBuildItem();
-    }
-
-    @BuildStep
-    void registerServiceBinding(Capabilities capabilities,
-            BuildProducer<ServiceProviderBuildItem> serviceProvider,
-            BuildProducer<DefaultDataSourceDbKindBuildItem> dbKind) {
-        if (capabilities.isPresent(Capability.KUBERNETES_SERVICE_BINDING)) {
-            //TODO: add binding class
-            dbKind.produce(new DefaultDataSourceDbKindBuildItem(DatabaseKind.DB2));
-        }
     }
 }
