@@ -1,5 +1,5 @@
-/*
- * Copyright 2013-2014 TORCH GmbH
+/**
+ * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -28,20 +28,14 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
-import com.google.inject.Module;
 import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
-import org.graylog2.bindings.ServerBindings;
 import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.filters.*;
 import org.graylog2.initializers.*;
-import org.graylog2.inputs.gelf.http.GELFHttpInput;
 import org.graylog2.inputs.gelf.tcp.GELFTCPInput;
+import org.graylog2.inputs.gelf.http.GELFHttpInput;
 import org.graylog2.inputs.gelf.udp.GELFUDPInput;
 import org.graylog2.inputs.kafka.KafkaInput;
 import org.graylog2.inputs.misc.jsonpath.JsonPathInput;
@@ -59,9 +53,6 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugins.PluginInstaller;
-import org.graylog2.shared.BaseConfiguration;
-import org.graylog2.shared.NodeRunner;
-import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,17 +61,13 @@ import org.slf4j.bridge.SLF4JBridgeHandler;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.Writer;
-import java.lang.reflect.Field;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Main class of Graylog2.
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public final class Main extends NodeRunner {
+public final class Main {
 
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
@@ -109,13 +96,25 @@ public final class Main extends NodeRunner {
         String configFile = commandLineArguments.getConfigFile();
         LOG.info("Using config file: {}", configFile);
 
-        final Configuration configuration = getConfiguration(configFile);
+        final Configuration configuration = new Configuration();
+        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
+
+        LOG.info("Loading configuration");
+        try {
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
+            System.exit(1);
+        } catch (ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
+        }
 
         if (configuration.getPasswordSecret().isEmpty()) {
             LOG.error("No password secret set. Please define password_secret in your graylog2.conf.");
             System.exit(1);
         }
-
+        
         if (commandLineArguments.isInstallPlugin()) {
             System.out.println("Plugin installation requested.");
             PluginInstaller installer = new PluginInstaller(
@@ -135,11 +134,8 @@ public final class Main extends NodeRunner {
             logLevel = Level.DEBUG;
         }
 
-        List<Module> bindingsModules = getBindingsModules(new ServerBindings(configuration));
-        Injector injector = Guice.createInjector(bindingsModules);
-
         // This is holding all our metrics.
-        final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
+        final MetricRegistry metrics = new MetricRegistry();
 
         // Report metrics via JMX.
         final JmxReporter reporter = JmxReporter.forRegistry(metrics).build();
@@ -158,7 +154,7 @@ public final class Main extends NodeRunner {
 
         // If we only want to check our configuration, we just initialize the rules engine to check if the rules compile
         if (commandLineArguments.isConfigTest()) {
-            Core server = injector.getInstance(Core.class);
+            Core server = new Core();
             server.setConfiguration(configuration);
             DroolsInitializer drools = new DroolsInitializer();
             try {
@@ -176,10 +172,10 @@ public final class Main extends NodeRunner {
         }
 
         // Le server object. This is where all the magic happens.
-        Core server = injector.getInstance(Core.class);
+        Core server = new Core();
         server.setLifecycle(Lifecycle.STARTING);
 
-        server.initialize();
+        server.initialize(configuration, metrics);
 
         // Register this node.
         Node.registerServer(server, configuration.isMaster(), configuration.getRestTransportUri());
@@ -256,12 +252,11 @@ public final class Main extends NodeRunner {
         server.initializers().register(new PeriodicalsInitializer());
 
         // Register message filters. (Order is important here)
-        final FilterRegistry filterRegistry = injector.getInstance(FilterRegistry.class);
-        filterRegistry.register(new StaticFieldFilter());
-        filterRegistry.register(new ExtractorFilter());
-        filterRegistry.register(new BlacklistFilter());
-        filterRegistry.register(new StreamMatcherFilter());
-        filterRegistry.register(new RewriteFilter());
+        server.registerFilter(new StaticFieldFilter());
+        server.registerFilter(new ExtractorFilter());
+        server.registerFilter(new BlacklistFilter());
+        server.registerFilter(new StreamMatcherFilter());
+        server.registerFilter(new RewriteFilter());
 
         // Register outputs.
         server.outputs().register(new ElasticSearchOutput(server));
@@ -290,24 +285,6 @@ public final class Main extends NodeRunner {
         } catch (InterruptedException e) {
             return;
         }
-    }
-
-    private static Configuration getConfiguration(String configFile) {
-        final Configuration configuration = new Configuration();
-        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
-
-        LOG.info("Loading configuration");
-        try {
-            jadConfig.process();
-        } catch (RepositoryException e) {
-            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
-            System.exit(1);
-        } catch (ValidationException e) {
-            LOG.error("Invalid configuration", e);
-            System.exit(1);
-        }
-
-        return configuration;
     }
 
     private static void savePidFile(String pidFile) {
