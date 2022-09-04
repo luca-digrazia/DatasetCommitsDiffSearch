@@ -8,7 +8,6 @@ import org.eclipse.microprofile.metrics.MetricUnits;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
 
 import io.quarkus.runtime.StartupEvent;
-import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
  * The purpose of this bean is to test that ArC automatically registers the constructor for reflection if an
@@ -18,7 +17,6 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * See https://github.com/quarkusio/quarkus/issues/6898
  */
 @ApplicationScoped
-@RegisterForReflection(fields = false)
 public class DummyGauge {
 
     void init(@Observes StartupEvent event) {
