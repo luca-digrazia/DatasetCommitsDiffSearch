@@ -18,7 +18,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
@@ -147,7 +146,7 @@ public class ActionCacheChecker {
   private static boolean validateArtifacts(
       ActionCache.Entry entry,
       Action action,
-      NestedSet<Artifact> actionInputs,
+      Iterable<Artifact> actionInputs,
       MetadataHandler metadataHandler,
       boolean checkOutput) {
     Map<String, FileArtifactValue> mdMap = new HashMap<>();
@@ -156,7 +155,7 @@ public class ActionCacheChecker {
         mdMap.put(artifact.getExecPathString(), getMetadataMaybe(metadataHandler, artifact));
       }
     }
-    for (Artifact artifact : actionInputs.toList()) {
+    for (Artifact artifact : actionInputs) {
       mdMap.put(artifact.getExecPathString(), getMetadataMaybe(metadataHandler, artifact));
     }
     return !Arrays.equals(DigestUtils.fromMetadata(mdMap), entry.getFileDigest());
@@ -276,16 +275,7 @@ public class ActionCacheChecker {
       // The action doesn't know its inputs, but the caller has a good idea of what they are.
       Preconditions.checkState(action.discoversInputs(),
           "Actions that don't know their inputs must discover them: %s", action);
-      if (action instanceof ActionCacheAwareAction
-          && ((ActionCacheAwareAction) action).storeInputsExecPathsInActionCache()) {
-        actionInputs = NestedSetBuilder.wrap(Order.STABLE_ORDER, resolvedCacheArtifacts);
-      } else {
-        actionInputs =
-            NestedSetBuilder.<Artifact>stableOrder()
-                .addTransitive(action.getMandatoryInputs())
-                .addAll(resolvedCacheArtifacts)
-                .build();
-      }
+      actionInputs = NestedSetBuilder.wrap(Order.STABLE_ORDER, resolvedCacheArtifacts);
     }
     ActionCache.Entry entry = getCacheEntry(action);
     if (mustExecute(
@@ -313,7 +303,7 @@ public class ActionCacheChecker {
       @Nullable ActionCache.Entry entry,
       EventHandler handler,
       MetadataHandler metadataHandler,
-      NestedSet<Artifact> actionInputs,
+      Iterable<Artifact> actionInputs,
       Map<String, String> clientEnv,
       Map<String, String> remoteDefaultPlatformProperties) {
     // Unconditional execution can be applied only for actions that are allowed to be executed.
@@ -410,23 +400,11 @@ public class ActionCacheChecker {
         // to rebuild everything if only that file changes.
         FileArtifactValue metadata = getMetadataOrConstant(metadataHandler, output);
         Preconditions.checkState(metadata != null);
-        entry.addFile(output.getExecPath(), metadata, /* saveExecPath= */ false);
+        entry.addFile(output.getExecPath(), metadata);
       }
     }
-
-    boolean storeAllInputsInActionCache =
-        action instanceof ActionCacheAwareAction
-            && ((ActionCacheAwareAction) action).storeInputsExecPathsInActionCache();
-    ImmutableSet<Artifact> excludePathsFromActionCache =
-        !storeAllInputsInActionCache && action.discoversInputs()
-            ? action.getMandatoryInputs().toSet()
-            : ImmutableSet.of();
-
     for (Artifact input : action.getInputs().toList()) {
-      entry.addFile(
-          input.getExecPath(),
-          getMetadataMaybe(metadataHandler, input),
-          /* saveExecPath= */ !excludePathsFromActionCache.contains(input));
+      entry.addFile(input.getExecPath(), getMetadataMaybe(metadataHandler, input));
     }
     entry.getFileDigest();
     actionCache.put(key, entry);

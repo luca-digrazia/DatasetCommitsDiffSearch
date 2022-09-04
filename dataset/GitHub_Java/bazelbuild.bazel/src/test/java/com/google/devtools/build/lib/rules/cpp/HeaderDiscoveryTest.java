@@ -14,7 +14,7 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.ImmutableList;
@@ -37,12 +37,11 @@ import org.junit.runners.JUnit4;
 /** Test. */
 @RunWith(JUnit4.class)
 public class HeaderDiscoveryTest {
-  private static final String DERIVED_SEGMENT = "derived";
 
   private final FileSystem fs = new InMemoryFileSystem();
   private final Path execRoot = fs.getPath("/execroot");
-  private final Path derivedRoot = execRoot.getChild(DERIVED_SEGMENT);
-  private final ArtifactRoot artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, DERIVED_SEGMENT);
+  private final Path derivedRoot = execRoot.getRelative("derived");
+  private final ArtifactRoot artifactRoot = ArtifactRoot.asDerivedRoot(execRoot, derivedRoot);
 
   @Test
   public void errorsWhenMissingHeaders() {
@@ -74,7 +73,7 @@ public class HeaderDiscoveryTest {
         .setDependencies(dependencies)
         .setAllowedDerivedInputs(includedHeaders)
         .build()
-        .discoverInputsFromDependencies(execRoot, artifactResolver, false);
+        .discoverInputsFromDependencies(execRoot, artifactResolver);
   }
 
   private SpecialArtifact treeArtifact(Path path) {

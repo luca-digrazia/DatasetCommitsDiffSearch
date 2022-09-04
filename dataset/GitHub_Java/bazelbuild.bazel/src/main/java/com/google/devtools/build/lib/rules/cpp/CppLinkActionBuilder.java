@@ -719,8 +719,8 @@ public class CppLinkActionBuilder {
 
     ImmutableSet<Artifact> combinedObjectArtifacts =
         ImmutableSet.<Artifact>builder()
-            .addAll(objectArtifacts.toList())
-            .addAll(linkstampObjectArtifacts.toList())
+            .addAll(objectArtifacts)
+            .addAll(linkstampObjectArtifacts)
             .build();
     final LinkerInputs.LibraryToLink outputLibrary =
         linkType.isExecutable()
@@ -804,13 +804,13 @@ public class CppLinkActionBuilder {
         IterablesChain.<LinkerInput>builder()
             .add(objectFileInputs)
             .add(linkstampObjectFileInputs)
-            .add(uniqueLibraries.toList())
+            .add(uniqueLibraries)
             .add(
                 // Adding toolchain libraries without whole archive no-matter-what. People don't
                 // want to include whole libstdc++ in their binary ever.
                 ImmutableSet.copyOf(
                     LinkerInputs.simpleLinkerInputs(
-                        toolchainLibrariesInputs.toList(),
+                        toolchainLibrariesInputs,
                         toolchainLibrariesType,
                         /* disableWholeArchive= */ true)))
             .build();
@@ -996,9 +996,9 @@ public class CppLinkActionBuilder {
       inputsBuilder.add(linkCommandLine.getParamFile());
       // Pass along tree artifacts, so they can be properly expanded.
       NestedSet<Artifact> paramFileActionInputs =
-          NestedSetBuilder.wrap(
-              Order.STABLE_ORDER,
-              Iterables.filter(expandedLinkerArtifacts.toList(), Artifact::isTreeArtifact));
+          NestedSetBuilder.<Artifact>stableOrder()
+              .addAll(Iterables.filter(expandedLinkerArtifacts, Artifact::isTreeArtifact))
+              .build();
 
       Action parameterFileWriteAction =
           new ParameterFileWriteAction(
