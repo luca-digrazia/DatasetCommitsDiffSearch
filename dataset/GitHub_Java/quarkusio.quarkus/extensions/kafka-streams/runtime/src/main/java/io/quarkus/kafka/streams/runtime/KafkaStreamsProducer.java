@@ -1,14 +1,10 @@
 package io.quarkus.kafka.streams.runtime;
 
-import static io.quarkus.kafka.streams.runtime.KafkaStreamsRuntimeConfig.DEFAULT_KAFKA_BROKER;
-
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -26,7 +22,6 @@ import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
-import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -41,7 +36,6 @@ import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.Arc;
@@ -67,17 +61,14 @@ public class KafkaStreamsProducer {
     private final KafkaStreamsTopologyManager kafkaStreamsTopologyManager;
     private final Admin kafkaAdminClient;
 
-    // TODO Replace @Named with @Identifier when it will be integrated
-
     @Inject
     public KafkaStreamsProducer(KafkaStreamsSupport kafkaStreamsSupport, KafkaStreamsRuntimeConfig runtimeConfig,
             Instance<Topology> topology, Instance<KafkaClientSupplier> kafkaClientSupplier,
-            @Named("default-kafka-broker") Instance<Map<String, Object>> defaultConfiguration,
             Instance<StateListener> stateListener, Instance<StateRestoreListener> globalStateRestoreListener) {
         shutdown = false;
         // No producer for Topology -> nothing to do
         if (topology.isUnsatisfied()) {
-            LOGGER.warn("No Topology producer; Kafka Streams will not be started");
+            LOGGER.debug("No Topology producer; Kafka Streams will not be started");
             this.executorService = null;
             this.kafkaStreams = null;
             this.kafkaStreamsTopologyManager = null;
@@ -88,17 +79,7 @@ public class KafkaStreamsProducer {
         Properties buildTimeProperties = kafkaStreamsSupport.getProperties();
 
         String bootstrapServersConfig = asString(runtimeConfig.bootstrapServers);
-        if (DEFAULT_KAFKA_BROKER.equalsIgnoreCase(bootstrapServersConfig)) {
-            // Try to see if kafka.bootstrap.servers is set, if so, use that value, if not, keep localhost:9092
-            bootstrapServersConfig = ConfigProvider.getConfig().getOptionalValue("kafka.bootstrap.servers", String.class)
-                    .orElse(bootstrapServersConfig);
-        }
-        Map<String, Object> cfg = Collections.emptyMap();
-        if (!defaultConfiguration.isUnsatisfied()) {
-            cfg = defaultConfiguration.get();
-        }
-        Properties kafkaStreamsProperties = getStreamsProperties(buildTimeProperties, cfg, bootstrapServersConfig,
-                runtimeConfig);
+        Properties kafkaStreamsProperties = getStreamsProperties(buildTimeProperties, bootstrapServersConfig, runtimeConfig);
         this.kafkaAdminClient = Admin.create(getAdminClientConfig(kafkaStreamsProperties));
 
         this.executorService = Executors.newSingleThreadExecutor();
@@ -187,16 +168,12 @@ public class KafkaStreamsProducer {
     /**
      * Returns all properties to be passed to Kafka Streams.
      */
-    private static Properties getStreamsProperties(Properties properties,
-            Map<String, Object> cfg, String bootstrapServersConfig,
+    private static Properties getStreamsProperties(Properties properties, String bootstrapServersConfig,
             KafkaStreamsRuntimeConfig runtimeConfig) {
         Properties streamsProperties = new Properties();
 
         // build-time options
         streamsProperties.putAll(properties);
-
-        // default configuration
-        streamsProperties.putAll(cfg);
 
         // dynamic add -- back-compatibility
         streamsProperties.putAll(KafkaStreamsPropertiesUtil.quarkusKafkaStreamsProperties());
