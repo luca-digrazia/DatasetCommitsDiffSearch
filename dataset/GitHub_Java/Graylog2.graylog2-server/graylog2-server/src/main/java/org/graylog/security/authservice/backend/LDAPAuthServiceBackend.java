@@ -77,18 +77,15 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
 
             final LDAPUser userEntry = optionalUser.get();
 
-            if (!authCredentials.isAuthenticated()) {
-                if (!isAuthenticated(connection, userEntry, authCredentials)) {
-                    LOG.debug("Invalid credentials for user <{}> (DN: {})", authCredentials.username(), userEntry.dn());
-                    return Optional.empty();
-                }
+            if (!isAuthenticated(connection, userEntry, authCredentials)) {
+                LOG.debug("Invalid credentials for user <{}> (DN: {})", authCredentials.username(), userEntry.dn());
+                return Optional.empty();
             }
 
             final UserDetails userDetails = provisionerService.provision(provisionerService.newDetails(this)
                     .authServiceType(backendType())
                     .authServiceId(backendId())
-                    .accountIsEnabled(true)
-                    .base64AuthServiceUid(userEntry.base64UniqueId())
+                    .authServiceUid(userEntry.uniqueId())
                     .username(userEntry.username())
                     .fullName(userEntry.fullName())
                     .email(userEntry.email())
@@ -124,7 +121,7 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
                 .userFullNameAttribute(config.userFullNameAttribute())
                 .build();
 
-        return ldapConnector.searchUserByPrincipal(connection, searchConfig, authCredentials.username());
+        return ldapConnector.searchUser(connection, searchConfig, authCredentials.username());
     }
 
     @Override
@@ -242,14 +239,13 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
                 .put("login_success", loginSuccess);
 
         if (user != null) {
-            userDetails.put("user_details", ImmutableMap.<String, String>builder()
-                    .put("dn", user.dn())
-                    .put(config.userUniqueIdAttribute(), user.base64UniqueId())
-                    .put(config.userNameAttribute(), user.username())
-                    .put(config.userFullNameAttribute(), user.fullName())
-                    .put("email", user.email())
-                    .build()
-            );
+            userDetails.put("user_details", ImmutableMap.of(
+                    "dn", user.dn(),
+                    config.userUniqueIdAttribute(), user.uniqueId(),
+                    config.userNameAttribute(), user.username(),
+                    config.userFullNameAttribute(), user.fullName(),
+                    "email", user.email()
+            ));
         } else {
             userDetails.put("user_details", ImmutableMap.of());
         }
