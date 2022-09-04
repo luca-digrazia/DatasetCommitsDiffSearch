@@ -21,7 +21,6 @@ import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.rest.models.system.SystemJobSummary;
 import org.joda.time.DateTime;
 
-import java.util.Locale;
 import java.util.UUID;
 
 public class SystemJob {
@@ -35,7 +34,7 @@ public class SystemJob {
         FIX_DEFLECTOR_MOVE_INDEX;
 
         public static Type fromString(String name) {
-            return valueOf(name.toUpperCase(Locale.ENGLISH));
+            return valueOf(name.toUpperCase());
         }
     }
 
