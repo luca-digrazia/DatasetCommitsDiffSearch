@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
@@ -36,7 +35,7 @@ public abstract class Template {
   private Template() {}
 
   /** Returns the text content of the template. */
-  protected abstract String getContent(ArtifactPathResolver resolver) throws IOException;
+  protected abstract String getContent() throws IOException;
 
   @Nullable
   public Artifact getTemplateArtifact() {
@@ -63,7 +62,7 @@ public abstract class Template {
     }
 
     @Override
-    protected String getContent(ArtifactPathResolver resolver) throws IOException {
+    protected String getContent() throws IOException {
       throw new IOException(
           "failed to load resource file '" + templateName + "' due to I/O error: " + e.getMessage(),
           e);
@@ -87,7 +86,7 @@ public abstract class Template {
     }
 
     @Override
-    protected String getContent(ArtifactPathResolver resolver) {
+    protected String getContent() {
       return templateText;
     }
 
@@ -109,8 +108,8 @@ public abstract class Template {
     }
 
     @Override
-    protected String getContent(ArtifactPathResolver resolver) throws IOException {
-      Path templatePath = resolver.toPath(templateArtifact);
+    protected String getContent() throws IOException {
+      Path templatePath = templateArtifact.getPath();
       try {
         return FileSystemUtils.readContent(templatePath, DEFAULT_CHARSET);
       } catch (IOException e) {

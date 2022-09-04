@@ -89,7 +89,6 @@ public class StandaloneModule extends BlazeModule {
             env.getExecRoot(),
             localExecutionOptions,
             ResourceManager.instance(),
-            localEnvProvider,
-            env.getBlazeWorkspace().getBinTools());
+            localEnvProvider);
   }
 }

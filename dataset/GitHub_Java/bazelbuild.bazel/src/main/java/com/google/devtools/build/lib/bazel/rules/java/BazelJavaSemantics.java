@@ -856,9 +856,4 @@ public class BazelJavaSemantics implements JavaSemantics {
       throws InterruptedException {
     return null;
   }
-
-  @Override
-  public boolean isJavaProtoLibraryStrictDeps(RuleContext ruleContext) {
-    return false;
-  }
 }

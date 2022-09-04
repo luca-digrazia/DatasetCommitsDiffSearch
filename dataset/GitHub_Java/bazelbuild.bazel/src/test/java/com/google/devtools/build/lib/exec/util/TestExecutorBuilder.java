@@ -49,10 +49,11 @@ public class TestExecutorBuilder {
       ImmutableList.of(ExecutionOptions.class, CommonCommandOptions.class);
   private final FileSystem fileSystem;
   private final BlazeDirectories directories;
-  private Reporter reporter = new Reporter(new EventBus());
+  private EventBus bus = new EventBus();
+  private Reporter reporter = new Reporter(bus);
   private OptionsParser optionsParser = OptionsParser.newOptionsParser(DEFAULT_OPTIONS);
   private List<ActionContext> strategies = new ArrayList<>();
-  private final Map<String, List<SpawnActionContext>> spawnStrategyMap =
+  private Map<String, SpawnActionContext> spawnStrategyMap =
       new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
   public TestExecutorBuilder(
@@ -66,6 +67,11 @@ public class TestExecutorBuilder {
 
   public TestExecutorBuilder setReporter(Reporter reporter) {
     this.reporter = reporter;
+    return this;
+  }
+
+  public TestExecutorBuilder setBus(EventBus bus) {
+    this.bus = bus;
     return this;
   }
 
@@ -90,7 +96,7 @@ public class TestExecutorBuilder {
   }
 
   public TestExecutorBuilder setExecution(String mnemonic, SpawnActionContext strategy) {
-    spawnStrategyMap.put(mnemonic, ImmutableList.of(strategy));
+    spawnStrategyMap.put(mnemonic, strategy);
     strategies.add(strategy);
     return this;
   }
@@ -100,9 +106,10 @@ public class TestExecutorBuilder {
         fileSystem,
         directories.getExecRoot(TestConstants.WORKSPACE_NAME),
         reporter,
+        bus,
         BlazeClock.instance(),
         optionsParser,
         SpawnActionContextMaps.createStub(strategies, spawnStrategyMap),
-        ImmutableList.of());
+        ImmutableList.<ActionContextProvider>of());
   }
 }

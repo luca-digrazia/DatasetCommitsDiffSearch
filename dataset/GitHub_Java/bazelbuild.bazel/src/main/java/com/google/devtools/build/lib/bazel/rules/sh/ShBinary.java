@@ -24,16 +24,15 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.ShToolchain;
+import com.google.devtools.build.lib.analysis.actions.ExecutableSymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction.LaunchInfo;
-import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
+import com.google.devtools.build.lib.analysis.actions.Substitution;
+import com.google.devtools.build.lib.analysis.actions.Template;
+import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -41,6 +40,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  * Implementation for the sh_binary rule.
  */
 public class ShBinary implements RuleConfiguredTargetFactory {
+  private static final Template STUB_SCRIPT_WINDOWS =
+      Template.forResource(ShBinary.class, "sh_stub_template_windows.txt");
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
@@ -61,8 +62,7 @@ public class ShBinary implements RuleConfiguredTargetFactory {
     // happens when srcs = ['x', 'y'] but 'x' is an empty filegroup?). This is a pervasive
     // problem in Blaze.
     ruleContext.registerAction(
-        SymlinkAction.toExecutable(
-            ruleContext.getActionOwner(), src, symlink, "Symlinking " + ruleContext.getLabel()));
+        new ExecutableSymlinkAction(ruleContext.getActionOwner(), src, symlink));
 
     NestedSetBuilder<Artifact> filesToBuildBuilder =
         NestedSetBuilder.<Artifact>stableOrder().add(src).add(symlink);
@@ -93,11 +93,6 @@ public class ShBinary implements RuleConfiguredTargetFactory {
         .setFilesToBuild(filesToBuild)
         .setRunfilesSupport(runfilesSupport, mainExecutable)
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .addNativeDeclaredProvider(
-            InstrumentedFilesCollector.collectTransitive(
-                ruleContext,
-                new InstrumentationSpec(FileTypeSet.ANY_FILE, "srcs", "deps", "data"),
-                /* reportedToActualSources= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER)))
         .build();
   }
 
@@ -116,9 +111,6 @@ public class ShBinary implements RuleConfiguredTargetFactory {
         LaunchInfo.builder()
             .addKeyValuePair("binary_type", "Bash")
             .addKeyValuePair("workspace_name", ruleContext.getWorkspaceName())
-            .addKeyValuePair(
-                "symlink_runfiles_enabled",
-                ruleContext.getConfiguration().runfilesEnabled() ? "1" : "0")
             .addKeyValuePair("bash_bin_path", shExecutable.getPathString())
             .build();
 
@@ -143,6 +135,19 @@ public class ShBinary implements RuleConfiguredTargetFactory {
     }
 
     PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
-    return createWindowsExeLauncher(ruleContext, shExecutable);
+    if (ruleContext.getConfiguration().enableWindowsExeLauncher()) {
+      return createWindowsExeLauncher(ruleContext, shExecutable);
+    }
+
+    Artifact wrapper =
+        ruleContext.getImplicitOutputArtifact(ruleContext.getTarget().getName() + ".cmd");
+    ruleContext.registerAction(
+        new TemplateExpansionAction(
+            ruleContext.getActionOwner(),
+            wrapper,
+            STUB_SCRIPT_WINDOWS,
+            ImmutableList.of(Substitution.of("%bash_exe_path%", shExecutable.getPathString())),
+            true));
+    return wrapper;
   }
 }

@@ -17,30 +17,31 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.actions.Substitution;
+import com.google.devtools.build.lib.analysis.actions.Template;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
-import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
-import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import java.io.IOException;
-import java.util.stream.StreamSupport;
 import javax.annotation.Nullable;
 
-/** An implementation of the {@code android_instrumentation} rule. */
+/** An implementation of the {@code android_instrumentation_test} rule. */
 public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
 
   private static final Template ANDROID_INSTRUMENTATION_TEST_STUB_SCRIPT =
@@ -48,15 +49,29 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
           AndroidInstrumentationTest.class, "android_instrumentation_test_template.txt");
   private static final String TEST_SUITE_PROPERTY_NAME_FILE = "test_suite_property_name.txt";
 
+  /** Checks expected rule invariants, throws rule errors if anything is set wrong. */
+  private static void validateRuleContext(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
+    if (getInstrumentationProvider(ruleContext) == null) {
+      ruleContext.throwWithAttributeError(
+          "test_app",
+          String.format(
+              "The android_binary target %s is missing an 'instruments' attribute. Please set "
+                  + "it to the label of the android_binary under test.",
+              ruleContext.attributes().get("test_app", BuildType.LABEL)));
+    }
+  }
+
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException, RuleErrorException, ActionConflictException {
+    validateRuleContext(ruleContext);
+
     // The wrapper script that invokes the test entry point.
     Artifact testExecutable = createTestExecutable(ruleContext);
 
     ImmutableList<TransitiveInfoCollection> runfilesDeps =
         ImmutableList.<TransitiveInfoCollection>builder()
-            .addAll(ruleContext.getPrerequisites("instrumentations", Mode.TARGET))
             .addAll(ruleContext.getPrerequisites("fixtures", Mode.TARGET))
             .add(ruleContext.getPrerequisite("target_device", Mode.HOST))
             .add(ruleContext.getPrerequisite("$test_entry_point", Mode.HOST))
@@ -65,9 +80,12 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
     Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
             .addArtifact(testExecutable)
+            .addArtifact(getInstrumentationApk(ruleContext))
+            .addArtifact(getTargetApk(ruleContext))
             .addTargets(runfilesDeps, RunfilesProvider.DEFAULT_RUNFILES)
             .addTransitiveArtifacts(AndroidCommon.getSupportApks(ruleContext))
             .addTransitiveArtifacts(getAdb(ruleContext).getFilesToRun())
+            .merge(getAapt(ruleContext).getRunfilesSupport())
             .addArtifacts(getDataDeps(ruleContext))
             .build();
 
@@ -103,15 +121,12 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
         .add(Substitution.of("%workspace%", ruleContext.getWorkspaceName()))
         .add(Substitution.of("%test_label%", ruleContext.getLabel().getCanonicalForm()))
         .add(executableSubstitution("%adb%", getAdb(ruleContext)))
+        .add(executableSubstitution("%aapt%", getAapt(ruleContext)))
         .add(executableSubstitution("%device_script%", getTargetDevice(ruleContext)))
         .add(executableSubstitution("%test_entry_point%", getTestEntryPoint(ruleContext)))
-        .add(artifactListSubstitution("%target_apks%", getTargetApks(ruleContext)))
-        .add(
-            artifactListSubstitution("%instrumentation_apks%", getInstrumentationApks(ruleContext)))
+        .add(artifactSubstitution("%target_apk%", getTargetApk(ruleContext)))
+        .add(artifactSubstitution("%instrumentation_apk%", getInstrumentationApk(ruleContext)))
         .add(artifactListSubstitution("%support_apks%", getAllSupportApks(ruleContext)))
-        .add(Substitution.ofSpaceSeparatedMap("%test_args%", getTestArgs(ruleContext)))
-        .add(Substitution.ofSpaceSeparatedMap("%fixture_args%", getFixtureArgs(ruleContext)))
-        .add(Substitution.ofSpaceSeparatedMap("%log_levels%", getLogLevels(ruleContext)))
         .add(deviceScriptFixturesSubstitution(ruleContext))
         .addAll(hostServiceFixturesSubstitutions(ruleContext))
         .add(artifactListSubstitution("%data_deps%", getDataDeps(ruleContext)))
@@ -167,40 +182,37 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
     return Substitution.of(key, filesToRunProvider.getExecutable().getRunfilesPathString());
   }
 
+  private static Substitution artifactSubstitution(String key, Artifact artifact) {
+    return Substitution.of(key, artifact.getRunfilesPathString());
+  }
+
   private static Substitution artifactListSubstitution(String key, Iterable<Artifact> artifacts) {
     return Substitution.ofSpaceSeparatedList(
         key,
-        StreamSupport.stream(artifacts.spliterator(), false)
+        Streams.stream(artifacts)
             .map(Artifact::getRunfilesPathString)
             .collect(ImmutableList.toImmutableList()));
   }
 
-  /**
-   * The target APKs from each {@code android_instrumentation} in the {@code instrumentations}
-   * attribute.
-   */
-  private static Iterable<Artifact> getTargetApks(RuleContext ruleContext) {
-    return Iterables.transform(
-        ruleContext.getPrerequisites(
-            "instrumentations",
-            Mode.TARGET,
-            AndroidInstrumentationInfoProvider.ANDROID_INSTRUMENTATION_INFO.getKey(),
-            AndroidInstrumentationInfoProvider.class),
-        AndroidInstrumentationInfoProvider::getTargetApk);
+  @Nullable
+  private static AndroidInstrumentationInfo getInstrumentationProvider(RuleContext ruleContext) {
+    return ruleContext.getPrerequisite(
+        "test_app", Mode.TARGET, AndroidInstrumentationInfo.PROVIDER);
+  }
+
+  /** The target APK from the {@code android_binary} in the {@code instrumentation} attribute. */
+  @Nullable
+  private static Artifact getTargetApk(RuleContext ruleContext) {
+    return getInstrumentationProvider(ruleContext).getTargetApk();
   }
 
   /**
-   * The instrumentation APKs from each {@code android_instrumentation} in the {@code
-   * instrumentations} attribute.
+   * The instrumentation APK from the {@code android_binary} in the {@code instrumentation}
+   * attribute.
    */
-  private static Iterable<Artifact> getInstrumentationApks(RuleContext ruleContext) {
-    return Iterables.transform(
-        ruleContext.getPrerequisites(
-            "instrumentations",
-            Mode.TARGET,
-            AndroidInstrumentationInfoProvider.ANDROID_INSTRUMENTATION_INFO.getKey(),
-            AndroidInstrumentationInfoProvider.class),
-        AndroidInstrumentationInfoProvider::getInstrumentationApk);
+  @Nullable
+  private static Artifact getInstrumentationApk(RuleContext ruleContext) {
+    return getInstrumentationProvider(ruleContext).getInstrumentationApk();
   }
 
   /** The support APKs from the {@code support_apks} and {@code fixtures} attributes. */
@@ -210,15 +222,14 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
             .addTransitive(AndroidCommon.getSupportApks(ruleContext));
     for (AndroidDeviceScriptFixtureInfoProvider fixture :
         ruleContext.getPrerequisites(
-            "fixtures", Mode.TARGET, AndroidDeviceScriptFixtureInfoProvider.class)) {
+            "fixtures", Mode.TARGET, AndroidDeviceScriptFixtureInfoProvider.SKYLARK_CONSTRUCTOR)) {
       allSupportApks.addTransitive(fixture.getSupportApks());
     }
     for (AndroidHostServiceFixtureInfoProvider fixture :
         ruleContext.getPrerequisites(
             "fixtures",
             Mode.TARGET,
-            AndroidInstrumentationInfoProvider.ANDROID_INSTRUMENTATION_INFO.getKey(),
-            AndroidHostServiceFixtureInfoProvider.class)) {
+            AndroidHostServiceFixtureInfoProvider.ANDROID_HOST_SERVICE_FIXTURE_INFO)) {
       allSupportApks.addTransitive(fixture.getSupportApks());
     }
     return allSupportApks.build();
@@ -239,23 +250,13 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
     return AndroidSdkProvider.fromRuleContext(ruleContext).getAdb();
   }
 
-  /** Map of {@code test_args} for the test runner to make available to test test code. */
-  private static ImmutableMap<String, String> getTestArgs(RuleContext ruleContext) {
-    return ImmutableMap.copyOf(ruleContext.attributes().get("test_args", Type.STRING_DICT));
-  }
-
-  /** Map of {@code fixture_args} for the test runner to pass to the {@code fixtures}. */
-  private static ImmutableMap<String, String> getFixtureArgs(RuleContext ruleContext) {
-    return ImmutableMap.copyOf(ruleContext.attributes().get("fixture_args", Type.STRING_DICT));
-  }
-
-  /** Map of {@code log_levels} to enable before the test run. */
-  private static ImmutableMap<String, String> getLogLevels(RuleContext ruleContext) {
-    return ImmutableMap.copyOf(ruleContext.attributes().get("log_levels", Type.STRING_DICT));
+  /** AAPT binary from the Android SDK. */
+  private static FilesToRunProvider getAapt(RuleContext ruleContext) {
+    return AndroidSdkProvider.fromRuleContext(ruleContext).getAapt();
   }
 
   private static ImmutableList<Artifact> getDataDeps(RuleContext ruleContext) {
-    return ruleContext.getPrerequisiteArtifacts("data", Mode.DATA).list();
+    return ruleContext.getPrerequisiteArtifacts("data", Mode.DONT_CHECK).list();
   }
 
   /**
@@ -271,8 +272,7 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
             ruleContext.getPrerequisites(
                 "fixtures",
                 Mode.TARGET,
-                AndroidHostServiceFixtureInfoProvider.ANDROID_HOST_SERVICE_FIXTURE_INFO.getKey(),
-                AndroidHostServiceFixtureInfoProvider.class));
+                AndroidHostServiceFixtureInfoProvider.ANDROID_HOST_SERVICE_FIXTURE_INFO));
     if (hostServiceFixtures.size() > 1) {
       ruleContext.ruleError(
           "android_instrumentation_test accepts at most one android_host_service_fixture");
@@ -283,15 +283,12 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
   private static Iterable<AndroidDeviceScriptFixtureInfoProvider> getDeviceScriptFixtures(
       RuleContext ruleContext) {
     return ruleContext.getPrerequisites(
-        "fixtures",
-        Mode.TARGET,
-        AndroidDeviceScriptFixtureInfoProvider.ANDROID_DEVICE_SCRIPT_FIXTURE_INFO.getKey(),
-        AndroidDeviceScriptFixtureInfoProvider.class);
+        "fixtures", Mode.TARGET, AndroidDeviceScriptFixtureInfoProvider.SKYLARK_CONSTRUCTOR);
   }
 
   private static String getDeviceBrokerType(RuleContext ruleContext) {
     return ruleContext
-        .getPrerequisite("target_device", Mode.HOST, DeviceBrokerTypeProvider.class)
+        .getPrerequisite("target_device", Mode.HOST, AndroidDeviceBrokerInfo.PROVIDER)
         .getDeviceBrokerType();
   }
 
@@ -306,7 +303,8 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
       throws RuleErrorException {
     try {
       return ResourceFileLoader.loadResource(
-          AndroidInstrumentationTest.class, TEST_SUITE_PROPERTY_NAME_FILE);
+              AndroidInstrumentationTest.class, TEST_SUITE_PROPERTY_NAME_FILE)
+          .trim();
     } catch (IOException e) {
       ruleContext.throwWithRuleError("Cannot load test suite property name: " + e.getMessage());
       return null;
@@ -314,21 +312,17 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Propagates the {@link ExecutionInfoProvider} from the {@code android_device} rule in the {@code
+   * Propagates the {@link ExecutionInfo} from the {@code android_device} rule in the {@code
    * target_device} attribute.
    *
    * <p>This allows the dependent {@code android_device} rule to specify some requirements on the
    * machine that the {@code android_instrumentation_test} runs on.
    */
-  private static ExecutionInfoProvider getExecutionInfoProvider(RuleContext ruleContext) {
-    ExecutionInfoProvider executionInfoProvider =
-        (ExecutionInfoProvider)
-            ruleContext.getPrerequisite(
-                "target_device", Mode.HOST, ExecutionInfoProvider.SKYLARK_CONSTRUCTOR.getKey());
+  private static ExecutionInfo getExecutionInfoProvider(RuleContext ruleContext) {
+    ExecutionInfo executionInfo =
+        ruleContext.getPrerequisite("target_device", Mode.HOST, ExecutionInfo.PROVIDER);
     ImmutableMap<String, String> executionRequirements =
-        (executionInfoProvider != null)
-            ? executionInfoProvider.getExecutionInfo()
-            : ImmutableMap.of();
-    return new ExecutionInfoProvider(executionRequirements);
+        (executionInfo != null) ? executionInfo.getExecutionInfo() : ImmutableMap.of();
+    return new ExecutionInfo(executionRequirements);
   }
 }

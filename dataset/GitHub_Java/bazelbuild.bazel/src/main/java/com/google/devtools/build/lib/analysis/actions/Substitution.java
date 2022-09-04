@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * A pair of a string to be substituted and a string to substitute it with. For simplicity, these
@@ -101,24 +102,6 @@ public abstract class Substitution {
     return new ListSubstitution(key, value);
   }
 
-  /**
-   * Returns an immutable Substitution instance for the key and list of values. The values will be
-   * joined by the given string before substitution.
-   */
-  public static Substitution ofJoinedShortPaths(
-      String key, ImmutableList<Artifact> artifacts, String joinStr) {
-    return new JoinedArtifactListShortPathSubstitution(key, artifacts, joinStr);
-  }
-
-  /**
-   * Returns an immutable Substitution instance for the key and list of values. The values will be
-   * joined by the given string before substitution.
-   */
-  public static Substitution ofJoinedShortPaths(
-      String key, NestedSet<Artifact> artifacts, String joinStr) {
-    return new JoinedArtifactNestedSetShortPathSubstitution(key, artifacts, joinStr);
-  }
-
   @Override
   public boolean equals(Object object) {
     if (this == object) {
@@ -166,7 +149,7 @@ public abstract class Substitution {
   /**
    * Expands a fragment value.
    *
-   * <p>This is slightly more memory efficient since it defers the expansion of the path fragment's
+   * <p>This is slighly more memory efficient since it defers the expansion of the path fragment's
    * string until requested. Often a template action is never executed, meaning the string is never
    * needed.
    */
@@ -212,40 +195,23 @@ public abstract class Substitution {
    * <p>This is much more memory efficient than eagerly joining them into a string.
    */
   @AutoCodec
-  public static final class JoinedArtifactListShortPathSubstitution extends ComputedSubstitution {
-    private final ImmutableList<Artifact> artifacts;
+  public static final class JoinedArtifactShortPathSubstitution extends ComputedSubstitution {
+    private final Iterable<Artifact> artifacts;
     private final String joinStr;
 
-    @AutoCodec.Instantiator
-    public JoinedArtifactListShortPathSubstitution(
+    public JoinedArtifactShortPathSubstitution(
         String key, ImmutableList<Artifact> artifacts, String joinStr) {
-      super(key);
-      this.artifacts = artifacts;
-      this.joinStr = joinStr;
+      this(key, (Iterable<Artifact>) artifacts, joinStr);
     }
 
-    @Override
-    public String getValue() {
-      return artifacts.stream()
-          .map(artifact -> artifact.getRootRelativePath().getPathString())
-          .collect(Collectors.joining(joinStr));
-    }
-  }
-
-  /**
-   * Expands a collection of artifacts to their short (root relative paths).
-   *
-   * <p>This is much more memory efficient than eagerly joining them into a string.
-   */
-  @AutoCodec
-  public static final class JoinedArtifactNestedSetShortPathSubstitution
-      extends ComputedSubstitution {
-    private final NestedSet<Artifact> artifacts;
-    private final String joinStr;
-
-    @AutoCodec.Instantiator
-    public JoinedArtifactNestedSetShortPathSubstitution(
+    public JoinedArtifactShortPathSubstitution(
         String key, NestedSet<Artifact> artifacts, String joinStr) {
+      this(key, (Iterable<Artifact>) artifacts, joinStr);
+    }
+
+    @AutoCodec.VisibleForSerialization
+    @AutoCodec.Instantiator
+    JoinedArtifactShortPathSubstitution(String key, Iterable<Artifact> artifacts, String joinStr) {
       super(key);
       this.artifacts = artifacts;
       this.joinStr = joinStr;
@@ -253,7 +219,7 @@ public abstract class Substitution {
 
     @Override
     public String getValue() {
-      return artifacts.toList().stream()
+      return StreamSupport.stream(artifacts.spliterator(), false)
           .map(artifact -> artifact.getRootRelativePath().getPathString())
           .collect(Collectors.joining(joinStr));
     }

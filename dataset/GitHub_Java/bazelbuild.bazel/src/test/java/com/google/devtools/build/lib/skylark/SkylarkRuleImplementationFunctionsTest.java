@@ -401,13 +401,13 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testRunShellArgumentsWithCommandSequence() throws Exception {
+  public void testCreateSpawnActionCommandsListTooShort() throws Exception {
     checkErrorContains(
         createRuleContext("//foo:foo"),
-        "'arguments' must be empty if 'command' is a sequence of strings",
-        "ruleContext.actions.run_shell(outputs = ruleContext.files.srcs,",
-        "  command = [\"echo\", \"'hello world'\", \"&&\", \"touch\"],",
-        "  arguments = [ruleContext.files.srcs[0].path])");
+        "'command' list has to be of size at least 3",
+        "ruleContext.actions.run_shell(",
+        "  outputs = ruleContext.files.srcs,",
+        "  command = ['dummy_command', '--arg'])");
   }
 
   private void setupToolInInputsTest(String... ruleImpl) throws Exception {
@@ -2379,10 +2379,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         ruleContext,
         "Invalid value for parameter \"param_file_arg\": Expected string with a single \"%s\"",
         "args = ruleContext.actions.args()\n" + "args.use_param_file('--file=')");
-    checkError(
-        ruleContext,
-        "Invalid value for parameter \"param_file_arg\": Expected string with a single \"%s\"",
-        "args = ruleContext.actions.args()\n" + "args.use_param_file('--file=%s%s')");
   }
 
   @Test

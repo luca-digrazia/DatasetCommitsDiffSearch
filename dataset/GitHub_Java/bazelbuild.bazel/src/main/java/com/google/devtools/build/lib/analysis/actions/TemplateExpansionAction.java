@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -115,8 +114,7 @@ public final class TemplateExpansionAction extends AbstractAction {
 
   @VisibleForTesting
   public String getFileContents() throws IOException {
-    return LocalTemplateExpansionStrategy.INSTANCE.getExpandedTemplateUnsafe(this,
-        ArtifactPathResolver.IDENTITY);
+    return LocalTemplateExpansionStrategy.INSTANCE.getExpandedTemplateUnsafe(this);
   }
 
   @Override
