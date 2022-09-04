@@ -104,29 +104,32 @@ public abstract class Query implements ContentPackable<QueryEntity> {
         final boolean hasKeepSearchTypes = state.hasNonNull("keep_search_types");
         if (hasTimerange || hasQuery || hasSearchTypes || hasKeepSearchTypes) {
             final Builder builder = toBuilder();
-
-            if (hasTimerange || hasQuery) {
-                final GlobalOverride.Builder globalOverrideBuilder = globalOverride().map(GlobalOverride::toBuilder)
-                        .orElseGet(GlobalOverride::builder);
-                if (hasTimerange) {
-                    try {
-                        final Object rawTimerange = state.path("timerange");
-                        final TimeRange newTimeRange = objectMapper.convertValue(rawTimerange, TimeRange.class);
-                        globalOverrideBuilder.timerange(newTimeRange);
-                        builder.timerange(newTimeRange);
-                    } catch (Exception e) {
-                        LOG.error("Unable to deserialize execution state for time range", e);
-                    }
+            if (hasTimerange) {
+                try {
+                    final Object rawTimerange = state.path("timerange");
+                    final TimeRange newTimeRange = objectMapper.convertValue(rawTimerange, TimeRange.class);
+                    builder.globalOverride(
+                            globalOverride().map(GlobalOverride::toBuilder)
+                                    .orElseGet(GlobalOverride::builder)
+                                    .timerange(newTimeRange)
+                                    .build()
+                    );
+                    builder.timerange(newTimeRange);
+                } catch (Exception e) {
+                    LOG.error("Unable to deserialize execution state for time range", e);
                 }
-                if (hasQuery) {
-                    final Object rawQuery = state.path("query");
-                    final BackendQuery newQuery = objectMapper.convertValue(rawQuery, BackendQuery.class);
-                    globalOverrideBuilder.query(newQuery);
-                    builder.query(newQuery);
-                }
-                builder.globalOverride(globalOverrideBuilder.build());
             }
-
+            if (hasQuery) {
+                final Object rawQuery = state.path("query");
+                final BackendQuery newQuery = objectMapper.convertValue(rawQuery, BackendQuery.class);
+                builder.globalOverride(
+                        globalOverride().map(GlobalOverride::toBuilder)
+                                .orElseGet(GlobalOverride::builder)
+                                .query(newQuery)
+                                .build()
+                );
+                builder.query(newQuery);
+            }
             if (hasSearchTypes || hasKeepSearchTypes) {
                 final Set<SearchType> searchTypesToKeep = hasKeepSearchTypes
                         ? filterForWhiteListFromState(searchTypes(), state)
@@ -207,6 +210,10 @@ public abstract class Query implements ContentPackable<QueryEntity> {
             return streamIdFilter;
         }
         return AndFilter.and(streamIdFilter, filter);
+    }
+
+    boolean hasSearchTypes() {
+        return !searchTypes().isEmpty();
     }
 
     @AutoValue.Builder

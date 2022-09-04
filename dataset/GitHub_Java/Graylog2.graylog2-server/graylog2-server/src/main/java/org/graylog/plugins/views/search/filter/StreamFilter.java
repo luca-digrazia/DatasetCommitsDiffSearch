@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.views.search.filter;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -8,7 +24,10 @@ import com.google.auto.value.AutoValue;
 import org.graylog.plugins.views.search.Filter;
 
 import javax.annotation.Nullable;
+import java.util.Arrays;
 import java.util.Set;
+
+import static java.util.stream.Collectors.toSet;
 
 @AutoValue
 @JsonTypeName(StreamFilter.NAME)
@@ -37,12 +56,28 @@ public abstract class StreamFilter implements Filter {
         return Builder.create();
     }
 
+    public abstract Builder toBuilder();
+
     public static StreamFilter ofId(String id) {
         return builder().streamId(id).build();
     }
 
+    public static Filter anyIdOf(String... ids) {
+        final Set<Filter> streamFilters = Arrays.stream(ids)
+                .map(StreamFilter::ofId)
+                .collect(toSet());
+        return OrFilter.builder()
+                .filters(streamFilters)
+                .build();
+    }
+
+    @Override
+    public Filter.Builder toGenericBuilder() {
+        return toBuilder();
+    }
+
     @AutoValue.Builder
-    public abstract static class Builder {
+    public abstract static class Builder implements Filter.Builder {
         @JsonProperty
         public abstract Builder type(String type);
 

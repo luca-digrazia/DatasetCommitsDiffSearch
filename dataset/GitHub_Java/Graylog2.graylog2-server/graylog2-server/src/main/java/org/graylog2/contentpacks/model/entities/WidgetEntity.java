@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-package org.graylog.plugins.views.search.views;
+package org.graylog2.contentpacks.model.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -23,23 +23,26 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
 import org.graylog.autovalue.WithBeanGetter;
 import org.graylog.plugins.views.search.engine.BackendQuery;
-import org.graylog2.contentpacks.ContentPackable;
-import org.graylog2.contentpacks.EntityDescriptorIds;
+import org.graylog.plugins.views.search.views.WidgetConfigDTO;
+import org.graylog.plugins.views.search.views.WidgetDTO;
+import org.graylog2.contentpacks.NativeEntityConverter;
+import org.graylog2.contentpacks.exceptions.ContentPackException;
 import org.graylog2.contentpacks.model.ModelTypes;
-import org.graylog2.contentpacks.model.entities.EntityDescriptor;
-import org.graylog2.contentpacks.model.entities.WidgetEntity;
+import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.plugin.streams.Stream;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @AutoValue
-@JsonDeserialize(builder = WidgetDTO.Builder.class)
+@JsonDeserialize(builder = WidgetEntity.Builder.class)
 @WithBeanGetter
-public abstract class WidgetDTO implements ContentPackable<WidgetEntity> {
+public abstract class WidgetEntity implements NativeEntityConverter<WidgetDTO> {
     public static final String FIELD_ID = "id";
     public static final String FIELD_TYPE = "type";
     public static final String FIELD_FILTER = "filter";
@@ -72,7 +75,7 @@ public abstract class WidgetDTO implements ContentPackable<WidgetEntity> {
 
     public static Builder builder() {
         return Builder.builder();
-    };
+    }
 
     @AutoValue.Builder
     public static abstract class Builder {
@@ -98,38 +101,45 @@ public abstract class WidgetDTO implements ContentPackable<WidgetEntity> {
         @JsonTypeInfo(
                 use = JsonTypeInfo.Id.NAME,
                 include = JsonTypeInfo.As.EXTERNAL_PROPERTY,
-                property = WidgetDTO.FIELD_TYPE,
-                visible = true,
-                defaultImpl = UnknownWidgetConfigDTO.class)
+                property = FIELD_TYPE,
+                visible = true)
         public abstract Builder config(WidgetConfigDTO config);
 
-        public abstract WidgetDTO build();
+        public abstract WidgetEntity build();
 
         @JsonCreator
         static Builder builder() {
-            return new AutoValue_WidgetDTO.Builder().streams(Collections.emptySet());
+            return new AutoValue_WidgetEntity.Builder().streams(Collections.emptySet());
         }
     }
 
     @Override
-    public WidgetEntity toContentPackEntity(EntityDescriptorIds entityDescriptorIds) {
-        Set<String> mappedStreams = streams().stream().map(streamId ->
-                entityDescriptorIds.get(EntityDescriptor.create(streamId, ModelTypes.STREAM_V1)))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toSet());
-        final WidgetEntity.Builder builder = WidgetEntity.builder()
-                .id(this.id())
+    public WidgetDTO toNativeEntity(Map<String, ValueReference> parameters, Map<EntityDescriptor, Object> nativeEntities) {
+        final WidgetDTO.Builder widgetBuilder = WidgetDTO.builder()
                 .config(this.config())
                 .filter(this.filter())
-                .streams(mappedStreams)
+                .id(this.id())
+                .streams(this.streams().stream()
+                        .map(id -> EntityDescriptor.create(id, ModelTypes.STREAM_V1))
+                        .map(nativeEntities::get)
+                        .map(object -> {
+                            if (object == null) {
+                                throw new ContentPackException("Missing Stream for event definition");
+                            } else if (object instanceof Stream) {
+                                Stream stream = (Stream) object;
+                                return stream.getId();
+                            } else {
+                                throw new ContentPackException(
+                                        "Invalid type for stream Stream for event definition: " + object.getClass());
+                            }
+                        }).collect(Collectors.toSet()))
                 .type(this.type());
         if (this.query().isPresent()) {
-            builder.query(this.query().get());
+            widgetBuilder.query(this.query().get());
         }
         if (this.timerange().isPresent()) {
-            builder.timerange(this.timerange().get());
+            widgetBuilder.timerange(this.timerange().get());
         }
-        return builder.build();
+        return widgetBuilder.build();
     }
 }

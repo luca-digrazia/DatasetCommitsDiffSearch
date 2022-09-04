@@ -21,20 +21,17 @@ import com.google.inject.Scopes;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import org.graylog.plugins.views.audit.ViewsAuditEventTypes;
 import org.graylog.plugins.views.migrations.V20181220133700_AddViewsAdminRole;
-import org.graylog.plugins.views.migrations.V20190127111728_MigrateWidgetFormatSettings;
 import org.graylog.plugins.views.migrations.V20190304102700_MigrateMessageListStructure;
 import org.graylog.plugins.views.migrations.V20190805115800_RemoveDashboardStateFromViews;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.V20191125144500_MigrateDashboardsToViews;
 import org.graylog.plugins.views.migrations.V20191204000000_RemoveLegacyViewsPermissions;
 import org.graylog.plugins.views.migrations.V20191203120602_MigrateSavedSearchesToViewsSupport.V20191203120602_MigrateSavedSearchesToViews;
-import org.graylog.plugins.views.migrations.V20200204122000_MigrateUntypedViewsToDashboards.V20200204122000_MigrateUntypedViewsToDashboards;
 import org.graylog.plugins.views.search.SearchRequirements;
 import org.graylog.plugins.views.search.SearchRequiresParameterSupport;
 import org.graylog.plugins.views.search.ValueParameter;
 import org.graylog.plugins.views.search.db.InMemorySearchJobService;
 import org.graylog.plugins.views.search.db.SearchJobService;
 import org.graylog.plugins.views.search.db.SearchesCleanUpJob;
-import org.graylog.plugins.views.search.elasticsearch.ESGeneratedQueryContext;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
 import org.graylog.plugins.views.search.filter.AndFilter;
 import org.graylog.plugins.views.search.filter.OrFilter;
@@ -146,8 +143,6 @@ public class ViewsBindings extends ViewsModule {
         addMigration(V20191204000000_RemoveLegacyViewsPermissions.class);
         addMigration(V20191125144500_MigrateDashboardsToViews.class);
         addMigration(V20191203120602_MigrateSavedSearchesToViews.class);
-        addMigration(V20190127111728_MigrateWidgetFormatSettings.class);
-        addMigration(V20200204122000_MigrateUntypedViewsToDashboards.class);
 
         addAuditEventTypes(ViewsAuditEventTypes.class);
 
@@ -158,7 +153,6 @@ public class ViewsBindings extends ViewsModule {
 
         install(new FactoryModuleBuilder().build(ViewRequirements.Factory.class));
         install(new FactoryModuleBuilder().build(SearchRequirements.Factory.class));
-        install(new FactoryModuleBuilder().build(ESGeneratedQueryContext.Factory.class));
 
         registerViewRequirement(RequiresParameterSupport.class);
         registerSearchRequirement(SearchRequiresParameterSupport.class);
