@@ -1,10 +1,7 @@
 package org.graylog2.outputs;
 
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
-import com.google.common.collect.Lists;
+import com.beust.jcommander.internal.Lists;
+import com.codahale.metrics.*;
 import org.graylog2.Configuration;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Message;
@@ -16,6 +13,7 @@ import javax.inject.Inject;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -46,26 +44,20 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
     }
 
     @Override
-    public void write(Message message) throws Exception {
+    public void write(List<Message> messages, OutputStreamConfiguration streamConfig) throws Exception {
         synchronized (this.buffer) {
-            this.buffer.add(message);
+            this.buffer.addAll(messages);
             if (this.buffer.size() >= maxBufferSize) {
                 flush();
             }
         }
     }
 
-    @Override
-    public String getHumanName() {
-        return "ElasticSearch Output with Batching";
-    }
-
     public void synchronousFlush(List<Message> mybuffer) {
         LOG.debug("[{}] Starting flushing {} messages", Thread.currentThread(), mybuffer.size());
 
         try(Timer.Context context = this.processTime.time()) {
-            for (Message message : mybuffer)
-                super.write(message);
+            super.write(mybuffer, null);
             this.batchSize.update(mybuffer.size());
             this.bufferFlushes.mark();
         } catch (Exception e) {
