@@ -75,7 +75,6 @@ import javax.annotation.Nullable;
 @Immutable
 @AutoCodec
 public final class JavaCompileAction extends SpawnAction {
-
   private static final String JACOCO_INSTRUMENTATION_PROCESSOR = "jacoco";
 
   private static final ResourceSet LOCAL_RESOURCES =
@@ -88,7 +87,6 @@ public final class JavaCompileAction extends SpawnAction {
   // TODO(#3320): This is missing the configuration's action environment!
   static final ActionEnvironment UTF8_ACTION_ENVIRONMENT =
       ActionEnvironment.create(UTF8_ENVIRONMENT);
-  public static final String MNEMONIC = "Javac";
 
   private final CommandLine javaCompileCommandLine;
 
@@ -136,8 +134,10 @@ public final class JavaCompileAction extends SpawnAction {
   /** The subset of classpath jars provided by direct dependencies. */
   private final NestedSet<Artifact> directJars;
 
-  /** The level of strict dependency checks (off, warnings, or errors). */
-  private final StrictDepsMode strictJavaDeps;
+  /**
+   * The level of strict dependency checks (off, warnings, or errors).
+   */
+  private final BuildConfiguration.StrictDepsMode strictJavaDeps;
 
   /** The tool with which to fix dependency errors. */
   private final String fixDepsTool;
@@ -215,7 +215,7 @@ public final class JavaCompileAction extends SpawnAction {
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
         runfilesSupplier,
-        MNEMONIC,
+        "Javac",
         /* executeUnconditionally= */ false,
         /* extraActionInfoSupplier= */ null);
     this.javaCompileCommandLine = javaCompileCommandLine;
@@ -300,7 +300,7 @@ public final class JavaCompileAction extends SpawnAction {
   }
 
   @VisibleForTesting
-  public StrictDepsMode getStrictJavaDepsMode() {
+  public BuildConfiguration.StrictDepsMode getStrictJavaDepsMode() {
     return strictJavaDeps;
   }
 
@@ -434,10 +434,8 @@ public final class JavaCompileAction extends SpawnAction {
     private Artifact artifactForExperimentalCoverage;
     private ImmutableSet<Artifact> sourceFiles = ImmutableSet.of();
     private final Collection<Artifact> sourceJars = new ArrayList<>();
-
-    /** @see {@link #setStrictJavaDeps}. */
-    private StrictDepsMode strictJavaDeps = StrictDepsMode.ERROR;
-
+    private BuildConfiguration.StrictDepsMode strictJavaDeps =
+        BuildConfiguration.StrictDepsMode.OFF;
     private String fixDepsTool = "add_dep";
     private NestedSet<Artifact> directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     private NestedSet<Artifact> compileTimeDependencyArtifacts =
@@ -504,7 +502,7 @@ public final class JavaCompileAction extends SpawnAction {
 
       // Invariant: if strictJavaDeps is OFF, then directJars and
       // dependencyArtifacts are ignored
-      if (strictJavaDeps == StrictDepsMode.OFF) {
+      if (strictJavaDeps == BuildConfiguration.StrictDepsMode.OFF) {
         directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
         compileTimeDependencyArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
       }
@@ -723,7 +721,7 @@ public final class JavaCompileAction extends SpawnAction {
 
       // strict_java_deps controls whether the mapping from jars to targets is
       // written out and whether we try to minimize the compile-time classpath.
-      if (strictJavaDeps != StrictDepsMode.OFF) {
+      if (strictJavaDeps != BuildConfiguration.StrictDepsMode.OFF) {
         result.add("--strict_java_deps", strictJavaDeps.toString());
         result.addExecPaths("--direct_dependencies", directJars);
 
@@ -870,11 +868,9 @@ public final class JavaCompileAction extends SpawnAction {
 
     /**
      * Sets the strictness of Java dependency checking, see {@link
-     * com.google.devtools.build.lib.analysis.config.StrictDepsMode}.
-     *
-     * <p>Defaults to {@link StrictDepsMode#ERROR}.
+     * com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode}.
      */
-    public Builder setStrictJavaDeps(StrictDepsMode strictDeps) {
+    public Builder setStrictJavaDeps(BuildConfiguration.StrictDepsMode strictDeps) {
       strictJavaDeps = strictDeps;
       return this;
     }
