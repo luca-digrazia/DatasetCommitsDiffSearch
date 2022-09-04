@@ -2,44 +2,27 @@ package io.quarkus.smallrye.openapi.deployment;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
-import org.eclipse.microprofile.openapi.models.parameters.Parameter.In;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.MethodParameterInfo;
 import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 
 import io.quarkus.deployment.util.ServiceUtil;
-import io.quarkus.resteasy.deployment.ResteasyJaxrsConfigBuildItem;
-import io.smallrye.openapi.api.OpenApiConstants;
-import io.smallrye.openapi.runtime.scanner.DefaultAnnotationScannerExtension;
-import io.smallrye.openapi.runtime.scanner.OpenApiAnnotationScanner;
-import io.smallrye.openapi.runtime.util.JandexUtil;
-import io.smallrye.openapi.runtime.util.JandexUtil.JaxRsParameterInfo;
+import io.smallrye.openapi.runtime.scanner.AnnotationScannerExtension;
 
-public class RESTEasyExtension extends DefaultAnnotationScannerExtension {
+public class RESTEasyExtension implements AnnotationScannerExtension {
 
-    public static final DotName DOTNAME_QUERY_PARAM = DotName.createSimple("org.jboss.resteasy.annotations.jaxrs.QueryParam");
-    public static final DotName DOTNAME_FORM_PARAM = DotName.createSimple("org.jboss.resteasy.annotations.jaxrs.FormParam");
-    public static final DotName DOTNAME_COOKIE_PARAM = DotName.createSimple("org.jboss.resteasy.annotations.jaxrs.CookieParam");
-    public static final DotName DOTNAME_PATH_PARAM = DotName.createSimple("org.jboss.resteasy.annotations.jaxrs.PathParam");
-    public static final DotName DOTNAME_HEADER_PARAM = DotName.createSimple("org.jboss.resteasy.annotations.jaxrs.HeaderParam");
-    public static final DotName DOTNAME_MATRIX_PARAM = DotName.createSimple("org.jboss.resteasy.annotations.jaxrs.MatrixParam");
     private static final DotName DOTNAME_PROVIDER = DotName.createSimple("javax.ws.rs.ext.Provider");
     private static final DotName DOTNAME_ASYNC_RESPONSE_PROVIDER = DotName
             .createSimple("org.jboss.resteasy.spi.AsyncResponseProvider");
 
-    private List<DotName> asyncTypes = new ArrayList<>();
-    private String defaultPath;
+    private final List<DotName> asyncTypes = new ArrayList<>();
 
-    public RESTEasyExtension(ResteasyJaxrsConfigBuildItem jaxrsConfig, IndexView index) {
-        this.defaultPath = jaxrsConfig.defaultPath;
+    public RESTEasyExtension(IndexView index) {
         // the index is not enough to scan for providers because it does not contain
         // dependencies, so we have to rely on scanning the declared providers via services
         scanAsyncResponseProvidersFromServices();
@@ -63,7 +46,8 @@ public class RESTEasyExtension extends DefaultAnnotationScannerExtension {
 
     private void scanAsyncResponseProvidersFromClassName(Class<?> asyncResponseProviderClass, String name) {
         try {
-            Class<?> klass = Class.forName(name);
+            Class<?> klass = Class.forName(name, false,
+                    Thread.currentThread().getContextClassLoader());
             if (asyncResponseProviderClass.isAssignableFrom(klass)) {
                 for (java.lang.reflect.Type type : klass.getGenericInterfaces()) {
                     if (type instanceof java.lang.reflect.ParameterizedType) {
@@ -106,86 +90,14 @@ public class RESTEasyExtension extends DefaultAnnotationScannerExtension {
     }
 
     @Override
-    public JaxRsParameterInfo getMethodParameterJaxRsInfo(MethodInfo method, int idx) {
-        AnnotationInstance jaxRsAnno = JandexUtil.getMethodParameterAnnotation(method, idx, DOTNAME_PATH_PARAM);
-        if (jaxRsAnno != null) {
-            JaxRsParameterInfo info = new JaxRsParameterInfo();
-            info.in = In.PATH;
-            info.name = JandexUtil.stringValue(jaxRsAnno, OpenApiConstants.PROP_VALUE);
-            if (info.name == null)
-                info.name = method.parameterName(idx);
-            return info;
-        }
-
-        jaxRsAnno = JandexUtil.getMethodParameterAnnotation(method, idx, DOTNAME_QUERY_PARAM);
-        if (jaxRsAnno != null) {
-            JaxRsParameterInfo info = new JaxRsParameterInfo();
-            info.in = In.QUERY;
-            info.name = JandexUtil.stringValue(jaxRsAnno, OpenApiConstants.PROP_VALUE);
-            if (info.name == null)
-                info.name = method.parameterName(idx);
-            return info;
-        }
-
-        jaxRsAnno = JandexUtil.getMethodParameterAnnotation(method, idx, DOTNAME_COOKIE_PARAM);
-        if (jaxRsAnno != null) {
-            JaxRsParameterInfo info = new JaxRsParameterInfo();
-            info.in = In.COOKIE;
-            info.name = JandexUtil.stringValue(jaxRsAnno, OpenApiConstants.PROP_VALUE);
-            if (info.name == null)
-                info.name = method.parameterName(idx);
-            return info;
-        }
-
-        jaxRsAnno = JandexUtil.getMethodParameterAnnotation(method, idx, DOTNAME_HEADER_PARAM);
-        if (jaxRsAnno != null) {
-            JaxRsParameterInfo info = new JaxRsParameterInfo();
-            info.in = In.HEADER;
-            info.name = JandexUtil.stringValue(jaxRsAnno, OpenApiConstants.PROP_VALUE);
-            if (info.name == null)
-                info.name = method.parameterName(idx);
-            return info;
-        }
-
-        return null;
-    }
-
-    @Override
-    public In parameterIn(MethodParameterInfo paramInfo) {
-        MethodInfo method = paramInfo.method();
-        short paramPosition = paramInfo.position();
-        List<AnnotationInstance> annotations = JandexUtil.getParameterAnnotations(method, paramPosition);
-        for (AnnotationInstance annotation : annotations) {
-            if (annotation.name().equals(DOTNAME_QUERY_PARAM)) {
-                return In.QUERY;
-            }
-            if (annotation.name().equals(DOTNAME_PATH_PARAM)) {
-                return In.PATH;
-            }
-            if (annotation.name().equals(DOTNAME_HEADER_PARAM)) {
-                return In.HEADER;
-            }
-            if (annotation.name().equals(DOTNAME_COOKIE_PARAM)) {
-                return In.COOKIE;
-            }
-        }
-        return null;
-    }
-
-    @Override
     public Type resolveAsyncType(Type type) {
         if (type.kind() == Type.Kind.PARAMETERIZED_TYPE
                 && asyncTypes.contains(type.name())) {
             ParameterizedType pType = type.asParameterizedType();
-            if (pType.arguments().size() == 1)
+            if (pType.arguments().size() == 1) {
                 return pType.arguments().get(0);
+            }
         }
-        return super.resolveAsyncType(type);
-    }
-
-    @Override
-    public void processJaxRsApplications(OpenApiAnnotationScanner scanner, Collection<ClassInfo> applications) {
-        if (applications.isEmpty())
-            scanner.setCurrentAppPath(defaultPath);
+        return null;
     }
 }
