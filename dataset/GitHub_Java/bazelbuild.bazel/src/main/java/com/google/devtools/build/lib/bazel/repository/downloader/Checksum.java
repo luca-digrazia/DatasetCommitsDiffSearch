@@ -20,13 +20,6 @@ import java.util.Base64;
 
 /** The content checksum for an HTTP download, which knows its own type. */
 public class Checksum {
-  /** Exception thrown to indicate that a string is not a valid checksum for that key type. */
-  public static final class InvalidChecksumException extends Exception {
-    private InvalidChecksumException(KeyType keyType, String hash) {
-      super("Invalid " + keyType + " checksum '" + hash + "'");
-    }
-  }
-
   private final KeyType keyType;
   private final HashCode hashCode;
 
@@ -36,16 +29,15 @@ public class Checksum {
   }
 
   /** Constructs a new Checksum for a given key type and hash, in hex format. */
-  public static Checksum fromString(KeyType keyType, String hash) throws InvalidChecksumException {
+  public static Checksum fromString(KeyType keyType, String hash) {
     if (!keyType.isValid(hash)) {
-      throw new InvalidChecksumException(keyType, hash);
+      throw new IllegalArgumentException("Invalid " + keyType + " checksum '" + hash + "'");
     }
     return new Checksum(keyType, HashCode.fromString(hash));
   }
 
   /** Constructs a new Checksum from a hash in Subresource Integrity format. */
-  public static Checksum fromSubresourceIntegrity(String integrity)
-      throws InvalidChecksumException {
+  public static Checksum fromSubresourceIntegrity(String integrity) {
     Base64.Decoder decoder = Base64.getDecoder();
     KeyType keyType = null;
     byte[] hash = null;
