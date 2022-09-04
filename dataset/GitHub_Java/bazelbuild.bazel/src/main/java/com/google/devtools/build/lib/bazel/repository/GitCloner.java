@@ -256,7 +256,6 @@ public class GitCloner {
           Transience.PERSISTENT);
     } finally {
       if (git != null) {
-        git.getRepository().close();
         git.close();
       }
       if (fetchEvent != null) {
