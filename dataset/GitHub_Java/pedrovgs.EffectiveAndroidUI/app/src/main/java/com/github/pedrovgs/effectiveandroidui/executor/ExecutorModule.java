@@ -11,7 +11,7 @@ import javax.inject.Singleton;
  * @author Pedro Vicente Gómez Sánchez
  */
 @Module(library = true)
-public final class ExecutorModule {
+public class ExecutorModule {
 
   @Provides @Singleton Executor provideExecutor(ThreadExecutor threadExecutor) {
     return threadExecutor;
