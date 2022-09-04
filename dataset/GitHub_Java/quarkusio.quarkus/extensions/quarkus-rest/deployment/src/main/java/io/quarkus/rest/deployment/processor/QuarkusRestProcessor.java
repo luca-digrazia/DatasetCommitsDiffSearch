@@ -803,7 +803,7 @@ public class QuarkusRestProcessor {
     }
 
     private String sanitizeApplicationPath(String applicationPath) {
-        if ((applicationPath == null) || applicationPath.isEmpty() || "/".equals(applicationPath)) {
+        if ((applicationPath == null) || applicationPath.isEmpty()) {
             return "/";
         }
         applicationPath = applicationPath.trim();
