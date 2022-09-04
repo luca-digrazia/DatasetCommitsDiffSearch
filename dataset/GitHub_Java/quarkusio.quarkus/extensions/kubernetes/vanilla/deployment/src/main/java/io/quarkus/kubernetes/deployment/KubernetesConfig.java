@@ -145,12 +145,6 @@ public class KubernetesConfig implements PlatformConfiguration {
     ProbeConfig readinessProbe;
 
     /**
-     * Prometheus configuration
-     */
-    @ConfigItem
-    PrometheusConfig prometheus;
-
-    /**
      * Volume mounts
      */
     @ConfigItem
@@ -226,12 +220,6 @@ public class KubernetesConfig implements PlatformConfiguration {
     Map<String, HostAliasConfig> hostAliases;
 
     /**
-     * Resources requirements
-     */
-    @ConfigItem
-    ResourcesConfig resources;
-
-    /**
      * If true, a Kubernetes Ingress will be created
      */
     @ConfigItem
@@ -242,12 +230,6 @@ public class KubernetesConfig implements PlatformConfiguration {
      */
     @ConfigItem(defaultValue = "true")
     boolean addVersionToLabelSelectors;
-
-    /**
-     * If set to true, Quarkus will attempt to deploy the application to the target Kubernetes cluster
-     */
-    @ConfigItem(defaultValue = "false")
-    boolean deploy;
 
     public Optional<String> getPartOf() {
         return partOf;
@@ -369,10 +351,6 @@ public class KubernetesConfig implements PlatformConfiguration {
         return readinessProbe;
     }
 
-    public PrometheusConfig getPrometheusConfig() {
-        return prometheus;
-    }
-
     public Map<String, MountConfig> getMounts() {
         return mounts;
     }
@@ -415,10 +393,6 @@ public class KubernetesConfig implements PlatformConfiguration {
 
     public Map<String, HostAliasConfig> getHostAliases() {
         return hostAliases;
-    }
-
-    public ResourcesConfig getResources() {
-        return resources;
     }
 
     @Override

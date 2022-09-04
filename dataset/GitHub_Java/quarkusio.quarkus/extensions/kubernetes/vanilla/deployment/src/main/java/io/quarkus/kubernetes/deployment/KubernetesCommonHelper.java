@@ -38,10 +38,6 @@ import io.dekorate.kubernetes.decorator.AddSecretVolumeDecorator;
 import io.dekorate.kubernetes.decorator.AddServiceAccountResourceDecorator;
 import io.dekorate.kubernetes.decorator.ApplyArgsDecorator;
 import io.dekorate.kubernetes.decorator.ApplyCommandDecorator;
-import io.dekorate.kubernetes.decorator.ApplyLimitsCpuDecorator;
-import io.dekorate.kubernetes.decorator.ApplyLimitsMemoryDecorator;
-import io.dekorate.kubernetes.decorator.ApplyRequestsCpuDecorator;
-import io.dekorate.kubernetes.decorator.ApplyRequestsMemoryDecorator;
 import io.dekorate.kubernetes.decorator.ApplyServiceAccountNamedDecorator;
 import io.dekorate.kubernetes.decorator.ApplyWorkingDirDecorator;
 import io.dekorate.kubernetes.decorator.RemoveAnnotationDecorator;
@@ -70,28 +66,23 @@ public class KubernetesCommonHelper {
 
     private static final String OUTPUT_ARTIFACT_FORMAT = "%s%s.jar";
 
-    public static Optional<Project> createProject(ApplicationInfoBuildItem app, OutputTargetBuildItem outputTarget,
+    public static Project createProject(ApplicationInfoBuildItem app, OutputTargetBuildItem outputTarget,
             PackageConfig packageConfig) {
         return createProject(app, outputTarget.getOutputDirectory()
                 .resolve(String.format(OUTPUT_ARTIFACT_FORMAT, outputTarget.getBaseName(), packageConfig.runnerSuffix)));
     }
 
-    public static Optional<Project> createProject(ApplicationInfoBuildItem app, Path artifactPath) {
+    public static Project createProject(ApplicationInfoBuildItem app, Path artifactPath) {
         //Let dekorate create a Project instance and then override with what is found in ApplicationInfoBuildItem.
-        try {
-            Project project = FileProjectFactory.create(artifactPath.toFile());
-            BuildInfo buildInfo = new BuildInfo(app.getName(), app.getVersion(),
-                    "jar", project.getBuildInfo().getBuildTool(),
-                    project.getBuildInfo().getBuildToolVersion(),
-                    artifactPath.toAbsolutePath(),
-                    project.getBuildInfo().getClassOutputDir(),
-                    project.getBuildInfo().getResourceDir());
+        Project project = FileProjectFactory.create(artifactPath.toFile());
+        BuildInfo buildInfo = new BuildInfo(app.getName(), app.getVersion(),
+                "jar", project.getBuildInfo().getBuildTool(),
+                project.getBuildInfo().getBuildToolVersion(),
+                artifactPath.toAbsolutePath(),
+                project.getBuildInfo().getClassOutputDir(),
+                project.getBuildInfo().getResourceDir());
 
-            return Optional.of(new Project(project.getRoot(), buildInfo, project.getScmInfo()));
-
-        } catch (Exception e) {
-            return Optional.empty();
-        }
+        return new Project(project.getRoot(), buildInfo, project.getScmInfo());
     }
 
     /**
@@ -117,7 +108,7 @@ public class KubernetesCommonHelper {
     /**
      * Creates the common decorator build items.
      */
-    public static List<DecoratorBuildItem> createDecorators(Optional<Project> project, String target, String name,
+    public static List<DecoratorBuildItem> createDecorators(Project project, String target, String name,
             PlatformConfiguration config,
             Optional<MetricsCapabilityBuildItem> metricsConfiguration,
             List<KubernetesAnnotationBuildItem> annotations,
@@ -177,12 +168,12 @@ public class KubernetesCommonHelper {
 
     /**
      * Creates container decorator build items.
-     *
+     * 
      * @param target The deployment target (e.g. kubernetes, openshift, knative)
      * @param name The name of the resource to accept the configuration
      * @param config The {@link PlatformConfiguration} instance
      */
-    private static List<DecoratorBuildItem> createContainerDecorators(Optional<Project> project, String target, String name,
+    private static List<DecoratorBuildItem> createContainerDecorators(Project project, String target, String name,
             PlatformConfiguration config) {
         List<DecoratorBuildItem> result = new ArrayList<>();
         if (config.getNamespace().isPresent()) {
@@ -206,12 +197,12 @@ public class KubernetesCommonHelper {
 
     /**
      * Creates pod decorator build items.
-     *
+     * 
      * @param target The deployment target (e.g. kubernetes, openshift, knative)
      * @param name The name of the resource to accept the configuration
      * @param config The {@link PlatformConfiguration} instance
      */
-    private static List<DecoratorBuildItem> createPodDecorators(Optional<Project> project, String target, String name,
+    private static List<DecoratorBuildItem> createPodDecorators(Project project, String target, String name,
             PlatformConfiguration config) {
         List<DecoratorBuildItem> result = new ArrayList<>();
         config.getImagePullSecrets().ifPresent(l -> {
@@ -234,27 +225,10 @@ public class KubernetesCommonHelper {
             result.add(new DecoratorBuildItem(target, new AddSidecarDecorator(name, ContainerConverter.convert(e))));
         });
 
-        config.getResources().limits.cpu.ifPresent(c -> {
-            result.add(new DecoratorBuildItem(target, new ApplyLimitsCpuDecorator(name, c)));
-        });
-
-        config.getResources().limits.memory.ifPresent(m -> {
-            result.add(new DecoratorBuildItem(target, new ApplyLimitsMemoryDecorator(name, m)));
-        });
-
-        config.getResources().requests.cpu.ifPresent(c -> {
-            result.add(new DecoratorBuildItem(target, new ApplyRequestsCpuDecorator(name, c)));
-        });
-
-        config.getResources().requests.memory.ifPresent(m -> {
-            result.add(new DecoratorBuildItem(target, new ApplyRequestsMemoryDecorator(name, m)));
-        });
-
         return result;
     }
 
-    private static List<DecoratorBuildItem> createMountAndVolumeDecorators(Optional<Project> project, String target,
-            String name,
+    private static List<DecoratorBuildItem> createMountAndVolumeDecorators(Project project, String target, String name,
             PlatformConfiguration config) {
         List<DecoratorBuildItem> result = new ArrayList<>();
         config.getMounts().entrySet().forEach(e -> {
@@ -288,32 +262,30 @@ public class KubernetesCommonHelper {
         return result;
     }
 
-    private static List<DecoratorBuildItem> createAnnotationDecorators(Optional<Project> project, String target, String name,
+    private static List<DecoratorBuildItem> createAnnotationDecorators(Project project, String target, String name,
             PlatformConfiguration config,
             Optional<MetricsCapabilityBuildItem> metricsConfiguration,
             List<KubernetesPortBuildItem> ports) {
         List<DecoratorBuildItem> result = new ArrayList<>();
         ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
 
-        project.ifPresent(p -> {
-            ScmInfo scm = p.getScmInfo();
-            String vcsUrl = scm != null ? scm.getUrl() : null;
-            String commitId = scm != null ? scm.getCommit() : null;
+        ScmInfo scm = project.getScmInfo();
+        String vcsUrl = scm != null ? scm.getUrl() : null;
+        String commitId = scm != null ? scm.getCommit() : null;
 
-            //Dekorate uses its own annotations. Let's replace them with the quarkus ones.
-            result.add(new DecoratorBuildItem(target, new RemoveAnnotationDecorator(Annotations.VCS_URL)));
-            result.add(new DecoratorBuildItem(target, new RemoveAnnotationDecorator(Annotations.COMMIT_ID)));
+        //Dekorate uses its own annotations. Let's replace them with the quarkus ones.
+        result.add(new DecoratorBuildItem(target, new RemoveAnnotationDecorator(Annotations.VCS_URL)));
+        result.add(new DecoratorBuildItem(target, new RemoveAnnotationDecorator(Annotations.COMMIT_ID)));
 
-            //Add quarkus vcs annotations
-            if (commitId != null) {
-                result.add(new DecoratorBuildItem(target, new AddAnnotationDecorator(name,
-                        new Annotation(QUARKUS_ANNOTATIONS_COMMIT_ID, commitId, new String[0]))));
-            }
-            if (vcsUrl != null) {
-                result.add(new DecoratorBuildItem(target,
-                        new AddAnnotationDecorator(name, new Annotation(QUARKUS_ANNOTATIONS_VCS_URL, vcsUrl, new String[0]))));
-            }
-        });
+        //Add quarkus vcs annotations
+        if (commitId != null) {
+            result.add(new DecoratorBuildItem(target,
+                    new AddAnnotationDecorator(name, new Annotation(QUARKUS_ANNOTATIONS_COMMIT_ID, commitId, new String[0]))));
+        }
+        if (vcsUrl != null) {
+            result.add(new DecoratorBuildItem(target,
+                    new AddAnnotationDecorator(name, new Annotation(QUARKUS_ANNOTATIONS_VCS_URL, vcsUrl, new String[0]))));
+        }
 
         if (config.isAddBuildTimestamp()) {
             result.add(new DecoratorBuildItem(target,

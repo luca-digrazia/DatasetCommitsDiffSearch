@@ -111,7 +111,7 @@ public class MinikubeProcessor {
         List<DecoratorBuildItem> result = new ArrayList<>();
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
-        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
+        Project project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
         result.addAll(KubernetesCommonHelper.createDecorators(project, MINIKUBE, name, config, metricsConfiguration,
                 annotations, labels, command,
                 ports, livenessPath, readinessPath, roles, roleBindings));
