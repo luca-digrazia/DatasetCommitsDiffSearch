@@ -216,7 +216,7 @@ public class PythonOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_disallow_legacy_py_provider",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {
