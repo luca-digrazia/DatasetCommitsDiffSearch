@@ -14,7 +14,7 @@ import org.eclipse.microprofile.health.Liveness;
 public class KafkaStreamsStateHealthCheck implements HealthCheck {
 
     @Inject
-    protected KafkaStreams kafkaStreams;
+    private KafkaStreams kafkaStreams;
 
     @Override
     public HealthCheckResponse call() {
