@@ -33,6 +33,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -67,8 +68,10 @@ final class SkylarkDocumentationCollector {
    *
    * <p>WARNING: This method no longer supports the specification of additional module classes via
    * parameters. Instead, all module classes are being picked up automatically.
+   *
+   * @param clazz DEPRECATED.
    */
-  public static Map<String, SkylarkModuleDoc> collectModules()
+  public static Map<String, SkylarkModuleDoc> collectModules(@Deprecated String... clazz)
       throws ClassPathException {
     Map<String, SkylarkModuleDoc> modules = new TreeMap<>();
     Map<SkylarkModule, Class<?>> builtinModules = new HashMap<>();
@@ -137,12 +140,18 @@ final class SkylarkDocumentationCollector {
         SkylarkModule skylarkModule = moduleClass.equals(Object.class)
             ? getTopLevelModule()
             : Runtime.getSkylarkNamespace(moduleClass).getAnnotation(SkylarkModule.class);
-        Preconditions.checkNotNull(skylarkModule);
-        if (!modules.containsKey(skylarkModule.name())) {
-          modules.put(skylarkModule.name(), new SkylarkModuleDoc(skylarkModule, moduleClass));
+        if (skylarkModule == null) {
+          // TODO(bazel-team): we currently have undocumented methods on undocumented data
+          // structures, namely java.util.List. Remove this case when we are done.
+          Preconditions.checkState(!skylarkSignature.documented());
+          Preconditions.checkState(moduleClass == List.class);
+        } else {
+          if (!modules.containsKey(skylarkModule.name())) {
+            modules.put(skylarkModule.name(), new SkylarkModuleDoc(skylarkModule, moduleClass));
+          }
+          SkylarkModuleDoc module = modules.get(skylarkModule.name());
+          module.addMethod(new SkylarkBuiltinMethodDoc(module, skylarkSignature, field.getType()));
         }
-        SkylarkModuleDoc module = modules.get(skylarkModule.name());
-        module.addMethod(new SkylarkBuiltinMethodDoc(module, skylarkSignature, field.getType()));
       }
     }
   }

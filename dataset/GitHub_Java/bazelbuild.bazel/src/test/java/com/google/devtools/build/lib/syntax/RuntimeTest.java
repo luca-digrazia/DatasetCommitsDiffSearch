@@ -19,7 +19,7 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.lang.reflect.Field;
-import java.util.List;
+import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -28,6 +28,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public final class RuntimeTest {
 
+  private static final Object DUMMY = new Object();
   private static final BuiltinFunction DUMMY_FUNC = new BuiltinFunction("dummyFunc") {
     // This would normally be done by @SkylarkSignature annotation and configure(), but a simple
     // stub suffices.
@@ -46,10 +47,9 @@ public final class RuntimeTest {
 
   @Test
   public void checkRegistry_GetBuiltins() {
-    Object dummy = new Object();
     Runtime.BuiltinRegistry reg = new Runtime.BuiltinRegistry();
-    reg.registerBuiltin(DummyType.class, "dummy", dummy);
-    assertThat(reg.getBuiltins()).contains(dummy);
+    reg.registerBuiltin(DummyType.class, "dummy", DUMMY);
+    assertThat(reg.getBuiltins()).contains(DUMMY);
   }
 
   @Test
@@ -66,22 +66,6 @@ public final class RuntimeTest {
     assertThat(reg.getFunctionNames(DummyType.class)).contains("dummyFunc");
   }
 
-  /** Ensures that we still register all builtins, even when some are equal to one another. */
-  @Test
-  public void checkRegistry_EqualBuiltinsDontClash() {
-    // Create two distinct objects that compare equal under Object#equals. Use toCharArray() to
-    // not worry about whether the JVM does string interning.
-    String equalValue1 = "abc";
-    String equalValue2 = new String(equalValue1.toCharArray());
-    Runtime.BuiltinRegistry reg = new Runtime.BuiltinRegistry();
-    reg.registerBuiltin(DummyType.class, "eq1", equalValue1);
-    reg.registerBuiltin(DummyType.class, "eq2", equalValue2);
-    List<Object> values = reg.getBuiltins();
-    assertThat(values).hasSize(2);
-    assertThat(values.get(0)).isSameAs(equalValue1);
-    assertThat(values.get(1)).isSameAs(equalValue2);
-  }
-
   @Test
   public void checkStaticallyRegistered_Method() throws Exception {
     Field splitField = MethodLibrary.class.getDeclaredField("split");
@@ -96,7 +80,7 @@ public final class RuntimeTest {
     Field lenField = MethodLibrary.class.getDeclaredField("len");
     lenField.setAccessible(true);
     Object lenFieldValue = lenField.get(null);
-    List<Object> builtins = Runtime.getBuiltinRegistry().getBuiltins();
+    Set<Object> builtins = Runtime.getBuiltinRegistry().getBuiltins();
     assertThat(builtins).contains(lenFieldValue);
   }
 }

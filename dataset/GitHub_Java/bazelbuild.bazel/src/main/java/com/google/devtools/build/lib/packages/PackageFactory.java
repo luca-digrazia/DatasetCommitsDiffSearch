@@ -433,11 +433,6 @@ public final class PackageFactory {
     threadPool.setMaximumPoolSize(globbingThreads);
   }
 
-  /**
-   * Sets the number of directories to eagerly traverse on the first glob for a given package, in
-   * order to warm the filesystem. -1 means do no eager traversal. See {@code
-   * PackageCacheOptions#maxDirectoriesToEagerlyVisitInGlobbing}.
-   */
   public void setMaxDirectoriesToEagerlyVisitInGlobbing(
       int maxDirectoriesToEagerlyVisitInGlobbing) {
     this.maxDirectoriesToEagerlyVisitInGlobbing = maxDirectoriesToEagerlyVisitInGlobbing;
@@ -593,12 +588,7 @@ public final class PackageFactory {
     }
 
     GlobList<String> globList = GlobList.captureResults(includes, excludes, matches);
-    if (env.getSemantics().incompatibleDisableGlobTracking()) {
-      // Converting to ImmutableList will remove glob information from the list.
-      return MutableList.copyOf(env, ImmutableList.copyOf(globList));
-    } else {
-      return MutableList.copyOf(env, globList);
-    }
+    return MutableList.copyOf(env, globList);
   }
 
   /**
