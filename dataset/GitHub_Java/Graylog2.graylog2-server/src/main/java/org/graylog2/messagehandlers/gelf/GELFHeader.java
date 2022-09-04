@@ -76,7 +76,7 @@ public class GELFHeader {
             }
         }
 
-        return this.sequenceCount;
+        return this.sequenceNumber;
     }
 
 }
