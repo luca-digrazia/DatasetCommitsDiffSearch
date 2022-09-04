@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.AspectResolver;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkAspectClass;
-import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.profiler.memory.CurrentRuleTracker;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
@@ -113,30 +113,6 @@ public final class AspectFunction implements SkyFunction {
   }
 
   /**
-   * Load Skylark-defined aspect from an extension file. Is to be called from a SkyFunction.
-   *
-   * @return {@code null} if dependencies cannot be satisfied.
-   * @throws AspectCreationException if the value loaded is not a {@link SkylarkDefinedAspect}.
-   */
-  @Nullable
-  static SkylarkDefinedAspect loadSkylarkDefinedAspect(
-      Environment env, SkylarkAspectClass skylarkAspectClass)
-      throws AspectCreationException, InterruptedException {
-    Label extensionLabel = skylarkAspectClass.getExtensionLabel();
-    String skylarkValueName = skylarkAspectClass.getExportedName();
-
-    SkylarkAspect skylarkAspect = loadSkylarkAspect(env, extensionLabel, skylarkValueName);
-    if (!(skylarkAspect instanceof SkylarkDefinedAspect)) {
-      throw new AspectCreationException(
-          String.format(
-              "%s from %s is not a skylark-defined aspect",
-              skylarkValueName, extensionLabel.toString()));
-    } else {
-      return (SkylarkDefinedAspect) skylarkAspect;
-    }
-  }
-
-  /**
    * Load Skylark aspect from an extension file. Is to be called from a SkyFunction.
    *
    * @return {@code null} if dependencies cannot be satisfied.
@@ -188,9 +164,11 @@ public final class AspectFunction implements SkyFunction {
       aspect = Aspect.forNative(nativeAspectClass, key.getParameters());
     } else if (key.getAspectClass() instanceof SkylarkAspectClass) {
       SkylarkAspectClass skylarkAspectClass = (SkylarkAspectClass) key.getAspectClass();
-      SkylarkDefinedAspect skylarkAspect;
+      SkylarkAspect skylarkAspect;
       try {
-        skylarkAspect = loadSkylarkDefinedAspect(env, skylarkAspectClass);
+        skylarkAspect =
+            loadSkylarkAspect(
+                env, skylarkAspectClass.getExtensionLabel(), skylarkAspectClass.getExportedName());
       } catch (AspectCreationException e) {
         throw new AspectFunctionException(e);
       }
@@ -407,7 +385,8 @@ public final class AspectFunction implements SkyFunction {
       throws DuplicateException {
     ArrayList<ConfiguredAspect> aspectValues = new ArrayList<>();
     for (AspectKey aspectKey : aspectKeys) {
-      AspectValue aspectValue = (AspectValue) values.get(aspectKey);
+      SkyKey skyAspectKey = aspectKey.getSkyKey();
+      AspectValue aspectValue = (AspectValue) values.get(skyAspectKey);
       ConfiguredAspect configuredAspect = aspectValue.getConfiguredAspect();
       aspectValues.add(configuredAspect);
     }
@@ -436,13 +415,14 @@ public final class AspectFunction implements SkyFunction {
       return;
     }
     ImmutableList<AspectKey> baseKeys = key.getBaseKeys();
-    result.put(key.getAspectDescriptor(), key);
+    SkyKey skyKey = key.getSkyKey();
+    result.put(key.getAspectDescriptor(), skyKey);
     for (AspectKey baseKey : baseKeys) {
       buildSkyKeys(baseKey, result, aspectPathBuilder);
     }
     // Post-order list of aspect SkyKeys gives the order of propagating aspects:
     // the aspect comes after all aspects it transitively sees.
-    aspectPathBuilder.add(key);
+    aspectPathBuilder.add(skyKey);
   }
 
   private SkyValue createAliasAspect(
@@ -459,7 +439,7 @@ public final class AspectFunction implements SkyFunction {
     // the real configured target.
     Label aliasLabel = aliasChain.size() > 1 ? aliasChain.get(1) : configuredTarget.getLabel();
 
-    SkyKey depKey = originalKey.withLabel(aliasLabel);
+    SkyKey depKey = ActionLookupValue.key(originalKey.withLabel(aliasLabel));
 
     // Compute the AspectValue of the target the alias refers to (which can itself be either an
     // alias or a real target)

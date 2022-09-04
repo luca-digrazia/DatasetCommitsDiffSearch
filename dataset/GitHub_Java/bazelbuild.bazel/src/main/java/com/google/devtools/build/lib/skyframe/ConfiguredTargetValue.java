@@ -100,13 +100,13 @@ public final class ConfiguredTargetValue extends ActionLookupValue {
 
   @VisibleForTesting
   public static SkyKey key(Label label, BuildConfiguration configuration) {
-    return ConfiguredTargetKey.of(label, configuration);
+    return key(new ConfiguredTargetKey(label, configuration));
   }
 
   static ImmutableList<SkyKey> keys(Iterable<ConfiguredTargetKey> lacs) {
     ImmutableList.Builder<SkyKey> keys = ImmutableList.builder();
     for (ConfiguredTargetKey lac : lacs) {
-      keys.add(lac);
+      keys.add(key(lac));
     }
     return keys.build();
   }
