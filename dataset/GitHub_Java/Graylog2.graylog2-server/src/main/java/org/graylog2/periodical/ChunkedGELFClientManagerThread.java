@@ -20,25 +20,22 @@
 
 package org.graylog2.periodical;
 
-import org.apache.log4j.Logger;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFMessage;
-import org.graylog2.messagehandlers.gelf.EmptyGELFMessageException;
-
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import org.graylog2.Log;
+import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
+import org.graylog2.messagehandlers.gelf.ChunkedGELFMessage;
+import org.graylog2.messagehandlers.gelf.EmptyGELFMessageException;
 
 /**
  * ChunkedGELFClientManagerThread.java: Sep 20, 2010 9:28:37 PM
  *
  * [description]
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ChunkedGELFClientManagerThread extends Thread {
-
-    private static final Logger LOG = Logger.getLogger(ChunkedGELFClientManagerThread.class);
 
     /**
      * Start the thread. Runs forever.
@@ -57,6 +54,8 @@ public class ChunkedGELFClientManagerThread extends Thread {
 
                     int fiveSecondsAgo = (int) (System.currentTimeMillis()/1000)-5;
 
+
+
                     try {
                         if (message.getFirstChunkArrival() < fiveSecondsAgo) {
                             this.dropMessage(messageId, "Did not completely arrive in time.");
@@ -69,7 +68,7 @@ public class ChunkedGELFClientManagerThread extends Thread {
                 }
                 
             } catch (Exception e) {
-                LOG.warn("Error in ChunkedGELFClientManagerThread: " + e.getMessage(), e);
+                Log.warn("Error in ChunkedGELFClientManagerThread: " + e.toString());
             }
 
            // Run every 10 seconds.
@@ -84,7 +83,7 @@ public class ChunkedGELFClientManagerThread extends Thread {
      * @param messageId The message to delete
      */
     public void dropMessage(String messageId, String reason) {
-        LOG.info("Dropping incomplete chunked GELF message <" + messageId + "> (" + reason + ")");
+        Log.info("Dropping incomplete chunked GELF message <" + messageId + "> (" + reason + ")");
         ChunkedGELFClientManager.getInstance().dropMessage(messageId);
     }
 
