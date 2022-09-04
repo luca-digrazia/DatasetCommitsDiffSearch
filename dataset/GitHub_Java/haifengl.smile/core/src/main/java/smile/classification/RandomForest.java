@@ -1,37 +1,33 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.classification;
 
 import java.io.Serializable;
-import java.util.*;
-import java.util.function.LongSupplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.LongStream;
-
-import smile.base.cart.CART;
-import smile.base.cart.SplitRule;
-import smile.data.DataFrame;
-import smile.data.Tuple;
-import smile.data.formula.Formula;
-import smile.data.type.StructType;
-import smile.data.vector.BaseVector;
-import smile.math.MathEx;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Callable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.data.Attribute;
+import smile.data.AttributeDataset;
+import smile.data.NumericAttribute;
+import smile.math.Math;
+import smile.util.MulticoreExecutor;
+import smile.util.SmileUtils;
 import smile.validation.Accuracy;
 import smile.validation.ClassificationMeasure;
 
@@ -75,9 +71,9 @@ import smile.validation.ClassificationMeasure;
  * 
  * @author Haifeng Li
  */
-public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier {
-    private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(RandomForest.class);
+public class RandomForest implements SoftClassifier<double[]> {
+    private static final long serialVersionUID = 1L;
+    private static final Logger logger = LoggerFactory.getLogger(RandomForest.class);
 
     /**
      * Decision tree wrapper with a weight. Currently, the weight is the accuracy of
@@ -92,31 +88,22 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
             this.weight = weight;
         }
     }
-
-    /**
-     * Design matrix formula
-     */
-    private Formula formula;
-
     /**
      * Forest of decision trees. The second value is the accuracy of
      * tree on the OOB samples, which can be used a weight when aggregating
      * tree votes.
      */
     private List<Tree> trees;
-
     /**
      * The number of classes.
      */
     private int k = 2;
-
     /**
      * Out-of-bag estimation of error rate, which is quite accurate given that
      * enough trees have been grown (otherwise the OOB estimate can
      * bias upward).
      */
     private double error;
-
     /**
      * Variable importance. Every time a split of a node is made on variable
      * the (GINI, information gain, etc.) impurity criterion for the two
@@ -128,204 +115,283 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
     private double[] importance;
 
     /**
-     * The class label encoder.
+     * Trainer for random forest classifiers.
      */
-    private ClassLabel labels;
+    public static class Trainer extends ClassifierTrainer<double[]> {
+        /**
+         * The number of trees.
+         */
+        private int ntrees = 500;
+        /**
+         * The splitting rule.
+         */
+        private DecisionTree.SplitRule rule = DecisionTree.SplitRule.GINI;
+        /**
+         * The number of random selected features to be used to determine the decision
+         * at a node of the tree. floor(sqrt(dim)) seems to give generally good performance,
+         * where dim is the number of variables.        
+         */
+        private int mtry = -1;
+        /**
+         * The minimum size of leaf nodes.
+         */
+        private int nodeSize = 1;
+        /**
+         * The maximum number of leaf nodes.
+         */
+        private int maxNodes = 100;
+        /**
+         * The sampling rate.
+         */
+        private double subsample = 1.0;
 
-    /**
-     * Constructor.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param k the number of classes.
-     * @param trees forest of decision trees.
-     * @param error the out-of-bag estimation of error rate.
-     * @param importance variable importance
-     */
-    public RandomForest(Formula formula, int k, List<Tree> trees, double error, double[] importance) {
-        this(formula, k, trees, error, importance, ClassLabel.of(k));
-    }
+        /**
+         * Default constructor of 500 trees.
+         */
+        private Trainer() {
 
-    /**
-     * Constructor.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param k the number of classes.
-     * @param trees forest of decision trees.
-     * @param error the out-of-bag estimation of error rate.
-     * @param importance variable importance
-     * @param labels class labels
-     */
-    public RandomForest(Formula formula, int k, List<Tree> trees, double error, double[] importance, ClassLabel labels) {
-        this.formula = formula;
-        this.k = k;
-        this.trees = trees;
-        this.error = error;
-        this.importance = importance;
-        this.labels = labels;
-    }
-
-    /**
-     * Learns a random forest for classification.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static RandomForest fit(Formula formula, DataFrame data) {
-        return fit(formula, data, new Properties());
-    }
-
-    /**
-     * Learns a random forest for classification.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static RandomForest fit(Formula formula, DataFrame data, Properties prop) {
-        int ntrees = Integer.valueOf(prop.getProperty("smile.random.forest.trees", "500"));
-        int mtry = Integer.valueOf(prop.getProperty("smile.random.forest.mtry", "-1"));
-        SplitRule rule = SplitRule.valueOf(prop.getProperty("smile.random.forest.split.rule", "GINI"));
-        int maxNodes = Integer.valueOf(prop.getProperty("smile.random.forest.max.nodes", "100"));
-        int nodeSize = Integer.valueOf(prop.getProperty("smile.random.forest.node.size", "5"));
-        double subsample = Double.valueOf(prop.getProperty("smile.random.forest.sample.rate", "1.0"));
-        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample);
-    }
-
-    /**
-     * Learns a random forest for classification.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     * @param ntrees the number of trees.
-     * @param mtry the number of input variables to be used to determine the decision
-     * at a node of the tree. p/3 seems to give generally good performance,
-     * where p is the number of variables.
-     * @param nodeSize the number of instances in a node below which the tree will
-     * not split, setting nodeSize = 5 generally gives good results.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
-     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
-     */
-    public static RandomForest fit(Formula formula, DataFrame data, int ntrees, int mtry, SplitRule rule, int maxNodes, int nodeSize, double subsample) {
-        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample, Optional.empty(), Optional.empty());
-    }
-
-    /**
-     * Learns a random forest for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     * @param ntrees the number of trees.
-     * @param mtry the number of input variables to be used to determine the decision
-     * at a node of the tree. p/3 seems to give generally good performance,
-     * where p is the number of variables.
-     * @param nodeSize the number of instances in a node below which the tree will
-     * not split, setting nodeSize = 5 generally gives good results.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
-     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
-     * @param seedGenerator RNG seed generator.
-     */
-    public static RandomForest fit(Formula formula, DataFrame data, int ntrees, int mtry, SplitRule rule, int maxNodes, int nodeSize, double subsample, Optional<int[]> classWeight, LongSupplier seedGenerator) {
-        return fit(formula, data, ntrees, mtry, rule, maxNodes, nodeSize, subsample, classWeight, Optional.of(LongStream.generate(seedGenerator)));
-    }
-
-    /**
-     * Learns a random forest for classification.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     * @param ntrees the number of trees.
-     * @param mtry the number of random selected features to be used to determine
-     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
-     * generally good performance, where dim is the number of variables.
-     * @param nodeSize the minimum size of leaf nodes.
-     * @param maxNodes the maximum number of leaf nodes in the tree.
-     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
-     *                  sampling without replacement.
-     * @param rule Decision tree split rule.
-     * @param classWeight Priors of the classes. The weight of each class
-     *                    is roughly the ratio of samples in each class.
-     *                    For example, if there are 400 positive samples
-     *                    and 100 negative samples, the classWeight should
-     *                    be [1, 4] (assuming label 0 is of negative, label 1 is of
-     *                    positive).
-     * @param seeds optional RNG seeds for each regression tree.
-     */
-    public static RandomForest fit(Formula formula, DataFrame data, int ntrees, int mtry, SplitRule rule, int maxNodes, int nodeSize, double subsample, Optional<int[]> classWeight, Optional<LongStream> seeds) {
-        if (ntrees < 1) {
-            throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
         }
 
-        if (maxNodes < 2) {
-            throw new IllegalArgumentException("Invalid maximum number of leaves: " + maxNodes);
+        /**
+         * Constructor.
+         *
+         * @param mtry the number of random selected features to be used to determine
+         * @param ntrees the number of trees.
+         */
+        public Trainer(int mtry, int ntrees) {
+            if (mtry < 1) {
+                throw new IllegalArgumentException("Invalid number of random selected features for splitting: " + mtry);
+            }
+
+            this.mtry = mtry;
+            if (ntrees < 1) {
+                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            }
+
+            this.ntrees = ntrees;
         }
 
-        if (nodeSize < 1) {
-            throw new IllegalArgumentException("Invalid minimum size of leaves: " + nodeSize);
+        /**
+         * Constructor.
+         *
+         * @param attributes the attributes of independent variable.
+         * @param ntrees the number of trees.
+         */
+        public Trainer(Attribute[] attributes, int ntrees) {
+            super(attributes);
+            this.mtry = (int) Math.floor(Math.sqrt(attributes.length));
+            if (ntrees < 1) {
+                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            }
+
+            this.ntrees = ntrees;
         }
 
-        if (subsample <= 0 || subsample > 1) {
-            throw new IllegalArgumentException("Invalid sampling rating: " + subsample);
+        /**
+         * Sets the splitting rule.
+         * @param rule the splitting rule.
+         */
+        public Trainer setSplitRule(DecisionTree.SplitRule rule) {
+            this.rule = rule;
+            return this;
         }
 
-        DataFrame x = formula.x(data);
-        BaseVector y = formula.y(data);
+        /**
+         * Sets the number of trees in the random forest.
+         * @param ntrees the number of trees.
+         */
+        public Trainer setNumTrees(int ntrees) {
+            if (ntrees < 1) {
+                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            }
 
-        if (mtry < 1 || mtry > x.ncols()) {
-            throw new IllegalArgumentException("Invalid number of variables to split on at a node of the tree: " + mtry);
+            this.ntrees = ntrees;
+            return this;
         }
 
-        ClassLabel.Result codec = ClassLabel.fit(y);
-        final int k = codec.k;
-        final int n = x.nrows();
+        /**
+         * Sets the number of random selected features for splitting.
+         * @param mtry the number of random selected features to be used to determine
+         * the decision at a node of the tree. floor(sqrt(p)) seems to give
+         * generally good performance, where p is the number of variables.
+         */
+        public Trainer setNumRandomFeatures(int mtry) {
+            if (mtry < 1) {
+                throw new IllegalArgumentException("Invalid number of random selected features for splitting: " + mtry);
+            }
 
-        final int[] weight = classWeight.orElseGet(() -> Collections.nCopies(k, 1).stream().mapToInt(i -> i).toArray());
-
-        final int[][] order = CART.order(x);
-        final int[][] prediction = new int[n][k]; // out-of-bag prediction
-
-        // generate seeds with sequential stream
-        long[] seedArray = seeds.orElse(LongStream.range(-ntrees, 0)).sequential().distinct().limit(ntrees).toArray();
-        if (seedArray.length != ntrees) {
-            throw new IllegalArgumentException(String.format("seed stream has only %d distinct values, expected %d", seedArray.length, ntrees));
+            this.mtry = mtry;
+            return this;
         }
 
-        List<Tree> trees = Arrays.stream(seedArray).parallel().mapToObj(seed -> {
-            // set RNG seed for the tree
-            if (seed > 1) MathEx.setSeed(seed);
+        /**
+         * Sets the maximum number of leaf nodes.
+         * @param maxNodes the maximum number of leaf nodes.
+         */
+        public Trainer setMaxNodes(int maxNodes) {
+            if (maxNodes < 2) {
+                throw new IllegalArgumentException("Invalid minimum size of leaf nodes: " + maxNodes);
+            }
 
-            final int[] samples = new int[n];
+            this.maxNodes = maxNodes;
+            return this;
+        }
+
+        /**
+         * Sets the minimum size of leaf nodes.
+         * @param nodeSize the number of instances in a node below which the tree will not split.
+         */
+        public Trainer setNodeSize(int nodeSize) {
+            if (nodeSize < 1) {
+                throw new IllegalArgumentException("Invalid minimum size of leaf nodes: " + nodeSize);
+            }
+
+            this.nodeSize = nodeSize;
+            return this;
+        }
+
+        /**
+         * Sets the sampling rate.
+         * @param subsample the sampling rate.
+         */
+        public Trainer setSamplingRates(double subsample) {
+            if (subsample <= 0 || subsample > 1) {
+                throw new IllegalArgumentException("Invalid sampling rating: " + subsample);
+            }
+
+            this.subsample = subsample;
+            return this;
+        }
+
+        @Override
+        public RandomForest train(double[][] x, int[] y) {
+            return new RandomForest(attributes, x, y, ntrees, maxNodes, nodeSize, mtry, subsample, rule, null);
+        }
+    }
+    
+    /**
+     * Trains a regression tree.
+     */
+    static class TrainingTask implements Callable<Tree> {
+        /**
+         * Attribute properties.
+         */
+        Attribute[] attributes;
+        /**
+         * Training instances.
+         */
+        double[][] x;
+        /**
+         * Training sample labels.
+         */
+        int[] y;
+        /**
+         * The number of variables to pick up in each node.
+         */
+        int mtry;
+        /**
+         * The minimum size of leaf nodes.
+         */
+        int nodeSize = 5;
+        /**
+         * The maximum number of leaf nodes in the tree.
+         */
+        int maxNodes = 100;
+        /**
+         * The sampling rate.
+         */
+        double subsample = 1.0;
+        /**
+         * The splitting rule.
+         */
+        DecisionTree.SplitRule rule;
+        /**
+         * Priors of the classes.
+         */
+        int[] classWeight;
+        /**
+         * The index of training values in ascending order. Note that only
+         * numeric attributes will be sorted.
+         */
+        int[][] order;
+        /**
+         * The out-of-bag predictions.
+         */
+        int[][] prediction;
+
+        /**
+         * Constructor.
+         */
+        TrainingTask(Attribute[] attributes, double[][] x, int[] y, int maxNodes, int nodeSize, int mtry, double subsample, DecisionTree.SplitRule rule, int[] classWeight, int[][] order, int[][] prediction) {
+            this.attributes = attributes;
+            this.x = x;
+            this.y = y;
+            this.mtry = mtry;
+            this.nodeSize = nodeSize;
+            this.maxNodes = maxNodes;
+            this.subsample = subsample;
+            this.rule = rule;
+            this.classWeight = classWeight;
+            this.order = order;
+            this.prediction = prediction;
+        }
+
+        @Override
+        public Tree call() {
+            int n = x.length;
+            int k = smile.math.Math.max(y) + 1;
+            int[] samples = new int[n];
+
             // Stratified sampling in case class is unbalanced.
             // That is, we sample each class separately.
             if (subsample == 1.0) {
                 // Training samples draw with replacement.
-                IntStream.range(0, k).forEach(l -> {
-                    int[] cl = IntStream.range(0, n).filter(i -> y.getInt(i) == l).toArray();
+                for (int l = 0; l < k; l++) {
+                    int nj = 0;
+                    ArrayList<Integer> cj = new ArrayList<>();
+                    for (int i = 0; i < n; i++) {
+                        if (y[i] == l) {
+                            cj.add(i);
+                            nj++;
+                        }
+                    }
 
                     // We used to do up sampling.
                     // But we switch to down sampling, which seems has better performance.
-                    int size = cl.length / weight[l];
+                    int size = nj / classWeight[l];
                     for (int i = 0; i < size; i++) {
-                        int xi = MathEx.randomInt(cl.length);
-                        samples[cl[xi]] += 1; //classWeight[l];
+                        int xi = Math.randomInt(nj);
+                        samples[cj.get(xi)] += 1; //classWeight[l];
                     }
-                });
+                }
             } else {
                 // Training samples draw without replacement.
-                IntStream.range(0, k).forEach(l -> {
-                    int[] cl = IntStream.range(0, n).filter(i -> y.getInt(i) == l).toArray();
+                int[] perm = new int[n];
+                for (int i = 0; i < n; i++) {
+                    perm[i] = i;
+                }
 
-                    // We used to do up sampling.
-                    // But we switch to down sampling, which seems has better performance.
-                    int size = (int) Math.round(subsample * cl.length / weight[l]);
-                    int[] permutation = MathEx.permutate(cl.length);
-                    for (int i = 0; i < size; i++) {
-                        samples[cl[permutation[i]]] += 1; //classWeight[l];
+                Math.permutate(perm);
+
+                int[] nc = new int[k];
+                for (int i = 0; i < n; i++) {
+                    nc[y[i]]++;
+                }
+
+                for (int l = 0; l < k; l++) {
+                    int subj = (int) Math.round(nc[l] * subsample / classWeight[l]);
+                    int count = 0;
+                    for (int i = 0; i < n && count < subj; i++) {
+                        int xi = perm[i];
+                        if (y[xi] == l) {
+                            samples[xi] += 1; //classWeight[l];
+                            count++;
+                        }
                     }
-                });
+                }
             }
 
-            DecisionTree tree = new DecisionTree(x, codec.y, codec.field.get(), k, rule, maxNodes, nodeSize, mtry, samples, order);
+            DecisionTree tree = new DecisionTree(attributes, x, y, maxNodes, nodeSize, mtry, rule, samples, order);
 
             // estimate OOB error
             int oob = 0;
@@ -333,9 +399,8 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
             for (int i = 0; i < n; i++) {
                 if (samples[i] == 0) {
                     oob++;
-                    int p = tree.predict(x.get(i));
-                    if (p == y.getInt(i)) correct++;
-                    // atomic operaton. do we really need synchronized?
+                    int p = tree.predict(x[i]);
+                    if (p == y[i]) correct++;
                     synchronized (prediction[i]) {
                         prediction[i][p]++;
                     }
@@ -351,41 +416,289 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
             }
 
             return new Tree(tree, accuracy);
-        }).collect(Collectors.toList());
+        }
+    }
 
-        int err = 0;
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     */
+    public RandomForest(double[][] x, int[] y, int ntrees) {
+        this(null, x, y, ntrees);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     */
+    public RandomForest(double[][] x, int[] y, int ntrees, int mtry) {
+        this(null, x, y, ntrees, mtry);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     */
+    public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees) {
+        this(attributes, x, y, ntrees, (int) Math.floor(Math.sqrt(x[0].length)));
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param data the dataset
+     * @param ntrees the number of trees.
+     * generally good performance, where dim is the number of variables.
+     */
+    public RandomForest(AttributeDataset data, int ntrees) {
+        this(data.attributes(), data.x(), data.labels(), ntrees);
+    }
+    
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances.
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     */
+    public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees, int mtry) {
+        this(attributes, x, y, ntrees, 100, 5, mtry, 1.0);
+
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param data the dataset
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     */
+    public RandomForest(AttributeDataset data, int ntrees, int mtry) {
+        this(data.attributes(), data.x(), data.labels(), ntrees, mtry);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances.
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
+     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
+     *                  sampling without replacement.
+     */
+    public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample) {
+        this(attributes, x, y, ntrees, maxNodes, nodeSize, mtry, subsample, DecisionTree.SplitRule.GINI);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param data the dataset
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
+     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
+     *                  sampling without replacement.
+     * @param rule Decision tree split rule.
+     */
+    public RandomForest(AttributeDataset data, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample, DecisionTree.SplitRule rule) {
+        this(data.attributes(), data.x(), data.labels(), ntrees, maxNodes, nodeSize, mtry, subsample, rule);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances.
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
+     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
+     *                  sampling without replacement.
+     * @param rule Decision tree split rule.
+     */
+    public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample, DecisionTree.SplitRule rule) {
+        this(attributes, x, y, ntrees, maxNodes, nodeSize, mtry, subsample, rule, null);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param data the dataset
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
+     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
+     *                  sampling without replacement.
+     * @param rule Decision tree split rule.
+     * @param classWeight Priors of the classes. The weight of each class
+     *                    is roughly the ratio of samples in each class.
+     *                    For example, if
+     *                    there are 400 positive samples and 100 negative
+     *                    samples, the classWeight should be [1, 4]
+     *                    (assuming label 0 is of negative, label 1 is of
+     *                    positive).
+     */
+    public RandomForest(AttributeDataset data, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample, DecisionTree.SplitRule rule, int[] classWeight) {
+        this(data.attributes(), data.x(), data.labels(), ntrees, maxNodes, nodeSize, mtry, subsample, rule, classWeight);
+    }
+
+    /**
+     * Constructor. Learns a random forest for classification.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances.
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     * @param mtry the number of random selected features to be used to determine
+     * the decision at a node of the tree. floor(sqrt(dim)) seems to give
+     * generally good performance, where dim is the number of variables.
+     * @param nodeSize the minimum size of leaf nodes.
+     * @param maxNodes the maximum number of leaf nodes in the tree.
+     * @param subsample the sampling rate for training tree. 1.0 means sampling with replacement. < 1.0 means
+     *                  sampling without replacement.
+     * @param rule Decision tree split rule.
+     * @param classWeight Priors of the classes. The weight of each class
+     *                    is roughly the ratio of samples in each class.
+     *                    For example, if
+     *                    there are 400 positive samples and 100 negative
+     *                    samples, the classWeight should be [1, 4]
+     *                    (assuming label 0 is of negative, label 1 is of
+     *                    positive).
+     */
+    public RandomForest(Attribute[] attributes, double[][] x, int[] y, int ntrees, int maxNodes, int nodeSize, int mtry, double subsample, DecisionTree.SplitRule rule, int[] classWeight) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
+        }
+
+        if (ntrees < 1) {
+            throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+        }
+
+        if (mtry < 1 || mtry > x[0].length) {
+            throw new IllegalArgumentException("Invalid number of variables to split on at a node of the tree: " + mtry);
+        }
+
+        if (nodeSize < 1) {
+            throw new IllegalArgumentException("Invalid minimum size of leaves: " + nodeSize);
+        }
+
+        if (maxNodes < 2) {
+            throw new IllegalArgumentException("Invalid maximum number of leaves: " + maxNodes);
+        }
+
+        if (subsample <= 0 || subsample > 1) {
+            throw new IllegalArgumentException("Invalid sampling rating: " + subsample);
+        }
+
+        // class label set.
+        int[] labels = Math.unique(y);
+        Arrays.sort(labels);
+        
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i] < 0) {
+                throw new IllegalArgumentException("Negative class label: " + labels[i]); 
+            }
+            
+            if (i > 0 && labels[i] - labels[i-1] > 1) {
+                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+            }
+        }
+
+        k = labels.length;
+        if (k < 2) {
+            throw new IllegalArgumentException("Only one class.");            
+        }
+        
+        if (attributes == null) {
+            int p = x[0].length;
+            attributes = new Attribute[p];
+            for (int i = 0; i < p; i++) {
+                attributes[i] = new NumericAttribute("V" + (i + 1));
+            }
+        }
+
+        if (classWeight == null) {
+            classWeight = new int[k];
+            for (int i = 0; i < k; i++) classWeight[i] = 1;
+        }
+
+        int n = x.length;
+        int[][] prediction = new int[n][k]; // out-of-bag prediction
+        int[][] order = SmileUtils.sort(attributes, x);
+        List<TrainingTask> tasks = new ArrayList<>();
+        for (int i = 0; i < ntrees; i++) {
+            tasks.add(new TrainingTask(attributes, x, y, maxNodes, nodeSize, mtry, subsample, rule, classWeight, order, prediction));
+        }
+        
+        try {
+            trees = MulticoreExecutor.run(tasks);
+        } catch (Exception ex) {
+            logger.error("Failed to train random forest on multi-core", ex);
+
+            trees = new ArrayList<>(ntrees);
+            for (int i = 0; i < ntrees; i++) {
+                trees.add(tasks.get(i).call());
+            }
+        }
+        
         int m = 0;
         for (int i = 0; i < n; i++) {
-            int pred = MathEx.whichMax(prediction[i]);
+            int pred = Math.whichMax(prediction[i]);
             if (prediction[i][pred] > 0) {
                 m++;
-                if (pred != y.getInt(i)) {
-                    err++;
+                if (pred != y[i]) {
+                    error++;
                 }
             }
         }
 
-        double error = m > 0 ? (double) err / m : 0.0;
-
-        double[] importance = new double[x.ncols()];
+        if (m > 0) {
+            error /= m;
+        }
+        
+        importance = new double[attributes.length];
         for (Tree tree : trees) {
             double[] imp = tree.tree.importance();
             for (int i = 0; i < imp.length; i++) {
                 importance[i] += imp[i];
             }
         }
-
-        return new RandomForest(formula, k, trees, error, importance, codec.labels);
-    }
-
-    @Override
-    public Optional<Formula> formula() {
-        return Optional.of(formula);
-    }
-
-    @Override
-    public Optional<StructType> schema() {
-        return trees.get(0).tree.schema();
     }
 
     /**
@@ -421,14 +734,7 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
     public int size() {
         return trees.size();
     }
-
-    /**
-     * Returns the decision trees.
-     */
-    public DecisionTree[] trees() {
-        return trees.stream().map(t -> t.tree).toArray(DecisionTree[]::new);
-    }
-
+    
     /**
      * Trims the tree model set to a smaller size in case of over-fitting.
      * Or if extra decision trees in the model don't improve the performance,
@@ -455,19 +761,18 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
     }
     
     @Override
-    public int predict(Tuple x) {
-        Tuple xt = formula.x(x);
+    public int predict(double[] x) {
         int[] y = new int[k];
         
         for (Tree tree : trees) {
-            y[tree.tree.predict(xt)]++;
+            y[tree.tree.predict(x)]++;
         }
         
-        return labels.label(MathEx.whichMax(y));
+        return Math.whichMax(y);
     }
     
     @Override
-    public int predict(Tuple x, double[] posteriori) {
+    public int predict(double[] x, double[] posteriori) {
         if (posteriori.length != k) {
             throw new IllegalArgumentException(String.format("Invalid posteriori vector size: %d, expected: %d", posteriori.length, k));
         }
@@ -483,33 +788,77 @@ public class RandomForest implements SoftClassifier<Tuple>, DataFrameClassifier 
             }
         }
 
-        MathEx.unitize1(posteriori);
-        return labels.label(MathEx.whichMax(y));
+        Math.unitize1(posteriori);
+        return Math.whichMax(y);
     }    
     
     /**
      * Test the model on a validation dataset.
-     *
-     * @param data the test data set.
-     * @return the predictions with first 1, 2, ..., decision trees.
+     * 
+     * @param x the test data set.
+     * @param y the test data response values.
+     * @return accuracies with first 1, 2, ..., decision trees.
      */
-    public int[][] test(DataFrame data) {
-        DataFrame x = formula.x(data);
+    public double[] test(double[][] x, int[] y) {
+        int T = trees.size();
+        double[] accuracy = new double[T];
 
-        int n = x.size();
-        int ntrees = trees.size();
-        int[] p = new int[k];
-        int[][] prediction = new int[ntrees][n];
+        int n = x.length;
+        int[] label = new int[n];
+        int[][] prediction = new int[n][k];
 
-        for (int j = 0; j < n; j++) {
-            Tuple xj = x.get(j);
-            Arrays.fill(p, 0);
-            for (int i = 0; i < ntrees; i++) {
-                p[trees.get(i).tree.predict(xj)]++;
-                prediction[i][j] = MathEx.whichMax(p);
+        Accuracy measure = new Accuracy();
+        
+        for (int i = 0; i < T; i++) {
+            for (int j = 0; j < n; j++) {
+                prediction[j][trees.get(i).tree.predict(x[j])]++;
+                label[j] = Math.whichMax(prediction[j]);
             }
+
+            accuracy[i] = measure.measure(y, label);
         }
 
-        return prediction;
+        return accuracy;
+    }
+    
+    /**
+     * Test the model on a validation dataset.
+     * 
+     * @param x the test data set.
+     * @param y the test data labels.
+     * @param measures the performance measures of classification.
+     * @return performance measures with first 1, 2, ..., decision trees.
+     */
+    public double[][] test(double[][] x, int[] y, ClassificationMeasure[] measures) {
+        int T = trees.size();
+        int m = measures.length;
+        double[][] results = new double[T][m];
+
+        int n = x.length;
+        int[] label = new int[n];
+        double[][] prediction = new double[n][k];
+
+        for (int i = 0; i < T; i++) {
+            for (int j = 0; j < n; j++) {
+                prediction[j][trees.get(i).tree.predict(x[j])]++;
+                label[j] = Math.whichMax(prediction[j]);
+            }
+
+            for (int j = 0; j < m; j++) {
+                results[i][j] = measures[j].measure(y, label);
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Returns the decision trees.
+     */
+    public DecisionTree[] getTrees() {
+        DecisionTree[] forest = new DecisionTree[trees.size()];
+        for (int i = 0; i < forest.length; i++)
+            forest[i] = trees.get(i).tree;
+
+        return forest;
     }
 }
