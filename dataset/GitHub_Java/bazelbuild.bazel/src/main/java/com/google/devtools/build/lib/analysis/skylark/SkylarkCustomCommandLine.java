@@ -19,15 +19,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.CommandLineItem;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
+import com.google.devtools.build.lib.analysis.actions.CommandLineItem;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.events.NullEventHandler;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -41,7 +39,6 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 /** Supports ctx.actions.args() from Skylark. */
-@AutoCodec
 class SkylarkCustomCommandLine extends CommandLine {
   private final SkylarkSemantics skylarkSemantics;
   private final EventHandler eventHandler;
@@ -50,7 +47,6 @@ class SkylarkCustomCommandLine extends CommandLine {
   private static final Joiner LINE_JOINER = Joiner.on("\n").skipNulls();
   private static final Joiner FIELD_JOINER = Joiner.on(": ").skipNulls();
 
-  @AutoCodec
   static final class VectorArg {
     private static Interner<VectorArg> interner = BlazeInterners.newStrongInterner();
 
@@ -61,7 +57,7 @@ class SkylarkCustomCommandLine extends CommandLine {
     private final boolean hasMapFn;
     private final boolean hasLocation;
 
-    private VectorArg(
+    VectorArg(
         boolean isNestedSet,
         boolean hasFormat,
         boolean hasBeforeEach,
@@ -76,30 +72,18 @@ class SkylarkCustomCommandLine extends CommandLine {
       this.hasLocation = hasLocation;
     }
 
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static VectorArg create(
-        boolean isNestedSet,
-        boolean hasFormat,
-        boolean hasBeforeEach,
-        boolean hasJoinWith,
-        boolean hasMapFn,
-        boolean hasLocation) {
-      return interner.intern(
-          new VectorArg(isNestedSet, hasFormat, hasBeforeEach, hasJoinWith, hasMapFn, hasLocation));
-    }
-
     private static void push(ImmutableList.Builder<Object> arguments, Builder arg) {
       boolean wantsLocation = arg.format != null || arg.mapFn != null;
       boolean hasLocation = arg.location != null && wantsLocation;
       VectorArg vectorArg =
-          VectorArg.create(
+          new VectorArg(
               arg.nestedSet != null,
               arg.format != null,
               arg.beforeEach != null,
               arg.joinWith != null,
               arg.mapFn != null,
               hasLocation);
+      vectorArg = interner.intern(vectorArg);
       arguments.add(vectorArg);
       if (vectorArg.isNestedSet) {
         arguments.add(arg.nestedSet);
@@ -273,7 +257,6 @@ class SkylarkCustomCommandLine extends CommandLine {
     }
   }
 
-  @AutoCodec
   static final class ScalarArg {
     private static Interner<ScalarArg> interner = BlazeInterners.newStrongInterner();
 
@@ -281,22 +264,17 @@ class SkylarkCustomCommandLine extends CommandLine {
     private final boolean hasMapFn;
     private final boolean hasLocation;
 
-    private ScalarArg(boolean hasFormat, boolean hasMapFn, boolean hasLocation) {
+    public ScalarArg(boolean hasFormat, boolean hasMapFn, boolean hasLocation) {
       this.hasFormat = hasFormat;
       this.hasMapFn = hasMapFn;
       this.hasLocation = hasLocation;
     }
 
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static ScalarArg create(boolean hasFormat, boolean hasMapFn, boolean hasLocation) {
-      return interner.intern(new ScalarArg(hasFormat, hasMapFn, hasLocation));
-    }
-
     private static void push(ImmutableList.Builder<Object> arguments, Builder arg) {
       boolean wantsLocation = arg.format != null || arg.mapFn != null;
       boolean hasLocation = arg.location != null && wantsLocation;
-      ScalarArg scalarArg = ScalarArg.create(arg.format != null, arg.mapFn != null, hasLocation);
+      ScalarArg scalarArg = new ScalarArg(arg.format != null, arg.mapFn != null, hasLocation);
+      scalarArg = interner.intern(scalarArg);
       arguments.add(scalarArg);
       arguments.add(arg.object);
       if (hasLocation) {
@@ -402,24 +380,14 @@ class SkylarkCustomCommandLine extends CommandLine {
     }
 
     SkylarkCustomCommandLine build() {
-      return new SkylarkCustomCommandLine(skylarkSemantics, eventHandler, arguments.build());
+      return new SkylarkCustomCommandLine(this);
     }
   }
 
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec.Instantiator
-  SkylarkCustomCommandLine(SkylarkSemantics skylarkSemantics, ImmutableList<Object> arguments) {
-    // TODO(b/76233103): fix this.
-    this(skylarkSemantics, NullEventHandler.INSTANCE, arguments);
-  }
-
-  private SkylarkCustomCommandLine(
-      SkylarkSemantics skylarkSemantics,
-      EventHandler eventHandler,
-      ImmutableList<Object> arguments) {
-    this.skylarkSemantics = skylarkSemantics;
-    this.eventHandler = eventHandler;
-    this.arguments = arguments;
+  SkylarkCustomCommandLine(Builder builder) {
+    this.arguments = builder.arguments.build();
+    this.skylarkSemantics = builder.skylarkSemantics;
+    this.eventHandler = builder.eventHandler;
   }
 
   @Override

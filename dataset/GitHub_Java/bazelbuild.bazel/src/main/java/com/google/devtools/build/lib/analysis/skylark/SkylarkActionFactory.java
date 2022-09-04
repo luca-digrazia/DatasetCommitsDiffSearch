@@ -19,8 +19,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.CommandLine;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
@@ -29,7 +27,9 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
+import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
@@ -599,6 +599,7 @@ public class SkylarkActionFactory implements SkylarkValue {
       throws EvalException {
     context.checkMutable("actions.run_shell");
 
+    // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
     SkylarkList argumentList = (SkylarkList) arguments;
     SpawnAction.Builder builder = new SpawnAction.Builder();
     buildCommandLine(builder, argumentList);
@@ -704,14 +705,14 @@ public class SkylarkActionFactory implements SkylarkValue {
       Object inputManifestsUnchecked,
       SpawnAction.Builder builder)
       throws EvalException {
+    // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
     Iterable<Artifact> inputArtifacts;
     if (inputs instanceof SkylarkList) {
       inputArtifacts = ((SkylarkList) inputs).getContents(Artifact.class, "inputs");
       builder.addInputs(inputArtifacts);
     } else {
-      NestedSet<Artifact> inputSet = ((SkylarkNestedSet) inputs).getSet(Artifact.class);
-      builder.addTransitiveInputs(inputSet);
-      inputArtifacts = inputSet;
+      inputArtifacts = ((SkylarkNestedSet) inputs).toCollection(Artifact.class);
+      builder.addInputs(((SkylarkNestedSet) inputs).getSet(Artifact.class));
     }
     builder.addOutputs(outputs.getContents(Artifact.class, "outputs"));
 
