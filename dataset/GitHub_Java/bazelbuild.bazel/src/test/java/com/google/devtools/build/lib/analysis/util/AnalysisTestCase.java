@@ -130,7 +130,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected BuildOptions buildOptions;
   private OptionsParser optionsParser;
   protected PackageManager packageManager;
-  private BuildViewForTesting buildView;
+  private BuildView buildView;
   protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   // Note that these configurations are virtual (they use only VFS)
@@ -215,17 +215,11 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         ImmutableMap.<String, String>of(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-                ImmutableMap.<RepositoryName, PathFragment>of()),
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
-
+    skyframeExecutor.injectExtraPrecomputedValues(ImmutableList.of(PrecomputedValue.injected(
+        RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+        ImmutableMap.<RepositoryName, PathFragment>of())));
     packageManager = skyframeExecutor.getPackageManager();
-    buildView = new BuildViewForTesting(directories, ruleClassProvider, skyframeExecutor, null);
+    buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
 
   }
 
@@ -407,7 +401,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     ensureUpdateWasCalled();
     Label parsedLabel;
     try {
-      parsedLabel = Label.parseAbsolute(label, ImmutableMap.of());
+      parsedLabel = Label.parseAbsolute(label);
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
@@ -416,8 +410,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   protected Target getTarget(String label) throws InterruptedException {
     try {
-      return SkyframeExecutorTestUtils.getExistingTarget(
-          skyframeExecutor, Label.parseAbsolute(label, ImmutableMap.of()));
+      return SkyframeExecutorTestUtils.getExistingTarget(skyframeExecutor,
+          Label.parseAbsolute(label));
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
@@ -452,7 +446,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
       String label, BuildConfiguration configuration) {
     Label parsedLabel;
     try {
-      parsedLabel = Label.parseAbsolute(label, ImmutableMap.of());
+      parsedLabel = Label.parseAbsolute(label);
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
@@ -502,7 +496,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     return analysisResult.getError();
   }
 
-  protected BuildViewForTesting getView() {
+  protected BuildView getView() {
     return buildView;
   }
 
