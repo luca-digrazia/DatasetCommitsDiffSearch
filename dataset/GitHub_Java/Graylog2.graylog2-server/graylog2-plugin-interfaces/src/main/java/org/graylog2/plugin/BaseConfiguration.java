@@ -99,7 +99,7 @@ public abstract class BaseConfiguration {
     @Parameter(value = "input_cache_max_size")
     private long inputCacheMaxSize = 0;
 
-    @Parameter("message_journal_enabled")
+    @Parameter("enable_message_journal")
     private boolean messageJournalEnabled = false;
 
     @Parameter("message_journal_dir")
