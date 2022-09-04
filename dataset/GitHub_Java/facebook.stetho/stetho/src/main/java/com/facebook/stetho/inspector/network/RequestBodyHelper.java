@@ -14,7 +14,7 @@ import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.zip.InflaterOutputStream;
+import java.util.zip.DeflaterOutputStream;
 
 /**
  * Helper which manages provides computed request sizes as well as transparent decompression.
@@ -44,7 +44,7 @@ public class RequestBodyHelper {
     if (DecompressionHelper.GZIP_ENCODING.equals(contentEncoding)) {
       deflatingOutput = GunzippingOutputStream.create(deflatedOutput);
     } else if (DecompressionHelper.DEFLATE_ENCODING.equals(contentEncoding)) {
-      deflatingOutput = new InflaterOutputStream(deflatedOutput);
+      deflatingOutput = new DeflaterOutputStream(deflatedOutput);
     } else {
       deflatingOutput = deflatedOutput;
     }

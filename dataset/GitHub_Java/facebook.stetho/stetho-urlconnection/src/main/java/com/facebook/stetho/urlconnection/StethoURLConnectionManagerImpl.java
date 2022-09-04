@@ -19,6 +19,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Isolated implementation class to allow us to escape the verifier if Stetho is not
@@ -27,17 +28,21 @@ import java.net.HttpURLConnection;
  * APK.
  */
 class StethoURLConnectionManagerImpl {
+  private static final AtomicInteger sSequenceNumberGenerator = new AtomicInteger(0);
+
   private final NetworkEventReporter mStethoHook = NetworkEventReporterImpl.get();
-  private final String mRequestId;
+  private final int mRequestId;
   @Nullable
   private final String mFriendlyName;
+
+  @Nullable private String mRequestIdString;
 
   private HttpURLConnection mConnection;
   @Nullable private URLConnectionInspectorRequest mInspectorRequest;
   @Nullable private RequestBodyHelper mRequestBodyHelper;
 
   public StethoURLConnectionManagerImpl(@Nullable String friendlyName) {
-    mRequestId = mStethoHook.nextRequestId();
+    mRequestId = sSequenceNumberGenerator.getAndIncrement();
     mFriendlyName = friendlyName;
   }
 
@@ -136,6 +141,9 @@ class StethoURLConnectionManagerImpl {
    */
   @Nonnull
   public String getStethoRequestId() {
-    return mRequestId;
+    if (mRequestIdString == null) {
+      mRequestIdString = String.valueOf(mRequestId);
+    }
+    return mRequestIdString;
   }
 }

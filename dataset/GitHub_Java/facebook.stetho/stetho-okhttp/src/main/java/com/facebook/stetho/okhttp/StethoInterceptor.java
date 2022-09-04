@@ -13,13 +13,7 @@ import com.facebook.stetho.inspector.network.DefaultResponseHandler;
 import com.facebook.stetho.inspector.network.NetworkEventReporter;
 import com.facebook.stetho.inspector.network.NetworkEventReporterImpl;
 import com.facebook.stetho.inspector.network.RequestBodyHelper;
-import com.squareup.okhttp.Connection;
-import com.squareup.okhttp.Interceptor;
-import com.squareup.okhttp.MediaType;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.RequestBody;
-import com.squareup.okhttp.Response;
-import com.squareup.okhttp.ResponseBody;
+import com.squareup.okhttp.*;
 import okio.BufferedSink;
 import okio.BufferedSource;
 import okio.Okio;
@@ -29,6 +23,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides easy integration with <a href="http://square.github.io/okhttp/">OkHttp</a> 2.2.0+
@@ -38,16 +33,15 @@ import java.io.OutputStream;
  *   OkHttpClient client = new OkHttpClient();
  *   client.networkInterceptors().add(new StethoInterceptor());
  * </pre>
- *
- * @deprecated replaced with {@code com.facebook.stetho.okhttp3.StethoInterceptor}.
  */
-@Deprecated
 public class StethoInterceptor implements Interceptor {
   private final NetworkEventReporter mEventReporter = NetworkEventReporterImpl.get();
 
+  private final AtomicInteger mNextRequestId = new AtomicInteger(0);
+
   @Override
   public Response intercept(Chain chain) throws IOException {
-    String requestId = mEventReporter.nextRequestId();
+    String requestId = String.valueOf(mNextRequestId.getAndIncrement());
 
     Request request = chain.request();
 
@@ -276,7 +270,7 @@ public class StethoInterceptor implements Interceptor {
     }
 
     @Override
-    public long contentLength() throws IOException {
+    public long contentLength() {
       return mBody.contentLength();
     }
 

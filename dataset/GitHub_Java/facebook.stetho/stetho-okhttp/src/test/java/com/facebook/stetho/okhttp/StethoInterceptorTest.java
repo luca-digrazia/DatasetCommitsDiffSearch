@@ -26,7 +26,6 @@ import com.squareup.okhttp.Response;
 import com.squareup.okhttp.ResponseBody;
 import com.squareup.okhttp.mockwebserver.MockResponse;
 import com.squareup.okhttp.mockwebserver.MockWebServer;
-import okio.Buffer;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -52,7 +51,6 @@ import java.util.zip.GZIPOutputStream;
 
 import static org.junit.Assert.*;
 import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.mock;
 
 @Config(emulateSdk = Build.VERSION_CODES.JELLY_BEAN)
 @RunWith(RobolectricTestRunner.class)
@@ -70,7 +68,7 @@ public class StethoInterceptorTest {
   public void setUp() {
     PowerMockito.mockStatic(NetworkEventReporterImpl.class);
 
-    mMockEventReporter = mock(NetworkEventReporter.class);
+    mMockEventReporter = Mockito.mock(NetworkEventReporter.class);
     Mockito.when(mMockEventReporter.isEnabled()).thenReturn(true);
     PowerMockito.when(NetworkEventReporterImpl.get()).thenReturn(mMockEventReporter);
 
@@ -103,7 +101,7 @@ public class StethoInterceptorTest {
         .build();
     Response filteredResponse =
         mInterceptor.intercept(
-            new SimpleTestChain(request, reply, mock(Connection.class)));
+            new SimpleTestChain(request, reply, null));
 
     inOrder.verify(mMockEventReporter).isEnabled();
     inOrder.verify(mMockEventReporter)
@@ -134,7 +132,7 @@ public class StethoInterceptorTest {
         hookAlmostRealRequestWillBeSent(mMockEventReporter);
 
     MockWebServer server = new MockWebServer();
-    server.start();
+    server.play();
     server.enqueue(new MockResponse()
         .setBody("Success!"));
 
@@ -175,13 +173,13 @@ public class StethoInterceptorTest {
     byte[] compressedData = compress(uncompressedData);
 
     MockWebServer server = new MockWebServer();
-    server.start();
+    server.play();
     server.enqueue(new MockResponse()
-        .setBody(new Buffer().write(compressedData))
+        .setBody(compressedData)
         .addHeader("Content-Encoding: gzip"));
 
     Request request = new Request.Builder()
-        .url(server.url("/"))
+        .url(server.getUrl("/"))
         .build();
     Response response = mClientWithInterceptor.newCall(request).execute();
 
