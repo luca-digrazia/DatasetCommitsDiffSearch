@@ -22,15 +22,16 @@ import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.security.deployment.JCAProviderBuildItem;
 import io.quarkus.smallrye.jwt.runtime.auth.JWTAuthMechanism;
-import io.quarkus.smallrye.jwt.runtime.auth.JsonWebTokenCredentialProducer;
 import io.quarkus.smallrye.jwt.runtime.auth.JwtPrincipalProducer;
 import io.quarkus.smallrye.jwt.runtime.auth.MpJwtValidator;
 import io.quarkus.smallrye.jwt.runtime.auth.RawOptionalClaimCreator;
@@ -56,6 +57,11 @@ class SmallRyeJwtProcessor {
 
     SmallRyeJWTConfig config;
 
+    @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.JWT);
+    }
+
     /**
      * Register the CDI beans that are needed by the MP-JWT extension
      *
@@ -67,7 +73,6 @@ class SmallRyeJwtProcessor {
         if (config.enabled) {
             AdditionalBeanBuildItem.Builder unremovable = AdditionalBeanBuildItem.builder().setUnremovable();
             unremovable.addBeanClass(MpJwtValidator.class);
-            unremovable.addBeanClass(JsonWebTokenCredentialProducer.class);
             unremovable.addBeanClass(JWTAuthMechanism.class);
             unremovable.addBeanClass(ClaimValueProducer.class);
             additionalBeans.produce(unremovable.build());
@@ -138,9 +143,9 @@ class SmallRyeJwtProcessor {
                 continue;
             }
             AnnotationInstance claimQualifier = injectionPoint.getRequiredQualifier(CLAIM_NAME);
-            if (claimQualifier != null && injectionPoint.getType().name().equals(DotNames.PROVIDER)) {
+            if (claimQualifier != null && injectionPoint.getRequiredType().name().equals(DotNames.PROVIDER)) {
                 // Classes from javax.json are handled specially
-                Type actualType = injectionPoint.getRequiredType();
+                Type actualType = injectionPoint.getRequiredType().asParameterizedType().arguments().get(0);
                 if (actualType.name().equals(DotNames.OPTIONAL) && !actualType.name().toString()
                         .startsWith("javax.json")) {
                     additionalTypes.add(actualType);
