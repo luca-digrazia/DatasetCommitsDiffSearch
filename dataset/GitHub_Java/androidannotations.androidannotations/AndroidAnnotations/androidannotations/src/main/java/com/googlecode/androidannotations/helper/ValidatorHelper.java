@@ -48,7 +48,7 @@ import com.googlecode.androidannotations.annotations.EReceiver;
 import com.googlecode.androidannotations.annotations.EService;
 import com.googlecode.androidannotations.annotations.EView;
 import com.googlecode.androidannotations.annotations.EViewGroup;
-import com.googlecode.androidannotations.annotations.EBean;
+import com.googlecode.androidannotations.annotations.Enhanced;
 import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.ViewById;
@@ -96,10 +96,10 @@ public class ValidatorHelper {
 	private static final Collection<Integer> VALID_LOG_LEVELS = Arrays.asList(Log.VERBOSE, Log.DEBUG, Log.INFO, Log.WARN, Log.ERROR);
 
 	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class, EView.class, EBean.class);
+	private static final List<Class<? extends Annotation>> VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class, EView.class, Enhanced.class);
 
 	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = Arrays.asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, EBean.class, EService.class, EReceiver.class, EProvider.class);
+	private static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = Arrays.asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, Enhanced.class, EService.class, EReceiver.class, EProvider.class);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -163,9 +163,9 @@ public class ValidatorHelper {
 		}
 	}
 
-	public void enclosingElementHasEBeanAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
+	public void enclosingElementHasEnhancedAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
 		Element enclosingElement = element.getEnclosingElement();
-		hasClassAnnotation(element, enclosingElement, validatedElements, EBean.class, valid);
+		hasClassAnnotation(element, enclosingElement, validatedElements, Enhanced.class, valid);
 	}
 
 	public void enclosingElementHasEActivity(Element element, AnnotationElements validatedElements, IsValid valid) {
@@ -888,15 +888,15 @@ public class ValidatorHelper {
 
 			if (!annotationHelper.isPrivate(constructor)) {
 				if (constructor.getParameters().size() != 0) {
-					annotationHelper.printAnnotationError(element, "%s annotated element should have an empty constructor");
+					annotationHelper.printError(element, "%s annotated element should have an empty constructor");
 					valid.invalidate();
 				}
 			} else {
-				annotationHelper.printAnnotationError(element, "%s annotated element should not have a private constructor");
+				annotationHelper.printError(element, "%s annotated element should not have a private constructor");
 				valid.invalidate();
 			}
 		} else {
-			annotationHelper.printAnnotationError(element, "%s annotated element should have only one constructor");
+			annotationHelper.printError(element, "%s annotated element should have only one constructor");
 			valid.invalidate();
 		}
 	}
