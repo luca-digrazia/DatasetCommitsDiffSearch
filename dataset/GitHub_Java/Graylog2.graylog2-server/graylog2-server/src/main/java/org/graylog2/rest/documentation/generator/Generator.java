@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,34 +15,22 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.documentation.generator;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import com.fasterxml.jackson.databind.annotation.JsonNaming;
-import com.fasterxml.jackson.module.jsonSchema.JsonSchema;
-import com.fasterxml.jackson.module.jsonSchema.factories.SchemaFactoryWrapper;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
-import com.google.common.primitives.Primitives;
-import org.graylog2.ServerVersion;
+import org.graylog2.Core;
 import org.graylog2.rest.documentation.annotations.*;
 import org.reflections.Reflections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
-import javax.ws.rs.core.Response;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
 
@@ -68,10 +56,10 @@ public class Generator {
     private static Map<String, Object> overviewResult = Maps.newHashMap();
     private static Reflections reflections;
 
-    private final ObjectMapper mapper;
+    private final String packageName;
 
-    public Generator(String packageName, ObjectMapper mapper) {
-        this.mapper = mapper;
+    public Generator(String packageName) {
+        this.packageName = packageName;
 
         synchronized (lock) {
             if (reflections == null) {
@@ -112,7 +100,7 @@ public class Generator {
             Map<String, String> info = Maps.newHashMap();
             info.put("title", "Graylog2 REST API");
 
-            overviewResult.put("apiVersion", ServerVersion.VERSION.toString());
+            overviewResult.put("apiVersion", Core.GRAYLOG2_VERSION);
             overviewResult.put("swaggerVersion", EMULATED_SWAGGER_VERSION);
             overviewResult.put("apis", apis);
 
@@ -126,9 +114,8 @@ public class Generator {
 
     public Map<String, Object> generateForRoute(String route, String basePath) {
         Map<String, Object> result = Maps.newHashMap();
-        Set<Class<?>> modelTypes = Sets.newHashSet();
-        List<Map<String, Object>> apis = Lists.newArrayList();
 
+        List<Map<String, Object>> apis = Lists.newArrayList();
         for (Class<?> clazz : getAnnotatedClasses()) {
             Path path = clazz.getAnnotation(Path.class);
             if (path == null) {
@@ -177,13 +164,6 @@ public class Generator {
                         }
                     }
 
-                    Produces produces = null;
-                    if (clazz.isAnnotationPresent(Produces.class) || method.isAnnotationPresent(Produces.class)) {
-                        produces = clazz.getAnnotation(Produces.class);
-                        if (method.isAnnotationPresent(Produces.class)) {
-                            produces = method.getAnnotation(Produces.class);
-                        }
-                    }
                     api.put("path", methodPath);
 
                     Map<String, Object> operation = Maps.newHashMap();
@@ -191,25 +171,10 @@ public class Generator {
                     operation.put("summary", apiOperation.value());
                     operation.put("notes", apiOperation.notes());
                     operation.put("nickname", method.getName());
-                    if (produces != null) {
-                        operation.put("produces", produces.value());
-                    }
-                    // skip Response.class because we can't reliably infer any schema information from its payload anyway.
-                    if (! method.getReturnType().isAssignableFrom(Response.class)) {
-                        operation.put("type", method.getReturnType().getSimpleName());
-                        modelTypes.add(method.getReturnType());
-                    }
 
-                    List<Parameter> parameters = determineParameters(method);
+                    List<Map<String, Object>> parameters = determineParameters(method);
                     if (parameters != null && !parameters.isEmpty()) {
                         operation.put("parameters", parameters);
-                    }
-                    for (Parameter parameter : parameters) {
-                        final Class type = parameter.getType();
-                        if (Primitives.unwrap(type).isPrimitive() || type.equals(String.class)) {
-                            continue;
-                        }
-                        modelTypes.add(type);
                     }
 
                     operation.put("responseMessages", determineResponses(method));
@@ -235,42 +200,21 @@ public class Generator {
             }
         });
 
-        // generate the json schema for the auto-mapped return types
-        Map<String, Object> models = Maps.newHashMap();
-        for (Class<?> type : modelTypes) {
-
-            // skip non-jackson mapped classes (like Response)
-            if (!type.isAnnotationPresent(JsonAutoDetect.class)) {
-                continue;
-            }
-            try {
-                SchemaFactoryWrapper visitor = new SchemaFactoryWrapper();
-                mapper.acceptJsonFormatVisitor(mapper.constructType(type), visitor);
-                final JsonSchema schema = visitor.finalSchema();
-                models.put(type.getSimpleName(), schema);
-            } catch (JsonMappingException e) {
-                LOG.error("Error generating model schema. Ignoring this model, this will likely break the API browser.", e);
-            }
-
-        }
         result.put("apis", apis);
         result.put("basePath", basePath);
-        result.put("models", models);
         result.put("resourcePath", cleanRoute(route));
-        result.put("apiVersion", ServerVersion.VERSION.toString());
+        result.put("apiVersion", Core.GRAYLOG2_VERSION);
         result.put("swaggerVersion", EMULATED_SWAGGER_VERSION);
 
         return result;
     }
 
-    private List<Parameter> determineParameters(Method method) {
+    private List<Map<String, Object>> determineParameters(Method method) {
         List<Map<String, Object>> parameters = Lists.newArrayList();
-        List<Parameter> params = Lists.newArrayList();
 
         int i = 0;
         for (Annotation[] annotations : method.getParameterAnnotations()) {
             Map<String, Object> parameter = Maps.newHashMap();
-            final Parameter param = new Parameter();
 
             for (Annotation annotation : annotations) {
                 if (annotation instanceof ApiParam) {
@@ -278,37 +222,23 @@ public class Generator {
                     parameter.put("name", apiParam.title());
                     parameter.put("description", apiParam.description());
                     parameter.put("required", apiParam.required());
-                    param.setName(apiParam.title());
-                    param.setDescription(apiParam.description());
-                    param.setIsRequired(apiParam.required());
 
                     Type parameterClass = method.getGenericParameterTypes()[i];
-                    if (parameterClass.equals(String.class)) {
+                    if(parameterClass.equals(String.class)) {
                         parameter.put("type", "string");
-                    } else if (parameterClass.equals(int.class) || parameterClass.equals(Integer.class)) {
+                    } else if(parameterClass.equals(int.class) || parameterClass.equals(Integer.class)) {
                         parameter.put("type", "integer");
-                    } else {
-                        parameter.put("type", method.getParameterTypes()[i].getSimpleName());
                     }
-                    param.setType(parameterClass);
                 }
 
-                String paramType;
-                Parameter.Kind paramKind;
+                String paramType = "";
                 if (annotation instanceof QueryParam) {
                     paramType = "query";
-                    paramKind = Parameter.Kind.QUERY;
                 } else if (annotation instanceof PathParam) {
                     paramType = "path";
-                    paramKind = Parameter.Kind.PATH;
-                } else if (annotation instanceof HeaderParam) {
-                    // TODO skip header params for now, we use them for Accept headers until we return proper objects
-                    continue;
                 } else {
                     paramType = "body";
-                    paramKind = Parameter.Kind.BODY;
                 }
-                param.setKind(paramKind);
 
                 parameter.put("paramType", paramType);
             }
@@ -317,12 +247,11 @@ public class Generator {
             if (!parameter.isEmpty()) {
                 parameters.add(parameter);
             }
-            if (param.getType() != null)
-                params.add(param);
+
             i++;
         }
 
-        return params;
+        return parameters;
     }
 
     private List<Map<String, Object>> determineResponses(Method method) {
@@ -376,90 +305,4 @@ public class Generator {
         return null;
     }
 
-    // sigh, is this really not built-in?
-    public static class DefaultNamingStrategy extends PropertyNamingStrategy.PropertyNamingStrategyBase {
-        @Override
-        public String translate(String propertyName) {
-            return propertyName;
-        }
-    }
-
-    @JsonNaming(DefaultNamingStrategy.class)
-    private static class Parameter {
-        private String name;
-        private String description;
-        private boolean isRequired;
-        private Class type;
-        private Kind kind;
-
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public void setDescription(String description) {
-            this.description = description;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public void setIsRequired(boolean required) {
-            isRequired = required;
-        }
-
-        public boolean isRequired() {
-            return isRequired;
-        }
-
-        public void setRequired(boolean required) {
-            isRequired = required;
-        }
-
-        public void setType(Type type) {
-            final Class<?> klass;
-
-            if (type instanceof ParameterizedType) {
-                klass = (Class<?>) ((ParameterizedType) type).getRawType();
-            } else {
-                klass = (Class<?>) type;
-            }
-
-            if (klass.isPrimitive()) {
-                this.type = Primitives.wrap(klass);
-            } else {
-                this.type = klass;
-            }
-        }
-
-        @JsonIgnore
-        public Class getType() {
-            return type;
-        }
-
-        @JsonProperty("type")
-        public String getTypeName() {
-            return type.getSimpleName();
-        }
-
-        public void setKind(Kind kind) {
-            this.kind = kind;
-        }
-
-        @JsonProperty("paramType")
-        public String getKind() {
-            return kind.toString().toLowerCase();
-        }
-
-        public enum Kind {
-            BODY,
-            HEADER,
-            PATH,
-            QUERY
-        }
-    }
 }
