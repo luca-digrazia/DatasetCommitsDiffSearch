@@ -11,6 +11,7 @@ import com.google.android.exoplayer2.upstream.TransferListener;
 import java.io.File;
 import java.util.Map;
 
+import leakcanary.LeakCanary;
 import tv.danmaku.ijk.media.exo2.ExoMediaSourceInterceptListener;
 import tv.danmaku.ijk.media.exo2.ExoSourceManager;
 
