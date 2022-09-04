@@ -411,16 +411,16 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     Artifact executable = linkAction.getLinkOutput();
     CcLinkingOutputs.Builder linkingOutputsBuilder = new CcLinkingOutputs.Builder();
     if (isLinkShared(ruleContext)) {
-      linkingOutputsBuilder.addDynamicLibraryForLinking(outputLibrary);
-      linkingOutputsBuilder.addDynamicLibraryForRuntime(outputLibrary);
+      linkingOutputsBuilder.addDynamicLibrary(outputLibrary);
+      linkingOutputsBuilder.addExecutionDynamicLibrary(outputLibrary);
     }
     // Also add all shared libraries from srcs.
     for (Artifact library : precompiledFiles.getSharedLibraries()) {
       Artifact symlink = common.getDynamicLibrarySymlink(library, true);
       LibraryToLink symlinkLibrary = LinkerInputs.solibLibraryToLink(
           symlink, library, CcLinkingOutputs.libraryIdentifierOf(library));
-      linkingOutputsBuilder.addDynamicLibraryForLinking(symlinkLibrary);
-      linkingOutputsBuilder.addDynamicLibraryForRuntime(symlinkLibrary);
+      linkingOutputsBuilder.addDynamicLibrary(symlinkLibrary);
+      linkingOutputsBuilder.addExecutionDynamicLibrary(symlinkLibrary);
     }
     CcLinkingOutputs linkingOutputs = linkingOutputsBuilder.build();
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.create(Order.STABLE_ORDER, executable);
@@ -465,7 +465,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
           NestedSetBuilder.fromNestedSet(filesToBuild)
               .addAll(
                   createDynamicLibrariesCopyActions(
-                      ruleContext, linkParams.getDynamicLibrariesForRuntime()))
+                      ruleContext, linkParams.getExecutionDynamicLibraries()))
               .build();
     }
 
@@ -817,13 +817,13 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    * Create the actions to symlink/copy execution dynamic libraries to binary directory so that they
    * are available at runtime.
    *
-   * @param dynamicLibrariesForRuntime The libraries to be copied.
+   * @param executionDynamicLibraries The libraries to be copied.
    * @return The result artifacts of the copies.
    */
   private static ImmutableList<Artifact> createDynamicLibrariesCopyActions(
-      RuleContext ruleContext, NestedSet<Artifact> dynamicLibrariesForRuntime) {
+      RuleContext ruleContext, NestedSet<Artifact> executionDynamicLibraries) {
     ImmutableList.Builder<Artifact> result = ImmutableList.builder();
-    for (Artifact target : dynamicLibrariesForRuntime) {
+    for (Artifact target : executionDynamicLibraries) {
       if (!ruleContext.getLabel().getPackageName().equals(target.getOwner().getPackageName())) {
         // SymlinkAction on file is actually copy on Windows.
         Artifact copy = ruleContext.getBinArtifact(target.getFilename());
@@ -909,9 +909,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext);
 
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    ccLinkingInfoBuilder.setCcDynamicLibrariesForRuntime(
-        new CcDynamicLibrariesForRuntime(
-            collectDynamicLibrariesForRuntimeArtifacts(
+    ccLinkingInfoBuilder.setCcExecutionDynamicLibraries(
+        new CcExecutionDynamicLibraries(
+            collectExecutionDynamicLibraryArtifacts(
                 ruleContext, linkingOutputs.getDynamicLibrariesForRuntime())));
 
     builder
@@ -943,9 +943,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);
   }
 
-  private static NestedSet<Artifact> collectDynamicLibrariesForRuntimeArtifacts(
-      RuleContext ruleContext, List<LibraryToLink> dynamicLibrariesForRuntime) {
-    Iterable<Artifact> artifacts = LinkerInputs.toLibraryArtifacts(dynamicLibrariesForRuntime);
+  private static NestedSet<Artifact> collectExecutionDynamicLibraryArtifacts(
+      RuleContext ruleContext,
+      List<LibraryToLink> executionDynamicLibraries) {
+    Iterable<Artifact> artifacts = LinkerInputs.toLibraryArtifacts(executionDynamicLibraries);
     if (!Iterables.isEmpty(artifacts)) {
       return NestedSetBuilder.wrap(Order.STABLE_ORDER, artifacts);
     }
@@ -953,11 +954,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     for (CcLinkingInfo ccLinkingInfo :
         ruleContext.getPrerequisites("deps", Mode.TARGET, CcLinkingInfo.PROVIDER)) {
-      CcDynamicLibrariesForRuntime ccDynamicLibrariesForRuntime =
-          ccLinkingInfo.getCcDynamicLibrariesForRuntime();
-      if (ccDynamicLibrariesForRuntime != null) {
-        builder.addTransitive(
-            ccDynamicLibrariesForRuntime.getDynamicLibrariesForRuntimeArtifacts());
+      CcExecutionDynamicLibraries ccExecutionDynamicLibraries =
+          ccLinkingInfo.getCcExecutionDynamicLibraries();
+      if (ccExecutionDynamicLibraries != null) {
+        builder.addTransitive(ccExecutionDynamicLibraries.getExecutionDynamicLibraryArtifacts());
       }
     }
 
