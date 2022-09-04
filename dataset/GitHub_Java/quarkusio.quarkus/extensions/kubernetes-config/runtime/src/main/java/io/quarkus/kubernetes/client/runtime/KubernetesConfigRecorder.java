@@ -2,6 +2,7 @@ package io.quarkus.kubernetes.client.runtime;
 
 import java.util.Collections;
 
+import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
@@ -11,8 +12,6 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.TlsConfig;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.AbstractRawDefaultConfigSource;
-import io.smallrye.config.ConfigValue;
-import io.smallrye.config.SmallRyeConfig;
 
 @Recorder
 public class KubernetesConfigRecorder {
@@ -35,14 +34,24 @@ public class KubernetesConfigRecorder {
                 KubernetesClientUtils.createClient(clientConfig, tlsConfig)));
     }
 
+    // We don't want to enable the reading of anything if 'quarkus.kubernetes-config.enabled' is EXPLICITLY set to false
+    // In order to figure out whether the user has actually set the property, we take advantage of the fact that Smallrye
+    // Config returns the ConfigSources by descending order - we thus check each ConfigSource to see if the value has been set
     private boolean isExplicitlyDisabled() {
-        SmallRyeConfig smallRyeConfig = (SmallRyeConfig) ConfigProvider.getConfig();
-        ConfigValue configValue = smallRyeConfig.getConfigValue(CONFIG_ENABLED_PROPERTY_NAME);
-        if (AbstractRawDefaultConfigSource.NAME.equals(configValue.getConfigSourceName())) {
-            return false;
-        }
-        if (configValue.getValue() != null) {
-            return !smallRyeConfig.getValue(CONFIG_ENABLED_PROPERTY_NAME, Boolean.class);
+        Config config = ConfigProvider.getConfig();
+        Iterable<ConfigSource> configSources = config.getConfigSources();
+        for (ConfigSource configSource : configSources) {
+            // this is the ConfigSource that Quarkus Config creates and if we've reached this point, then we know that the
+            // use has not explicitly configured the value
+            if (configSource instanceof AbstractRawDefaultConfigSource) {
+                return false;
+            }
+            // don't use configSource.getPropertyNames() as it returns an empty list for env vars
+            String strValue = configSource.getValue(CONFIG_ENABLED_PROPERTY_NAME);
+            if ((strValue != null) && !strValue.isEmpty()) {
+                // TODO: should probably use converter here
+                return !Boolean.parseBoolean(strValue);
+            }
         }
         return false;
     }
