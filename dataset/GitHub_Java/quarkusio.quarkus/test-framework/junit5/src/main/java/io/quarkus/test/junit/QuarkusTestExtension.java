@@ -331,7 +331,6 @@ public class QuarkusTestExtension
         Object instance = TestInstantiator.instantiateTest(factoryContext.getTestClass());
         TestHTTPResourceManager.inject(instance);
         TestInjectionManager.inject(instance);
-        state.testResourceManager.inject(instance);
         return instance;
     }
 

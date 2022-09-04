@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.logging.Handler;
 
 import org.objectweb.asm.ClassVisitor;
 
@@ -26,7 +25,6 @@ import io.quarkus.deployment.builditem.LiveReloadBuildItem;
 import io.quarkus.runtime.Application;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.configuration.ProfileManager;
-import io.quarkus.runtime.logging.InitialConfigurator;
 
 /**
  * Class that can be used to run quarkus directly, executing the build and runtime
@@ -126,15 +124,11 @@ public class RuntimeRunner implements Runnable, Closeable {
                     application.stop();
                 }
             };
+
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
-        } finally {
-            // if the log handler is not activated, activate it with a default configuration to flush the messages
-            if (!InitialConfigurator.DELAYED_HANDLER.isActivated()) {
-                InitialConfigurator.DELAYED_HANDLER.setHandlers(new Handler[] { InitialConfigurator.createDefaultHandler() });
-            }
         }
     }
 
