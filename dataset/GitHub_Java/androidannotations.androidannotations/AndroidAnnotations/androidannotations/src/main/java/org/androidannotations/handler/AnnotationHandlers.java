@@ -53,6 +53,7 @@ public class AnnotationHandlers {
 		add(new PrefHandler(processingEnvironment));
 		add(new RoboGuiceHandler(processingEnvironment));
 		add(new ViewByIdHandler(processingEnvironment));
+		add(new ViewsByIdHandler(processingEnvironment));
 		add(new FragmentByIdHandler(processingEnvironment));
 		add(new FragmentByTagHandler(processingEnvironment));
 		add(new FromHtmlHandler(processingEnvironment));
@@ -97,6 +98,8 @@ public class AnnotationHandlers {
 		add(new SeekBarTouchStartHandler(processingEnvironment));
 		add(new SeekBarTouchStopHandler(processingEnvironment));
 		add(new ServiceActionHandler(processingEnvironment));
+		add(new SubscribeHandler(processingEnvironment));
+		add(new ProduceHandler(processingEnvironment));
 		add(new InstanceStateHandler(processingEnvironment));
 		add(new HttpsClientHandler(processingEnvironment));
 		add(new OnActivityResultHandler(processingEnvironment));
