@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.node.TreeTraversingParser;
@@ -115,12 +116,7 @@ public class ConfigurationFactory<T> {
      * @throws ConfigurationException if there is an error parsing or validating the file
      */
     public T build() throws IOException, ConfigurationException {
-        try {
-            return build(mapper.valueToTree(klass.newInstance()), "default configuration");
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw new IllegalArgumentException("Unable create an instance " +
-                    "of the configuration class: '" + klass.getCanonicalName() + "'", e);
-        }
+        return build(JsonNodeFactory.instance.objectNode(), "default configuration");
     }
 
     private T build(JsonNode node, String path) throws IOException, ConfigurationException {
