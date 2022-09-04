@@ -1,41 +1,90 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc;
 
-package org.jboss.quarkus.arc;
-
-import java.util.Collection;
-
+import java.util.Map;
+import java.util.function.Function;
+import javax.enterprise.context.NormalScope;
 import javax.enterprise.context.spi.AlterableContext;
+import javax.enterprise.context.spi.Contextual;
+import javax.enterprise.context.spi.CreationalContext;
 
 /**
- *
- * @author Martin Kouba
+ * A context implementing this interface makes it possible to capture and view its state via the {@link ContextState}.
+ * 
+ * It also allows users to destroy all contextual instances within this context.
  */
 public interface InjectableContext extends AlterableContext {
-
-    /**
-     * Note that we cannot actually return just a map of contextuals to contextual instances because we need to preserve the
-     * {@link javax.enterprise.context.spi.CreationalContext} too so that we're able to destroy the dependent objects correctly.
-     *
-     * @return all existing contextual instances
-     */
-    Collection<InstanceHandle<?>> getAll();
 
     /**
      * Destroy all existing contextual instances.
      */
     void destroy();
+
+    /**
+     * @return the current state
+     */
+    ContextState getState();
+
+    /**
+     * If the context is active then return an existing instance of certain contextual type or create a new instance, otherwise
+     * return a null value.
+     * 
+     * This allows for the {@link #isActive()} check and the actual creation to happen in a single method, which gives a
+     * performance benefit by performing fewer thread local operations.
+     *
+     * @param <T> the type of contextual type
+     * @param contextual the contextual type
+     * @param creationalContextFunction the creational context function
+     * @return the contextual instance, or a null value
+     */
+    default <T> T getIfActive(Contextual<T> contextual,
+            Function<Contextual<T>, CreationalContext<T>> creationalContextFunction) {
+        if (!isActive()) {
+            return null;
+        }
+        T result = get(contextual);
+        if (result != null) {
+            return result;
+        }
+        return get(contextual, creationalContextFunction.apply(contextual));
+    }
+
+    /**
+     * Destroy all contextual instances from the given state.
+     * <p>
+     * The default implementation is not optimized and does not guarantee proper sychronization. Implementations of this
+     * interface are encouraged to provide an optimized implementation of this method.
+     * 
+     * @param state
+     */
+    default void destroy(ContextState state) {
+        for (InjectableBean<?> bean : state.getContextualInstances().keySet()) {
+            try {
+                destroy(bean);
+            } catch (Exception e) {
+                throw new IllegalStateException("Unable to destroy contextual instance of " + bean, e);
+            }
+        }
+    }
+
+    /**
+     * 
+     * @return {@code true} if this context represents a normal scope
+     */
+    default boolean isNormal() {
+        return getScope().isAnnotationPresent(NormalScope.class);
+    }
+
+    /**
+    *
+    */
+    interface ContextState {
+
+        /**
+         * The changes to the map are not reflected in the underlying context.
+         * 
+         * @return a map of contextual instances
+         */
+        Map<InjectableBean<?>, Object> getContextualInstances();
+
+    }
 }

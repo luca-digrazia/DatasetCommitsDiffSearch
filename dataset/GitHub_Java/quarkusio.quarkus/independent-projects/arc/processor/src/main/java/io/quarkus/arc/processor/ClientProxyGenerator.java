@@ -118,7 +118,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
         FieldCreator beanField = clientProxy.getFieldCreator(BEAN_FIELD, DescriptorUtils.extToInt(beanClassName))
                 .setModifiers(ACC_PRIVATE | ACC_FINAL);
         if (mockable) {
-            clientProxy.getFieldCreator(MOCK_FIELD, providerType.descriptorName()).setModifiers(ACC_PRIVATE | ACC_VOLATILE);
+            clientProxy.getFieldCreator(MOCK_FIELD, Object.class).setModifiers(ACC_PRIVATE | ACC_VOLATILE);
         }
         FieldCreator contextField = null;
         if (BuiltinScope.APPLICATION.is(bean.getScope())) {
@@ -133,7 +133,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
         implementGetContextualInstance(clientProxy, providerType);
         implementGetBean(clientProxy, beanField.getFieldDescriptor());
         if (mockable) {
-            implementMockMethods(clientProxy, providerType);
+            implementMockMethods(clientProxy);
         }
 
         for (MethodInfo method : getDelegatingMethods(bean, bytecodeTransformerConsumer, transformUnproxyableClasses)) {
@@ -231,19 +231,17 @@ public class ClientProxyGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    private void implementMockMethods(ClassCreator clientProxy, ProviderType providerType) {
+    private void implementMockMethods(ClassCreator clientProxy) {
         MethodCreator clear = clientProxy
                 .getMethodCreator(MethodDescriptor.ofMethod(clientProxy.getClassName(), CLEAR_MOCK_METHOD_NAME, void.class));
-        clear.writeInstanceField(FieldDescriptor.of(clientProxy.getClassName(), MOCK_FIELD, providerType.descriptorName()),
-                clear.getThis(),
+        clear.writeInstanceField(FieldDescriptor.of(clientProxy.getClassName(), MOCK_FIELD, Object.class), clear.getThis(),
                 clear.loadNull());
         clear.returnValue(null);
 
         MethodCreator set = clientProxy
                 .getMethodCreator(
                         MethodDescriptor.ofMethod(clientProxy.getClassName(), SET_MOCK_METHOD_NAME, void.class, Object.class));
-        set.writeInstanceField(FieldDescriptor.of(clientProxy.getClassName(), MOCK_FIELD, providerType.descriptorName()),
-                set.getThis(),
+        set.writeInstanceField(FieldDescriptor.of(clientProxy.getClassName(), MOCK_FIELD, Object.class), set.getThis(),
                 set.getMethodParam(0));
         set.returnValue(null);
     }
@@ -270,8 +268,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
         if (mockable) {
             //if mockable and mocked just return the mock
             ResultHandle mock = creator.readInstanceField(
-                    FieldDescriptor.of(clientProxy.getClassName(), MOCK_FIELD, providerType.descriptorName()),
-                    creator.getThis());
+                    FieldDescriptor.of(clientProxy.getClassName(), MOCK_FIELD, Object.class.getName()), creator.getThis());
             BytecodeCreator falseBranch = creator.ifNull(mock).falseBranch();
             falseBranch.returnValue(falseBranch.checkCast(mock, providerType.className()));
         }

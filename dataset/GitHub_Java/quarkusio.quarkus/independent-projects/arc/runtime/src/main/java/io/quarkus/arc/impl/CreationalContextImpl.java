@@ -4,6 +4,7 @@ import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.InstanceHandle;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.Function;
@@ -20,7 +21,7 @@ public class CreationalContextImpl<T> implements CreationalContext<T>, Function<
 
     private final Contextual<T> contextual;
     private final CreationalContextImpl<?> parent;
-    private List<InstanceHandle<?>> dependentInstances;
+    private final List<InstanceHandle<?>> dependentInstances;
 
     public CreationalContextImpl(Contextual<T> contextual) {
         this(contextual, null);
@@ -29,34 +30,29 @@ public class CreationalContextImpl<T> implements CreationalContext<T>, Function<
     public CreationalContextImpl(Contextual<T> contextual, CreationalContextImpl<?> parent) {
         this.contextual = contextual;
         this.parent = parent;
-        this.dependentInstances = null;
+        this.dependentInstances = Collections.synchronizedList(new ArrayList<>());
     }
 
     public <I> void addDependentInstance(InjectableBean<I> bean, I instance, CreationalContext<I> ctx) {
         addDependentInstance(new InstanceHandleImpl<I>(bean, instance, ctx));
     }
 
-    public synchronized <I> void addDependentInstance(InstanceHandle<I> instanceHandle) {
-        if (dependentInstances == null) {
-            dependentInstances = new ArrayList<>();
-        }
+    public <I> void addDependentInstance(InstanceHandle<I> instanceHandle) {
         dependentInstances.add(instanceHandle);
     }
 
-    public synchronized boolean hasDependentInstances() {
-        return dependentInstances != null && !dependentInstances.isEmpty();
+    public boolean hasDependentInstances() {
+        return !dependentInstances.isEmpty();
     }
 
     void destroyDependentInstance(Object dependentInstance) {
-        synchronized (this) {
-            if (dependentInstances != null) {
-                for (Iterator<InstanceHandle<?>> iterator = dependentInstances.iterator(); iterator.hasNext();) {
-                    InstanceHandle<?> instanceHandle = iterator.next();
-                    if (instanceHandle.get() == dependentInstance) {
-                        instanceHandle.destroy();
-                        iterator.remove();
-                        break;
-                    }
+        synchronized (dependentInstances) {
+            for (Iterator<InstanceHandle<?>> iterator = dependentInstances.iterator(); iterator.hasNext();) {
+                InstanceHandle<?> instanceHandle = iterator.next();
+                if (instanceHandle.get() == dependentInstance) {
+                    instanceHandle.destroy();
+                    iterator.remove();
+                    break;
                 }
             }
         }
@@ -69,11 +65,9 @@ public class CreationalContextImpl<T> implements CreationalContext<T>, Function<
 
     @Override
     public void release() {
-        synchronized (this) {
-            if (dependentInstances != null) {
-                for (InstanceHandle<?> instance : dependentInstances) {
-                    instance.destroy();
-                }
+        synchronized (dependentInstances) {
+            for (InstanceHandle<?> instance : dependentInstances) {
+                instance.destroy();
             }
         }
     }
