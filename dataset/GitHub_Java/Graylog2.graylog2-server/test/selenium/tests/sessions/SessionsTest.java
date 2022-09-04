@@ -19,49 +19,39 @@
  */
 package selenium.tests.sessions;
 
-import com.google.common.collect.Maps;
-import org.fluentlenium.adapter.FluentTest;
-import org.fluentlenium.adapter.util.SharedDriver;
 import org.fluentlenium.core.annotation.Page;
+import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import selenium.pages.DashboardPage;
 import selenium.pages.LoginPage;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import static org.fest.assertions.fluentlenium.FluentLeniumAssertions.assertThat;
-import static play.test.Helpers.*;
+import static play.test.Helpers.running;
+import static play.test.Helpers.testServer;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@SharedDriver(type = SharedDriver.SharedType.PER_CLASS)
-public class SessionsTest extends FluentTest {
-    public static final int WEB_PORT = 9999;
+public class SessionsTest extends BaseSeleniumTest {
+    private static final Logger log = LoggerFactory.getLogger(SessionsTest.class);
 
     @Page
     public LoginPage loginPage;
 
-    @Override
-    public String getDefaultBaseUrl() {
-        return "http://localhost:" + WEB_PORT + "/";
-    }
-
-    private Map<String, ? extends Object> getApplicationConfig() {
-        final HashMap map = Maps.newHashMap();
-        map.put("application.secret", "qwertyqwertyqwertyqwerty");
-        map.put("graylog2-server.uris", "http://localhost:12900");
-        return map;
+    @BeforeClass
+    public static void setup() {
+        skipOnTravis();
     }
 
     @Test
     public void login() {
-        running(testServer(WEB_PORT, fakeApplication(getApplicationConfig())), new Runnable() {
+        running(testServer(WEB_PORT, getApp()), new Runnable() {
             @Override
             public void run() {
                 loginPage.go();
-                final DashboardPage dashboardPage = loginPage.loginAs("admin", "123123123");
+                final DashboardPage dashboardPage = loginPage.loginAs("admin", "admin");
                 assertThat(dashboardPage).isAt();
             }
         });
@@ -69,7 +59,7 @@ public class SessionsTest extends FluentTest {
 
     @Test
     public void loginErrorNoUser() {
-        running(testServer(WEB_PORT, fakeApplication(getApplicationConfig())), new Runnable() {
+        running(testServer(WEB_PORT, getApp()), new Runnable() {
             @Override
             public void run() {
                 loginPage.go();
