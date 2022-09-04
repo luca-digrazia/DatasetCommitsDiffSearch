@@ -30,6 +30,8 @@ import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.runtime.TestResultAggregator.AggregationPolicy;
+import com.google.devtools.build.lib.testutil.Suite;
+import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
 import java.util.stream.Stream;
@@ -39,6 +41,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 /** Tests for {@link TestResultAggregator}. */
+@TestSpec(size = Suite.SMALL_TESTS)
 @RunWith(JUnit4.class)
 public final class TestResultAggregatorTest {
 
@@ -48,7 +51,6 @@ public final class TestResultAggregatorTest {
   public void configureMockParams() {
     when(mockParams.runsDetectsFlakes()).thenReturn(false);
     when(mockParams.getTimeout()).thenReturn(TestTimeout.LONG);
-    when(mockParams.getShards()).thenReturn(1);
   }
 
   @Test
@@ -114,8 +116,8 @@ public final class TestResultAggregatorTest {
 
   @Test
   public void cancelConcurrentTests_cancellationAfterPassIgnored() {
-    when(mockParams.runsDetectsFlakes()).thenReturn(true);
     TestResultAggregator underTest = createAggregatorWithTestRuns(2);
+    when(mockParams.runsDetectsFlakes()).thenReturn(true);
 
     underTest.testEvent(
         testResult(

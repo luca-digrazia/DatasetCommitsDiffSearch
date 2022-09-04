@@ -65,7 +65,8 @@ final class TestResultAggregator {
       boolean skippedThisTest) {
     this.policy = policy;
     this.summary =
-        TestSummary.newBuilder(target)
+        TestSummary.newBuilder()
+            .setTarget(target)
             .setConfiguration(configuration)
             .setStatus(BlazeTestStatus.NO_STATUS)
             .setSkipped(skippedThisTest);
@@ -134,7 +135,7 @@ final class TestResultAggregator {
     postSummary();
   }
 
-  static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
+  private static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
     return status.getNumber() > other.getNumber() ? status : other;
   }
 
