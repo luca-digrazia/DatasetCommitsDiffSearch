@@ -217,6 +217,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      *
      * @param action Action to perform on each non-zero, typically this is a lambda.
      */
+    @SuppressWarnings("WeakerAccess")
     public void foreachNonzero(MatrixElementConsumer action) {
         for (int j = 0; j < ncols; j++) {
             for (int k = colIndex[j]; k < colIndex[j + 1]; k++) {
@@ -240,6 +241,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * @param endColumn   One past the last column to scan.
      * @param consumer      Action to perform on each non-zero, typically this is a lambda.
      */
+    @SuppressWarnings("WeakerAccess")
     public void foreachNonzero(int startColumn, int endColumn, MatrixElementConsumer consumer) {
         if (startColumn < 0 || startColumn >= ncols) {
             throw new IllegalArgumentException("Start column must be in range [0,ncols)");
@@ -259,6 +261,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     /**
      * Provides a stream over all of the non-zero elements of a sparse matrix.
      */
+    @SuppressWarnings("WeakerAccess")
     public Stream<Entry> nonzeros() {
         return StreamSupport.stream(new SparseMatrixSpliterator(this, 0, ncols), false);
     }
@@ -269,6 +272,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * @param startColumn The first column to scan
      * @param endColumn   The first column after the ones that we should scan.
      */
+    @SuppressWarnings("WeakerAccess")
     public Stream<Entry> nonzeros(int startColumn, int endColumn) {
         return StreamSupport.stream(new SparseMatrixSpliterator(this, startColumn, endColumn), false);
     }
@@ -278,9 +282,9 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * <p>
      * This is exposed to facilitate lower level access to the stream API for a matrix.
      */
-    private static class SparseMatrixSpliterator implements Spliterator<Entry> {
+    public static class SparseMatrixSpliterator implements Spliterator<Entry> {
         private final SparseMatrix m;
-        private int col;      // current column, advanced on split or traversal
+        private int col;      // current colum, advanced on split or traversal
         private int index;    // current element within column
         private final int fence; // one past the last column to process
 
