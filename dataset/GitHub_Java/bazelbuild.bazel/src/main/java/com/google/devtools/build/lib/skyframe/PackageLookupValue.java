@@ -133,10 +133,9 @@ public abstract class PackageLookupValue implements SkyValue {
     return Key.create(pkgIdentifier);
   }
 
-  /** {@link SkyKey} for {@link PackageLookupValue} computation. */
   @AutoCodec.VisibleForSerialization
   @AutoCodec
-  public static class Key extends AbstractSkyKey<PackageIdentifier> {
+  static class Key extends AbstractSkyKey<PackageIdentifier> {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
 
     private Key(PackageIdentifier arg) {
