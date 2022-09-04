@@ -322,11 +322,12 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
     /**
      * Whether to error out when we find Jar files when building binaries that weren't converted to
-     * a dex archive. This option will soon be removed from Bazel.
+     * a dex archive. Once this option works, we'll flip the default value in a config file, then
+     * once it is proven that it works, remove it from Bazel and said config file.
      */
     @Option(
       name = "experimental_incremental_dexing_error_on_missed_jars",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "experimental",
       help = "Do not use.")
     public boolean incrementalDexingErrorOnMissedJars;
