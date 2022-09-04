@@ -17,6 +17,7 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableMultiset.toImmutableMultiset;
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -28,7 +29,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisOptions;
@@ -45,11 +45,12 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -80,13 +81,13 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.Before;
@@ -224,15 +225,17 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         packageOptions,
         Options.getDefaults(StarlarkSemanticsOptions.class),
         UUID.randomUUID(),
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
+    skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
+                Optional.<RootedPath>absent()),
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()),
+                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+                ImmutableMap.<RepositoryName, PathFragment>of()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY),
@@ -524,7 +527,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner)
       throws InterruptedException {
     Label label = owner.getLabel();
-    ActionLookupKey actionLookupKey =
+    ActionLookupValue.ActionLookupKey actionLookupKey =
         ConfiguredTargetKey.builder()
             .setLabel(label)
             .setConfigurationKey(owner.getConfigurationKey())
@@ -581,6 +584,11 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     assertThat(actual).containsExactlyEntriesIn(expected);
   }
 
+  protected String getAnalysisError() {
+    ensureUpdateWasCalled();
+    return analysisResult.getError();
+  }
+
   protected BuildViewForTesting getView() {
     return buildView;
   }
@@ -615,7 +623,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             TestAspects.ALL_ATTRIBUTES_WITH_TOOL_ASPECT,
             TestAspects.BAR_PROVIDER_ASPECT,
             TestAspects.EXTRA_ATTRIBUTE_ASPECT,
-            TestAspects.PACKAGE_GROUP_ATTRIBUTE_ASPECT,
             TestAspects.COMPUTED_ATTRIBUTE_ASPECT,
             TestAspects.FOO_PROVIDER_ASPECT,
             TestAspects.ASPECT_REQUIRING_PROVIDER_SETS,

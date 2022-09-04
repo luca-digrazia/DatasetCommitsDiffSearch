@@ -327,17 +327,6 @@ public class AspectTest extends AnalysisTestCase {
   }
 
   @Test
-  public void aspectDependsOnPackageGroup() throws Exception {
-    setRulesAvailableInTests(
-        TestAspects.BASE_RULE, TestAspects.PACKAGE_GROUP_ATTRIBUTE_ASPECT_RULE);
-    pkg("extra", "package_group(name='extra')");
-    pkg("a", "rule_with_package_group_deps_aspect(name='a', foo=[':b'])", "base(name='b')");
-
-    getConfiguredTarget("//a:a");
-    assertContainsEventWithFrequency("bad aspect", 0);
-  }
-
-  @Test
   public void aspectWithComputedAttribute() throws Exception {
     setRulesAvailableInTests(TestAspects.BASE_RULE, TestAspects.COMPUTED_ATTRIBUTE_ASPECT_RULE);
 
@@ -894,31 +883,5 @@ public class AspectTest extends AnalysisTestCase {
     AspectApplyingToFiles.Provider provider =
         aspect.getProvider(AspectApplyingToFiles.Provider.class);
     assertThat(provider.getLabel()).isEqualTo(Label.parseAbsoluteUnchecked("//a:x_deploy.jar"));
-  }
-
-  @Test
-  public void sameConfiguredAttributeOnAspectAndRule() throws Exception {
-    scratch.file(
-        "a/a.bzl",
-        "def _a_impl(t, ctx):",
-        "  return [DefaultInfo()]",
-        "def _r_impl(ctx):",
-        "  return [DefaultInfo()]",
-        "a = aspect(",
-        "  implementation = _a_impl,",
-        "  attrs = {'_f': attr.label(",
-        "                   default = configuration_field(",
-        "                     fragment = 'cpp', name = 'cc_toolchain'))})",
-        "r = rule(",
-        "  implementation = _r_impl,",
-        "  attrs = {'_f': attr.label(",
-        "                   default = configuration_field(",
-        "                     fragment = 'cpp', name = 'cc_toolchain')),",
-        "           'dep': attr.label(aspects=[a])})");
-
-    scratch.file("a/BUILD", "load(':a.bzl', 'r')", "r(name='r')");
-
-    setRulesAndAspectsAvailableInTests(ImmutableList.of(), ImmutableList.of());
-    getConfiguredTarget("//a:r");
   }
 }
