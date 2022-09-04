@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -25,8 +26,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
-import javax.annotation.Nullable;
 
 /**
  * Scans source files to determine the bounding set of transitively referenced include files.
@@ -59,7 +58,7 @@ public interface IncludeScanner {
    * <p>{@code mainSource} is the source file relative to which the {@code cmdlineIncludes} are
    * interpreted.
    */
-  void processAsync(
+  ListenableFuture<?> processAsync(
       Artifact mainSource,
       Collection<Artifact> sources,
       IncludeScanningHeaderData includeScanningHeaderData,
@@ -73,13 +72,11 @@ public interface IncludeScanner {
   /** Supplies IncludeScanners upon request. */
   interface IncludeScannerSupplier {
     /**
-     * Returns the possibly shared scanner to be used for a given triplet of include paths. The
-     * paths are specified as PathFragments relative to the execution root.
+     * Returns the possibly shared scanner to be used for a given pair of include paths. The paths
+     * are specified as PathFragments relative to the execution root.
      */
-    IncludeScanner scannerFor(
-        List<PathFragment> quoteIncludePaths,
-        List<PathFragment> includePaths,
-        List<PathFragment> frameworkIncludePaths);
+    IncludeScanner scannerFor(List<PathFragment> quoteIncludePaths,
+        List<PathFragment> includePaths);
   }
 
   /**
@@ -91,7 +88,7 @@ public interface IncludeScanner {
      * Lookup table to find the {@link Artifact}s of generated files based on their {@link
      * Artifact#getExecPath}.
      */
-    private final Map<PathFragment, Artifact> pathToDeclaredHeader;
+    private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
 
     /**
      * The set of headers that are modular, i.e. are going to be read as a serialized AST rather
@@ -114,31 +111,23 @@ public interface IncludeScanner {
      */
     private final List<String> cmdlineIncludes;
 
-    /**
-     * Tests whether the given artifact is a valid header even if it is not declared, i.e. a
-     * transitive dependency. If null, assume all headers can be included.
-     */
-    @Nullable private final Predicate<Artifact> isValidUndeclaredHeader;
-
     public IncludeScanningHeaderData(
-        Map<PathFragment, Artifact> pathToDeclaredHeader,
+        Map<PathFragment, Artifact> pathToLegalOutputArtifact,
         Set<Artifact> modularHeaders,
         List<PathFragment> systemIncludeDirs,
-        List<String> cmdlineIncludes,
-        @Nullable Predicate<Artifact> isValidUndeclaredHeader) {
-      this.pathToDeclaredHeader = pathToDeclaredHeader;
+        List<String> cmdlineIncludes) {
+      this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
       this.modularHeaders = modularHeaders;
       this.systemIncludeDirs = systemIncludeDirs;
       this.cmdlineIncludes = cmdlineIncludes;
-      this.isValidUndeclaredHeader = isValidUndeclaredHeader;
     }
 
     public Set<Artifact> getModularHeaders() {
       return modularHeaders;
     }
 
-    public Map<PathFragment, Artifact> getPathToDeclaredHeader() {
-      return pathToDeclaredHeader;
+    public Map<PathFragment, Artifact> getPathToLegalOutputArtifact() {
+      return pathToLegalOutputArtifact;
     }
 
     public List<PathFragment> getSystemIncludeDirs() {
@@ -149,22 +138,15 @@ public interface IncludeScanner {
       return cmdlineIncludes;
     }
 
-    public boolean isLegalHeader(Artifact header) {
-      return isValidUndeclaredHeader == null
-          || pathToDeclaredHeader.containsKey(header.getExecPath())
-          || isValidUndeclaredHeader.test(header);
-    }
-
     public static class Builder {
-      private final Map<PathFragment, Artifact> pathToDeclaredHeader;
+      private final Map<PathFragment, Artifact> pathToLegalOutputArtifact;
       private final Set<Artifact> modularHeaders;
       private List<PathFragment> systemIncludeDirs = ImmutableList.of();
       private List<String> cmdlineIncludes = ImmutableList.of();
-      @Nullable private Predicate<Artifact> isValidUndeclaredHeader = null;
 
       public Builder(
-          Map<PathFragment, Artifact> pathToDeclaredHeader, Set<Artifact> modularHeaders) {
-        this.pathToDeclaredHeader = pathToDeclaredHeader;
+          Map<PathFragment, Artifact> pathToLegalOutputArtifact, Set<Artifact> modularHeaders) {
+        this.pathToLegalOutputArtifact = pathToLegalOutputArtifact;
         this.modularHeaders = modularHeaders;
       }
 
@@ -178,19 +160,9 @@ public interface IncludeScanner {
         return this;
       }
 
-      public Builder setIsValidUndeclaredHeader(
-          @Nullable Predicate<Artifact> isValidUndeclaredHeader) {
-        this.isValidUndeclaredHeader = isValidUndeclaredHeader;
-        return this;
-      }
-
       public IncludeScanningHeaderData build() {
         return new IncludeScanningHeaderData(
-            pathToDeclaredHeader,
-            modularHeaders,
-            systemIncludeDirs,
-            cmdlineIncludes,
-            isValidUndeclaredHeader);
+            pathToLegalOutputArtifact, modularHeaders, systemIncludeDirs, cmdlineIncludes);
       }
     }
   }

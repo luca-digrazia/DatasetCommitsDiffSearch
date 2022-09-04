@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.rules.cpp.CppIncludeScanningContext;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScannerSupplier;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
-import java.util.List;
 
 /**
  * Include scanning context implementation.
@@ -40,7 +39,7 @@ public class CppIncludeScanningContextImpl implements CppIncludeScanningContext 
   }
 
   @Override
-  public ListenableFuture<List<Artifact>> findAdditionalInputs(
+  public ListenableFuture<Iterable<Artifact>> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
       IncludeProcessing includeProcessing,

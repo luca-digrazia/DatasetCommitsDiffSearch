@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -35,7 +34,7 @@ public interface CppIncludeScanningContext extends ActionContext {
    * <p>Returns null if additional inputs will only be found during action execution, not before.
    */
   @Nullable
-  ListenableFuture<List<Artifact>> findAdditionalInputs(
+  ListenableFuture<Iterable<Artifact>> findAdditionalInputs(
       CppCompileAction action,
       ActionExecutionContext actionExecutionContext,
       IncludeProcessing includeProcessing,

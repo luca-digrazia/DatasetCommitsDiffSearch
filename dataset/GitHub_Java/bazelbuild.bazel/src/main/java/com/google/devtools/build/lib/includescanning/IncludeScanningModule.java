@@ -19,7 +19,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
@@ -149,19 +148,15 @@ public class IncludeScanningModule extends BlazeModule {
     private final CommandEnvironment env;
     private final Supplier<SpawnIncludeScanner> spawnScannerSupplier;
     private final Supplier<ExecutorService> includePool;
-    private final ConcurrentMap<Artifact, ListenableFuture<Collection<Inclusion>>> cache =
-        new ConcurrentHashMap<>();
-    private final boolean useAsyncIncludeScanner;
+    private final ConcurrentMap<Artifact, Collection<Inclusion>> cache = new ConcurrentHashMap<>();
 
     SwigIncludeScanningContextImpl(
         CommandEnvironment env,
         Supplier<SpawnIncludeScanner> spawnScannerSupplier,
-        Supplier<ExecutorService> includePool,
-        boolean useAsyncIncludeScanner) {
+        Supplier<ExecutorService> includePool) {
       this.env = env;
       this.spawnScannerSupplier = spawnScannerSupplier;
       this.includePool = includePool;
-      this.useAsyncIncludeScanner = useAsyncIncludeScanner;
     }
 
     @Override
@@ -182,8 +177,7 @@ public class IncludeScanningModule extends BlazeModule {
               swigIncludePaths,
               env.getDirectories(),
               env.getSkyframeBuildView().getArtifactFactory(),
-              env.getExecRoot(),
-              useAsyncIncludeScanner);
+              env.getExecRoot());
       ImmutableMap.Builder<PathFragment, Artifact> pathToLegalOutputArtifact =
           ImmutableMap.builder();
       for (Artifact path : legalOutputPaths) {
@@ -244,8 +238,7 @@ public class IncludeScanningModule extends BlazeModule {
       this.strategies =
           ImmutableList.of(
               new CppIncludeExtractionContextImpl(env),
-              new SwigIncludeScanningContextImpl(
-                  env, spawnScannerSupplier, () -> includePool, options.useAsyncIncludeScanner),
+              new SwigIncludeScanningContextImpl(env, spawnScannerSupplier, () -> includePool),
               new CppIncludeScanningContextImpl(() -> includeScannerSupplier));
 
       env.getEventBus().register(this);
@@ -277,8 +270,8 @@ public class IncludeScanningModule extends BlazeModule {
 
     @Override
     public void executorCreated(Iterable<ActionContext> usedContexts) throws ExecutorInitException {
-      IncludeScanningOptions options = buildRequest.getOptions(IncludeScanningOptions.class);
-      int threads = options.includeScanningParallelism;
+      int threads = buildRequest.getOptions(IncludeScanningOptions.class)
+          .includeScanningParallelism;
       if (threads > 0) {
         log.info(
             String.format("Include scanning configured to use a pool with %d threads", threads));
@@ -293,11 +286,11 @@ public class IncludeScanningModule extends BlazeModule {
               includePool,
               env.getSkyframeBuildView().getArtifactFactory(),
               spawnScannerSupplier,
-              env.getExecRoot(),
-              options.useAsyncIncludeScanner);
+              env.getExecRoot());
 
       spawnScannerSupplier.get().setOutputService(env.getOutputService());
-      spawnScannerSupplier.get().setInMemoryOutput(options.inMemoryIncludesFiles);
+      spawnScannerSupplier.get().setInMemoryOutput(
+          buildRequest.getOptions(IncludeScanningOptions.class).inMemoryIncludesFiles);
     }
   }
 }
