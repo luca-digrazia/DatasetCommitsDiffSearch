@@ -240,9 +240,6 @@ public abstract class CcModule
       Object systemIncludeDirs,
       Object frameworkIncludeDirs,
       Object defines,
-      Object thinLtoIndex,
-      Object thinLtoInputBitcodeFile,
-      Object thinLtoOutputObjectFile,
       boolean usePic,
       boolean addLegacyCxxOptions)
       throws EvalException {
@@ -259,9 +256,6 @@ public abstract class CcModule
         /* isUsingFission= */ false,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
-        convertFromNoneable(thinLtoIndex, /* defaultValue= */ null),
-        convertFromNoneable(thinLtoInputBitcodeFile, /* defaultValue=*/ null),
-        convertFromNoneable(thinLtoOutputObjectFile, /* defaultValue=*/ null),
         /* includes= */ ImmutableList.of(),
         userFlagsToIterable(userCompileFlags),
         /* cppModuleMap= */ null,

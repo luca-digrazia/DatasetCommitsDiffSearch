@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.cpp.AspectLegalCppSemantics;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
@@ -213,7 +213,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       filesBuilder.addAll(outputs);
       createProtoCompileAction(outputs);
 
-      CompilationInfo compilationInfo = compilationHelper.compile(ruleContext::ruleError);
+      CompilationInfo compilationInfo = compilationHelper.compile();
       CcCompilationOutputs ccCompilationOutputs = compilationInfo.getCcCompilationOutputs();
       CcLinkingHelper ccLinkingHelper = initializeLinkingHelper(featureConfiguration, deps);
       if (ccToolchain(ruleContext).supportsInterfaceSharedLibraries(featureConfiguration)) {
@@ -340,15 +340,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
 
       String protoRoot = protoInfo.getDirectProtoSourceRoot();
       PathFragment repositoryRoot =
-          ruleContext
-              .getLabel()
-              .getPackageIdentifier()
-              .getRepository()
-              .getExecPath(
-                  ruleContext
-                      .getAnalysisEnvironment()
-                      .getStarlarkSemantics()
-                      .experimentalSiblingRepositoryLayout());
+          ruleContext.getLabel().getPackageIdentifier().getRepository().getSourceRoot();
       if (protoRoot.equals(".") || protoRoot.equals(repositoryRoot.getPathString())) {
         return helper;
       }

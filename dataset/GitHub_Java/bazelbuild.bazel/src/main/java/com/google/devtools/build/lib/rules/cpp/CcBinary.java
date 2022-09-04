@@ -187,10 +187,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider toolchain,
+      CppConfiguration cppConfiguration,
       List<LibraryToLink> libraries,
       CcLinkingOutputs ccLibraryLinkingOutputs,
+      CcCompilationContext ccCompilationContext,
       Link.LinkingMode linkingMode,
       NestedSet<Artifact> transitiveArtifacts,
+      Iterable<Artifact> fakeLinkerInputs,
+      boolean fake,
+      ImmutableSet<CppSource> cAndCppSources,
       boolean linkCompileOutputSeparately)
       throws RuleErrorException {
     Runfiles.Builder builder =
@@ -240,6 +245,33 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       builder.addTarget(malloc, RunfilesProvider.DEFAULT_RUNFILES);
       builder.addTarget(malloc, runfilesMapping);
     }
+
+    if (fake) {
+      // Add the object files, libraries, and linker scripts that are used to
+      // link this executable.
+      builder.addSymlinksToArtifacts(Iterables.filter(fakeLinkerInputs, Artifact.MIDDLEMAN_FILTER));
+      // The crosstool inputs for the link action are not sufficient; we also need the crosstool
+      // inputs for compilation. Node that these cannot be middlemen because Runfiles does not
+      // know how to expand them.
+      builder.addTransitiveArtifacts(toolchain.getAllFiles());
+      builder.addTransitiveArtifacts(toolchain.getLibcLink(cppConfiguration));
+      // Add the sources files that are used to compile the object files.
+      // We add the headers in the transitive closure and our own sources in the srcs
+      // attribute. We do not provide the auxiliary inputs, because they are only used when we
+      // do FDO compilation, and cc_fake_binary does not support FDO.
+      ImmutableSet.Builder<Artifact> sourcesBuilder = ImmutableSet.<Artifact>builder();
+      for (CppSource cppSource : cAndCppSources) {
+        sourcesBuilder.add(cppSource.getSource());
+      }
+      builder.addSymlinksToArtifacts(sourcesBuilder.build());
+      builder.addSymlinksToArtifacts(ccCompilationContext.getDeclaredIncludeSrcs());
+      // Add additional files that are referenced from the compile command, like module maps
+      // or header modules.
+      builder.addSymlinksToArtifacts(ccCompilationContext.getAdditionalInputs());
+      builder.addSymlinksToArtifacts(
+          ccCompilationContext.getTransitiveModules(
+              usePic(ruleContext, toolchain, cppConfiguration, featureConfiguration)));
+    }
     return builder.build();
   }
 
@@ -247,12 +279,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext context)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     RuleConfiguredTargetBuilder ruleBuilder = new RuleConfiguredTargetBuilder(context);
-    CcBinary.init(semantics, ruleBuilder, context);
+    CcBinary.init(semantics, ruleBuilder, context, /*fake =*/ false);
     return ruleBuilder.build();
   }
 
   public static void init(
-      CppSemantics semantics, RuleConfiguredTargetBuilder ruleBuilder, RuleContext ruleContext)
+      CppSemantics semantics,
+      RuleConfiguredTargetBuilder ruleBuilder,
+      RuleContext ruleContext,
+      boolean fake)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     CcCommon.checkRuleLoadedThroughMacro(ruleContext);
     semantics.validateDeps(ruleContext);
@@ -321,6 +356,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     requestedFeaturesBuilder
         .addAll(ruleContext.getFeatures())
         .add(linkingMode == Link.LinkingMode.DYNAMIC ? DYNAMIC_LINKING_MODE : STATIC_LINKING_MODE);
+    if (fake) {
+      requestedFeaturesBuilder.add(CppRuleClasses.IS_CC_FAKE_BINARY);
+    }
 
     FdoContext fdoContext = common.getFdoContext();
     FeatureConfiguration featureConfiguration =
@@ -362,7 +400,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             .addCcCompilationContexts(
                 ImmutableList.of(CcCompilationHelper.getStlCcCompilationContext(ruleContext)))
             .setHeadersCheckingMode(semantics.determineHeadersCheckingMode(ruleContext))
-            .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext));
+            .setCodeCoverageEnabled(CcCompilationHelper.isCodeCoverageEnabled(ruleContext))
+            .setFake(fake);
     CompilationInfo compilationInfo = compilationHelper.compile();
     CcCompilationContext ccCompilationContext = compilationInfo.getCcCompilationContext();
     CcCompilationOutputs precompiledFileObjects =
@@ -498,6 +537,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             additionalLinkerInputs,
             ccLinkingOutputs,
             ccCompilationContext,
+            fake,
             binary,
             depsCcLinkingContext,
             extraLinkTimeLibrariesNestedSet.build(),
@@ -518,6 +558,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     CcLauncherInfo ccLauncherInfo = ccLinkingOutputsAndCcLinkingInfo.second;
 
     LibraryToLink ccLinkingOutputsBinaryLibrary = ccLinkingOutputsBinary.getLibraryToLink();
+    Iterable<Artifact> fakeLinkerInputs =
+        fake ? ccLinkingOutputsBinary.getLinkActionInputs() : ImmutableList.<Artifact>of();
     ImmutableList.Builder<LibraryToLink> librariesBuilder = ImmutableList.builder();
     if (isLinkShared(ruleContext)) {
       if (ccLinkingOutputsBinaryLibrary != null) {
@@ -599,10 +641,15 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ruleContext,
             featureConfiguration,
             ccToolchain,
+            cppConfiguration,
             libraries,
             ccLinkingOutputs,
+            ccCompilationContext,
             linkingMode,
             transitiveArtifacts.build(),
+            fakeLinkerInputs,
+            fake,
+            compilationHelper.getCompilationUnitSources(),
             linkCompileOutputSeparately);
     RunfilesSupport runfilesSupport = RunfilesSupport.withExecutable(ruleContext, runfiles, binary);
 
@@ -616,7 +663,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         filesToBuild,
         ccCompilationOutputs,
         ccCompilationContext,
-        libraries);
+        libraries,
+        fake);
 
     // Support test execution on darwin.
     if (ApplePlatform.isApplePlatform(ccToolchain.getTargetCpu())
@@ -680,6 +728,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       List<Artifact> additionalLinkerInputs,
       CcLinkingOutputs ccLinkingOutputs,
       CcCompilationContext ccCompilationContext,
+      boolean fake,
       Artifact binary,
       CcLinkingContext depsCcLinkingContext,
       NestedSet<CcLinkingContext.LinkerInput> extraLinkTimeLibraries,
@@ -815,7 +864,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
                 && featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)
                 && CppHelper.useInterfaceSharedLibraries(
                     cppConfiguration, ccToolchain, featureConfiguration))
-        .setPdbFile(pdbFile);
+        .setPdbFile(pdbFile)
+        .setFake(fake);
 
     ccLinkingHelper.setDefFile(winDefFile);
 
@@ -998,13 +1048,10 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext, Iterable<Artifact> dynamicLibrariesForRuntime) {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
     for (Artifact target : dynamicLibrariesForRuntime) {
-      // If the binary and the DLL don't belong to the same package or the DLL is a source file,
-      // we should copy the DLL to the binary's directory.
       if (!ruleContext
-              .getLabel()
-              .getPackageIdentifier()
-              .equals(target.getOwner().getPackageIdentifier())
-          || target.isSourceArtifact()) {
+          .getLabel()
+          .getPackageIdentifier()
+          .equals(target.getOwner().getPackageIdentifier())) {
         // SymlinkAction on file is actually copy on Windows.
         Artifact copy = ruleContext.getBinArtifact(target.getFilename());
         ruleContext.registerAction(SymlinkAction.toArtifact(
@@ -1072,7 +1119,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       NestedSet<Artifact> filesToBuild,
       CcCompilationOutputs ccCompilationOutputs,
       CcCompilationContext ccCompilationContext,
-      List<LibraryToLink> libraries)
+      List<LibraryToLink> libraries,
+      boolean fake)
       throws RuleErrorException {
     List<Artifact> instrumentedObjectFiles = new ArrayList<>();
     instrumentedObjectFiles.addAll(ccCompilationOutputs.getObjectFiles(false));
@@ -1080,7 +1128,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     InstrumentedFilesInfo instrumentedFilesProvider =
         common.getInstrumentedFilesProvider(
             instrumentedObjectFiles,
-            !TargetUtils.isTestRule(ruleContext.getRule()),
+            !TargetUtils.isTestRule(ruleContext.getRule()) && !fake,
             ccCompilationContext.getVirtualToOriginalHeaders());
 
     NestedSet<Artifact> headerTokens =
