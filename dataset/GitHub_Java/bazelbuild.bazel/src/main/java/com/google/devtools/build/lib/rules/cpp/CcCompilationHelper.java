@@ -1232,8 +1232,7 @@ public final class CcCompilationHelper {
 
   /** @return the no-PIC header module artifact for the current target. */
   private Artifact.DerivedArtifact getHeaderModule(Artifact moduleMapArtifact) {
-    PathFragment objectDir =
-        CppHelper.getObjDirectory(label, configuration.isSiblingRepositoryLayout());
+    PathFragment objectDir = CppHelper.getObjDirectory(label);
     PathFragment outputName =
         objectDir.getRelative(moduleMapArtifact.getRootRelativePath().getBaseName());
     return actionConstructionContext.getRelatedArtifact(outputName, ".pcm");
@@ -1241,8 +1240,7 @@ public final class CcCompilationHelper {
 
   /** @return the pic header module artifact for the current target. */
   private Artifact.DerivedArtifact getPicHeaderModule(Artifact moduleMapArtifact) {
-    PathFragment objectDir =
-        CppHelper.getObjDirectory(label, configuration.isSiblingRepositoryLayout());
+    PathFragment objectDir = CppHelper.getObjDirectory(label);
     PathFragment outputName =
         objectDir.getRelative(moduleMapArtifact.getRootRelativePath().getBaseName());
     return actionConstructionContext.getRelatedArtifact(outputName, ".pic.pcm");
