@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Maps;
 import com.google.common.hash.HashCode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetCodec;
 import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Context;
@@ -691,72 +690,6 @@ class Marshallers {
         }
       };
 
-  private final Marshaller nestedSetMarshaller =
-      new Marshaller() {
-        @Override
-        public boolean matches(DeclaredType type) {
-          // env.getElementUtils().getTypeElement mysteriously does not recognize NestedSet, so we
-          // do String comparison.
-          return env.getTypeUtils()
-              .erasure(type)
-              .toString()
-              .equals("com.google.devtools.build.lib.collect.nestedset.NestedSet");
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          TypeMirror typeParameter = context.getDeclaredType().getTypeArguments().get(0);
-          String nestedSetCodec = context.makeName("nestedSetCodec");
-
-          TypeMirror typeParameterCodec = getCodec((DeclaredType) typeParameter).get().asType();
-          if (matchesErased(typeParameterCodec, InjectingObjectCodec.class)) {
-            context.builder.addStatement(
-                "$T<$T> $L = new $T<>($T.CODEC, dependency)",
-                NestedSetCodec.class,
-                typeParameter,
-                nestedSetCodec,
-                NestedSetCodec.class,
-                typeParameter);
-          } else {
-            context.builder.addStatement(
-                "$T<$T> $L = new $T<>($T.CODEC)",
-                NestedSetCodec.class,
-                typeParameter,
-                nestedSetCodec,
-                NestedSetCodec.class,
-                typeParameter);
-          }
-          context.builder.addStatement("$L.serialize($L, codedOut)", nestedSetCodec, context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          TypeMirror typeParameter = context.getDeclaredType().getTypeArguments().get(0);
-          String nestedSetCodec = context.makeName("nestedSetCodec");
-
-          TypeMirror typeParameterCodec = getCodec((DeclaredType) typeParameter).get().asType();
-          if (matchesErased(typeParameterCodec, InjectingObjectCodec.class)) {
-            context.builder.addStatement(
-                "$T<$T> $L = new $T<>($T.CODEC, dependency)",
-                NestedSetCodec.class,
-                typeParameter,
-                nestedSetCodec,
-                NestedSetCodec.class,
-                typeParameter);
-          } else {
-            context.builder.addStatement(
-                "$T<$T> $L = new $T<>($T.CODEC)",
-                NestedSetCodec.class,
-                typeParameter,
-                nestedSetCodec,
-                NestedSetCodec.class,
-                typeParameter);
-          }
-          context.builder.addStatement(
-              "$L = $L.deserialize(codedIn)", context.name, nestedSetCodec);
-        }
-      };
-
   private final Marshaller codecMarshaller =
       new Marshaller() {
         @Override
@@ -819,7 +752,6 @@ class Marshallers {
           immutableMapMarshaller,
           immutableSortedMapMarshaller,
           multimapMarshaller,
-          nestedSetMarshaller,
           patternMarshaller,
           hashCodeMarshaller,
           protoMarshaller,
