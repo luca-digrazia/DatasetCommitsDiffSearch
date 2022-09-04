@@ -416,6 +416,8 @@ public final class CppLinkAction extends AbstractAction
     CppLinkInfo.Builder info = CppLinkInfo.newBuilder();
     info.addAllInputFile(Artifact.toExecPaths(
         LinkerInputs.toLibraryArtifacts(getLinkCommandLine().getLinkerInputs())));
+    info.addAllInputFile(Artifact.toExecPaths(
+        LinkerInputs.toLibraryArtifacts(getLinkCommandLine().getRuntimeInputs())));
     info.setOutputFile(getPrimaryOutput().getExecPathString());
     if (interfaceOutputLibrary != null) {
       info.setInterfaceOutputFile(interfaceOutputLibrary.getArtifact().getExecPathString());
@@ -455,8 +457,8 @@ public final class CppLinkAction extends AbstractAction
     // the argv.
     fp.addBoolean(linkCommandLine.isNativeDeps());
     fp.addBoolean(linkCommandLine.useTestOnlyFlags());
-    if (linkCommandLine.getToolchainLibrariesSolibDir() != null) {
-      fp.addPath(linkCommandLine.getToolchainLibrariesSolibDir());
+    if (linkCommandLine.getRuntimeSolibDir() != null) {
+      fp.addPath(linkCommandLine.getRuntimeSolibDir());
     }
     fp.addBoolean(isLtoIndexing);
   }
@@ -501,7 +503,8 @@ public final class CppLinkAction extends AbstractAction
         ? MIN_DYNAMIC_LINK_RESOURCES
         : MIN_STATIC_LINK_RESOURCES;
 
-    final int inputSize = Iterables.size(getLinkCommandLine().getLinkerInputs());
+    final int inputSize = Iterables.size(getLinkCommandLine().getLinkerInputs())
+        + Iterables.size(getLinkCommandLine().getRuntimeInputs());
 
     return ResourceSet.createWithRamCpuIo(
         Math.max(inputSize * LINK_RESOURCES_PER_INPUT.getMemoryMb(),
@@ -576,9 +579,9 @@ public final class CppLinkAction extends AbstractAction
           ImmutableMap.copyOf(builder.getLtoBitcodeFiles()),
           builder.getRuntimeMiddleman(),
           NestedSetBuilder.<Artifact>stableOrder()
-              .addTransitive(builder.getToolchainLibrariesInputs())
+              .addTransitive(builder.getRuntimeInputs())
               .build(),
-          builder.getToolchainLibrariesType(),
+          builder.getRuntimeType(),
           builder.getLinkstamps(),
           ImmutableList.copyOf(builder.getLinkopts()),
           builder.getLinkType(),
