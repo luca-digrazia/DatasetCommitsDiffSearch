@@ -14,22 +14,21 @@
 
 package com.google.devtools.build.lib.sandbox;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
+import com.google.devtools.build.lib.shell.SubprocessBuilder.StreamAction;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.versioning.GnuVersionParser;
-import com.google.devtools.build.lib.versioning.ParseException;
-import com.google.devtools.build.lib.versioning.SemVer;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -97,15 +96,74 @@ final class RealSandboxfsProcess implements SandboxfsProcess {
   }
 
   /**
+   * Checks if the given sandboxfs binary is available and is valid.
+   *
+   * @param binary path to the sandboxfs binary that will later be used in the {@link #mount} call.
+   * @return true if the binary looks good, false otherwise
+   */
+  static boolean isAvailable(PathFragment binary) {
+    Subprocess process;
+    try {
+      process =
+          new SubprocessBuilder()
+              .setArgv(binary.getPathString(), "--version")
+              .setStdout(StreamAction.STREAM)
+              .redirectErrorStream(true)
+              .start();
+    } catch (IOException e) {
+      log.warning("sandboxfs binary at " + binary + " seems to be missing; got error: " + e);
+      return false;
+    }
+
+    ByteArrayOutputStream outErrBytes = new ByteArrayOutputStream();
+    try {
+      ByteStreams.copy(process.getInputStream(), outErrBytes);
+    } catch (IOException e) {
+      try {
+        outErrBytes.write(("Failed to read stdout: " + e).getBytes("UTF-8"));
+      } catch (IOException e2) {
+        // Should not really have happened. There is nothing we can do.
+      }
+    }
+    String outErr = outErrBytes.toString().replaceFirst("\n$", "");
+
+    process.waitForUninterruptibly();
+    int exitCode = process.exitValue();
+    if (exitCode == 0) {
+      // TODO(jmmv): Validate the version number and ensure we support it. Would be nice to reuse
+      // the DottedVersion logic from the Apple rules.
+      if (outErr.matches("sandboxfs .*")) {
+        return true;
+      } else {
+        log.warning(
+            "sandboxfs binary at "
+                + binary
+                + " exists but doesn't seem valid; output was: "
+                + outErr);
+        return false;
+      }
+    } else {
+      log.warning(
+          "sandboxfs binary at "
+              + binary
+              + " returned non-zero exit code "
+              + exitCode
+              + " and output "
+              + outErr);
+      return false;
+    }
+  }
+
+  /**
    * Mounts a new sandboxfs instance.
    *
    * <p>The root of the file system instance is left unmapped which means that it remains as
-   * read-only throughout the lifetime of this instance. Writable subdirectories can later be mapped
-   * via {@link #createSandbox}.
+   * read-only throughout the lifetime of this instance.  Writable subdirectories can later be
+   * mapped via {@link #map(List)}.
    *
-   * @param binary path to the sandboxfs binary. This is a {@link PathFragment} and not a {@link
-   *     Path} because we want to support "bare" (non-absolute) names for the location of the
-   *     sandboxfs binary; such names are automatically looked for in the {@code PATH}.
+   * @param binary path to the sandboxfs binary.  This is a {@link PathFragment} and not a
+   *     {@link Path} because we want to support "bare" (non-absolute) names for the location of
+   *     the sandboxfs binary; such names are automatically looked for in the {@code PATH}.
    * @param mountPoint directory on which to mount the sandboxfs instance
    * @param logFile path to the file that will receive all sandboxfs logging output
    * @return a new handle that represents the running process
@@ -115,12 +173,8 @@ final class RealSandboxfsProcess implements SandboxfsProcess {
       throws IOException {
     log.info("Mounting sandboxfs (" + binary + ") onto " + mountPoint);
 
-    GnuVersionParser<SemVer> parser = new GnuVersionParser<>("sandboxfs", SemVer::parse);
-    try {
-      parser.fromProgram(binary);
-    } catch (IOException | ParseException e) {
-      throw new IOException("Failed to get sandboxfs version from " + binary, e);
-    }
+    // TODO(jmmv): Before starting a sandboxfs serving instance, we must query the current version
+    // of sandboxfs and check if we support its communication protocol.
 
     ImmutableList.Builder<String> argvBuilder = ImmutableList.builder();
 
@@ -225,17 +279,11 @@ final class RealSandboxfsProcess implements SandboxfsProcess {
   }
 
   @Override
-  public void createSandbox(String name, List<Mapping> mappings) throws IOException {
-    checkArgument(!PathFragment.containsSeparator(name));
-    PathFragment root = PathFragment.create("/").getRelative(name);
-
+  public void map(List<Mapping> mappings) throws IOException {
     Function<Mapping, String> formatMapping =
-        (mapping) ->
-            String.format(
-                "{\"Map\": {\"Mapping\": \"%s\", \"Target\": \"%s\", \"Writable\": %s}}",
-                root.getRelative(mapping.path().toRelative()),
-                mapping.target(),
-                mapping.writable() ? "true" : "false");
+        (mapping) -> String.format(
+            "{\"Map\": {\"Mapping\": \"%s\", \"Target\": \"%s\", \"Writable\": %s}}",
+            mapping.path(), mapping.target(), mapping.writable() ? "true" : "false");
 
     StringBuilder sb = new StringBuilder();
     sb.append("[\n");
@@ -245,10 +293,7 @@ final class RealSandboxfsProcess implements SandboxfsProcess {
   }
 
   @Override
-  public void destroySandbox(String name) throws IOException {
-    checkArgument(!PathFragment.containsSeparator(name));
-    PathFragment root = PathFragment.create("/").getRelative(name);
-
-    reconfigure(String.format("[{\"Unmap\": \"%s\"}]\n\n", root.getPathString()));
+  public void unmap(PathFragment mapping) throws IOException {
+    reconfigure(String.format("[{\"Unmap\": \"%s\"}]\n\n", mapping));
   }
 }
