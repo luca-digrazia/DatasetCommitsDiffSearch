@@ -11,8 +11,6 @@ package com.facebook.stetho.inspector.elements.android;
 
 import android.view.View;
 import android.view.ViewDebug;
-
-import com.facebook.stetho.common.ExceptionUtil;
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.StringUtil;
 import com.facebook.stetho.common.android.ResourcesUtil;
@@ -171,13 +169,9 @@ final class ViewDescriptor extends AbstractChainedDescriptor<View> implements Hi
             property.getValue(element),
             property.getAnnotation(),
             styles);
-      } catch (Exception e) {
-        if (e instanceof IllegalAccessException || e instanceof InvocationTargetException) {
-          LogUtil.e(e, "failed to get style property " + property.getCSSName() +
-                  " of element= " + element.toString());
-        } else {
-          throw ExceptionUtil.propagate(e);
-        }
+      } catch (IllegalAccessException | InvocationTargetException e) {
+        LogUtil.e(e, "failed to get style property " + property.getCSSName() +
+            " of element= " + element.toString());
       }
     }
   }
