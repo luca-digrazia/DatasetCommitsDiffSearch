@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.Allowlist;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.EmptyToNullLabelConverter;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.Fragment;
@@ -625,13 +626,12 @@ public class AndroidConfiguration extends Fragment implements AndroidConfigurati
         help = "Implementation to use to sign APKs")
     public ApkSigningMethod apkSigningMethod;
 
-    // TODO(b/36023617): Remove this option.
     @Option(
         name = "use_singlejar_apkbuilder",
         defaultValue = "true",
         documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
         effectTags = OptionEffectTag.LOADING_AND_ANALYSIS,
-        help = "This option is a deprecated. It is now a no-op and will be removed soon.")
+        help = "Build Android APKs with SingleJar.")
     public boolean useSingleJarApkBuilder;
 
     @Option(
@@ -948,6 +948,14 @@ public class AndroidConfiguration extends Fragment implements AndroidConfigurati
       // Unless the build was started from an Android device, host means MAIN.
       host.configurationDistinguisher = ConfigurationDistinguisher.MAIN;
       return host;
+    }
+  }
+
+  /** Configuration loader for the Android fragment. */
+  public static class Loader implements ConfigurationFragmentFactory {
+    @Override
+    public Class<? extends Fragment> creates() {
+      return AndroidConfiguration.class;
     }
   }
 

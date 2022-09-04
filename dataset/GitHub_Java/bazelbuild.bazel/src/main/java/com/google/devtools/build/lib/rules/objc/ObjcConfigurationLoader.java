@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +14,8 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.Fragment;
 
 /**
  * A loader that creates ObjcConfiguration instances based on Objective-C configurations and
@@ -26,14 +23,7 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
  */
 public class ObjcConfigurationLoader implements ConfigurationFragmentFactory {
   @Override
-  public ObjcConfiguration create(ConfigurationEnvironment env, BuildOptions buildOptions)
-      throws InvalidConfigurationException {
-    return new ObjcConfiguration(buildOptions.get(ObjcCommandLineOptions.class),
-        buildOptions.get(BuildConfiguration.Options.class));
-  }
-
-  @Override
-  public Class<? extends BuildConfiguration.Fragment> creates() {
+  public Class<? extends Fragment> creates() {
     return ObjcConfiguration.class;
   }
 }

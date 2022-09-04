@@ -14,39 +14,25 @@
 
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
+import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import javax.annotation.Nullable;
 
 /** Configuration fragment for android_local_test. */
-@AutoCodec
 @Immutable
-public class AndroidLocalTestConfiguration extends BuildConfiguration.Fragment {
-  public static final ObjectCodec<AndroidLocalTestConfiguration> CODEC =
-      new AndroidLocalTestConfiguration_AutoCodec();
-
+@RequiresOptions(options = {AndroidLocalTestConfiguration.Options.class})
+public class AndroidLocalTestConfiguration extends Fragment {
   /** android_local_test specific options */
-  @AutoCodec(strategy = Strategy.PUBLIC_FIELDS)
   public static final class Options extends FragmentOptions {
-    public static final ObjectCodec<Options> CODEC =
-        new AndroidLocalTestConfiguration_Options_AutoCodec();
-
     @Option(
       name = "experimental_android_local_test_binary_resources",
-      defaultValue = "false",
+      defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
       help =
@@ -62,34 +48,17 @@ public class AndroidLocalTestConfiguration extends BuildConfiguration.Fragment {
    * com.google.devtools.build.lib.rules.android.AndroidLocalTestConfiguration}.
    */
   public static final class Loader implements ConfigurationFragmentFactory {
-
-    @Nullable
-    @Override
-    public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
-        throws InvalidConfigurationException, InterruptedException {
-      return new AndroidLocalTestConfiguration(buildOptions.get(Options.class));
-    }
-
     @Override
     public Class<? extends Fragment> creates() {
       return AndroidLocalTestConfiguration.class;
-    }
-
-    @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
-      return ImmutableSet.of(Options.class);
     }
   }
 
   private final boolean androidLocalTestBinaryResources;
 
-  AndroidLocalTestConfiguration(Options options) {
-    this.androidLocalTestBinaryResources = options.androidLocalTestBinaryResources;
-  }
-
-  @AutoCodec.Instantiator
-  AndroidLocalTestConfiguration(boolean androidLocalTestBinaryResources) {
-    this.androidLocalTestBinaryResources = androidLocalTestBinaryResources;
+  public AndroidLocalTestConfiguration(BuildOptions buildOptions) {
+    this.androidLocalTestBinaryResources =
+        buildOptions.get(Options.class).androidLocalTestBinaryResources;
   }
 
   public boolean useAndroidLocalTestBinaryResources() {

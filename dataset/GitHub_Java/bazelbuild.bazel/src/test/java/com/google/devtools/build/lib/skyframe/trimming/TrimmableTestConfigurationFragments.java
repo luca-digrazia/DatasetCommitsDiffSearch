@@ -20,7 +20,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
-import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BaseRuleClasses.BaseRule;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -187,12 +188,12 @@ public final class TrimmableTestConfigurationFragments {
         .setPrelude("//:prelude.bzl")
         // must be part of BuildOptions for various reasons e.g. dynamic configs
         .addConfigurationOptions(CoreOptions.class)
-        .addConfigurationFragment(TestConfiguration.class)
+        .addConfigurationFragment(new TestConfiguration.Loader())
         // needed for the default workspace
         .addRuleDefinition(new WorkspaceBaseRule())
         .addRuleDefinition(new BindRule())
         // needed for our native rules
-        .addRuleDefinition(new BaseRuleClasses.NativeBuildRule())
+        .addRuleDefinition(new BaseRule())
         // needed to define toolchains
         .addRuleDefinition(new ToolchainTypeRule())
         // needs to be set to something
@@ -202,7 +203,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule transitionRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "with_configuration",
@@ -255,7 +256,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule alphaRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "alpha_native",
@@ -271,7 +272,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule bravoRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "bravo_native",
@@ -287,7 +288,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule charlieRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "charlie_native",
@@ -303,7 +304,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule deltaRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "delta_native",
@@ -319,7 +320,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule echoRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "echo_native",
@@ -335,7 +336,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule platformlessRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "platformless_native",
@@ -351,7 +352,7 @@ public final class TrimmableTestConfigurationFragments {
 
     MockRule platformerRule =
         () ->
-            MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+            MockRule.ancestor(BaseRule.class)
                 .factory(DepsCollectingFactory.class)
                 .define(
                     "platformer_native",
@@ -366,11 +367,11 @@ public final class TrimmableTestConfigurationFragments {
                     });
 
     builder
-        .addConfigurationFragment(AConfig.class)
-        .addConfigurationFragment(BConfig.class)
-        .addConfigurationFragment(CConfig.class)
-        .addConfigurationFragment(DConfig.class)
-        .addConfigurationFragment(EConfig.class)
+        .addConfigurationFragment(AConfig.FACTORY)
+        .addConfigurationFragment(BConfig.FACTORY)
+        .addConfigurationFragment(CConfig.FACTORY)
+        .addConfigurationFragment(DConfig.FACTORY)
+        .addConfigurationFragment(EConfig.FACTORY)
         .addRuleDefinition(transitionRule)
         .addRuleDefinition(alphaRule)
         .addRuleDefinition(bravoRule)
@@ -383,7 +384,7 @@ public final class TrimmableTestConfigurationFragments {
     if (toolchainTypeLabel != null) {
       MockRule usesToolchainsRule =
           () ->
-              MockRule.ancestor(BaseRuleClasses.NativeBuildRule.class)
+              MockRule.ancestor(BaseRule.class)
                   .factory(DepsCollectingFactory.class)
                   .define(
                       "uses_toolchains_native",
@@ -401,6 +402,21 @@ public final class TrimmableTestConfigurationFragments {
     }
   }
 
+  /** General purpose fragment loader for the test fragments in this file. */
+  private static final class FragmentLoader<FragmentT extends Fragment>
+      implements ConfigurationFragmentFactory {
+    private final Class<FragmentT> fragmentType;
+
+    FragmentLoader(Class<FragmentT> fragmentType) {
+      this.fragmentType = fragmentType;
+    }
+
+    @Override
+    public Class<? extends Fragment> creates() {
+      return fragmentType;
+    }
+  }
+
   /** Set of test options. */
   public static final class AOptions extends FragmentOptions {
     @Option(
@@ -415,6 +431,8 @@ public final class TrimmableTestConfigurationFragments {
   @StarlarkBuiltin(name = "alpha", doc = "Test config fragment.")
   @RequiresOptions(options = {AOptions.class})
   public static final class AConfig extends Fragment implements StarlarkValue {
+    public static final ConfigurationFragmentFactory FACTORY = new FragmentLoader<>(AConfig.class);
+
     private final String value;
 
     public AConfig(BuildOptions buildOptions) {
@@ -441,6 +459,8 @@ public final class TrimmableTestConfigurationFragments {
   @StarlarkBuiltin(name = "bravo", doc = "Test config fragment.")
   @RequiresOptions(options = {BOptions.class})
   public static final class BConfig extends Fragment implements StarlarkValue {
+    public static final ConfigurationFragmentFactory FACTORY = new FragmentLoader<>(BConfig.class);
+
     private final String value;
 
     public BConfig(BuildOptions buildOptions) {
@@ -467,6 +487,8 @@ public final class TrimmableTestConfigurationFragments {
   @StarlarkBuiltin(name = "charlie", doc = "Test config fragment.")
   @RequiresOptions(options = {COptions.class})
   public static final class CConfig extends Fragment implements StarlarkValue {
+    public static final ConfigurationFragmentFactory FACTORY = new FragmentLoader<>(CConfig.class);
+
     private final String value;
 
     public CConfig(BuildOptions buildOptions) {
@@ -493,6 +515,8 @@ public final class TrimmableTestConfigurationFragments {
   @StarlarkBuiltin(name = "delta", doc = "Test config fragment.")
   @RequiresOptions(options = {DOptions.class})
   public static final class DConfig extends Fragment implements StarlarkValue {
+    public static final ConfigurationFragmentFactory FACTORY = new FragmentLoader<>(DConfig.class);
+
     private final String value;
 
     public DConfig(BuildOptions buildOptions) {
@@ -522,6 +546,8 @@ public final class TrimmableTestConfigurationFragments {
   @StarlarkBuiltin(name = "echo", doc = "Test config fragment.")
   @RequiresOptions(options = {EOptions.class})
   public static final class EConfig extends Fragment implements StarlarkValue {
+    public static final ConfigurationFragmentFactory FACTORY = new FragmentLoader<>(EConfig.class);
+
     private final String value;
 
     public EConfig(BuildOptions buildOptions) {

@@ -15,49 +15,33 @@
 package com.google.devtools.build.lib.rules.apple.swift;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.Fragment;
+import com.google.devtools.build.lib.analysis.config.RequiresOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.starlarkbuildapi.apple.SwiftConfigurationApi;
 
 /**
  * A configuration containing flags required for Swift tools. This is used primarily by swift_*
- * family of rules written in Skylark.
+ * family of rules written in Starlark.
  */
-@SkylarkModule(
-  name = "swift",
-  doc = "A configuration fragment for Swift tools.",
-  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
-)
 @Immutable
-public class SwiftConfiguration extends BuildConfiguration.Fragment {
-
-  private final boolean enableWholeModuleOptimization;
+@RequiresOptions(options = {SwiftCommandLineOptions.class})
+public class SwiftConfiguration extends Fragment implements SwiftConfigurationApi {
   private final ImmutableList<String> copts;
 
-  public SwiftConfiguration(SwiftCommandLineOptions options) {
-    enableWholeModuleOptimization = options.enableWholeModuleOptimization;
-    copts = ImmutableList.copyOf(options.copts);
+  public SwiftConfiguration(BuildOptions buildOptions) {
+    this.copts = ImmutableList.copyOf(buildOptions.get(SwiftCommandLineOptions.class).copts);
   }
 
-  /** Returns whether to enable Whole Module Optimization. */
-  @SkylarkCallable(
-    name = "enable_whole_module_optimization",
-    doc = "Whether to enable Whole Module Optimization."
-  )
-  public boolean enableWholeModuleOptimization() {
-    return enableWholeModuleOptimization;
+  @Override
+  public boolean isImmutable() {
+    return true; // immutable and Starlark-hashable
   }
 
   /** Returns a list of options to use for compiling Swift. */
-  @SkylarkCallable(name = "copts", doc = "Returns a list of options to use for compiling Swift.")
+  @Override
   public ImmutableList<String> getCopts() {
     return copts;
   }
@@ -65,21 +49,8 @@ public class SwiftConfiguration extends BuildConfiguration.Fragment {
   /** Loads {@link SwiftConfiguration} from build options. */
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
-    public SwiftConfiguration create(ConfigurationEnvironment env, BuildOptions buildOptions)
-        throws InvalidConfigurationException, InterruptedException {
-      SwiftCommandLineOptions options = buildOptions.get(SwiftCommandLineOptions.class);
-
-      return new SwiftConfiguration(options);
-    }
-
-    @Override
-    public Class<? extends BuildConfiguration.Fragment> creates() {
+    public Class<? extends Fragment> creates() {
       return SwiftConfiguration.class;
-    }
-
-    @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
-      return ImmutableSet.<Class<? extends FragmentOptions>>of(SwiftCommandLineOptions.class);
     }
   }
 }

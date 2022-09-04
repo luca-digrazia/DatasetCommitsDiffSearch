@@ -15,11 +15,11 @@ package com.google.devtools.build.lib.rules.config;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.RequiresOptions;
@@ -124,13 +124,20 @@ public class ConfigSettingTest extends BuildViewTestCase {
     }
   }
 
+  private static class DummyTestOptionsLoader implements ConfigurationFragmentFactory {
+    @Override
+    public Class<? extends Fragment> creates() {
+      return DummyTestOptionsFragment.class;
+    }
+  }
+
   @Override
   protected ConfiguredRuleClassProvider createRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
     builder.addRuleDefinition(new FeatureFlagSetterRule());
     builder.addConfigurationOptions(DummyTestOptions.class);
-    builder.addConfigurationFragment(DummyTestOptionsFragment.class);
+    builder.addConfigurationFragment(new DummyTestOptionsLoader());
     return builder.build();
   }
 
@@ -292,7 +299,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
         String.format(
             "option 'nonselectable_allowlisted_option' cannot be used in a config_setting (it is "
                 + "allowlisted to %s//tools/... only)",
-            RepositoryName.create(TestConstants.TOOLS_REPOSITORY).getCanonicalForm()),
+            RepositoryName.create(TestConstants.TOOLS_REPOSITORY).getDefaultCanonicalForm()),
         "config_setting(",
         "    name = 'badoption',",
         "    values = {",
@@ -1509,30 +1516,6 @@ public class ConfigSettingTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:match");
     assertContainsEvent("'gouda' cannot be converted to //test:wishes type int");
-  }
-
-  @Test
-  public void buildsettings_allowMultipleWorks() throws Exception {
-    scratch.file(
-        "test/build_settings.bzl",
-        "def _impl(ctx):",
-        "  return []",
-        "string_flag = rule(",
-        "  implementation = _impl,",
-        "  build_setting = config.string(flag = True, allow_multiple = True),",
-        ")");
-    scratch.file(
-        "test/BUILD",
-        "load('//test:build_settings.bzl', 'string_flag')",
-        "config_setting(",
-        "    name = 'match',",
-        "    flag_values = {",
-        "        ':cheese': 'pepperjack',",
-        "    },",
-        ")",
-        "string_flag(name = 'cheese', build_setting_default = 'gouda')");
-    useConfiguration(ImmutableMap.of("//test:cheese", ImmutableList.of("pepperjack", "brie")));
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
   }
 
   @Test

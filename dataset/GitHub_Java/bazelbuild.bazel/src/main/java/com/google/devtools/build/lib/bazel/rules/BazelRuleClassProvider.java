@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.ShellConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.ActionEnvironmentProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -46,7 +47,6 @@ import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidLocalTestRu
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidSdkRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidSemantics;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAndroidToolsDefaultsJar;
-import com.google.devtools.build.lib.bazel.rules.android.BazelDexArchiveAspect;
 import com.google.devtools.build.lib.bazel.rules.android.BazelSdkToolchainRule;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppSemantics;
 import com.google.devtools.build.lib.bazel.rules.cpp.proto.BazelCcProtoAspect;
@@ -111,7 +111,7 @@ import com.google.devtools.build.lib.rules.python.PyRuleClasses.PySymlink;
 import com.google.devtools.build.lib.rules.python.PyRuntimeInfo;
 import com.google.devtools.build.lib.rules.python.PyRuntimeRule;
 import com.google.devtools.build.lib.rules.python.PyStarlarkTransitions;
-import com.google.devtools.build.lib.rules.python.PythonConfiguration;
+import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.rules.test.TestingSupportRules;
@@ -179,6 +179,14 @@ public class BazelRuleClassProvider {
   @RequiresOptions(options = {StrictActionEnvOptions.class})
   public static class StrictActionEnvConfiguration extends Fragment {
     public StrictActionEnvConfiguration(BuildOptions buildOptions) {}
+
+    /** Loader. */
+    public static class Loader implements ConfigurationFragmentFactory {
+      @Override
+      public Class<? extends Fragment> creates() {
+        return StrictActionEnvConfiguration.class;
+      }
+    }
   }
 
   public static final ActionEnvironmentProvider SHELL_ACTION_ENV =
@@ -230,25 +238,20 @@ public class BazelRuleClassProvider {
         return ActionEnvironment.split(env);
       };
 
-  /** Convenience wrapper around {@link #setup} that returns a final ConfiguredRuleClassProvider. */
-  // Used by the build encyclopedia generator.
+  /** Used by the build encyclopedia generator. */
   public static ConfiguredRuleClassProvider create() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
+    builder.setToolsRepository(TOOLS_REPOSITORY);
+    builder.setThirdPartyLicenseExistencePolicy(ThirdPartyLicenseExistencePolicy.NEVER_CHECK);
     setup(builder);
     return builder.build();
   }
 
-  /** Adds this class's definitions to a builder. */
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
-    builder.setToolsRepository(TOOLS_REPOSITORY);
-    builder.setBuiltinsBzlZipResource(
-        ResourceFileLoader.resolveResource(BazelRuleClassProvider.class, "builtins_bzl.zip"));
-    builder.setBuiltinsBzlPackagePathInSource("src/main/starlark/builtins_bzl");
-    builder.setThirdPartyLicenseExistencePolicy(ThirdPartyLicenseExistencePolicy.NEVER_CHECK);
-
     for (RuleSet ruleSet : RULE_SETS) {
       ruleSet.init(builder);
     }
+    builder.setThirdPartyLicenseExistencePolicy(ThirdPartyLicenseExistencePolicy.NEVER_CHECK);
   }
 
   public static final RuleSet BAZEL_SETUP =
@@ -262,10 +265,10 @@ public class BazelRuleClassProvider {
               .setPrerequisiteValidator(new BazelPrerequisiteValidator())
               .setActionEnvironmentProvider(SHELL_ACTION_ENV)
               .addConfigurationOptions(ShellConfiguration.Options.class)
-              .addConfigurationFragment(ShellConfiguration.class)
+              .addConfigurationFragment(new ShellConfiguration.Loader())
               .addUniversalConfigurationFragment(ShellConfiguration.class)
               .addUniversalConfigurationFragment(PlatformConfiguration.class)
-              .addConfigurationFragment(StrictActionEnvConfiguration.class)
+              .addConfigurationFragment(new StrictActionEnvConfiguration.Loader())
               .addUniversalConfigurationFragment(StrictActionEnvConfiguration.class)
               .addConfigurationOptions(CoreOptions.class);
         }
@@ -281,7 +284,7 @@ public class BazelRuleClassProvider {
         @Override
         public void init(ConfiguredRuleClassProvider.Builder builder) {
           builder.addConfigurationOptions(ProtoConfiguration.Options.class);
-          builder.addConfigurationFragment(ProtoConfiguration.class);
+          builder.addConfigurationFragment(new ProtoConfiguration.Loader());
           builder.addRuleDefinition(new BazelProtoLibraryRule());
           builder.addRuleDefinition(new ProtoLangToolchainRule());
 
@@ -339,11 +342,11 @@ public class BazelRuleClassProvider {
         public void init(ConfiguredRuleClassProvider.Builder builder) {
           String toolsRepository = checkNotNull(builder.getToolsRepository());
 
-          builder.addConfigurationFragment(AndroidConfiguration.class);
-          builder.addConfigurationFragment(AndroidLocalTestConfiguration.class);
+          builder.addConfigurationFragment(new AndroidConfiguration.Loader());
+          builder.addConfigurationFragment(new AndroidLocalTestConfiguration.Loader());
 
           AndroidNeverlinkAspect androidNeverlinkAspect = new AndroidNeverlinkAspect();
-          DexArchiveAspect dexArchiveAspect = new BazelDexArchiveAspect(toolsRepository);
+          DexArchiveAspect dexArchiveAspect = new DexArchiveAspect(toolsRepository);
           builder.addNativeAspectClass(androidNeverlinkAspect);
           builder.addNativeAspectClass(dexArchiveAspect);
 
@@ -420,8 +423,8 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(ConfiguredRuleClassProvider.Builder builder) {
-          builder.addConfigurationFragment(PythonConfiguration.class);
-          builder.addConfigurationFragment(BazelPythonConfiguration.class);
+          builder.addConfigurationFragment(new PythonConfigurationLoader());
+          builder.addConfigurationFragment(new BazelPythonConfiguration.Loader());
 
           builder.addRuleDefinition(new BazelPyRuleClasses.PyBaseRule());
           builder.addRuleDefinition(new BazelPyRuleClasses.PyBinaryBaseRule());

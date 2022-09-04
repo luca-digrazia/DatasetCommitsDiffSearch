@@ -16,23 +16,18 @@ package com.google.devtools.build.lib.rules;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
+import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.LateBoundAlias.CommonAliasRule;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
-import java.io.IOException;
-import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -43,24 +38,16 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class LateBoundAliasTest extends BuildViewTestCase {
 
-  private static final class TestFragment extends Fragment {}
+  /** Test fragment. */
+  public static final class TestFragment extends Fragment {
+    public TestFragment(BuildOptions buildOptions) {}
+  }
 
   private static final class TestFragmentOptionFactory implements ConfigurationFragmentFactory {
 
     @Override
     public Class<? extends Fragment> creates() {
       return TestFragment.class;
-    }
-
-    @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
-      return ImmutableSet.of();
-    }
-
-    @Nullable
-    @Override
-    public Fragment create(BuildOptions buildOptions) {
-      return new TestFragment();
     }
   }
 
@@ -83,7 +70,7 @@ public class LateBoundAliasTest extends BuildViewTestCase {
   }
 
   @Override
-  protected ConfiguredRuleClassProvider getRuleClassProvider() {
+  protected ConfiguredRuleClassProvider createRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
     builder.addConfigurationFragment(new TestFragmentOptionFactory());
@@ -92,7 +79,7 @@ public class LateBoundAliasTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testResolveNullTarget() throws IOException, LabelSyntaxException {
+  public void testResolveNullTarget() throws Exception {
     scratch.file("a/BUILD", "test_rule_name(name='alias')");
 
     ConfiguredTarget alias = getConfiguredTarget("//a:alias");
@@ -101,7 +88,7 @@ public class LateBoundAliasTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testNullTargetCanBeDependant() throws IOException, LabelSyntaxException {
+  public void testNullTargetCanBeDependant() throws Exception {
     scratch.file(
         "a/BUILD",
         "test_rule_name(name='alias')",

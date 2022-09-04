@@ -24,6 +24,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.RequiresOptions;
@@ -393,8 +394,7 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     assertThat(countObjectsPartiallyMatchingRegex(oldAnalyzedTargets, "//java/a:y")).isEqualTo(1);
     update("//java/a:x");
     Set<?> newAnalyzedTargets = getSkyframeEvaluatedTargetKeys();
-    // Source target and rule target.
-    assertThat(newAnalyzedTargets).hasSize(2);
+    assertThat(newAnalyzedTargets).isNotEmpty(); // could be greater due to implicit deps
     assertThat(countObjectsPartiallyMatchingRegex(newAnalyzedTargets, "//java/a:x")).isEqualTo(1);
     assertThat(countObjectsPartiallyMatchingRegex(newAnalyzedTargets, "//java/a:y")).isEqualTo(0);
   }
@@ -617,13 +617,20 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     public DiffResetFragment(BuildOptions buildOptions) {}
   }
 
+  private static final class DiffResetFactory implements ConfigurationFragmentFactory {
+    @Override
+    public Class<? extends Fragment> creates() {
+      return DiffResetFragment.class;
+    }
+  }
+
   private void setupDiffResetTesting() throws Exception {
     ImmutableSet<OptionDefinition> optionsThatCanChange =
         ImmutableSet.of(
             DiffResetOptions.PROBABLY_IRRELEVANT_OPTION, DiffResetOptions.ALSO_IRRELEVANT_OPTION);
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
-    builder.addConfigurationFragment(DiffResetFragment.class);
+    builder.addConfigurationFragment(new DiffResetFactory());
     builder.overrideShouldInvalidateCacheForOptionDiffForTesting(
         (newOptions, changedOption, oldValue, newValue) -> {
           return !optionsThatCanChange.contains(changedOption);
@@ -670,7 +677,12 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     useConfiguration("--definitely_relevant=Testing");
     update("//test:top");
     update("//test:top");
-    assertNoTargetsVisited();
+    // these targets were cached and did not need to be reanalyzed
+    assertNumberOfAnalyzedConfigurationsOfTargets(
+        ImmutableMap.<String, Integer>builder()
+            .put("//test:top", 0)
+            .put("//test:shared", 0)
+            .build());
   }
 
   @Test
@@ -685,7 +697,11 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     update("//test:top");
     update("//test:top");
     // these targets were cached and did not need to be reanalyzed
-    assertNoTargetsVisited();
+    assertNumberOfAnalyzedConfigurationsOfTargets(
+        ImmutableMap.<String, Integer>builder()
+            .put("//test:top", 0)
+            .put("//test:shared", 0)
+            .build());
   }
 
   @Test

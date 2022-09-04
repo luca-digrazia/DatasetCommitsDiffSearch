@@ -15,11 +15,11 @@
 package com.google.devtools.build.lib.analysis.test;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.OptionsDiffPredicate;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -47,8 +47,8 @@ import java.util.Map;
 public class TestConfiguration extends Fragment {
   public static final OptionsDiffPredicate SHOULD_INVALIDATE_FOR_OPTION_DIFF =
       (options, changedOption, oldValue, newValue) -> {
-        if (TestOptions.ALWAYS_INVALIDATE_WHEN_CHANGED.contains(changedOption)) {
-          // changes in --trim_test_configuration itself or related flags always prompt invalidation
+        if (TestOptions.TRIM_TEST_CONFIGURATION.equals(changedOption)) {
+          // changes in --trim_test_configuration itself always prompt invalidation
           return true;
         }
         if (!changedOption.getField().getDeclaringClass().equals(TestOptions.class)) {
@@ -61,11 +61,8 @@ public class TestConfiguration extends Fragment {
 
   /** Command-line options. */
   public static class TestOptions extends FragmentOptions {
-    private static final ImmutableSet<OptionDefinition> ALWAYS_INVALIDATE_WHEN_CHANGED =
-        ImmutableSet.of(
-            OptionsParser.getOptionDefinitionByName(TestOptions.class, "trim_test_configuration"),
-            OptionsParser.getOptionDefinitionByName(
-                TestOptions.class, "experimental_retain_test_configuration_across_testonly"));
+    private static final OptionDefinition TRIM_TEST_CONFIGURATION =
+        OptionsParser.getOptionDefinitionByName(TestOptions.class, "trim_test_configuration");
 
     @Option(
         name = "test_timeout",
@@ -130,34 +127,18 @@ public class TestConfiguration extends Fragment {
     public int testResultExpiration;
 
     @Option(
-        name = "trim_test_configuration",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
-        effectTags = {
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-          OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        },
-        help =
-            "When enabled, test-related options will be cleared below the top level of the build."
-                + " When this flag is active, tests cannot be built as dependencies of non-test"
-                + " rules, but changes to test-related options will not cause non-test rules to be"
-                + " re-analyzed.")
+      name = "trim_test_configuration",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
+      effectTags = {
+        OptionEffectTag.LOADING_AND_ANALYSIS,
+        OptionEffectTag.LOSES_INCREMENTAL_STATE,
+      },
+      help = "When enabled, test-related options will be cleared below the top level of the build. "
+          + "When this flag is active, tests cannot be built as dependencies of non-test rules, "
+          + "but changes to test-related options will not cause non-test rules to be re-analyzed."
+    )
     public boolean trimTestConfiguration;
-
-    @Option(
-        name = "experimental_retain_test_configuration_across_testonly",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
-        effectTags = {
-          OptionEffectTag.LOADING_AND_ANALYSIS,
-          OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        },
-        help =
-            "When enabled, --trim_test_configuration will not trim the test configuration for rules"
-                + " marked testonly=1. This is meant to reduce action conflict issues when non-test"
-                + " rules depend on cc_test rules. No effect if --trim_test_configuration is"
-                + " false.")
-    public boolean experimentalRetainTestConfigurationAcrossTestonly;
 
     @Option(
         name = "test_arg",
@@ -310,9 +291,15 @@ public class TestConfiguration extends Fragment {
       hostOptions.coverageReportGenerator = this.coverageReportGenerator;
       // trimTestConfiguration is a global analysis option and should be platform-agnostic
       hostOptions.trimTestConfiguration = this.trimTestConfiguration;
-      hostOptions.experimentalRetainTestConfigurationAcrossTestonly =
-          this.experimentalRetainTestConfigurationAcrossTestonly;
       return hostOptions;
+    }
+  }
+
+  /** Configuration loader for test options */
+  public static class Loader implements ConfigurationFragmentFactory {
+    @Override
+    public Class<? extends Fragment> creates() {
+      return TestConfiguration.class;
     }
   }
 
