@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
@@ -48,7 +50,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   RuleConfiguredTarget(
       RuleContext ruleContext,
       TransitiveInfoProviderMap providers,
-      SkylarkProviders skylarkProviders) {
+      SkylarkProviders skylarkProviders1) {
     super(ruleContext);
     // We don't use ImmutableMap.Builder here to allow augmenting the initial list of 'default'
     // providers by passing them in.
@@ -58,10 +60,8 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     Preconditions.checkState(providerBuilder.contains(FilesToRunProvider.class));
 
     // Initialize every SkylarkApiProvider
-    if (!skylarkProviders.isEmpty()) {
-      skylarkProviders.init(this);
-      providerBuilder.add(skylarkProviders);
-    }
+    skylarkProviders1.init(this);
+    providerBuilder.add(skylarkProviders1);
 
     this.providers = providerBuilder.build();
     this.configConditions = ruleContext.getConfigConditions();
@@ -109,5 +109,11 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   public String errorMessage(String name) {
     return String.format("target (rule class of '%s') doesn't have provider '%s'.",
         getTarget().getRuleClass(), name);
+  }
+
+  @Override
+  public ImmutableCollection<String> getKeys() {
+    return ImmutableList.<String>builder().addAll(super.getKeys())
+        .addAll(getProvider(SkylarkProviders.class).getKeys()).build();
   }
 }

@@ -61,8 +61,7 @@ public final class OutputGroupProvider extends SkylarkClassObject
     implements TransitiveInfoProvider, SkylarkIndexable, Iterable<String> {
   public static final String SKYLARK_NAME = "output_groups";
 
-  public static NativeClassObjectConstructor<OutputGroupProvider> SKYLARK_CONSTRUCTOR =
-      new Constructor();
+  public static NativeClassObjectConstructor SKYLARK_CONSTRUCTOR = new Constructor();
 
   /**
    * Prefix for output groups that are not reported to the user on the terminal output of Blaze when
@@ -257,15 +256,17 @@ public final class OutputGroupProvider extends SkylarkClassObject
     return outputGroups.keySet();
   }
 
-  /** A constructor callable from Skylark for OutputGroupProvider. */
-  private static class Constructor extends NativeClassObjectConstructor<OutputGroupProvider> {
+  /**
+   * A constructor callable from Skylark for OutputGroupProvider.
+   */
+  private static class Constructor extends NativeClassObjectConstructor {
 
     private Constructor() {
-      super(OutputGroupProvider.class, "OutputGroupInfo");
+      super("OutputGroupInfo");
     }
 
     @Override
-    protected OutputGroupProvider createInstanceFromSkylark(Object[] args, Location loc)
+    protected SkylarkClassObject createInstanceFromSkylark(Object[] args, Location loc)
         throws EvalException {
 
       @SuppressWarnings("unchecked")
