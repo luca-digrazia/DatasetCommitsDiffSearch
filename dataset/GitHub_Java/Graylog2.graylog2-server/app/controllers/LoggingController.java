@@ -45,7 +45,7 @@ public class LoggingController extends AuthenticatedController {
 
         Map<Node, List<InternalLogger>> loggers = Maps.newHashMap();
         for (Node node : ServerNodes.all()) {
-            loggers.put(node, node.allLoggers());
+            loggers.put(node, nodeService.allLoggers(node));
         }
 
         return ok(views.html.system.logging.index.render(currentUser(), bc, loggers));

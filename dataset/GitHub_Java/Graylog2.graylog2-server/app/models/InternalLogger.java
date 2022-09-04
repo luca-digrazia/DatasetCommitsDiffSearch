@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,19 +15,8 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models;
-
-import com.google.common.collect.Lists;
-import lib.APIException;
-import lib.ApiClient;
-import models.api.responses.system.loggers.LoggerSummary;
-import models.api.responses.system.loggers.LoggersResponse;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -42,21 +31,6 @@ public class InternalLogger {
         this.title = title;
         this.level = level;
         this.syslogLevel = syslogLevel;
-    }
-
-    public static List<InternalLogger> all(Node node) throws APIException, IOException {
-        List<InternalLogger> loggers = Lists.newArrayList();
-
-        LoggersResponse response = ApiClient.get(LoggersResponse.class)
-                .node(node)
-                .path("/system/loggers")
-                .execute();
-
-        for(Map.Entry<String, LoggerSummary> logger : response.loggers.entrySet()) {
-            loggers.add(new InternalLogger(logger.getKey(), logger.getValue().level, logger.getValue().syslogLevel));
-        }
-
-        return loggers;
     }
 
     public String getTitle() {
