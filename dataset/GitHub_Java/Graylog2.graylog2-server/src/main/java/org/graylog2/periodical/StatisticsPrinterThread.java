@@ -19,8 +19,13 @@
  */
 package org.graylog2.periodical;
 
+import com.sun.media.jai.opimage.MeanRIF;
+import com.yammer.metrics.Metrics;
+import java.util.concurrent.TimeUnit;
 import org.graylog2.Core;
 import org.graylog2.buffers.BufferWatermark;
+import org.graylog2.buffers.OutputBuffer;
+import org.graylog2.buffers.ProcessBuffer;
 import org.joda.time.DateTime;
 
 /**
@@ -32,9 +37,12 @@ public class StatisticsPrinterThread implements Runnable {
     public static final int PERIOD = 5;
     
     private final Core server;
-        
+    
+    public static final String COUNTER_NAME = "statisticsprinter";
+    
     public StatisticsPrinterThread(Core server) {
         this.server = server;
+        server.getMessageCounterManager().register(COUNTER_NAME);
     }
     
     @Override
@@ -69,8 +77,8 @@ public class StatisticsPrinterThread implements Runnable {
     }
     
     private void messageCounts() {
-        print("written", "Messages written to all outputs: " + server.getBenchmarkCounter().get());
-        server.getBenchmarkCounter().set(0);
+        print("messagecounts", "Accepted messages: " + server.getMessageCounterManager().get(COUNTER_NAME).getTotalCount());
+        server.getMessageCounterManager().get(COUNTER_NAME).resetAllCounts();
     }
     
 }
