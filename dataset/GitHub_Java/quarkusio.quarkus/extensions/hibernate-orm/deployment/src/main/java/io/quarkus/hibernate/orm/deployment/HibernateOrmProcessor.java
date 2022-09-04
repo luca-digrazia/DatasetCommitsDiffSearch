@@ -41,7 +41,6 @@ import org.hibernate.annotations.Proxy;
 import org.hibernate.boot.archive.scan.spi.ClassDescriptor;
 import org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl;
 import org.hibernate.cfg.AvailableSettings;
-import org.hibernate.dialect.DB297Dialect;
 import org.hibernate.dialect.DerbyTenSevenDialect;
 import org.hibernate.dialect.MariaDB103Dialect;
 import org.hibernate.dialect.MySQL8Dialect;
@@ -70,14 +69,10 @@ import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.ResourceAnnotationBuildItem;
-import io.quarkus.arc.deployment.staticmethods.InterceptedStaticMethodsTransformersRegisteredBuildItem;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
@@ -129,8 +124,8 @@ import net.bytebuddy.dynamic.DynamicType;
  */
 public final class HibernateOrmProcessor {
 
-    public static final String HIBERNATE_ORM_CONFIG_PREFIX = "quarkus.hibernate-orm.";
-    public static final String NO_SQL_LOAD_SCRIPT_FILE = "no-file";
+    private static final String HIBERNATE_ORM_CONFIG_PREFIX = "quarkus.hibernate-orm.";
+    private static final String NO_SQL_LOAD_SCRIPT_FILE = "no-file";
 
     private static final DotName PERSISTENCE_CONTEXT = DotName.createSimple(PersistenceContext.class.getName());
     private static final DotName PERSISTENCE_UNIT = DotName.createSimple(PersistenceUnit.class.getName());
@@ -147,7 +142,7 @@ public final class HibernateOrmProcessor {
 
     @BuildStep
     CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.HIBERNATE_ORM);
+        return new CapabilityBuildItem(Capabilities.HIBERNATE_ORM);
     }
 
     // We do our own enhancement during the compilation phase, so disable any
@@ -187,7 +182,6 @@ public final class HibernateOrmProcessor {
             List<JdbcDataSourceBuildItem> jdbcDataSourcesBuildItem,
             List<PersistenceXmlDescriptorBuildItem> persistenceXmlDescriptors,
             BuildProducer<NativeImageResourceBuildItem> resourceProducer,
-            Capabilities capabilities,
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             LaunchModeBuildItem launchMode,
             JpaEntitiesBuildItem domainObjects,
@@ -212,12 +206,8 @@ public final class HibernateOrmProcessor {
         for (PersistenceXmlDescriptorBuildItem persistenceXmlDescriptorBuildItem : persistenceXmlDescriptors) {
             allDescriptors.add(persistenceXmlDescriptorBuildItem.getDescriptor());
         }
-
-        final boolean hibernateReactivePresent = capabilities.isPresent(Capability.HIBERNATE_REACTIVE);
-        if (!hibernateReactivePresent) {
-            handleHibernateORMWithNoPersistenceXml(allDescriptors, resourceProducer, systemPropertyProducer,
-                    defaultJdbcDataSourceBuildItem, applicationArchivesBuildItem, launchMode.getLaunchMode());
-        }
+        handleHibernateORMWithNoPersistenceXml(allDescriptors, resourceProducer, systemPropertyProducer,
+                defaultJdbcDataSourceBuildItem, applicationArchivesBuildItem, launchMode.getLaunchMode());
 
         for (ParsedPersistenceXmlDescriptor descriptor : allDescriptors) {
             persistenceUnitDescriptorProducer.produce(new PersistenceUnitDescriptorBuildItem(descriptor));
@@ -303,10 +293,10 @@ public final class HibernateOrmProcessor {
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener) throws Exception {
 
-        feature.produce(new FeatureBuildItem(Feature.HIBERNATE_ORM));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_ORM));
 
         final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
-        final boolean hibernateReactivePresent = capabilities.isPresent(Capability.HIBERNATE_REACTIVE);
+        final boolean hibernateReactivePresent = capabilities.isCapabilityPresent(Capabilities.HIBERNATE_REACTIVE);
         //The Hibernate Reactive extension is able to handle registration of PersistenceProviders for both reactive and
         //traditional blocking Hibernate, by depending on this module and delegating to this code.
         //So when the Hibernate Reactive extension is present, trust that it will register its own PersistenceProvider
@@ -522,7 +512,6 @@ public final class HibernateOrmProcessor {
         }
     }
 
-    @Consume(InterceptedStaticMethodsTransformersRegisteredBuildItem.class)
     @BuildStep
     public HibernateEnhancersRegisteredBuildItem enhancerDomainObjects(JpaEntitiesBuildItem domainObjects,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
@@ -546,7 +535,7 @@ public final class HibernateOrmProcessor {
         MultiTenancyStrategy strategy = MultiTenancyStrategy
                 .valueOf(hibernateConfig.multitenant.orElse(MultiTenancyStrategy.NONE.name()));
         buildProducer.produce(new BeanContainerListenerBuildItem(
-                recorder.initializeJpa(capabilities.isPresent(Capability.TRANSACTIONS), strategy,
+                recorder.initializeJpa(capabilities.isCapabilityPresent(Capabilities.TRANSACTIONS), strategy,
                         hibernateConfig.multitenantSchemaDatasource.orElse(null))));
 
         // Bootstrap all persistence units
@@ -942,14 +931,11 @@ public final class HibernateOrmProcessor {
         }
     }
 
-    public static Optional<String> guessDialect(Optional<String> dbKind) {
+    private Optional<String> guessDialect(Optional<String> dbKind) {
         // For now select the latest dialect from the driver
         // later, we can keep doing that but also avoid DCE
         // of all the dialects we want in so that people can override them
         String resolvedDbKind = dbKind.orElse("NO_DATABASE_KIND");
-        if (DatabaseKind.isDB2(resolvedDbKind)) {
-            return Optional.of(DB297Dialect.class.getName());
-        }
         if (DatabaseKind.isPostgreSQL(resolvedDbKind)) {
             return Optional.of(QuarkusPostgreSQL10Dialect.class.getName());
         }
@@ -963,10 +949,10 @@ public final class HibernateOrmProcessor {
             return Optional.of(MySQL8Dialect.class.getName());
         }
         if (DatabaseKind.isDerby(resolvedDbKind)) {
-            return Optional.of(DerbyTenSevenDialect.class.getName());
+            return Optional.of((DerbyTenSevenDialect.class.getName()));
         }
         if (DatabaseKind.isMsSQL(resolvedDbKind)) {
-            return Optional.of(SQLServer2012Dialect.class.getName());
+            return Optional.of((SQLServer2012Dialect.class.getName()));
         }
 
         String error = dbKind.isPresent()
