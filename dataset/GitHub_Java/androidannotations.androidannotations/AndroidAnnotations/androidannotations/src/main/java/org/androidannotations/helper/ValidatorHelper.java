@@ -79,6 +79,9 @@ public class ValidatorHelper {
 	private static final List<String> ANDROID_FRAGMENT_QUALIFIED_NAMES = asList(CanonicalNameConstants.FRAGMENT, CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
 
 	private static final String METHOD_NAME_SET_ROOT_URL = "setRootUrl";
+	private static final String METHOD_NAME_SET_AUTHENTICATION = "setAuthentication";
+	private static final String METHOD_NAME_GET_COOKIE = "getCookie";
+	private static final String METHOD_NAME_GET_HEADER = "getHeader";
 
 	private static final List<String> VALID_PREF_RETURN_TYPES = Arrays.asList("int", "boolean", "float", "long", CanonicalNameConstants.STRING);
 
@@ -762,7 +765,10 @@ public class ValidatorHelper {
 		List<? extends Element> enclosedElements = typeElement.getEnclosedElements();
 		boolean foundGetRestTemplateMethod = false;
 		boolean foundSetRestTemplateMethod = false;
+		boolean foundSetAuthenticationMethod = false;
 		boolean foundSetRootUrlMethod = false;
+		boolean foundGetCookieMethod = false;
+		boolean foundGetHeaderMethod = false;
 		for (Element enclosedElement : enclosedElements) {
 			if (enclosedElement.getKind() != ElementKind.METHOD) {
 				valid.invalidate();
@@ -806,14 +812,45 @@ public class ValidatorHelper {
 								}
 							} else if (executableElement.getSimpleName().toString().equals(METHOD_NAME_SET_ROOT_URL) && !foundSetRootUrlMethod) {
 								foundSetRootUrlMethod = true;
+							} else if (executableElement.getSimpleName().toString().equals(METHOD_NAME_SET_AUTHENTICATION) && !foundSetAuthenticationMethod) {
+								foundSetAuthenticationMethod = true;
 							} else {
 								valid.invalidate();
 								annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
 
 							}
+						} else if (parameters.size() == 2) {
+							VariableElement firstParameter = parameters.get(0);
+							VariableElement secondParameter = parameters.get(1);
+							if (!(firstParameter.asType().toString().equals(CanonicalNameConstants.STRING) && secondParameter.asType().toString().equals(CanonicalNameConstants.STRING))) {
+								valid.invalidate();
+								annotationHelper.printError(enclosedElement, "The method to set headers, cookies, or HTTP Basic Auth should have only String parameters on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+							}
 						} else {
 							valid.invalidate();
 							annotationHelper.printError(enclosedElement, "The method to set a RestTemplate should have only one RestTemplate parameter on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+						}
+					} else if (returnType.toString().equals(CanonicalNameConstants.STRING)) {
+						List<? extends VariableElement> parameters = executableElement.getParameters();
+						if (parameters.size() == 1) {
+							VariableElement firstParameter = parameters.get(0);
+							if (firstParameter.asType().toString().equals(CanonicalNameConstants.STRING)) {
+								if (executableElement.getSimpleName().toString().equals(METHOD_NAME_GET_COOKIE) && !foundGetCookieMethod) {
+									foundGetCookieMethod = true;
+								} else if (executableElement.getSimpleName().toString().equals(METHOD_NAME_GET_HEADER) && !foundGetHeaderMethod) {
+									foundGetHeaderMethod = true;
+								} else {
+									valid.invalidate();
+									annotationHelper.printError(enclosedElement, "Only one getCookie(String) and one getHeader(String) method are allowed on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+								}
+							} else {
+								valid.invalidate();
+								annotationHelper.printError(enclosedElement, "Only getCookie(String) and getHeader(String) can return a String on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface");
+							}
+
+						} else {
+							valid.invalidate();
+							annotationHelper.printError(enclosedElement, "The only methods that can return a String on a " + TargetAnnotationHelper.annotationName(Rest.class) + " annotated interface are getCookie(String) and getHeader(String)");
 						}
 					} else {
 						valid.invalidate();
@@ -989,12 +1026,6 @@ public class ValidatorHelper {
 		TypeMirror httpMessageConverterType = annotationHelper.typeElementFromQualifiedName(HTTP_MESSAGE_CONVERTER).asType();
 		TypeMirror httpMessageConverterTypeErased = annotationHelper.getTypeUtils().erasure(httpMessageConverterType);
 		List<DeclaredType> converters = annotationHelper.extractAnnotationClassArrayParameter(element, annotationHelper.getTarget(), "converters");
-
-		if (converters == null) {
-			valid.invalidate();
-			return;
-		}
-
 		for (DeclaredType converterType : converters) {
 			TypeMirror erasedConverterType = annotationHelper.getTypeUtils().erasure(converterType);
 			if (annotationHelper.isSubtype(erasedConverterType, httpMessageConverterTypeErased)) {
