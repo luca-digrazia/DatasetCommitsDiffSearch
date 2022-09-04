@@ -1,29 +1,57 @@
 package com.codahale.dropwizard.server;
 
-import com.codahale.dropwizard.jersey.setup.JerseyEnvironment;
 import com.codahale.dropwizard.jetty.ConnectorFactory;
 import com.codahale.dropwizard.jetty.ContextRoutingHandler;
 import com.codahale.dropwizard.jetty.HttpConnectorFactory;
-import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.health.HealthCheckRegistry;
-import com.codahale.metrics.jetty9.InstrumentedHandler;
+import com.codahale.dropwizard.setup.Environment;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.jersey.spi.container.servlet.ServletContainer;
+import com.google.common.collect.ImmutableMap;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
-import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.util.thread.ThreadPool;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.validation.Valid;
-import javax.validation.Validator;
 import javax.validation.constraints.NotNull;
 
+// TODO: 5/15/13 <coda> -- add tests for SimpleServerFactory
+
+/**
+ * A single-connector implementation of {@link ServerFactory}, suitable for PaaS deployments
+ * (e.g., Heroku) where applications are limited to a single, runtime-defined port. A startup script
+ * can override the port via {@code -Ddw.server.connector.port=$PORT}.
+ * <p/>
+ * <b>Configuration Parameters:</b>
+ * <table>
+ *     <tr>
+ *         <td>Name</td>
+ *         <td>Default</td>
+ *         <td>Description</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code connector}</td>
+ *         <td>An {@link HttpConnectorFactory HTTP connector} listening on port {@code 8080}.</td>
+ *         <td>The {@link ConnectorFactory connector} which will handle both application and admin requests.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code applicationContextPath}</td>
+ *         <td>{@code /application}</td>
+ *         <td>The context path of the application servlets, including Jersey.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code adminContextPath}</td>
+ *         <td>{@code /admin}</td>
+ *         <td>The context path of the admin servlets, including metrics and tasks.</td>
+ *     </tr>
+ * </table>
+ * <p/>
+ * For more configuration parameters, see {@link AbstractServerFactory}.
+ *
+ * @see ServerFactory
+ * @see AbstractServerFactory
+ */
 @JsonTypeName("simple")
 public class SimpleServerFactory extends AbstractServerFactory {
     @Valid
@@ -31,10 +59,10 @@ public class SimpleServerFactory extends AbstractServerFactory {
     private ConnectorFactory connector = HttpConnectorFactory.application();
 
     @NotEmpty
-    private String serviceRoot = "/service";
+    private String applicationContextPath = "/application";
 
     @NotEmpty
-    private String adminRoot = "/admin";
+    private String adminContextPath = "/admin";
 
     @JsonProperty
     public ConnectorFactory getConnector() {
@@ -47,67 +75,58 @@ public class SimpleServerFactory extends AbstractServerFactory {
     }
 
     @JsonProperty
-    public String getServiceRoot() {
-        return serviceRoot;
+    public String getApplicationContextPath() {
+        return applicationContextPath;
     }
 
     @JsonProperty
-    public void setServiceRoot(String root) {
-        this.serviceRoot = root;
+    public void setApplicationContextPath(String contextPath) {
+        this.applicationContextPath = contextPath;
     }
 
     @JsonProperty
-    public String getAdminRoot() {
-        return adminRoot;
+    public String getAdminContextPath() {
+        return adminContextPath;
     }
 
     @JsonProperty
-    public void setAdminRoot(String root) {
-        this.adminRoot = root;
+    public void setAdminContextPath(String contextPath) {
+        this.adminContextPath = contextPath;
     }
 
     @Override
-    public Server build(String name,
-                        MetricRegistry metricRegistry,
-                        HealthCheckRegistry healthChecks,
-                        LifecycleEnvironment lifecycle,
-                        ServletContextHandler applicationContext,
-                        ServletContainer jerseyContainer,
-                        ServletContextHandler adminContext,
-                        JerseyEnvironment jersey,
-                        ObjectMapper objectMapper,
-                        Validator validator) {
+    public Server build(Environment environment) {
+        printBanner(environment.getName());
+        final ThreadPool threadPool = createThreadPool(environment.metrics());
+        final Server server = buildServer(environment.lifecycle(), threadPool);
 
-        final ThreadPool threadPool = createThreadPool(metricRegistry);
-        final Server server = buildServer(lifecycle, threadPool);
+        environment.getApplicationContext().setContextPath(applicationContextPath);
+        final Handler applicationHandler = createAppServlet(server,
+                                                            environment.jersey(),
+                                                            environment.getObjectMapper(),
+                                                            environment.getValidator(),
+                                                            environment.getApplicationContext(),
+                                                            environment.getJerseyServletContainer(),
+                                                            environment.metrics());
 
-        final ServletContextHandler applicationHandler = createExternalServlet(jersey,
-                                                                               objectMapper,
-                                                                               validator,
-                                                                               applicationContext,
-                                                                               jerseyContainer);
-        applicationHandler.setContextPath(serviceRoot);
+        environment.getAdminContext().setContextPath(adminContextPath);
+        final Handler adminHandler = createAdminServlet(server,
+                                                        environment.getAdminContext(),
+                                                        environment.metrics(),
+                                                        environment.healthChecks());
 
-        final ServletContextHandler adminHandler = createInternalServlet(adminContext,
-                                                                         metricRegistry,
-                                                                         healthChecks);
-        adminHandler.setContextPath(adminRoot);
+        final Connector conn = connector.build(server,
+                                               environment.metrics(),
+                                               environment.getName(),
+                                               server.getThreadPool());
 
-        final Connector conn = connector.build(server, metricRegistry, name);
         server.addConnector(conn);
 
-        final ContextRoutingHandler routingHandler = new ContextRoutingHandler(applicationHandler,
-                                                                               adminHandler);
-        final Handler gzipHandler = getGzipHandlerFactory().wrapHandler(routingHandler);
-        final Handler handler = new InstrumentedHandler(metricRegistry, gzipHandler);
-
-        if (getRequestLogFactory().isEnabled()) {
-            final RequestLogHandler requestLogHandler = getRequestLogFactory().build(name);
-            requestLogHandler.setHandler(handler);
-            server.setHandler(requestLogHandler);
-        } else {
-            server.setHandler(handler);
-        }
+        final ContextRoutingHandler routingHandler = new ContextRoutingHandler(ImmutableMap.of(
+                applicationContextPath, applicationHandler,
+                adminContextPath, adminHandler
+        ));
+        server.setHandler(addRequestLog(routingHandler, environment.getName()));
 
         return server;
     }
