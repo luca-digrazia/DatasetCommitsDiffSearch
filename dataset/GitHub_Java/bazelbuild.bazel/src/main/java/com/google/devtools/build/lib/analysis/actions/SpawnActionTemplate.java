@@ -20,12 +20,10 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -129,7 +127,8 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
     // Note that we pass in nulls below because SpawnActionTemplate does not support param file, and
     // it does not use any default value for executable or shell environment. They must be set
     // explicitly via builder method #setExecutable and #setEnvironment.
-    return actionBuilder.buildForActionTemplate(getOwner());
+    return actionBuilder.buildSpawnAction(
+        getOwner(), actionBuilder.buildCommandLineWithoutParamsFiles(), /*configEnv=*/ null);
   }
 
   /**
@@ -203,7 +202,9 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
 
   @Override
   public Iterable<String> getClientEnvironmentVariables() {
-    return spawnActionBuilder.buildForActionTemplate(getOwner()).getClientEnvironmentVariables();
+    return spawnActionBuilder
+        .buildSpawnAction(getOwner(), CommandLine.of(ImmutableList.of()), null)
+        .getClientEnvironmentVariables();
   }
 
   @Override

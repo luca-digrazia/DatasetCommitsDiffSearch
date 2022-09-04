@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -812,6 +813,21 @@ public class CustomCommandLineTest {
   }
 
   @Test
+  public void testCustomMultiArgs() {
+    CustomCommandLine cl =
+        builder()
+            .addCustomMultiArgv(
+                new CustomMultiArgv() {
+                  @Override
+                  public ImmutableList<String> argv() {
+                    return ImmutableList.of("--arg1", "--arg2");
+                  }
+                })
+            .build();
+    assertThat(cl.arguments()).containsExactly("--arg1", "--arg2").inOrder();
+  }
+
+  @Test
   public void testCombinedArgs() {
     CustomCommandLine cl =
         builder()
@@ -875,6 +891,7 @@ public class CustomCommandLineTest {
             .addExecPaths("foo", NestedSetBuilder.emptySet(Order.STABLE_ORDER))
             .addAll("foo", VectorArg.of((NestedSet<String>) null))
             .addAll("foo", VectorArg.of(NestedSetBuilder.<String>emptySet(Order.STABLE_ORDER)))
+            .addCustomMultiArgv(null)
             .addPlaceholderTreeArtifactExecPath("foo", null)
             .build();
     assertThat(cl.arguments()).isEmpty();
@@ -967,6 +984,7 @@ public class CustomCommandLineTest {
   private SpecialArtifact createTreeArtifact(String rootRelativePath) {
     PathFragment relpath = PathFragment.create(rootRelativePath);
     return new SpecialArtifact(
+        rootDir.getRoot().getRelative(relpath),
         rootDir,
         rootDir.getExecPath().getRelative(relpath),
         ArtifactOwner.NullArtifactOwner.INSTANCE,

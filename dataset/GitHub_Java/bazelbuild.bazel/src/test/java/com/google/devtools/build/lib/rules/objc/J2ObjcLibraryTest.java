@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.util.MockJ2ObjcSupport;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
@@ -38,6 +39,13 @@ public class J2ObjcLibraryTest extends ObjcRuleTestCase {
           output.add(ActionInputHelper.treeFileArtifact((SpecialArtifact) artifact, "children2"));
         }
       };
+
+  /**
+   * The configuration to be used for genfiles artifacts.
+   */
+  protected BuildConfiguration getGenfilesConfig() throws InterruptedException {
+    return getAppleCrosstoolConfiguration();
+  }
 
   /**
    * Creates and injects a j2objc_library target that depends upon the given label, then returns the
@@ -72,6 +80,7 @@ public class J2ObjcLibraryTest extends ObjcRuleTestCase {
         "    name = 'transpile',",
         "    deps = ['test'])");
     MockObjcSupport.setup(mockToolsConfig);
+    MockObjcSupport.setupIosSimDevice(mockToolsConfig);
     MockJ2ObjcSupport.setup(mockToolsConfig);
     MockProtoSupport.setup(mockToolsConfig);
 

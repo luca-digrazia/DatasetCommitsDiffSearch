@@ -76,9 +76,9 @@ public class ActionMetadataHandler implements MetadataHandler {
   /**
    * Data for input artifacts. Immutable.
    *
-   * <p>This should never be read directly. Use {@link #getInputFileArtifactValue} instead.
+   * <p>This should never be read directly. Use {@link #getInputFileArtifactValue} instead.</p>
    */
-  private final InputArtifactData inputArtifactData;
+  private final Map<Artifact, FileArtifactValue> inputArtifactData;
 
   /** FileValues for each output Artifact. */
   private final ConcurrentMap<Artifact, FileValue> outputArtifactData =
@@ -128,8 +128,7 @@ public class ActionMetadataHandler implements MetadataHandler {
   private final AtomicBoolean executionMode = new AtomicBoolean(false);
 
   @VisibleForTesting
-  public ActionMetadataHandler(
-      InputArtifactData inputArtifactData,
+  public ActionMetadataHandler(Map<Artifact, FileArtifactValue> inputArtifactData,
       Iterable<Artifact> outputs,
       TimestampGranularityMonitor tsgm) {
     this.inputArtifactData = Preconditions.checkNotNull(inputArtifactData);
@@ -168,7 +167,7 @@ public class ActionMetadataHandler implements MetadataHandler {
       return null;
     }
 
-    return inputArtifactData.get(input);
+    return Preconditions.checkNotNull(inputArtifactData.get(input), input);
   }
 
   @Override
@@ -465,43 +464,6 @@ public class ActionMetadataHandler implements MetadataHandler {
         // Ignore exceptions for empty files, as above.
       }
     }
-  }
-
-  @Override
-  public void injectRemoteFile(Artifact output, byte[] digest, long size, int locationIndex) {
-    Preconditions.checkState(
-        executionMode.get(), "Tried to inject %s outside of execution.", output);
-    Preconditions.checkArgument(
-        locationIndex != 0 || size == 0,
-        "output = %s, size = %s, locationIndex =%s",
-        output,
-        size,
-        locationIndex);
-
-    // TODO(shahan): there are a couple of things that could reduce memory usage
-    // 1. We might be able to skip creating an entry in `outputArtifactData` and only create
-    // the `FileArtifactValue`, but there are likely downstream consumers that expect it that
-    // would need to be cleaned up.
-    // 2. Instead of creating an `additionalOutputData` entry, we could add the extra
-    // `locationIndex` to `FileStateValue`.
-    try {
-      injectOutputData(
-          output, new FileArtifactValue.RemoteFileArtifactValue(digest, size, locationIndex));
-    } catch (IOException e) {
-      throw new IllegalStateException(e); // Should never happen.
-    }
-  }
-
-  public void injectOutputData(Artifact output, FileArtifactValue artifactValue)
-      throws IOException {
-    Preconditions.checkState(injectedFiles.add(output), output);
-    // While `artifactValue` carries the important information, the control flow of `getMetadata`
-    // requires an entry in `outputArtifactData` to access `additionalOutputData`, so a
-    // `PLACEHOLDER` is added to `outputArtifactData`.
-    FileValue oldFileValue = outputArtifactData.putIfAbsent(output, FileValue.PLACEHOLDER);
-    checkInconsistentData(output, oldFileValue, FileValue.PLACEHOLDER);
-    FileArtifactValue oldArtifactValue = additionalOutputData.putIfAbsent(output, artifactValue);
-    checkInconsistentData(output, oldArtifactValue, artifactValue);
   }
 
   @Override

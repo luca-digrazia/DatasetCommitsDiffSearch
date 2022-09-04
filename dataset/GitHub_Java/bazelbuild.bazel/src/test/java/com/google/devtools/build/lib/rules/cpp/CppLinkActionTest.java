@@ -21,7 +21,6 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.primitives.Ints;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
@@ -54,7 +53,6 @@ import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -526,6 +524,10 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   public Artifact getOutputArtifact(String relpath) {
     return new Artifact(
+        getTargetConfiguration()
+            .getBinDirectory(RepositoryName.MAIN)
+            .getRoot()
+            .getRelative(relpath),
         getTargetConfiguration().getBinDirectory(RepositoryName.MAIN),
         getTargetConfiguration().getBinFragment().getRelative(relpath));
   }
@@ -670,7 +672,9 @@ public class CppLinkActionTest extends BuildViewTestCase {
     FileSystem fs = scratch.getFileSystem();
     Path execRoot = fs.getPath(TestUtils.tmpDir());
     PathFragment execPath = PathFragment.create("out").getRelative(name);
+    Path path = execRoot.getRelative(execPath);
     return new SpecialArtifact(
+        path,
         ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out")),
         execPath,
         ArtifactOwner.NullArtifactOwner.INSTANCE,
@@ -775,100 +779,5 @@ public class CppLinkActionTest extends BuildViewTestCase {
               objectFile.getExecPathString())
           .inOrder();
     }
-  }
-
-  /** Tests that -pie is removed when -shared is also present (http://b/5611891#). */
-  @Test
-  public void testPieOptionDisabledForSharedLibraries() throws Exception {
-    CppLinkAction linkAction =
-        createLinkBuilder(
-                LinkTargetType.DYNAMIC_LIBRARY,
-                "dummyRuleContext/out.so",
-                ImmutableList.of(),
-                ImmutableList.of(),
-                getMockFeatureConfiguration())
-            .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
-            .addLinkopts(ImmutableList.of("-pie", "-other", "-pie"))
-            .setLibraryIdentifier("foo")
-            .build();
-
-    List<String> argv = linkAction.getLinkCommandLine().getRawLinkArgv();
-    assertThat(argv).doesNotContain("-pie");
-    assertThat(argv).contains("-other");
-  }
-
-  /** Tests that -pie is removed when -shared is also present (http://b/5611891#). */
-  @Test
-  public void testPieOptionKeptForExecutables() throws Exception {
-    CppLinkAction linkAction =
-        createLinkBuilder(
-                LinkTargetType.EXECUTABLE,
-                "dummyRuleContext/out",
-                ImmutableList.of(),
-                ImmutableList.of(),
-                getMockFeatureConfiguration())
-            .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
-            .addLinkopts(ImmutableList.of("-pie", "-other", "-pie"))
-            .build();
-
-    List<String> argv = linkAction.getLinkCommandLine().getRawLinkArgv();
-    assertThat(argv).contains("-pie");
-    assertThat(argv).contains("-other");
-  }
-
-  @Test
-  public void testLinkoptsComeAfterLinkerInputs() throws Exception {
-    String solibPrefix = "_solib_" + CrosstoolConfigurationHelper.defaultCpu();
-    Iterable<LibraryToLink> linkerInputs =
-        LinkerInputs.opaqueLibrariesToLink(
-            ArtifactCategory.DYNAMIC_LIBRARY,
-            ImmutableList.of(
-                getOutputArtifact(solibPrefix + "/FakeLinkerInput1.so"),
-                getOutputArtifact(solibPrefix + "/FakeLinkerInput2.so"),
-                getOutputArtifact(solibPrefix + "/FakeLinkerInput3.so"),
-                getOutputArtifact(solibPrefix + "/FakeLinkerInput4.so")));
-
-    CppLinkAction linkAction =
-        createLinkBuilder(
-                LinkTargetType.EXECUTABLE,
-                "dummyRuleContext/out",
-                ImmutableList.of(),
-                ImmutableList.copyOf(linkerInputs),
-                getMockFeatureConfiguration())
-            .addLinkopts(ImmutableList.of("FakeLinkopt1", "FakeLinkopt2"))
-            .build();
-
-    List<String> argv = linkAction.getLinkCommandLine().getRawLinkArgv();
-    int lastLinkerInputIndex =
-        Ints.max(
-            argv.indexOf("FakeLinkerInput1"), argv.indexOf("FakeLinkerInput2"),
-            argv.indexOf("FakeLinkerInput3"), argv.indexOf("FakeLinkerInput4"));
-    int firstLinkoptIndex = Math.min(argv.indexOf("FakeLinkopt1"), argv.indexOf("FakeLinkopt2"));
-    assertThat(lastLinkerInputIndex).isLessThan(firstLinkoptIndex);
-  }
-
-  @Test
-  public void testLinkoptsAreOmittedForStaticLibrary() throws Exception {
-    CppLinkAction linkAction =
-        createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
-            .addLinkopt("FakeLinkopt1")
-            .setLibraryIdentifier("foo")
-            .build();
-
-    assertThat(linkAction.getLinkCommandLine().getLinkopts()).isEmpty();
-  }
-
-  @Test
-  public void testSplitExecutableLinkCommand() throws Exception {
-    CppLinkAction linkAction = createLinkBuilder(LinkTargetType.EXECUTABLE).build();
-    Pair<List<String>, List<String>> result = linkAction.getLinkCommandLine().splitCommandline();
-
-    String linkCommandLine = Joiner.on(" ").join(result.first);
-    assertThat(linkCommandLine).contains("gcc_tool");
-    assertThat(linkCommandLine).contains("-o");
-    assertThat(linkCommandLine).contains("output/path.a");
-    assertThat(linkCommandLine).contains("path.a-2.params");
-
-    assertThat(result.second).contains("-lstdc++");
   }
 }

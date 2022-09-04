@@ -361,7 +361,7 @@ public class FilesystemValueCheckerTest {
     FileSystemUtils.writeContentAsLatin1(out1.getPath(), "hello");
     FileSystemUtils.writeContentAsLatin1(out2.getPath(), "fizzlepop");
 
-    ActionLookupKey actionLookupKey =
+    SkyKey actionLookupKey =
         new ActionLookupKey() {
           @Override
           public SkyFunctionName functionName() {
@@ -440,7 +440,7 @@ public class FilesystemValueCheckerTest {
     SpecialArtifact last = createTreeArtifact("zzzzzzzzzz");
     FileSystemUtils.createDirectoryAndParents(last.getPath());
 
-    ActionLookupKey actionLookupKey =
+    SkyKey actionLookupKey =
         new ActionLookupKey() {
           @Override
           public SkyFunctionName functionName() {
@@ -620,6 +620,7 @@ public class FilesystemValueCheckerTest {
     outputDir.createDirectory();
     ArtifactRoot derivedRoot = ArtifactRoot.asDerivedRoot(fs.getPath("/"), outputDir);
     return new SpecialArtifact(
+        outputPath,
         derivedRoot,
         derivedRoot.getExecPath().getRelative(derivedRoot.getRoot().relativize(outputPath)),
         ArtifactOwner.NullArtifactOwner.INSTANCE,

@@ -22,8 +22,10 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import com.google.common.hash.Hashing;
 import com.google.common.util.concurrent.Runnables;
 import com.google.devtools.build.lib.actions.Action;
@@ -34,22 +36,23 @@ import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionResult;
-import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BuildFailedException;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.TestAction;
 import com.google.devtools.build.lib.actions.util.TestAction.DummyAction;
+import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.StoredEventHandler;
+import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue.ActionTemplateExpansionKey;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodecAdapter;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -115,9 +118,9 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
   @Test
   public void testCodec() throws Exception {
-    ObjectCodecTester.newBuilder(Artifact.CODEC)
+    ObjectCodecTester.newBuilder(
+            new InjectingObjectCodecAdapter<>(Artifact.CODEC, () -> scratch.getFileSystem()))
         .addSubjects(outOne, outOneFileOne)
-        .addDependency(FileSystem.class, scratch.getFileSystem())
         .buildAndRunTests();
   }
 
@@ -752,7 +755,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
-            actionKeyContext, ImmutableList.of(generateOutputAction, noGenerateOutputAction));
+            actionKeyContext,
+            ImmutableMultimap.<ActionTemplate<?>, Action>of(
+                actionTemplate, generateOutputAction,
+                actionTemplate, noGenerateOutputAction));
 
     buildArtifact(artifact2);
   }
@@ -791,7 +797,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
-            actionKeyContext, ImmutableList.of(generateOutputAction, noGenerateOutputAction));
+            actionKeyContext,
+            ImmutableMultimap.<ActionTemplate<?>, Action>of(
+                actionTemplate, generateOutputAction,
+                actionTemplate, noGenerateOutputAction));
 
     try {
       buildArtifact(artifact2);
@@ -835,7 +844,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
-            actionKeyContext, ImmutableList.of(generateOutputAction, throwingAction));
+            actionKeyContext,
+            ImmutableMultimap.<ActionTemplate<?>, Action>of(
+                actionTemplate, generateOutputAction,
+                actionTemplate, throwingAction));
 
     try {
       buildArtifact(artifact2);
@@ -878,7 +890,10 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
     actionTemplateExpansionFunction =
         new DummyActionTemplateExpansionFunction(
-            actionKeyContext, ImmutableList.of(throwingAction, anotherThrowingAction));
+            actionKeyContext,
+            ImmutableMultimap.<ActionTemplate<?>, Action>of(
+                actionTemplate, throwingAction,
+                actionTemplate, anotherThrowingAction));
 
     try {
       buildArtifact(artifact2);
@@ -1177,7 +1192,9 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     FileSystem fs = scratch.getFileSystem();
     Path execRoot = fs.getPath(TestUtils.tmpDir());
     PathFragment execPath = PathFragment.create("out").getRelative(name);
+    Path path = execRoot.getRelative(execPath);
     return new SpecialArtifact(
+        path,
         ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out")),
         execPath,
         ACTION_LOOKUP_KEY,
@@ -1225,21 +1242,23 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   /** A dummy action template expansion function that just returns the injected actions */
   private static class DummyActionTemplateExpansionFunction implements SkyFunction {
     private final ActionKeyContext actionKeyContext;
-    private final List<Action> actions;
+    private final Multimap<ActionTemplate<?>, Action> actionTemplateToActionMap;
 
-    DummyActionTemplateExpansionFunction(ActionKeyContext actionKeyContext, List<Action> actions) {
+    DummyActionTemplateExpansionFunction(
+        ActionKeyContext actionKeyContext,
+        Multimap<ActionTemplate<?>, Action> actionTemplateToActionMap) {
       this.actionKeyContext = actionKeyContext;
-      this.actions = actions;
+      this.actionTemplateToActionMap = actionTemplateToActionMap;
     }
 
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env) {
-      try {
-        return new ActionTemplateExpansionValue(
-            Actions.filterSharedActionsAndThrowActionConflict(actionKeyContext, actions), false);
-      } catch (ActionConflictException e) {
-        throw new IllegalStateException(e);
-      }
+      ActionTemplateExpansionKey key = (ActionTemplateExpansionKey) skyKey.argument();
+      ActionTemplate<?> actionTemplate = key.getActionTemplate();
+      return new ActionTemplateExpansionValue(
+          actionKeyContext,
+          Preconditions.checkNotNull(actionTemplateToActionMap.get(actionTemplate)),
+          false);
     }
 
     @Override

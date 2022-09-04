@@ -18,21 +18,25 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.cache.Digest;
+import com.google.devtools.build.lib.actions.cache.Md5Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -42,16 +46,14 @@ import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinatio
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.vfs.FileStatus;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 /** Tests {@link PopulateTreeArtifactAction}. */
 @RunWith(JUnit4.class)
@@ -69,7 +71,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
 
     @Override
-    public Metadata getMetadataMaybe(Artifact artifact) {
+    public Iterable<TreeFileArtifact> getExpandedOutputs(Artifact artifact) {
       throw new UnsupportedOperationException(artifact.prettyPrint());
     }
 
@@ -79,8 +81,8 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
 
     @Override
-    public void setDigestForVirtualArtifact(Artifact artifact, Digest digest) {
-      throw new UnsupportedOperationException(artifact.prettyPrint() + ": " + digest);
+    public void setDigestForVirtualArtifact(Artifact artifact, Md5Digest md5Digest) {
+      throw new UnsupportedOperationException(artifact.prettyPrint() + ": " + md5Digest);
     }
 
     @Override
@@ -94,23 +96,8 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
 
     @Override
-    public boolean artifactExists(Artifact artifact) {
-      throw new UnsupportedOperationException(artifact.prettyPrint());
-    }
-
-    @Override
-    public boolean isRegularFile(Artifact artifact) {
-      throw new UnsupportedOperationException(artifact.prettyPrint());
-    }
-
-    @Override
     public boolean artifactOmitted(Artifact artifact) {
       throw new UnsupportedOperationException(artifact.prettyPrint());
-    }
-
-    @Override
-    public boolean isInjected(Artifact file) throws IOException {
-      throw new UnsupportedOperationException(file.prettyPrint());
     }
 
     @Override
@@ -119,17 +106,19 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
   };
 
-  private Root root;
+  private ArtifactRoot root;
 
   @Before
   public void setRootDir() throws Exception  {
-    root = Root.asDerivedRoot(scratch.dir("/exec/root"));
+    Path execRoot = scratch.getFileSystem().getPath("/exec");
+    root = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
   }
 
   @Test
   public void testActionOutputs() throws Exception {
     Action action = createPopulateTreeArtifactAction();
-    assertThat(Artifact.toExecPaths(action.getOutputs())).containsExactly("test/archive_member");
+    assertThat(Artifact.toExecPaths(action.getOutputs()))
+        .containsExactly("out/test/archive_member");
   }
 
   @Test
@@ -146,10 +135,11 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     PopulateTreeArtifactAction action = createPopulateTreeArtifactAction();
     Spawn spawn = action.createSpawn();
     Iterable<Artifact> outputs = actionInputsToArtifacts(spawn.getOutputFiles());
-    assertThat(Artifact.toExecPaths(outputs)).containsExactly(
-        "test/archive_member/archive_members/1.class",
-        "test/archive_member/archive_members/2.class",
-        "test/archive_member/archive_members/txt/text.txt");
+    assertThat(Artifact.toExecPaths(outputs))
+        .containsExactly(
+            "out/test/archive_member/archive_members/1.class",
+            "out/test/archive_member/archive_members/2.class",
+            "out/test/archive_member/archive_members/txt/text.txt");
   }
 
   @Test
@@ -167,13 +157,15 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
   public void testSpawnArguments() throws Exception {
     PopulateTreeArtifactAction action = createPopulateTreeArtifactAction();
     BaseSpawn spawn = (BaseSpawn) action.createSpawn();
-    assertThat(spawn.getArguments()).containsExactly(
-        "unzipBinary",
-        "x",
-        "myArchive.zip",
-        "-d",
-        "test/archive_member",
-        "@archiveManifest.txt").inOrder();
+    assertThat(spawn.getArguments())
+        .containsExactly(
+            "unzipBinary",
+            "x",
+            "myArchive.zip",
+            "-d",
+            "out/test/archive_member",
+            "@archiveManifest.txt")
+        .inOrder();
   }
 
   @Test
@@ -181,12 +173,15 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     ArrayList<Artifact> treefileArtifacts = new ArrayList<Artifact>();
     PopulateTreeArtifactAction action = createPopulateTreeArtifactAction();
     ActionExecutionContext executionContext = actionExecutionContext(treefileArtifacts);
-    action.execute(executionContext);
+    ActionResult actionResult = action.execute(executionContext);
 
-    assertThat(Artifact.toExecPaths(treefileArtifacts)).containsExactly(
-        "test/archive_member/archive_members/1.class",
-        "test/archive_member/archive_members/2.class",
-        "test/archive_member/archive_members/txt/text.txt");
+    assertThat(actionResult.spawnResults()).isEmpty();
+
+    assertThat(Artifact.toExecPaths(treefileArtifacts))
+        .containsExactly(
+            "out/test/archive_member/archive_members/1.class",
+            "out/test/archive_member/archive_members/2.class",
+            "out/test/archive_member/archive_members/txt/text.txt");
   }
 
   @Test
@@ -224,11 +219,55 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
   }
 
   @Test
+  public void testEmptyTreeArtifactInputAndOutput() throws Exception {
+    Action action = createPopulateTreeArtifactAction();
+    scratch.overwriteFile("archiveManifest.txt", "");
+
+    ArrayList<Artifact> treeFileArtifacts = new ArrayList<Artifact>();
+    ActionExecutionContext executionContext = actionExecutionContext(treeFileArtifacts);
+
+    ActionResult actionResult = action.execute(executionContext);
+
+    assertThat(actionResult.spawnResults()).isEmpty();
+    assertThat(treeFileArtifacts).isEmpty();
+  }
+
+  @Test
+  public void testOutputTreeFileArtifactDirsCreated() throws Exception {
+    Action action = createPopulateTreeArtifactAction();
+    scratch.overwriteFile(
+        "archiveManifest.txt",
+        "archive_members/dirA/memberA",
+        "archive_members/dirB/memberB");
+
+    ArrayList<Artifact> treeFileArtifacts = new ArrayList<Artifact>();
+    ActionExecutionContext executionContext = actionExecutionContext(treeFileArtifacts);
+    ActionResult actionResult = action.execute(executionContext);
+
+    assertThat(actionResult.spawnResults()).isEmpty();
+
+    // We check whether the parent directory structures of output TreeFileArtifacts exist even
+    // though the spawn is not executed (the SpawnActionContext is mocked out).
+    assertThat(treeFileArtifacts).hasSize(2);
+    for (Artifact treeFileArtifact : treeFileArtifacts) {
+      assertThat(treeFileArtifact.getPath().getParentDirectory().exists()).isTrue();
+      assertThat(treeFileArtifact.getPath().exists()).isFalse();
+    }
+  }
+
+  private enum KeyAttributes {
+    ARCHIVE,
+    TREE_ARTIFACT,
+    ARCHIVE_MANIFEST,
+    ZIPPER
+  }
+
+  @Test
   public void testComputeKey() throws Exception {
     final Artifact archiveA = getSourceArtifact("myArchiveA.zip");
     final Artifact archiveB = getSourceArtifact("myArchiveB.zip");
-    final Artifact treeArtifactToPopulateA = createTreeArtifact("testA/archive_member");
-    final Artifact treeArtifactToPopulateB = createTreeArtifact("testB/archive_member");
+    final SpecialArtifact treeArtifactToPopulateA = createTreeArtifact("testA/archive_member");
+    final SpecialArtifact treeArtifactToPopulateB = createTreeArtifact("testB/archive_member");
     final Artifact archiveManifestA = getSourceArtifact("archiveManifestA.txt");
     final Artifact archiveManifestB = getSourceArtifact("archiveManifestB.txt");
     final FilesToRunProvider zipperA = FilesToRunProvider.fromSingleExecutableArtifact(
@@ -236,28 +275,38 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     final FilesToRunProvider zipperB = FilesToRunProvider.fromSingleExecutableArtifact(
         getSourceArtifact("unzipBinaryB"));
 
-    ActionTester.runTest(16, new ActionCombinationFactory() {
-      @Override
-      public Action generate(int i) {
-        Artifact archive = (i & 1) == 0 ? archiveA : archiveB;
-        Artifact treeArtifactToPopulate = (i & 2) == 0
-            ? treeArtifactToPopulateA : treeArtifactToPopulateB;
-        Artifact archiveManifest = (i & 4) == 0 ? archiveManifestA : archiveManifestB;
-        FilesToRunProvider zipper = (i & 8) == 0 ? zipperA : zipperB;
+    ActionTester.runTest(
+        KeyAttributes.class,
+        new ActionCombinationFactory<KeyAttributes>() {
+          @Override
+          public Action generate(ImmutableSet<KeyAttributes> attributesToFlip) {
+            Artifact archive =
+                attributesToFlip.contains(KeyAttributes.ARCHIVE) ? archiveA : archiveB;
+            SpecialArtifact treeArtifactToPopulate =
+                attributesToFlip.contains(KeyAttributes.TREE_ARTIFACT)
+                    ? treeArtifactToPopulateA
+                    : treeArtifactToPopulateB;
+            Artifact archiveManifest =
+                attributesToFlip.contains(KeyAttributes.ARCHIVE_MANIFEST)
+                    ? archiveManifestA
+                    : archiveManifestB;
+            FilesToRunProvider zipper =
+                attributesToFlip.contains(KeyAttributes.ZIPPER) ? zipperA : zipperB;
 
-        return new PopulateTreeArtifactAction(
-            ActionsTestUtil.NULL_ACTION_OWNER,
-            archive,
-            archiveManifest,
-            treeArtifactToPopulate,
-            zipper);
-      }
-    });
+            return new PopulateTreeArtifactAction(
+                ActionsTestUtil.NULL_ACTION_OWNER,
+                archive,
+                archiveManifest,
+                treeArtifactToPopulate,
+                zipper);
+          }
+        },
+        actionKeyContext);
   }
 
   private PopulateTreeArtifactAction createPopulateTreeArtifactAction() throws Exception {
     Artifact archive = getSourceArtifact("myArchive.zip");
-    Artifact treeArtifactToPopulate = createTreeArtifact("test/archive_member");
+    SpecialArtifact treeArtifactToPopulate = createTreeArtifact("test/archive_member");
     Artifact archiveManifest = getSourceArtifact("archiveManifest.txt");
     FilesToRunProvider unzip = FilesToRunProvider.fromSingleExecutableArtifact(
         getSourceArtifact("unzipBinary"));
@@ -278,21 +327,29 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
 
   private ActionExecutionContext actionExecutionContext(
       List<Artifact> storingExpandedTreeFileArtifacts) throws Exception {
-    Executor executor = new TestExecutorBuilder(directories, null)
-        .setExecution(PopulateTreeArtifactAction.MNEMONIC, mock(SpawnActionContext.class))
-        .build();
+    Executor executor =
+        new TestExecutorBuilder(fileSystem, directories, null)
+            .setExecution(PopulateTreeArtifactAction.MNEMONIC, mock(SpawnActionContext.class))
+            .build();
 
     return new ActionExecutionContext(
-        executor, null, new TestMetadataHandler(storingExpandedTreeFileArtifacts), null, null);
+        executor,
+        null,
+        ActionInputPrefetcher.NONE,
+        actionKeyContext,
+        new TestMetadataHandler(storingExpandedTreeFileArtifacts),
+        null,
+        ImmutableMap.<String, String>of(),
+        null);
   }
 
-  private Artifact createTreeArtifact(String rootRelativePath) {
-    PathFragment relpath = new PathFragment(rootRelativePath);
+  private SpecialArtifact createTreeArtifact(String rootRelativePath) {
+    PathFragment relpath = PathFragment.create(rootRelativePath);
     return new SpecialArtifact(
-        root.getPath().getRelative(relpath),
+        root.getRoot().getRelative(relpath),
         root,
         root.getExecPath().getRelative(relpath),
-        ArtifactOwner.NULL_OWNER,
+        ArtifactOwner.NullArtifactOwner.INSTANCE,
         SpecialArtifactType.TREE);
   }
 

@@ -21,11 +21,11 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
+import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -104,8 +104,8 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
     builder.setSourceFile(sourceTreeFileArtifact);
     builder.setOutputs(outputTreeFileArtifact, null);
 
-    CcToolchainVariables.Builder buildVariables =
-        new CcToolchainVariables.Builder(cppCompileActionBuilder.getVariables());
+    CcToolchainFeatures.Variables.Builder buildVariables =
+        new CcToolchainFeatures.Variables.Builder(cppCompileActionBuilder.getVariables());
     buildVariables.overrideStringVariable(
         "source_file", sourceTreeFileArtifact.getExecPathString());
     buildVariables.overrideStringVariable(

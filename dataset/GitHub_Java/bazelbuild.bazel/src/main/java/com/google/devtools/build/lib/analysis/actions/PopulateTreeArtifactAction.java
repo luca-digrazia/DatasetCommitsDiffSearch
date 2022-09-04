@@ -211,16 +211,18 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
-    fp.addString(getMnemonic());
-    fp.addStrings(spawnCommandLine());
-    fp.addPaths(zipper.getRunfilesSupplier().getRunfilesDirs());
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    f.addString(getMnemonic());
+    f.addStrings(spawnCommandLine());
+    f.addPaths(zipper.getRunfilesSupplier().getRunfilesDirs());
     List<Artifact> runfilesManifests = zipper.getRunfilesSupplier().getManifests();
-    fp.addInt(runfilesManifests.size());
+    f.addInt(runfilesManifests.size());
     for (Artifact manifest : runfilesManifests) {
-      fp.addPath(manifest.getExecPath());
+      f.addPath(manifest.getExecPath());
     }
+    return f.hexDigestAndReset();
   }
 
   @Override
@@ -271,7 +273,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       if (!line.isEmpty()) {
         PathFragment path = PathFragment.create(line);
 
-        if (!PathFragment.isNormalized(line) || path.isAbsolute()) {
+        if (!path.isNormalized() || path.isAbsolute()) {
           throw new IllegalManifestFileException(
               path + " is not a proper relative path");
         }

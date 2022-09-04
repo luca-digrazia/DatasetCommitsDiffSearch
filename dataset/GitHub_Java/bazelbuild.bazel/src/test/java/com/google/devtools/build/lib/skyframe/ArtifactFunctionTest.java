@@ -250,8 +250,10 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
 
   private Artifact createDerivedArtifact(String path) {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
+    Path fullPath = root.getRelative(execPath);
     Artifact output =
         new Artifact(
+            fullPath,
             ArtifactRoot.asDerivedRoot(root, root.getRelative("out")),
             execPath,
             ALL_OWNER);
@@ -262,7 +264,9 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
   private Artifact createMiddlemanArtifact(String path) {
     ArtifactRoot middlemanRoot =
         ArtifactRoot.middlemanRoot(middlemanPath, middlemanPath.getRelative("out"));
-    return new Artifact(middlemanRoot, middlemanRoot.getExecPath().getRelative(path), ALL_OWNER);
+    Path fullPath = middlemanRoot.getRoot().getRelative(path);
+    return new Artifact(
+        fullPath, middlemanRoot, middlemanRoot.getExecPath().getRelative(path), ALL_OWNER);
   }
 
   private SpecialArtifact createDerivedTreeArtifactWithAction(String path) {
@@ -273,7 +277,9 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
 
   private SpecialArtifact createDerivedTreeArtifactOnly(String path) {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
+    Path fullPath = root.getRelative(execPath);
     return new SpecialArtifact(
+        fullPath,
         ArtifactRoot.asDerivedRoot(root, root.getRelative("out")),
         execPath,
         ALL_OWNER,
@@ -347,7 +353,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
       Map<Artifact, FileArtifactValue> additionalOutputData = new HashMap<>();
       ActionLookupData actionLookupData = (ActionLookupData) skyKey.argument();
       ActionLookupValue actionLookupValue =
-          (ActionLookupValue) env.getValue(actionLookupData.getActionLookupKey());
+          (ActionLookupValue) env.getValue(actionLookupData.getActionLookupNode());
       Action action = actionLookupValue.getAction(actionLookupData.getActionIndex());
       Artifact output = Iterables.getOnlyElement(action.getOutputs());
 
