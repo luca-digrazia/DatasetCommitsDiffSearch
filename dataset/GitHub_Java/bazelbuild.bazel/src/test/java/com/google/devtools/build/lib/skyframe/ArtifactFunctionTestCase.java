@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
 import com.google.devtools.build.skyframe.SequencedRecordingDifferencer;
@@ -50,6 +51,7 @@ import org.junit.Before;
 
 abstract class ArtifactFunctionTestCase {
   static final ActionLookupKey ALL_OWNER = new SingletonActionLookupKey();
+  static final SkyKey OWNER_KEY = LegacySkyKey.create(SkyFunctions.ACTION_LOOKUP, ALL_OWNER);
 
   protected Set<ActionAnalysisMetadata> actions;
   protected boolean fastDigest = false;
@@ -156,8 +158,13 @@ abstract class ArtifactFunctionTestCase {
 
   private static class SingletonActionLookupKey extends ActionLookupKey {
     @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.CONFIGURED_TARGET;
+    protected SkyKey getSkyKeyInternal() {
+      return OWNER_KEY;
+    }
+
+    @Override
+    protected SkyFunctionName getType() {
+      throw new UnsupportedOperationException();
     }
   }
 

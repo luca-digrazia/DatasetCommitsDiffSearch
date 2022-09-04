@@ -20,9 +20,7 @@ import java.io.OutputStream;
  * Functionally like a {@link ReadonlyFileSystem} and a {@link AbstractFileSystemWithCustomStat}.
  */
 public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSystemWithCustomStat {
-
-  protected ReadonlyFileSystemWithCustomStat(DigestHashFunction hashFunction) {
-    super(hashFunction);
+  protected ReadonlyFileSystemWithCustomStat() {
   }
 
   protected IOException modificationException() {
@@ -74,11 +72,6 @@ public abstract class ReadonlyFileSystemWithCustomStat extends AbstractFileSyste
 
   @Override
   public boolean createDirectory(Path path) throws IOException {
-    throw modificationException();
-  }
-
-  @Override
-  public void createDirectoryAndParents(Path path) throws IOException {
     throw modificationException();
   }
 

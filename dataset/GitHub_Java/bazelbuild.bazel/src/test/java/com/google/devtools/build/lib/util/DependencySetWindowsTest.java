@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.windows.WindowsFileSystem;
@@ -30,8 +29,7 @@ import org.junit.runners.JUnit4;
 public class DependencySetWindowsTest {
 
   private Scratch scratch = new Scratch();
-  private final FileSystem fileSystem =
-      new WindowsFileSystem(DigestHashFunction.DEFAULT_HASH_FOR_TESTS);
+  private final FileSystem fileSystem = new WindowsFileSystem();
   private final Path root = fileSystem.getPath("C:/");
 
   private DependencySet newDependencySet() {

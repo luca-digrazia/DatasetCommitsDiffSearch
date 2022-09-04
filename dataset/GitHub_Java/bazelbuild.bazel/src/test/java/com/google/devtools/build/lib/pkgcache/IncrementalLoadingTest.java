@@ -23,9 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
-import com.google.devtools.build.lib.analysis.util.DefaultBuildOptionsForTesting;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
@@ -53,7 +51,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -442,8 +439,8 @@ public class IncrementalLoadingTest {
     private class ManualDiffAwarenessFactory implements DiffAwareness.Factory {
       @Nullable
       @Override
-      public DiffAwareness maybeCreate(Root pathEntry) {
-        return pathEntry.asPath().equals(workspace) ? new ManualDiffAwareness() : null;
+      public DiffAwareness maybeCreate(Path pathEntry) {
+        return pathEntry == workspace ? new ManualDiffAwareness() : null;
       }
     }
 
@@ -468,16 +465,14 @@ public class IncrementalLoadingTest {
       LoadingMock loadingMock = LoadingMock.get();
       BlazeDirectories directories =
           new BlazeDirectories(
-              new ServerDirectories(
-                  fs.getPath("/install"), fs.getPath("/output"), fs.getPath("/userRoot")),
+              new ServerDirectories(fs.getPath("/install"), fs.getPath("/output")),
               workspace,
               loadingMock.getProductName());
-      ConfiguredRuleClassProvider ruleClassProvider = loadingMock.createRuleClassProvider();
       skyframeExecutor =
           SequencedSkyframeExecutor.create(
               loadingMock
                   .getPackageFactoryBuilderForTesting(directories)
-                  .build(ruleClassProvider),
+                  .build(loadingMock.createRuleClassProvider(), fs),
               fs,
               directories,
               actionKeyContext,
@@ -490,8 +485,7 @@ public class IncrementalLoadingTest {
               BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
               BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-              BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
-              DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
+              BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
       TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
       PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
       packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
@@ -500,7 +494,7 @@ public class IncrementalLoadingTest {
       skyframeExecutor.preparePackageLoading(
           new PathPackageLocator(
               outputBase,
-              ImmutableList.of(Root.fromPath(workspace)),
+              ImmutableList.of(workspace),
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
           packageCacheOptions,
           Options.getDefaults(SkylarkSemanticsOptions.class),
@@ -591,7 +585,7 @@ public class IncrementalLoadingTest {
       skyframeExecutor.preparePackageLoading(
           new PathPackageLocator(
               outputBase,
-              ImmutableList.of(Root.fromPath(workspace)),
+              ImmutableList.of(workspace),
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
           packageCacheOptions,
           Options.getDefaults(SkylarkSemanticsOptions.class),
@@ -601,7 +595,7 @@ public class IncrementalLoadingTest {
           ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(BlazeClock.instance()));
       skyframeExecutor.invalidateFilesUnderPathForTesting(
-          new Reporter(new EventBus()), modifiedFileSet, Root.fromPath(workspace));
+          new Reporter(new EventBus()), modifiedFileSet, workspace);
       ((SequencedSkyframeExecutor) skyframeExecutor).handleDiffs(new Reporter(new EventBus()));
 
       changes.clear();

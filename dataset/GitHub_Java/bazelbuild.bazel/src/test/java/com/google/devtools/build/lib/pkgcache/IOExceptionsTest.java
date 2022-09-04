@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.pkgcache;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -77,7 +75,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
 
   protected void syncPackages() throws Exception {
     skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
+        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
   }
 
   @Override
@@ -108,7 +106,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x", ImmutableMap.of()))).isFalse();
+    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x"))).isFalse();
     scratch.overwriteFile("pkg/BUILD",
         "# another comment to force reload",
         "sh_library(name = 'x')");
@@ -116,7 +114,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
     syncPackages();
     eventCollector.clear();
     reporter.addHandler(failFastHandler);
-    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x", ImmutableMap.of()))).isTrue();
+    assertThat(visitTransitively(Label.parseAbsolute("//pkg:x"))).isTrue();
     assertNoEvents();
   }
 
@@ -137,7 +135,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertThat(visitTransitively(Label.parseAbsolute("//top:top", ImmutableMap.of()))).isFalse();
+    assertThat(visitTransitively(Label.parseAbsolute("//top:top"))).isFalse();
     assertContainsEvent("no such package 'pkg'");
     // The traditional label visitor does not propagate the original IOException message.
     // assertContainsEvent("custom crash");
@@ -151,7 +149,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
     syncPackages();
     eventCollector.clear();
     reporter.addHandler(failFastHandler);
-    assertThat(visitTransitively(Label.parseAbsolute("//top:top", ImmutableMap.of()))).isTrue();
+    assertThat(visitTransitively(Label.parseAbsolute("//top:top"))).isTrue();
     assertNoEvents();
   }
 
@@ -170,6 +168,6 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
         return null;
       }
     };
-    assertThat(visitTransitively(Label.parseAbsolute("//top/pkg:x", ImmutableMap.of()))).isFalse();
+    assertThat(visitTransitively(Label.parseAbsolute("//top/pkg:x"))).isFalse();
   }
 }

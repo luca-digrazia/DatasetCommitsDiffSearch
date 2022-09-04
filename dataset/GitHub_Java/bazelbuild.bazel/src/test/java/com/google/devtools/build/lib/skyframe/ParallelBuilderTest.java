@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.Runnables;
 import com.google.devtools.build.lib.actions.Action;
@@ -184,6 +185,8 @@ public class ParallelBuilderTest extends TimestampBuilderTestCase {
   public void testReportsActionExecutedEvent() throws Exception {
     Artifact pear = createDerivedArtifact("pear");
     ActionEventRecorder recorder = new ActionEventRecorder();
+    EventBus eventBus = new EventBus();
+    eventBusRef.set(eventBus);
     eventBus.register(recorder);
 
     Action action = registerAction(new TestAction(Runnables.doNothing(), emptySet, asSet(pear)));

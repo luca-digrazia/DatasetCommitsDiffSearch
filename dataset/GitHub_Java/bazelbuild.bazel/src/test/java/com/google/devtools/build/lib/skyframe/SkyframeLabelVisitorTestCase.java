@@ -19,7 +19,6 @@ import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -39,7 +38,6 @@ import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.DelegatingWalkableGraph;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
@@ -221,15 +219,14 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
 
   protected void syncPackages(ModifiedFileSet modifiedFileSet) throws InterruptedException {
     getSkyframeExecutor()
-        .invalidateFilesUnderPathForTesting(
-            reporter, modifiedFileSet, Root.fromPath(rootDirectory));
+        .invalidateFilesUnderPathForTesting(reporter, modifiedFileSet, rootDirectory);
   }
 
   protected Set<Target> asTargetSet(Iterable<String> strLabels)
       throws LabelSyntaxException, NoSuchThingException, InterruptedException {
     Set<Target> targets = new HashSet<>();
     for (String strLabel : strLabels) {
-      Label label = Label.parseAbsolute(strLabel, ImmutableMap.of());
+      Label label = Label.parseAbsolute(strLabel);
       targets.add(getSkyframeExecutor().getPackageManager().getTarget(reporter, label));
     }
     return targets;

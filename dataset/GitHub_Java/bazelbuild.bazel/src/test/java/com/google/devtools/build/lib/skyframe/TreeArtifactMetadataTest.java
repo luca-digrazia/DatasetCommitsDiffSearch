@@ -224,10 +224,10 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
   }
 
   private void setGeneratingActions() throws InterruptedException {
-    if (evaluator.getExistingValue(ALL_OWNER) == null) {
+    if (evaluator.getExistingValue(OWNER_KEY) == null) {
       differencer.inject(
           ImmutableMap.of(
-              ALL_OWNER,
+              OWNER_KEY,
               new ActionLookupValue(
                   actionKeyContext, ImmutableList.<ActionAnalysisMetadata>copyOf(actions), false)));
     }

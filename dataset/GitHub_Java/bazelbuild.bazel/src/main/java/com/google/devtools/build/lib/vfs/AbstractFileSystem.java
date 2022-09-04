@@ -123,7 +123,7 @@ abstract class AbstractFileSystem extends FileSystem {
     public int read() throws IOException {
       long startTime = Profiler.nanoTimeMaybe();
       try {
-        // Note that FileInputStream#read() does *not* call any of our overridden methods,
+        // Note that FileInputStream#read() does *not* call any of our overriden methods,
         // so there's no concern with double counting here.
         return super.read();
       } finally {

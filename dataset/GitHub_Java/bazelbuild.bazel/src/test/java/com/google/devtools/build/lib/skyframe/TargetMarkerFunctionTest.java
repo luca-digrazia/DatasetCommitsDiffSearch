@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.clock.BlazeClock;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -64,12 +62,12 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
   }
 
   private SkyKey skyKey(String labelName) throws Exception {
-    return TargetMarkerValue.key(Label.parseAbsolute(labelName, ImmutableMap.of()));
+    return TargetMarkerValue.key(Label.parseAbsolute(labelName));
   }
 
   private Throwable getErrorFromTargetValue(String labelName) throws Exception {
     reporter.removeHandler(failFastHandler);
-    SkyKey targetKey = TargetMarkerValue.key(Label.parseAbsolute(labelName, ImmutableMap.of()));
+    SkyKey targetKey = TargetMarkerValue.key(Label.parseAbsolute(labelName));
     EvaluationResult<TargetMarkerValue> evaluationResult =
         SkyframeExecutorTestUtils.evaluate(
             skyframeExecutor, targetKey, /*keepGoing=*/ false, reporter);
@@ -92,7 +90,7 @@ public class TargetMarkerFunctionTest extends BuildViewTestCase {
     ModifiedFileSet subpackageBuildFile =
         ModifiedFileSet.builder().modify(PathFragment.create("a/b/BUILD")).build();
     skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, subpackageBuildFile, Root.fromPath(rootDirectory));
+        reporter, subpackageBuildFile, rootDirectory);
 
     NoSuchTargetException exn = (NoSuchTargetException) getErrorFromTargetValue(labelName);
     // In the presence of b/12545745, the error message is different and comes from the

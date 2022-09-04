@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.common.options.Options;
 import java.io.IOException;
 import java.util.Collection;
@@ -408,7 +407,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
         .preparePackageLoading(
             new PathPackageLocator(
                 outputBase,
-                ImmutableList.of(Root.fromPath(rootDirectory)),
+                ImmutableList.of(rootDirectory),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
             packageCacheOptions,
             Options.getDefaults(SkylarkSemanticsOptions.class),
@@ -492,7 +491,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
           }
         };
     fs.stubStat(bazDir, inconsistentParentFileStatus);
-    Set<Label> labels = ImmutableSet.of(Label.parseAbsolute("//foo:foo", ImmutableMap.of()));
+    Set<Label> labels = ImmutableSet.of(Label.parseAbsolute("//foo:foo"));
     getSkyframeExecutor()
         .getPackageManager()
         .newTransitiveLoader()
