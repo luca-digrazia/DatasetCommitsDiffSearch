@@ -21,8 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Contains all the available TvShows for this sample. All this harcoded data simulates some
- * information obtained from an external service.
+ * Contains all the available TvShows.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
@@ -389,7 +388,7 @@ public class Catalog {
    * Search a TvShow using a tv show identifier.
    *
    * We should return a clone of TvShow objects inside catalog because all this data is in
-   * memory and anyone can change it. But, this is just a sample!
+   * memory and anyone can change it if we don't return only copies, but this is just a sample!
    *
    * @param tvShowId used to search inside the catalog.
    * @return a TvShow that matches with the parameter passed as identifier.
