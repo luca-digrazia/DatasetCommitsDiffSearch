@@ -224,23 +224,20 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       logger.fine(format("Will create BuildEventServiceTransport streaming to '%s'",
           besOptions.besBackend));
 
-      final String besResultsUrl;
+      final String message;
       if (!Strings.isNullOrEmpty(besOptions.besResultsUrl)) {
-        besResultsUrl =
+        String url =
             besOptions.besResultsUrl.endsWith("/")
-                ? besOptions.besResultsUrl + invocationId
-                : besOptions.besResultsUrl + "/" + invocationId;
-        commandLineReporter.handle(
-            Event.info("Streaming Build Event Protocol to " + besResultsUrl));
+                ? besOptions.besResultsUrl
+                : besOptions.besResultsUrl + "/";
+        message = "Streaming Build Event Protocol to " + url + invocationId;
       } else {
-        besResultsUrl = null;
-        commandLineReporter.handle(
-            Event.info(
-                format(
-                    "Streaming Build Event Protocol to %s build_request_id: %s "
-                        + "invocation_id: %s",
-                    besOptions.besBackend, buildRequestId, invocationId)));
+        message =
+            format(
+                "Streaming Build Event Protocol to %s build_request_id: %s " + "invocation_id: %s",
+                besOptions.besBackend, buildRequestId, invocationId);
       }
+      commandLineReporter.handle(Event.info(message));
 
       BuildEventTransport besTransport =
           new BuildEventServiceTransport(
@@ -256,8 +253,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
               pathConverter,
               commandLineReporter,
               besOptions.projectId,
-              keywords(besOptions, startupOptionsProvider),
-              besResultsUrl);
+              keywords(besOptions, startupOptionsProvider));
       logger.fine("BuildEventServiceTransport was created successfully");
       return besTransport;
     }

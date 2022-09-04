@@ -28,7 +28,6 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.SettableFuture;
@@ -87,7 +86,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
   /** Max wait time between isStreamActive checks of the PublishBuildToolEventStream RPC. */
   private static final int STREAMING_RPC_POLL_IN_SECS = 1;
 
-  private final String besResultsUrl;
   private final ListeningExecutorService uploaderExecutorService;
   private final Duration uploadTimeout;
   private final boolean publishLifecycleEvents;
@@ -135,8 +133,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       PathConverter pathConverter,
       EventHandler commandLineReporter,
       @Nullable String projectId,
-      Set<String> keywords,
-      @Nullable String besResultsUrl) {
+      Set<String> keywords) {
     this(
         besClient,
         uploadTimeout,
@@ -151,8 +148,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
         commandLineReporter,
         projectId,
         keywords,
-        new JavaSleeper(),
-        besResultsUrl);
+        new JavaSleeper());
   }
 
   @VisibleForTesting
@@ -170,8 +166,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       EventHandler commandLineReporter,
       @Nullable String projectId,
       Set<String> keywords,
-      Sleeper sleeper,
-      @Nullable String besResultsUrl) {
+      Sleeper sleeper) {
     this.besClient = besClient;
     this.besProtoUtil = new BuildEventServiceProtoUtil(
         buildRequestId, invocationId, projectId, command, clock, keywords);
@@ -191,7 +186,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     this.invocationResult = UNKNOWN_STATUS;
     this.uploadTimeout = uploadTimeout;
     this.sleeper = sleeper;
-    this.besResultsUrl = besResultsUrl;
   }
 
   public boolean isStreaming() {
@@ -250,18 +244,9 @@ public class BuildEventServiceTransport implements BuildEventTransport {
                 uploadComplete.get(uploadTimeout.toMillis(), MILLISECONDS);
               }
               report(INFO, UPLOAD_SUCCEEDED_MESSAGE);
-              if (!Strings.isNullOrEmpty(besResultsUrl)) {
-                report(INFO, "Build Event Protocol results available at " + besResultsUrl);
-              }
-
             } catch (Exception e) {
               uploadComplete.cancel(true);
               reportErrorAndFailBuild(e);
-              if (!Strings.isNullOrEmpty(besResultsUrl)) {
-                report(
-                    INFO,
-                    "Partial Build Event Protocol results may be available at " + besResultsUrl);
-              }
             }
           } finally {
             shutdownFuture.set(null);
