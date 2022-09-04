@@ -15,6 +15,7 @@
  */
 package com.github.pedrovgs.effectiveandroidui.ui.fragment;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.GridView;
@@ -63,6 +64,10 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
     initializeGridView();
     tvShowCatalogPresenter.setView(this);
     tvShowCatalogPresenter.initialize();
+  }
+
+  @Override public void onAttach(Activity activity) {
+    super.onAttach(activity);
   }
 
   @Override public void onResume() {
