@@ -19,44 +19,32 @@ package org.graylog2.rest.resources.system.inputs;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.database.ValidationException;
+import org.graylog2.database.*;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputImpl;
 import org.graylog2.inputs.InputService;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.InputState;
+import com.wordnik.swagger.annotations.*;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
-import org.graylog2.shared.inputs.InputDescription;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.shared.rest.resources.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.GET;
+import javax.ws.rs.*;
 import javax.ws.rs.NotFoundException;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -143,13 +131,14 @@ public class InputsResource extends RestResource {
         Configuration inputConfig = new Configuration(lr.configuration);
 
         // Build input.
+        DateTime createdAt = new DateTime(DateTimeZone.UTC);
         final MessageInput input;
         try {
             input = inputRegistry.create(lr.type, inputConfig);
             input.setTitle(lr.title);
             input.setGlobal(lr.global);
             input.setCreatorUserId(getCurrentUser().getName());
-            input.setCreatedAt(Tools.iso8601());
+            input.setCreatedAt(createdAt);
             input.setConfiguration(inputConfig);
 
             input.checkConfiguration();
@@ -177,7 +166,7 @@ public class InputsResource extends RestResource {
         inputData.put(MessageInput.FIELD_TYPE, lr.type);
         inputData.put(MessageInput.FIELD_CREATOR_USER_ID, getCurrentUser().getName());
         inputData.put(MessageInput.FIELD_CONFIGURATION, lr.configuration);
-        inputData.put(MessageInput.FIELD_CREATED_AT, Tools.iso8601());
+        inputData.put(MessageInput.FIELD_CREATED_AT, createdAt);
         if (lr.global) {
             inputData.put(MessageInput.FIELD_GLOBAL, true);
         } else {
@@ -209,14 +198,8 @@ public class InputsResource extends RestResource {
     @ApiOperation(value = "Get all available input types of this node")
     @Produces(MediaType.APPLICATION_JSON)
     public String types() {
-        final Map<String, Object> result = Maps.newHashMap();
-        final Map<String, InputDescription> availableInputs = inputRegistry.getAvailableInputs();
-        final Map<String, String> inputs = Maps.newHashMap();
-        for (final String key : availableInputs.keySet()) {
-            inputs.put(key, availableInputs.get(key).getName());
-        }
-
-        result.put("types", inputs);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("types", inputRegistry.getAvailableInputs());
 
         return json(result);
     }
@@ -348,18 +331,24 @@ public class InputsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such input type registered.")
     })
     public String info(@ApiParam(name = "inputType", required = true) @PathParam("inputType") String inputType) {
-        final Map<String, InputDescription> availableInputs = inputRegistry.getAvailableInputs();
-        if (!availableInputs.containsKey(inputType)) {
-            LOG.error("Unknown input type {} requested.", inputType);
-            throw new WebApplicationException(Response.Status.NOT_FOUND);
+
+        MessageInput input;
+        try {
+            input = inputRegistry.create(inputType, new Configuration(Maps.<String, Object>newHashMap()));
+        } catch (NoSuchInputTypeException e) {
+            LOG.error("There is no such input type registered.", e);
+            throw new WebApplicationException(e, Response.Status.NOT_FOUND);
+        } catch (Exception e) {
+            LOG.error("Unable to instantiate input of type <" + inputType + ">", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
         }
-        final InputDescription description = availableInputs.get(inputType);
-        final Map<String, Object> result = Maps.newHashMap();
-        result.put("type", inputType);
-        result.put("name", description.getName());
-        result.put("is_exclusive", description.isExclusive());
-        result.put("requested_configuration", description.getRequestedConfiguration());
-        result.put("link_to_docs", description.getLinkToDocs());
+
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("type", input.getClass().getCanonicalName());
+        result.put("name", input.getName());
+        result.put("is_exclusive", input.isExclusive());
+        result.put("requested_configuration", input.getRequestedConfiguration().asList());
+        result.put("link_to_docs", input.linkToDocs());
 
         return json(result);
     }

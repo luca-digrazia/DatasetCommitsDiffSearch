@@ -100,10 +100,11 @@ public class ConfigurationRequest {
                         }
                         break;
                     case TextField.FIELD_TYPE:
-                    case DropdownField.FIELD_TYPE:
                         if (!configuration.stringIsSet(field.getName())) {
-                                throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
+                            throw new ConfigurationException("Mandatory configuration field " + field.getName() + " is missing");
                         }
+                        break;
+                    case DropdownField.FIELD_TYPE:
                         break;
                     default:
                         throw new IllegalStateException("Unknown field type " + type + ". This is a bug.");

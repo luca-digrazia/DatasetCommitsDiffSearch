@@ -19,7 +19,7 @@ package org.graylog2.filters;
 import com.codahale.metrics.MetricRegistry;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.buffers.InputBuffer;
+import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
@@ -41,8 +41,7 @@ public class StaticFieldFilterTest {
 
         FakeInput fakeInput = new FakeInput(mock(MetricRegistry.class),mock(Transport.class),
                                             mock(MetricRegistry.class),
-                                            mock(Codec.class),
-                                            mock(MessageInput.Config.class), mock(MessageInput.Descriptor.class));
+                                            mock(Codec.class));
         fakeInput.addStaticField("foo", "bar");
 
         msg.setSourceInput(fakeInput);
@@ -62,8 +61,7 @@ public class StaticFieldFilterTest {
 
         FakeInput fakeInput = new FakeInput(mock(MetricRegistry.class),mock(Transport.class),
                                             mock(MetricRegistry.class),
-                                            mock(Codec.class),
-                                            mock(MessageInput.Config.class), mock(MessageInput.Descriptor.class));
+                                            mock(Codec.class));
         fakeInput.addStaticField("foo", "bar");
 
         msg.setSourceInput(fakeInput);
@@ -80,13 +78,13 @@ public class StaticFieldFilterTest {
 
         public FakeInput(MetricRegistry metricRegistry,
                          Transport transport,
-                         MetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor) {
-            super(metricRegistry, transport, localRegistry, codec, config, descriptor);
+                         MetricRegistry localRegistry, Codec codec) {
+            super(metricRegistry, transport, localRegistry, codec);
         }
 
 
         @Override
-        public void launch(InputBuffer processBuffer) throws MisfireException {
+        public void launch(Buffer processBuffer) throws MisfireException {
             //To change body of implemented methods use File | Settings | File Templates.
         }
 
@@ -97,6 +95,21 @@ public class StaticFieldFilterTest {
 
         @Override
         public ConfigurationRequest getRequestedConfiguration() {
+            return null;  //To change body of implemented methods use File | Settings | File Templates.
+        }
+
+        @Override
+        public boolean isExclusive() {
+            return false;  //To change body of implemented methods use File | Settings | File Templates.
+        }
+
+        @Override
+        public String getName() {
+            return null;  //To change body of implemented methods use File | Settings | File Templates.
+        }
+
+        @Override
+        public String linkToDocs() {
             return null;  //To change body of implemented methods use File | Settings | File Templates.
         }
     }

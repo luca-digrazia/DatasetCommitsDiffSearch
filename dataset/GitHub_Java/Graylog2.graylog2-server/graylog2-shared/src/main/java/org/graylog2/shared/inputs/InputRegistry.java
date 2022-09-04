@@ -17,9 +17,6 @@
 package org.graylog2.shared.inputs;
 
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.InstrumentedThreadFactory;
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.plugin.configuration.Configuration;
@@ -29,19 +26,19 @@ import org.graylog2.shared.buffers.ProcessBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public abstract class InputRegistry {
     private static final Logger LOG = LoggerFactory.getLogger(InputRegistry.class);
     protected final Set<InputState> inputStates = new HashSet<>();
-    protected final ExecutorService executor;
+    protected final ExecutorService executor = Executors.newCachedThreadPool(
+            new ThreadFactoryBuilder().setNameFormat("inputs-%d").build()
+    );
     private final MessageInputFactory messageInputFactory;
     private final ProcessBuffer processBuffer;
 
@@ -56,22 +53,9 @@ public abstract class InputRegistry {
     public abstract void cleanInput(MessageInput input);
 
     public InputRegistry(MessageInputFactory messageInputFactory,
-                         ProcessBuffer processBuffer,
-                         MetricRegistry metricRegistry) {
+                         ProcessBuffer processBuffer) {
         this.messageInputFactory = messageInputFactory;
         this.processBuffer = processBuffer;
-        this.executor = executorService(metricRegistry);
-    }
-
-    private ExecutorService executorService(final MetricRegistry metricRegistry) {
-        return new InstrumentedExecutorService(
-                Executors.newCachedThreadPool(threadFactory(metricRegistry)), metricRegistry);
-    }
-
-    private ThreadFactory threadFactory(final MetricRegistry metricRegistry) {
-        return new InstrumentedThreadFactory(
-                new ThreadFactoryBuilder().setNameFormat("inputs-%d").build(),
-                metricRegistry);
     }
 
     public MessageInput create(String inputClass, Configuration configuration) throws NoSuchInputTypeException {
@@ -196,7 +180,7 @@ public abstract class InputRegistry {
         return false;
     }
 
-    public Map<String, InputDescription> getAvailableInputs() {
+    public Map<String, String> getAvailableInputs() {
         return messageInputFactory.getAvailableInputs();
     }
 
