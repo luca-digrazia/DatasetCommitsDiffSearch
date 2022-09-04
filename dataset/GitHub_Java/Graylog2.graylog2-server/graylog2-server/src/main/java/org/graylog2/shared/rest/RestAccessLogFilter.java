@@ -53,13 +53,13 @@ public class RestAccessLogFilter implements ContainerResponseFilter {
             try {
                 final String rawQuery = requestContext.getUriInfo().getRequestUri().getRawQuery();
                 final Date requestDate = requestContext.getDate();
-                final String userId = RestTools.getUserIdFromRequest(requestContext);
+                final String userName = RestTools.getUserNameFromRequest(requestContext);
                 final String remoteAddress = RestTools.getRemoteAddrFromRequest(response.getRequest(), trustedProxies);
                 final String userAgent = requestContext.getHeaderString(HttpHeaders.USER_AGENT);
 
                 LOG.debug("{} {} [{}] \"{} {}{}\" {} {} {}",
                         remoteAddress,
-                        userId == null ? "-" : userId,
+                        userName == null ? "-" : userName,
                         (requestDate == null ? "-" : requestDate),
                         requestContext.getMethod(),
                         requestContext.getUriInfo().getPath(),

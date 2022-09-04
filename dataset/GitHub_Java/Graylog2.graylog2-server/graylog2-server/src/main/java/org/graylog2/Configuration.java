@@ -18,7 +18,6 @@ package org.graylog2;
 
 import com.github.joschi.jadconfig.Parameter;
 import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.Validator;
 import com.github.joschi.jadconfig.ValidatorMethod;
 import com.github.joschi.jadconfig.converters.TrimmedStringSetConverter;
 import com.github.joschi.jadconfig.util.Duration;
@@ -27,16 +26,19 @@ import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.github.joschi.jadconfig.validators.PositiveLongValidator;
 import com.github.joschi.jadconfig.validators.StringNotBlankValidator;
+import com.github.joschi.jadconfig.validators.URIAbsoluteValidator;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.utilities.IPSubnetConverter;
 import org.graylog2.utilities.IpSubnet;
 import org.joda.time.DateTimeZone;
 
-import java.io.File;
+import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Set;
+
+import static org.graylog2.plugin.Tools.normalizeURI;
 
 /**
  * Helper class to hold configuration of Graylog
@@ -48,6 +50,12 @@ public class Configuration extends BaseConfiguration {
 
     @Parameter(value = "password_secret", required = true, validator = StringNotBlankValidator.class)
     private String passwordSecret;
+
+    @Parameter(value = "rest_listen_uri", required = true, validator = URIAbsoluteValidator.class)
+    private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_PORT + "/api/");
+
+    @Parameter(value = "web_listen_uri", required = true, validator = URIAbsoluteValidator.class)
+    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/");
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 500;
@@ -70,7 +78,7 @@ public class Configuration extends BaseConfiguration {
     @Parameter("rules_file")
     private String droolsRulesFile;
 
-    @Parameter(value = "node_id_file", validator = NodeIdFileValidator.class)
+    @Parameter(value = "node_id_file")
     private String nodeIdFile = "/etc/graylog/server/node-id";
 
     @Parameter(value = "root_username")
@@ -196,6 +204,16 @@ public class Configuration extends BaseConfiguration {
         return nodeIdFile;
     }
 
+    @Override
+    public URI getRestListenUri() {
+        return normalizeURI(restListenUri, getRestUriScheme(), GRAYLOG_DEFAULT_PORT, "/");
+    }
+
+    @Override
+    public URI getWebListenUri() {
+        return normalizeURI(webListenUri, getWebUriScheme(), GRAYLOG_DEFAULT_WEB_PORT, "/");
+    }
+
     public String getRootUsername() {
         return rootUsername;
     }
@@ -309,34 +327,16 @@ public class Configuration extends BaseConfiguration {
         }
     }
 
-    public static class NodeIdFileValidator implements Validator<String> {
-        @Override
-        public void validate(String name, String path) throws ValidationException {
-            if (path == null) {
-                return;
-            }
-            final File file = Paths.get(path).toFile();
-            final StringBuilder b = new StringBuilder();
-            if (!file.isFile()) {
-                b.append("a file");
-            }
-            if (!file.canRead()) {
-                if (b.length() > 0) {
-                    b.append(", ");
-                }
-                b.append("readable");
-            }
-            if (!file.canWrite()) {
-                if (b.length() > 0) {
-                    b.append(", ");
-                }
-                b.append("writable");
-            }
-            if (b.length() == 0) {
-                // all good
-                return;
-            }
-            throw new ValidationException("Node ID file at path " + path + " isn't " + b +". Please specify the correct path or change the permissions");
+    @ValidatorMethod
+    @SuppressWarnings("unused")
+    public void validateNetworkInterfaces() throws ValidationException {
+        final URI restListenUri = getRestListenUri();
+        final URI webListenUri = getWebListenUri();
+
+        if (restListenUri.getPort() == webListenUri.getPort() &&
+                !restListenUri.getHost().equals(webListenUri.getHost()) &&
+                (WILDCARD_IP_ADDRESS.equals(restListenUri.getHost()) || WILDCARD_IP_ADDRESS.equals(webListenUri.getHost()))) {
+            throw new ValidationException("Wildcard IP addresses cannot be used if the Graylog REST API and web interface listen on the same port.");
         }
     }
 }
