@@ -849,7 +849,7 @@ public final class CcCommon {
             .addAll(toolchain.getFeatures().getDefaultFeaturesAndActionConfigs());
 
     if (!cppConfiguration.dontEnableHostNonhost()) {
-      if (toolchain.isToolConfiguration()) {
+      if (toolchain.isHostConfiguration()) {
         allFeatures.add("host");
       } else {
         allFeatures.add("nonhost");

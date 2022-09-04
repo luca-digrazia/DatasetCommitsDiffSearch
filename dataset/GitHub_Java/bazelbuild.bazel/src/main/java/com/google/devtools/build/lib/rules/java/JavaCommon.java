@@ -43,10 +43,10 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -482,15 +482,15 @@ public class JavaCommon {
   }
 
   public static PathFragment getHostJavaExecutable(RuleContext ruleContext) {
-    return JavaRuntimeInfo.forHost(ruleContext).javaBinaryExecPathFragment();
+    return JavaRuntimeInfo.forHost(ruleContext).javaBinaryExecPath();
   }
 
   public static PathFragment getHostJavaExecutable(JavaRuntimeInfo javaRuntime) {
-    return javaRuntime.javaBinaryExecPathFragment();
+    return javaRuntime.javaBinaryExecPath();
   }
 
   public static PathFragment getJavaExecutable(RuleContext ruleContext) {
-    return JavaRuntimeInfo.from(ruleContext).javaBinaryExecPathFragment();
+    return JavaRuntimeInfo.from(ruleContext).javaBinaryExecPath();
   }
 
   /**
@@ -507,7 +507,7 @@ public class JavaCommon {
     if (launcher != null) {
       javaExecutable = launcher.getRootRelativePath();
     } else {
-      javaExecutable = javaRuntime.javaBinaryRunfilesPathFragment();
+      javaExecutable = javaRuntime.javaBinaryRunfilesPath();
     }
 
     if (!javaExecutable.isAbsolute()) {
