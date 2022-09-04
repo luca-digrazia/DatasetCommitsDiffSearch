@@ -28,7 +28,7 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.deployment.index.ClassPathArtifactResolver;
 import io.quarkus.deployment.index.ResolvedArtifact;
@@ -77,7 +77,7 @@ public class SwaggerUiProcessor {
             BuildProducer<RouteBuildItem> routes,
             BeanContainerBuildItem container,
             BuildProducer<GeneratedResourceBuildItem> generatedResources,
-            BuildProducer<NativeImageResourceBuildItem> nativeImageResourceBuildItemBuildProducer,
+            BuildProducer<SubstrateResourceBuildItem> substrateResourceBuildItemBuildProducer,
             LiveReloadBuildItem liveReloadBuildItem,
             HttpRootPathBuildItem httpRootPathBuildItem) throws Exception {
 
@@ -141,7 +141,7 @@ public class SwaggerUiProcessor {
                             generatedResources
                                     .produce(new GeneratedResourceBuildItem(fileName,
                                             content));
-                            nativeImageResourceBuildItemBuildProducer.produce(new NativeImageResourceBuildItem(fileName));
+                            substrateResourceBuildItemBuildProducer.produce(new SubstrateResourceBuildItem(fileName));
 
                         }
                     }
@@ -168,10 +168,9 @@ public class SwaggerUiProcessor {
             while (entries.hasMoreElements()) {
                 JarEntry entry = entries.nextElement();
                 if (entry.getName().startsWith(versionedSwaggerUiWebjarPrefix) && !entry.isDirectory()) {
-                    try (InputStream inputStream = jarFile.getInputStream(entry)) {
-                        String filename = entry.getName().replace(versionedSwaggerUiWebjarPrefix, "");
-                        Files.copy(inputStream, resourceDir.resolve(filename));
-                    }
+                    InputStream inputStream = jarFile.getInputStream(entry);
+                    String filename = entry.getName().replace(versionedSwaggerUiWebjarPrefix, "");
+                    Files.copy(inputStream, resourceDir.resolve(filename));
                 }
             }
         }
