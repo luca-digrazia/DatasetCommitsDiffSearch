@@ -1,6 +1,8 @@
 package io.dropwizard.client;
 
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.httpclient.HttpClientMetricNameStrategies;
+import com.codahale.metrics.httpclient.HttpClientMetricNameStrategy;
 import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
 import com.codahale.metrics.httpclient.InstrumentedHttpRequestExecutor;
 import com.google.common.annotations.VisibleForTesting;
@@ -10,7 +12,9 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.config.Registry;
 import org.apache.http.config.SocketConfig;
+import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.impl.DefaultConnectionReuseStrategy;
 import org.apache.http.impl.NoConnectionReuseStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -22,16 +26,16 @@ import java.io.IOException;
 
 /**
  * A convenience class for building {@link HttpClient} instances.
- * <p>
+ * <p/>
  * Among other things,
  * <ul>
  * <li>Disables stale connection checks</li>
  * <li>Disables Nagle's algorithm</li>
  * <li>Disables cookie management by default</li>
  * </ul>
- * </p>
  */
 public class HttpClientBuilder extends ApacheClientBuilderBase<HttpClientBuilder, HttpClientConfiguration> {
+
     private static final HttpRequestRetryHandler NO_RETRIES = new HttpRequestRetryHandler() {
         @Override
         public boolean retryRequest(IOException exception, int executionCount, HttpContext context) {
@@ -39,12 +43,48 @@ public class HttpClientBuilder extends ApacheClientBuilderBase<HttpClientBuilder
         }
     };
 
+    private HttpRequestRetryHandler httpRequestRetryHandler;
+    private HttpClientMetricNameStrategy metricNameStrategy = HttpClientMetricNameStrategies.METHOD_ONLY;
+
     public HttpClientBuilder(MetricRegistry metricRegistry) {
         super(metricRegistry, new HttpClientConfiguration());
     }
 
     public HttpClientBuilder(Environment environment) {
         super(environment, new HttpClientConfiguration());
+    }
+
+    /**
+     * Uses the {@link HttpRequestRetryHandler} for handling request retries.
+     *
+     * @param httpRequestRetryHandler an httpRequestRetryHandler
+     * @return {@code this}
+     */
+    public HttpClientBuilder using(HttpRequestRetryHandler httpRequestRetryHandler) {
+        this.httpRequestRetryHandler = httpRequestRetryHandler;
+        return this;
+    }
+
+    /**
+     * Use the given {@link Registry} instance.
+     *
+     * @param registry
+     * @return {@code this}
+     */
+    public HttpClientBuilder using(Registry<ConnectionSocketFactory> registry) {
+        this.registry = registry;
+        return this;
+    }
+
+    /**
+     * Use the given {@link HttpClientMetricNameStrategy} instance.
+     *
+     * @param metricNameStrategy    a {@link HttpClientMetricNameStrategy} instance
+     * @return {@code this}
+     */
+    public HttpClientBuilder using(HttpClientMetricNameStrategy metricNameStrategy) {
+        this.metricNameStrategy = metricNameStrategy;
+        return this;
     }
 
     /**
@@ -88,7 +128,7 @@ public class HttpClientBuilder extends ApacheClientBuilderBase<HttpClientBuilder
                 .setSoTimeout(timeout)
                 .build();
 
-        builder.setRequestExecutor(new InstrumentedHttpRequestExecutor(metricRegistry, metricNameStrategy, name))
+        builder.setRequestExecutor(new InstrumentedHttpRequestExecutor(metricRegistry, metricNameStrategy))
                 .setConnectionManager(manager)
                 .setDefaultRequestConfig(requestConfig)
                 .setDefaultSocketConfig(socketConfig)
@@ -112,10 +152,6 @@ public class HttpClientBuilder extends ApacheClientBuilderBase<HttpClientBuilder
             builder.setDefaultCredentialsProvider(credentialsProvider);
         }
 
-        if (routePlanner != null) {
-            builder.setRoutePlanner(routePlanner);
-        }
-
         return builder.build();
     }
 
@@ -130,6 +166,7 @@ public class HttpClientBuilder extends ApacheClientBuilderBase<HttpClientBuilder
         final String defaultUserAgent = this.name == null ? name : String.format("%s (%s)", this.name, name);
         return configuration.getUserAgent().or(defaultUserAgent);
     }
+
 
 
 }

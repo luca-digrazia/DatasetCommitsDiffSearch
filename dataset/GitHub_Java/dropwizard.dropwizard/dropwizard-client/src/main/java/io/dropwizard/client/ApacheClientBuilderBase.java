@@ -1,34 +1,28 @@
 package io.dropwizard.client;
 
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.httpclient.HttpClientMetricNameStrategies;
-import com.codahale.metrics.httpclient.HttpClientMetricNameStrategy;
 import com.codahale.metrics.httpclient.InstrumentedHttpClientConnectionManager;
 import com.google.common.annotations.VisibleForTesting;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.Duration;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.DnsResolver;
-import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 
 abstract class ApacheClientBuilderBase<T extends ApacheClientBuilderBase, C extends HttpClientConfiguration> {
+
     protected C configuration;
     protected CredentialsProvider credentialsProvider = null;
     protected final MetricRegistry metricRegistry;
     protected String name;
     protected Environment environment;
-    protected HttpRequestRetryHandler httpRequestRetryHandler;
-    protected HttpRoutePlanner routePlanner = null;
-    protected HttpClientMetricNameStrategy metricNameStrategy = HttpClientMetricNameStrategies.METHOD_ONLY;
     protected DnsResolver resolver = new SystemDefaultDnsResolver();
     protected Registry<ConnectionSocketFactory> registry
             = RegistryBuilder.<ConnectionSocketFactory>create()
@@ -48,7 +42,7 @@ abstract class ApacheClientBuilderBase<T extends ApacheClientBuilderBase, C exte
 
     @SuppressWarnings("unchecked")
     private T self() {
-        return (T) this;
+        return (T)this;
     }
 
     /**
@@ -108,50 +102,6 @@ abstract class ApacheClientBuilderBase<T extends ApacheClientBuilderBase, C exte
     }
 
     /**
-     * Uses the {@link HttpRequestRetryHandler} for handling request retries.
-     *
-     * @param httpRequestRetryHandler an httpRequestRetryHandler
-     * @return {@code this}
-     */
-    public T using(HttpRequestRetryHandler httpRequestRetryHandler) {
-        this.httpRequestRetryHandler = httpRequestRetryHandler;
-        return self();
-    }
-
-    /**
-     * Use the given {@link Registry} instance.
-     *
-     * @param registry
-     * @return {@code this}
-     */
-    public T using(Registry<ConnectionSocketFactory> registry) {
-        this.registry = registry;
-        return self();
-    }
-
-    /**
-     * Use the given {@link HttpClientMetricNameStrategy} instance.
-     *
-     * @param metricNameStrategy a {@link HttpClientMetricNameStrategy} instance
-     * @return {@code this}
-     */
-    public T using(HttpClientMetricNameStrategy metricNameStrategy) {
-        this.metricNameStrategy = metricNameStrategy;
-        return self();
-    }
-
-    /**
-     * Use the given {@link org.apache.http.conn.routing.HttpRoutePlanner} instance.
-     *
-     * @param routePlanner a {@link org.apache.http.conn.routing.HttpRoutePlanner} instance
-     * @return {@code this}
-     */
-    public T using(HttpRoutePlanner routePlanner) {
-        this.routePlanner = routePlanner;
-        return self();
-    }
-
-    /**
      * Create a RequestConfig based on the HttpClientConfiguration.  It sets
      * timeouts and cookie handling.
      *
@@ -161,12 +111,10 @@ abstract class ApacheClientBuilderBase<T extends ApacheClientBuilderBase, C exte
         final String cookiePolicy = configuration.isCookiesEnabled() ? CookieSpecs.BEST_MATCH : CookieSpecs.IGNORE_COOKIES;
         final Integer timeout = (int) configuration.getTimeout().toMilliseconds();
         final Integer connectionTimeout = (int) configuration.getConnectionTimeout().toMilliseconds();
-        final Integer connectionRequestTimeout = (int) configuration.getConnectionRequestTimeout().toMilliseconds();
         return RequestConfig.custom()
                 .setCookieSpec(cookiePolicy)
                 .setSocketTimeout(timeout)
                 .setConnectTimeout(connectionTimeout)
-                .setConnectionRequestTimeout(connectionRequestTimeout)
                 .setStaleConnectionCheckEnabled(false)
                 .build();
     }
@@ -181,7 +129,7 @@ abstract class ApacheClientBuilderBase<T extends ApacheClientBuilderBase, C exte
      * @return a InstrumentedHttpClientConnectionManger instance
      */
     protected InstrumentedHttpClientConnectionManager createConnectionManager(Registry<ConnectionSocketFactory> registry,
-                                                                              String name) {
+                                                                    String name) {
         final Duration ttl = configuration.getTimeToLive();
         final InstrumentedHttpClientConnectionManager manager = new InstrumentedHttpClientConnectionManager(
                 metricRegistry,
