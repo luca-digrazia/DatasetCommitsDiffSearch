@@ -14,81 +14,55 @@
 
 package com.google.devtools.build.lib.buildeventservice.client;
 
-import static com.google.common.base.Strings.isNullOrEmpty;
-import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
-import static com.google.devtools.build.lib.util.Preconditions.checkState;
-import static java.lang.System.getenv;
-import static java.nio.file.Files.newInputStream;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.common.base.Function;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.v1.OrderedBuildEvent;
 import com.google.devtools.build.v1.PublishBuildEventGrpc;
 import com.google.devtools.build.v1.PublishBuildEventGrpc.PublishBuildEventBlockingStub;
 import com.google.devtools.build.v1.PublishBuildEventGrpc.PublishBuildEventStub;
+import com.google.devtools.build.v1.PublishBuildToolEventStreamRequest;
 import com.google.devtools.build.v1.PublishBuildToolEventStreamResponse;
 import com.google.devtools.build.v1.PublishLifecycleEventRequest;
 import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
+import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
-import io.grpc.auth.MoreCallCredentials;
-import io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.NegotiationType;
-import io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.AbstractStub;
 import io.grpc.stub.StreamObserver;
-import io.netty.handler.ssl.SslContext;
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Paths;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.time.Duration;
 import javax.annotation.Nullable;
-import javax.net.ssl.SSLException;
-import org.joda.time.Duration;
 
 /** Implementation of BuildEventServiceClient that uploads data using gRPC. */
 public class BuildEventServiceGrpcClient implements BuildEventServiceClient {
-
-  private static final Logger logger =
-      Logger.getLogger(BuildEventServiceGrpcClient.class.getName());
-
   /** Max wait time for a single non-streaming RPC to finish */
-  private static final Duration RPC_TIMEOUT = Duration.standardSeconds(15);
-  /** See https://developers.google.com/identity/protocols/application-default-credentials * */
-  private static final String DEFAULT_APP_CREDENTIALS_ENV_VAR = "GOOGLE_APPLICATION_CREDENTIALS";
-  /** TODO(eduardocolaco): Scope documentation.* */
-  private static final String CREDENTIALS_SCOPE =
-      "https://www.googleapis.com/auth/cloud-build-service";
+  private static final Duration RPC_TIMEOUT = Duration.ofSeconds(15);
+
+  private final ManagedChannel channel;
 
   private final PublishBuildEventStub besAsync;
   private final PublishBuildEventBlockingStub besBlocking;
-  private final ManagedChannel channel;
-  private final AtomicReference<StreamObserver<OrderedBuildEvent>> streamReference;
-
-  public BuildEventServiceGrpcClient(String serverSpec, boolean tlsEnabled,
-      @Nullable String tlsCertificateFile, @Nullable String tlsAuthorityOverride,
-      @Nullable String credentialsFile, @Nullable String credentialsScope) {
-    this(getChannel(serverSpec, tlsEnabled, tlsCertificateFile, tlsAuthorityOverride),
-        getCallCredentials(credentialsFile, credentialsScope));
-  }
 
   public BuildEventServiceGrpcClient(
-      ManagedChannel channel,
-      @Nullable CallCredentials callCredentials) {
+      ManagedChannel channel, @Nullable CallCredentials callCredentials) {
+    this(
+        withCallCredentials(PublishBuildEventGrpc.newStub(channel), callCredentials),
+        withCallCredentials(PublishBuildEventGrpc.newBlockingStub(channel), callCredentials),
+        channel);
+  }
+
+  @VisibleForTesting
+  protected BuildEventServiceGrpcClient(
+      PublishBuildEventStub besAsync,
+      PublishBuildEventBlockingStub besBlocking,
+      ManagedChannel channel) {
+    this.besAsync = besAsync;
+    this.besBlocking = besBlocking;
     this.channel = channel;
-    this.besAsync = withCallCredentials(
-        PublishBuildEventGrpc.newStub(channel), callCredentials);
-    this.besBlocking = withCallCredentials(
-        PublishBuildEventGrpc.newBlockingStub(channel), callCredentials);
-    this.streamReference = new AtomicReference<>(null);
   }
 
   private static <T extends AbstractStub<T>> T withCallCredentials(
@@ -98,85 +72,113 @@ public class BuildEventServiceGrpcClient implements BuildEventServiceClient {
   }
 
   @Override
-  public Status publish(PublishLifecycleEventRequest lifecycleEvent) throws Exception {
-    besBlocking
-        .withDeadlineAfter(RPC_TIMEOUT.getMillis(), MILLISECONDS)
-        .publishLifecycleEvent(lifecycleEvent);
-    return Status.OK;
+  public void publish(PublishLifecycleEventRequest lifecycleEvent)
+      throws StatusException, InterruptedException {
+    throwIfInterrupted();
+    try {
+      besBlocking
+          .withDeadlineAfter(RPC_TIMEOUT.toMillis(), MILLISECONDS)
+          .publishLifecycleEvent(lifecycleEvent);
+    } catch (StatusRuntimeException e) {
+      Throwables.throwIfInstanceOf(Throwables.getRootCause(e), InterruptedException.class);
+      throw e.getStatus().asException();
+    }
   }
 
-  @Override
-  public ListenableFuture<Status> openStream(
-      Function<PublishBuildToolEventStreamResponse, Void> ack)
-      throws Exception {
-    SettableFuture<Status> streamFinished = SettableFuture.create();
-    checkState(
-        streamReference.compareAndSet(null, createStream(ack, streamFinished)),
-        "Starting a new stream without closing the previous one");
-    return streamFinished;
-  }
+  private static class BESGrpcStreamContext implements StreamContext {
+    private final StreamObserver<PublishBuildToolEventStreamRequest> stream;
+    private final SettableFuture<Status> streamStatus;
 
-  private StreamObserver<OrderedBuildEvent> createStream(
-      final Function<PublishBuildToolEventStreamResponse, Void> ack,
-      final SettableFuture<Status> streamFinished) {
-    return besAsync.publishBuildToolEventStream(
-        new StreamObserver<PublishBuildToolEventStreamResponse>() {
-          @Override
-          public void onNext(PublishBuildToolEventStreamResponse response) {
-            ack.apply(response);
-          }
+    public BESGrpcStreamContext(PublishBuildEventStub besAsync, AckCallback ackCallback) {
+      this.streamStatus = SettableFuture.create();
+      this.stream =
+          besAsync.publishBuildToolEventStream(
+              new StreamObserver<PublishBuildToolEventStreamResponse>() {
+                @Override
+                public void onNext(PublishBuildToolEventStreamResponse response) {
+                  ackCallback.apply(response);
+                }
 
-          @Override
-          public void onError(Throwable t) {
-            streamReference.set(null);
-            streamFinished.setException(t);
-          }
+                @Override
+                public void onError(Throwable t) {
+                  Status error = Status.fromThrowable(t);
+                  if (error.getCode() == Status.CANCELLED.getCode()
+                      && error.getCause() != null
+                      && Status.fromThrowable(error.getCause()).getCode()
+                          != Status.UNKNOWN.getCode()) {
+                    // gRPC likes to wrap Status(Runtime)Exceptions in StatusRuntimeExceptions. If
+                    // the status is cancelled and has a Status(Runtime)Exception as a cause it
+                    // means the error was generated client side.
+                    error = Status.fromThrowable(error.getCause());
+                  }
+                  streamStatus.set(error);
+                }
 
-          @Override
-          public void onCompleted() {
-            streamReference.set(null);
-            streamFinished.set(Status.OK);
-          }
-        });
-  }
+                @Override
+                public void onCompleted() {
+                  streamStatus.set(Status.OK);
+                }
+              });
+    }
 
-  @Override
-  public void sendOverStream(OrderedBuildEvent buildEvent) throws Exception {
-    checkNotNull(streamReference.get(), "Attempting to send over a closed or unopened stream")
-        .onNext(buildEvent);
-  }
+    @Override
+    public void sendOverStream(PublishBuildToolEventStreamRequest buildEvent)
+        throws InterruptedException {
+      throwIfInterrupted();
+      try {
+        stream.onNext(buildEvent);
+      } catch (StatusRuntimeException e) {
+        Throwables.throwIfInstanceOf(Throwables.getRootCause(e), InterruptedException.class);
+        streamStatus.set(Status.fromThrowable(e));
+      }
+    }
 
-  @Override
-  public void closeStream() {
-    StreamObserver<OrderedBuildEvent> stream;
-    if ((stream = streamReference.getAndSet(null)) != null) {
+    @Override
+    public void halfCloseStream() {
       stream.onCompleted();
     }
-  }
 
-  @Override
-  public void abortStream(Status status) {
-    StreamObserver<OrderedBuildEvent> stream;
-    if ((stream = streamReference.getAndSet(null)) != null) {
+    @Override
+    public void abortStream(Status status) {
       stream.onError(status.asException());
+    }
+
+    @Override
+    public ListenableFuture<Status> getStatus() {
+      return streamStatus;
     }
   }
 
   @Override
-  public boolean isStreamActive() {
-    return streamReference.get() != null;
-  }
+  public StreamContext openStream(AckCallback ackCallback) throws InterruptedException {
+    try {
+      return new BESGrpcStreamContext(besAsync, ackCallback);
+    } catch (StatusRuntimeException e) {
+      Throwables.throwIfInstanceOf(Throwables.getRootCause(e), InterruptedException.class);
+      ListenableFuture<Status> status = Futures.immediateFuture(Status.fromThrowable(e));
+      return new StreamContext() {
+        @Override
+        public ListenableFuture<Status> getStatus() {
+          return status;
+        }
 
-  @Override
-  public void shutdown() throws InterruptedException {
-    this.channel.shutdown();
+        @Override
+        public void sendOverStream(PublishBuildToolEventStreamRequest buildEvent) {}
+
+        @Override
+        public void halfCloseStream() {}
+
+        @Override
+        public void abortStream(Status status) {}
+      };
+    }
   }
 
   @Override
   public String userReadableError(Throwable t) {
-    if (t instanceof StatusRuntimeException) {
+    if (t instanceof StatusException) {
       Throwable rootCause = Throwables.getRootCause(t);
-      String message = ((StatusRuntimeException) t).getStatus().getCode().name();
+      String message = ((StatusException) t).getStatus().getCode().name();
       message += ": " + rootCause.getMessage();
       return message;
     } else {
@@ -184,51 +186,14 @@ public class BuildEventServiceGrpcClient implements BuildEventServiceClient {
     }
   }
 
-  /**
-   * Returns call credentials read from the specified file (if non-empty) or from
-   * env(GOOGLE_APPLICATION_CREDENTIALS) otherwise.
-   */
-  @Nullable
-  private static CallCredentials getCallCredentials(@Nullable String credentialsFile,
-      @Nullable String credentialsScope) {
-    String effectiveScope = credentialsScope != null ? credentialsScope : CREDENTIALS_SCOPE;
-    try {
-      if (!isNullOrEmpty(credentialsFile)) {
-        return MoreCallCredentials.from(
-            GoogleCredentials.fromStream(newInputStream(Paths.get(credentialsFile)))
-                .createScoped(ImmutableList.of(effectiveScope)));
-
-      } else if (!isNullOrEmpty(getenv(DEFAULT_APP_CREDENTIALS_ENV_VAR))) {
-        return MoreCallCredentials.from(
-            GoogleCredentials.getApplicationDefault()
-                .createScoped(ImmutableList.of(effectiveScope)));
-      }
-    } catch (IOException e) {
-      logger.log(Level.WARNING, "Failed to read credentials", e);
-    }
-    return null;
+  @Override
+  public void shutdown() {
+    channel.shutdown();
   }
 
-  /**
-   * Returns a ManagedChannel to the specified server.
-   */
-  private static ManagedChannel getChannel(String serverSpec, boolean tlsEnabled,
-      @Nullable String tlsCertificateFile, @Nullable String tlsAuthorityOverride) {
-    //TODO(buchgr): Use ManagedChannelBuilder once bazel uses a newer gRPC version.
-    NettyChannelBuilder builder = NettyChannelBuilder.forTarget(serverSpec);
-    builder.negotiationType(tlsEnabled ? NegotiationType.TLS : NegotiationType.PLAINTEXT);
-    if (tlsCertificateFile != null) {
-      try {
-        SslContext sslContext =
-            GrpcSslContexts.forClient().trustManager(new File(tlsCertificateFile)).build();
-        builder.sslContext(sslContext);
-      } catch (SSLException e) {
-        throw new RuntimeException(e);
-      }
+  private static void throwIfInterrupted() throws InterruptedException {
+    if (Thread.interrupted()) {
+      throw new InterruptedException();
     }
-    if (tlsAuthorityOverride != null) {
-      builder.overrideAuthority(tlsAuthorityOverride);
-    }
-    return builder.build();
   }
 }
