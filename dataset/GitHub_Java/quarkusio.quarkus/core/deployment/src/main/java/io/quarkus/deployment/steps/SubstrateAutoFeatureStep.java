@@ -273,8 +273,7 @@ public class SubstrateAutoFeatureStep {
             if (entry.getValue().fields) {
                 tc.invokeStaticMethod(
                         ofMethod("org/graalvm/nativeimage/RuntimeReflection", "register", void.class,
-                                boolean.class, Field[].class),
-                        tc.load(entry.getValue().finalIsWritable), fields);
+                                boolean.class, Field[].class), tc.load(entry.getValue().finalIsWritable), fields);
             } else if (!entry.getValue().fieldSet.isEmpty()) {
                 ResultHandle farray = tc.newArray(Field.class, tc.load(1));
                 for (String field : entry.getValue().fieldSet) {
