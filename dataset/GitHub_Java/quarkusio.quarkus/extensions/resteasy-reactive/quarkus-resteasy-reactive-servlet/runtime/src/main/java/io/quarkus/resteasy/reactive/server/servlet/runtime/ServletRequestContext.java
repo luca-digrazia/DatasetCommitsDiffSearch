@@ -6,7 +6,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -19,6 +18,8 @@ import java.util.function.Consumer;
 
 import javax.enterprise.event.Event;
 import javax.servlet.AsyncContext;
+import javax.servlet.ReadListener;
+import javax.servlet.ServletInputStream;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletRequest;
@@ -38,15 +39,19 @@ import io.netty.util.concurrent.ScheduledFuture;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.impl.LazyValue;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveSecurityContext;
+import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.server.ResponseCommitListener;
+import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.ext.web.RoutingContext;
 
 public class ServletRequestContext extends ResteasyReactiveRequestContext
-        implements ServerHttpRequest, ServerHttpResponse {
+        implements ServerHttpRequest, ServerHttpResponse, ResponseCommitListener {
 
     private static final LazyValue<Event<SecurityIdentity>> SECURITY_IDENTITY_EVENT = new LazyValue<>(
             ServletRequestContext::createEvent);
@@ -55,17 +60,21 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     final HttpServletResponse response;
     AsyncContext asyncContext;
     ServletWriteListener writeListener;
+    ServletReadListener readListener;
     byte[] asyncWriteData;
+    boolean closed;
     Consumer<Throwable> asyncWriteHandler;
+    protected Consumer<ResteasyReactiveRequestContext> preCommitTask;
 
     public ServletRequestContext(Deployment deployment, ProvidersImpl providers,
             HttpServletRequest request, HttpServletResponse response,
             ThreadSetupAction requestContext, ServerRestHandler[] handlerChain, ServerRestHandler[] abortHandlerChain,
-            RoutingContext context) {
+            RoutingContext context, HttpServerExchange exchange) {
         super(deployment, providers, requestContext, handlerChain, abortHandlerChain);
         this.request = request;
         this.response = response;
         this.context = context;
+        exchange.addResponseCommitListener(this);
     }
 
     protected boolean isRequestScopeManagementRequired() {
@@ -77,11 +86,21 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     }
 
     @Override
-    public void close() {
-        super.close();
-        if (asyncContext != null) {
-            asyncContext.complete();
+    public synchronized void close() {
+        if (asyncWriteData != null) {
+            closed = true;
+        } else {
+            super.close();
+            if (asyncContext != null) {
+                asyncContext.complete();
+            }
         }
+    }
+
+    @Override
+    public ServerHttpResponse addCloseHandler(Runnable onClose) {
+        context.response().closeHandler(v -> onClose.run());
+        return this;
     }
 
     @Override
@@ -187,7 +206,11 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
 
     @Override
     public String getRequestAbsoluteUri() {
-        return request.getRequestURI();
+        if (request.getQueryString() == null) {
+            return request.getRequestURL().toString();
+        } else {
+            return request.getRequestURL().append("?").append(request.getQueryString()).toString();
+        }
     }
 
     @Override
@@ -208,26 +231,6 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
             //ignore
         }
         context.response().close();
-    }
-
-    @Override
-    public String getFormAttribute(String name) {
-        if (context.queryParams().contains(name)) {
-            return null;
-        }
-        return request.getParameter(name);
-    }
-
-    @Override
-    public List<String> getAllFormAttributes(String name) {
-        if (context.queryParams().contains(name)) {
-            return Collections.emptyList();
-        }
-        String[] values = request.getParameterValues(name);
-        if (values == null) {
-            return Collections.emptyList();
-        }
-        return Arrays.asList(values);
     }
 
     @Override
@@ -259,14 +262,17 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
     }
 
     @Override
-    public void setExpectMultipart(boolean expectMultipart) {
-        //read the form data
-        request.getParameterMap();
+    public InputStream createInputStream(ByteBuffer existingData) {
+        return new ServletResteasyReactiveInputStream(existingData, request);
     }
 
     @Override
-    public InputStream createInputStream(ByteBuffer existingData) {
-        return new ServletResteasyReactiveInputStream(existingData, request);
+    public InputStream createInputStream() {
+        try {
+            return request.getInputStream();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -277,20 +283,17 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
 
     @Override
     public ServerHttpResponse resumeRequestInput() {
-        //TODO
         return this;
     }
 
     @Override
     public ServerHttpResponse setReadListener(ReadCallback callback) {
-        byte[] buf = new byte[1024];
-        int r;
         try {
-            InputStream in = request.getInputStream();
-            while ((r = in.read(buf)) > 0) {
-                callback.data(ByteBuffer.wrap(buf, 0, r));
+            ServletInputStream in = request.getInputStream();
+            if (!request.isAsyncStarted()) {
+                request.startAsync();
             }
-            callback.done();
+            in.setReadListener(new ServletReadListener(in, callback));
         } catch (IOException e) {
             resume(e);
         }
@@ -336,23 +339,31 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
 
     @Override
     public ServerHttpResponse end(byte[] data) {
-        try {
-            response.getOutputStream().write(data);
-            response.getOutputStream().close();
-        } catch (IOException e) {
-            log.debug("IoException writing response", e);
+        if (BlockingOperationControl.isBlockingAllowed()) {
+            try {
+                response.getOutputStream().write(data);
+                response.getOutputStream().close();
+            } catch (IOException e) {
+                log.debug("IoException writing response", e);
+            }
+        } else {
+            write(data, new Consumer<Throwable>() {
+                @Override
+                public void accept(Throwable throwable) {
+                    try {
+                        response.getOutputStream().close();
+                    } catch (IOException e) {
+                        log.debug("IoException writing response", e);
+                    }
+                }
+            });
         }
         return this;
     }
 
     @Override
     public ServerHttpResponse end(String data) {
-        try {
-            response.getOutputStream().write(data.getBytes(StandardCharsets.UTF_8));
-            response.getOutputStream().close();
-        } catch (IOException e) {
-            log.debug("IoException writing response", e);
-        }
+        end(data.getBytes(StandardCharsets.UTF_8));
         return this;
     }
 
@@ -412,17 +423,22 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
                 asyncResultHandler.accept(e);
             }
         } else {
-            if (writeListener == null) {
-                try {
-                    ServletOutputStream outputStream = response.getOutputStream();
-                    outputStream.setWriteListener(writeListener = new ServletWriteListener(outputStream));
-                } catch (IOException e) {
-                    asyncResultHandler.accept(e);
+            synchronized (this) {
+                if (asyncWriteData != null) {
+                    throw new IllegalStateException("Cannot write more than one piece of async data at a time");
                 }
-            } else {
                 asyncWriteData = data;
                 asyncWriteHandler = asyncResultHandler;
-                writeListener.onWritePossible();
+                if (writeListener == null) {
+                    try {
+                        ServletOutputStream outputStream = response.getOutputStream();
+                        outputStream.setWriteListener(writeListener = new ServletWriteListener(outputStream));
+                    } catch (IOException e) {
+                        asyncResultHandler.accept(e);
+                    }
+                } else {
+                    writeListener.onWritePossible();
+                }
             }
         }
         return this;
@@ -453,6 +469,18 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
         }
     }
 
+    @Override
+    public void setPreCommitListener(Consumer<ResteasyReactiveRequestContext> task) {
+        preCommitTask = task;
+    }
+
+    @Override
+    public void beforeCommit(HttpServerExchange exchange) {
+        if (preCommitTask != null) {
+            preCommitTask.accept(this);
+        }
+    }
+
     class ServletWriteListener implements WriteListener {
 
         private final ServletOutputStream outputStream;
@@ -462,30 +490,120 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
         }
 
         @Override
-        public synchronized void onWritePossible() {
-            if (!outputStream.isReady()) {
-                return;
-            }
-            Consumer<Throwable> ctx = asyncWriteHandler;
-            byte[] data = asyncWriteData;
-            asyncWriteHandler = null;
-            asyncWriteData = null;
-            try {
-                outputStream.write(data);
-                ctx.accept(null);
-            } catch (IOException e) {
-                ctx.accept(e);
+        public void onWritePossible() {
+            synchronized (ServletRequestContext.this) {
+                if (!outputStream.isReady()) {
+                    return;
+                }
+                Consumer<Throwable> ctx = asyncWriteHandler;
+                byte[] data = asyncWriteData;
+                asyncWriteHandler = null;
+                asyncWriteData = null;
+                try {
+                    outputStream.write(data);
+                    ctx.accept(null);
+                } catch (IOException e) {
+                    ctx.accept(e);
+                }
+                if (closed) {
+                    close();
+                }
             }
         }
 
         @Override
         public synchronized void onError(Throwable t) {
-            if (asyncWriteHandler != null) {
-                Consumer<Throwable> ctx = asyncWriteHandler;
-                asyncWriteHandler = null;
-                asyncWriteData = null;
-                ctx.accept(t);
+            synchronized (ServletRequestContext.this) {
+                if (asyncWriteHandler != null) {
+                    Consumer<Throwable> ctx = asyncWriteHandler;
+                    asyncWriteHandler = null;
+                    asyncWriteData = null;
+                    ctx.accept(t);
+                    close();
+                }
             }
+        }
+    }
+
+    class ServletReadListener implements ReadListener {
+
+        final ServletInputStream inputStream;
+        final ReadCallback readCallback;
+        boolean paused;
+        boolean allDone;
+        Throwable problem;
+
+        ServletReadListener(ServletInputStream inputStream, ReadCallback readCallback) {
+            this.inputStream = inputStream;
+            this.readCallback = readCallback;
+        }
+
+        @Override
+        public void onDataAvailable() throws IOException {
+            synchronized (this) {
+                if (paused) {
+                    return;
+                }
+            }
+            doRead();
+
+        }
+
+        private void doRead() {
+            if (inputStream.isReady()) {
+                byte[] buf = new byte[1024];
+                try {
+                    int r = inputStream.read(buf);
+                    readCallback.data(ByteBuffer.wrap(buf, 0, r));
+                } catch (IOException e) {
+                    ServletRequestContext.this.resume(problem);
+                }
+            }
+        }
+
+        synchronized void pause() {
+            paused = true;
+        }
+
+        void resume() {
+            boolean allDone;
+            Throwable problem;
+            synchronized (this) {
+                paused = false;
+                allDone = this.allDone;
+                this.allDone = false;
+                problem = this.problem;
+                this.problem = null;
+            }
+            if (problem != null) {
+                ServletRequestContext.this.resume(problem);
+            } else if (allDone) {
+                readCallback.done();
+            } else {
+                doRead();
+            }
+        }
+
+        @Override
+        public void onAllDataRead() throws IOException {
+            synchronized (this) {
+                if (paused) {
+                    allDone = true;
+                    return;
+                }
+            }
+            readCallback.done();
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            synchronized (this) {
+                if (paused) {
+                    problem = t;
+                    return;
+                }
+            }
+            ServletRequestContext.this.resume(t);
         }
     }
 
@@ -515,5 +633,27 @@ public class ServletRequestContext extends ResteasyReactiveRequestContext
             this.value = value;
             return old;
         }
+    }
+
+    @Override
+    public ServerHttpResponse sendFile(String path, long offset, long length) {
+        context.response().sendFile(path, offset, length);
+        return this;
+    }
+
+    @Override
+    public boolean isWriteQueueFull() {
+        return context.response().writeQueueFull();
+    }
+
+    @Override
+    public ServerHttpResponse addDrainHandler(Runnable onDrain) {
+        context.response().drainHandler(new Handler<Void>() {
+            @Override
+            public void handle(Void event) {
+                onDrain.run();
+            }
+        });
+        return this;
     }
 }
