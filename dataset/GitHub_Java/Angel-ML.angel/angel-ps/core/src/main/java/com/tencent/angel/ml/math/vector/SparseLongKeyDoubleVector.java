@@ -17,25 +17,30 @@
 
 package com.tencent.angel.ml.math.vector;
 
+import com.tencent.angel.common.Serialize;
 import com.tencent.angel.ml.math.TAbstractVector;
 import com.tencent.angel.ml.math.TVector;
+import com.tencent.angel.ml.matrix.RowType;
 import com.tencent.angel.protobuf.generated.MLProtos;
+import io.netty.buffer.ByteBuf;
 import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.longs.Long2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
+import java.util.stream.IntStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 /**
  * Sparse double vector with long key.
  */
-public class SparseLongKeyDoubleVector extends TLongDoubleVector {
+public class SparseLongKeyDoubleVector extends TLongDoubleVector implements Serialize{
   private static final Log LOG = LogFactory.getLog(SparseLongKeyDoubleVector.class);
   /** A (long->double) map */
   private volatile Long2DoubleOpenHashMap indexToValueMap;
 
-  public static final int INIT_SIZE = 1024 * 1024;
+  public static final int INIT_SIZE = 1024;
 
+  private volatile long modelNnz;
   /**
    * Init the empty vector
    */
@@ -111,16 +116,18 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
       return plusBy((SparseDoubleSortedVector) other);
     else if (other instanceof SparseLongKeySortedDoubleVector)
       return plusBy((SparseLongKeySortedDoubleVector) other);
+    else if (other instanceof SparseDummyVector)
+      return plusBy((SparseDummyVector) other);
+    else if (other instanceof SparseLongKeyDummyVector)
+      return plusBy((SparseLongKeyDummyVector) other);
     throw new UnsupportedOperationException(
       "Unsupportted operation: " + this.getClass().getName() + " plusBy " + other.getClass()
         .getName());
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeyDoubleVector other) {
-    assert dim == other.dim;
-
     if(indexToValueMap.size() == 0) {
-      indexToValueMap.putAll(other.indexToValueMap);
+      indexToValueMap = other.indexToValueMap.clone();
     } else if(indexToValueMap.size() < other.size()) {
       Long2DoubleOpenHashMap oldMap = indexToValueMap;
       indexToValueMap = other.indexToValueMap.clone();
@@ -146,7 +153,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseDoubleSortedVector other) {
-    assert dim == other.getDimension();
+    resize(other.size());
     int [] indexes = other.getIndices();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
@@ -157,11 +164,31 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeySortedDoubleVector other) {
-    assert dim == other.getDimension();
+    resize(other.size());
     long [] indexes = other.getIndexes();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
       indexToValueMap.addTo(indexes[i], values[i]);
+    }
+
+    return this;
+  }
+
+  private SparseLongKeyDoubleVector plusBy(SparseDummyVector other) {
+    resize(other.size());
+    int [] indexes = other.getIndices();
+    for(int i = 0; i < indexes.length; i++) {
+      indexToValueMap.addTo(indexes[i], 1);
+    }
+
+    return this;
+  }
+
+  private SparseLongKeyDoubleVector plusBy(SparseLongKeyDummyVector other) {
+    resize(other.size());
+    long [] indexes = other.getIndices();
+    for(int i = 0; i < indexes.length; i++) {
+      indexToValueMap.addTo(indexes[i], 1);
     }
 
     return this;
@@ -189,33 +216,44 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
       return plusBy((SparseDoubleSortedVector) other, x);
     else if (other instanceof SparseLongKeySortedDoubleVector)
       return plusBy((SparseLongKeySortedDoubleVector) other, x);
-
+    else if (other instanceof SparseDummyVector)
+      return plusBy((SparseDummyVector) other, x);
+    else if (other instanceof SparseLongKeyDummyVector)
+      return plusBy((SparseLongKeyDummyVector) other, x);
     throw new UnsupportedOperationException(
       "Unsupportted operation: " + this.getClass().getName() + " plusBy " + other.getClass()
         .getName());
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeyDoubleVector other, double x) {
-    assert dim == other.dim;
-    if(indexToValueMap.size() < other.size()) {
-      Long2DoubleOpenHashMap oldMap = indexToValueMap;
-      indexToValueMap = new Long2DoubleOpenHashMap(other.size());
-      indexToValueMap.putAll(oldMap);
-    }
+    if(this.indexToValueMap.isEmpty()) {
+      this.indexToValueMap.putAll(other.getIndexToValueMap());
+    } else {
+      resize(other.size());
 
-    ObjectIterator<Long2DoubleMap.Entry> iter =
-      other.indexToValueMap.long2DoubleEntrySet().fastIterator();
-    Long2DoubleMap.Entry entry = null;
-    while (iter.hasNext()) {
-      entry = iter.next();
-      indexToValueMap.addTo(entry.getLongKey(), entry.getDoubleValue() * x);
+      ObjectIterator<Long2DoubleMap.Entry> iter =
+        other.indexToValueMap.long2DoubleEntrySet().fastIterator();
+      Long2DoubleMap.Entry entry = null;
+      while (iter.hasNext()) {
+        entry = iter.next();
+        indexToValueMap.addTo(entry.getLongKey(), entry.getDoubleValue() * x);
+      }
     }
 
     return this;
   }
 
+  private void resize(int newSize) {
+    if(indexToValueMap.size() < newSize) {
+      Long2DoubleOpenHashMap oldMap = indexToValueMap;
+      indexToValueMap = new Long2DoubleOpenHashMap(newSize);
+      indexToValueMap.putAll(oldMap);
+    }
+  }
+
   private SparseLongKeyDoubleVector plusBy(SparseDoubleSortedVector other, double x) {
-    assert dim == other.getDimension();
+    resize(other.size());
+
     int [] indexes = other.getIndices();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
@@ -226,11 +264,33 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private SparseLongKeyDoubleVector plusBy(SparseLongKeySortedDoubleVector other, double x) {
-    assert dim == other.getDimension();
+    resize(other.size());
+
     long [] indexes = other.getIndexes();
     double [] values = other.getValues();
     for(int i = 0; i < indexes.length; i++) {
       indexToValueMap.addTo(indexes[i], values[i] * x);
+    }
+
+    return this;
+  }
+
+  private SparseLongKeyDoubleVector plusBy(SparseDummyVector other, double x) {
+    resize(other.size());
+
+    int [] indexes = other.getIndices();
+    for(int i = 0; i < indexes.length; i++) {
+      indexToValueMap.addTo(indexes[i], x);
+    }
+
+    return this;
+  }
+
+  private SparseLongKeyDoubleVector plusBy(SparseLongKeyDummyVector other, double x) {
+    resize(other.size());
+    long [] indexes = other.getIndices();
+    for(int i = 0; i < indexes.length; i++) {
+      indexToValueMap.addTo(indexes[i], x);
     }
 
     return this;
@@ -246,7 +306,6 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private SparseLongKeyDoubleVector plus(SparseLongKeyDoubleVector other) {
-    assert dim == other.dim;
     SparseLongKeyDoubleVector baseVector = null;
     SparseLongKeyDoubleVector streamVector = null;
     if (size() < other.size()) {
@@ -277,7 +336,6 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private SparseLongKeyDoubleVector plus(SparseLongKeyDoubleVector other, double x) {
-    assert dim == other.dim;
     SparseLongKeyDoubleVector baseVector = null;
     SparseLongKeyDoubleVector streamVector = null;
     if (size() < other.size()) {
@@ -306,21 +364,22 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
       return dot((SparseDoubleSortedVector) other);
     else if (other instanceof SparseLongKeySortedDoubleVector)
       return dot((SparseLongKeySortedDoubleVector) other);
-
+    else if (other instanceof SparseDummyVector)
+      return dot((SparseDummyVector) other);
+    else if (other instanceof SparseLongKeyDummyVector)
+      return dot((SparseLongKeyDummyVector) other);
     throw new UnsupportedOperationException(
       "Unsupportted operation: " + this.getClass().getName() + " dot " + other.getClass()
         .getName());
   }
 
   private double dot(SparseLongKeyDoubleVector other) {
-    assert dim == other.dim;
     double ret = 0.0;
     if (size() <= other.size()) {
       ObjectIterator<Long2DoubleMap.Entry> iter =
         indexToValueMap.long2DoubleEntrySet().fastIterator();
-      Long2DoubleMap.Entry entry = null;
       while (iter.hasNext()) {
-        entry = iter.next();
+        Long2DoubleMap.Entry entry = iter.next();
         ret += other.get(entry.getLongKey()) * entry.getDoubleValue();
       }
       return ret;
@@ -330,7 +389,6 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private double dot(SparseDoubleSortedVector other) {
-    assert dim == other.getDimension();
     int [] indexes = other.getIndices();
     double [] values = other.getValues();
     double ret = 0.0;
@@ -342,7 +400,6 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
   }
 
   private double dot(SparseLongKeySortedDoubleVector other) {
-    assert dim == other.getDimension();
     long [] indexes = other.getIndexes();
     double [] values = other.getValues();
     double ret = 0.0;
@@ -351,6 +408,33 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
     }
 
     return ret;
+  }
+
+  private double dot(SparseDummyVector other) {
+    int [] indexes = other.getIndices();
+    double ret = 0.0;
+    for(int i = 0; i < indexes.length; i++) {
+      ret += get(indexes[i]);
+    }
+
+    return ret;
+  }
+
+  private double dot(SparseLongKeyDummyVector other) {
+    double ret = 0.0;
+    for(long i:  other.getIndices()) {
+      ret += get(i);
+    }
+
+    return ret;
+  }
+
+  public long getModelNnz() {
+    return modelNnz;
+  }
+
+  public void setModelNnz(long modelNnz) {
+    this.modelNnz = modelNnz;
   }
 
   @Override public double get(long key) {
@@ -432,7 +516,7 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
     ObjectIterator<Long2DoubleMap.Entry> iter =
       indexToValueMap.long2DoubleEntrySet().fastIterator();
     while (iter.hasNext()) {
-      if(iter.next().getDoubleValue() > 0)
+      if(iter.next().getDoubleValue() != 0.0)
         counter++;
     }
 
@@ -459,12 +543,21 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
     return sum;
   }
 
-  @Override public double sparsity() {
-    return nonZeroNumber() / dim;
+  @Override public double norm() {
+    ObjectIterator<Long2DoubleMap.Entry> iter = indexToValueMap.long2DoubleEntrySet().iterator();
+    double sum = 0;
+    while (iter.hasNext()) {
+      sum += Math.abs(iter.next().getDoubleValue());
+    }
+    return sum;
   }
 
-  @Override public MLProtos.RowType getType() {
-    return MLProtos.RowType.T_DOUBLE_SPARSE_LONGKEY;
+  @Override public double sparsity() {
+    return (double)nonZeroNumber() / dim;
+  }
+
+  @Override public RowType getType() {
+    return RowType.T_DOUBLE_SPARSE_LONGKEY;
   }
 
   @Override public int size() {
@@ -483,5 +576,42 @@ public class SparseLongKeyDoubleVector extends TLongDoubleVector {
 
   public Long2DoubleOpenHashMap getIndexToValueMap() {
     return indexToValueMap;
+  }
+
+  @Override
+  public TLongDoubleVector elemUpdate(LongDoubleElemUpdater updater, ElemUpdateParam param) {
+    ObjectIterator<Long2DoubleMap.Entry> iter = indexToValueMap.long2DoubleEntrySet().fastIterator();
+    Long2DoubleMap.Entry entry;
+    while (iter.hasNext()) {
+      entry = iter.next();
+      entry.setValue(updater.action(entry.getLongKey(), entry.getDoubleValue(), param));
+    }
+    return null;
+  }
+
+  @Override
+  public void serialize(ByteBuf buf) {
+    buf.writeLong(dim);
+    buf.writeInt(indexToValueMap.size());
+    indexToValueMap.forEach((key, value) -> {
+      buf.writeLong(key);
+      buf.writeDouble(value);
+    });
+  }
+
+  @Override
+  public void deserialize(ByteBuf buf) {
+    int dim = buf.readInt();
+    int length = buf.readInt();
+    Long2DoubleOpenHashMap data = new Long2DoubleOpenHashMap(dim);
+    IntStream.range(0,length).forEach(i->data.put(buf.readLong(), buf.readDouble()));
+    this.dim = dim;
+    this.indexToValueMap = data;
+
+  }
+
+  @Override
+  public int bufferLen() {
+    return 12 + (8 + 8) * indexToValueMap.size();
   }
 }
