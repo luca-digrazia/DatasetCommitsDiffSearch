@@ -25,7 +25,7 @@ import java.util.Random;
 public class RandomUtils {
 
   private static final Random RANDOM = new Random();
-  private static final int CENT_PERCENT = 101;
+  public static final int CENT_PERCENT = 101;
 
   private RandomUtils() {
     //Empty
