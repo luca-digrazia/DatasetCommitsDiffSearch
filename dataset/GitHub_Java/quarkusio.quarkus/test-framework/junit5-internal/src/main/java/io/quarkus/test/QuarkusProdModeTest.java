@@ -8,7 +8,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -56,7 +55,6 @@ import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.RestAssuredURLManager;
-import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.utilities.JavaBinFinder;
 
 /**
@@ -108,19 +106,6 @@ public class QuarkusProdModeTest
     private String startupConsoleOutput;
     private int exitCode;
     private Consumer<Throwable> assertBuildException;
-
-    public QuarkusProdModeTest() {
-        InputStream appPropsIs = Thread.currentThread().getContextClassLoader().getResourceAsStream("application.properties");
-        if (appPropsIs != null) {
-            customApplicationProperties = new Properties();
-            try (InputStream is = appPropsIs) {
-                customApplicationProperties.load(is);
-            } catch (IOException e) {
-                throw new UncheckedIOException("Failed to load application configuration from "
-                        + Thread.currentThread().getContextClassLoader().getResource("application.properties"), e);
-            }
-        }
-    }
 
     public Supplier<JavaArchive> getArchiveProducer() {
         return archiveProducer;
@@ -306,19 +291,6 @@ public class QuarkusProdModeTest
         };
         timeoutTimer.schedule(timeoutTask, 1000 * 60 * 5);
 
-        ExtensionContext.Store store = extensionContext.getRoot().getStore(ExtensionContext.Namespace.GLOBAL);
-        if (store.get(TestResourceManager.class.getName()) == null) {
-            TestResourceManager manager = new TestResourceManager(extensionContext.getRequiredTestClass());
-            manager.start();
-            store.put(TestResourceManager.class.getName(), new ExtensionContext.Store.CloseableResource() {
-
-                @Override
-                public void close() throws Throwable {
-                    manager.close();
-                }
-            });
-        }
-
         Class<?> testClass = extensionContext.getRequiredTestClass();
 
         try {
@@ -338,8 +310,7 @@ public class QuarkusProdModeTest
             exportArchive(deploymentDir, testClass);
 
             Path testLocation = PathTestHelper.getTestClassesLocation(testClass);
-            QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder()
-                    .setApplicationRoot(deploymentDir)
+            QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder(deploymentDir)
                     .setMode(QuarkusBootstrap.Mode.PROD)
                     .setLocalProjectDiscovery(true)
                     .addExcludedPath(testLocation)
