@@ -1,6 +1,7 @@
 package io.dropwizard.jersey.validation;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -27,7 +28,6 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -94,10 +94,7 @@ public class ConstraintMessage {
      * friendly string representation of where the error occurred (eg. "patient.name")
      */
     public static Optional<String> isRequestEntity(ConstraintViolation<?> violation, Invocable invocable) {
-        final Path.Node parent = Iterables.get(violation.getPropertyPath(), 1, null);
-        if (parent == null) {
-            return Optional.empty();
-        }
+        final Path.Node parent = Iterables.get(violation.getPropertyPath(), 1);
         final List<Parameter> parameters = invocable.getParameters();
 
         switch (parent.getKind()) {
@@ -108,7 +105,7 @@ public class ConstraintMessage {
                 }
         }
 
-        return Optional.empty();
+        return Optional.absent();
     }
 
     /**
@@ -117,7 +114,7 @@ public class ConstraintMessage {
     private static Optional<String> getMemberName(ConstraintViolation<?> violation, Invocable invocable) {
         final int size = Iterables.size(violation.getPropertyPath());
         if (size < 2) {
-            return Optional.empty();
+            return Optional.absent();
         }
 
         final Path.Node parent = Iterables.get(violation.getPropertyPath(), size - 2);
@@ -134,7 +131,7 @@ public class ConstraintMessage {
                     return getMemberName(field.getDeclaredAnnotations());
                 }
 
-                return Optional.empty();
+                return Optional.absent();
             case METHOD:
                 // Constraint violation occurred directly on a function
                 // parameter annotated with *Param
@@ -142,7 +139,7 @@ public class ConstraintMessage {
                 final int paramIndex = member.as(Path.ParameterNode.class).getParameterIndex();
                 return getMemberName(method.getParameterAnnotations()[paramIndex]);
             default:
-                return Optional.empty();
+                return Optional.absent();
         }
     }
 
@@ -161,7 +158,7 @@ public class ConstraintMessage {
             }
         }
 
-        return returnValueNames >= 0 ? Optional.of(result.toString()) : Optional.empty();
+        return returnValueNames >= 0 ? Optional.of(result.toString()) : Optional.<String>absent();
     }
 
     /**
@@ -186,7 +183,7 @@ public class ConstraintMessage {
             }
         }
 
-        return Optional.empty();
+        return Optional.absent();
     }
 
     private static boolean isValidationMethod(ConstraintViolation<?> v) {
