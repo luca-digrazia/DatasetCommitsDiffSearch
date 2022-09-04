@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -37,8 +36,7 @@ public final class TaggedEvents implements Serializable {
   private final ImmutableList<Event> events;
   private final int hashCode;
 
-  @VisibleForTesting
-  public TaggedEvents(final @Nullable String tag, ImmutableCollection<Event> events) {
+  TaggedEvents(final @Nullable String tag, ImmutableCollection<Event> events) {
     this.events =
         events.isEmpty()
             ? ImmutableList.of()

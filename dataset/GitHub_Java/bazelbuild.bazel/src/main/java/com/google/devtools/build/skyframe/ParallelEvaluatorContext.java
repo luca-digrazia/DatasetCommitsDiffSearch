@@ -52,7 +52,6 @@ class ParallelEvaluatorContext {
   private final DirtyTrackingProgressReceiver progressReceiver;
   private final EventFilter storedEventFilter;
   private final ErrorInfoManager errorInfoManager;
-  private final GraphInconsistencyReceiver graphInconsistencyReceiver;
 
   /**
    * The visitor managing the thread pool. Used to enqueue parents when an entry is finished, and,
@@ -73,20 +72,29 @@ class ParallelEvaluatorContext {
       EventFilter storedEventFilter,
       ErrorInfoManager errorInfoManager,
       final Function<SkyKey, Runnable> runnableMaker,
-      GraphInconsistencyReceiver graphInconsistencyReceiver,
       final int threadCount) {
-    this(
-        graph,
-        graphVersion,
-        skyFunctions,
-        reporter,
-        emittedEventState,
-        keepGoing,
-        progressReceiver,
-        storedEventFilter,
-        errorInfoManager,
-        graphInconsistencyReceiver,
-        () -> new NodeEntryVisitor(threadCount, progressReceiver, runnableMaker));
+    this.graph = graph;
+    this.graphVersion = graphVersion;
+    this.skyFunctions = skyFunctions;
+    this.reporter = reporter;
+    this.replayingNestedSetEventVisitor =
+        new NestedSetVisitor<>(new NestedSetEventReceiver(reporter), emittedEventState.eventState);
+    this.replayingNestedSetPostableVisitor =
+        new NestedSetVisitor<>(
+            new NestedSetPostableReceiver(reporter), emittedEventState.postableState);
+    this.keepGoing = keepGoing;
+    this.progressReceiver = Preconditions.checkNotNull(progressReceiver);
+    this.storedEventFilter = storedEventFilter;
+    this.errorInfoManager = errorInfoManager;
+    visitorSupplier =
+        Suppliers.memoize(
+            new Supplier<NodeEntryVisitor>() {
+              @Override
+              public NodeEntryVisitor get() {
+                return new NodeEntryVisitor(
+                    threadCount, progressReceiver, runnableMaker);
+              }
+            });
   }
 
   ParallelEvaluatorContext(
@@ -100,39 +108,11 @@ class ParallelEvaluatorContext {
       EventFilter storedEventFilter,
       ErrorInfoManager errorInfoManager,
       final Function<SkyKey, Runnable> runnableMaker,
-      GraphInconsistencyReceiver graphInconsistencyReceiver,
       final ForkJoinPool forkJoinPool) {
-    this(
-        graph,
-        graphVersion,
-        skyFunctions,
-        reporter,
-        emittedEventState,
-        keepGoing,
-        progressReceiver,
-        storedEventFilter,
-        errorInfoManager,
-        graphInconsistencyReceiver,
-        () -> new NodeEntryVisitor(forkJoinPool, progressReceiver, runnableMaker));
-  }
-
-  private ParallelEvaluatorContext(
-      QueryableGraph graph,
-      Version graphVersion,
-      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
-      ExtendedEventHandler reporter,
-      EmittedEventState emittedEventState,
-      boolean keepGoing,
-      final DirtyTrackingProgressReceiver progressReceiver,
-      EventFilter storedEventFilter,
-      ErrorInfoManager errorInfoManager,
-      GraphInconsistencyReceiver graphInconsistencyReceiver,
-      Supplier<NodeEntryVisitor> visitorSupplier) {
     this.graph = graph;
     this.graphVersion = graphVersion;
     this.skyFunctions = skyFunctions;
     this.reporter = reporter;
-    this.graphInconsistencyReceiver = graphInconsistencyReceiver;
     this.replayingNestedSetEventVisitor =
         new NestedSetVisitor<>(new NestedSetEventReceiver(reporter), emittedEventState.eventState);
     this.replayingNestedSetPostableVisitor =
@@ -142,7 +122,15 @@ class ParallelEvaluatorContext {
     this.progressReceiver = Preconditions.checkNotNull(progressReceiver);
     this.storedEventFilter = storedEventFilter;
     this.errorInfoManager = errorInfoManager;
-    this.visitorSupplier = Suppliers.memoize(visitorSupplier);
+    visitorSupplier =
+        Suppliers.memoize(
+            new Supplier<NodeEntryVisitor>() {
+              @Override
+              public NodeEntryVisitor get() {
+                return new NodeEntryVisitor(
+                    forkJoinPool, progressReceiver, runnableMaker);
+              }
+            });
   }
 
   Map<SkyKey, ? extends NodeEntry> getBatchValues(
@@ -206,10 +194,6 @@ class ParallelEvaluatorContext {
 
   DirtyTrackingProgressReceiver getProgressReceiver() {
     return progressReceiver;
-  }
-
-  GraphInconsistencyReceiver getGraphInconsistencyReceiver() {
-    return graphInconsistencyReceiver;
   }
 
   NestedSetVisitor<TaggedEvents> getReplayingNestedSetEventVisitor() {

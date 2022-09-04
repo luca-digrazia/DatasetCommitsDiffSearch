@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -40,8 +39,7 @@ import java.util.List;
  */
 public final class ExtraActionFactory implements RuleConfiguredTargetFactory {
   @Override
-  public ConfiguredTarget create(RuleContext context)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+  public ConfiguredTarget create(RuleContext context) throws RuleErrorException {
     // This rule doesn't produce any output when listed as a build target.
     // Only when used via the --experimental_action_listener flag,
     // this rule instructs the build system to add additional outputs.
@@ -52,7 +50,7 @@ public final class ExtraActionFactory implements RuleConfiguredTargetFactory {
     CommandHelper commandHelper =
         new CommandHelper(context, tools, ImmutableMap.<Label, Iterable<Artifact>>of());
 
-    resolvedData.addAll(context.getPrerequisiteArtifacts("data", Mode.DONT_CHECK).list());
+    resolvedData.addAll(context.getPrerequisiteArtifacts("data", Mode.DATA).list());
     List<String>outputTemplates =
         context.attributes().get("out_templates", Type.STRING_LIST);
 
