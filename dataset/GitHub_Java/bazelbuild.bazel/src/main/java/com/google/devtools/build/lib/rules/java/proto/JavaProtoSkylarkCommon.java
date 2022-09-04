@@ -85,7 +85,6 @@ public class JavaProtoSkylarkCommon {
         supportData.getDirectProtoSources(),
         supportData.getTransitiveImports(),
         supportData.getProtosInDirectDeps(),
-        supportData.getTransitiveProtoPathFlags(),
         skylarkRuleContext.getLabel(),
         ImmutableList.of(sourceJar),
         "JavaLite",
@@ -142,7 +141,7 @@ public class JavaProtoSkylarkCommon {
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));
     JavaToolchainProvider toolchain =
-        checkNotNull(JavaToolchainProvider.from(javaToolchainConfigTarget));
+        checkNotNull(javaToolchainConfigTarget.getProvider(JavaToolchainProvider.class));
 
     return ImmutableList.<String>builder()
         .addAll(toolchain.getJavacOptions())

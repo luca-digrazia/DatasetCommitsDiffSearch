@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -42,7 +41,6 @@ import javax.annotation.Nullable;
           + "this struct, accessible as a <code>java</code> field on a "
           + "<a href=\"Target.html\">target</a>."
 )
-@AutoCodec
 public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
   /** The name of the field in Skylark used to access this class. */
   public static final String NAME = "java";
@@ -59,8 +57,9 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
     return new JavaSkylarkApiProvider(null);
   }
 
-  /** Creates a Skylark API provider that reads information from an explicit provider map. */
-  @AutoCodec.Instantiator
+  /**
+   * Creates a Skylark API provider that reads information from an explicit provider map.
+   */
   public static JavaSkylarkApiProvider fromProviderMap(
       TransitiveInfoProviderMap transitiveInfoProviderMap) {
     return new JavaSkylarkApiProvider(transitiveInfoProviderMap);

@@ -21,9 +21,8 @@ import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.con
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -45,7 +44,7 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
 
     Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders =
         ruleContext.getPrerequisites("deps", TARGET, JavaProtoLibraryAspectProvider.class);
@@ -57,7 +56,8 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
     // with the same root relative path
     Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
-            .addTransitiveArtifactsWrappedInStableOrder(dependencyArgsProviders.getRuntimeJars())
+            .addTransitiveArtifactsWrappedInStableOrder(
+                dependencyArgsProviders.getRecursiveJavaCompilationArgs().getRuntimeJars())
             .build();
 
     JavaSourceJarsProvider sourceJarsProvider =
@@ -96,7 +96,7 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
                 JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
             .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, runfiles))
             .addOutputGroup(
-                OutputGroupInfo.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
+                OutputGroupProvider.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
             .addNativeDeclaredProvider(javaInfo);
 
     if (ruleContext.getFragment(JavaConfiguration.class).jplPropagateCcLinkParamsStore()) {

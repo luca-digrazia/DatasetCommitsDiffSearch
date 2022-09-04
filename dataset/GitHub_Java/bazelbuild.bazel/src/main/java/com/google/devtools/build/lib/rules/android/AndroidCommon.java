@@ -604,7 +604,7 @@ public class AndroidCommon {
         // Repackages the R.java for each dependency package and places the resultant jars before
         // the dependency libraries to ensure that the generated resource ids are correct.
         createJarJarActions(attributes, jarsProducedForRuntime,
-            resourceApk.getResourceDependencies().getResourceContainers(),
+            resourceApk.getResourceDependencies().getResources(),
             resourceApk.getPrimaryResource().getJavaPackage(), resourceClassJar);
       }
     }

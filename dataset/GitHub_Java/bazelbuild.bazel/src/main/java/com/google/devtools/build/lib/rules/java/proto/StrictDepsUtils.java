@@ -50,7 +50,8 @@ public class StrictDepsUtils {
       return JavaCompilationArgsProvider.create(
           nonStrictDirectJars.build(),
           strictCompProvider.getRecursiveJavaCompilationArgs(),
-          strictCompProvider.getCompileTimeJavaDependencyArtifacts());
+          strictCompProvider.getCompileTimeJavaDependencyArtifacts(),
+          strictCompProvider.getRunTimeJavaDependencyArtifacts());
     }
   }
 

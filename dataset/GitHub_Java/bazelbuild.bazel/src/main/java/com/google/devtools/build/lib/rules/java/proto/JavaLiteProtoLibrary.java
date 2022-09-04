@@ -14,17 +14,18 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
+import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.PROTO_TOOLCHAIN_ATTR;
 import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkParamsStore;
 import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.constructJcapFromAspectDeps;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -44,13 +45,14 @@ import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardLibrary;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
 import com.google.devtools.build.lib.rules.java.ProtoJavaApiInfoAspectProvider;
+import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 
 /** Implementation of the java_lite_proto_library rule. */
 public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
 
     Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders =
         ruleContext.getPrerequisites("deps", Mode.TARGET, JavaProtoLibraryAspectProvider.class);
@@ -62,7 +64,8 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
     // with the same root relative path
     Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
-            .addTransitiveArtifactsWrappedInStableOrder(dependencyArgsProviders.getRuntimeJars())
+            .addTransitiveArtifactsWrappedInStableOrder(
+                dependencyArgsProviders.getRecursiveJavaCompilationArgs().getRuntimeJars())
             .build();
 
     JavaSourceJarsProvider sourceJarsProvider =
@@ -100,7 +103,7 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addProvider(RunfilesProvider.withData(Runfiles.EMPTY, runfiles))
         .addOutputGroup(
-            OutputGroupInfo.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
+            OutputGroupProvider.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
         .addProvider(getJavaLiteRuntimeSpec(ruleContext))
         .addNativeDeclaredProvider(javaInfo)
         .addProvider(createCcLinkParamsStore(ruleContext, ImmutableList.of()))
@@ -111,8 +114,7 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> specs =
         new ProguardLibrary(ruleContext).collectProguardSpecs(ImmutableMultimap.<Mode, String>of());
 
-    TransitiveInfoCollection runtime =
-        JavaProtoAspectCommon.getLiteProtoToolchainProvider(ruleContext).runtime();
+    TransitiveInfoCollection runtime = getProtoToolchainProvider(ruleContext).runtime();
     if (runtime == null) {
       return new ProguardSpecProvider(specs);
     }
@@ -126,5 +128,11 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
         NestedSetBuilder.fromNestedSet(specs)
             .addTransitive(specProvider.getTransitiveProguardSpecs())
             .build());
+  }
+
+  private ProtoLangToolchainProvider getProtoToolchainProvider(RuleContext ruleContext) {
+    return checkNotNull(
+        ruleContext.getPrerequisite(
+            PROTO_TOOLCHAIN_ATTR, TARGET, ProtoLangToolchainProvider.class));
   }
 }
