@@ -29,15 +29,7 @@ import org.graylog2.restclient.lib.metrics.Metric;
 import org.graylog2.restclient.models.api.requests.MultiMetricRequest;
 import org.graylog2.restclient.models.api.requests.SystemJobTriggerRequest;
 import org.graylog2.restclient.models.api.responses.metrics.MetricsListResponse;
-import org.graylog2.restclient.models.api.responses.system.ClusterEntityJVMStatsResponse;
-import org.graylog2.restclient.models.api.responses.system.ESClusterHealthResponse;
-import org.graylog2.restclient.models.api.responses.system.GetNotificationsResponse;
-import org.graylog2.restclient.models.api.responses.system.GetSystemJobsResponse;
-import org.graylog2.restclient.models.api.responses.system.GetSystemMessagesResponse;
-import org.graylog2.restclient.models.api.responses.system.NodeThroughputResponse;
-import org.graylog2.restclient.models.api.responses.system.NotificationSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.SystemJobSummaryResponse;
-import org.graylog2.restclient.models.api.responses.system.SystemMessageSummaryResponse;
+import org.graylog2.restclient.models.api.responses.system.*;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexerFailureCountResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexerFailuresResponse;
 import org.graylog2.restroutes.generated.routes;
@@ -54,8 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 public class ClusterService {
-    private static final Logger LOG = LoggerFactory.getLogger(ClusterService.class);
-
+    private static final Logger log = LoggerFactory.getLogger(ClusterService.class);
     private final ApiClient api;
     private final SystemJob.Factory systemJobFactory;
     private final ServerNodes serverNodes;
@@ -86,8 +77,9 @@ public class ClusterService {
         for (NotificationSummaryResponse notification : r.notifications) {
             try {
                 notifications.add(new Notification(notification));
-            } catch (IllegalArgumentException e) {
-                LOG.warn("There is a notification type we can't handle: [{}]", notification.type);
+            } catch(IllegalArgumentException e) {
+                play.Logger.warn("There is a notification type we can't handle: [" + notification.type + "]");
+                continue;
             }
         }
 
@@ -134,7 +126,7 @@ public class ClusterService {
     public List<SystemJob> allSystemJobs() throws IOException, APIException {
         List<SystemJob> jobs = Lists.newArrayList();
 
-        for (Node node : serverNodes.all()) {
+        for(Node node : serverNodes.all()) {
             GetSystemJobsResponse r = api.path(routes.SystemJobResource().list(), GetSystemJobsResponse.class).node(node).execute();
 
             for (SystemJobSummaryResponse job : r.jobs) {
@@ -149,8 +141,10 @@ public class ClusterService {
         try {
             final ESClusterHealthResponse response = api.path(routes.IndexerClusterResource().clusterHealth(), ESClusterHealthResponse.class).execute();
             return new ESClusterHealth(response);
-        } catch (APIException | IOException e) {
-            LOG.error("Could not load es cluster health", e);
+        } catch (APIException e) {
+            log.error("Could not load es cluster health", e);
+        } catch (IOException e) {
+            log.error("Could not load es cluster health", e);
         }
         return null;
     }
@@ -161,7 +155,7 @@ public class ClusterService {
 
         for (Map.Entry<Node, ClusterEntityJVMStatsResponse> entry : rs.entrySet()) {
             if (entry.getValue() == null) {
-                LOG.warn("Skipping failed jvm stats request for node {}", entry.getKey());
+                log.warn("Skipping failed jvm stats request for node {}", entry.getKey());
                 continue;
             }
             result.add(new NodeJVMStats(entry.getValue()));
@@ -178,7 +172,7 @@ public class ClusterService {
         int t = 0;
         for (Map.Entry<Node, NodeThroughputResponse> entry : responses.entrySet()) {
             if (entry.getValue() == null) {
-                LOG.warn("Skipping failed throughput request for node {}", entry.getKey());
+                log.warn("Skipping failed throughput request for node {}", entry.getKey());
                 continue;
             }
             t += entry.getValue().throughput;
@@ -252,13 +246,17 @@ public class ClusterService {
                     ioStats.readBytesTotal += asLong(read_bytes_total, metrics);
                     ioStats.writtenBytes += asLong(written_bytes, metrics);
                     ioStats.writtenBytesTotal += asLong(written_bytes_total, metrics);
-                } catch (APIException | IOException e) {
-                    LOG.error("Unable to load metrics for radio node {}", radio.getId());
+                } catch (IOException e) {
+                    log.error("Unable to load metrics for radio node {}", radio.getId());
+                } catch (APIException e) {
+                    log.error("Unable to load metrics for radio node", radio.getId());
                 }
             }
 
-        } catch (APIException | IOException e) {
-            LOG.error("Unable to load master node", e);
+        } catch (IOException e) {
+            log.error("Unable to load master node", e);
+        } catch (APIException e) {
+            log.error("Unable to load master node", e);
         }
         return ioStats;
     }

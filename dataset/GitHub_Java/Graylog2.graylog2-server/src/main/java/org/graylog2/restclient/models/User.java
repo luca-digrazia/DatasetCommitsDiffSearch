@@ -38,7 +38,6 @@ import play.mvc.Http;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 public class User {
 	private static final Logger log = LoggerFactory.getLogger(User.class);
@@ -56,13 +55,12 @@ public class User {
     private final boolean external;
     private final Startpage startpage;
     private final long sessionTimeoutMs;
-    private final Map<String, Object> preferences;
 
     private Subject subject;
 
     @AssistedInject
     public User(ApiClient api, @Assisted UserResponse ur, @Nullable @Assisted String sessionId) {
-        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external, ur.getStartpage(), ur.sessionTimeoutMs, ur.preferences);
+        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external, ur.getStartpage(), ur.sessionTimeoutMs);
     }
 
 	public User(ApiClient api,
@@ -76,8 +74,7 @@ public class User {
                 boolean readonly,
                 boolean external,
                 Startpage startpage,
-                long sessionTimeoutMs,
-                Map<String, Object> preferences) {
+                long sessionTimeoutMs) {
         DateTimeZone timezone1 = null;
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.api = api;
@@ -99,7 +96,6 @@ public class User {
         this.readonly = readonly;
         this.external = external;
         this.startpage = startpage;
-        this.preferences = preferences;
     }
 
     public boolean update(ChangeUserRequest request) {
@@ -200,10 +196,6 @@ public class User {
 
     public long getSessionTimeoutMs() {
         return sessionTimeoutMs;
-    }
-
-    public Map<String, Object> getPreferences() {
-        return preferences;
     }
 
     public interface Factory {

@@ -29,6 +29,7 @@ import org.graylog2.restclient.lib.Configuration;
 import org.graylog2.restclient.models.api.responses.*;
 import org.graylog2.restclient.models.api.results.MessageAnalyzeResult;
 import org.graylog2.restclient.models.api.results.MessageResult;
+import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import play.cache.Cache;
@@ -63,8 +64,7 @@ public class MessagesService {
             return Cache.getOrElse(MESSAGE_FIELDS_CACHE_KEY, new Callable<Set<String>>() {
                 @Override
                 public Set<String> call() throws Exception {
-                    final MessageFieldResponse response = api.get(MessageFieldResponse.class)
-                            .path("/system/fields")
+                    final MessageFieldResponse response = api.path(routes.SystemResource().fields(), MessageFieldResponse.class)
                             .queryParam("limit", Configuration.getFieldListLimit())
                             .execute();
                     return response.fields;
@@ -86,7 +86,7 @@ public class MessagesService {
             return Cache.getOrElse(TOTAL_CNT_CACHE_KEY, new Callable<Long>() {
                 @Override
                 public Long call() throws Exception {
-                    MessageCountResponse response = api.get(MessageCountResponse.class).path("/count/total").execute();
+                    MessageCountResponse response = api.path(routes.CountResource().total(), MessageCountResponse.class).execute();
                     return response.events;
                 }
             }, TOTAL_CNT_CACHE_TTL);
@@ -101,8 +101,7 @@ public class MessagesService {
         return 0;
     }
     public MessageResult getMessage(String index, String id) throws IOException, APIException {
-        final GetMessageResponse r = api.get(GetMessageResponse.class)
-                .path("/messages/{0}/{1}", index, id)
+        final GetMessageResponse r = api.path(routes.MessageResource().search(index, id), GetMessageResponse.class)
                 .execute();
 		return new MessageResult(r.message, r.index, Maps.<String, List<HighlightRange>>newHashMap(), fieldMapper);
 	}
@@ -112,12 +111,10 @@ public class MessagesService {
 			return new MessageAnalyzeResult(new ArrayList<String>());
 		}
 
-        MessageAnalyzeResponse r = api.get(MessageAnalyzeResponse.class)
-                .path("/messages/{0}/analyze", index)
+        MessageAnalyzeResponse r = api.path(routes.MessageResource().analyze(index), MessageAnalyzeResponse.class)
                 .queryParam("string", what)
                 .execute();
 		return new MessageAnalyzeResult(r.tokens);
 	}
-
 
 }

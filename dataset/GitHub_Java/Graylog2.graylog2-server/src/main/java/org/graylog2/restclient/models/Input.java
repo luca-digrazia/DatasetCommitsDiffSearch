@@ -237,7 +237,7 @@ public class Input {
                 .expect(200, 404)
                 .execute();
 
-            if (response == null || response.value == null) {
+            if (response == null) {
                 return -1L;
             } else {
                 return response.value;
