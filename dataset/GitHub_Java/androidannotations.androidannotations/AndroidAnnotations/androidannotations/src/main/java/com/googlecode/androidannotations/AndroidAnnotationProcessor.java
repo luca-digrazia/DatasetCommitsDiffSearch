@@ -62,19 +62,18 @@ import com.googlecode.androidannotations.annotations.ItemSelect;
 import com.googlecode.androidannotations.annotations.LongClick;
 import com.googlecode.androidannotations.annotations.NoTitle;
 import com.googlecode.androidannotations.annotations.NonConfigurationInstance;
-import com.googlecode.androidannotations.annotations.OnActivityResult;
 import com.googlecode.androidannotations.annotations.OptionsItem;
 import com.googlecode.androidannotations.annotations.OptionsMenu;
 import com.googlecode.androidannotations.annotations.OrmLiteDao;
+import com.googlecode.androidannotations.annotations.SeekBarProgressChange;
 import com.googlecode.androidannotations.annotations.RoboGuice;
 import com.googlecode.androidannotations.annotations.RootContext;
-import com.googlecode.androidannotations.annotations.SeekBarProgressChange;
-import com.googlecode.androidannotations.annotations.SeekBarTouchStart;
-import com.googlecode.androidannotations.annotations.SeekBarTouchStop;
 import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.TextChange;
 import com.googlecode.androidannotations.annotations.Touch;
 import com.googlecode.androidannotations.annotations.Trace;
+import com.googlecode.androidannotations.annotations.SeekBarTouchStart;
+import com.googlecode.androidannotations.annotations.SeekBarTouchStop;
 import com.googlecode.androidannotations.annotations.Transactional;
 import com.googlecode.androidannotations.annotations.UiThread;
 import com.googlecode.androidannotations.annotations.ViewById;
@@ -144,26 +143,24 @@ import com.googlecode.androidannotations.processing.ItemLongClickProcessor;
 import com.googlecode.androidannotations.processing.ItemSelectedProcessor;
 import com.googlecode.androidannotations.processing.LongClickProcessor;
 import com.googlecode.androidannotations.processing.ModelProcessor;
-import com.googlecode.androidannotations.processing.ModelProcessor.ProcessResult;
 import com.googlecode.androidannotations.processing.NoTitleProcessor;
 import com.googlecode.androidannotations.processing.NonConfigurationInstanceProcessor;
-import com.googlecode.androidannotations.processing.OnActivityResultProcessor;
 import com.googlecode.androidannotations.processing.OptionsItemProcessor;
 import com.googlecode.androidannotations.processing.OptionsMenuProcessor;
 import com.googlecode.androidannotations.processing.OrmLiteDaoProcessor;
 import com.googlecode.androidannotations.processing.PrefProcessor;
+import com.googlecode.androidannotations.processing.SeekBarProgressChangeProcessor;
 import com.googlecode.androidannotations.processing.ResProcessor;
 import com.googlecode.androidannotations.processing.RestServiceProcessor;
 import com.googlecode.androidannotations.processing.RoboGuiceProcessor;
 import com.googlecode.androidannotations.processing.RootContextProcessor;
-import com.googlecode.androidannotations.processing.SeekBarProgressChangeProcessor;
-import com.googlecode.androidannotations.processing.SeekBarTouchStartProcessor;
-import com.googlecode.androidannotations.processing.SeekBarTouchStopProcessor;
 import com.googlecode.androidannotations.processing.SharedPrefProcessor;
 import com.googlecode.androidannotations.processing.SystemServiceProcessor;
 import com.googlecode.androidannotations.processing.TextChangeProcessor;
 import com.googlecode.androidannotations.processing.TouchProcessor;
 import com.googlecode.androidannotations.processing.TraceProcessor;
+import com.googlecode.androidannotations.processing.SeekBarTouchStartProcessor;
+import com.googlecode.androidannotations.processing.SeekBarTouchStopProcessor;
 import com.googlecode.androidannotations.processing.TransactionalProcessor;
 import com.googlecode.androidannotations.processing.UiThreadProcessor;
 import com.googlecode.androidannotations.processing.ViewByIdProcessor;
@@ -209,24 +206,23 @@ import com.googlecode.androidannotations.validation.LongClickValidator;
 import com.googlecode.androidannotations.validation.ModelValidator;
 import com.googlecode.androidannotations.validation.NoTitleValidator;
 import com.googlecode.androidannotations.validation.NonConfigurationInstanceValidator;
-import com.googlecode.androidannotations.validation.OnActivityResultValidator;
 import com.googlecode.androidannotations.validation.OptionsItemValidator;
 import com.googlecode.androidannotations.validation.OptionsMenuValidator;
 import com.googlecode.androidannotations.validation.OrmLiteDaoValidator;
 import com.googlecode.androidannotations.validation.PrefValidator;
+import com.googlecode.androidannotations.validation.SeekBarProgressChangeValidator;
 import com.googlecode.androidannotations.validation.ResValidator;
 import com.googlecode.androidannotations.validation.RestServiceValidator;
 import com.googlecode.androidannotations.validation.RoboGuiceValidator;
 import com.googlecode.androidannotations.validation.RootContextValidator;
 import com.googlecode.androidannotations.validation.RunnableValidator;
-import com.googlecode.androidannotations.validation.SeekBarProgressChangeValidator;
-import com.googlecode.androidannotations.validation.SeekBarTouchStartValidator;
-import com.googlecode.androidannotations.validation.SeekBarTouchStopValidator;
 import com.googlecode.androidannotations.validation.SharedPrefValidator;
 import com.googlecode.androidannotations.validation.SystemServiceValidator;
 import com.googlecode.androidannotations.validation.TextChangeValidator;
 import com.googlecode.androidannotations.validation.TouchValidator;
 import com.googlecode.androidannotations.validation.TraceValidator;
+import com.googlecode.androidannotations.validation.SeekBarTouchStartValidator;
+import com.googlecode.androidannotations.validation.SeekBarTouchStopValidator;
 import com.googlecode.androidannotations.validation.TransactionalValidator;
 import com.googlecode.androidannotations.validation.ViewByIdValidator;
 import com.googlecode.androidannotations.validation.rest.AcceptValidator;
@@ -237,6 +233,7 @@ import com.googlecode.androidannotations.validation.rest.OptionsValidator;
 import com.googlecode.androidannotations.validation.rest.PostValidator;
 import com.googlecode.androidannotations.validation.rest.PutValidator;
 import com.googlecode.androidannotations.validation.rest.RestValidator;
+import com.sun.codemodel.JCodeModel;
 
 @SupportedAnnotationClasses({ EActivity.class, //
 		App.class, //
@@ -310,8 +307,7 @@ import com.googlecode.androidannotations.validation.rest.RestValidator;
 		SeekBarTouchStop.class, //
 		AfterTextChange.class, //
 		OrmLiteDao.class, //
-		HttpsClient.class, //
-		OnActivityResult.class //
+		HttpsClient.class //
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
@@ -360,9 +356,9 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		AnnotationElements validatedModel = validateAnnotations(extractedModel, rClass, androidSystemServices, androidManifest);
 
 		if (validatedModel != null) {
-			ProcessResult processResult = processAnnotations(validatedModel, rClass, androidSystemServices, androidManifest);
+			JCodeModel codeModel = processAnnotations(validatedModel, rClass, androidSystemServices, androidManifest);
 
-			generateSources(processResult);
+			generateSources(codeModel);
 		}
 	}
 
@@ -480,7 +476,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new NonConfigurationInstanceValidator(processingEnv));
 		modelValidator.register(new OrmLiteDaoValidator(processingEnv, rClass));
 		modelValidator.register(new HttpsClientValidator(processingEnv, rClass));
-		modelValidator.register(new OnActivityResultValidator(processingEnv, rClass));
 		return modelValidator;
 	}
 
@@ -494,12 +489,12 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		}
 	}
 
-	private ProcessResult processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws Exception {
+	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws Exception {
 		timeStats.start("Process Annotations");
 		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices, androidManifest, validatedModel);
-		ProcessResult processResult = modelProcessor.process(validatedModel);
+		JCodeModel codeModel = modelProcessor.process(validatedModel);
 		timeStats.stop("Process Annotations");
-		return processResult;
+		return codeModel;
 	}
 
 	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest, AnnotationElements validatedModel) {
@@ -569,16 +564,15 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new InstanceStateProcessor(processingEnv));
 		modelProcessor.register(new NonConfigurationInstanceProcessor(processingEnv));
 		modelProcessor.register(new HttpsClientProcessor(rClass));
-		modelProcessor.register(new OnActivityResultProcessor(processingEnv, rClass));
 		return modelProcessor;
 	}
 
-	private void generateSources(ProcessResult processResult) throws IOException {
+	private void generateSources(JCodeModel model) throws IOException {
 		timeStats.start("Generate Sources");
 		Messager messager = processingEnv.getMessager();
-		messager.printMessage(Diagnostic.Kind.NOTE, "Number of files generated by AndroidAnnotations: " + processResult.codeModel.countArtifacts());
+		messager.printMessage(Diagnostic.Kind.NOTE, "Number of files generated by AndroidAnnotations: " + model.countArtifacts());
 		CodeModelGenerator modelGenerator = new CodeModelGenerator(processingEnv.getFiler(), messager);
-		modelGenerator.generate(processResult);
+		modelGenerator.generate(model);
 		timeStats.stop("Generate Sources");
 	}
 

@@ -43,17 +43,18 @@ import java.lang.annotation.Target;
  * <ul>
  * <li>A {@link android.widget.SeekBar} parameter to determine which view has
  * targeted this event
- * <li>An int parameter to get the progress level of the SeekBar
- * <li>A boolean parameter to determine if this event is triggered by the user
+ * <li>An int parameter named progress to get the progress level of the SeekBar
+ * <li>A boolean parameter named fromUser to determine if this event is
+ * triggered by the user
  * </ul>
  * 
  * </blockquote> <blockquote>
  * 
- * All these parameters are optional. Parameter names do not matter.
+ * All these parameters are optional.
  * 
  * </blockquote> <blockquote>
  * 
- * Some usage examples of &#064;SeekBarProgressChange annotation:
+ * Some usage examples of &#064;ProgressChange annotation:
  * 
  * <pre>
  * &#064;ProgressChange(<b>R.id.seekBar</b>)
