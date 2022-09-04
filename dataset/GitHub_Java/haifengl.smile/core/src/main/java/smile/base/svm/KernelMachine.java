@@ -82,7 +82,6 @@ public class KernelMachine<T> implements Serializable {
 
     /**
      * Returns the kernel function.
-     * @return the kernel function.
      */
     public MercerKernel<T> kernel() {
         return kernel;
@@ -90,7 +89,6 @@ public class KernelMachine<T> implements Serializable {
 
     /**
      * Returns the instances of kernel machines.
-     * @return the instances of kernel machines.
      */
     public T[] instances() {
         return instances;
@@ -98,7 +96,6 @@ public class KernelMachine<T> implements Serializable {
 
     /**
      * Returns the weights of instances.
-     * @return the weights of instances.
      */
     public double[] weights() {
         return w;
@@ -106,17 +103,12 @@ public class KernelMachine<T> implements Serializable {
 
     /**
      * Returns the intercept.
-     * @return the intercept.
      */
     public double intercept() {
         return b;
     }
 
-    /**
-     * Returns the decision function value.
-     * @param x an instance.
-     * @return the decision function value.
-     */
+    /** Returns the decision function value. */
     public double score(T x) {
         double f = b;
 
@@ -127,10 +119,7 @@ public class KernelMachine<T> implements Serializable {
         return f;
     }
 
-    /**
-     * Convert the kernel machine to SVM instance.
-     * @return SVM.
-     */
+    /** Convert the kernel machine to SVM instance. */
     public SVM<T> toSVM() {
         return new SVM<>(kernel, instances, w, b);
     }

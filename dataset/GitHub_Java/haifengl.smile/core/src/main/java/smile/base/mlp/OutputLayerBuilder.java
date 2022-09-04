@@ -33,7 +33,6 @@ public class OutputLayerBuilder extends LayerBuilder {
      * Constructor.
      * @param n the number of neurons.
      * @param f the activation function.
-     * @param cost the cost function.
      */
     public OutputLayerBuilder(int n, OutputFunction f, Cost cost) {
         super(n);

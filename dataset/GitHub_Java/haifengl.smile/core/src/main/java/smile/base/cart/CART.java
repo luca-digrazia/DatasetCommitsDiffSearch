@@ -117,14 +117,7 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
 
     }
 
-    /**
-     * Constructor.
-     * @param formula The model formula.
-     * @param schema The data schema of predictors.
-     * @param response The response variable.
-     * @param root The root node.
-     * @param importance The feature importance.
-     */
+    /** Constructor. */
     public CART(Formula formula, StructType schema, StructField response, Node root, double[] importance) {
         this.formula = formula;
         this.schema = schema;
@@ -202,10 +195,7 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
         }
     }
 
-    /**
-     * Returns the number of nodes in the tree.
-     * @return the number of nodes in the tree.
-     */
+    /** Returns the number of nodes in the tree. */
     public int size() {
         return size(root);
     }
@@ -218,11 +208,7 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
         return size(parent.trueChild) + size(parent.falseChild) + 1;
     }
 
-    /**
-     * Returns the index of ordered samples for each ordinal column.
-     * @param x the predictors.
-     * @return the index of ordered samples for each ordinal column.
-     */
+    /** Returns the index of ordered samples for each ordinal column. */
     public static int[][] order(DataFrame x) {
         int n = x.size();
         int p = x.ncols();
@@ -245,8 +231,6 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
     /**
      * Returns the predictors by the model formula if it is not null.
      * Otherwise return the input tuple.
-     * @param x the input tuple.
-     * @return the predictors.
      */
     protected Tuple predictors(Tuple x) {
         return formula == null ? x : formula.x(x);
@@ -263,10 +247,8 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
 
     /**
      * Split a node into two children nodes.
-     *
-     * @param split the split candidate.
-     * @param queue the queue of splits.
-     * @return true if split success.
+     * Returns a new InternalNode if split success.
+     * Otherwise, return the node.
      */
     protected boolean split(final Split split, PriorityQueue<Split> queue) {
         if (split.feature < 0) {
@@ -341,12 +323,11 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
 
     /**
      * Finds the best attribute to split on a set of samples. at the current node. Returns
-     * <code>Optional.empty</code> if a split doesn't exists to reduce the impurity.
+     * null if a split doesn't exists to reduce the impurity.
      * @param node the leaf node to split.
      * @param lo the inclusive lower bound of the data partition in the reordered sample index array.
      * @param hi the exclusive upper bound of the data partition in the reordered sample index array.
      * @param unsplittable unsplittable[j] is true if the column j cannot be split further in the node.
-     * @return the best split candidate.
      */
     protected Optional<Split> findBestSplit(LeafNode node, int lo, int hi, boolean[] unsplittable) {
         if (node.size() < 2 * nodeSize) {
@@ -382,29 +363,13 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
         return split;
     }
 
-    /**
-     * Returns the impurity of node.
-     * @param node the node to calculate the impurity.
-     * @return the impurity of node.
-     */
+    /** Returns the impurity of node. */
     protected abstract double impurity(LeafNode node);
 
-    /**
-     * Creates a new leaf node.
-     * @param nodeSamples the samples belonging to this node.
-     * @return the new leaf node.
-     */
+    /** Creates a new leaf node. */
     protected abstract LeafNode newNode(int[] nodeSamples);
 
-    /**
-     * Finds the best split for given column.
-     * @param node the node to split.
-     * @param column the column to split on.
-     * @param impurity the impurity of node.
-     * @param lo the lower bound of data index in the node.
-     * @param hi the upper bound of data index in the node.
-     * @return the best split.
-     */
+    /** Finds the best split for given column. */
     protected abstract Optional<Split> findBestSplit(LeafNode node, int column, double impurity, int lo, int hi);
 
     /**
@@ -430,9 +395,7 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
 
     /**
      * Returns the graphic representation in Graphviz dot format.
-     * Try <a href="http://viz-js.com/">http://viz-js.com/</a>
-     * to visualize the returned string.
-     * @return the graphic representation in Graphviz dot format.
+     * Try http://viz-js.com/ to visualize the returned string.
      */
     public String dot() {
         StringBuilder builder = new StringBuilder();
@@ -477,19 +440,15 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
     }
 
     /**
-     * Shuffles {@link #index} and {@link #order} by partitioning the range
-     * from low (inclusive) to high (exclusive) so that all elements i for
-     * which predicate(i) is true come before all elements for which it is
-     * false, but element ordering is otherwise preserved. The number of
-     * true values returned by predicate must equal {@code split - low}.
-     *
-     * @param low the low bound of the segment of the order arrays
-     *            which will be partitioned.
+     * Shuffles {@link #index} and {@link #order} by partitioning the range from low
+     * (inclusive) to high (exclusive) so that all elements i for which predicate(i) is true come
+     * before all elements for which it is false, but element ordering is otherwise preserved. The
+     * number of true values returned by predicate must equal split-low.
+     * @param low the low bound of the segment of the order arrays which will be partitioned.
      * @param split where the partition's split point will end up.
-     * @param high the high bound of the segment of the order arrays
-     *             which will be partitioned.
-     * @param predicate whether an element goes to the left side or
-     *                  the right side of the partition.
+     * @param high the high bound of the segment of the order arrays which will be partitioned.
+     * @param predicate whether an element goes to the left side or the right side of the
+     *        partition.
      */
     private void shuffle(int low, int split, int high, boolean[] predicate) {
         Arrays.stream(order).filter(Objects::nonNull).forEach(o -> shuffle(o, low, split, high, predicate));
@@ -497,23 +456,11 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
     }
 
     /**
-     * Shuffles an array in-place by partitioning the range from
-     * low (inclusive) to high (exclusive) so that all elements i
-     * for which goesLeft(i) is true come before all elements for
-     * which it is false, but element ordering is otherwise preserved.
-     * The number of true values returned by goesLeft must equal
-     * {@code split - low}. buffer is scratch space large enough
-     * (i.e., at least {@code high - split} long) to hold all
-     * elements for which goesLeft is false.
-     *
-     * @param a the array to shuffle.
-     * @param low the low bound of the segment of the order arrays
-     *            which will be partitioned.
-     * @param split where the partition's split point will end up.
-     * @param high the high bound of the segment of the order arrays
-     *             which will be partitioned.
-     * @param predicate whether an element goes to the left side or
-     *                  the right side of the partition.
+     * Shuffles an array in-place by partitioning the range from low (inclusive) to high (exclusive)
+     * so that all elements i for which goesLeft(i) is true come before all elements for which it is
+     * false, but element ordering is otherwise preserved. The number of true values returned by
+     * goesLeft must equal split-low. buffer is scratch space large enough (i.e., at least
+     * high-split long) to hold all elements for which goesLeft is false.
      */
     private void shuffle(int[] a, int low, int split, int high, boolean[] predicate) {
         int k = 0;
@@ -552,8 +499,6 @@ public abstract class CART implements SHAP<Tuple>, Serializable {
 
     /**
      * Returns the average of absolute SHAP values over a data frame.
-     * @param data the data.
-     * @return the average of absolute SHAP values.
      */
     public double[] shap(DataFrame data) {
         // Binds the formula to the data frame's schema in case that

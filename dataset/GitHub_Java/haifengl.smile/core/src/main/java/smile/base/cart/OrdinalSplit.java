@@ -35,18 +35,7 @@ public class OrdinalSplit extends Split {
      */
     final IntPredicate predicate;
 
-    /**
-     * Constructor.
-     * @param leaf the node to split.
-     * @param feature the index of feature column.
-     * @param value the split value.
-     * @param score the split score.
-     * @param lo the lower bound of sample index in the node.
-     * @param hi the upper bound of sample index in the node.
-     * @param trueCount the number of samples in true branch child.
-     * @param falseCount the number of samples false branch child.
-     * @param predicate the lambda returns true if the sample passes the test on the split feature.
-     */
+    /** Constructor. */
     public OrdinalSplit(LeafNode leaf, int feature, double value, double score, int lo, int hi, int trueCount, int falseCount, IntPredicate predicate) {
         super(leaf, feature, score, lo, hi, trueCount, falseCount);
         this.value = value;

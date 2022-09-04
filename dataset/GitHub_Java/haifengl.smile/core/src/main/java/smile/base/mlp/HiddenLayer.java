@@ -26,31 +26,27 @@ public class HiddenLayer extends Layer {
     private static final long serialVersionUID = 2L;
 
     /** The activation function. */
-    private final ActivationFunction activation;
+    private final ActivationFunction f;
 
     /**
      * Constructor.
      * @param n the number of neurons.
      * @param p the number of input variables (not including bias value).
-     * @param activation the activation function.
+     * @param f the activation function.
      */
-    public HiddenLayer(int n, int p, ActivationFunction activation) {
+    public HiddenLayer(int n, int p, ActivationFunction f) {
         super(n, p);
-        this.activation = activation;
+        this.f = f;
     }
 
     @Override
     public String toString() {
-        if (dropoutRate > 0.0) {
-            return String.format("%s(%d, %.2f)", activation.name(), n, dropoutRate);
-        } else {
-            return String.format("%s(%d)", activation.name(), n);
-        }
+        return String.format("%s(%d)", f.name(), n);
     }
 
     @Override
-    public void transform(double[] x) {
-        activation.f(x);
+    public void f(double[] x) {
+        f.f(x);
     }
 
     @Override
@@ -58,7 +54,7 @@ public class HiddenLayer extends Layer {
         double[] output = this.output.get();
         double[] outputGradient = this.outputGradient.get();
 
-        activation.g(outputGradient, output);
+        f.g(outputGradient, output);
         if (lowerLayerGradient != null) {
             weight.tv(outputGradient, lowerLayerGradient);
         }

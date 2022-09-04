@@ -63,10 +63,7 @@ public class OutputLayer extends Layer {
         return String.format("%s(%d) | %s", f.name(), n, cost);
     }
 
-    /**
-     * Returns the cost function of neural network.
-     * @return the cost function.
-     */
+    /** Returns the cost function of neural network. */
     public Cost cost() {
         return cost;
     }
