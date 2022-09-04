@@ -97,7 +97,6 @@ import net.starlark.java.eval.Sequence;
 import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkCallable;
 import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.Tuple;
 import net.starlark.java.syntax.Identifier;
@@ -178,7 +177,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
                 .value(false)
                 .taggable()
                 .nonconfigurable("taggable - called in Rule.getRuleTags"))
-        .add(attr("shard_count", INTEGER).value(StarlarkInt.of(-1)))
+        .add(attr("shard_count", INTEGER).value(-1))
         .add(
             attr("local", BOOLEAN)
                 .value(false)
@@ -627,7 +626,8 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
    *
    * <p>Exactly one of {@link #builder} or {@link #ruleClass} is null except inside {@link #export}.
    */
-  public static final class StarlarkRuleFunction implements StarlarkExportable, RuleFunction {
+  public static final class StarlarkRuleFunction
+      implements StarlarkCallable, StarlarkExportable, RuleFunction {
     private RuleClass.Builder builder;
 
     private RuleClass ruleClass;
@@ -636,10 +636,6 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
     private final Location definitionLocation;
     private Label starlarkLabel;
 
-    // TODO(adonovan): merge {Starlark,Builtin}RuleFunction and RuleClass,
-    // making the latter a callable, StarlarkExportable value.
-    // (Making RuleClasses first-class values will help us to build a
-    // rich query output mode that includes values from loaded .bzl files.)
     public StarlarkRuleFunction(
         RuleClass.Builder builder,
         RuleClassType type,
@@ -668,11 +664,11 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
 
     @Override
     public String getName() {
-      return ruleClass != null ? ruleClass.getName() : "unexported rule";
+      return "rule";
     }
 
     @Override
-    public Object call(StarlarkThread thread, Tuple args, Dict<String, Object> kwargs)
+    public Object call(StarlarkThread thread, Tuple<Object> args, Dict<String, Object> kwargs)
         throws EvalException, InterruptedException, ConversionException {
       if (!args.isEmpty()) {
         throw new EvalException("unexpected positional arguments");

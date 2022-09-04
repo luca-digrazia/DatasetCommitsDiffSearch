@@ -64,8 +64,7 @@ public final class TrimTestConfigurationTest extends AnalysisTestCase {
   /** Simple native test rule. */
   public static final class NativeTest implements RuleConfiguredTargetFactory {
     @Override
-    public ConfiguredTarget create(RuleContext context)
-        throws ActionConflictException, InterruptedException {
+    public ConfiguredTarget create(RuleContext context) throws ActionConflictException {
       Artifact executable = context.getBinArtifact(context.getLabel().getName());
       context.registerAction(FileWriteAction.create(context, executable, "#!/bin/true", true));
       Runfiles runfiles =
@@ -745,51 +744,6 @@ public final class TrimTestConfigurationTest extends AnalysisTestCase {
         ")",
         "starlark_test(",
         "    name = 'starlark_test',",
-        ")");
-    useConfiguration("--trim_test_configuration", "--noexpand_test_suites", "--test_arg=TypeA");
-    update("//test:starlark_dep");
-    assertThat(getAnalysisResult().getTargetsToBuild()).isNotEmpty();
-  }
-
-  @Test
-  public void flagOnNonTestTargetWithTestSuiteDependencies_IsPermitted() throws Exception {
-    // reporter.removeHandler(failFastHandler);
-    scratch.file(
-        "test/BUILD",
-        "load(':test.bzl', 'starlark_test')",
-        "load(':lib.bzl', 'starlark_lib')",
-        "starlark_lib(",
-        "    name = 'starlark_dep',",
-        "    deps = [':a_test_suite'],",
-        "    testonly = 1,",
-        ")",
-        "starlark_test(",
-        "    name = 'starlark_test',",
-        ")",
-        "test_suite(",
-        "    name = 'a_test_suite',",
-        "    tests = [':starlark_test'],",
-        ")");
-    useConfiguration("--trim_test_configuration", "--noexpand_test_suites", "--test_arg=TypeA");
-    update("//test:starlark_dep");
-    assertThat(getAnalysisResult().getTargetsToBuild()).isNotEmpty();
-  }
-
-  @Test
-  public void flagOnNonTestTargetWithJavaTestDependencies_IsPermitted() throws Exception {
-    // reporter.removeHandler(failFastHandler);
-    scratch.file(
-        "test/BUILD",
-        "load(':lib.bzl', 'starlark_lib')",
-        "starlark_lib(",
-        "    name = 'starlark_dep',",
-        "    deps = [':JavaTest'],",
-        "    testonly = 1,",
-        ")",
-        "java_test(",
-        "    name = 'JavaTest',",
-        "    srcs = ['JavaTest.java'],",
-        "    test_class = 'test.JavaTest',",
         ")");
     useConfiguration("--trim_test_configuration", "--noexpand_test_suites", "--test_arg=TypeA");
     update("//test:starlark_dep");
