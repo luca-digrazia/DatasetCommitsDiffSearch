@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -23,6 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.CompilationHelper;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
@@ -52,18 +52,15 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License;
-import com.google.devtools.build.lib.rules.cpp.CcSkyframeSupportFunction.CcSkyframeSupportException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.protobuf.TextFormat;
@@ -305,7 +302,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .addInput(rawProfileArtifact)
-            .addTransitiveInputs(getMiddlemanOrFiles(ruleContext, "all_files"))
+            .addTransitiveInputs(getFiles(ruleContext, "all_files"))
             .addOutput(profileArtifact)
             .useDefaultShellEnvironment()
             .setExecutable(toolchainInfo.getToolPathFragment(Tool.LLVM_PROFDATA))
@@ -329,6 +326,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     BuildConfiguration configuration = Preconditions.checkNotNull(ruleContext.getConfiguration());
     CppConfiguration cppConfiguration =
         Preconditions.checkNotNull(configuration.getFragment(CppConfiguration.class));
+    CppToolchainInfo toolchainInfo = getCppToolchainInfo(ruleContext, cppConfiguration);
 
     PathFragment fdoZip = null;
     FdoInputFile prefetchHints = null;
@@ -409,49 +407,28 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    // Is there a toolchain proto available on the target directly?
-    CToolchain toolchain = parseToolchainFromAttributes(ruleContext);
-    Label ccToolchainSuiteLabelIfNeeded = null;
-    if (toolchain == null && cppConfiguration.getCrosstoolFromCcToolchainProtoAttribute() == null) {
-      ccToolchainSuiteLabelIfNeeded = cppConfiguration.getCrosstoolTop();
-    }
-
-    SkyKey ccSupportKey = CcSkyframeSupportValue.key(fdoZip, ccToolchainSuiteLabelIfNeeded);
+    SkyKey fdoKey = CcSkyframeSupportValue.key(fdoZip);
 
     SkyFunction.Environment skyframeEnv = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
-    CcSkyframeSupportValue ccSkyframeSupportValue;
-    try {
-      ccSkyframeSupportValue =
-          (CcSkyframeSupportValue)
-              skyframeEnv.getValueOrThrow(ccSupportKey, CcSkyframeSupportException.class);
-    } catch (CcSkyframeSupportException e) {
-      ruleContext.throwWithRuleError(e.getMessage());
-      throw new IllegalStateException("Should not be reached");
-    }
+    CcSkyframeSupportValue fdoSupport = (CcSkyframeSupportValue) skyframeEnv.getValue(fdoKey);
     if (skyframeEnv.valuesMissing()) {
      return null;
     }
 
-    CppToolchainInfo toolchainInfo =
-        getCppToolchainInfo(ruleContext, cppConfiguration, ccSkyframeSupportValue, toolchain);
-
     final Label label = ruleContext.getLabel();
     final NestedSet<Artifact> crosstool = ruleContext.getPrerequisite("all_files", Mode.HOST)
         .getProvider(FileProvider.class).getFilesToBuild();
-    final NestedSet<Artifact> crosstoolMiddleman = getMiddlemanOrFiles(ruleContext, "all_files");
-    final NestedSet<Artifact> compile = getMiddlemanOrFiles(ruleContext, "compiler_files");
+    final NestedSet<Artifact> crosstoolMiddleman = getFiles(ruleContext, "all_files");
+    final NestedSet<Artifact> compile = getFiles(ruleContext, "compiler_files");
     final NestedSet<Artifact> compileWithoutIncludes =
-        getOptionalMiddlemanOrFiles(ruleContext, "compiler_files_without_includes");
-    final NestedSet<Artifact> strip = getMiddlemanOrFiles(ruleContext, "strip_files");
-    final NestedSet<Artifact> objcopy = getMiddlemanOrFiles(ruleContext, "objcopy_files");
-    final NestedSet<Artifact> as = getOptionalMiddlemanOrFiles(ruleContext, "as_files");
-    final NestedSet<Artifact> ar = getOptionalMiddlemanOrFiles(ruleContext, "ar_files");
-    final NestedSet<Artifact> link = getMiddlemanOrFiles(ruleContext, "linker_files");
-    final NestedSet<Artifact> dwp = getMiddlemanOrFiles(ruleContext, "dwp_files");
-    final NestedSet<Artifact> libcMiddleman =
-        getOptionalMiddlemanOrFiles(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
-    final NestedSet<Artifact> libc =
-        getOptionalFiles(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
+        getOptionalFiles(ruleContext, "compiler_files_without_includes");
+    final NestedSet<Artifact> strip = getFiles(ruleContext, "strip_files");
+    final NestedSet<Artifact> objcopy = getFiles(ruleContext, "objcopy_files");
+    final NestedSet<Artifact> as = getOptionalFiles(ruleContext, "as_files");
+    final NestedSet<Artifact> ar = getOptionalFiles(ruleContext, "ar_files");
+    final NestedSet<Artifact> link = getFiles(ruleContext, "linker_files");
+    final NestedSet<Artifact> dwp = getFiles(ruleContext, "dwp_files");
+    final NestedSet<Artifact> libcLink = inputsForLibc(ruleContext);
     String purposePrefix = Actions.escapeLabel(label) + "_";
     String runtimeSolibDirBase = "_solib_" + "_" + Actions.escapeLabel(label);
     final PathFragment runtimeSolibDir =
@@ -541,7 +518,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     NestedSetBuilder<Pair<String, String>> coverageEnvironment = NestedSetBuilder.compileOrder();
 
-    NestedSet<Artifact> coverage = getOptionalMiddlemanOrFiles(ruleContext, "coverage_files");
+    NestedSet<Artifact> coverage = getOptionalFiles(ruleContext, "coverage_files");
     if (coverage.isEmpty()) {
       coverage = crosstool;
     }
@@ -573,12 +550,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     if (fdoMode == FdoMode.LLVM_FDO) {
       profileArtifact =
           convertLLVMRawProfileToIndexed(
-              ccSkyframeSupportValue.getFdoZipPath().asFragment(), toolchainInfo, ruleContext);
+              fdoSupport.getFilePath().asFragment(), toolchainInfo, ruleContext);
       if (ruleContext.hasErrors()) {
         return null;
       }
     } else if (fdoMode == FdoMode.AUTO_FDO || fdoMode == FdoMode.XBINARY_FDO) {
-      Path fdoProfile = ccSkyframeSupportValue.getFdoZipPath();
+      Path fdoProfile = fdoSupport.getFilePath();
       profileArtifact = ruleContext.getUniqueDirectoryArtifact(
               "fdo",
               fdoProfile.getBaseName(),
@@ -601,21 +578,18 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             toolchainInfo,
             cppConfiguration.getCrosstoolTopPathFragment(),
             crosstool,
-            /* crosstoolMiddleman= */ NestedSetBuilder.<Artifact>stableOrder()
-                .addTransitive(crosstoolMiddleman)
-                .addTransitive(libcMiddleman)
-                .build(),
+            fullInputsForCrosstool(ruleContext, crosstoolMiddleman),
             compile,
             compileWithoutIncludes,
             strip,
             objcopy,
             as,
             ar,
-            fullInputsForLink(ruleContext, link, libcMiddleman),
+            fullInputsForLink(ruleContext, link),
             ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST),
             dwp,
             coverage,
-            libc,
+            libcLink,
             staticRuntimeLinkInputs,
             staticRuntimeLinkMiddleman,
             dynamicRuntimeLinkSymlinks,
@@ -625,7 +599,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             supportsParamFiles,
             supportsHeaderParsing,
             getBuildVariables(ruleContext, toolchainInfo.getDefaultSysroot()),
-            getBuiltinIncludes(libc),
+            getBuiltinIncludes(ruleContext),
             coverageEnvironment.build(),
             toolchainInfo.supportsInterfaceSharedObjects()
                 ? ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST)
@@ -634,7 +608,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             sysroot,
             fdoMode,
             new FdoProvider(
-                ccSkyframeSupportValue.getFdoZipPath(),
+                fdoSupport.getFilePath(),
                 fdoMode,
                 cppConfiguration.getFdoInstrument(),
                 profileArtifact,
@@ -679,11 +653,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   /** Finds an appropriate {@link CppToolchainInfo} for this target. */
   private CppToolchainInfo getCppToolchainInfo(
-      RuleContext ruleContext,
-      CppConfiguration cppConfiguration,
-      CcSkyframeSupportValue ccSkyframeSupportValue,
-      CToolchain toolchainFromCcToolchainAttribute)
-      throws RuleErrorException {
+      RuleContext ruleContext, CppConfiguration cppConfiguration) throws RuleErrorException {
 
     if (cppConfiguration.enableCcToolchainConfigInfoFromSkylark()) {
       // Attempt to obtain CppToolchainInfo from the 'toolchain_config' attribute of cc_toolchain.
@@ -706,10 +676,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     }
 
     // Attempt to find a toolchain based on the target attributes, not the configuration.
-    CToolchain toolchain = toolchainFromCcToolchainAttribute;
-    if (toolchain == null) {
-      toolchain = getToolchainFromAttributes(ruleContext, cppConfiguration, ccSkyframeSupportValue);
-    }
+    CToolchain toolchain = getToolchainFromAttributes(ruleContext, cppConfiguration);
 
     // If we found a toolchain, use it.
     try {
@@ -732,14 +699,15 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   @Nullable
   private CToolchain parseToolchainFromAttributes(RuleContext ruleContext)
       throws RuleErrorException {
-    String protoAttribute = StringUtil.emptyToNull(ruleContext.attributes().get("proto", STRING));
-    if (protoAttribute == null) {
+    if (ruleContext.attributes().get("proto", Type.STRING).isEmpty()) {
       return null;
     }
 
+    String data = ruleContext.attributes().get("proto", Type.STRING);
+
     CToolchain.Builder builder = CToolchain.newBuilder();
     try {
-      TextFormat.merge(protoAttribute, builder);
+      TextFormat.merge(data, builder);
       return builder.build();
     } catch (ParseException e) {
       throw ruleContext.throwWithAttributeError("proto", "Could not parse CToolchain data");
@@ -785,31 +753,25 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   @Nullable
   private CToolchain getToolchainFromAttributes(
-      RuleContext ruleContext,
-      CppConfiguration cppConfiguration,
-      CcSkyframeSupportValue ccSkyframeSupportValue)
-      throws RuleErrorException {
+      RuleContext ruleContext, CppConfiguration cppConfiguration) throws RuleErrorException {
+
+    // Is there a toolchain proto available on the target directly?
+    CToolchain toolchain = parseToolchainFromAttributes(ruleContext);
+    if (toolchain != null) {
+      return toolchain;
+    }
 
     String toolchainIdentifier = ruleContext.attributes().get("toolchain_identifier", Type.STRING);
     String cpu = ruleContext.attributes().get("cpu", Type.STRING);
     String compiler = ruleContext.attributes().get("compiler", Type.STRING);
     try {
-      CrosstoolRelease crosstoolRelease;
-      if (cppConfiguration.getCrosstoolFromCcToolchainProtoAttribute() != null) {
-        // We have cc_toolchain_suite.proto attribute set, let's use it
-        crosstoolRelease = cppConfiguration.getCrosstoolFromCcToolchainProtoAttribute();
-      } else {
-        // We use the proto from the CROSSTOOL file
-        crosstoolRelease = ccSkyframeSupportValue.getCrosstoolRelease();
-      }
-
       return CToolchainSelectionUtils.selectCToolchain(
           toolchainIdentifier,
           cpu,
           compiler,
           cppConfiguration.getTransformedCpuFromOptions(),
           cppConfiguration.getCompilerFromOptions(),
-          crosstoolRelease);
+          cppConfiguration.getCrosstoolFile().getProto());
     } catch (InvalidConfigurationException e) {
       ruleContext.throwWithRuleError(
           String.format("Error while selecting cc_toolchain: %s", e.getMessage()));
@@ -817,9 +779,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     }
   }
 
-  private ImmutableList<Artifact> getBuiltinIncludes(NestedSet<Artifact> libc) {
+  private ImmutableList<Artifact> getBuiltinIncludes(RuleContext ruleContext) {
     ImmutableList.Builder<Artifact> result = ImmutableList.builder();
-    for (Artifact artifact : libc) {
+    for (Artifact artifact : inputsForLibc(ruleContext)) {
       if (artifact.getExecPath().endsWith(BUILTIN_INCLUDE_FILE_SUFFIX)) {
         result.add(artifact);
       }
@@ -828,20 +790,36 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     return result.build();
   }
 
+  private NestedSet<Artifact> inputsForLibc(RuleContext ruleContext) {
+    TransitiveInfoCollection libc =
+        ruleContext.getPrerequisite(CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
+    return libc != null
+        ? libc.getProvider(FileProvider.class).getFilesToBuild()
+        : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
+  }
+
+  private NestedSet<Artifact> fullInputsForCrosstool(RuleContext ruleContext,
+      NestedSet<Artifact> crosstoolMiddleman) {
+    return NestedSetBuilder.<Artifact>stableOrder()
+        .addTransitive(crosstoolMiddleman)
+        .addTransitive(
+            AnalysisUtils.getMiddlemanFor(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET))
+        .build();
+  }
+
   /**
    * Returns the crosstool-derived link action inputs for a given rule. Adds the given set of
    * artifacts as extra inputs.
    */
-  private NestedSet<Artifact> fullInputsForLink(
-      RuleContext ruleContext, NestedSet<Artifact> link, NestedSet<Artifact> libcLink) {
-    NestedSetBuilder<Artifact> builder =
-        NestedSetBuilder.<Artifact>stableOrder().addTransitive(link).addTransitive(libcLink);
-    if (!isAppleToolchain()) {
-      builder
-          .add(ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST))
-          .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST));
-    }
-    return builder.build();
+  protected NestedSet<Artifact> fullInputsForLink(
+      RuleContext ruleContext, NestedSet<Artifact> link) {
+    return NestedSetBuilder.<Artifact>stableOrder()
+        .addTransitive(link)
+        .addTransitive(
+            AnalysisUtils.getMiddlemanFor(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET))
+        .add(ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST))
+        .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST))
+        .build();
   }
 
   private CppModuleMap createCrosstoolModuleMap(RuleContext ruleContext) {
@@ -866,13 +844,8 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     return ruleContext.getPrerequisites(attribute, Mode.TARGET).get(0);
   }
 
-  private NestedSet<Artifact> getMiddlemanOrFiles(RuleContext context, String attribute) {
-    return getMiddlemanOrFiles(context, attribute, Mode.HOST);
-  }
-
-  private NestedSet<Artifact> getMiddlemanOrFiles(
-      RuleContext context, String attribute, Mode mode) {
-    TransitiveInfoCollection dep = context.getPrerequisite(attribute, mode);
+  private NestedSet<Artifact> getFiles(RuleContext context, String attribute) {
+    TransitiveInfoCollection dep = context.getPrerequisite(attribute, Mode.HOST);
     MiddlemanProvider middlemanProvider = dep.getProvider(MiddlemanProvider.class);
     // We use the middleman if we can (if the dep is a filegroup), otherwise, just the regular
     // filesToBuild (e.g. if it is a simple input file)
@@ -881,23 +854,10 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         : dep.getProvider(FileProvider.class).getFilesToBuild();
   }
 
-  private NestedSet<Artifact> getOptionalMiddlemanOrFiles(RuleContext context, String attribute) {
-    return getOptionalMiddlemanOrFiles(context, attribute, Mode.HOST);
-  }
-
-  private NestedSet<Artifact> getOptionalMiddlemanOrFiles(
-      RuleContext context, String attribute, Mode mode) {
-    TransitiveInfoCollection dep = context.getPrerequisite(attribute, mode);
+  private NestedSet<Artifact> getOptionalFiles(RuleContext context, String attribute) {
+    TransitiveInfoCollection dep = context.getPrerequisite(attribute, Mode.HOST);
     return dep != null
-        ? getMiddlemanOrFiles(context, attribute, mode)
-        : NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-  }
-
-  private NestedSet<Artifact> getOptionalFiles(
-      RuleContext ruleContext, String attribute, Mode mode) {
-    TransitiveInfoCollection dep = ruleContext.getPrerequisite(attribute, mode);
-    return dep != null
-        ? dep.getProvider(FileProvider.class).getFilesToBuild()
+        ? getFiles(context, attribute)
         : NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   }
 
@@ -950,26 +910,21 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       variables.addStringVariable(CcCommon.SYSROOT_VARIABLE_NAME, sysroot.getPathString());
     }
 
-    variables.addAllNonTransitive(getAdditionalBuildVariables(ruleContext));
+    addBuildVariables(ruleContext, variables);
 
     return variables.build();
   }
 
   /**
-   * Add local build variables from subclasses into {@link CcToolchainVariables} returned from
-   * {@link CcToolchain#getBuildVariables(RuleContext, PathFragment)}.
+   * Add local build variables from subclasses into {@link
+   * com.google.devtools.build.lib.rules.cpp.CcToolchainVariables} returned from {@link
+   * #getBuildVariables(RuleContext, PathFragment)}.
    *
    * <p>This method is meant to be overridden by subclasses of CcToolchain.
    */
-  protected boolean isAppleToolchain() {
-    // To be overridden in subclass.
-    return false;
-  }
-
-  protected CcToolchainVariables getAdditionalBuildVariables(RuleContext ruleContext)
+  protected void addBuildVariables(RuleContext ruleContext, CcToolchainVariables.Builder variables)
       throws RuleErrorException {
-    // To be overridden in subclass.
-    return CcToolchainVariables.EMPTY;
+    // To be overridden in subclasses.
   }
 
   private PathFragment calculateSysroot(RuleContext ruleContext, PathFragment defaultSysroot) {
