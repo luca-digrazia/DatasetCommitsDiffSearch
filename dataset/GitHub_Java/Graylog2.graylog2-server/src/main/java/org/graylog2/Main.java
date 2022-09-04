@@ -49,9 +49,7 @@ public class Main {
      * This holds the configuration from /etc/graylog2.conf
      */
     public static Properties masterConfig = null;
-
-    private Main() { }
-
+    
     /**
      * @param args the command line arguments
      */
