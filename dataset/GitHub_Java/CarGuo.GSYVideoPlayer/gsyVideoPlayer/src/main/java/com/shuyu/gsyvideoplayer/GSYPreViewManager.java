@@ -13,15 +13,15 @@ import com.shuyu.gsyvideoplayer.model.GSYModel;
 import java.io.IOException;
 import java.util.Map;
 
-import tv.danmaku.ijk.media.player.AbstractMediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
+import tv.danmaku.ijk.media.player.IjkLibLoader;
 import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 /**
  * Created by shuyu on 2016/12/11.
  */
 
-public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
+public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener, IjkMediaPlayer.OnSeekCompleteListener {
 
     public static String TAG = "GSYPreViewManager";
 
@@ -35,6 +35,9 @@ public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
     private HandlerThread mMediaHandlerThread;
     private GSYPreViewManager.MediaHandler mMediaHandler;
 
+    private boolean seekToComplete = true;
+    private static IjkLibLoader ijkLibLoader; //自定义so包加载类
+
     public static synchronized GSYPreViewManager instance() {
         if (videoManager == null) {
             videoManager = new GSYPreViewManager();
@@ -43,7 +46,10 @@ public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
     }
 
     public GSYPreViewManager() {
-        mediaPlayer = new IjkMediaPlayer();
+        IjkLibLoader libLoader = GSYVideoManager.getIjkLibLoader();
+        mediaPlayer = (libLoader == null) ? new IjkMediaPlayer() : new IjkMediaPlayer(libLoader);
+        ijkLibLoader = libLoader;
+
         mMediaHandlerThread = new HandlerThread(TAG);
         mMediaHandlerThread.start();
         mMediaHandler = new GSYPreViewManager.MediaHandler((mMediaHandlerThread.getLooper()));
@@ -81,6 +87,7 @@ public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
             initIJKPlayer(msg);
 
             mediaPlayer.setOnPreparedListener(GSYPreViewManager.this);
+            mediaPlayer.setOnSeekCompleteListener(this);
             mediaPlayer.setVolume(0, 0);
             mediaPlayer.prepareAsync();
 
@@ -91,7 +98,7 @@ public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
     }
 
     private void initIJKPlayer(Message msg) {
-        mediaPlayer = new IjkMediaPlayer();
+        mediaPlayer = (ijkLibLoader == null) ? new IjkMediaPlayer() : new IjkMediaPlayer(ijkLibLoader);
         mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
         try {
             mediaPlayer.setDataSource(((GSYModel) msg.obj).getUrl(), ((GSYModel) msg.obj).getMapHeadData());
@@ -115,6 +122,12 @@ public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
     @Override
     public void onPrepared(IMediaPlayer mp) {
         mp.pause();
+        seekToComplete = true;
+    }
+
+    @Override
+    public void onSeekComplete(IMediaPlayer mp) {
+        seekToComplete = true;
     }
 
     public void prepare(final String url, final Map<String, String> mapHeadData, boolean loop, float speed) {
@@ -143,4 +156,11 @@ public class GSYPreViewManager implements IMediaPlayer.OnPreparedListener {
         return mediaPlayer;
     }
 
+    public boolean isSeekToComplete() {
+        return seekToComplete;
+    }
+
+    public void setSeekToComplete(boolean seekToComplete) {
+        this.seekToComplete = seekToComplete;
+    }
 }
