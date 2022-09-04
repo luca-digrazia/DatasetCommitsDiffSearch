@@ -7,7 +7,7 @@ import com.fasterxml.classmate.ResolvedTypeWithMembers;
 import com.fasterxml.classmate.TypeResolver;
 import com.fasterxml.classmate.members.ResolvedMethod;
 import io.dropwizard.validation.BaseValidator;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
@@ -20,14 +20,14 @@ public class SelfValidatingValidatorTest {
     private SelfValidatingValidator selfValidatingValidator = new SelfValidatingValidator();
 
     @Test
-    void validObjectHasNoViolations() throws Exception {
+    public void validObjectHasNoViolations() throws Exception {
         final Validator validator = BaseValidator.newValidator();
         final Set<ConstraintViolation<ValidExample>> violations = validator.validate(new ValidExample(1));
         assertThat(violations).isEmpty();
     }
 
     @Test
-    void invalidObjectHasViolations() throws Exception {
+    public void invalidObjectHasViolations() throws Exception {
         final Validator validator = BaseValidator.newValidator();
         final Set<ConstraintViolation<ValidExample>> violations = validator.validate(new ValidExample(-1));
         assertThat(violations)
@@ -36,28 +36,28 @@ public class SelfValidatingValidatorTest {
     }
 
     @Test
-    void correctMethod() throws Exception {
+    public void correctMethod() throws Exception {
         assertThat(selfValidatingValidator.isMethodCorrect(
                 getMethod("validateCorrect", ViolationCollector.class)))
                 .isTrue();
     }
 
     @Test
-    void voidIsNotAccepted() throws Exception {
+    public void voidIsNotAccepted() throws Exception {
         assertThat(selfValidatingValidator.isMethodCorrect(
                 getMethod("validateFailReturn", ViolationCollector.class)))
                 .isFalse();
     }
 
     @Test
-    void privateIsNotAccepted() throws Exception {
+    public void privateIsNotAccepted() throws Exception {
         assertThat(selfValidatingValidator.isMethodCorrect(
                 getMethod("validateFailPrivate", ViolationCollector.class)))
                 .isFalse();
     }
 
     @Test
-    void additionalParametersAreNotAccepted() throws Exception {
+    public void additionalParametersAreNotAccepted() throws Exception {
         assertThat(selfValidatingValidator.isMethodCorrect(
                 getMethod("validateFailAdditionalParameters", ViolationCollector.class, int.class)))
                 .isFalse();
