@@ -79,14 +79,7 @@ public class StreamAlertResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-
-        final AlertCondition alertCondition;
-        try {
-            alertCondition = AlertCondition.fromRequest(ccr, Tools.iso8601(), core);
-        } catch (AlertCondition.NoSuchAlertConditionTypeException e) {
-            LOG.error("Invalid alarm condition type.", e);
-            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
-        }
+        final AlertCondition alertCondition = new AlertCondition(ccr, Tools.iso8601());
 
         try {
             stream.addAlertCondition(alertCondition);

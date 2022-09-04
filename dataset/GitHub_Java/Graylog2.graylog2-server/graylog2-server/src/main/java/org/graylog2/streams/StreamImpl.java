@@ -114,15 +114,6 @@ public class StreamImpl extends Persisted implements Stream {
         return streams;
     }
 
-    public static List<Stream> loadAllWithConfiguredAlertConditions(Core core) {
-        Map<String, Object> queryOpts = new HashMap<String, Object>() {{
-            // Explanation: alert_conditions.1 is the first Array element.
-            put(StreamImpl.EMBEDDED_ALERT_CONDITIONS, new BasicDBObject("$ne", new ArrayList<Object>()));
-        }};
-
-        return loadAll(core, queryOpts);
-    }
-
     public void pause() {
         try {
             this.fields.put("disabled", true);
@@ -171,11 +162,7 @@ public class StreamImpl extends Persisted implements Stream {
 
         if (fields.containsKey(EMBEDDED_ALERT_CONDITIONS)) {
             for (BasicDBObject conditionFields : (List<BasicDBObject>) fields.get(EMBEDDED_ALERT_CONDITIONS)) {
-                try {
-                    conditions.add(AlertCondition.fromPersisted(conditionFields, core));
-                } catch (AlertCondition.NoSuchAlertConditionTypeException e) {
-                    LOG.error("Skipping alert condition.", e);
-                }
+                conditions.add(AlertCondition.fromPersisted(conditionFields));
             }
         }
 
@@ -192,6 +179,7 @@ public class StreamImpl extends Persisted implements Stream {
 	
     @Override
     public String toString() {
+        this.getStreamRules();
         return this.id.toString() + ":" + this.getTitle();
     }
 
