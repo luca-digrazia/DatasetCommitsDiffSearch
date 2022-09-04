@@ -6,6 +6,7 @@ import com.codahale.metrics.annotation.Metered;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -23,7 +24,6 @@ import java.util.Collections;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -132,14 +132,20 @@ public class TaskServletTest {
      */
     @Test
     public void verifyTaskExecuteMethod() {
-        assertThatCode(() -> Task.class.getMethod("execute", ImmutableMultimap.class, PrintWriter.class))
-            .doesNotThrowAnyException();
+        try {
+            Task.class.getMethod("execute", ImmutableMultimap.class, PrintWriter.class);
+        } catch (NoSuchMethodException e) {
+            Assert.fail("Execute method for " + Task.class.getName() + " not found");
+        }
     }
 
     @Test
     public void verifyPostBodyTaskExecuteMethod() {
-        assertThatCode(() -> PostBodyTask.class.getMethod("execute", ImmutableMultimap.class, String.class, PrintWriter.class))
-            .doesNotThrowAnyException();
+        try {
+            PostBodyTask.class.getMethod("execute", ImmutableMultimap.class, String.class, PrintWriter.class);
+        } catch (NoSuchMethodException e) {
+            Assert.fail("Execute method for " + PostBodyTask.class.getName() + " not found");
+        }
     }
 
     @Test
@@ -236,7 +242,6 @@ public class TaskServletTest {
             "vacuum-cleaning-exceptions"));
     }
 
-    @SuppressWarnings("InputStreamSlowMultibyteRead")
     private static class TestServletInputStream extends ServletInputStream {
         private InputStream delegate;
 
