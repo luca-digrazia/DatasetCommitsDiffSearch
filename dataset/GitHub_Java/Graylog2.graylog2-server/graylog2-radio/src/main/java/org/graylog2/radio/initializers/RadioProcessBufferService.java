@@ -20,6 +20,7 @@ import com.google.common.util.concurrent.AbstractIdleService;
 import org.graylog2.inputs.InputCache;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
+import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
@@ -64,7 +65,8 @@ public class RadioProcessBufferService extends AbstractIdleService {
         }
 
         processBuffer.initialize(processors, configuration.getRingSize(),
-                configuration.getProcessorWaitStrategy()
+                configuration.getProcessorWaitStrategy(),
+                configuration.getProcessBufferProcessors()
         );
     }
 
