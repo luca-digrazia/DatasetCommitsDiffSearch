@@ -1,7 +1,5 @@
 package io.quarkus.mongodb.panache;
 
-import static io.quarkus.mongodb.panache.runtime.JavaMongoOperations.INSTANCE;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,28 +10,33 @@ import org.bson.Document;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 
+import io.quarkus.mongodb.panache.runtime.MongoOperations;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
 import io.quarkus.panache.common.impl.GenerateBridge;
 
 /**
  * Represents an entity. If your Mongo entities extend this class they gain auto-generated accessors
- * to all their public fields, as well as a lot of useful methods. Unless you have a custom ID strategy, you
- * should not extend this class directly but extend {@link PanacheMongoEntity} instead.
+ * to all their public fields, as well as a lot of useful
+ * methods. Unless you have a custom ID strategy, you should not extend this class directly but extend
+ * {@link PanacheMongoEntity} instead.
  *
  * @see PanacheMongoEntity
  */
 public abstract class PanacheMongoEntityBase {
+
+    // Operations
+
     /**
      * Persist this entity in the database.
-     * This will set its ID field if not already set.
+     * This will set it's ID field if not already set.
      *
      * @see #persist(Iterable)
      * @see #persist(Stream)
      * @see #persist(Object, Object...)
      */
     public void persist() {
-        INSTANCE.persist(this);
+        MongoOperations.persist(this);
     }
 
     /**
@@ -44,7 +47,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Object, Object...)
      */
     public void update() {
-        INSTANCE.update(this);
+        MongoOperations.update(this);
     }
 
     /**
@@ -55,7 +58,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Object, Object...)
      */
     public void persistOrUpdate() {
-        INSTANCE.persistOrUpdate(this);
+        MongoOperations.persistOrUpdate(this);
     }
 
     /**
@@ -67,7 +70,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #deleteAll()
      */
     public void delete() {
-        INSTANCE.delete(this);
+        MongoOperations.delete(this);
     }
 
     // Queries
@@ -80,7 +83,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge(targetReturnTypeErased = true)
     public static <T extends PanacheMongoEntityBase> T findById(Object id) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -91,7 +94,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Optional<T> findByIdOptional(Object id) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -108,7 +111,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(String query, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -126,7 +129,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(String query, Sort sort, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -143,7 +146,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(String query, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -161,7 +164,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(String query, Sort sort, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -178,7 +181,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(String query, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -196,7 +199,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(String query, Sort sort, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -212,7 +215,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(Document query) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -229,7 +232,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> find(Document query, Document sort) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -242,7 +245,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> findAll() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -256,7 +259,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> PanacheQuery<T> findAll(Sort sort) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -274,7 +277,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(String query, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -293,7 +296,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(String query, Sort sort, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -311,7 +314,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(String query, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -330,7 +333,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(String query, Sort sort, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -348,7 +351,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(String query, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -367,7 +370,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(String query, Sort sort, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -384,7 +387,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(Document query) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -402,7 +405,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> list(Document query, Document sort) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -416,7 +419,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> listAll() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -431,7 +434,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> List<T> listAll(Sort sort) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -449,7 +452,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(String query, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -468,7 +471,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(String query, Sort sort, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -486,7 +489,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(String query, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -505,7 +508,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(String query, Sort sort, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -523,7 +526,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(String query, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -542,7 +545,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(String query, Sort sort, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -559,7 +562,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(Document query) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -577,7 +580,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> stream(Document query, Document sort) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -591,7 +594,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> streamAll() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -606,7 +609,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> Stream<T> streamAll(Sort sort) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -619,7 +622,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long count() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -634,7 +637,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long count(String query, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -649,7 +652,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long count(String query, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -664,7 +667,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long count(String query, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -678,7 +681,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long count(Document query) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -691,7 +694,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long deleteAll() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -702,7 +705,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static boolean deleteById(Object id) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -717,7 +720,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long delete(String query, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -732,7 +735,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long delete(String query, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -747,7 +750,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long delete(String query, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -761,7 +764,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static long delete(Document query) {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -772,9 +775,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #persist(Stream)
      * @see #persist(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persist(Iterable<?> entities) {
-        INSTANCE.persist(entities);
+        MongoOperations.persist(entities);
     }
 
     /**
@@ -785,22 +787,20 @@ public abstract class PanacheMongoEntityBase {
      * @see #persist(Iterable)
      * @see #persist(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persist(Stream<?> entities) {
-        INSTANCE.persist(entities);
+        MongoOperations.persist(entities);
     }
 
     /**
      * Insert all given entities.
      *
-     * @param entities the entities to insert
+     * @param entities the entities to update
      * @see #persist()
      * @see #persist(Stream)
      * @see #persist(Iterable)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persist(Object firstEntity, Object... entities) {
-        INSTANCE.persist(firstEntity, entities);
+        MongoOperations.persist(firstEntity, entities);
     }
 
     /**
@@ -811,9 +811,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Stream)
      * @see #update(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void update(Iterable<?> entities) {
-        INSTANCE.update(entities);
+        MongoOperations.update(entities);
     }
 
     /**
@@ -824,9 +823,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Iterable)
      * @see #update(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void update(Stream<?> entities) {
-        INSTANCE.update(entities);
+        MongoOperations.update(entities);
     }
 
     /**
@@ -837,9 +835,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Stream)
      * @see #update(Iterable)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void update(Object firstEntity, Object... entities) {
-        INSTANCE.update(firstEntity, entities);
+        MongoOperations.update(firstEntity, entities);
     }
 
     /**
@@ -850,9 +847,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Stream)
      * @see #persistOrUpdate(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persistOrUpdate(Iterable<?> entities) {
-        INSTANCE.persistOrUpdate(entities);
+        MongoOperations.persistOrUpdate(entities);
     }
 
     /**
@@ -863,9 +859,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Iterable)
      * @see #persistOrUpdate(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persistOrUpdate(Stream<?> entities) {
-        INSTANCE.persistOrUpdate(entities);
+        MongoOperations.persistOrUpdate(entities);
     }
 
     /**
@@ -876,58 +871,8 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Stream)
      * @see #persistOrUpdate(Iterable)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static void persistOrUpdate(Object firstEntity, Object... entities) {
-        INSTANCE.persistOrUpdate(firstEntity, entities);
-    }
-
-    /**
-     * Update all entities of this type by the given update document, with optional indexed parameters.
-     * The returned {@link PanacheUpdate} object will allow to restrict on which document the update should be applied.
-     *
-     * @param update the update document, if it didn't contain any update operator, we add <code>$set</code>..
-     *        It can also be expressed as a {@link io.quarkus.mongodb.panache query string}.
-     * @param params optional sequence of indexed parameters
-     * @return a new {@link PanacheUpdate} instance for the given update document
-     * @see #update(String, Map)
-     * @see #update(String, Parameters)
-     */
-    @GenerateBridge
-    public static PanacheUpdate update(String update, Object... params) {
-        throw INSTANCE.implementationInjectionMissing();
-    }
-
-    /**
-     * Update all entities of this type by the given update document, with named parameters.
-     * The returned {@link PanacheUpdate} object will allow to restrict on which document the update should be applied.
-     *
-     * @param update the update document, if it didn't contain any update operator, we add <code>$set</code>.
-     *        It can also be expressed as a {@link io.quarkus.mongodb.panache query string}.
-     * @param params {@link Map} of named parameters
-     * @return a new {@link PanacheUpdate} instance for the given update document
-     * @see #update(String, Object...)
-     * @see #update(String, Parameters)
-     *
-     */
-    @GenerateBridge
-    public static PanacheUpdate update(String update, Map<String, Object> params) {
-        throw INSTANCE.implementationInjectionMissing();
-    }
-
-    /**
-     * Update all entities of this type by the given update document, with named parameters.
-     * The returned {@link PanacheUpdate} object will allow to restrict on which document the update should be applied.
-     *
-     * @param update the update document, if it didn't contain any update operator, we add <code>$set</code>.
-     *        It can also be expressed as a {@link io.quarkus.mongodb.panache query string}.
-     * @param params {@link Parameters} of named parameters
-     * @return a new {@link PanacheUpdate} instance for the given update document
-     * @see #update(String, Object...)
-     * @see #update(String, Map)
-     */
-    @GenerateBridge
-    public static PanacheUpdate update(String update, Parameters params) {
-        throw INSTANCE.implementationInjectionMissing();
+        MongoOperations.persistOrUpdate(firstEntity, entities);
     }
 
     /**
@@ -935,7 +880,7 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static <T extends PanacheMongoEntityBase> MongoCollection<T> mongoCollection() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 
     /**
@@ -943,6 +888,6 @@ public abstract class PanacheMongoEntityBase {
      */
     @GenerateBridge
     public static MongoDatabase mongoDatabase() {
-        throw INSTANCE.implementationInjectionMissing();
+        throw MongoOperations.implementationInjectionMissing();
     }
 }
