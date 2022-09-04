@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
+import com.google.devtools.build.lib.analysis.ToolchainContext.ResolvedToolchainProviders;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -454,7 +455,10 @@ public class CppHelper {
 
   private static CcToolchainProvider getToolchainFromPlatformConstraints(
       RuleContext ruleContext, Label toolchainType) {
-    return (CcToolchainProvider) ruleContext.getToolchainContext().forToolchainType(toolchainType);
+    ResolvedToolchainProviders providers =
+        (ResolvedToolchainProviders)
+            ruleContext.getToolchainContext().getResolvedToolchainProviders();
+    return (CcToolchainProvider) providers.getForToolchainType(toolchainType);
   }
 
   private static CcToolchainProvider getToolchainFromCrosstoolTop(

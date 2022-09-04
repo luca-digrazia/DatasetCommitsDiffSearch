@@ -267,8 +267,7 @@ public final class BuildType {
         }
         // TODO(b/110101445): check if context is ever actually null
         if (context == null) {
-          return Label.parseAbsolute(
-              (String) x, /* defaultToMain= */ false, /* repositoryMapping= */ ImmutableMap.of());
+          return Label.parseAbsolute((String) x, false);
           // TODO(b/110308446): remove instances of context being a Label
         } else if (context instanceof Label) {
           return ((Label) context)

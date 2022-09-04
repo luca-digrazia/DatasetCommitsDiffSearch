@@ -111,12 +111,7 @@ public final class CppToolchainInfo {
 
   /** Creates a CppToolchainInfo from CROSSTOOL info encapsulated in {@link CrosstoolInfo}. */
   public static CppToolchainInfo create(
-      PathFragment crosstoolTopPathFragment,
-      Label toolchainLabel,
-      CrosstoolInfo crosstoolInfo,
-      boolean disableLegacyCrosstoolFields,
-      boolean disableCompilationModeFlags,
-      boolean disableLinkingModeFlags)
+      PathFragment crosstoolTopPathFragment, Label toolchainLabel, CrosstoolInfo crosstoolInfo)
       throws InvalidConfigurationException {
     ImmutableMap<String, PathFragment> toolPaths =
         computeToolPaths(crosstoolInfo, crosstoolTopPathFragment);
@@ -126,24 +121,21 @@ public final class CppToolchainInfo {
     ImmutableListMultimap.Builder<LinkingMode, String> linkOptionsFromLinkingModeBuilder =
         ImmutableListMultimap.builder();
 
-    boolean haveDynamicMode = false;
-    if (!disableLinkingModeFlags) {
-      // If a toolchain supports dynamic libraries at all, there must be at least one
-      // of the following:
-      // - a "DYNAMIC" section in linking_mode_flags (even if no flags are needed)
-      // - a non-empty list in one of the dynamicLibraryLinkerFlag fields
-      // If none of the above contain data, then the toolchain can't do dynamic linking.
-      haveDynamicMode = crosstoolInfo.hasDynamicLinkingModeFlags();
-      linkOptionsFromLinkingModeBuilder.putAll(
-          LinkingMode.DYNAMIC, crosstoolInfo.getDynamicLinkingModeFlags());
-      linkOptionsFromLinkingModeBuilder.putAll(
-          LinkingMode.LEGACY_FULLY_STATIC, crosstoolInfo.getFullyStaticLinkingModeFlags());
-      linkOptionsFromLinkingModeBuilder.putAll(
-          LinkingMode.STATIC, crosstoolInfo.getMostlyStaticLinkingModeFlags());
-      linkOptionsFromLinkingModeBuilder.putAll(
-          LinkingMode.LEGACY_MOSTLY_STATIC_LIBRARIES,
-          crosstoolInfo.getMostlyStaticLibrariesLinkingModeFlags());
-    }
+    // If a toolchain supports dynamic libraries at all, there must be at least one
+    // of the following:
+    // - a "DYNAMIC" section in linking_mode_flags (even if no flags are needed)
+    // - a non-empty list in one of the dynamicLibraryLinkerFlag fields
+    // If none of the above contain data, then the toolchain can't do dynamic linking.
+    boolean haveDynamicMode = crosstoolInfo.hasDynamicLinkingModeFlags();
+    linkOptionsFromLinkingModeBuilder.putAll(
+        LinkingMode.DYNAMIC, crosstoolInfo.getDynamicLinkingModeFlags());
+    linkOptionsFromLinkingModeBuilder.putAll(
+        LinkingMode.LEGACY_FULLY_STATIC, crosstoolInfo.getFullyStaticLinkingModeFlags());
+    linkOptionsFromLinkingModeBuilder.putAll(
+        LinkingMode.STATIC, crosstoolInfo.getMostlyStaticLinkingModeFlags());
+    linkOptionsFromLinkingModeBuilder.putAll(
+        LinkingMode.LEGACY_MOSTLY_STATIC_LIBRARIES,
+        crosstoolInfo.getMostlyStaticLibrariesLinkingModeFlags());
 
     ImmutableListMultimap.Builder<CompilationMode, String> cFlagsBuilder =
         ImmutableListMultimap.builder();
@@ -152,35 +144,33 @@ public final class CppToolchainInfo {
     ImmutableListMultimap.Builder<CompilationMode, String> linkOptionsFromCompilationModeBuilder =
         ImmutableListMultimap.builder();
 
-    if (!disableCompilationModeFlags) {
-      cFlagsBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.OPT),
-          crosstoolInfo.getOptCompilationModeCompilerFlags());
-      cxxFlagsBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.OPT),
-          crosstoolInfo.getOptCompilationModeCxxFlags());
-      linkOptionsFromCompilationModeBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.OPT),
-          crosstoolInfo.getOptCompilationModeLinkerFlags());
-      cFlagsBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.DBG),
-          crosstoolInfo.getDbgCompilationModeCompilerFlags());
-      cxxFlagsBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.DBG),
-          crosstoolInfo.getDbgCompilationModeCxxFlags());
-      linkOptionsFromCompilationModeBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.DBG),
-          crosstoolInfo.getDbgCompilationModeLinkerFlags());
-      cFlagsBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.FASTBUILD),
-          crosstoolInfo.getFastbuildCompilationModeCompilerFlags());
-      cxxFlagsBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.FASTBUILD),
-          crosstoolInfo.getFastbuildCompilationModeCxxFlags());
-      linkOptionsFromCompilationModeBuilder.putAll(
-          importCompilationMode(CrosstoolConfig.CompilationMode.FASTBUILD),
-          crosstoolInfo.getFastbuildCompilationModeLinkerFlags());
-    }
+    cFlagsBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.OPT),
+        crosstoolInfo.getOptCompilationModeCompilerFlags());
+    cxxFlagsBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.OPT),
+        crosstoolInfo.getOptCompilationModeCxxFlags());
+    linkOptionsFromCompilationModeBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.OPT),
+        crosstoolInfo.getOptCompilationModeLinkerFlags());
+    cFlagsBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.DBG),
+        crosstoolInfo.getDbgCompilationModeCompilerFlags());
+    cxxFlagsBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.DBG),
+        crosstoolInfo.getDbgCompilationModeCxxFlags());
+    linkOptionsFromCompilationModeBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.DBG),
+        crosstoolInfo.getDbgCompilationModeLinkerFlags());
+    cFlagsBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.FASTBUILD),
+        crosstoolInfo.getFastbuildCompilationModeCompilerFlags());
+    cxxFlagsBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.FASTBUILD),
+        crosstoolInfo.getFastbuildCompilationModeCxxFlags());
+    linkOptionsFromCompilationModeBuilder.putAll(
+        importCompilationMode(CrosstoolConfig.CompilationMode.FASTBUILD),
+        crosstoolInfo.getFastbuildCompilationModeLinkerFlags());
 
     try {
       return new CppToolchainInfo(
@@ -201,15 +191,11 @@ public final class CppToolchainInfo {
           defaultSysroot,
           crosstoolInfo.getTargetLibc(),
           crosstoolInfo.getHostSystemName(),
-          disableLegacyCrosstoolFields
-              ? ImmutableList.of()
-              : crosstoolInfo.getDynamicLibraryLinkerFlags(),
-          disableLegacyCrosstoolFields ? ImmutableList.of() : crosstoolInfo.getLinkerFlags(),
+          crosstoolInfo.getDynamicLibraryLinkerFlags(),
+          crosstoolInfo.getLinkerFlags(),
           linkOptionsFromLinkingModeBuilder.build(),
           linkOptionsFromCompilationModeBuilder.build(),
-          disableLegacyCrosstoolFields
-              ? ImmutableList.of()
-              : crosstoolInfo.getTestOnlyLinkerFlags(),
+          crosstoolInfo.getTestOnlyLinkerFlags(),
           crosstoolInfo.getLdEmbedFlags(),
           crosstoolInfo.getObjcopyEmbedFlags(),
           toolchainLabel,
@@ -227,11 +213,11 @@ public final class CppToolchainInfo {
           crosstoolInfo.getAbiVersion(),
           crosstoolInfo.getTargetSystemName(),
           computeAdditionalMakeVariables(crosstoolInfo),
-          disableLegacyCrosstoolFields ? ImmutableList.of() : crosstoolInfo.getCompilerFlags(),
-          disableLegacyCrosstoolFields ? ImmutableList.of() : crosstoolInfo.getCxxFlags(),
+          crosstoolInfo.getCompilerFlags(),
+          crosstoolInfo.getCxxFlags(),
           cFlagsBuilder.build(),
           cxxFlagsBuilder.build(),
-          disableLegacyCrosstoolFields ? ImmutableList.of() : crosstoolInfo.getUnfilteredCxxFlags(),
+          crosstoolInfo.getUnfilteredCxxFlags(),
           crosstoolInfo.supportsFission(),
           crosstoolInfo.supportsStartEndLib(),
           crosstoolInfo.supportsEmbeddedRuntimes(),

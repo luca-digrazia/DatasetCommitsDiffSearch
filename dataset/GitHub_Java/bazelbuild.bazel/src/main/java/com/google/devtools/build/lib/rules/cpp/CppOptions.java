@@ -104,7 +104,7 @@ public class CppOptions extends FragmentOptions {
         throw new OptionsParsingException("Not a label");
       }
       try {
-        return Label.parseAbsolute(input, ImmutableMap.of())
+        return Label.parseAbsolute(input)
             .getRelativeWithRemapping(LIBC_RELATIVE_LABEL, ImmutableMap.of());
       } catch (LabelSyntaxException e) {
         throw new OptionsParsingException(e.getMessage());

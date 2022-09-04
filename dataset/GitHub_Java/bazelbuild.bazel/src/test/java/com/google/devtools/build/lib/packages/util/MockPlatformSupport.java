@@ -22,15 +22,11 @@ import java.io.IOException;
 public class MockPlatformSupport {
 
   /** Adds mocks for basic host and target platform. */
-  public static void setup(MockToolsConfig mockToolsConfig) throws IOException {
+  public static void setup(MockToolsConfig mockToolsConfig, String platformsPath)
+      throws IOException {
     mockToolsConfig.create(
-        TestConstants.CONSTRAINTS_PATH + "/BUILD",
+        platformsPath + "/BUILD",
         "package(default_visibility=['//visibility:public'])",
-        "licenses(['notice'])");
-    mockToolsConfig.create(
-        TestConstants.CONSTRAINTS_PATH + "/cpu/BUILD",
-        "package(default_visibility=['//visibility:public'])",
-        "licenses(['notice'])",
         "constraint_setting(name = 'cpu')",
         "constraint_value(",
         "    name = 'x86_32',",
@@ -48,18 +44,6 @@ public class MockPlatformSupport {
         "    name = 'arm',",
         "    constraint_setting = ':cpu',",
         ")",
-        "constraint_value(",
-        "    name = 'aarch64',",
-        "    constraint_setting = ':cpu',",
-        ")",
-        "constraint_value(",
-        "    name = 's390x',",
-        "    constraint_setting = ':cpu',",
-        ")");
-    mockToolsConfig.create(
-        TestConstants.CONSTRAINTS_PATH + "/os/BUILD",
-        "package(default_visibility=['//visibility:public'])",
-        "licenses(['notice'])",
         "constraint_setting(name = 'os')",
         "constraint_value(",
         "    name = 'osx',",
@@ -81,82 +65,40 @@ public class MockPlatformSupport {
         "    name = 'windows',",
         "    constraint_setting = ':os',",
         ")",
-        "constraint_value(",
-        "    name = 'freebsd',",
-        "    constraint_setting = ':os',",
-        ")");
-    mockToolsConfig.create(
-        TestConstants.PLATFORMS_PATH + "/BUILD",
-        "package(default_visibility=['//visibility:public'])",
         "platform(",
-        "    name = 'target_platform',",
-        "    target_platform = True,",
-        "    constraint_values = [",
-        "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:jdk8',",
-        "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:java8',",
-        "    ],",
+        "   name = 'target_platform',",
+        "   target_platform = True,",
         "    cpu_constraints = [",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:x86_32',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:x86_64',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:ppc',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:arm',",
+        "        ':x86_32',",
+        "        ':x86_64',",
+        "        ':ppc',",
+        "        ':arm',",
         "    ],",
         "    os_constraints = [",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "os:osx',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "os:linux',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "os:windows',",
+        "        ':osx',",
+        "        ':linux',",
+        "        ':windows',",
         "    ],",
         ")",
         "platform(",
-        "    name = 'host_platform',",
-        "    host_platform = True,",
-        "    constraint_values = [",
-        "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:jdk11',",
-        "        '" + TestConstants.PLATFORM_PACKAGE_ROOT + "/java/constraints:java8',",
-        "    ],",
+        "   name = 'host_platform',",
+        "   host_platform = True,",
         "    cpu_constraints = [",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:x86_32',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:x86_64',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:ppc',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "cpu:arm',",
+        "        ':x86_32',",
+        "        ':x86_64',",
+        "        ':ppc',",
+        "        ':arm',",
         "    ],",
         "    os_constraints = [",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "os:osx',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "os:linux',",
-        "        '" + TestConstants.CONSTRAINTS_PACKAGE_ROOT + "os:windows',",
+        "        ':osx',",
+        "        ':linux',",
+        "        ':windows',",
         "    ],",
         ")");
-    mockToolsConfig.create(
-        TestConstants.PLATFORMS_PATH + "/java/constraints/BUILD",
-        "package(default_visibility = ['//visibility:public'])",
-        "constraint_setting(name = 'runtime')",
-        "constraint_value(",
-        "    name = 'jdk8',",
-        "    constraint_setting = ':runtime',",
-        ")",
-        "constraint_value(",
-        "    name = 'jdk11',",
-        "    constraint_setting = ':runtime',",
-        ")",
-        "constraint_setting(name = 'language')",
-        "constraint_value(",
-        "    name = 'java8',",
-        "    constraint_setting = ':language',",
-        ")");
-    if (TestConstants.LOCAL_CONFIG_PLATFORM_PATH != null) {
-      // Only create these if the local config workspace exists.
-      mockToolsConfig.create(
-          TestConstants.LOCAL_CONFIG_PLATFORM_PATH + "/WORKSPACE",
-          "workspace(name = 'local_config_platform')");
-      mockToolsConfig.create(
-          TestConstants.LOCAL_CONFIG_PLATFORM_PATH + "/BUILD",
-          "package(default_visibility=['//visibility:public'])",
-          "platform(name = 'host')");
-    }
   }
 
-  /** Adds a mock K8 platform. */
-  public static void addMockK8Platform(MockToolsConfig mockToolsConfig, Label crosstoolLabel)
+  /** Adds a mock piii platform. */
+  public static void addMockPiiiPlatform(MockToolsConfig mockToolsConfig, Label crosstoolLabel)
       throws Exception {
     mockToolsConfig.create(
         "mock_platform/BUILD",
@@ -164,14 +106,14 @@ public class MockPlatformSupport {
         "constraint_setting(name = 'mock_setting')",
         "constraint_value(name = 'mock_value', constraint_setting = ':mock_setting')",
         "platform(",
-        "   name = 'mock-k8-platform',",
+        "   name = 'mock-piii-platform',",
         "   constraint_values = [':mock_value'],",
         ")",
         "toolchain(",
-        "   name = 'toolchain_cc-compiler-k8',",
+        "   name = 'toolchain_cc-compiler-piii',",
         "   toolchain_type = '" + TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_type',",
         "   toolchain = '"
-            + crosstoolLabel.getRelativeWithRemapping("cc-compiler-k8-compiler", ImmutableMap.of())
+            + crosstoolLabel.getRelativeWithRemapping("cc-compiler-piii", ImmutableMap.of())
             + "',",
         "   target_compatible_with = [':mock_value'],",
         ")");
