@@ -276,10 +276,6 @@ public class ProtoApk implements Closeable {
 
     private void writeXmlFrom(XmlElement element) throws IOException {
       ANGLE_OPEN.writeTo(out);
-      if (!element.getNamespaceUriBytes().isEmpty()) {
-        findNamespacePrefix(element.getNamespaceUriBytes()).writeTo(out);
-        COLON.writeTo(out);
-      }
       final ByteString name = element.getNameBytes();
       name.writeTo(out);
       final Map<ByteString, ByteString> namespaces = new HashMap<>();
