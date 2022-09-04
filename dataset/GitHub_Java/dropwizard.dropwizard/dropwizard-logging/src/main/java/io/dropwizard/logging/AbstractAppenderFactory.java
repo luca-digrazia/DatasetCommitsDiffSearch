@@ -43,14 +43,6 @@ import java.util.TimeZone;
  *         <td>The maximum capacity of the blocking queue.</td>
  *     </tr>
  *     <tr>
- *         <td>{@code includeCallerData}</td>
- *         <td>{@link AsyncAppenderBase}</td>
- *         <td>
- *             Whether to include caller data, required for line numbers.
- *             Beware, is considered expensive.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code discardingThreshold}</td>
  *         <td>{@link AsyncAppenderBase}</td>
  *         <td>
@@ -72,8 +64,6 @@ public abstract class AbstractAppenderFactory implements AppenderFactory {
     private int queueSize = AsyncAppenderBase.DEFAULT_QUEUE_SIZE;
 
     private int discardingThreshold = -1;
-
-    private boolean includeCallerData = false;
 
     @JsonProperty
     public int getQueueSize() {
@@ -115,23 +105,12 @@ public abstract class AbstractAppenderFactory implements AppenderFactory {
         this.logFormat = logFormat;
     }
 
-    @JsonProperty
-    public boolean isIncludeCallerData() {
-        return includeCallerData;
-    }
-
-    @JsonProperty
-    public void setIncludeCallerData(boolean includeCallerData) {
-        this.includeCallerData = includeCallerData;
-    }
-
     protected Appender<ILoggingEvent> wrapAsync(Appender<ILoggingEvent> appender) {
         return wrapAsync(appender, appender.getContext());
     }
 
     protected Appender<ILoggingEvent> wrapAsync(Appender<ILoggingEvent> appender, Context context) {
         final AsyncAppender asyncAppender = new AsyncAppender();
-        asyncAppender.setIncludeCallerData(includeCallerData);
         asyncAppender.setQueueSize(queueSize);
         asyncAppender.setDiscardingThreshold(discardingThreshold);
         asyncAppender.setContext(context);
