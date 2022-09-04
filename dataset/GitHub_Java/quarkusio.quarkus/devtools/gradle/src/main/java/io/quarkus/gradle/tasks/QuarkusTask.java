@@ -4,9 +4,6 @@ import org.gradle.api.DefaultTask;
 
 import io.quarkus.gradle.QuarkusPluginExtension;
 
-/**
- * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
- */
 public abstract class QuarkusTask extends DefaultTask {
 
     private QuarkusPluginExtension extension;
@@ -19,8 +16,9 @@ public abstract class QuarkusTask extends DefaultTask {
     }
 
     QuarkusPluginExtension extension() {
-        if (extension == null)
-            extension = (QuarkusPluginExtension) getProject().getExtensions().findByName("quarkus");
+        if (extension == null) {
+            extension = getProject().getExtensions().findByType(QuarkusPluginExtension.class);
+        }
         return extension;
     }
 }

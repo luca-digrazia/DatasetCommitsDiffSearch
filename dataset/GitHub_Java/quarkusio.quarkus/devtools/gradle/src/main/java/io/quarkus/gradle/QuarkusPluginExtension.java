@@ -36,20 +36,12 @@ public class QuarkusPluginExtension {
         return new File(outputDirectory);
     }
 
-    public void setOutputDirectory(String outputDirectory) {
-        this.outputDirectory = outputDirectory;
-    }
-
     public File outputConfigDirectory() {
         if (outputConfigDirectory == null) {
             outputConfigDirectory = project.getConvention().getPlugin(JavaPluginConvention.class)
                     .getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getOutput().getResourcesDir().getAbsolutePath();
         }
         return new File(outputConfigDirectory);
-    }
-
-    public void setOutputConfigDirectory(String outputConfigDirectory) {
-        this.outputConfigDirectory = outputConfigDirectory;
     }
 
     public File sourceDir() {
@@ -60,10 +52,6 @@ public class QuarkusPluginExtension {
         return new File(sourceDir);
     }
 
-    public void setSourceDir(String sourceDir) {
-        this.sourceDir = sourceDir;
-    }
-
     public File workingDir() {
         if (workingDir == null) {
             workingDir = outputDirectory().getPath();
@@ -72,19 +60,11 @@ public class QuarkusPluginExtension {
         return new File(workingDir);
     }
 
-    public void setWorkingDir(String workingDir) {
-        this.workingDir = workingDir;
-    }
-
     public String finalName() {
         if (finalName == null || finalName.length() == 0) {
             this.finalName = String.format("%s-%s", project.getName(), project.getVersion());
         }
         return finalName;
-    }
-
-    public void setFinalName(String finalName) {
-        this.finalName = finalName;
     }
 
     public Set<File> resourcesDir() {
