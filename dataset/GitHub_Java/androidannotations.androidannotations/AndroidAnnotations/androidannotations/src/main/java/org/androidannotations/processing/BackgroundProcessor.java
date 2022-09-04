@@ -66,10 +66,9 @@ public class BackgroundProcessor implements DecoratingElementProcessor {
 		Background annotation = element.getAnnotation(Background.class);
 		String id = annotation.id();
 		int delay = annotation.delay();
-		String serial = annotation.serial();
 
 		JClass backgroundExecutorClass = holder.refClass(BackgroundExecutor.class);
-		JInvocation newTask = _new(anonymousTaskClass).arg(lit(id)).arg(lit(delay)).arg(lit(serial));
+		JInvocation newTask = _new(anonymousTaskClass).arg(lit(id)).arg(lit(delay));
 		JInvocation executeCall = backgroundExecutorClass.staticInvoke("execute").arg(newTask);
 
 		delegatingMethod.body().add(executeCall);
