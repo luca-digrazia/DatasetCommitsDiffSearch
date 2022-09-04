@@ -1,23 +1,23 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.codecs;
 
 import org.graylog2.plugin.InstantMillisProvider;
-import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.codecs.CodecAggregator;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.buffer.ChannelBuffers;
@@ -38,14 +38,14 @@ import static org.testng.Assert.*;
 
 public class GelfChunkAggregatorTest {
     private static final byte[] CHUNK_MAGIC_BYTES = new byte[]{0x1e, 0x0f};
-    private MessageInput input;
+    private MessageInput2 input;
     private ScheduledThreadPoolExecutor poolExecutor;
     private GelfChunkAggregator aggregator;
     private InetSocketAddress remoteAddress;
 
     @BeforeTest
     public void before() {
-        input = mock(MessageInput.class);
+        input = mock(MessageInput2.class);
         when(input.getUniqueReadableId()).thenReturn("input-id");
         poolExecutor = new ScheduledThreadPoolExecutor(1);
         aggregator = new GelfChunkAggregator(poolExecutor);
@@ -55,7 +55,6 @@ public class GelfChunkAggregatorTest {
     @AfterTest
     public void after() {
         poolExecutor.shutdown();
-        DateTimeUtils.setCurrentMillisSystem();
     }
 
     @Test
