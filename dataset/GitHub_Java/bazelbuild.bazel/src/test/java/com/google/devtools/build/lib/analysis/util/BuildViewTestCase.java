@@ -338,7 +338,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       SkyframeExecutor skyframeExecutor,
       PackageFactory packageFactory,
       BlazeDirectories directories) {
-    ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions =
+    ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions =
         ((InMemoryMemoizingEvaluator) skyframeExecutor.getEvaluatorForTesting())
             .getSkyFunctionsForTesting();
     BzlLoadFunction bzlLoadFunction =
@@ -1660,7 +1660,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected static ConfiguredAttributeMapper getMapperFromConfiguredTargetAndTarget(
       ConfiguredTargetAndData ctad) {
     return ConfiguredAttributeMapper.of(
-        (Rule) ctad.getTarget(), ctad.getConfiguredTarget().getConfigConditions());
+        (Rule) ctad.getTarget(),
+        ((RuleConfiguredTarget) ctad.getConfiguredTarget()).getConfigConditions());
   }
 
   public static Label makeLabel(String label) {
