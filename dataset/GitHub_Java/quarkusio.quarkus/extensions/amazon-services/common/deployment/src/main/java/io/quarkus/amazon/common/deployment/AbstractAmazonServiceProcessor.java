@@ -18,7 +18,6 @@ import io.quarkus.amazon.common.runtime.SyncHttpClientConfig;
 import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.InjectionPointInfo;
-import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -30,7 +29,7 @@ import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 
 abstract public class AbstractAmazonServiceProcessor {
 
-    abstract protected Feature amazonServiceClientName();
+    abstract protected String amazonServiceClientName();
 
     abstract protected String configName();
 
@@ -88,11 +87,8 @@ abstract public class AbstractAmazonServiceProcessor {
             RuntimeValue<SdkAsyncHttpClient.Builder> asyncTransport = null;
 
             if (client.getSyncClassName().isPresent()) {
-                if (buildSyncConfig.type == SyncHttpClientBuildTimeConfig.SyncClientType.APACHE) {
-                    syncTransport = recorder.configureSyncApacheHttpClient(configName(), syncConfig);
-                } else {
-                    syncTransport = recorder.configureSyncUrlConnectionHttpClient(configName(), syncConfig);
-                }
+                syncTransport = recorder.configureSync(configName(), buildSyncConfig,
+                        syncConfig);
             }
 
             if (client.getAsyncClassName().isPresent()) {
