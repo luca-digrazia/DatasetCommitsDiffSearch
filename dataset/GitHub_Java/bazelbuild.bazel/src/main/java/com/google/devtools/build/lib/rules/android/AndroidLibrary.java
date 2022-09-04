@@ -175,7 +175,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     validateRuleContext(ruleContext);
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
-    AndroidSdkProvider.verifyPresence(ruleContext);
+    if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
+      return null;
+    }
     checkResourceInlining(ruleContext);
     NestedSetBuilder<Aar> transitiveAars = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAarArtifacts = NestedSetBuilder.stableOrder();
