@@ -17,7 +17,6 @@
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport;
 
 import com.google.common.collect.Sets;
-import org.bson.types.ObjectId;
 import org.graylog2.migrations.Migration;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.joda.time.DateTime;
@@ -27,13 +26,11 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.time.ZonedDateTime;
 import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -89,28 +86,14 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
                 .map(dashboard -> migrateDashboard(dashboard, recordMigratedDashboardIds, recordMigratedWidgetIds))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        writeViews(newViews);
+        newViews.forEach((view, search) -> {
+            searchService.save(search);
+            viewService.save(view);
+        });
 
         final MigrationCompleted migrationCompleted = MigrationCompleted.create(dashboardIdToViewId, widgetIdMigrationMapping);
 
         writeMigrationCompleted(migrationCompleted);
-    }
-
-    private void writeViews(Map<View, Search> newViews) {
-        final List<ObjectId> writtenSearches = new ArrayList<>(newViews.size());
-        final List<ObjectId> writtenViews = new ArrayList<>(newViews.size());
-
-        try {
-            newViews.forEach((view, search) -> {
-                writtenSearches.add(searchService.save(search));
-                writtenViews.add(viewService.save(view));
-            });
-        } catch (Exception e) {
-            LOG.warn("Exception caught while writing new views to database, rolling back: ", e);
-            writtenSearches.forEach(searchService::remove);
-            writtenViews.forEach(viewService::remove);
-            throw e;
-        }
     }
 
     private void writeMigrationCompleted(MigrationCompleted migrationCompleted) {
