@@ -24,9 +24,9 @@ import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
-import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
+import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
 /** Rule definition for {@code java_package_configuration} */
@@ -44,9 +44,9 @@ public class JavaPackageConfigurationRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr("packages", LABEL_LIST)
-                .cfg(ExecutionTransitionFactory.create())
+                .cfg(HostTransition.createFactory())
                 .allowedFileTypes()
-                .mandatoryBuiltinProviders(ImmutableList.of(PackageSpecificationProvider.class)))
+                .mandatoryNativeProviders(ImmutableList.of(PackageSpecificationProvider.class)))
         /* <!-- #BLAZE_RULE(java_package_configuration).ATTRIBUTE(javacopts) -->
         Java compiler flags.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -76,7 +76,7 @@ Configurations can be added to
 <code><a href="${link java_toolchain.javacopts}">java_toolchain.javacopts</a></code>s.
 </p>
 
-<h4 id="java_package_configuration_example">Example:</h4>
+<h4 id="java_package_configuration">Example:</h4>
 
 <pre class="code">
 java_package_configuration(

@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -29,11 +27,11 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
-import com.google.devtools.build.lib.analysis.TransitionMode;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -48,15 +46,8 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
       throws InterruptedException, RuleErrorException, ActionConflictException {
     JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.stableOrder();
-    BuildConfiguration configuration = checkNotNull(ruleContext.getConfiguration());
-    filesBuilder.addTransitive(
-        PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", TransitionMode.TARGET));
-    boolean siblingRepositoryLayout =
-        ruleContext
-            .getAnalysisEnvironment()
-            .getSkylarkSemantics()
-            .experimentalSiblingRepositoryLayout();
-    PathFragment javaHome = defaultJavaHome(ruleContext.getLabel(), siblingRepositoryLayout);
+    filesBuilder.addTransitive(PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", Mode.TARGET));
+    PathFragment javaHome = defaultJavaHome(ruleContext.getLabel());
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("java_home")) {
       PathFragment javaHomeAttribute =
           PathFragment.create(ruleContext.getExpander().expand("java_home"));
@@ -75,13 +66,13 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
     PathFragment javaBinaryRunfilesPath =
         getRunfilesJavaExecutable(javaHome, ruleContext.getLabel());
 
-    Artifact java = ruleContext.getPrerequisiteArtifact("java", TransitionMode.TARGET);
+    Artifact java = ruleContext.getPrerequisiteArtifact("java", Mode.TARGET);
     if (java != null) {
       if (javaHome.isAbsolute()) {
         ruleContext.ruleError("'java_home' with an absolute path requires 'java' to be empty.");
       }
       javaBinaryExecPath = java.getExecPath();
-      javaBinaryRunfilesPath = java.getRootRelativePath();
+      javaBinaryRunfilesPath = java.getRunfilesPath();
       if (!isJavaBinary(javaBinaryExecPath)) {
         ruleContext.ruleError("the path to 'java' must end in 'bin/java'.");
       }
@@ -96,11 +87,8 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
     NestedSet<Artifact> middleman =
-        configuration.enableAggregatingMiddleman()
-            ? CompilationHelper.getAggregatingMiddleman(
-                ruleContext, Actions.escapeLabel(ruleContext.getLabel()), filesToBuild)
-            : filesToBuild;
-
+        CompilationHelper.getAggregatingMiddleman(
+            ruleContext, Actions.escapeLabel(ruleContext.getLabel()), filesToBuild);
     // TODO(cushon): clean up uses of java_runtime in data deps and remove this
     Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
@@ -136,11 +124,11 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
         || path.endsWith(PathFragment.create("bin/java.exe"));
   }
 
-  static PathFragment defaultJavaHome(Label javabase, boolean siblingRepositoryLayout) {
+  static PathFragment defaultJavaHome(Label javabase) {
     if (javabase.getPackageIdentifier().getRepository().isDefault()) {
       return javabase.getPackageFragment();
     }
-    return javabase.getPackageIdentifier().getExecPath(siblingRepositoryLayout);
+    return javabase.getPackageIdentifier().getSourceRoot();
   }
 
   private static PathFragment getRunfilesJavaExecutable(PathFragment javaHome, Label javabase) {

@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.ImportDepsCheckingLevel;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
+import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -39,6 +40,13 @@ public class JavaOptions extends FragmentOptions {
   public static class JavaClasspathModeConverter extends EnumConverter<JavaClasspathMode> {
     public JavaClasspathModeConverter() {
       super(JavaClasspathMode.class, "Java classpath reduction strategy");
+    }
+  }
+
+  /** Converter for the --java_optimization_mode option. */
+  public static class JavaOptimizationModeConverter extends EnumConverter<JavaOptimizationMode> {
+    public JavaOptimizationModeConverter() {
+      super(JavaOptimizationMode.class, "Java optimization strategy");
     }
   }
 
@@ -450,11 +458,12 @@ public class JavaOptions extends FragmentOptions {
 
   @Option(
       name = "java_optimization_mode",
-      defaultValue = "",
+      defaultValue = "legacy",
+      converter = JavaOptimizationModeConverter.class,
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Do not use.")
-  public String javaOptimizationMode;
+      help = "Applies desired link-time optimizations to Java binaries and tests.")
+  public JavaOptimizationMode javaOptimizationMode;
 
   @Option(
       name = "legacy_bazel_java_test",
@@ -589,7 +598,7 @@ public class JavaOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_require_java_toolchain_header_compiler_direct",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       metadataTags = {
