@@ -38,6 +38,7 @@ import build.bazel.remote.execution.v2.Tree;
 import com.google.common.base.Charsets;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -49,6 +50,7 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.MetadataInjector;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -61,7 +63,6 @@ import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.InMemoryCacheClient;
 import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.remote.util.Utils.InMemoryOutput;
-import com.google.devtools.build.lib.skyframe.TreeArtifactValue;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.RecordingOutErr;
@@ -992,16 +993,13 @@ public class RemoteCacheTests {
     // assert
     assertThat(inMemoryOutput).isNull();
 
-    TreeArtifactValue tree =
-        TreeArtifactValue.newBuilder(dir)
-            .putChild(
-                TreeFileArtifact.createTreeOutput(dir, "file1"),
-                new RemoteFileArtifactValue(toBinaryDigest(d1), d1.getSizeBytes(), 1, "action-id"))
-            .putChild(
-                TreeFileArtifact.createTreeOutput(dir, "a/file2"),
-                new RemoteFileArtifactValue(toBinaryDigest(d2), d2.getSizeBytes(), 1, "action-id"))
-            .build();
-    verify(injector).injectTree(dir, tree);
+    Map<TreeFileArtifact, FileArtifactValue> m =
+        ImmutableMap.of(
+            TreeFileArtifact.createTreeOutput(dir, "file1"),
+            new RemoteFileArtifactValue(toBinaryDigest(d1), d1.getSizeBytes(), 1, "action-id"),
+            TreeFileArtifact.createTreeOutput(dir, "a/file2"),
+            new RemoteFileArtifactValue(toBinaryDigest(d2), d2.getSizeBytes(), 1, "action-id"));
+    verify(injector).injectDirectory(eq(dir), eq(m));
 
     Path outputBase = artifactRoot.getRoot().asPath();
     assertThat(outputBase.readdir(Symlinks.NOFOLLOW)).isEmpty();
@@ -1204,35 +1202,6 @@ public class RemoteCacheTests {
     }
     assertThat(file.exists()).isTrue();
     assertThat(file.getFileSize()).isEqualTo(0);
-  }
-
-  @Test
-  public void testDownloadFileWithSymlinkTemplate() throws Exception {
-    // Test that when a symlink template is provided, we don't actually download files to disk.
-    // Instead, a symbolic link should be created that points to a location where the file may
-    // actually be found. That location could, for example, be backed by a FUSE file system that
-    // exposes the Content Addressable Storage.
-
-    // arrange
-    final ConcurrentMap<Digest, byte[]> cas = new ConcurrentHashMap<>();
-
-    Digest helloDigest = digestUtil.computeAsUtf8("hello-contents");
-    cas.put(helloDigest, "hello-contents".getBytes(StandardCharsets.UTF_8));
-
-    Path file = fs.getPath("/execroot/symlink-to-file");
-    RemoteOptions options = Options.getDefaults(RemoteOptions.class);
-    options.remoteDownloadSymlinkTemplate = "/home/alice/cas/{hash}-{size_bytes}";
-    RemoteCache remoteCache = new InMemoryRemoteCache(cas, options, digestUtil);
-
-    // act
-    Utils.getFromFuture(remoteCache.downloadFile(file, helloDigest));
-
-    // assert
-    assertThat(file.isSymbolicLink()).isTrue();
-    assertThat(file.readSymbolicLink())
-        .isEqualTo(
-            PathFragment.create(
-                "/home/alice/cas/a378b939ad2e1d470a9a28b34b0e256b189e85cb236766edc1d46ec3b6ca82e5-14"));
   }
 
   @Test
