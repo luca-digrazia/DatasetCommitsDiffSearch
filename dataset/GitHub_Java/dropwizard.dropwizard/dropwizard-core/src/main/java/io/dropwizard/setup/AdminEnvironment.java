@@ -6,7 +6,6 @@ import com.codahale.metrics.health.jvm.ThreadDeadlockHealthCheck;
 import io.dropwizard.jetty.MutableServletContextHandler;
 import io.dropwizard.jetty.setup.ServletEnvironment;
 import io.dropwizard.servlets.tasks.GarbageCollectionTask;
-import io.dropwizard.servlets.tasks.LogConfigurationTask;
 import io.dropwizard.servlets.tasks.Task;
 import io.dropwizard.servlets.tasks.TaskServlet;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
@@ -15,7 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static java.util.Objects.requireNonNull;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * The administrative environment of a Dropwizard application.
@@ -39,7 +38,6 @@ public class AdminEnvironment extends ServletEnvironment {
         this.healthChecks.register("deadlocks", new ThreadDeadlockHealthCheck());
         this.tasks = new TaskServlet(metricRegistry);
         tasks.add(new GarbageCollectionTask());
-        tasks.add(new LogConfigurationTask());
         addServlet("tasks", tasks).addMapping("/tasks/*");
         handler.addLifeCycleListener(new AbstractLifeCycle.AbstractLifeCycleListener() {
             @Override
@@ -56,7 +54,7 @@ public class AdminEnvironment extends ServletEnvironment {
      * @param task a task
      */
     public void addTask(Task task) {
-        tasks.add(requireNonNull(task));
+        tasks.add(checkNotNull(task));
     }
 
     private void logTasks() {
