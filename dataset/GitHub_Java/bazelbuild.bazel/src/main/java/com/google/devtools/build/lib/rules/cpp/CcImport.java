@@ -78,12 +78,13 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, ccToolchain);
+    boolean targetWindows = featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS);
 
     Artifact staticLibrary = ruleContext.getPrerequisiteArtifact("static_library", Mode.TARGET);
     Artifact sharedLibrary = ruleContext.getPrerequisiteArtifact("shared_library", Mode.TARGET);
     Artifact interfaceLibrary =
         ruleContext.getPrerequisiteArtifact("interface_library", Mode.TARGET);
-    performErrorChecks(ruleContext, systemProvided, sharedLibrary, interfaceLibrary);
+    performErrorChecks(ruleContext, systemProvided, sharedLibrary, interfaceLibrary, targetWindows);
 
     Artifact resolvedSymlinkDynamicLibrary = null;
     Artifact resolvedSymlinkInterfaceLibrary = null;
@@ -191,7 +192,8 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       boolean systemProvided,
       Artifact sharedLibrary,
-      Artifact interfaceLibrary) {
+      Artifact interfaceLibrary,
+      boolean targetsWindows) {
     // If the shared library will be provided by system during runtime, users are not supposed to
     // specify shared_library.
     if (systemProvided && sharedLibrary != null) {
@@ -203,6 +205,12 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
     if (!systemProvided && sharedLibrary == null && interfaceLibrary != null) {
       ruleContext.ruleError(
           "'shared_library' should be specified when 'system_provided' is false");
+    }
+
+    if (targetsWindows && sharedLibrary != null && interfaceLibrary == null) {
+      ruleContext.ruleError(
+          "'interface library' must be specified when using cc_import for shared library on"
+              + " Windows");
     }
   }
 }

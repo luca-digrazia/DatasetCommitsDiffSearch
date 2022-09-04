@@ -269,7 +269,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
     private boolean areSrcsBlacklisted() {
       return !new ProtoSourceFileBlacklist(
               ruleContext, getProtoToolchainProvider().blacklistedProtos())
-          .checkSrcs(protoInfo.getOriginalDirectProtoSources(), "cc_proto_library");
+          .checkSrcs(protoInfo.getDirectProtoSources(), "cc_proto_library");
     }
 
     private FeatureConfiguration getFeatureConfiguration() {
@@ -323,11 +323,6 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       PathFragment binOrGenfiles = ruleContext.getBinOrGenfilesDirectory().getExecPath();
       if (protoRootFragment.startsWith(binOrGenfiles)) {
         protoRootFragment = protoRootFragment.relativeTo(binOrGenfiles);
-      }
-      PathFragment repositoryPath =
-          ruleContext.getLabel().getPackageIdentifier().getRepository().getPathUnderExecRoot();
-      if (protoRootFragment.startsWith(repositoryPath)) {
-        protoRootFragment = protoRootFragment.relativeTo(repositoryPath);
       }
 
       String stripIncludePrefix =
