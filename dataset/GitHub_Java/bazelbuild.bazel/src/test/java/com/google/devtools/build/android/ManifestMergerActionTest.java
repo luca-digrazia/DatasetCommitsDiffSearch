@@ -95,6 +95,10 @@ public class ManifestMergerActionTest {
 
   @Test
   public void testMerge_GenerateDummyManifest() throws Exception {
+    final Path workingDir = Paths.get(System.getProperty("user.dir"));
+    assertThat(workingDir.toFile().exists()).isTrue();
+    assertThat(workingDir.toFile().isDirectory()).isTrue();
+
     Files.createDirectories(working.resolve("output"));
     Path mergedManifest = working.resolve("output/mergedManifest.xml");
 
@@ -120,15 +124,18 @@ public class ManifestMergerActionTest {
   }
 
   @Test public void testMerge() throws Exception {
-    String dataDir =
-        Paths.get(System.getenv("TEST_WORKSPACE"), System.getenv("TEST_BINARY"))
-            .resolveSibling("testing/manifestmerge")
-            .toString()
-            .replace("\\", "/");
+    final Path workingDir = Paths.get(System.getProperty("user.dir"));
+    assertThat(workingDir.toFile().exists()).isTrue();
+    assertThat(workingDir.toFile().isDirectory()).isTrue();
 
-    final Path mergerManifest = rlocation(dataDir + "/merger/AndroidManifest.xml");
-    final Path mergeeManifestOne = rlocation(dataDir + "/mergeeOne/AndroidManifest.xml");
-    final Path mergeeManifestTwo = rlocation(dataDir + "/mergeeTwo/AndroidManifest.xml");
+    String dataDir = System.getProperty("testdatadir");
+    if (dataDir.charAt(dataDir.length() - 1) != '/') {
+      dataDir = dataDir + '/';
+    }
+
+    final Path mergerManifest = rlocation(dataDir + "merger/AndroidManifest.xml");
+    final Path mergeeManifestOne = rlocation(dataDir + "mergeeOne/AndroidManifest.xml");
+    final Path mergeeManifestTwo = rlocation(dataDir + "mergeeTwo/AndroidManifest.xml");
     assertThat(mergerManifest.toFile().exists()).isTrue();
     assertThat(mergeeManifestOne.toFile().exists()).isTrue();
     assertThat(mergeeManifestTwo.toFile().exists()).isTrue();
@@ -224,16 +231,15 @@ public class ManifestMergerActionTest {
             + " </manifest>");
 
     // binary manifest merging
-    args =
-        generateArgs(
-            binaryManifest,
-            ImmutableMap.of(libFooOutput, "libFoo", libBarOutput, "libBar"),
-            /* library= */ false,
-            ImmutableMap.of(
-                "applicationId", "com.google.android.app",
-                "foo", "this \\\\: is \"a, \"bad string"),
-            /* customPackage= */ "",
-            binaryOutput);
+    args = generateArgs(
+        binaryManifest,
+        ImmutableMap.of(libFooOutput, "libFoo", libBarOutput, "libBar"),
+        false, /* library */
+        ImmutableMap.of(
+            "applicationId", "com.google.android.app",
+            "foo", "this \\\\: is \"a, \"bad string"),
+        "", /* customPackage */
+        binaryOutput);
     ManifestMergerAction.main(args.toArray(new String[0]));
     assertThat(Joiner.on(" ")
         .join(Files.readAllLines(binaryOutput, UTF_8))

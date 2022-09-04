@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.logging.Logger;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -199,7 +200,7 @@ public class ManifestMergerAction {
       Path tmp = Files.createTempDirectory("manifest_merge_tmp");
       tmp.toFile().deleteOnExit();
       ImmutableMap.Builder<Path, String> mergeeManifests = ImmutableMap.builder();
-      for (Map.Entry<Path, String> mergeeManifest : options.mergeeManifests.entrySet()) {
+      for (Entry<Path, String> mergeeManifest : options.mergeeManifests.entrySet()) {
         mergeeManifests.put(
             removePermissions(mergeeManifest.getKey(), tmp), mergeeManifest.getValue());
       }
