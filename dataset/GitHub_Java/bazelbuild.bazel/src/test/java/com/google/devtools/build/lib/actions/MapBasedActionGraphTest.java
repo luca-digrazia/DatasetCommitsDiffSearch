@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -40,7 +39,7 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class MapBasedActionGraphTest {
-  private final FileSystem fileSystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
+  private final FileSystem fileSystem = new InMemoryFileSystem();
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Test
@@ -132,9 +131,6 @@ public class MapBasedActionGraphTest {
                 graph.registerAction(action);
               } catch (ActionConflictException e) {
                 throw new UncheckedActionConflictException(e);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupts not expected in this test");
               }
               doRandom();
             }
@@ -146,12 +142,7 @@ public class MapBasedActionGraphTest {
           new Runnable() {
             @Override
             public void run() {
-              try {
-                graph.unregisterAction(action);
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("Interrupts not expected in this test");
-              }
+              graph.unregisterAction(action);
               doRandom();
             }
           });

@@ -147,18 +147,16 @@ public final class CoverageReportActionBuilder {
         actionExecutionContext.getEventHandler().handle(Event.info(locationMessage));
         return ActionResult.create(spawnResults);
       } catch (ExecException e) {
-        throw e.toActionExecutionException(this);
+        throw e.toActionExecutionException(
+            "Coverage report generation failed: ",
+            actionExecutionContext.getVerboseFailures(),
+            this);
       }
     }
 
     @Override
     public String getMnemonic() {
       return "CoverageReport";
-    }
-
-    @Override
-    protected String getRawProgressMessage() {
-      return "Coverage report generation";
     }
 
     @Override

@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.util.TestAction.DummyAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -57,7 +58,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -101,6 +104,17 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
     assertThat(value.getChildren())
         .containsExactlyElementsIn(
             Iterables.transform(children, child -> TreeFileArtifact.createTreeOutput(tree, child)));
+
+    // Assertions about digest. As of this writing this logic is essentially the same
+    // as that in TreeArtifact, but it's good practice to unit test anyway to guard against
+    // breaking changes.
+    Map<String, FileArtifactValue> digestBuilder = new HashMap<>();
+    for (PathFragment child : children) {
+      FileArtifactValue subdigest =
+          FileArtifactValue.createForTesting(tree.getPath().getRelative(child));
+      digestBuilder.put(child.getPathString(), subdigest);
+    }
+    assertThat(DigestUtils.fromMetadata(digestBuilder)).isEqualTo(value.getDigest());
     return value;
   }
 
@@ -252,7 +266,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
             .setNumThreads(SkyframeExecutor.DEFAULT_THREAD_COUNT)
-            .setEventHandler(NullEventHandler.INSTANCE)
+            .setEventHander(NullEventHandler.INSTANCE)
             .build();
     return driver.evaluate(Arrays.asList(keys), evaluationContext);
   }
@@ -261,12 +275,12 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws SkyFunctionException, InterruptedException {
+      Map<TreeFileArtifact, FileArtifactValue> treeArtifactData = new HashMap<>();
       ActionLookupData actionLookupData = (ActionLookupData) skyKey.argument();
       ActionLookupValue actionLookupValue =
           (ActionLookupValue) env.getValue(actionLookupData.getActionLookupKey());
       Action action = actionLookupValue.getAction(actionLookupData.getActionIndex());
       SpecialArtifact output = (SpecialArtifact) Iterables.getOnlyElement(action.getOutputs());
-      TreeArtifactValue.Builder tree = TreeArtifactValue.newBuilder(output);
       for (PathFragment subpath : testTreeArtifactContents) {
         try {
           TreeFileArtifact suboutput = TreeFileArtifact.createTreeOutput(output, subpath);
@@ -279,15 +293,17 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
           FileArtifactValue withDigest =
               FileArtifactValue.createFromInjectedDigest(
                   noDigest, path.getDigest(), !output.isConstantMetadata());
-          tree.putChild(suboutput, withDigest);
+          treeArtifactData.put(suboutput, withDigest);
         } catch (IOException e) {
           throw new SkyFunctionException(e, Transience.TRANSIENT) {};
         }
       }
 
+      TreeArtifactValue treeArtifactValue = TreeArtifactValue.create(treeArtifactData);
+
       return ActionExecutionValue.create(
           /*artifactData=*/ ImmutableMap.of(),
-          ImmutableMap.of(output, tree.build()),
+          ImmutableMap.of(output, treeArtifactValue),
           /*outputSymlinks=*/ null,
           /*discoveredModules=*/ null,
           /*actionDependsOnBuildId=*/ false);

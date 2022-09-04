@@ -20,7 +20,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Ascii;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -36,7 +38,6 @@ import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
@@ -163,6 +164,7 @@ import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
@@ -183,12 +185,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.function.Predicate;
 import javax.annotation.Nullable;
 import org.junit.Before;
 
@@ -272,11 +271,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         ImmutableList.of(
             PrecomputedValue.injected(
                 PrecomputedValue.STARLARK_SEMANTICS, StarlarkSemantics.DEFAULT),
-            PrecomputedValue.injected(PrecomputedValue.REPO_ENV, ImmutableMap.of()),
+            PrecomputedValue.injected(PrecomputedValue.REPO_ENV, ImmutableMap.<String, String>of()),
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()),
+                RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
+                ImmutableMap.<RepositoryName, PathFragment>of()),
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
+                Optional.<RootedPath>absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY),
@@ -481,19 +482,21 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         packageOptions,
         starlarkSemanticsOptions,
         UUID.randomUUID(),
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
         tsgm);
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
+    skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageOptions.getDeletedPackages()));
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
+                Optional.<RootedPath>absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES,
-                ImmutableSet.of()),
+                ImmutableSet.<String>of()),
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_FOR_VERIFICATION, Optional.empty())));
+                RepositoryDelegatorFunction.RESOLVED_FILE_FOR_VERIFICATION,
+                Optional.<RootedPath>absent())));
   }
 
   protected void setPackageOptions(String... options) throws Exception {
@@ -628,13 +631,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return new CachingAnalysisEnvironment(
         view.getArtifactFactory(),
         actionKeyContext,
-        new ActionLookupKey() {
-          @Nullable
-          @Override
-          public Label getLabel() {
-            return null;
-          }
-
+        new ActionLookupValue.ActionLookupKey() {
           @Override
           public SkyFunctionName functionName() {
             return null;
@@ -866,21 +863,15 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getGeneratingAction(outputName, filesToBuild, "filesToBuild");
   }
 
-  private static Artifact findArtifactNamed(
-      String name, NestedSet<Artifact> artifacts, Object context) {
-    return artifacts.toList().stream()
-        .filter(artifactNamed(name))
-        .findFirst()
-        .orElseThrow(
-            () ->
-                new NoSuchElementException(
-                    String.format(
-                        "Artifact named '%s' not found in %s (%s)", name, context, artifacts)));
-  }
-
   private Action getGeneratingAction(
       String outputName, NestedSet<Artifact> filesToBuild, String providerName) {
-    return getGeneratingAction(findArtifactNamed(outputName, filesToBuild, providerName));
+    Artifact artifact = Iterables.find(filesToBuild.toList(), artifactNamed(outputName), null);
+    if (artifact == null) {
+      fail(
+          String.format(
+              "Artifact named '%s' not found in %s (%s)", outputName, providerName, filesToBuild));
+    }
+    return getGeneratingAction(artifact);
   }
 
   protected final Action getGeneratingAction(Artifact artifact) {
@@ -912,7 +903,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected SpawnAction getGeneratingSpawnAction(ConfiguredTarget target, String outputName) {
     return getGeneratingSpawnAction(
-        findArtifactNamed(outputName, getFilesToBuild(target), target.getLabel()));
+        Iterables.find(getFilesToBuild(target).toList(), artifactNamed(outputName)));
   }
 
   protected final List<String> getGeneratingSpawnActionArgs(Artifact artifact)
@@ -1297,7 +1288,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected final Artifact.DerivedArtifact getDerivedArtifact(
       PathFragment rootRelativePath, ArtifactRoot root, ArtifactOwner owner) {
-    if ((owner instanceof ActionLookupKey)) {
+    if ((owner instanceof ActionLookupValue.ActionLookupKey)) {
       ActionLookupValue actionLookupValue;
       try {
         actionLookupValue =
@@ -1328,7 +1319,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * "foo.o".
    */
   protected final Artifact getTreeArtifact(String packageRelativePath, ConfiguredTarget owner) {
-    ActionLookupKey actionLookupKey =
+    ActionLookupValue.ActionLookupKey actionLookupKey =
         ConfiguredTargetKey.builder()
             .setConfiguredTarget(owner)
             .setConfigurationKey(owner.getConfigurationKey())
@@ -1954,8 +1945,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         eventBus);
   }
 
-  protected static Predicate<Artifact> artifactNamed(String name) {
-    return artifact -> name.equals(artifact.prettyPrint());
+  protected static Predicate<Artifact> artifactNamed(final String name) {
+    return new Predicate<Artifact>() {
+      @Override
+      public boolean apply(Artifact input) {
+        return name.equals(input.prettyPrint());
+      }
+    };
   }
 
   /**
@@ -2150,7 +2146,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public ActionLookupKey getOwner() {
+    public ActionLookupValue.ActionLookupKey getOwner() {
       throw new UnsupportedOperationException();
     }
 
@@ -2276,10 +2272,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Converts the given label to an output path where double slashes and colons are replaced with
-   * single slashes.
+   * Converts the given label to an output path where double slashes and colons are
+   * replaced with single slashes
+   * @param label
    */
-  private static String convertLabelToPath(String label) {
+  private String convertLabelToPath(String label) {
     return label.replace(':', '/').substring(1);
   }
 

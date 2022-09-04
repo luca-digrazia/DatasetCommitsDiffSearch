@@ -147,10 +147,6 @@ class ArtifactConflictFinder {
             // artifact below -- we don't need to check it since this action is already in
             // error.
             continue;
-          } catch (InterruptedException e) {
-            // Bail.
-            Thread.currentThread().interrupt();
-            return;
           }
           for (Artifact output : action.getOutputs()) {
             artifactPathMap.put(output.getExecPath(), output);

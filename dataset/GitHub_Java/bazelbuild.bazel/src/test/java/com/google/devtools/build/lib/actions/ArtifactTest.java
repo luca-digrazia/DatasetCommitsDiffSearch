@@ -19,13 +19,13 @@ import static org.junit.Assert.assertThrows;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.testing.EqualsTester;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
 import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.LabelArtifactOwner;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -35,8 +35,6 @@ import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationDepsUtils;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.testutil.Scratch;
-import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -145,24 +143,6 @@ public class ArtifactTest {
   }
 
   @Test
-  public void testIsFileType() throws Exception {
-    ArtifactRoot root = ArtifactRoot.asSourceRoot(Root.fromPath(scratch.dir("/foo")));
-    Artifact javaFile = ActionsTestUtil.createArtifact(root, scratch.file("/foo/Bar.java"));
-    assertThat(javaFile.isFileType(FileType.of("java"))).isTrue();
-    assertThat(javaFile.isFileType(FileType.of("cc"))).isFalse();
-  }
-
-  @Test
-  public void testIsFileTypeSet() throws Exception {
-    ArtifactRoot root = ArtifactRoot.asSourceRoot(Root.fromPath(scratch.dir("/foo")));
-    Artifact javaFile = ActionsTestUtil.createArtifact(root, scratch.file("/foo/Bar.java"));
-    assertThat(javaFile.isFileType(FileTypeSet.of(FileType.of("cc"), FileType.of("java"))))
-        .isTrue();
-    assertThat(javaFile.isFileType(FileTypeSet.of(FileType.of("py"), FileType.of("js")))).isFalse();
-    assertThat(javaFile.isFileType(FileTypeSet.of())).isFalse();
-  }
-
-  @Test
   public void testMangledPath() {
     String path = "dir/sub_dir/name:end";
     assertThat(Actions.escapedPath(path)).isEqualTo("dir_Ssub_Udir_Sname_Cend");
@@ -191,7 +171,7 @@ public class ArtifactTest {
           }
 
           @Override
-          public ActionLookupKey getOwner() {
+          public ActionLookupValue.ActionLookupKey getOwner() {
             throw new UnsupportedOperationException();
           }
         },
@@ -369,7 +349,7 @@ public class ArtifactTest {
             new Artifact.SourceArtifact(
                     ArtifactRoot.asSourceRoot(Root.fromPath(scratch.dir("/"))),
                     PathFragment.create("src/foo.cc"),
-                    ArtifactOwner.NULL_OWNER)
+                    ArtifactOwner.NullArtifactOwner.INSTANCE)
                 .isSourceArtifact())
         .isTrue();
     assertThat(
@@ -389,28 +369,18 @@ public class ArtifactTest {
   }
 
   @Test
-  public void hashCodeAndEquals() {
+  public void hashCodeAndEquals() throws IOException {
     Path execRoot = scratch.getFileSystem().getPath("/");
     ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, "newRoot");
-    ActionLookupKey firstOwner =
-        new ActionLookupKey() {
-          @Override
-          public Label getLabel() {
-            return null;
-          }
-
+    ActionLookupValue.ActionLookupKey firstOwner =
+        new ActionLookupValue.ActionLookupKey() {
           @Override
           public SkyFunctionName functionName() {
             return null;
           }
         };
-    ActionLookupKey secondOwner =
-        new ActionLookupKey() {
-          @Override
-          public Label getLabel() {
-            return null;
-          }
-
+    ActionLookupValue.ActionLookupKey secondOwner =
+        new ActionLookupValue.ActionLookupKey() {
           @Override
           public SkyFunctionName functionName() {
             return null;
@@ -466,33 +436,5 @@ public class ArtifactTest {
                     /*contentBasedPath=*/ true)
                 .contentBasedPath())
         .isTrue();
-  }
-
-  @Test
-  public void testGetRepositoryRelativePathExternalSourceArtifacts() throws IOException {
-    ArtifactRoot externalRoot =
-        ArtifactRoot.asExternalSourceRoot(
-            Root.fromPath(
-                scratch
-                    .dir("/output_base")
-                    .getRelative(LabelConstants.EXTERNAL_REPOSITORY_LOCATION)));
-
-    // --experimental_sibling_repository_layout not set
-    assertThat(
-            new Artifact.SourceArtifact(
-                    externalRoot,
-                    LabelConstants.EXTERNAL_PATH_PREFIX.getRelative("foo/bar/baz.cc"),
-                    ArtifactOwner.NULL_OWNER)
-                .getRepositoryRelativePath())
-        .isEqualTo(PathFragment.create("bar/baz.cc"));
-
-    // --experimental_sibling_repository_layout set
-    assertThat(
-            new Artifact.SourceArtifact(
-                    externalRoot,
-                    LabelConstants.EXPERIMENTAL_EXTERNAL_PATH_PREFIX.getRelative("foo/bar/baz.cc"),
-                    ArtifactOwner.NULL_OWNER)
-                .getRepositoryRelativePath())
-        .isEqualTo(PathFragment.create("bar/baz.cc"));
   }
 }
