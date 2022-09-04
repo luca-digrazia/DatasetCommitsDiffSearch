@@ -435,12 +435,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
           state.discoveredInputs =
               skyframeActionExecutor.discoverInputs(
                   action, metadataHandler, env, state.actionFileSystem);
-          Preconditions.checkState(
-              env.valuesMissing() == (state.discoveredInputs == null),
-              "discoverInputs() must return null iff requesting more dependencies.");
-          if (state.discoveredInputs == null) {
-            return null;
-          }
+          Preconditions.checkState(state.discoveredInputs != null,
+              "discoverInputs() returned null on action %s", action);
         } catch (MissingDepException e) {
           Preconditions.checkState(env.valuesMissing(), action);
           return null;
@@ -452,6 +448,24 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         return null;
       }
 
+      // Stage 1 finished, let's do stage 2. The stage 1 of input discovery will have added some
+      // files with addDiscoveredInputs() and then have waited for those files to be available
+      // by returning null if env.valuesMissing() returned true. So stage 2 can now access those
+      // inputs to discover even more inputs and then potentially also wait for those to be
+      // available.
+      if (state.discoveredInputsStage2 == null) {
+        state.discoveredInputsStage2 = action.discoverInputsStage2(env);
+        if (env.valuesMissing()) {
+          return null;
+        }
+      }
+      if (state.discoveredInputsStage2 != null) {
+        addDiscoveredInputs(
+            state.inputArtifactData, state.expandedArtifacts, state.discoveredInputsStage2, env);
+        if (env.valuesMissing()) {
+          return null;
+        }
+      }
       metadataHandler =
           new ActionMetadataHandler(
               state.inputArtifactData,
@@ -807,6 +821,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     Map<Artifact, Collection<Artifact>> expandedArtifacts = null;
     Token token = null;
     Iterable<Artifact> discoveredInputs = null;
+    Iterable<Artifact> discoveredInputsStage2 = null;
     ActionExecutionValue value = null;
     FileSystem actionFileSystem = null;
 

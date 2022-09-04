@@ -57,8 +57,6 @@ import com.google.devtools.build.v1.PublishBuildToolEventStreamRequest;
 import com.google.devtools.build.v1.PublishBuildToolEventStreamResponse;
 import com.google.devtools.build.v1.PublishLifecycleEventRequest;
 import com.google.protobuf.Any;
-import com.google.protobuf.Timestamp;
-import com.google.protobuf.util.Timestamps;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.StatusException;
@@ -111,7 +109,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
   private final BuildEventArtifactUploader artifactUploader;
   private final Sleeper sleeper;
   private final boolean errorsShouldFailTheBuild;
-  private final Clock clock;
   /** Contains all pendingAck events that might be retried in case of failures. */
   private ConcurrentLinkedDeque<InternalOrderedBuildEvent> pendingAck;
   /** Contains all events should be sent ordered by sequence number. */
@@ -223,7 +220,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     this.sleeper = sleeper;
     this.besResultsUrl = besResultsUrl;
     this.errorsShouldFailTheBuild = errorsShouldFailTheBuild;
-    this.clock = clock;
   }
 
   public boolean isStreaming() {
@@ -263,13 +259,11 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       return shutdownFuture;
     }
 
-    Timestamp lastEventTimestamp = timestamp();
     uploaderExecutorService.execute(
         () -> {
           try {
             sendOrderedBuildEvent(
-                new LastInternalOrderedBuildEvent(
-                    besProtoUtil.nextSequenceNumber(), lastEventTimestamp));
+                new LastInternalOrderedBuildEvent(besProtoUtil.nextSequenceNumber()));
 
             if (errorsReported) {
               // If we encountered errors before and have already reported them, then we should
@@ -351,12 +345,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     ListenableFuture<PathConverter> upload = artifactUploader.upload(localFileMap.build());
     InternalOrderedBuildEvent buildEvent =
         new DefaultInternalOrderedBuildEvent(
-            event, namer, upload, besProtoUtil.nextSequenceNumber(), timestamp());
+            event, namer, upload, besProtoUtil.nextSequenceNumber());
     sendOrderedBuildEvent(buildEvent);
-  }
-
-  private Timestamp timestamp() {
-    return Timestamps.fromMillis(clock.currentTimeMillis());
   }
 
   private String errorMessageFromException(Throwable t) {
@@ -430,14 +420,14 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     @Override
     public Void call() throws Exception {
       try {
-        publishLifecycleEvent(besProtoUtil.buildEnqueued(timestamp()));
-        publishLifecycleEvent(besProtoUtil.invocationStarted(timestamp()));
+        publishLifecycleEvent(besProtoUtil.buildEnqueued());
+        publishLifecycleEvent(besProtoUtil.invocationStarted());
         try {
           retryOnException(BuildEventServiceTransport.this::publishEventStream);
         } finally {
           Result result = getInvocationResult();
-          publishLifecycleEvent(besProtoUtil.invocationFinished(timestamp(), result));
-          publishLifecycleEvent(besProtoUtil.buildFinished(timestamp(), result));
+          publishLifecycleEvent(besProtoUtil.invocationFinished(result));
+          publishLifecycleEvent(besProtoUtil.buildFinished(result));
         }
       } finally {
         try {
@@ -668,15 +658,9 @@ public class BuildEventServiceTransport implements BuildEventTransport {
    * (serialized).
    */
   private interface InternalOrderedBuildEvent {
-
-    /** Returns whether this is the last event. */
     boolean isLastEvent();
 
-    /** Returns the immutable sequence number for this event. */
     int getSequenceNumber();
-
-    /** Returns the immutable Timestamp for this event. */
-    Timestamp getTimestamp();
 
     ListenableFuture<PathConverter> localFileUploadProgress();
 
@@ -688,19 +672,16 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     private final ArtifactGroupNamer artifactGroupNamer;
     private final ListenableFuture<PathConverter> artifactUpload;
     private final int sequenceNumber;
-    private final Timestamp timestamp;
 
     DefaultInternalOrderedBuildEvent(
         BuildEvent event,
         ArtifactGroupNamer artifactGroupNamer,
         ListenableFuture<PathConverter> artifactUpload,
-        int sequenceNumber,
-        Timestamp timestamp) {
+        int sequenceNumber) {
       this.event = Preconditions.checkNotNull(event);
       this.artifactGroupNamer = Preconditions.checkNotNull(artifactGroupNamer);
       this.artifactUpload = artifactUpload;
       this.sequenceNumber = sequenceNumber;
-      this.timestamp = timestamp;
     }
 
     @Override
@@ -711,10 +692,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     @Override
     public int getSequenceNumber() {
       return sequenceNumber;
-    }
-
-    public Timestamp getTimestamp() {
-      return timestamp;
     }
 
     @Override
@@ -742,17 +719,15 @@ public class BuildEventServiceTransport implements BuildEventTransport {
                   return protocolOptions;
                 }
               });
-      return besProtoUtil.bazelEvent(getSequenceNumber(), getTimestamp(), Any.pack(eventProto));
+      return besProtoUtil.bazelEvent(Any.pack(eventProto), sequenceNumber);
     }
   }
 
   private class LastInternalOrderedBuildEvent implements InternalOrderedBuildEvent {
     private final int sequenceNumber;
-    private final Timestamp timestamp;
 
-    LastInternalOrderedBuildEvent(int sequenceNumber, Timestamp timestamp) {
+    LastInternalOrderedBuildEvent(int sequenceNumber) {
       this.sequenceNumber = sequenceNumber;
-      this.timestamp = timestamp;
     }
 
     @Override
@@ -765,10 +740,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       return sequenceNumber;
     }
 
-    public Timestamp getTimestamp() {
-      return timestamp;
-    }
-
     @Override
     public ListenableFuture<PathConverter> localFileUploadProgress() {
       return Futures.immediateFuture(PathConverter.NO_CONVERSION);
@@ -776,7 +747,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
 
     @Override
     public PublishBuildToolEventStreamRequest serialize(PathConverter pathConverter) {
-      return besProtoUtil.streamFinished(getSequenceNumber(), getTimestamp());
+      return besProtoUtil.streamFinished(sequenceNumber);
     }
   }
 
