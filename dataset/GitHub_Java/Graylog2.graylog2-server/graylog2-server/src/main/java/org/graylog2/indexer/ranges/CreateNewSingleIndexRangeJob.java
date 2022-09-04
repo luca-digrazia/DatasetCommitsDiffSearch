@@ -1,38 +1,51 @@
+/*
+ * Copyright (C) 2020 Graylog, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
+ *
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
+ */
 package org.graylog2.indexer.ranges;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.database.ValidationException;
-import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.EmptyIndexException;
-import org.graylog2.indexer.Indexer;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.indices.Indices;
+import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
+import java.util.Set;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
+import static com.google.common.base.Preconditions.checkNotNull;
+
 public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
     private static final Logger LOG = LoggerFactory.getLogger(CreateNewSingleIndexRangeJob.class);
     private final String indexName;
+    private final Indices indices;
 
     public interface Factory {
-        public CreateNewSingleIndexRangeJob create(Deflector deflector, String indexName);
+        CreateNewSingleIndexRangeJob create(Set<IndexSet> indexSets, String indexName);
     }
 
     @AssistedInject
-    public CreateNewSingleIndexRangeJob(@Assisted Deflector deflector,
+    public CreateNewSingleIndexRangeJob(@Assisted Set<IndexSet> indexSets,
                                         @Assisted String indexName,
-                                        ServerStatus serverStatus,
-                                        Indexer indexer,
                                         ActivityWriter activityWriter,
+                                        Indices indices,
                                         IndexRangeService indexRangeService) {
-        super(deflector, serverStatus, indexer, activityWriter, indexRangeService);
-        this.indexName = indexName;
+        super(indexSets, activityWriter, indexRangeService);
+        this.indexName = checkNotNull(indexName);
+        this.indices = indices;
     }
 
     @Override
@@ -41,25 +54,27 @@ public class CreateNewSingleIndexRangeJob extends RebuildIndexRangesJob {
     }
 
     @Override
+    public String getInfo() {
+        return "Calculating ranges for index " + indexName + ".";
+    }
+
+    @Override
     public void execute() {
+        if (!indices.exists(indexName)) {
+            LOG.debug("Not running job for deleted index <{}>", indexName);
+            return;
+        }
+        if (indices.isClosed(indexName)) {
+            LOG.debug("Not running job for closed index <{}>", indexName);
+            return;
+        }
         LOG.info("Calculating ranges for index {}.", indexName);
         try {
-            final Map<String, Object> range;
-            if (deflector.getCurrentActualTargetIndex(indexer).equals(indexName))
-                range = calculateRange(indexName);
-            else
-                range = getDeflectorIndexRange(indexName);
-
-            final IndexRange indexRange = indexRangeService.create(range);
-            indexRangeService.destroy(indexName);
+            final IndexRange indexRange = indexRangeService.calculateRange(indexName);
             indexRangeService.save(indexRange);
             LOG.info("Created ranges for index {}.", indexName);
-        } catch (EmptyIndexException e) {
-            LOG.error("Unable to calculate ranges for index {}: {}", indexName, e);
-        } catch (ValidationException e) {
-            LOG.error("Unable to save index range for index {}: {}", indexName, e);
         } catch (Exception e) {
-            LOG.error("Exception during index range calculation for index {}: ", indexName, e);
+            LOG.error("Exception during index range calculation for index " + indexName, e);
         }
     }
 
