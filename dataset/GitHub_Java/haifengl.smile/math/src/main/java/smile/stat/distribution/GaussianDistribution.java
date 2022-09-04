@@ -151,7 +151,7 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
     private double z1 = Double.NaN;
 
     /**
-     * Generates a Gaussian random number with the Box-Muller algorithm.
+     * Uses the Box-Muller algorithm to transform Random.random()'s into Gaussian deviates.
      */
     @Override
     public double rand() {
@@ -176,9 +176,9 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
     }
     
     /**
-     * Generates a Gaussian random number with the inverse CDF method.
+     * Uses Inverse CDF method to generate a Gaussian deviate.
      */
-    public double inverseCDF() {
+    public double randInverseCDF() {
         final double a0 = 2.50662823884;
         final double a1 = -18.61500062529;
         final double a2 = 41.39119773534;
