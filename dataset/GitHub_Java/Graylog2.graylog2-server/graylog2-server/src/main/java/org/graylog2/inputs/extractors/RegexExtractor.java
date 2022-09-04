@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.extractors;
 
@@ -53,14 +53,14 @@ public class RegexExtractor extends Extractor {
     }
 
     @Override
-    protected Result[] run(String value) {
+    protected Result run(String value) {
         final Matcher matcher = pattern.matcher(value);
 
         if (!matcher.find() || matcher.groupCount() == 0 || matcher.start(1) == -1 || matcher.end(1) == -1) {
             return null;
         }
 
-        return new Result[] { new Result(value.substring(matcher.start(1), matcher.end(1)), matcher.start(1), matcher.end(1)) };
+        return new Result(value.substring(matcher.start(1), matcher.end(1)), matcher.start(1), matcher.end(1));
     }
 
 }
