@@ -1056,11 +1056,6 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     if (dylibProvider != null) {
       return dylibProvider.getDepsObjcProvider();
     }
-    AppleLoadableBundleBinaryProvider loadableBundleProvider =
-        getConfiguredTarget(label).get(AppleLoadableBundleBinaryProvider.SKYLARK_CONSTRUCTOR);
-    if (loadableBundleProvider != null) {
-      return loadableBundleProvider.getDepsObjcProvider();
-    }
     return null;
   }
 

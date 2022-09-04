@@ -29,8 +29,6 @@ import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.common.options.Option;
@@ -41,12 +39,10 @@ import com.google.devtools.common.options.OptionEffectTag;
  * Rule and configuration class definitions for testing late-bound split attributes.
  */
 public class LateBoundSplitUtil {
-  /** A custom {@link FragmentOptions} with the option to be split. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
+  /**
+   * A custom {@link FragmentOptions} with the option to be split.
+   */
   public static class TestOptions extends FragmentOptions { // public for options loader
-    public static final ObjectCodec<TestOptions> CODEC =
-        new LateBoundSplitUtil_TestOptions_AutoCodec();
-
     @Option(
       name = "foo",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -68,11 +64,10 @@ public class LateBoundSplitUtil {
         return ImmutableList.of(split1, split2);
       };
 
-  /** The {@link BuildConfiguration.Fragment} that contains the options. */
-  @AutoCodec
+  /**
+   * The {@link BuildConfiguration.Fragment} that contains the options.
+   */
   static class TestFragment extends BuildConfiguration.Fragment {
-    public static final ObjectCodec<TestFragment> CODEC =
-        new LateBoundSplitUtil_TestFragment_AutoCodec();
   }
 
   /**
@@ -111,7 +106,7 @@ public class LateBoundSplitUtil {
                                 .allowedRuleClasses(Attribute.ANY_RULE)
                                 .cfg(SIMPLE_SPLIT)
                                 .value(
-                                    Attribute.LateBoundDefault.fromConstantForTesting(
+                                    Attribute.LateBoundDefault.fromConstant(
                                         Label.parseAbsoluteUnchecked("//foo:latebound_dep"))))
                         .requiresConfigurationFragments(TestFragment.class);
                   });
