@@ -225,25 +225,10 @@ public class GelfCodecTest {
     }
 
     @Test
-    public void decodeSucceedsWithoutShortMessageButWithMessage() throws Exception {
+    public void decodeFSucceedsWithoutShortMessageButWithMessage() throws Exception {
         final String json = "{"
                 + "\"version\": \"1.1\","
                 + "\"host\": \"example.org\","
-                + "\"message\": \"A short message that helps you identify what is going on\""
-                + "}";
-
-        final RawMessage rawMessage = new RawMessage(json.getBytes(StandardCharsets.UTF_8));
-
-        final Message message = codec.decode(rawMessage);
-        assertThat(message).isNotNull();
-    }
-
-    @Test
-    public void decodeSucceedsWithEmptyShortMessageButWithMessage() throws Exception {
-        final String json = "{"
-                + "\"version\": \"1.1\","
-                + "\"host\": \"example.org\","
-                + "\"short_message\": \"\","
                 + "\"message\": \"A short message that helps you identify what is going on\""
                 + "}";
 
