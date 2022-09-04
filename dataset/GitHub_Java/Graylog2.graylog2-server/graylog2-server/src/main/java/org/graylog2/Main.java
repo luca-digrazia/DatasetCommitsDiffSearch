@@ -39,11 +39,10 @@ import org.graylog2.inputs.gelf.http.GELFHttpInput;
 import org.graylog2.inputs.gelf.udp.GELFUDPInput;
 import org.graylog2.inputs.misc.metrics.LocalMetricsInput;
 import org.graylog2.inputs.random.FakeHttpMessageInput;
-import org.graylog2.inputs.raw.tcp.RawTCPInput;
-import org.graylog2.inputs.raw.udp.RawUDPInput;
+import org.graylog2.inputs.random.generators.FakeHttpMessageGenerator;
+import org.graylog2.inputs.raw.RawUDPInput;
 import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
 import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
-import org.graylog2.notifications.Notification;
 import org.graylog2.outputs.ElasticSearchOutput;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
@@ -171,7 +170,7 @@ public final class Main {
         server.initialize(configuration, metrics);
 
         // Could it be that there is another master instance already?
-        Node.register(server, configuration.isMaster(), configuration.getRestTransportUri());
+        Node.register(server, configuration.isMaster(), configuration.getRestListenUri());
 
         Node thisNode = null;
         try {
@@ -192,11 +191,6 @@ public final class Main {
                         + "This is a mis-configuration you should fix.";
                 LOG.warn(what);
                 server.getActivityWriter().write(new Activity(what, Main.class));
-
-                // Write a notification.
-                if (Notification.isFirst(server, Notification.Type.MULTI_MASTER)) {
-                    Notification.publish(server, Notification.Type.MULTI_MASTER, Notification.Severity.URGENT);
-                }
 
                 configuration.setIsMaster(false);
             } else {
@@ -221,7 +215,6 @@ public final class Main {
         server.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
         server.inputs().register(SyslogTCPInput.class, SyslogTCPInput.NAME);
         server.inputs().register(RawUDPInput.class, RawUDPInput.NAME);
-        server.inputs().register(RawTCPInput.class, RawTCPInput.NAME);
         server.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
         server.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
         server.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);

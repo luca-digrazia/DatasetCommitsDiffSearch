@@ -19,33 +19,15 @@
  */
 package org.graylog2.metrics.reporter;
 
-import org.graylog2.Core;
-import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.inputs.MessageInput;
 
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class InProcessMessageWriter implements GELFTarget {
+public interface GELFTarget {
 
-    private final GraylogServer server;
-    private final MessageInput input;
-
-    public InProcessMessageWriter(GraylogServer server, MessageInput input) {
-        this.server = server;
-        this.input = input;
-    }
-
-    @Override
-    public void deliver(String shortMessage, String source, Map<String, Object> fields) {
-        Message message = new Message(shortMessage, source, Tools.getUTCTimestampWithMilliseconds());
-        message.addFields(fields);
-
-        server.getProcessBuffer().insertCached(message, input);
-    }
+    public void deliver(String shortMessage, String source, Map<String, Object> field);
 
 }
