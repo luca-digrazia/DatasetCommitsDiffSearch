@@ -47,10 +47,8 @@ public class ProvisionerService {
         this.provisionerActionFactories = provisionerActionFactories;
     }
 
-    public UserDetails.Builder newDetails(AuthServiceBackend backend) {
-        return UserDetails.builder()
-                .authServiceId(backend.backendId())
-                .authServiceType(backend.backendType());
+    public UserDetails.Builder newDetails() {
+        return UserDetails.builder();
     }
 
     public UserDetails provision(UserDetails userDetails) {
