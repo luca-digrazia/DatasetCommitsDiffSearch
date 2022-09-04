@@ -242,25 +242,28 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
      * 视频截图
      */
     private void shotImage(final View v) {
-        //获取截图
-        detailPlayer.taskShotPic(new GSYVideoShotListener() {
-            @Override
-            public void getBitmap(Bitmap bitmap) {
-                if (bitmap != null) {
-                    try {
-                        CommonUtil.saveBitmap(bitmap);
-                    } catch (FileNotFoundException e) {
-                        showToast("save fail ");
-                        e.printStackTrace();
-                        return;
+        if (detailPlayer.getCurrentPlayer().getRenderProxy() != null) {
+            //每次设置一个监听
+            detailPlayer.getCurrentPlayer().getRenderProxy().setCurrentFrameBitmapListener(new GSYVideoShotListener() {
+                @Override
+                public void getBitmap(Bitmap bitmap) {
+                    if (bitmap != null) {
+                        try {
+                            CommonUtil.saveBitmap(bitmap);
+                        } catch (FileNotFoundException e) {
+                            showToast("save fail ");
+                            e.printStackTrace();
+                            return;
+                        }
+                        showToast("save success ");
+                    } else {
+                        showToast("get bitmap fail ");
                     }
-                    showToast("save success ");
-                } else {
-                    showToast("get bitmap fail ");
                 }
-            }
-        });
-
+            });
+            //获取截图
+            detailPlayer.getCurrentPlayer().getRenderProxy().taskShotPic();
+        }
     }
 
     /**
