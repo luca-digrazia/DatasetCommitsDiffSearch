@@ -52,10 +52,10 @@ public class InputBufferImpl implements InputBuffer {
                            Provider<JournallingMessageHandler> spoolingMessageHandlerProvider) {
         final Disruptor<RawMessageEvent> disruptor = new Disruptor<>(
                 RawMessageEvent.FACTORY,
-                configuration.getInputBufferRingSize(),
+                configuration.getRingSize(),
                 executorService(metricRegistry),
                 ProducerType.MULTI,
-                configuration.getInputBufferWaitStrategy());
+                configuration.getProcessorWaitStrategy());
 
         disruptor.handleExceptionsWith(new ExceptionHandler() {
             @Override
@@ -83,11 +83,6 @@ public class InputBufferImpl implements InputBuffer {
         }
 
         ringBuffer = disruptor.start();
-
-        LOG.info("Initialized {} with ring size <{}> and wait strategy <{}>.",
-                this.getClass().getSimpleName(),
-                configuration.getInputBufferRingSize(),
-                configuration.getInputBufferWaitStrategy().getClass().getSimpleName());
     }
 
     public void insert(RawMessage message) {

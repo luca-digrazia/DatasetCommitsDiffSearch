@@ -19,11 +19,9 @@
 package org.graylog2.shared.journal;
 
 import com.google.common.base.Function;
-import com.google.common.collect.Lists;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
 import com.google.inject.name.Named;
-import kafka.common.OffsetOutOfRangeException;
 import kafka.common.TopicAndPartition;
 import kafka.log.CleanerConfig;
 import kafka.log.Log;
@@ -31,22 +29,16 @@ import kafka.log.LogConfig;
 import kafka.log.LogManager;
 import kafka.message.ByteBufferMessageSet;
 import kafka.message.Message;
-import kafka.message.MessageAndOffset;
-import kafka.message.MessageSet;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.SystemTime$;
-import kafka.utils.Utils;
-import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
-import scala.collection.Iterator;
 import scala.collection.JavaConversions;
 import scala.collection.Map$;
 
 import javax.annotation.Nullable;
 import java.io.File;
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -61,7 +53,7 @@ public class KafkaJournal {
     private long readOffset = 0L; // TODO read from persisted store
 
     @Inject
-    public KafkaJournal(@Named("journalDirectory") String journalDir) {
+    public KafkaJournal(@Named("spoolDirectory") String spoolDir) {
 
         // TODO all of these configuration values need tweaking
         // these are the default values as per kafka 0.8.1.1
@@ -94,7 +86,7 @@ public class KafkaJournal {
                         false,
                         "MD5");
         logManager = new LogManager(
-                new File[]{new File(journalDir)},
+                new File[]{new File(spoolDir)},
                 Map$.MODULE$.<String, LogConfig>empty(),
                 defaultConfig,
                 cleanerConfig,
@@ -111,7 +103,7 @@ public class KafkaJournal {
         } else {
             kafkaLog = messageLog.get();
         }
-        log.info("Initialized Kafka based journal at {}", journalDir);
+        log.info("Initialized Kafka based journal at {}", spoolDir);
     }
 
     /**
@@ -132,22 +124,16 @@ public class KafkaJournal {
      */
     public long write(List<Entry> entries) {
         final long[] payloadSize = {0L};
-        // make a copy
-        final List<Message> messages = Lists.newArrayList(transform(
+        final ByteBufferMessageSet messageSet = new ByteBufferMessageSet(JavaConversions.asScalaBuffer(transform(
                 entries,
                 new Function<Entry, Message>() {
                     @Nullable
                     @Override
                     public Message apply(Entry entry) {
                         payloadSize[0] += entry.messageBytes.length;
-                        if (log.isTraceEnabled()) {
-                            log.trace("Message {} contains bytes {}", Tools.bytesToHex(entry.idBytes),
-                                     Tools.bytesToHex(entry.messageBytes));
-                        }
                         return new Message(entry.messageBytes, entry.idBytes);
                     }
-                }));
-        final ByteBufferMessageSet messageSet = new ByteBufferMessageSet(JavaConversions.asScalaBuffer(messages));
+                })));
 
         final Log.LogAppendInfo appendInfo = kafkaLog.append(messageSet, true);
         log.info("Wrote {} messages to journal: {} bytes, log position {} to {}",
@@ -166,31 +152,19 @@ public class KafkaJournal {
         return write(Collections.singletonList(journalEntry));
     }
 
-    public List<JournalReadEntry> read() {
-        final long maxOffset = readOffset + 1;
-        final List<JournalReadEntry> messages = Lists.newArrayListWithCapacity((int) (maxOffset - readOffset));
-        try {
-            final MessageSet messageSet = kafkaLog.read(readOffset, 10 * 1024, Option.<Object>apply(maxOffset));
+/*    public List<byte[]> read() {
+        final MessageSet messageSet = kafkaLog.read(readOffset, 10 * 1024, Option.<Object>apply(readOffset + 1));
 
-            final Iterator<MessageAndOffset> iterator = messageSet.iterator();
-            while (iterator.hasNext()) {
-                final MessageAndOffset messageAndOffset = iterator.next();
+        final Iterator<MessageAndOffset> iterator = messageSet.iterator();
+        while (iterator.hasNext()) {
+            final MessageAndOffset messageAndOffset = iterator.next();
+            final ByteBuffer payload = messageAndOffset.message().payload();
 
-                // TODO why are payload and key inverted? This seems odd.
-                final byte[] bytes = Utils.readBytes(messageAndOffset.message().payload());
-                final byte[] keyBytes = Utils.readBytes(messageAndOffset.message().key());
-                if (log.isTraceEnabled()) {
-                    log.trace("Read message {} contains {}", Tools.bytesToHex(bytes), Tools.bytesToHex(keyBytes));
-                }
-                messages.add(new JournalReadEntry(ByteBuffer.wrap(keyBytes), messageAndOffset.offset()));
-                readOffset = messageAndOffset.nextOffset();
-            }
-
-        } catch (OffsetOutOfRangeException e) {
-            log.warn("Offset out of range, no messages available starting at offset {}", readOffset);
         }
-        return messages;
+
+        return null;
     }
+*/
 
     public static class Entry {
         private final byte[] idBytes;
@@ -199,25 +173,6 @@ public class KafkaJournal {
         public Entry(byte[] idBytes, byte[] messageBytes) {
             this.idBytes = idBytes;
             this.messageBytes = messageBytes;
-        }
-    }
-
-    public static class JournalReadEntry {
-
-        private final ByteBuffer payload;
-        private final long offset;
-
-        public JournalReadEntry(ByteBuffer payload, long offset) {
-            this.payload = payload;
-            this.offset = offset;
-        }
-
-        public long getOffset() {
-            return offset;
-        }
-
-        public ByteBuffer getPayload() {
-            return payload;
         }
     }
 }
