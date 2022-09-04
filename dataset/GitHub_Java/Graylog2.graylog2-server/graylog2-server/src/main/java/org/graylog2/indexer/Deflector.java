@@ -17,18 +17,14 @@
 package org.graylog2.indexer;
 
 import com.google.common.collect.ComparisonChain;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.indices.InvalidAliasNameException;
-import org.graylog2.audit.AuditActor;
-import org.graylog2.audit.AuditEventSender;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.TooManyAliasesException;
 import org.graylog2.indexer.indices.jobs.SetIndexReadOnlyAndCalculateRangeJob;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
-import org.graylog2.plugin.system.NodeId;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
@@ -50,7 +46,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.graylog2.audit.AuditEventTypes.ES_WRITE_INDEX_UPDATE;
 
 /**
  * Format of actual indexes behind the Deflector:
@@ -75,8 +70,6 @@ public class Deflector { // extends Ablenkblech
     private final Indices indices;
     private final Pattern deflectorIndexPattern;
     private final Pattern indexPattern;
-    private final AuditEventSender auditEventSender;
-    private final NodeId nodeId;
     private final SetIndexReadOnlyAndCalculateRangeJob.Factory setIndexReadOnlyAndCalculateRangeJobFactory;
 
     @Inject
@@ -85,16 +78,12 @@ public class Deflector { // extends Ablenkblech
                      final ActivityWriter activityWriter,
                      final Indices indices,
                      final IndexRangeService indexRangeService,
-                     final AuditEventSender auditEventSender,
-                     final NodeId nodeId,
                      final SetIndexReadOnlyAndCalculateRangeJob.Factory setIndexReadOnlyAndCalculateRangeJobFactory) {
         this.indexPrefix = indexPrefix;
 
         this.systemJobManager = systemJobManager;
         this.activityWriter = activityWriter;
         this.indexRangeService = indexRangeService;
-        this.auditEventSender = auditEventSender;
-        this.nodeId = nodeId;
         this.setIndexReadOnlyAndCalculateRangeJobFactory = setIndexReadOnlyAndCalculateRangeJobFactory;
 
         this.deflectorName = buildName(indexPrefix);
@@ -194,7 +183,6 @@ public class Deflector { // extends Ablenkblech
         LOG.info("Done!");
 
         activityWriter.write(activity);
-        auditEventSender.success(AuditActor.system(nodeId), ES_WRITE_INDEX_UPDATE, ImmutableMap.of("indexName", newTarget));
     }
 
     private void addDeflectorIndexRange(String newTarget) {
