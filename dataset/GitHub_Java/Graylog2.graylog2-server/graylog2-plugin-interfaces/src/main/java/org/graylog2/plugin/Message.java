@@ -27,7 +27,6 @@ import java.util.Collections;
 
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.streams.Stream;
-import org.joda.time.DateTime;
 
 import java.util.List;
 import java.util.Map;
@@ -78,7 +77,7 @@ public class Message {
             "message", "source", "_id"
     );
 
-    public Message(String message, String source, DateTime timestamp) {
+    public Message(String message, String source, double timestamp) {
     	// Adding the fields directly because they would not be accepted as a reserved fields.
         fields.put("_id", new com.eaio.uuid.UUID().toString());
         fields.put("message", message);
@@ -111,7 +110,7 @@ public class Message {
         obj.putAll(getFields());
         
         // Timestamp
-        obj.put("timestamp", Tools.buildElasticSearchTimeFormat((DateTime) getField("timestamp")));
+        obj.put("timestamp", Tools.buildElasticSearchTimeFormat(getField("timestamp")));
 
         // Manually converting stream ID to string - caused strange problems without it.
         if (getStreams().size() > 0) {
