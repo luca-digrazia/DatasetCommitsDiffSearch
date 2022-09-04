@@ -51,24 +51,6 @@ public final class MockObjcSupport {
   public static final String DEFAULT_XCODE_VERSION = "7.3.1";
   public static final String DEFAULT_IOS_SDK_VERSION = "8.4";
 
-  /** Returns the set of flags required to build objc libraries using the mock OSX crosstool. */
-  public static ImmutableList<String> requiredObjcCrosstoolFlags() {
-    ImmutableList.Builder<String> argsBuilder = ImmutableList.builder();
-    argsBuilder.addAll(TestConstants.OSX_CROSSTOOL_FLAGS);
-
-    // TODO(b/68751876): Set --apple_crosstool_top and --crosstool_top using the
-    // AppleCrosstoolTransition
-    argsBuilder
-        .add("--xcode_version_config=" + MockObjcSupport.XCODE_VERSION_CONFIG)
-        .add("--apple_crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL)
-        .add("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
-
-    // TODO(b/32411441): This flag will be flipped off by default imminently, at which point
-    // this can be removed. The flag itself is for safe rollout of a backwards incompatible change.
-    argsBuilder.add("--noexperimental_objc_provider_from_linked");
-    return argsBuilder.build();
-  }
-
   /**
    * Sets up the support for building ObjC.
    * Any partial toolchain line will be merged into every toolchain stanza in the crosstool
@@ -82,7 +64,6 @@ public final class MockObjcSupport {
             "bundlemerge",
             "objc_dummy.mm",
             "environment_plist.sh",
-            "device_debug_entitlements.plist",
             "gcov",
             "ibtoolwrapper",
             "momcwrapper",
@@ -95,34 +76,8 @@ public final class MockObjcSupport {
             "libtool")) {
       config.create(TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/objc/" + tool);
     }
-    // Since we deleted ios_application, we have to create a custom rule that mocks out a
-    // close-enough test host app for ios_test to use until those rules are also deleted.
-    config.create(
-        TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/objc/fake_test_app.bzl",
-        "def _fake_test_app_impl(ctx):",
-        "  return struct(",
-        "      instrumented_files=struct(dependency_attributes=['bundle_loader', 'ipa']),",
-        "      providers=[",
-        "          DefaultInfo(files=depset([ctx.file.ipa])),",
-        "          apple_common.new_xctest_app_provider(",
-        "              bundle_loader=ctx.file.bundle_loader,",
-        "              ipa=ctx.file.ipa,",
-        "              objc_provider=apple_common.new_objc_provider(),",
-        "          ),",
-        "      ],",
-        "  )",
-        "fake_test_app = rule(",
-        "    implementation=_fake_test_app_impl,",
-        "    attrs={",
-        "        'bundle_loader': attr.label(",
-        "            single_file=True, default='//tools/objc:xctest_appbin'),",
-        "        'ipa': attr.label(",
-        "            allow_files=True, single_file=True, default='//tools/objc:xctest_app.ipa'),",
-        "    },",
-        ")");
     config.create(
         TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/objc/BUILD",
-        "load(':fake_test_app.bzl', 'fake_test_app')",
         "package(default_visibility=['//visibility:public'])",
         "exports_files(glob(['**']))",
         "filegroup(name = 'default_provisioning_profile', srcs = ['foo.mobileprovision'])",
@@ -133,11 +88,10 @@ public final class MockObjcSupport {
         "  name = 'protobuf_compiler_support',",
         "  srcs = ['proto_support', 'protobuf_compiler_helper.py'],",
         ")",
-        "sh_binary(name = 'environment_plist', srcs = ['environment_plist.sh'])",
-        "fake_test_app(name = 'xctest_app')",
-        "apple_binary(name = 'xctest_appbin', platform_type = 'ios', deps = [':dummy_lib'])",
         "filegroup(name = 'xctest_infoplist', srcs = ['xctest.plist'])",
         "filegroup(name = 'j2objc_dead_code_pruner', srcs = ['j2objc_dead_code_pruner.py'])",
+        "ios_application(name = 'xctest_app', binary = ':xctest_appbin')",
+        "objc_binary(name = 'xctest_appbin', srcs = ['objc_dummy.mm'])",
         "filegroup(",
         "  name = 'protobuf_well_known_types',",
         String.format(
@@ -163,25 +117,20 @@ public final class MockObjcSupport {
         "  name = 'version5_8',",
         "  version = '5.8',",
         ")",
-        "objc_library(name = 'dummy_lib', srcs = ['objc_dummy.mm'])",
-        "alias(name = 'protobuf_lib', actual = '//objcproto:protobuf_lib')");
+        "objc_library(name = 'dummy_lib', srcs = ['objc_dummy.mm'])");
     // If the bazel tools repository is not in the workspace, also create a workspace tools/objc
     // package with a few lingering dependencies.
     // TODO(b/64537078): Move these dependencies underneath the tools workspace.
     if (TestConstants.TOOLS_REPOSITORY_SCRATCH.length() > 0) {
       config.create(
           "tools/objc/BUILD",
-          "load('@"
-              + TestConstants.TOOLS_REPOSITORY_SCRATCH
-              + "//tools/objc:fake_test_app.bzl', 'fake_test_app')",
           "package(default_visibility=['//visibility:public'])",
           "exports_files(glob(['**']))",
-          "fake_test_app(name = 'xctest_app')",
-          "apple_binary(name = 'xctest_appbin', platform_type = 'ios', deps = [':dummy_lib'])",
+          "ios_application(name = 'xctest_app', binary = ':xctest_appbin')",
+          "objc_binary(name = 'xctest_appbin', srcs = ['objc_dummy.mm'])",
           "filegroup(name = 'default_provisioning_profile', srcs = ['foo.mobileprovision'])",
           "filegroup(name = 'xctest_infoplist', srcs = ['xctest.plist'])");
     }
-    config.create(TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/objc/xctest_app.ipa");
     config.create(
         TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/objc/foo.mobileprovision", "No such luck");
     config.create(TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/objc/compile_protos.py");
@@ -238,6 +187,10 @@ public final class MockObjcSupport {
     config.create(
         TestConstants.TOOLS_REPOSITORY_SCRATCH + "objcproto/BUILD",
         "package(default_visibility=['//visibility:public'])",
+        "objc_library(",
+        "  name = 'ProtocolBuffers_lib',",
+        "  srcs = ['empty.m'],",
+        ")",
         "objc_library(",
         "  name = 'protobuf_lib',",
         "  srcs = ['empty.m'],",

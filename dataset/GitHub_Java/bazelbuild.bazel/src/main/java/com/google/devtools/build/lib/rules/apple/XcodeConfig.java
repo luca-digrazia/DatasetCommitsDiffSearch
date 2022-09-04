@@ -22,13 +22,13 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RedirectChaser;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
@@ -372,6 +373,11 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
         XcodeConfigRule.XCODE_CONFIG_ATTR_NAME,
         RuleConfiguredTarget.Mode.TARGET,
         XcodeConfigProvider.PROVIDER);
-    return versions.getXcodeVersion();
+    DottedVersion fromProvider = versions.getXcodeVersion();
+    DottedVersion fromConfig = ruleContext.getFragment(AppleConfiguration.class).getXcodeVersion();
+    // This sanity check is there to keep this provider in sync with AppleConfiguration until the
+    // latter can be removed. Tracking bug: https://github.com/bazelbuild/bazel/issues/3424
+    Preconditions.checkState(Objects.equals(fromProvider, fromConfig));
+    return fromProvider;
   }
 }

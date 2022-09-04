@@ -203,9 +203,8 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "   srcs = ['a.m'],",
         "   defines = ['mock_define']",
         ")",
-        "apple_binary(",
+        "objc_binary(",
         "   name = 'bin',",
-        "   platform_type = 'ios',",
         "   deps = [':my_target']",
         ")");
 
@@ -241,9 +240,8 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "   srcs = ['a.m'],",
         "   deps = [':my_target']",
         ")",
-        "apple_binary(",
+        "objc_binary(",
         "   name = 'bin',",
-        "   platform_type = 'ios',",
         "   deps = [':lib']",
         ")");
 
@@ -259,11 +257,10 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/rule/apple_rules.bzl",
         "def swift_binary_impl(ctx):",
-        "   xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]",
         "   cpu = ctx.fragments.apple.ios_cpu()",
         "   platform = ctx.fragments.apple.ios_cpu_platform()",
         "   env = ctx.fragments.apple.target_apple_env(platform)",
-        "   xcode_version = xcode_config.xcode_version()",
+        "   xcode_version = ctx.fragments.apple.xcode_version()",
         "   sdk_version = ctx.fragments.apple.sdk_version_for_platform(platform)",
         "   single_arch_platform = ctx.fragments.apple.single_arch_platform",
         "   single_arch_cpu = ctx.fragments.apple.single_arch_cpu",
@@ -280,10 +277,8 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "      bitcode_mode=str(bitcode_mode)",
         "   )",
         "swift_binary = rule(",
-        "    implementation = swift_binary_impl,",
-        "    fragments = ['apple'],",
-        "    attrs = { '_xcode_config': ",
-        "        attr.label(default=Label('//examples/apple_skylark:current_xcode_config')) },",
+        "implementation = swift_binary_impl,",
+        "fragments = ['apple']",
         ")");
 
     scratch.file("examples/apple_skylark/a.m");
@@ -291,7 +286,6 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
         "load('/examples/rule/apple_rules', 'swift_binary')",
-        "xcode_config_alias(name='current_xcode_config')",
         "swift_binary(",
         "   name='my_target',",
         ")");
