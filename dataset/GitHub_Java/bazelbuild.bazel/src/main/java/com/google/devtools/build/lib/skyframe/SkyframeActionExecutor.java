@@ -396,11 +396,8 @@ public final class SkyframeActionExecutor {
   }
 
   void updateActionFileSystemContext(
-      FileSystem actionFileSystem,
-      Environment env,
-      MetadataConsumer consumer,
-      ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> filesets)
-      throws IOException {
+      FileSystem actionFileSystem, Environment env, MetadataConsumer consumer,
+      ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> filesets) throws IOException {
     outputService.updateActionFileSystemContext(actionFileSystem, env, consumer, filesets);
   }
 
@@ -513,7 +510,7 @@ public final class SkyframeActionExecutor {
       MetadataHandler metadataHandler,
       Map<Artifact, Collection<Artifact>> expandedInputs,
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
-      ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
+      ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
       @Nullable FileSystem actionFileSystem,
       @Nullable Object skyframeDepsResult) {
     FileOutErr fileOutErr = actionLogBufferPathGenerator.generate(
