@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.graph.EndpointPair;
 import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.ImmutableGraph;
@@ -56,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -64,7 +64,7 @@ import javax.annotation.Nullable;
  * restarted in order to recreate the lost inputs.
  */
 public class ActionRewindStrategy {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(ActionRewindStrategy.class.getName());
   @VisibleForTesting public static final int MAX_REPEATED_LOST_INPUTS = 20;
   @VisibleForTesting public static final int MAX_ACTION_REWIND_EVENTS = 5;
   private static final int MAX_LOST_INPUTS_RECORDED = 5;
@@ -213,10 +213,11 @@ public class ActionRewindStrategy {
         throw new ActionExecutionException(
             lostInputsException, failedAction, /*catastrophe=*/ false);
       } else if (0 < priorLosses) {
-        logger.atInfo().log(
-            "lost input again (#%s) for the same action. lostInput: %s, "
-                + "lostInput digest: %s, failedAction: %.10000s",
-            priorLosses + 1, lostInputsByDigest.get(digest), digest, failedAction);
+        logger.info(
+            String.format(
+                "lost input again (#%s) for the same action. lostInput: %s, "
+                    + "lostInput digest: %s, failedAction: %.10000s",
+                priorLosses + 1, lostInputsByDigest.get(digest), digest, failedAction));
       }
     }
     return lostInputRecordsThisAction.build();
@@ -290,10 +291,11 @@ public class ActionRewindStrategy {
       //
       // In other cases, such as with bugs, when the action fails enough it will cause a crash in
       // checkIfActionLostInputTooManyTimes. We log that this has occurred.
-      logger.atWarning().log(
-          "lostInput not a dep of the failed action, and can't be associated with such a dep. "
-              + "lostInput: %s, owners: %s, failedAction: %.10000s",
-          lostInput, owners, failedAction);
+      logger.warning(
+          String.format(
+              "lostInput not a dep of the failed action, and can't be associated with such a dep. "
+                  + "lostInput: %s, owners: %s, failedAction: %.10000s",
+              lostInput, owners, failedAction));
     }
     return lostInputOwningDirectDeps;
   }
