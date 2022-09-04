@@ -16,6 +16,7 @@ import com.yammer.dropwizard.tasks.Task;
 import com.yammer.dropwizard.validation.Validator;
 import com.yammer.metrics.core.HealthCheck;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,7 @@ public class Environment {
     private final ImmutableSet.Builder<Task> tasks;
 
     private final ObjectMapperFactory objectMapperFactory;
+    private SessionHandler sessionHandler;
     private Validator validator;
 
     private final DropwizardResourceConfig jerseyConfig;
@@ -122,6 +124,14 @@ public class Environment {
      */
     public void addTask(Task task) {
         tasks.add(checkNotNull(task));
+    }
+
+    public void setSessionHandler(SessionHandler sessionHandler) {
+        this.sessionHandler = sessionHandler;
+    }
+
+    public SessionHandler getSessionHandler() {
+        return sessionHandler;
     }
 
 

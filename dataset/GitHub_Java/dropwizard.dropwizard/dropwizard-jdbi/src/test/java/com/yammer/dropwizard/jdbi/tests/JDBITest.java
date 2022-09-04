@@ -9,7 +9,6 @@ import com.yammer.dropwizard.db.DatabaseConfiguration;
 import com.yammer.dropwizard.db.ManagedDataSource;
 import com.yammer.dropwizard.jdbi.DBIFactory;
 import com.yammer.dropwizard.lifecycle.Managed;
-import com.yammer.dropwizard.setup.AdminEnvironment;
 import com.yammer.dropwizard.setup.LifecycleEnvironment;
 import org.junit.After;
 import org.junit.Before;
@@ -40,7 +39,6 @@ public class JDBITest {
         hsqlConfig.setValidationQuery("SELECT 1 FROM INFORMATION_SCHEMA.SYSTEM_USERS");
     }
 
-    private final AdminEnvironment adminEnvironment = mock(AdminEnvironment.class);
     private final LifecycleEnvironment lifecycleEnvironment = mock(LifecycleEnvironment.class);
     private final Environment environment = mock(Environment.class);
     private final DBIFactory factory = new DBIFactory();
@@ -49,7 +47,6 @@ public class JDBITest {
 
     @Before
     public void setUp() throws Exception {
-        when(environment.getAdminEnvironment()).thenReturn(adminEnvironment);
         when(environment.getLifecycleEnvironment()).thenReturn(lifecycleEnvironment);
 
         this.dbi = factory.build(environment, hsqlConfig, "hsql");

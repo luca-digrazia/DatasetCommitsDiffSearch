@@ -2,14 +2,16 @@ package com.yammer.dropwizard.cli;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
-import com.yammer.dropwizard.AbstractService;
+import com.yammer.dropwizard.Service;
 import com.yammer.dropwizard.config.Configuration;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.config.ServerFactory;
-import org.apache.commons.cli.CommandLine;
+import net.sourceforge.argparse4j.inf.Namespace;
 import org.eclipse.jetty.server.Server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 
 // TODO: 10/12/11 <coda> -- write tests for ServerCommand
 
@@ -18,17 +20,12 @@ import org.slf4j.LoggerFactory;
  *
  * @param <T> the {@link Configuration} subclass which is loaded from the configuration file
  */
-public class ServerCommand<T extends Configuration> extends ConfiguredCommand<T> {
+public class ServerCommand<T extends Configuration> extends EnvironmentCommand<T> {
     private final Class<T> configurationClass;
 
-    /**
-     * Creates a new {@link ServerCommand} with the given configuration class.
-     *
-     * @param configurationClass    the configuration class the YAML file is parsed as
-     */
-    public ServerCommand(Class<T> configurationClass) {
-        super("server", "Starts an HTTP server running the service");
-        this.configurationClass = configurationClass;
+    public ServerCommand(Service<T> service) {
+        super(service, "server", "Runs the Dropwizard service as an HTTP server");
+        this.configurationClass = service.getConfigurationClass();
     }
 
     /*
@@ -41,29 +38,29 @@ public class ServerCommand<T extends Configuration> extends ConfiguredCommand<T>
     }
 
     @Override
-    protected final void run(AbstractService<T> service,
-                             T configuration,
-                             CommandLine params) throws Exception {
-        final Environment environment = new Environment();
-        service.initializeWithBundles(configuration, environment);
-
-        final Server server = new ServerFactory(configuration.getHttpConfiguration()).buildServer(environment);
-
+    protected void run(Environment environment, Namespace namespace, T configuration) throws Exception {
+        final Server server = new ServerFactory(configuration.getHttpConfiguration(),
+                                                environment.getName()).buildServer(environment);
         final Logger logger = LoggerFactory.getLogger(ServerCommand.class);
-        logger.info("Starting " + service.getName());
-
-        try {
-            logger.info('\n' + Resources.toString(Resources.getResource("banner.txt"), Charsets.UTF_8));
-        } catch (IllegalArgumentException ignored) {
-            // don't display the banner if there isn't one
-        }
-
+        logBanner(environment.getName(), logger);
         try {
             server.start();
-            server.join();
         } catch (Exception e) {
             logger.error("Unable to start server, shutting down", e);
             server.stop();
+        }
+    }
+
+    private void logBanner(String name, Logger logger) {
+        try {
+            final String banner = Resources.toString(Resources.getResource("banner.txt"),
+                                                     Charsets.UTF_8);
+            logger.info("Starting {}\n{}", name, banner);
+        } catch (IllegalArgumentException ignored) {
+            // don't display the banner if there isn't one
+            logger.info("Starting {}", name);
+        } catch (IOException ignored) {
+            logger.info("Starting {}", name);
         }
     }
 }

@@ -13,10 +13,6 @@ import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
-/**
- * A JUnit rule for starting and stopping your service at the start and end of a test class.
- * @param <C> the configuration type
- */
 public class DropwizardServiceRule<C extends Configuration> implements TestRule {
 
     private final Class<? extends Service<C>> serviceClass;
@@ -27,20 +23,9 @@ public class DropwizardServiceRule<C extends Configuration> implements TestRule 
     private Environment environment;
     private Server jettyServer;
 
-    /**
-     *
-     * @param serviceClass the class for your service
-     * @param configPath the file path to your YAML config
-     * @param configOverrides configuration value overrides (no need to prefix with dw.)
-     */
-    public DropwizardServiceRule(Class<? extends Service<C>> serviceClass,
-                                 String configPath,
-                                 ConfigOverride... configOverrides) {
+    public DropwizardServiceRule(Class<? extends Service<C>> serviceClass, String configPath) {
         this.serviceClass = serviceClass;
         this.configPath = configPath;
-        for (ConfigOverride configOverride: configOverrides) {
-            configOverride.addToSystemProperties();
-        }
     }
 
     @Override
