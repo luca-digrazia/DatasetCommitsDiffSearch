@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
+import java.util.List;
 
 /** Syntax node for an import statement. */
 public final class LoadStatement extends Statement {
@@ -55,16 +56,15 @@ public final class LoadStatement extends Statement {
    * <p>Import statements generated this way are bound to the usual restriction that private symbols
    * cannot be loaded.
    */
-  LoadStatement(StringLiteral imp, ImmutableList<Binding> bindings) {
+  LoadStatement(StringLiteral imp, List<Binding> bindings) {
     this.imp = imp;
-    this.bindings = bindings;
+    this.bindings = ImmutableList.copyOf(bindings);
     this.mayLoadInternalSymbols = false;
   }
 
-  private LoadStatement(
-      StringLiteral imp, ImmutableList<Binding> bindings, boolean mayLoadInternalSymbols) {
+  private LoadStatement(StringLiteral imp, List<Binding> bindings, boolean mayLoadInternalSymbols) {
     this.imp = imp;
-    this.bindings = bindings;
+    this.bindings = ImmutableList.copyOf(bindings);
     this.mayLoadInternalSymbols = mayLoadInternalSymbols;
   }
 
