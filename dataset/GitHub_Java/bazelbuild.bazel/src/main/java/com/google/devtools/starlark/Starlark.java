@@ -14,6 +14,8 @@
 package com.google.devtools.starlark;
 
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Module;
@@ -38,21 +40,29 @@ class Starlark {
   private static final String START_PROMPT = ">> ";
   private static final String CONTINUATION_PROMPT = ".. ";
 
+  private static final EventHandler PRINT_HANDLER =
+      new EventHandler() {
+        @Override
+        public void handle(Event event) {
+          if (event.getKind() == EventKind.ERROR) {
+            System.err.println(event.getMessage());
+          } else {
+            System.out.println(event.getMessage());
+          }
+        }
+      };
+
   private static final Charset CHARSET = StandardCharsets.ISO_8859_1;
   private final BufferedReader reader =
       new BufferedReader(new InputStreamReader(System.in, CHARSET));
   private final Mutability mutability = Mutability.create("interpreter");
-  private final StarlarkThread thread;
-
-  {
-    thread =
-        StarlarkThread.builder(mutability)
-            .useDefaultSemantics()
-            .setGlobals(
-                Module.createForBuiltins(com.google.devtools.build.lib.syntax.Starlark.UNIVERSE))
-            .build();
-    thread.setPrintHandler((th, msg) -> System.out.println(msg));
-  }
+  private final StarlarkThread thread =
+      StarlarkThread.builder(mutability)
+          .useDefaultSemantics()
+          .setGlobals(
+              Module.createForBuiltins(com.google.devtools.build.lib.syntax.Starlark.UNIVERSE))
+          .setEventHandler(PRINT_HANDLER)
+          .build();
 
   private String prompt() {
     StringBuilder input = new StringBuilder();
@@ -79,7 +89,7 @@ class Starlark {
 
   /** Provide a REPL evaluating Starlark code. */
   @SuppressWarnings("CatchAndPrintStackTrace")
-  private void readEvalPrintLoop() {
+  public void readEvalPrintLoop() {
     String line;
 
     // TODO(adonovan): parse a compound statement, like the Python and
@@ -88,7 +98,7 @@ class Starlark {
     // lines only until the parse is complete.
 
     while ((line = prompt()) != null) {
-      ParserInput input = ParserInput.create(line, "<stdin>");
+      ParserInput input = ParserInput.fromLines(line);
       try {
         Object result = EvalUtils.execAndEvalOptionalFinalExpression(input, thread);
         if (result != null) {
@@ -99,7 +109,8 @@ class Starlark {
           System.err.println(ev);
         }
       } catch (EvalException ex) {
-        System.err.println(ex.print());
+        // TODO(adonovan): show Starlark (not Java) stack.
+        ex.printStackTrace();
       } catch (InterruptedException ex) {
         System.err.println("Interrupted");
       }
@@ -107,11 +118,11 @@ class Starlark {
   }
 
   /** Execute a Starlark file. */
-  private int executeFile(String filename) {
+  public int executeFile(String path) {
     String content;
     try {
-      content = new String(Files.readAllBytes(Paths.get(filename)), CHARSET);
-      return execute(filename, content);
+      content = new String(Files.readAllBytes(Paths.get(path)), CHARSET);
+      return execute(content);
     } catch (Exception e) {
       e.printStackTrace();
       return 1;
@@ -119,17 +130,18 @@ class Starlark {
   }
 
   /** Execute a Starlark file. */
-  private int execute(String filename, String content) {
+  public int execute(String content) {
+    ParserInput input = ParserInput.create(content, null);
     try {
-      EvalUtils.exec(ParserInput.create(content, filename), thread);
+      EvalUtils.exec(input, thread);
       return 0;
     } catch (SyntaxError ex) {
       for (Event ev : ex.errors()) {
         System.err.println(ev);
       }
       return 1;
-    } catch (EvalException ex) {
-      System.err.println(ex.print());
+    } catch (EvalException e) {
+      System.err.println(e.print());
       return 1;
     } catch (Exception e) {
       e.printStackTrace(System.err);
@@ -144,7 +156,7 @@ class Starlark {
     } else if (args.length == 1 && !args[0].equals("-c")) {
       ret = new Starlark().executeFile(args[0]);
     } else if (args.length == 2 && args[0].equals("-c")) {
-      ret = new Starlark().execute("<command-line>", args[1]);
+      ret = new Starlark().execute(args[1]);
     } else {
       System.err.println("USAGE: Starlark [-c \"<cmdLineProgram>\" | <fileName>]");
       ret = 1;

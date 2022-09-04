@@ -18,8 +18,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -27,6 +25,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Mutability.Freezable;
 import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -92,13 +91,19 @@ import javax.annotation.Nullable;
 // 3) Debugging support (thread name, profiling counters, etc).
 // And that is all. See go.starlark.net for the model.
 //
-// The Frame interface should eliminated.
+// The Frame interface should be hidden from clients and then eliminated.
+// The dynamic lookup mechanism should go away.
+// The Module class should be redesigned.
+// The concept struggling to get out of it is a Module,
+// which is created before file initialization and
+// populated by execution of the top-level statements in a file;
+// every UserDefinedFunction value should hold a reference to its Module.
 // As best I can tell, all the skyframe serialization
 // as it applies to LexicalFrames is redundant, as these are transient
 // and should not exist after loading.
 // We will remove the FuncallExpression parameter from StarlarkFunction.call.
 // Clients should use getCallerLocation instead.
-// The only place that still needs an AST is Bazel's generator_name.
+// The Continuation class should be deleted.
 // Once the API is small and sound, we can start to represent all
 // the lexical frames within a single function using just an array,
 // indexed by a small integer computed during the validation pass.
@@ -163,6 +168,16 @@ public final class StarlarkThread implements Freezable {
   }
 
   interface LexicalFrame extends Frame {
+    static LexicalFrame create(Mutability mutability) {
+      return mutability.isFrozen()
+          ? ImmutableEmptyLexicalFrame.INSTANCE
+          : new MutableLexicalFrame(mutability);
+    }
+
+    static LexicalFrame create(Mutability mutability, int numArgs) {
+      Preconditions.checkState(!mutability.isFrozen());
+      return new MutableLexicalFrame(mutability, /*initialCapacity=*/ numArgs);
+    }
   }
 
   private static final class ImmutableEmptyLexicalFrame implements LexicalFrame {
@@ -274,38 +289,36 @@ public final class StarlarkThread implements Freezable {
     return v == null ? null : key.cast(v);
   }
 
-  /** A CallFrame records information about an active function call. */
-  // TODO(adonovan): merge LexicalFrame into CallFrame. Every function call should have a frame,
-  // but only Starlark functions need local variables.
-  private static final class CallFrame {
-    final StarlarkCallable fn; // the called function
+  /**
+   * A Continuation contains data saved during a function call and restored when the function exits.
+   */
+  private static final class Continuation {
+    /** The {@link BaseFunction} being evaluated that will return into this Continuation. */
+    final BaseFunction function;
 
-    // Note that the inherited design is off-by-one:
-    // the following fields are logically facts about the _enclosing_ frame.
-    // This is a consequence of not representing toplevel statements as a function.
-    // TODO(adonovan): fix that.
+    /** The {@link FuncallExpression} to which this Continuation will return. */
+    @Nullable final FuncallExpression caller;
 
-    final Location callerLoc; // location of the enclosing call (may be Location.BUILTIN)
-    @Nullable final FuncallExpression call; // syntax of the enclosing call
-    final Frame savedLexicals; // the saved lexicals of the parent
-    final Module savedModule; // the saved module of the parent (TODO(adonovan): eliminate)
+    /** The next Continuation after this Continuation. */
+    @Nullable final Continuation continuation;
 
-    CallFrame(
-        StarlarkCallable fn,
-        Location callerLoc,
-        @Nullable FuncallExpression call,
-        Frame savedLexicals,
-        Module savedModule) {
-      this.fn = fn;
-      this.callerLoc = callerLoc;
-      this.call = call;
-      this.savedLexicals = savedLexicals;
-      this.savedModule = savedModule;
-    }
+    /** The lexical Frame of the caller. */
+    final Frame lexicalFrame;
 
-    @Override
-    public String toString() {
-      return fn.getName() + "@" + callerLoc;
+    /** The global Frame of the caller. */
+    final Module globalFrame;
+
+    Continuation(
+        @Nullable Continuation continuation,
+        BaseFunction function,
+        @Nullable FuncallExpression caller,
+        Frame lexicalFrame,
+        Module globalFrame) {
+      this.continuation = continuation;
+      this.function = function;
+      this.caller = caller;
+      this.lexicalFrame = lexicalFrame;
+      this.globalFrame = globalFrame;
     }
   }
 
@@ -369,8 +382,8 @@ public final class StarlarkThread implements Freezable {
     private static boolean skylarkObjectsProbablyEqual(Object obj1, Object obj2) {
       // TODO(b/76154791): check this more carefully.
       return obj1.equals(obj2)
-          || (obj1 instanceof StarlarkValue
-              && obj2 instanceof StarlarkValue
+          || (obj1 instanceof SkylarkValue
+              && obj2 instanceof SkylarkValue
               && Starlark.repr(obj1).equals(Starlark.repr(obj2)));
     }
 
@@ -471,15 +484,18 @@ public final class StarlarkThread implements Freezable {
     }
   }
 
-  // Local environment of the current active call,
-  // or an alias for globalFrame if no calls are active.
-  // TODO(adonovan): redundant with callstack; eliminate once we fix off-by-one problem.
+  /**
+   * Static Frame for lexical variables that are always looked up in the current StarlarkThread or
+   * for the definition StarlarkThread of the function currently being evaluated.
+   */
   private Frame lexicalFrame;
 
-  // Global environment of the current topmost call frame,
-  // or of the file about to be initialized if no calls are active.
-  // TODO(adonovan): eliminate once we represent even toplevel statements
-  // as a StarlarkFunction that closes over its Module.
+  /**
+   * Static Frame for global variables; either the current lexical Frame if evaluation is currently
+   * happening at the global scope of a BUILD file, or the global Frame at the time of function
+   * definition if evaluation is currently happening in the body of a function. Thus functions can
+   * close over other functions defined in the same file.
+   */
   private Module globalFrame;
 
   /** The semantics options that affect how Skylark code is evaluated. */
@@ -496,50 +512,38 @@ public final class StarlarkThread implements Freezable {
    */
   private final Map<String, Extension> importedExtensions;
 
-  /** Stack of active function calls. */
-  // TODO(adonovan): currently off by one because top-level statements don't have a CallFrame.
-  private final ArrayList<CallFrame> callstack = new ArrayList<>();
+  /**
+   * When in a lexical (Skylark) frame, this lists the names of the functions in the call stack. We
+   * currently use it to artificially disable recursion.
+   */
+  @Nullable private Continuation continuation;
 
   /** A hook for notifications of assignments at top level. */
   PostAssignHook postAssignHook;
 
   /**
-   * Pushes a function onto the call stack.
+   * Enters a scope by saving state to a new Continuation
    *
-   * @param fn the function whose scope to enter
-   * @param loc the source location of the function call.
+   * @param function the function whose scope to enter
+   * @param lexical the lexical frame to use
+   * @param caller the source AST node for the caller
+   * @param globals the global Frame that this function closes over from its definition
+   *     StarlarkThread
    */
-  void push(StarlarkCallable fn, Location loc, @Nullable FuncallExpression call) {
-    callstack.add(new CallFrame(fn, loc, call, this.lexicalFrame, this.globalFrame));
-
-    if (fn instanceof StarlarkFunction) {
-      StarlarkFunction sfn = (StarlarkFunction) fn;
-      this.lexicalFrame =
-          new MutableLexicalFrame(
-              this.mutability(), /*initialCapacity=*/ sfn.getSignature().numParameters());
-      this.globalFrame = sfn.getModule();
-    } else {
-      // built-in function
-      this.lexicalFrame = DUMMY_LEXICAL_FRAME;
-      // this.globalFrame is left as is.
-      // For built-ins, thread.globals() returns the module
-      // of the file from which the built-in was called.
-      // Really they have no business knowing about that.
-    }
+  void enterScope(
+      BaseFunction function, Frame lexical, @Nullable FuncallExpression caller, Module globals) {
+    continuation = new Continuation(continuation, function, caller, lexicalFrame, globalFrame);
+    lexicalFrame = lexical;
+    globalFrame = globals;
   }
 
-  /** Pops a function off the call stack. */
-  void pop() {
-    int last = callstack.size() - 1;
-    CallFrame top = callstack.get(last);
-    callstack.remove(last); // pop
-    this.lexicalFrame = top.savedLexicals;
-    this.globalFrame = top.savedModule;
+  /** Exits a scope by restoring state from the current continuation */
+  void exitScope() {
+    Preconditions.checkNotNull(continuation);
+    lexicalFrame = continuation.lexicalFrame;
+    globalFrame = continuation.globalFrame;
+    continuation = continuation.continuation;
   }
-
-  // Builtins cannot create or modify variable bindings,
-  // so it's sufficient to use a shared instance.
-  private static final LexicalFrame DUMMY_LEXICAL_FRAME = ImmutableEmptyLexicalFrame.INSTANCE;
 
   private final String transitiveHashCode;
 
@@ -580,29 +584,33 @@ public final class StarlarkThread implements Freezable {
    * supplied function is already on the stack.
    */
   boolean isRecursiveCall(StarlarkFunction function) {
-    for (CallFrame fr : callstack) {
+    for (Continuation k = continuation; k != null; k = k.continuation) {
       // TODO(adonovan): compare code, not closure values, otherwise
       // one can defeat this check by writing the Y combinator.
-      if (fr.fn.equals(function)) {
+      if (k.function.equals(function)) {
         return true;
       }
     }
     return false;
   }
 
-  /** Returns the current called function, which must exist. */
-  StarlarkCallable getCurrentFunction() {
-    return Iterables.getLast(callstack).fn;
+  /** Returns the current function call, if it exists. */
+  @Nullable
+  BaseFunction getCurrentFunction() {
+    return continuation != null ? continuation.function : null;
   }
 
-  /** Returns the call expression and called function for the outermost call being evaluated. */
-  // TODO(adonovan): replace this by an API for walking the call stack, then move to lib.packages.
-  public Pair<FuncallExpression, StarlarkCallable> getOutermostCall() {
-    if (callstack.isEmpty()) {
+  /** Returns the FuncallExpression and the BaseFunction for the top-level call being evaluated. */
+  // TODO(adonovan): replace this by an API for walking the call stack.
+  public Pair<FuncallExpression, BaseFunction> getTopCall() {
+    Continuation continuation = this.continuation;
+    if (continuation == null) {
       return null;
     }
-    CallFrame outermost = callstack.get(0);
-    return new Pair<>(outermost.call, outermost.fn);
+    while (continuation.continuation != null) {
+      continuation = continuation.continuation;
+    }
+    return new Pair<>(continuation.caller, continuation.function);
   }
 
   /**
@@ -857,7 +865,8 @@ public final class StarlarkThread implements Freezable {
    * Returns a set of all names of variables that are accessible in this {@code StarlarkThread}, in
    * a deterministic order.
    */
-  Set<String> getVariableNames() {
+  // TODO(adonovan): eliminate sole external call from docgen.
+  public Set<String> getVariableNames() {
     LinkedHashSet<String> vars = new LinkedHashSet<>();
     vars.addAll(lexicalFrame.getTransitiveBindings().keySet());
     // No-op when globalFrame = lexicalFrame
@@ -878,29 +887,33 @@ public final class StarlarkThread implements Freezable {
    * current context. The innermost frame's location must be supplied as {@code currentLocation} by
    * the caller.
    */
-  public ImmutableList<DebugFrame> listFrames(Location loc) {
+  public ImmutableList<DebugFrame> listFrames(Location currentLocation) {
     ImmutableList.Builder<DebugFrame> frameListBuilder = ImmutableList.builder();
 
-    Frame lex = this.lexicalFrame;
-    for (CallFrame fr : Lists.reverse(callstack)) {
+    Continuation currentContinuation = continuation;
+    Frame currentFrame = lexicalFrame;
+
+    // if there's a continuation then the current frame is a lexical frame
+    while (currentContinuation != null) {
       frameListBuilder.add(
           DebugFrame.builder()
-              .setLexicalFrameBindings(ImmutableMap.copyOf(lex.getTransitiveBindings()))
+              .setLexicalFrameBindings(ImmutableMap.copyOf(currentFrame.getTransitiveBindings()))
               .setGlobalBindings(ImmutableMap.copyOf(getGlobals().getTransitiveBindings()))
-              .setFunctionName(fr.fn.getName())
-              .setLocation(loc)
+              .setFunctionName(currentContinuation.function.getName())
+              .setLocation(currentLocation)
               .build());
-      lex = fr.savedLexicals;
-      loc = fr.callerLoc;
+
+      currentFrame = currentContinuation.lexicalFrame;
+      currentLocation =
+          currentContinuation.caller != null ? currentContinuation.caller.getLocation() : null;
+      currentContinuation = currentContinuation.continuation;
     }
-    // TODO(adonovan): simplify by fixing the callstack's off-by-one problem.
-    // We won't need to pass in 'loc' nor add a fake <top level> frame, nor
-    // suffer a loop-carried dependence.
+
     frameListBuilder.add(
         DebugFrame.builder()
             .setGlobalBindings(ImmutableMap.copyOf(getGlobals().getTransitiveBindings()))
             .setFunctionName("<top level>")
-            .setLocation(loc)
+            .setLocation(currentLocation)
             .build());
 
     return frameListBuilder.build();
@@ -918,7 +931,8 @@ public final class StarlarkThread implements Freezable {
    */
   @Nullable
   public ReadyToPause stepControl(Stepping stepping) {
-    final int depth = callstack.size();
+    final Continuation pausedContinuation = continuation;
+
     switch (stepping) {
       case NONE:
         return null;
@@ -926,10 +940,10 @@ public final class StarlarkThread implements Freezable {
         // pause at the very next statement
         return thread -> true;
       case OVER:
-        return thread -> thread.callstack.size() <= depth;
+        return thread -> isAt(thread, pausedContinuation) || isOutside(thread, pausedContinuation);
       case OUT:
-        // if we're at the outermost frame, same as NONE
-        return depth == 0 ? null : thread -> thread.callstack.size() < depth;
+        // if we're at the outer-most frame, same as NONE
+        return pausedContinuation == null ? null : thread -> isOutside(thread, pausedContinuation);
     }
     throw new IllegalArgumentException("Unsupported stepping type: " + stepping);
   }
@@ -960,6 +974,17 @@ public final class StarlarkThread implements Freezable {
      * currently in the outer-most frame, same as NONE.
      */
     OUT,
+  }
+
+  /** Returns true if {@code thread} is in a parent frame of {@code pausedContinuation}. */
+  private static boolean isOutside(
+      StarlarkThread thread, @Nullable Continuation pausedContinuation) {
+    return pausedContinuation != null && thread.continuation == pausedContinuation.continuation;
+  }
+
+  /** Returns true if {@code thread} is at the same frame as {@code pausedContinuation. */
+  private static boolean isAt(StarlarkThread thread, @Nullable Continuation pausedContinuation) {
+    return thread.continuation == pausedContinuation;
   }
 
   @Override

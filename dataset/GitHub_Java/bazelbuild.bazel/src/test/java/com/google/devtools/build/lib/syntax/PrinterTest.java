@@ -15,9 +15,13 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.IllegalFormatException;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,7 +39,8 @@ public class PrinterTest {
 
   @Test
   public void testPrinter() throws Exception {
-    // Note that str and repr only differ on behaviour of strings at toplevel.
+    // Note that prettyPrintValue and printValue only differ on behaviour of
+    // labels and strings at toplevel.
     assertThat(Starlark.str(createObjWithStr())).isEqualTo("<str marker>");
     assertThat(Starlark.repr(createObjWithStr())).isEqualTo("<repr marker>");
 
@@ -48,6 +53,10 @@ public class PrinterTest {
     assertThat(Starlark.str(3)).isEqualTo("3");
     assertThat(Starlark.repr(3)).isEqualTo("3");
     assertThat(Starlark.repr(Starlark.NONE)).isEqualTo("None");
+
+    assertThat(Starlark.str(Label.parseAbsolute("//x", ImmutableMap.of()))).isEqualTo("//x:x");
+    assertThat(Starlark.repr(Label.parseAbsolute("//x", ImmutableMap.of())))
+        .isEqualTo("Label(\"//x:x\")");
 
     List<?> list = StarlarkList.of(null, "foo", "bar");
     List<?> tuple = Tuple.of("foo", "bar");
@@ -119,15 +128,71 @@ public class PrinterTest {
         "%.s");
   }
 
-  private StarlarkValue createObjWithStr() {
-    return new StarlarkValue() {
+  @Test
+  public void testPrettyPrinter() throws Exception {
+    assertThat(Printer.getPrettyPrinter().repr(ImmutableList.of(1, 2, 3)).toString())
+        .isEqualTo(
+            "[\n" +
+            "    1,\n" +
+            "    2,\n" +
+            "    3\n" +
+            "]");
+    assertThat(Printer.getPrettyPrinter().repr(ImmutableList.<String>of()).toString())
+        .isEqualTo("[]");
+    assertThat(Printer.getPrettyPrinter().repr(ImmutableList.of("foo")).toString())
+        .isEqualTo("[\n    \"foo\"\n]");
+    assertThat(
+            Printer.getPrettyPrinter()
+                .repr(ImmutableMap.<Object, Object>of("foo", "bar", "baz", ImmutableList.of(1, 2)))
+                .toString())
+        .isEqualTo(
+            "{\n" +
+            "    \"foo\": \"bar\",\n" +
+            "    \"baz\": [\n" +
+            "        1,\n" +
+            "        2\n" +
+            "    ]\n" +
+            "}");
+    assertThat(
+            Printer.getPrettyPrinter()
+                .repr(ImmutableMap.<Object, Object>of(
+                        "foo", "bar", "empty", ImmutableList.of(), "a", "b"))
+                .toString())
+        .isEqualTo(
+            "{\n" +
+            "    \"foo\": \"bar\",\n" +
+            "    \"empty\": [],\n" +
+            "    \"a\": \"b\"\n" +
+            "}");
+  }
+
+  private SkylarkPrinter makeSimplifiedFormatPrinter() {
+    return new Printer.BasePrinter(new StringBuilder(), /*simplifiedFormatStrings=*/ true);
+  }
+
+  @Test
+  public void testSimplifiedDisallowsPlaceholdersBesidesPercentS() {
+    assertThat(makeSimplifiedFormatPrinter().format("Allowed: %%").toString())
+        .isEqualTo("Allowed: %");
+    assertThat(makeSimplifiedFormatPrinter().format("Allowed: %s", "abc").toString())
+        .isEqualTo("Allowed: abc");
+    assertThrows(
+        IllegalFormatException.class,
+        () -> makeSimplifiedFormatPrinter().format("Disallowed: %r", "abc"));
+    assertThrows(
+        IllegalFormatException.class,
+        () -> makeSimplifiedFormatPrinter().format("Disallowed: %d", 5));
+  }
+
+  private SkylarkValue createObjWithStr() {
+    return new SkylarkValue() {
       @Override
-      public void repr(Printer printer) {
+      public void repr(SkylarkPrinter printer) {
         printer.append("<repr marker>");
       }
 
       @Override
-      public void str(Printer printer) {
+      public void str(SkylarkPrinter printer) {
         printer.append("<str marker>");
       }
     };

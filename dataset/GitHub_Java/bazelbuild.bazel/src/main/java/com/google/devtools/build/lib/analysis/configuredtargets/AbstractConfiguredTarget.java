@@ -31,13 +31,13 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
@@ -218,7 +218,7 @@ public abstract class AbstractConfiguredTarget
   /** Returns a declared provider provided by this target. Only meant to use from Skylark. */
   @Nullable
   @Override
-  public final Info get(Provider.Key providerKey) {
+  public final InfoInterface get(Provider.Key providerKey) {
     if (providerKey.equals(DefaultInfo.PROVIDER.getKey())) {
       return getDefaultProvider();
     }
@@ -227,7 +227,7 @@ public abstract class AbstractConfiguredTarget
 
   /** Implement in subclasses to get a skylark provider for a given {@code providerKey}. */
   @Nullable
-  protected abstract Info rawGetSkylarkProvider(Provider.Key providerKey);
+  protected abstract InfoInterface rawGetSkylarkProvider(Provider.Key providerKey);
 
   public String getRuleClassString() {
     return "";
@@ -260,7 +260,7 @@ public abstract class AbstractConfiguredTarget
   // All main target classes must override this method to provide more descriptive strings.
   // Exceptions are currently EnvironmentGroupConfiguredTarget and PackageGroupConfiguredTarget.
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<unknown target " + getLabel() + ">");
   }
 }

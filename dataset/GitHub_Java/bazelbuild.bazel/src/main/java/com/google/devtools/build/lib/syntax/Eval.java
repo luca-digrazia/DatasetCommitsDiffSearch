@@ -18,6 +18,7 @@ import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -95,10 +96,10 @@ final class Eval {
 
   private TokenKind execFor(ForStatement node) throws EvalException, InterruptedException {
     Object o = eval(thread, node.getCollection());
-    Iterable<?> seq = Starlark.toIterable(o);
+    Iterable<?> col = EvalUtils.toIterable(o, node.getLocation());
     EvalUtils.lock(o, node.getLocation());
     try {
-      for (Object it : seq) {
+      for (Object it : col) {
         assign(node.getLHS(), it, thread, node.getLocation());
 
         switch (execStatementsInternal(node.getBlock())) {
@@ -252,7 +253,7 @@ final class Eval {
       assignItem(object, key, value, loc);
     } else if (expr instanceof ListExpression) {
       ListExpression list = (ListExpression) expr;
-      assignList(list.getElements(), value, thread, loc);
+      assignList(list, value, thread, loc);
     } else {
       // Not possible for validated ASTs.
       throw new EvalException(loc, "cannot assign to '" + expr + "'");
@@ -298,32 +299,25 @@ final class Eval {
    *     matching length
    */
   private static void assignList(
-      List<Expression> lhs, Object x, StarlarkThread thread, Location loc)
+      ListExpression list, Object value, StarlarkThread thread, Location loc)
       throws EvalException, InterruptedException {
-    // TODO(adonovan): lock/unlock rhs during iteration so that
-    // assignments fail when the left side aliases the right,
-    // which is a tricky case in Python assignment semantics.
-    int nrhs = Starlark.len(x);
-    if (nrhs < 0) {
-      throw new EvalException(null, "type '" + EvalUtils.getDataTypeName(x) + "' is not iterable");
-    }
-    Iterable<?> rhs = Starlark.toIterable(x); // fails if x is a string
-    int len = lhs.size();
+    Collection<?> collection = EvalUtils.toCollection(value, loc);
+    int len = list.getElements().size();
     if (len == 0) {
       throw new EvalException(
           loc, "lists or tuples on the left-hand side of assignments must have at least one item");
     }
-    if (len != nrhs) {
+    if (len != collection.size()) {
       throw new EvalException(
           loc,
           String.format(
               "assignment length mismatch: left-hand side has length %d, but right-hand side"
                   + " evaluates to value of length %d",
-              len, nrhs));
+              len, collection.size()));
     }
     int i = 0;
-    for (Object item : rhs) {
-      assign(lhs.get(i), item, thread, loc);
+    for (Object item : collection) {
+      assign(list.getElements().get(i), item, thread, loc);
       i++;
     }
   }
@@ -366,7 +360,7 @@ final class Eval {
     // TODO(b/141263526): following Python, allow list+=iterable (but not list+iterable).
     if (op == TokenKind.PLUS && x instanceof StarlarkList && y instanceof StarlarkList) {
       StarlarkList<?> list = (StarlarkList) x;
-      list.extend(y);
+      list.extend(y, location);
       return list;
     }
     return EvalUtils.binaryOp(op, x, y, thread, location);
@@ -398,7 +392,7 @@ final class Eval {
     // TODO(adonovan): don't push and pop all the time. We should only need the stack of function
     // call frames, and we should recycle them.
     // TODO(adonovan): put the StarlarkThread (Starlark thread) into the Java thread-local store
-    // once only, in push, and undo this in pop.
+    // once only, in enterScope, and undo this in exitScope.
     try {
       if (Callstack.enabled) {
         Callstack.push(expr);
@@ -648,7 +642,7 @@ final class Eval {
 
             Object iterable = eval(thread, forClause.getIterable());
             Location loc = comp.getLocation();
-            Iterable<?> listValue = Starlark.toIterable(iterable);
+            Iterable<?> listValue = EvalUtils.toIterable(iterable, loc);
             EvalUtils.lock(iterable, loc);
             try {
               for (Object elem : listValue) {
@@ -794,7 +788,7 @@ final class Eval {
         posargs.add(value);
       } else if (arg instanceof Argument.Star) {
         // f(*args): expand args
-        if (!(value instanceof StarlarkIterable)) {
+        if (!(value instanceof Iterable)) {
           throw new EvalException(
               call.getLocation(),
               "argument after * must be an iterable, not " + EvalUtils.getDataTypeName(value));

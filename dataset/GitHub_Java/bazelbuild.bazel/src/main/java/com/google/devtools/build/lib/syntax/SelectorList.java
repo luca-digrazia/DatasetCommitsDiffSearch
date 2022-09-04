@@ -19,6 +19,8 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,11 +42,12 @@ import java.util.Objects;
  * </pre>
  */
 @SkylarkModule(
-    name = "select",
-    doc = "A selector between configuration-dependent entities.",
-    documented = false)
+  name = "select",
+  doc = "A selector between configuration-dependent entities.",
+  documented = false
+)
 @AutoCodec
-public final class SelectorList implements StarlarkValue {
+public final class SelectorList implements SkylarkValue {
   // TODO(build-team): Selectors are currently split between .packages and .syntax . They should
   // really all be in .packages, but then we'd need to figure out a way how to extend binary
   // operators, which is a non-trivial problem.
@@ -125,7 +128,8 @@ public final class SelectorList implements StarlarkValue {
             location,
             String.format(
                 "'+' operator applied to incompatible types (%s, %s)",
-                getTypeName(firstValue), getTypeName(value)));
+                EvalUtils.getDataTypeName(firstValue, true),
+                EvalUtils.getDataTypeName(value, true)));
       }
     }
 
@@ -133,16 +137,6 @@ public final class SelectorList implements StarlarkValue {
   }
 
   private static final Class<?> NATIVE_LIST_TYPE = List.class;
-
-  private static String getTypeName(Object x) {
-    if (x instanceof SelectorList) {
-      return "select of " + EvalUtils.getDataTypeNameFromClass(((SelectorList) x).getType());
-    } else if (x instanceof SelectorValue) {
-      return "select of " + EvalUtils.getDataTypeNameFromClass(((SelectorValue) x).getType());
-    } else {
-      return Starlark.type(x);
-    }
-  }
 
   private static Class<?> getNativeType(Object value) {
     if (value instanceof SelectorList) {
@@ -174,7 +168,7 @@ public final class SelectorList implements StarlarkValue {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.printList(elements, "", " + ", "", null);
   }
 

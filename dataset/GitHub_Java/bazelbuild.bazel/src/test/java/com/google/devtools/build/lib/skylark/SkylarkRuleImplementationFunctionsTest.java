@@ -962,8 +962,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   @Test
   public void testNsetContainsList() throws Exception {
     setRuleContext(createRuleContext("//foo:foo"));
-    checkEvalErrorContains(
-        "depset elements must not be mutable values", "depset([[ruleContext.files.srcs]])");
+    checkEvalErrorContains("unhashable type: 'list'", "depset([[ruleContext.files.srcs]])");
   }
 
   @Test

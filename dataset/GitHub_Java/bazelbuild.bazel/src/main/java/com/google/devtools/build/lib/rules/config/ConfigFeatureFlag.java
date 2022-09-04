@@ -91,11 +91,12 @@ public class ConfigFeatureFlag implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     if (!ConfigFeatureFlag.isAvailable(ruleContext)) {
-      throw ruleContext.throwWithRuleError(
+      ruleContext.ruleError(
           String.format(
               "the %s rule is not available in package '%s'",
               ruleContext.getRuleClassNameForLogging(),
               ruleContext.getLabel().getPackageIdentifier()));
+      throw new RuleErrorException();
     }
 
     List<String> specifiedValues = ruleContext.attributes().get("allowed_values", STRING_LIST);

@@ -33,16 +33,15 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintCollectionApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Function;
 import javax.annotation.Nullable;
 
@@ -209,12 +208,6 @@ public abstract class ConstraintCollection
     return false;
   }
 
-  @Override
-  public boolean hasConstraintValue(ConstraintValueInfo constraintValue) {
-    ConstraintValueInfo discoveredConstraintValue = this.get(constraintValue.constraint());
-    return Objects.equals(constraintValue, discoveredConstraintValue);
-  }
-
   /**
    * Returns the {@link ConstraintValueInfo} for the given {@link ConstraintSettingInfo}, or {@code
    * null} if none exists.
@@ -260,7 +253,7 @@ public abstract class ConstraintCollection
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<");
     if (parent() != null) {
       printer.append("parent: ");

@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
@@ -20,12 +21,12 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -37,11 +38,11 @@ import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-/** A generic skylark object with fields, constructable by calling {@code struct()} in skylark. */
-public abstract class StructImpl implements Info, ClassObject, StructApi, Serializable {
-
-  private final Provider provider;
-  private final Location location;
+/**
+ * A generic skylark object with fields, constructable by calling {@code struct()} in skylark.
+ */
+public abstract class StructImpl extends Info
+    implements ClassObject, StructApi, Serializable {
 
   /**
    * Constructs an {@link StructImpl}.
@@ -51,18 +52,7 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
    *     {@link Location#BUILTIN}.
    */
   protected StructImpl(Provider provider, @Nullable Location location) {
-    this.provider = provider;
-    this.location = location != null ? location : Location.BUILTIN;
-  }
-
-  @Override
-  public Provider getProvider() {
-    return provider;
-  }
-
-  @Override
-  public Location getCreationLoc() {
-    return location;
+    super(provider, location);
   }
 
   /**
@@ -78,6 +68,26 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
       builder.put(Attribute.getSkylarkName(e.getKey()), Starlark.fromJava(e.getValue(), null));
     }
     return builder.build();
+  }
+
+  /**
+   * Returns whether the given field name exists.
+   *
+   * <p>This conceptually extends the API for {@link ClassObject}.
+   */
+  public abstract boolean hasField(String name);
+
+  /**
+   * <p>Wraps {@link ClassObject#getValue(String)}, returning null in cases where
+   * {@link EvalException} would have been thrown.
+   */
+  @VisibleForTesting
+  public Object getValueOrNull(String name) {
+    try {
+      return getValue(name);
+    } catch (EvalException e) {
+      return null;
+    }
   }
 
   /**
@@ -108,7 +118,7 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
    * <p>By default, it is the one specified by the provider.
    */
   protected String getErrorMessageFormatForUnknownField() {
-    return getProvider().getErrorMessageFormatForUnknownField();
+    return provider.getErrorMessageFormatForUnknownField();
   }
 
   @Override
@@ -127,7 +137,7 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
     if (this == other) {
       return true;
     }
-    if (!this.getProvider().equals(other.getProvider())) {
+    if (!this.provider.equals(other.provider)) {
       return false;
     }
     // Compare objects' fields and their values
@@ -147,7 +157,7 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
     List<String> fields = new ArrayList<>(getFieldNames());
     Collections.sort(fields);
     List<Object> objectsToHash = new ArrayList<>();
-    objectsToHash.add(getProvider());
+    objectsToHash.add(provider);
     for (String field : fields) {
       objectsToHash.add(field);
       objectsToHash.add(getValueOrNull(field));
@@ -160,7 +170,7 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
    * is no guarantee, it depends on the actual values).
    */
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     boolean first = true;
     printer.append("struct(");
     // Sort by key to ensure deterministic output.
@@ -174,14 +184,6 @@ public abstract class StructImpl implements Info, ClassObject, StructApi, Serial
       printer.repr(getValueOrNull(fieldName));
     }
     printer.append(")");
-  }
-
-  private Object getValueOrNull(String name) {
-    try {
-      return getValue(name);
-    } catch (EvalException e) {
-      return null;
-    }
   }
 
   @Override

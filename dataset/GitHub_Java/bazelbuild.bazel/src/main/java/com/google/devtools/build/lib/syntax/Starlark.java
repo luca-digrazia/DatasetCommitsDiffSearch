@@ -14,10 +14,11 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,7 @@ public final class Starlark {
   public static final Object UNBOUND = new UnboundMarker();
 
   @Immutable
-  private static final class UnboundMarker implements StarlarkValue {
+  private static final class UnboundMarker implements SkylarkValue {
     private UnboundMarker() {}
 
     @Override
@@ -58,7 +59,7 @@ public final class Starlark {
     }
 
     @Override
-    public void repr(Printer printer) {
+    public void repr(SkylarkPrinter printer) {
       printer.append("<unbound>");
     }
   }
@@ -83,7 +84,7 @@ public final class Starlark {
    * StarlarkValue.
    */
   public static boolean valid(Object x) {
-    return x instanceof StarlarkValue
+    return x instanceof SkylarkValue
         || x instanceof String
         || x instanceof Boolean
         || x instanceof Integer;
@@ -130,64 +131,14 @@ public final class Starlark {
   public static boolean truth(Object x) {
     if (x instanceof Boolean) {
       return (Boolean) x;
-    } else if (x instanceof StarlarkValue) {
-      return ((StarlarkValue) x).truth();
+    } else if (x instanceof SkylarkValue) {
+      return ((SkylarkValue) x).truth();
     } else if (x instanceof String) {
       return !((String) x).isEmpty();
     } else if (x instanceof Integer) {
       return (Integer) x != 0;
     } else {
       throw new IllegalArgumentException("invalid Starlark value: " + x.getClass());
-    }
-  }
-
-  /**
-   * Returns an iterable view of {@code x} if it is an iterable Starlark value; throws EvalException
-   * otherwise.
-   *
-   * <p>Whereas the interpreter temporarily freezes the iterable value using {@link EvalUtils#lock}
-   * and {@link EvalUtils#unlock} while iterating in {@code for} loops and comprehensions, iteration
-   * using this method does not freeze the value. Callers should exercise care not to mutate the
-   * underlying object during iteration.
-   */
-  public static Iterable<?> toIterable(Object x) throws EvalException {
-    if (x instanceof StarlarkIterable) {
-      return (Iterable<?>) x;
-    }
-    throw new EvalException(null, "type '" + EvalUtils.getDataTypeName(x) + "' is not iterable");
-  }
-
-  /**
-   * Returns a new array containing the elements of Starlark iterable value {@code x}. A Starlark
-   * value is iterable if it implements {@link StarlarkIterable}.
-   */
-  public static Object[] toArray(Object x) throws EvalException {
-    // Specialize Sequence and Dict to avoid allocation and/or indirection.
-    if (x instanceof Sequence) {
-      return ((Sequence<?>) x).toArray();
-    } else if (x instanceof Dict) {
-      return ((Dict<?, ?>) x).keySet().toArray();
-    } else {
-      return Iterables.toArray(toIterable(x), Object.class);
-    }
-  }
-
-  /**
-   * Returns the length of a legal Starlark value as if by the expression {@code len(x)}, or -1 if
-   * the value is not a string or iterable.
-   */
-  public static int len(Object x) {
-    if (x instanceof String) {
-      return ((String) x).length();
-    } else if (x instanceof Sequence) {
-      return ((Sequence) x).size();
-    } else if (x instanceof Dict) {
-      return ((Dict) x).size();
-    } else if (x instanceof StarlarkIterable) {
-      // Iterables.size() checks if x is a Collection so it's efficient in that sense.
-      return Iterables.size((Iterable<?>) x);
-    } else {
-      return -1;
     }
   }
 
@@ -223,10 +174,8 @@ public final class Starlark {
       throw new IllegalArgumentException(
           cls.getName() + " is annotated with neither @SkylarkGlobalLibrary nor @SkylarkModule");
     }
-    // TODO(adonovan): logically this should be a parameter.
-    StarlarkSemantics semantics = StarlarkSemantics.DEFAULT_SEMANTICS;
-    for (String name : CallUtils.getMethodNames(semantics, v.getClass())) {
-      env.put(name, CallUtils.getBuiltinCallable(semantics, v, name));
+    for (String name : CallUtils.getMethodNames(v.getClass())) {
+      env.put(name, CallUtils.getBuiltinCallable(v, name));
     }
   }
 

@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.errorprone.annotations.FormatMethod;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -612,11 +611,10 @@ public abstract class SkylarkType {
    * @param value - the actual value of the parameter
    * @param type - the expected Class for the value
    * @param loc - the location info used in the EvalException
-   * @param format - a String.format-style format string
+   * @param format - a format String
    * @param args - arguments to format, in case there's an exception
    */
   // TODO(adonovan): irrelevant; eliminate.
-  @FormatMethod
   public static <T> T cast(Object value, Class<T> type, Location loc, String format, Object... args)
       throws EvalException {
     try {
@@ -637,15 +635,8 @@ public abstract class SkylarkType {
    * @param args - arguments to format, in case there's an exception
    */
   @SuppressWarnings("unchecked")
-  @FormatMethod
-  public static <T> T cast(
-      Object value,
-      Class<T> genericType,
-      Class<?> argType,
-      Location loc,
-      String format,
-      Object... args)
-      throws EvalException {
+  public static <T> T cast(Object value, Class<T> genericType, Class<?> argType,
+      Location loc, String format, Object... args) throws EvalException {
     if (of(genericType, argType).contains(value)) {
       return (T) value;
     } else {
@@ -668,21 +659,25 @@ public abstract class SkylarkType {
       return ImmutableMap.of();
     }
     if (!(obj instanceof Map<?, ?>)) {
-      throw Starlark.errorf(
-          "expected a dictionary for '%s' but got '%s' instead",
-          what, EvalUtils.getDataTypeName(obj));
+      throw new EvalException(
+          null,
+          String.format(
+              "expected a dictionary for '%s' but got '%s' instead",
+              what, EvalUtils.getDataTypeName(obj)));
     }
 
     for (Map.Entry<?, ?> input : ((Map<?, ?>) obj).entrySet()) {
       if (!keyType.isAssignableFrom(input.getKey().getClass())
           || !valueType.isAssignableFrom(input.getValue().getClass())) {
-        throw Starlark.errorf(
-            "expected <%s, %s> type for '%s' but got <%s, %s> instead",
-            keyType.getSimpleName(),
-            valueType.getSimpleName(),
-            what,
-            EvalUtils.getDataTypeName(input.getKey()),
-            EvalUtils.getDataTypeName(input.getValue()));
+        throw new EvalException(
+            null,
+            String.format(
+                "expected <%s, %s> type for '%s' but got <%s, %s> instead",
+                keyType.getSimpleName(),
+                valueType.getSimpleName(),
+                what,
+                EvalUtils.getDataTypeName(input.getKey()),
+                EvalUtils.getDataTypeName(input.getValue())));
       }
     }
 
@@ -695,11 +690,13 @@ public abstract class SkylarkType {
   public static void checkType(Object object, Class<?> type, @Nullable Object description)
       throws EvalException {
     if (!type.isInstance(object)) {
-      throw Starlark.errorf(
-          "expected type '%s' %sbut got type '%s' instead",
-          Starlark.repr(type),
-          description == null ? "" : String.format("for %s ", description),
-          EvalUtils.getDataTypeName(object));
+      throw new EvalException(
+          null,
+          Starlark.format(
+              "expected type '%r' %sbut got type '%s' instead",
+              type,
+              description == null ? "" : String.format("for %s ", description),
+              EvalUtils.getDataTypeName(object)));
       }
   }
 }

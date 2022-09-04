@@ -29,11 +29,13 @@ import com.google.devtools.build.lib.packages.Type.DictType;
 import com.google.devtools.build.lib.packages.Type.LabelClass;
 import com.google.devtools.build.lib.packages.Type.ListType;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
+import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -43,9 +45,7 @@ import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
- * Collection of data types that are specific to building things, i.e. not inherent to Starlark.
- *
- * <p>BEFORE YOU ADD A NEW TYPE: See javadoc in {@link Type}.
+ * Collection of data types that are specific to building things, i.e. not inherent to Skylark.
  */
 public final class BuildType {
 
@@ -146,12 +146,10 @@ public final class BuildType {
   public static <T> Object selectableConvert(
       Type<T> type, Object x, Object what, LabelConversionContext context)
       throws ConversionException {
-    if (x instanceof com.google.devtools.build.lib.packages.SelectorList) {
+    if (x instanceof com.google.devtools.build.lib.syntax.SelectorList) {
       return new SelectorList<T>(
-          ((com.google.devtools.build.lib.packages.SelectorList) x).getElements(),
-          what,
-          context,
-          type);
+          ((com.google.devtools.build.lib.syntax.SelectorList) x).getElements(),
+          what, context, type);
     } else {
       return type.convert(x, what, context);
     }
@@ -291,7 +289,7 @@ public final class BuildType {
 
   /**
    * Dictionary type specialized for label keys, which is able to detect collisions caused by the
-   * fact that labels have multiple equivalent representations in Starlark code.
+   * fact that labels have multiple equivalent representations in Skylark code.
    */
   private static class LabelKeyedDictType<ValueT> extends DictType<Label, ValueT> {
     private LabelKeyedDictType(Type<ValueT> valueType) {
@@ -490,13 +488,11 @@ public final class BuildType {
   }
 
   /**
-   * Holds an ordered collection of {@link Selector}s. This is used to support {@code attr =
-   * rawValue + select(...) + select(...) + ..."} syntax. For consistency's sake, raw values are
-   * stored as selects with only a default condition.
+   * Holds an ordered collection of {@link Selector}s. This is used to support
+   * {@code attr = rawValue + select(...) + select(...) + ..."} syntax. For consistency's
+   * sake, raw values are stored as selects with only a default condition.
    */
-  // TODO(adonovan): merge with packages.Selector{List,Value}.
-  // We don't need three classes for the same concept.
-  public static final class SelectorList<T> implements StarlarkValue {
+  public static final class SelectorList<T> implements SkylarkValue {
     private final Type<T> originalType;
     private final List<Selector<T>> elements;
 
@@ -565,7 +561,7 @@ public final class BuildType {
     }
 
     @Override
-    public void repr(Printer printer) {
+    public void repr(SkylarkPrinter printer) {
       // Convert to a lib.syntax.SelectorList to guarantee consistency with callers that serialize
       // directly on that type.
       List<SelectorValue> selectorValueList = new ArrayList<>();
@@ -573,7 +569,7 @@ public final class BuildType {
         selectorValueList.add(new SelectorValue(element.getEntries(), element.getNoMatchError()));
       }
       try {
-        printer.repr(com.google.devtools.build.lib.packages.SelectorList.of(selectorValueList));
+        printer.repr(com.google.devtools.build.lib.syntax.SelectorList.of(null, selectorValueList));
       } catch (EvalException e) {
         throw new IllegalStateException("this list should have been validated on creation");
       }

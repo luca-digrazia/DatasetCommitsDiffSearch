@@ -18,30 +18,24 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.Collections;
 import java.util.List;
 import java.util.RandomAccess;
 import javax.annotation.Nullable;
 
 /**
- * A Sequence is a finite iterable sequence of Starlark values, such as a list or tuple.
+ * A Sequence is a finite sequence of Starlark values, such as a list or tuple.
  *
- * <p>Sequences implement the read-only operations of the {@link List} interface, but not its update
- * operations, similar to {@code ImmutableList}. The specification of {@code List} governs how such
- * methods behave and in particular how they report errors. Subclasses of sequence may define ad-hoc
- * mutator methods, such as {@link StarlarkList#extend}, exposed to Starlark, or Java, or both.
- *
- * <p>In principle, subclasses of Sequence could also define the standard update operations of List,
- * but there appears to be little demand, and doing so carries some risk of obscuring unintended
- * mutations to Starlark values that would currently cause the program to crash.
+ * <p>Although this implements the {@link List} interface, it is not mutable via that interface's
+ * methods. Instead, use the mutators that take in a {@link Mutability} object.
  */
 @SkylarkModule(
     name = "sequence",
     documented = false,
     category = SkylarkModuleCategory.BUILTIN,
     doc = "common type of lists and tuples.")
-public interface Sequence<E>
-    extends StarlarkValue, List<E>, RandomAccess, SkylarkIndexable, StarlarkIterable<E> {
+public interface Sequence<E> extends SkylarkValue, List<E>, RandomAccess, SkylarkIndexable {
 
   @Override
   default boolean truth() {

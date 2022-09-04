@@ -1026,19 +1026,7 @@ class MethodLibrary {
         }
         direct = x;
       }
-      if (direct instanceof Depset) {
-        throw new EvalException(
-            null,
-            "parameter 'direct' must contain a list of elements, and may no longer accept a"
-                + " depset. The deprecated behavior may be temporarily re-enabled by setting"
-                + " --incompatible_disable_depset_inputs=false");
-      }
-      result =
-          Depset.fromDirectAndTransitive(
-              order,
-              listFromNoneable(direct, Object.class, "direct"),
-              listFromNoneable(transitive, Depset.class, "transitive"));
-
+      result = depsetConstructor(direct, order, transitive);
     } else {
       if (x != Starlark.NONE) {
         if (!isEmptySkylarkList(items)) {
@@ -1062,6 +1050,27 @@ class MethodLibrary {
       }
     }
     return result;
+  }
+
+  private static Depset depsetConstructor(Object direct, Order order, Object transitive)
+      throws EvalException {
+
+    if (direct instanceof Depset) {
+      throw new EvalException(
+          null,
+          "parameter 'direct' must contain a list of elements, and may "
+              + "no longer accept a depset. The deprecated behavior may be temporarily re-enabled "
+              + "by setting --incompatible_disable_depset_inputs=false");
+    }
+
+    Depset.Builder builder = Depset.builder(order);
+    for (Object directElement : listFromNoneable(direct, Object.class, "direct")) {
+      builder.addDirect(directElement);
+    }
+    for (Depset transitiveSet : listFromNoneable(transitive, Depset.class, "transitive")) {
+      builder.addTransitive(transitiveSet);
+    }
+    return builder.build();
   }
 
   private static <T> List<T> listFromNoneable(
@@ -1088,7 +1097,7 @@ class MethodLibrary {
     }
 
     // Non-legacy behavior: either 'transitive' or 'direct' were specified.
-    List<Object> directElements;
+    Iterable<Object> directElements;
     if (direct != Starlark.NONE) {
       SkylarkType.checkType(direct, Sequence.class, "direct");
       directElements = ((Sequence<?>) direct).getContents(Object.class, "direct");
@@ -1097,14 +1106,21 @@ class MethodLibrary {
       directElements = ((Sequence<?>) items).getContents(Object.class, "items");
     }
 
-    List<Depset> transitiveList;
+    Iterable<Depset> transitiveList;
     if (transitive != Starlark.NONE) {
       SkylarkType.checkType(transitive, Sequence.class, "transitive");
       transitiveList = ((Sequence<?>) transitive).getContents(Depset.class, "transitive");
     } else {
       transitiveList = ImmutableList.of();
     }
-    return Depset.fromDirectAndTransitive(order, directElements, transitiveList);
+    Depset.Builder builder = Depset.builder(order);
+    for (Object directElement : directElements) {
+      builder.addDirect(directElement);
+    }
+    for (Depset transitiveSet : transitiveList) {
+      builder.addTransitive(transitiveSet);
+    }
+    return builder.build();
   }
 
   private static boolean isEmptySkylarkList(Object o) {

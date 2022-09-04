@@ -14,8 +14,13 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Strings;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Formattable;
+import java.util.Formatter;
 import java.util.IllegalFormatException;
 import java.util.List;
 import java.util.Map;
@@ -23,73 +28,8 @@ import java.util.MissingFormatWidthException;
 import java.util.UnknownFormatConversionException;
 import javax.annotation.Nullable;
 
-/** A printer of Starlark values. */
-// TODO(adonovan): merge BasePrinter into Printer and simplify.
-public abstract class Printer {
-
-  /** Append a char to the printer's buffer */
-  public abstract Printer append(char c);
-
-  /** Append a char sequence to the printer's buffer */
-  public abstract Printer append(CharSequence s);
-
-  /**
-   * Prints a list to the printer's buffer. All list items are rendered with {@code repr}.
-   *
-   * @param list the list
-   * @param isTuple if true, uses parentheses, otherwise, uses square brackets. Also one-element
-   *     tuples are rendered with a comma after the element.
-   * @return Printer
-   */
-  public abstract Printer printList(Iterable<?> list, boolean isTuple);
-
-  /**
-   * Prints a list to the printer's buffer. All list items are rendered with {@code repr}.
-   *
-   * @param list the list of objects to repr (each as with repr)
-   * @param before a string to print before the list items, e.g. an opening bracket
-   * @param separator a separator to print between items
-   * @param after a string to print after the list items, e.g. a closing bracket
-   * @param singletonTerminator null or a string to print after the list if it is a singleton. The
-   *     singleton case is notably relied upon in python syntax to distinguish a tuple of size one
-   *     such as ("foo",) from a merely parenthesized object such as ("foo")
-   * @return Printer
-   */
-  public abstract Printer printList(
-      Iterable<?> list,
-      String before,
-      String separator,
-      String after,
-      @Nullable String singletonTerminator);
-
-  /** Renders an object with {@code repr} and append to the printer's buffer. */
-  public abstract Printer repr(Object o);
-
-  /** Renders an object with {@code str} and append to the printer's buffer. */
-  public abstract Printer str(Object o);
-
-  /** Renders an object in the style of {@code print} and append to the printer's buffer. */
-  public abstract Printer debugPrint(Object o);
-
-  /**
-   * Performs Python-style string formatting, as per {@code pattern % tuple}. Limitations: only
-   * {@code %d %s %r %%} are supported.
-   *
-   * @param pattern a format string
-   * @param arguments an array containing positional arguments
-   * @return Printer
-   */
-  public abstract Printer format(String pattern, Object... arguments);
-
-  /**
-   * Performs Python-style string formatting, as per {@code pattern % tuple}. Limitations: only
-   * {@code %d %s %r %%} are supported.
-   *
-   * @param pattern a format string
-   * @param arguments a list containing positional arguments
-   * @return Printer
-   */
-  public abstract Printer formatWithList(String pattern, List<?> arguments);
+/** (Pretty) Printing of Skylark values */
+public class Printer {
 
   /**
    * Creates an instance of {@link BasePrinter} that wraps an existing buffer.
@@ -128,6 +68,35 @@ public abstract class Printer {
   }
 
   private Printer() {}
+
+  // These static methods proxy to the similar methods of BasePrinter
+
+  /** Format an object with Skylark's {@code debugPrint}. */
+  static String debugPrint(Object x) {
+    return getPrinter().debugPrint(x).toString();
+  }
+
+  /**
+   * Perform Python-style string formatting, lazily.
+   *
+   * @param pattern a format string.
+   * @param arguments positional arguments.
+   * @return the formatted string.
+   */
+  static Formattable formattable(final String pattern, Object... arguments) {
+    final List<Object> args = Arrays.asList(arguments);
+    return new Formattable() {
+      @Override
+      public String toString() {
+        return Starlark.formatWithList(pattern, args);
+      }
+
+      @Override
+      public void formatTo(Formatter formatter, int flags, int width, int precision) {
+        Printer.getPrinter(formatter.out()).formatWithList(pattern, args);
+      }
+    };
+  }
 
   /**
    * Append a char to a buffer. In case of {@link IOException} throw an {@link AssertionError}
@@ -171,7 +140,7 @@ public abstract class Printer {
   }
 
   /** Actual class that implements Printer API */
-  public static class BasePrinter extends Printer {
+  public static class BasePrinter implements SkylarkPrinter {
     // Methods of this class should not recurse through static methods of Printer
 
     protected final Appendable buffer;
@@ -220,8 +189,8 @@ public abstract class Printer {
      * @return the buffer, in fluent style
      */
     public BasePrinter debugPrint(Object o) {
-      if (o instanceof StarlarkValue) {
-        ((StarlarkValue) o).debugPrint(this);
+      if (o instanceof SkylarkValue) {
+        ((SkylarkValue) o).debugPrint(this);
         return this;
       }
 
@@ -233,11 +202,11 @@ public abstract class Printer {
      * quote strings at top level, though strings and other values appearing as elements of other
      * structures are quoted as if by {@code repr}.
      *
-     * <p>Implementations of StarlarkValue may define their own behavior of {@code str}.
+     * <p>Implementations of SkylarkValue may define their own behavior of {@code str}.
      */
     public BasePrinter str(Object o) {
-      if (o instanceof StarlarkValue) {
-        ((StarlarkValue) o).str(this);
+      if (o instanceof SkylarkValue) {
+        ((SkylarkValue) o).str(this);
         return this;
       }
 
@@ -251,7 +220,7 @@ public abstract class Printer {
      * Prints the quoted representation of Starlark value {@code o}. The quoted form is often a
      * Starlark expression that evaluates to {@code o}.
      *
-     * <p>Implementations of StarlarkValue may define their own behavior of {@code repr}.
+     * <p>Implementations of SkylarkValue may define their own behavior of {@code repr}.
      *
      * <p>In addition to Starlark values, {@code repr} also prints instances of classes Map, List,
      * Map.Entry, Class, Node, or Location. To avoid nondeterminism, all other values are printed
@@ -260,12 +229,12 @@ public abstract class Printer {
     @Override
     public BasePrinter repr(Object o) {
       if (o == null) {
-        // Java null is not a valid Starlark value, but sometimes printers are used on non-Skylark
+        // Java null is not a valid Skylark value, but sometimes printers are used on non-Skylark
         // values such as Locations or ASTs.
         this.append("null");
 
-      } else if (o instanceof StarlarkValue) {
-        ((StarlarkValue) o).repr(this);
+      } else if (o instanceof SkylarkValue) {
+        ((SkylarkValue) o).repr(this);
 
       } else if (o instanceof String) {
         writeString((String) o);
@@ -281,22 +250,22 @@ public abstract class Printer {
 
         // -- non-Starlark values --
 
-      } else if (o instanceof Map) {
+      } else if (o instanceof Map<?, ?>) {
         Map<?, ?> dict = (Map<?, ?>) o;
         this.printList(dict.entrySet(), "{", ", ", "}", null);
 
-      } else if (o instanceof List) {
+      } else if (o instanceof List<?>) {
         List<?> seq = (List<?>) o;
         this.printList(seq, false);
 
-      } else if (o instanceof Map.Entry) {
+      } else if (o instanceof Map.Entry<?, ?>) {
         Map.Entry<?, ?> entry = (Map.Entry<?, ?>) o;
         this.repr(entry.getKey());
         this.append(": ");
         this.repr(entry.getValue());
 
-      } else if (o instanceof Class) {
-        this.append(Starlark.classType((Class<?>) o));
+      } else if (o instanceof Class<?>) {
+        this.append(EvalUtils.getDataTypeNameFromClass((Class<?>) o));
 
       } else if (o instanceof Node || o instanceof Location) {
         // AST node objects and locations are printed in tracebacks and error messages,
@@ -309,7 +278,7 @@ public abstract class Printer {
         // but Starlark code cannot access values of o that would reach here,
         // and native code is already trusted to be deterministic.
         // TODO(adonovan): replace this with a default behavior of this.append(o),
-        // once we require that all @Skylark-annotated classes implement StarlarkValue.
+        // once we require that all @Skylark-annotated classes implement SkylarkValue.
         // (After all, Java code can call String.format, which also calls toString.)
         this.append("<unknown object " + o.getClass().getName() + ">");
       }
@@ -318,7 +287,7 @@ public abstract class Printer {
     }
 
     /**
-     * Write a properly escaped Starlark representation of a string to a buffer.
+     * Write a properly escaped Skylark representation of a string to a buffer.
      *
      * @param s the string a representation of which to repr.
      * @return this printer.
@@ -406,7 +375,7 @@ public abstract class Printer {
     }
 
     /**
-     * Print a Starlark list or tuple of object representations
+     * Print a Skylark list or tuple of object representations
      *
      * @param list the contents of the list or tuple
      * @param isTuple if true the list will be formatted with parentheses and with a trailing comma

@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -186,11 +187,11 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.printList(this, /*isTuple=*/ false);
   }
 
-  // TODO(adonovan): StarlarkValue has 3 String methods yet still we need this fourth. Why?
+  // TODO(adonovan): SkylarkValue has 3 String methods yet still we need this fourth. Why?
   @Override
   public String toString() {
     return Starlark.repr(this);
@@ -324,15 +325,16 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
       doc =
           "Removes the first item from the list whose value is x. "
               + "It is an error if there is no such item.",
-      parameters = {@Param(name = "x", type = Object.class, doc = "The object to remove.")})
-  public NoneType removeObject(Object x) throws EvalException {
+      parameters = {@Param(name = "x", type = Object.class, doc = "The object to remove.")},
+      useLocation = true)
+  public NoneType removeObject(Object x, Location loc) throws EvalException {
     for (int i = 0; i < size; i++) {
       if (elems[i].equals(x)) {
-        remove(i, /*loc=*/ null);
+        remove(i, loc);
         return Starlark.NONE;
       }
     }
-    throw Starlark.errorf("item %s not found in list", Starlark.repr(x));
+    throw new EvalException(loc, Starlark.format("item %r not found in list", x));
   }
 
   /**
@@ -353,16 +355,20 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
       doc = "Adds an item to the end of the list.",
       parameters = {
         @Param(name = "item", type = Object.class, doc = "Item to add at the end.", noneable = true)
-      })
+      },
+      useLocation = true)
   @SuppressWarnings("unchecked")
-  public NoneType append(Object item) throws EvalException {
-    add((E) item, /*loc=*/ null); // unchecked
+  public NoneType append(Object item, Location loc) throws EvalException {
+    add((E) item, loc); // unchecked
     return Starlark.NONE;
   }
 
-  @SkylarkCallable(name = "clear", doc = "Removes all the elements of the list.")
-  public NoneType clearMethod() throws EvalException {
-    checkMutable(/*loc=*/ null);
+  @SkylarkCallable(
+      name = "clear",
+      doc = "Removes all the elements of the list.",
+      useLocation = true)
+  public NoneType clearMethod(Location loc) throws EvalException {
+    checkMutable(loc);
     for (int i = 0; i < size; i++) {
       elems[i] = null; // aid GC
     }
@@ -376,21 +382,23 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
       parameters = {
         @Param(name = "index", type = Integer.class, doc = "The index of the given position."),
         @Param(name = "item", type = Object.class, doc = "The item.", noneable = true)
-      })
+      },
+      useLocation = true)
   @SuppressWarnings("unchecked")
-  public NoneType insert(Integer index, Object item) throws EvalException {
-    add(EvalUtils.clampRangeEndpoint(index, size), (E) item, /*loc=*/ null); // unchecked
+  public NoneType insert(Integer index, Object item, Location loc) throws EvalException {
+    add(EvalUtils.clampRangeEndpoint(index, size), (E) item, loc); // unchecked
     return Starlark.NONE;
   }
 
   @SkylarkCallable(
       name = "extend",
       doc = "Adds all items to the end of the list.",
-      parameters = {@Param(name = "items", type = Object.class, doc = "Items to add at the end.")})
-  public NoneType extend(Object items) throws EvalException {
+      parameters = {@Param(name = "items", type = Object.class, doc = "Items to add at the end.")},
+      useLocation = true)
+  public NoneType extend(Object items, Location loc) throws EvalException {
     @SuppressWarnings("unchecked")
-    Iterable<? extends E> src = (Iterable<? extends E>) Starlark.toIterable(items);
-    addAll(src, (Location) null);
+    Collection<? extends E> src = (Collection<? extends E>) EvalUtils.toCollection(items, loc);
+    addAll(src, loc);
     return Starlark.NONE;
   }
 
@@ -415,8 +423,9 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
             noneable = true,
             named = true,
             doc = "The end index of the list portion to inspect.")
-      })
-  public Integer index(Object x, Object start, Object end) throws EvalException {
+      },
+      useLocation = true)
+  public Integer index(Object x, Object start, Object end, Location loc) throws EvalException {
     int i = start == Starlark.NONE ? 0 : EvalUtils.clampRangeEndpoint((Integer) start, size);
     int j = end == Starlark.NONE ? size : EvalUtils.clampRangeEndpoint((Integer) end, size);
     for (; i < j; i++) {
@@ -424,7 +433,7 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
         return i;
       }
     }
-    throw Starlark.errorf("item %s not found in list", Starlark.repr(x));
+    throw new EvalException(loc, Starlark.format("item %r not found in list", x));
   }
 
   @SkylarkCallable(
@@ -440,12 +449,13 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
             noneable = true,
             defaultValue = "None",
             doc = "The index of the item.")
-      })
-  public Object pop(Object i) throws EvalException {
+      },
+      useLocation = true)
+  public Object pop(Object i, Location loc) throws EvalException {
     int arg = i == Starlark.NONE ? -1 : (Integer) i;
-    int index = EvalUtils.getSequenceIndex(arg, size, /*loc=*/ null);
+    int index = EvalUtils.getSequenceIndex(arg, size, loc);
     Object result = elems[index];
-    remove(index, /*loc=*/ null);
+    remove(index, loc);
     return result;
   }
 }

@@ -17,20 +17,23 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ObjectArrays;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.AbstractCollection;
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.Iterator;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
+import java.util.List;
 
 /**
- * A Starlark tuple, i.e. the value represented by {@code (1, 2, 3)}. Tuples are always immutable
+ * A Skylark tuple, i.e. the value represented by {@code (1, 2, 3)}. Tuples are always immutable
  * (regardless of the {@link StarlarkThread} they are created in).
  */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "tuple",
-    category = StarlarkDocumentationCategory.BUILTIN,
+    category = SkylarkModuleCategory.BUILTIN,
     doc =
         "The built-in tuple type. Example tuple expressions:<br>"
             + "<pre class=language-python>x = (1, 2, 3)</pre>"
@@ -156,17 +159,17 @@ public final class Tuple<E> extends AbstractList<E> implements Sequence<E> {
 
   @Override
   public Object[] toArray() {
-    return elems.length != 0 ? elems.clone() : elems;
+    return Arrays.copyOf(elems, elems.length);
   }
 
   @Override
-  public void repr(Printer printer) {
-    // TODO(adonovan): when Printer moves into this package,
+  public void repr(SkylarkPrinter printer) {
+    // TODO(adonovan): when SkylarkPrinter moves into this package,
     // inline and simplify this, the sole call with isTuple=true.
     printer.printList(this, /*isTuple=*/ true);
   }
 
-  // TODO(adonovan): StarlarkValue has 3 String methods yet still we need this fourth. Why?
+  // TODO(adonovan): SkylarkValue has 3 String methods yet still we need this fourth. Why?
   @Override
   public String toString() {
     return Starlark.repr(this);
@@ -207,21 +210,20 @@ public final class Tuple<E> extends AbstractList<E> implements Sequence<E> {
   }
 
   @Override
-  public Tuple<E> getSlice(Mutability mu, int start, int stop, int step) {
-    RangeList indices = new RangeList(start, stop, step);
-    int n = indices.size();
-    if (step == 1) { // common case
-      return subList(indices.at(0), indices.at(n));
-    }
-    Object[] res = new Object[n];
-    for (int i = 0; i < n; ++i) {
-      res[i] = elems[indices.at(i)];
+  public Tuple<E> getSlice(
+      Object start, Object end, Object step, Location loc, Mutability mutability)
+      throws EvalException {
+    // TODO(adonovan): opt: this is horribly inefficient.
+    List<Integer> indices = EvalUtils.getSliceIndices(start, end, step, this.size(), loc);
+    Object[] res = new Object[indices.size()];
+    for (int i = 0; i < indices.size(); ++i) {
+      res[i] = elems[indices.get(i)];
     }
     return wrap(res);
   }
 
   /** Returns a Tuple containing n consecutive repeats of this tuple. */
-  Tuple<E> repeat(int n) {
+  public Tuple<E> repeat(int n, Mutability mutability) {
     if (n <= 0 || isEmpty()) {
       return empty();
     }
