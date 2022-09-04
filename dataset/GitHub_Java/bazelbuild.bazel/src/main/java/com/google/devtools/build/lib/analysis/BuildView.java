@@ -1201,7 +1201,6 @@ public class BuildView {
             ImmutableList.of(),
             targetConfig,
             configurations.getHostConfiguration(),
-            ruleClassProvider.getLipoDataTransition(),
             ruleClassProvider.getPrerequisiteValidator(),
             ((Rule) target).getRuleClassObject().getConfigurationFragmentPolicy())
         .setVisibility(

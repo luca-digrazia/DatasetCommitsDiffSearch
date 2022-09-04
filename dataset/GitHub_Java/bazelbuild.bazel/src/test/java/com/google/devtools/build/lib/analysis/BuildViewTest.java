@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.OutputFilter.RegexOutputFilter;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestSpec;
@@ -92,9 +91,9 @@ public class BuildViewTest extends BuildViewTestBase {
     Rule ruleTarget = (Rule) getTarget("//pkg:foo");
     assertThat(ruleTarget.getRuleClass()).isEqualTo("genrule");
 
-    ConfiguredTargetAndTarget ruleCTAT = getConfiguredTargetAndTarget("//pkg:foo");
+    ConfiguredTarget ruleCT = getConfiguredTarget("//pkg:foo");
 
-    assertThat(ruleCTAT.getTarget()).isSameAs(ruleTarget);
+    assertThat(ruleCT.getTarget()).isSameAs(ruleTarget);
   }
 
   @Test
@@ -116,17 +115,14 @@ public class BuildViewTest extends BuildViewTestBase {
     //scratch.file("tests/small_test_1.py");
 
     update("//tests:smallTests");
-    ConfiguredTargetAndTarget test1 = getConfiguredTargetAndTarget("//tests:small_test_1");
-    ConfiguredTargetAndTarget test2 = getConfiguredTargetAndTarget("//tests:small_test_2");
-    ConfiguredTargetAndTarget suite = getConfiguredTargetAndTarget("//tests:smallTests");
 
-    ConfiguredTarget test1CT = test1.getConfiguredTarget();
-    ConfiguredTarget test2CT = test2.getConfiguredTarget();
-    ConfiguredTarget suiteCT = suite.getConfiguredTarget();
+    ConfiguredTarget test1 = getConfiguredTarget("//tests:small_test_1");
+    ConfiguredTarget test2 = getConfiguredTarget("//tests:small_test_2");
+    ConfiguredTarget suite = getConfiguredTarget("//tests:smallTests");
     assertNoEvents(); // start from a clean slate
 
     Collection<ConfiguredTarget> targets =
-        new LinkedHashSet<>(ImmutableList.of(test1CT, test2CT, suiteCT));
+        new LinkedHashSet<>(ImmutableList.of(test1, test2, suite));
     targets =
         Lists.<ConfiguredTarget>newArrayList(
             BuildView.filterTestsByTargets(
@@ -134,7 +130,7 @@ public class BuildViewTest extends BuildViewTestBase {
                 Sets.newHashSet(test1.getTarget(), suite.getTarget()),
                 NullEventHandler.INSTANCE,
                 skyframeExecutor.getPackageManager()));
-    assertThat(targets).containsExactlyElementsIn(Sets.newHashSet(test1CT, suiteCT));
+    assertThat(targets).containsExactlyElementsIn(Sets.newHashSet(test1, suite));
   }
 
   @Test
@@ -151,16 +147,17 @@ public class BuildViewTest extends BuildViewTestBase {
   public void testGeneratedArtifact() throws Exception {
     setupDummyRule();
     update("//pkg:a.out");
-    OutputFileConfiguredTarget output =
-        (OutputFileConfiguredTarget) getConfiguredTarget("//pkg:a.out");
-    Artifact outputArtifact = output.getArtifact();
+    OutputFileConfiguredTarget outputCT = (OutputFileConfiguredTarget)
+        getConfiguredTarget("//pkg:a.out");
+    Artifact outputArtifact = outputCT.getArtifact();
     assertThat(outputArtifact.getRoot())
         .isEqualTo(
-            output
+            outputCT
                 .getConfiguration()
-                .getBinDirectory(output.getLabel().getPackageIdentifier().getRepository()));
+                .getBinDirectory(
+                    outputCT.getTarget().getLabel().getPackageIdentifier().getRepository()));
     assertThat(outputArtifact.getExecPath())
-        .isEqualTo(output.getConfiguration().getBinFragment().getRelative("pkg/a.out"));
+        .isEqualTo(outputCT.getConfiguration().getBinFragment().getRelative("pkg/a.out"));
     assertThat(outputArtifact.getRootRelativePath()).isEqualTo(PathFragment.create("pkg/a.out"));
 
     Action action = getGeneratingAction(outputArtifact);
