@@ -15,12 +15,25 @@
  */
 package org.androidannotations.holder;
 
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldVar;
 
-public interface HasReceiverRegistration extends HasLifecycleMethods {
+public interface HasReceiverRegistration extends GeneratedClassHolder {
 
 	JExpression getContextRef();
 
 	JFieldVar getIntentFilterField(String[] actions, String[] dataSchemas);
+
+	JBlock getOnCreateAfterSuperBlock();
+	JBlock getOnDestroyBeforeSuperBlock();
+
+	JBlock getOnStartAfterSuperBlock();
+	JBlock getOnStopBeforeSuperBlock();
+
+	JBlock getOnResumeAfterSuperBlock();
+	JBlock getOnPauseBeforeSuperBlock();
+
+	JBlock getOnAttachAfterSuperBlock();
+	JBlock getOnDetachBeforeSuperBlock();
 }
