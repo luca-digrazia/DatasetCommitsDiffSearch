@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -186,7 +187,6 @@ public final class PyCommon {
     validateTargetPythonVersionAttr(DEFAULT_PYTHON_VERSION_ATTRIBUTE);
     validateTargetPythonVersionAttr(PYTHON_VERSION_ATTRIBUTE);
     validateOldVersionAttrNotUsedIfDisabled();
-    validateLegacyProviderNotUsedIfDisabled();
   }
 
   /** Returns the parsed value of the "srcs_version" attribute. */
@@ -230,12 +230,20 @@ public final class PyCommon {
   private static void collectTransitivePythonSourcesFromDeps(
       RuleContext ruleContext, NestedSetBuilder<Artifact> builder) {
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
-      try {
-        builder.addTransitive(PyProviderUtils.getTransitiveSources(dep));
-      } catch (EvalException e) {
-        // Either the provider type or field type is bad.
-        ruleContext.attributeError(
-            "deps", String.format("In dep '%s': %s", dep.getLabel(), e.getMessage()));
+      if (PyStructUtils.hasProvider(dep)) {
+        try {
+          StructImpl info = PyStructUtils.getProvider(dep);
+          NestedSet<Artifact> sources = PyStructUtils.getTransitiveSources(info);
+          builder.addTransitive(sources);
+        } catch (EvalException e) {
+          // Either the provider type or field type is bad.
+          ruleContext.ruleError(e.getMessage());
+        }
+      } else {
+        // TODO(bazel-team): We also collect .py source files from deps (e.g. for proto_library
+        // rules). We should have rules implement a "PythonSourcesProvider" instead.
+        FileProvider provider = dep.getProvider(FileProvider.class);
+        builder.addAll(FileType.filter(provider.getFilesToBuild(), PyRuleClasses.PYTHON_SOURCE));
       }
     }
   }
@@ -260,37 +268,48 @@ public final class PyCommon {
     } else {
       targets = ruleContext.getPrerequisites("deps", Mode.TARGET);
     }
-    for (TransitiveInfoCollection target : targets) {
-      try {
-        if (PyProviderUtils.getUsesSharedLibraries(target)) {
+    try {
+      for (TransitiveInfoCollection target : targets) {
+        if (checkForSharedLibraries(target)) {
           return true;
         }
-      } catch (EvalException e) {
-        ruleContext.ruleError(String.format("In dep '%s': %s", target.getLabel(), e.getMessage()));
       }
+      return false;
+    } catch (EvalException e) {
+      ruleContext.ruleError(e.getMessage());
+      return false;
     }
-    return false;
+  }
+
+  private static boolean checkForSharedLibraries(TransitiveInfoCollection target)
+      throws EvalException {
+    if (PyStructUtils.hasProvider(target)) {
+      return PyStructUtils.getUsesSharedLibraries(PyStructUtils.getProvider(target));
+    } else {
+      NestedSet<Artifact> files = target.getProvider(FileProvider.class).getFilesToBuild();
+      return FileType.contains(files, CppFileTypes.SHARED_LIBRARY);
+    }
   }
 
   private static NestedSet<String> initImports(RuleContext ruleContext, PythonSemantics semantics) {
     NestedSetBuilder<String> builder = NestedSetBuilder.compileOrder();
     builder.addAll(semantics.getImports(ruleContext));
+
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
-      try {
-        NestedSet<String> imports = PyProviderUtils.getImports(dep);
+      if (dep.getProvider(PythonImportsProvider.class) != null) {
+        PythonImportsProvider provider = dep.getProvider(PythonImportsProvider.class);
+        NestedSet<String> imports = provider.getTransitivePythonImports();
         if (!builder.getOrder().isCompatible(imports.getOrder())) {
-          // TODO(brandjon): We should make order an invariant of the Python provider. Then once we
-          /// remove PythonImportsProvider we can move this check into PyProvider/PyStructUtils.
+          // TODO(brandjon): Add test case for this error, once we replace PythonImportsProvider
+          // with the normal Python provider and once we clean up our provider merge logic.
           ruleContext.ruleError(
               getOrderErrorMessage(PyStructUtils.IMPORTS, builder.getOrder(), imports.getOrder()));
         } else {
           builder.addTransitive(imports);
         }
-      } catch (EvalException e) {
-        ruleContext.attributeError(
-            "deps", String.format("In dep '%s': %s", dep.getLabel(), e.getMessage()));
       }
     }
+
     return builder.build();
   }
 
@@ -305,13 +324,14 @@ public final class PyCommon {
       return true;
     }
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
-      try {
-        if (PyProviderUtils.getHasPy2OnlySources(dep)) {
-          return true;
+      if (PyStructUtils.hasProvider(dep)) {
+        try {
+          if (PyStructUtils.getHasPy2OnlySources(PyStructUtils.getProvider(dep))) {
+            return true;
+          }
+        } catch (EvalException e) {
+          ruleContext.ruleError(String.format("In dep '%s': %s", dep.getLabel(), e.getMessage()));
         }
-      } catch (EvalException e) {
-        ruleContext.attributeError(
-            "deps", String.format("In dep '%s': %s", dep.getLabel(), e.getMessage()));
       }
     }
     return false;
@@ -327,13 +347,14 @@ public final class PyCommon {
       return true;
     }
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
-      try {
-        if (PyProviderUtils.getHasPy3OnlySources(dep)) {
-          return true;
+      if (PyStructUtils.hasProvider(dep)) {
+        try {
+          if (PyStructUtils.getHasPy3OnlySources(PyStructUtils.getProvider(dep))) {
+            return true;
+          }
+        } catch (EvalException e) {
+          ruleContext.ruleError(String.format("In dep '%s': %s", dep.getLabel(), e.getMessage()));
         }
-      } catch (EvalException e) {
-        ruleContext.attributeError(
-            "deps", String.format("In dep '%s': %s", dep.getLabel(), e.getMessage()));
       }
     }
     return false;
@@ -443,27 +464,6 @@ public final class PyCommon {
   }
 
   /**
-   * Reports an attribute error if a target in {@code deps} passes the legacy "py" provider but this
-   * is disallowed by the configuration.
-   */
-  private void validateLegacyProviderNotUsedIfDisabled() {
-    if (!ruleContext.getFragment(PythonConfiguration.class).disallowLegacyPyProvider()) {
-      return;
-    }
-    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
-      if (PyProviderUtils.hasLegacyProvider(dep)) {
-        ruleContext.attributeError(
-            "deps",
-            String.format(
-                "In dep '%s': The legacy 'py' provider is disallowed. Migrate to the PyInfo "
-                    + "provider instead. You can temporarily disable this failure with "
-                    + "--incompatible_disallow_legacy_py_provider=false.",
-                dep.getLabel()));
-      }
-    }
-  }
-
-  /**
    * Under the new version semantics ({@code --experimental_allow_python_version_transitions=true}),
    * if the Python version (as determined by the configuration) is inconsistent with {@link
    * #hasPy2OnlySources} or {@link #hasPy3OnlySources}, emits a {@link FailAction} that "generates"
@@ -483,7 +483,8 @@ public final class PyCommon {
     if (!ruleContext.getFragment(PythonConfiguration.class).useNewPyVersionSemantics()) {
       return false;
     }
-    // TODO(brandjon): Add link to documentation explaining the error and use of the aspect.
+    // TODO(brandjon): Add hints to the error message about how to locate the offending
+    // dependencies.
     String error = null;
     if (version == PythonVersion.PY2 && hasPy3OnlySources) {
       error =
@@ -588,16 +589,6 @@ public final class PyCommon {
       NestedSet<Artifact> filesToBuild,
       NestedSet<String> imports) {
 
-    boolean createLegacyPyProvider =
-        !ruleContext.getFragment(PythonConfiguration.class).disallowLegacyPyProvider();
-    PyProviderUtils.builder(createLegacyPyProvider)
-        .setTransitiveSources(transitivePythonSources)
-        .setUsesSharedLibraries(usesSharedLibraries)
-        .setImports(imports)
-        .setHasPy2OnlySources(hasPy2OnlySources)
-        .setHasPy3OnlySources(hasPy3OnlySources)
-        .buildAndAddToTarget(builder);
-
     builder
         .addNativeDeclaredProvider(
             InstrumentedFilesCollector.collect(
@@ -606,6 +597,15 @@ public final class PyCommon {
                 METADATA_COLLECTOR,
                 filesToBuild,
                 /* reportedToActualSources= */ NestedSetBuilder.create(Order.STABLE_ORDER)))
+        .addSkylarkTransitiveInfo(
+            PyStructUtils.PROVIDER_NAME,
+            PyStructUtils.builder()
+                .setTransitiveSources(transitivePythonSources)
+                .setUsesSharedLibraries(usesSharedLibraries)
+                .setImports(imports)
+                .setHasPy2OnlySources(hasPy2OnlySources)
+                .setHasPy3OnlySources(hasPy3OnlySources)
+                .build())
         // Python targets are not really compilable. The best we can do is make sure that all
         // generated source files are ready.
         .addOutputGroup(OutputGroupInfo.FILES_TO_COMPILE, transitivePythonSources)
@@ -617,9 +617,10 @@ public final class PyCommon {
    */
   public List<Artifact> validateSrcs() {
     List<Artifact> sourceFiles = new ArrayList<>();
-    // TODO(bazel-team): Need to get the transitive deps closure, not just the sources of the rule.
-    for (TransitiveInfoCollection src :
-        ruleContext.getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
+    // TODO(bazel-team): Need to get the transitive deps closure, not just the
+    //                 sources of the rule.
+    for (TransitiveInfoCollection src : ruleContext
+        .getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
       // Make sure that none of the sources contain hyphens.
       if (Util.containsHyphen(src.getLabel().getPackageFragment())) {
         ruleContext.attributeError("srcs",

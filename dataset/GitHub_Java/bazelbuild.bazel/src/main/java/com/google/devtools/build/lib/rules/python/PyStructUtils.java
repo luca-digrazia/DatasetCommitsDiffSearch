@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.python;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -27,8 +28,8 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 
-/** Static helper class for creating and accessing instances of the legacy "py" struct provider. */
-// TODO(#7010): Remove this in favor of PyInfo.
+/** Static helper class for creating and accessing instances of the "py" legacy struct provider. */
+// TODO(#7010): Replace this with a real provider.
 public class PyStructUtils {
 
   // Disable construction.
@@ -53,7 +54,9 @@ public class PyStructUtils {
    * target).
    */
   // TODO(brandjon): Make this a pre-order depset, since higher-level targets should get precedence
-  // on PYTHONPATH. Add assertions on its order compatibility.
+  // on PYTHONPATH.
+  // TODO(brandjon): Add assertions that this depset and transitive_sources have an order compatible
+  // with the one expected by the rules.
   public static final String IMPORTS = "imports";
 
   /**
@@ -76,10 +79,29 @@ public class PyStructUtils {
     builder.put(USES_SHARED_LIBRARIES, false);
     builder.put(
         IMPORTS,
-        SkylarkNestedSet.of(String.class, NestedSetBuilder.<String>emptySet(Order.COMPILE_ORDER)));
+        SkylarkNestedSet.of(String.class, NestedSetBuilder.<String>compileOrder().build()));
     builder.put(HAS_PY2_ONLY_SOURCES, false);
     builder.put(HAS_PY3_ONLY_SOURCES, false);
     DEFAULTS = builder.build();
+  }
+
+  /** Returns whether a given dependency has the py provider. */
+  public static boolean hasProvider(TransitiveInfoCollection dep) {
+    return dep.get(PROVIDER_NAME) != null;
+  }
+
+  /**
+   * Returns the struct representing the py provider, from the given target info.
+   *
+   * @throws EvalException if the provider does not exist or has the wrong type.
+   */
+  public static StructImpl getProvider(TransitiveInfoCollection dep) throws EvalException {
+    Object info = dep.get(PROVIDER_NAME);
+    if (info == null) {
+      throw new EvalException(/*location=*/ null, "Target does not have 'py' provider");
+    }
+    return SkylarkType.cast(
+        info, StructImpl.class, null, "'%s' provider should be a struct", PROVIDER_NAME);
   }
 
   private static Object getValue(StructImpl info, String fieldName) throws EvalException {
@@ -110,26 +132,17 @@ public class PyStructUtils {
             "'%s' provider's '%s' field should be a depset of Files (got a '%s')",
             PROVIDER_NAME,
             TRANSITIVE_SOURCES,
-            EvalUtils.getDataTypeName(fieldValue, /*fullDetails=*/ true));
-    try {
-      NestedSet<Artifact> unwrappedValue = castValue.getSet(Artifact.class);
-      if (!unwrappedValue.getOrder().isCompatible(Order.COMPILE_ORDER)) {
-        throw new EvalException(
-            /*location=*/ null,
-            String.format(
-                "Incompatible depset order for 'transitive_sources': expected 'default' or "
-                    + "'postorder', but got '%s'",
-                unwrappedValue.getOrder().getSkylarkName()));
-      }
-      return unwrappedValue;
-    } catch (SkylarkNestedSet.TypeException exception) {
+            EvalUtils.getDataTypeNameFromClass(fieldValue.getClass()));
+    NestedSet<Artifact> unwrappedValue = castValue.getSet(Artifact.class);
+    if (!unwrappedValue.getOrder().isCompatible(Order.COMPILE_ORDER)) {
       throw new EvalException(
-          null,
+          /*location=*/ null,
           String.format(
-              "expected field '%s' to be a depset of type 'file', but was a depset of type '%s'",
-              TRANSITIVE_SOURCES, castValue.getContentType()),
-          exception);
+              "Incompatible depset order for 'transitive_sources': expected 'default' or "
+                  + "'postorder', but got '%s'",
+              unwrappedValue.getOrder().getSkylarkName()));
     }
+    return unwrappedValue;
   }
 
   /**
@@ -146,7 +159,7 @@ public class PyStructUtils {
         "'%s' provider's '%s' field should be a boolean (got a '%s')",
         PROVIDER_NAME,
         USES_SHARED_LIBRARIES,
-        EvalUtils.getDataTypeName(fieldValue, /*fullDetails=*/ true));
+        EvalUtils.getDataTypeNameFromClass(fieldValue.getClass()));
   }
 
   /**
@@ -166,16 +179,7 @@ public class PyStructUtils {
             PROVIDER_NAME,
             IMPORTS,
             EvalUtils.getDataTypeNameFromClass(fieldValue.getClass()));
-    try {
-      return castValue.getSet(String.class);
-    } catch (SkylarkNestedSet.TypeException exception) {
-      throw new EvalException(
-          null,
-          String.format(
-              "expected field '%s' to be a depset of type 'file', but was a depset of type '%s'",
-              IMPORTS, castValue.getContentType()),
-          exception);
-    }
+    return castValue.getSet(String.class);
   }
 
   /**
@@ -216,7 +220,7 @@ public class PyStructUtils {
     return new Builder();
   }
 
-  /** Builder for a legacy py provider struct. */
+  /** Builder for a py provider struct. */
   public static class Builder {
     SkylarkNestedSet transitiveSources = null;
     Boolean usesSharedLibraries = null;
