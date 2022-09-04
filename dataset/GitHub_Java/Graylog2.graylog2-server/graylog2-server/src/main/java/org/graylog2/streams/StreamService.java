@@ -44,7 +44,7 @@ public interface StreamService extends PersistedService {
     /**
      * @return the total number of streams
      */
-    long count();
+    long streamCount();
 
     void pause(Stream stream) throws ValidationException;
 
