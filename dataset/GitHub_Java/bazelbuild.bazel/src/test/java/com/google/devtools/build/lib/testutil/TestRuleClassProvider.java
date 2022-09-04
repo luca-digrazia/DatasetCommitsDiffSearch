@@ -17,14 +17,13 @@ package com.google.devtools.build.lib.testutil;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.syntax.Type.INTEGER;
+import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.CommonPrerequisiteValidator;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
@@ -35,35 +34,34 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.config.ConfigRules;
-import com.google.devtools.build.lib.rules.core.CoreRules;
-import com.google.devtools.build.lib.rules.platform.PlatformRules;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.lang.reflect.Method;
 import java.util.Map;
-import net.starlark.java.syntax.Location;
 
-/** Helper class to provide a RuleClassProvider for tests. */
+/**
+ * Helper class to provide a RuleClassProvider for tests.
+ */
 public class TestRuleClassProvider {
+  private static ConfiguredRuleClassProvider ruleProvider = null;
+  private static ConfiguredRuleClassProvider ruleProviderWithClearedSuffix = null;
 
-  private static ConfiguredRuleClassProvider ruleClassProvider = null;
-  private static ConfiguredRuleClassProvider ruleClassProviderWithClearedSuffix = null;
-
-  private TestRuleClassProvider() {}
-
-  /** Adds all the rule classes supported internally within the build tool to the given builder. */
+  /**
+   * Adds all the rule classes supported internally within the build tool to the given builder.
+   */
   public static void addStandardRules(ConfiguredRuleClassProvider.Builder builder) {
     try {
       Class<?> providerClass = Class.forName(TestConstants.TEST_RULE_CLASS_PROVIDER);
-      Method setupMethod =
-          providerClass.getMethod("setup", ConfiguredRuleClassProvider.Builder.class);
+      // The method setup in the rule class provider requires the tools repository to be set
+      // beforehand.
+      builder.setToolsRepository(TestConstants.TOOLS_REPOSITORY);
+      Method setupMethod = providerClass.getMethod("setup",
+          ConfiguredRuleClassProvider.Builder.class);
       setupMethod.invoke(null, builder);
     } catch (Exception e) {
       throw new IllegalStateException(e);
@@ -73,10 +71,6 @@ public class TestRuleClassProvider {
   private static ConfiguredRuleClassProvider createRuleClassProvider(boolean clearSuffix) {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     addStandardRules(builder);
-    // TODO(b/174773026): Eliminate TestingDummyRule/MockToolchainRule from this class, push them
-    // down into the tests that use them. It's better for tests to avoid spooky mocks at a distance.
-    // The same might also be said for the cleared-workspace variant of getRuleClassProvider(). If
-    // we eliminate both, TestRuleClassProvider probably doesn't need to exist anymore.
     builder.addRuleDefinition(new TestingDummyRule());
     builder.addRuleDefinition(new MockToolchainRule());
     if (clearSuffix) {
@@ -85,70 +79,28 @@ public class TestRuleClassProvider {
     return builder.build();
   }
 
-  /** Returns a rule class provider. */
+  /** Return a rule class provider. */
+  public static ConfiguredRuleClassProvider getRuleClassProvider(boolean clearSuffix) {
+    if (clearSuffix) {
+      if (ruleProviderWithClearedSuffix == null) {
+        ruleProviderWithClearedSuffix = createRuleClassProvider(true);
+      }
+      return ruleProviderWithClearedSuffix;
+    }
+    if (ruleProvider == null) {
+      ruleProvider = createRuleClassProvider(false);
+    }
+    return ruleProvider;
+  }
+
+  /** Return a rule class provider. */
   public static ConfiguredRuleClassProvider getRuleClassProvider() {
-    if (ruleClassProvider == null) {
-      ruleClassProvider = createRuleClassProvider(false);
-    }
-    return ruleClassProvider;
+    return getRuleClassProvider(false);
   }
 
-  /** Returns a rule class provider with the workspace suffix cleared. */
-  public static ConfiguredRuleClassProvider getRuleClassProviderWithClearedSuffix() {
-    if (ruleClassProviderWithClearedSuffix == null) {
-      ruleClassProviderWithClearedSuffix = createRuleClassProvider(true);
-    }
-    return ruleClassProviderWithClearedSuffix;
-  }
-
-  // TODO(bazel-team): The logic for the "minimal" rule class provider is currently split between
-  // TestRuleClassProvider and BuiltinsInjectionTest's overrides of BuildViewTestCase setup helpers.
-  // Consider refactoring this together into one place as a new MinimalAnalysisMock.
   /**
-   * Adds a few essential rules to a builder, such that it is usable but does not contain all the
-   * rule classes known to the production environment.
+   * A dummy rule with some dummy attributes.
    */
-  public static void addMinimalRules(ConfiguredRuleClassProvider.Builder builder) {
-    // TODO(bazel-team): See also TrimmableTestConfigurationFragments#installFragmentsAndNativeRules
-    // for alternative/additional setup. Consider factoring that one to use this method.
-    builder
-        .setToolsRepository("@")
-        .setRunfilesPrefix("test")
-        .setPrerequisiteValidator(new MinimalPrerequisiteValidator());
-    CoreRules.INSTANCE.init(builder);
-    builder.addConfigurationOptions(CoreOptions.class);
-    PlatformRules.INSTANCE.init(builder);
-    ConfigRules.INSTANCE.init(builder);
-  }
-
-  private static class MinimalPrerequisiteValidator extends CommonPrerequisiteValidator {
-    @Override
-    public boolean isSameLogicalPackage(
-        PackageIdentifier thisPackage, PackageIdentifier prerequisitePackage) {
-      return thisPackage.equals(prerequisitePackage);
-    }
-
-    @Override
-    protected boolean packageUnderExperimental(PackageIdentifier packageIdentifier) {
-      return false;
-    }
-
-    @Override
-    protected boolean checkVisibilityForExperimental(RuleContext.Builder context) {
-      // It does not matter whether we return true or false here if packageUnderExperimental always
-      // returns false.
-      return true;
-    }
-
-    @Override
-    protected boolean allowExperimentalDeps(RuleContext.Builder context) {
-      // It does not matter whether we return true or false here if packageUnderExperimental always
-      // returns false.
-      return false;
-    }
-  }
-
-  /** A dummy rule with some dummy attributes. */
   public static final class TestingDummyRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
@@ -165,13 +117,15 @@ public class TestRuleClassProvider {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("testing_dummy_rule")
-          .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+          .ancestors(BaseRuleClasses.RuleBase.class)
           .factoryClass(UnknownRuleConfiguredTarget.class)
           .build();
     }
   }
 
-  /** Stub rule to test Make variable expansion. */
+  /**
+   * Stub rule to test Make variable expansion.
+   */
   public static final class MakeVariableTester implements RuleConfiguredTargetFactory {
 
     @Override
@@ -187,7 +141,9 @@ public class TestRuleClassProvider {
     }
   }
 
-  /** Definition of a stub rule to test Make variable expansion. */
+  /**
+   * Definition of a stub rule to test Make variable expansion.
+   */
   public static final class MakeVariableTesterRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
@@ -202,8 +158,7 @@ public class TestRuleClassProvider {
       return Metadata.builder()
           .name("make_variable_tester")
           .ancestors(
-              BaseRuleClasses.NativeBuildRule.class,
-              BaseRuleClasses.MakeVariableExpandingRule.class)
+              BaseRuleClasses.BaseRule.class, BaseRuleClasses.MakeVariableExpandingRule.class)
           .factoryClass(MakeVariableTester.class)
           .build();
     }
@@ -225,7 +180,7 @@ public class TestRuleClassProvider {
       return RuleDefinition.Metadata.builder()
           .name("mock_toolchain_rule")
           .factoryClass(UnknownRuleConfiguredTarget.class)
-          .ancestors(BaseRuleClasses.NativeActionCreatingRule.class)
+          .ancestors(BaseRuleClasses.RuleBase.class)
           .build();
     }
   }

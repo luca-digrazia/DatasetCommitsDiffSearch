@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages.util;
 
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.skyframe.packages.PackageFactoryBuilderWithSkyframeForTesting;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
-import com.google.devtools.common.options.InvocationPolicyEnforcer;
 
 /** Create a mock client for the loading phase, as well as a configuration factory. */
 public class LoadingMock {
@@ -29,25 +29,13 @@ public class LoadingMock {
     return TestConstants.PRODUCT_NAME;
   }
 
-  public PackageFactoryBuilderWithSkyframeForTesting getPackageFactoryBuilderForTesting() {
+  public PackageFactoryBuilderWithSkyframeForTesting getPackageFactoryBuilderForTesting(
+      BlazeDirectories directories) {
     return (PackageFactoryBuilderWithSkyframeForTesting)
-        TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING.builder();
+        TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING.builder(directories);
   }
 
   public ConfiguredRuleClassProvider createRuleClassProvider() {
-    return TestRuleClassProvider.getRuleClassProvider();
-  }
-
-  public InvocationPolicyEnforcer getInvocationPolicyEnforcer() {
-    return new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
-  }
-
-  /**
-   * Returns the defaults package for the default settings using {@link #createRuleClassProvider}
-   * and applying {@link #getInvocationPolicyEnforcer}.
-   */
-  public String getDefaultsPackageContent() {
-    return createRuleClassProvider()
-        .getDefaultsPackageContent(getInvocationPolicyEnforcer().getInvocationPolicy());
+    return TestRuleClassProvider.getRuleClassProvider(true);
   }
 }
