@@ -406,7 +406,6 @@ public class BuildView {
               topLevelCtKeys,
               aspectKeys,
               Suppliers.memoize(configurationLookupSupplier),
-              topLevelOptions,
               eventBus,
               keepGoing,
               loadingPhaseThreads);
@@ -554,8 +553,7 @@ public class BuildView {
         topLevelOptions,
         skyframeAnalysisResult.getPackageRoots(),
         loadingResult.getWorkspaceName(),
-        topLevelTargetsWithConfigs.getTargetsAndConfigs(),
-        loadingResult.getNotSymlinkedInExecrootDirectories());
+        topLevelTargetsWithConfigs.getTargetsAndConfigs());
   }
 
   /**
