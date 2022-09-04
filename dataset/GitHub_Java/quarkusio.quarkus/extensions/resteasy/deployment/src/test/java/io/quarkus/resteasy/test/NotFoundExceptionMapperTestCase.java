@@ -54,18 +54,14 @@ public class NotFoundExceptionMapperTestCase {
     }
 
     @Test
-    public void shouldDisplayNewAddedFileIn404ErrorPage() throws InterruptedException {
+    public void shouldDisplayNewAddedFileIn404ErrorPage() {
         String CONTENT = "html content";
         test.addResourceFile(META_INF_RESOURCES + "index2.html", CONTENT);
-
-        Thread.sleep(700);
 
         RestAssured.get("/index2.html")
                 .then()
                 .statusCode(200)
                 .body(containsString(CONTENT)); // check that index2.html is live reloaded
-
-        Thread.sleep(500);
 
         RestAssured.given()
                 .accept(ContentType.HTML)
@@ -77,11 +73,9 @@ public class NotFoundExceptionMapperTestCase {
     }
 
     @Test
-    public void shouldNotDisplayDeletedFileIn404ErrorPage() throws InterruptedException {
+    public void shouldNotDisplayDeletedFileIn404ErrorPage() {
         String TEST_CONTENT = "test html content";
         test.addResourceFile(META_INF_RESOURCES + "test.html", TEST_CONTENT);
-
-        Thread.sleep(700);
 
         RestAssured
                 .get("/test.html")
@@ -90,8 +84,6 @@ public class NotFoundExceptionMapperTestCase {
                 .body(containsString(TEST_CONTENT)); // check that test.html is live reloaded
 
         test.deleteResourceFile(META_INF_RESOURCES + "test.html"); // delete test.html file
-
-        Thread.sleep(700);
 
         RestAssured
                 .given()
