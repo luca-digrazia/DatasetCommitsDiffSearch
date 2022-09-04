@@ -27,7 +27,8 @@ public class UserTransactionLifecycleTest extends AbstractTransactionLifecycleTe
 
     @Override
     protected boolean expectDoubleFlush() {
-        return false;
+        // FIXME: We expect double flushes in this case, but that's a bug
+        return true;
     }
 
     @ApplicationScoped
