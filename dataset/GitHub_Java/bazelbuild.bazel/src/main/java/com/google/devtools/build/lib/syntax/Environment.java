@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -29,16 +28,13 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Mutability.Freezable;
 import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
-import com.google.devtools.build.lib.syntax.Parser.ParsingLevel;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.SpellChecker;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -79,7 +75,7 @@ import javax.annotation.Nullable;
  * that the words "dynamic" and "static" refer to the point of view of the source code, and here we
  * have a dual point of view.
  */
-public final class Environment implements Freezable, Debuggable {
+public final class Environment implements Freezable {
 
   /**
    * A phase for enabling or disabling certain builtin functions
@@ -285,36 +281,19 @@ public final class Environment implements Freezable, Debuggable {
       this.bindings = new LinkedHashMap<>();
     }
 
-    public GlobalFrame(
-        Mutability mutability,
-        @Nullable GlobalFrame parent,
-        @Nullable Label label,
-        @Nullable Map<String, Object> bindings) {
+    public GlobalFrame(Mutability mutability, @Nullable GlobalFrame parent, @Nullable Label label) {
       this.mutability = Preconditions.checkNotNull(mutability);
       this.parent = parent;
       this.label = label;
       this.bindings = new LinkedHashMap<>();
-      if (bindings != null) {
-        this.bindings.putAll(bindings);
-      }
     }
 
     public GlobalFrame(Mutability mutability) {
-      this(mutability, null, null, null);
+      this(mutability, null, null);
     }
 
-    public GlobalFrame(Mutability mutability, @Nullable GlobalFrame parent) {
-      this(mutability, parent, null, null);
-    }
-
-    public GlobalFrame(Mutability mutability, @Nullable GlobalFrame parent, @Nullable Label label) {
-      this(mutability, parent, label, null);
-    }
-
-    /** Constructs a global frame for the given builtin bindings. */
-    public static GlobalFrame createForBuiltins(Map<String, Object> bindings) {
-      Mutability mutability = Mutability.create("<builtins>").freeze();
-      return new GlobalFrame(mutability, null, null, bindings);
+    public GlobalFrame(Mutability mutability, GlobalFrame parent) {
+      this(mutability, parent, null);
     }
 
     private void checkInitialized() {
@@ -464,7 +443,7 @@ public final class Environment implements Freezable, Debuggable {
     final BaseFunction function;
 
     /** The {@link FuncallExpression} to which this Continuation will return. */
-    @Nullable final FuncallExpression caller;
+    final FuncallExpression caller;
 
     /** The next Continuation after this Continuation. */
     @Nullable final Continuation continuation;
@@ -479,12 +458,12 @@ public final class Environment implements Freezable, Debuggable {
     @Nullable final LinkedHashSet<String> knownGlobalVariables;
 
     Continuation(
-        @Nullable Continuation continuation,
+        Continuation continuation,
         BaseFunction function,
-        @Nullable FuncallExpression caller,
+        FuncallExpression caller,
         LexicalFrame lexicalFrame,
         GlobalFrame globalFrame,
-        @Nullable LinkedHashSet<String> knownGlobalVariables) {
+        LinkedHashSet<String> knownGlobalVariables) {
       this.continuation = continuation;
       this.function = function;
       this.caller = caller;
@@ -720,17 +699,13 @@ public final class Environment implements Freezable, Debuggable {
 
   /**
    * Enters a scope by saving state to a new Continuation
-   *
    * @param function the function whose scope to enter
    * @param lexical the lexical frame to use
    * @param caller the source AST node for the caller
    * @param globals the global Frame that this function closes over from its definition Environment
    */
   void enterScope(
-      BaseFunction function,
-      LexicalFrame lexical,
-      @Nullable FuncallExpression caller,
-      GlobalFrame globals) {
+      BaseFunction function, LexicalFrame lexical, FuncallExpression caller, GlobalFrame globals) {
     continuation =
         new Continuation(
             continuation, function, caller, lexicalFrame, globalFrame, knownGlobalVariables);
@@ -894,6 +869,14 @@ public final class Environment implements Freezable, Debuggable {
 
     Builder(Mutability mutability) {
       this.mutability = mutability;
+    }
+
+    /**
+     * Obsolete, doesn't do anything.
+     * TODO(laurentlb): To be removed once call-sites have been updated
+     */
+    public Builder setSkylark() {
+      return this;
     }
 
     /** Enables loading or workspace phase only functions in this Environment. */
@@ -1150,108 +1133,6 @@ public final class Environment implements Freezable, Debuggable {
     return vars;
   }
 
-  private static final class EvalEventHandler implements EventHandler {
-    List<String> messages = new ArrayList<>();
-
-    @Override
-    public void handle(Event event) {
-      if (event.getKind() == EventKind.ERROR) {
-        messages.add(event.getMessage());
-      }
-    }
-  }
-
-  @Override
-  public Object evaluate(String contents) throws EvalException, InterruptedException {
-    ParserInputSource input =
-        ParserInputSource.create(contents, PathFragment.create("<debug eval>"));
-    EvalEventHandler eventHandler = new EvalEventHandler();
-    Statement statement = Parser.parseStatement(input, eventHandler, ParsingLevel.LOCAL_LEVEL);
-    if (!eventHandler.messages.isEmpty()) {
-      throw new EvalException(statement.getLocation(), eventHandler.messages.get(0));
-    }
-    // TODO(bazel-team): move statement handling code to Eval
-    // deal with the most common case first
-    if (statement.kind() == Statement.Kind.EXPRESSION) {
-      return ((ExpressionStatement) statement).getExpression().doEval(this);
-    }
-    // all other statement types are executed directly
-    Eval.fromEnvironment(this).exec(statement);
-    switch (statement.kind()) {
-      case ASSIGNMENT:
-      case AUGMENTED_ASSIGNMENT:
-        return ((AssignmentStatement) statement).getLValue().getExpression().doEval(this);
-      case RETURN:
-        Expression expr = ((ReturnStatement) statement).getReturnExpression();
-        return expr != null ? expr.doEval(this) : Runtime.NONE;
-      default:
-        return Runtime.NONE;
-    }
-  }
-
-  @Override
-  public ImmutableList<DebugFrame> listFrames(Location currentLocation) {
-    ImmutableList.Builder<DebugFrame> frameListBuilder = ImmutableList.builder();
-
-    Continuation currentContinuation = continuation;
-    Frame currentFrame = currentFrame();
-
-    // if there's a continuation then the current frame is a lexical frame
-    while (currentContinuation != null) {
-      frameListBuilder.add(
-          DebugFrame.builder()
-              .setLexicalFrameBindings(ImmutableMap.copyOf(currentFrame.getTransitiveBindings()))
-              .setGlobalBindings(ImmutableMap.copyOf(getGlobals().getTransitiveBindings()))
-              .setFunctionName(currentContinuation.function.getFullName())
-              .setLocation(currentLocation)
-              .build());
-
-      currentFrame = currentContinuation.lexicalFrame;
-      currentLocation =
-          currentContinuation.caller != null ? currentContinuation.caller.getLocation() : null;
-      currentContinuation = currentContinuation.continuation;
-    }
-
-    frameListBuilder.add(
-        DebugFrame.builder()
-            .setGlobalBindings(ImmutableMap.copyOf(getGlobals().getTransitiveBindings()))
-            .setFunctionName("<top level>")
-            .setLocation(currentLocation)
-            .build());
-
-    return frameListBuilder.build();
-  }
-
-  @Override
-  @Nullable
-  public ReadyToPause stepControl(Stepping stepping) {
-    final Continuation pausedContinuation = continuation;
-
-    switch (stepping) {
-      case NONE:
-        return null;
-      case INTO:
-        // pause at the very next statement
-        return env -> true;
-      case OVER:
-        return env -> isAt(env, pausedContinuation) || isOutside(env, pausedContinuation);
-      case OUT:
-        // if we're at the outer-most frame, same as NONE
-        return pausedContinuation == null ? null : env -> isOutside(env, pausedContinuation);
-    }
-    throw new IllegalArgumentException("Unsupported stepping type: " + stepping);
-  }
-
-  /** Returns true if {@code env} is in a parent frame of {@code pausedContinuation}. */
-  private static boolean isOutside(Environment env, @Nullable Continuation pausedContinuation) {
-    return pausedContinuation != null && env.continuation == pausedContinuation.continuation;
-  }
-
-  /** Returns true if {@code env} is at the same frame as {@code pausedContinuation. */
-  private static boolean isAt(Environment env, @Nullable Continuation pausedContinuation) {
-    return env.continuation == pausedContinuation;
-  }
-
   @Override
   public int hashCode() {
     throw new UnsupportedOperationException(); // avoid nondeterminism
@@ -1336,29 +1217,34 @@ public final class Environment implements Freezable, Debuggable {
     return transitiveHashCode;
   }
 
-  /** A read-only {@link Environment.GlobalFrame} with False/True/None constants only. */
+  /** A read-only {@link Environment.GlobalFrame} with global constants in it only */
   static final GlobalFrame CONSTANTS_ONLY = createConstantsGlobals();
 
-  /**
-   * A read-only {@link Environment.GlobalFrame} with initial globals as defined in
-   * MethodLibrary.
-   */
+  /** A read-only {@link Environment.GlobalFrame} with initial globals */
   public static final GlobalFrame DEFAULT_GLOBALS = createDefaultGlobals();
 
   /** To be removed when all call-sites are updated. */
   public static final GlobalFrame SKYLARK = DEFAULT_GLOBALS;
 
   private static Environment.GlobalFrame createConstantsGlobals() {
-    ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-    Runtime.addConstantsToBuilder(builder);
-    return GlobalFrame.createForBuiltins(builder.build());
+    try (Mutability mutability = Mutability.create("CONSTANTS")) {
+      Environment env = Environment.builder(mutability)
+          .useDefaultSemantics()
+          .build();
+      Runtime.setupConstants(env);
+      return env.getGlobals();
+    }
   }
 
   private static Environment.GlobalFrame createDefaultGlobals() {
-    ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-    Runtime.addConstantsToBuilder(builder);
-    MethodLibrary.addBindingsToBuilder(builder);
-    return GlobalFrame.createForBuiltins(builder.build());
+    try (Mutability mutability = Mutability.create("BUILD")) {
+      Environment env = Environment.builder(mutability)
+          .useDefaultSemantics()
+          .build();
+      Runtime.setupConstants(env);
+      Runtime.setupMethodEnvironment(env, MethodLibrary.defaultGlobalFunctions);
+      return env.getGlobals();
+    }
   }
 
   /** An exception thrown by {@link #FAIL_FAST_HANDLER}. */

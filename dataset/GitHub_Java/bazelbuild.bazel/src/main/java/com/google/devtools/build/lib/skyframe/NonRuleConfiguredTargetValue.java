@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -36,8 +35,7 @@ import javax.annotation.Nullable;
 /** A non-rule configured target in the context of a Skyframe graph. */
 @Immutable
 @ThreadSafe
-// Reached via OutputFileConfiguredTarget.
-@AutoCodec(explicitlyAllowClass = RuleConfiguredTarget.class)
+@AutoCodec
 @VisibleForTesting
 public final class NonRuleConfiguredTargetValue extends BasicActionLookupValue
     implements ConfiguredTargetValue {

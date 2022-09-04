@@ -15,11 +15,8 @@
 package com.google.devtools.build.lib.skyframe.serialization;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
-import java.io.BufferedInputStream;
 import java.util.Arrays;
 import java.util.Objects;
 import org.junit.Test;
@@ -231,6 +228,7 @@ public final class DynamicCodecTest {
                 new char[] {'a', 'b', 'c', 'x', 'y', 'z'},
                 new long[] {Long.MAX_VALUE, Long.MIN_VALUE, 27983741982341L, 52893748523495834L}))
         .addCodec(new DynamicCodec(ArrayExample.class))
+        .makeMemoizing()
         .runTests();
   }
 
@@ -264,6 +262,7 @@ public final class DynamicCodecTest {
                 }),
             new NestedArrayExample(new int[][] {{1, 2, 3}, null, {7}}))
         .addCodec(new DynamicCodec(NestedArrayExample.class))
+        .makeMemoizing()
         .runTests();
   }
 
@@ -373,33 +372,5 @@ public final class DynamicCodecTest {
         .addCodec(new EnumCodec<>(EnumExample.class))
         .setRepetitions(100000)
         .runTests();
-  }
-
-  private static class NoCodecExample2 {
-    @SuppressWarnings("unused")
-    private final BufferedInputStream noCodec = new BufferedInputStream(null);
-  }
-
-  private static class NoCodecExample1 {
-    @SuppressWarnings("unused")
-    private final NoCodecExample2 noCodec = new NoCodecExample2();
-  }
-
-  @Test
-  public void testNoCodecExample() throws Exception {
-    ObjectCodecs codecs = new ObjectCodecs(AutoRegistry.get(), ImmutableMap.of());
-    try {
-      codecs.serializeMemoized(new NoCodecExample1());
-      fail();
-    } catch (SerializationException.NoCodecException expected) {
-      assertThat(expected)
-          .hasMessageThat()
-          .contains(
-              "java.io.BufferedInputStream ["
-                  + "com.google.devtools.build.lib.skyframe.serialization."
-                  + "DynamicCodecTest$NoCodecExample2, "
-                  + "com.google.devtools.build.lib.skyframe.serialization."
-                  + "DynamicCodecTest$NoCodecExample1]");
-    }
   }
 }

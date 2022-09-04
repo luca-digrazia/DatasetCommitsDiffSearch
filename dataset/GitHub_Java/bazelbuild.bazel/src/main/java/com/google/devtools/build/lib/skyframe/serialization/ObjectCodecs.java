@@ -38,10 +38,6 @@ public class ObjectCodecs {
     deserializationContext = new DeserializationContext(codecRegistry, dependencies);
   }
 
-  public ObjectCodecs(ObjectCodecRegistry codecRegistry) {
-    this(codecRegistry, ImmutableMap.of());
-  }
-
   public ByteString serialize(Object subject) throws SerializationException {
     return serializeToByteString(subject, this::serialize);
   }
