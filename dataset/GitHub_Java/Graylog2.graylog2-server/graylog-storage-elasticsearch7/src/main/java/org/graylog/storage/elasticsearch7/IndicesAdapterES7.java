@@ -246,11 +246,7 @@ public class IndicesAdapterES7 implements IndicesAdapter {
     @Override
     public long numberOfMessages(String index) {
         final JsonNode result = statsApi.indexStats(index);
-        final JsonNode count = result.path("_all").path("primaries").path("docs").path("count");
-        if (count.isMissingNode()) {
-            throw new RuntimeException("Unable to extract count from response.");
-        }
-        return count.asLong();
+        return result.path("primaries").path("docs").path("count").asLong();
     }
 
     private GetSettingsResponse settingsFor(String indexOrAlias) {

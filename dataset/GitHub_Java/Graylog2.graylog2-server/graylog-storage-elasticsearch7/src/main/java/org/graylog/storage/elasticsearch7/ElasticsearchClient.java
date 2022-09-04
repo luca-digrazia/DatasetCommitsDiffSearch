@@ -150,16 +150,10 @@ public class ElasticsearchClient {
     }
 
     public static RequestOptions withTimeout(RequestOptions requestOptions, Duration timeout) {
-        final RequestConfig.Builder requestConfigBuilder = (requestOptions == null || requestOptions.getRequestConfig() == null)
-                ? RequestConfig.custom()
-                : RequestConfig.copy(requestOptions.getRequestConfig());
-        final RequestConfig requestConfigWithTimeout = requestConfigBuilder
+        final RequestConfig requestConfigWithTimeout = RequestConfig.copy(requestOptions.getRequestConfig())
                 .setSocketTimeout(Math.toIntExact(timeout.toMilliseconds()))
                 .build();
-        final RequestOptions.Builder requestOptionsBuilder = requestOptions == null
-                ? RequestOptions.DEFAULT.toBuilder()
-                : requestOptions.toBuilder();
-        return requestOptionsBuilder
+        return requestOptions.toBuilder()
                 .setRequestConfig(requestConfigWithTimeout)
                 .build();
 
