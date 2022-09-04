@@ -1,77 +1,114 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.data.formula;
 
-import smile.data.type.DataType;
-import smile.data.type.DataTypes;
-
-import java.util.Collections;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import smile.data.Tuple;
+import smile.data.type.DataType;
+import smile.data.type.StructField;
+import smile.data.type.StructType;
 
 /**
- * The term of a * b multiplication expression.
- * It is also referred as an interaction between factors
- * due to the influence of one factor on a response
- * depending on the level of another factor.
+ * The term of {@code a * b} expression.
  *
  * @author Haifeng Li
  */
-public class Mul<T> implements Factor<T, Double> {
-    /** The first factor. */
-    private Factor<T, Double> a;
-    /** The second factor. */
-    private Factor<T, Double> b;
-
+public class Mul extends Operator {
     /**
      * Constructor.
      *
      * @param a the first factor.
      * @param b the second factor.
      */
-    public Mul(Factor<T, Double> a, Factor<T, Double> b) {
-        this.a = a;
-        this.b = b;
+    public Mul(Term a, Term b) {
+        super("*", a, b);
     }
 
     @Override
-    public String toString() {
-        return String.format("%s * %s", a, b);
-    }
+    public List<Feature> bind(StructType schema) {
+        List<Feature> features = new ArrayList<>();
+        List<Feature> xfeatures = x.bind(schema);
+        List<Feature> yfeatures = y.bind(schema);
+        if (xfeatures.size() != yfeatures.size()) {
+            throw new IllegalStateException(String.format("The features of %s and %s are of different size: %d != %d", x, y, xfeatures.size(), yfeatures.size()));
+        }
 
-    @Override
-    public List<Factor> factors() {
-        return Collections.singletonList(this);
-    }
+        for (int i = 0; i < xfeatures.size(); i++) {
+            Feature a = xfeatures.get(i);
+            StructField xfield = a.field();
+            DataType xtype = xfield.type;
+            Feature b = yfeatures.get(i);
+            StructField yfield = b.field();
+            DataType ytype = yfield.type;
 
-    @Override
-    public Set<String> variables() {
-        Set<String> t = new HashSet<>(a.variables());
-        t.addAll(b.variables());
-        return t;
-    }
+            if (!(xtype.isInt() ||  xtype.isLong() ||  xtype.isDouble() || xtype.isFloat() ||
+                  ytype.isInt() ||  ytype.isLong() ||  ytype.isDouble() || ytype.isFloat() )) {
+                throw new IllegalStateException(String.format("Invalid expression: %s * %s", xtype, ytype));
+            }
 
-    @Override
-    public Double apply(T o) {
-        return a.apply(o) * b.apply(o);
-    }
+            features.add(new Feature() {
+                final StructField field = new StructField(String.format("%s * %s", xfield.name, yfield.name),
+                        DataType.prompt(xfield.type, yfield.type),
+                        null);
 
-    @Override
-    public DataType type() {
-        return DataTypes.DoubleType;
+                final java.util.function.Function<Tuple, Object> lambda =
+                        field.type.isInt()    ? (Tuple o) -> a.applyAsInt(o)    * b.applyAsInt(o) :
+                        field.type.isLong()   ? (Tuple o) -> a.applyAsLong(o)   * b.applyAsLong(o) :
+                        field.type.isFloat()  ? (Tuple o) -> a.applyAsFloat(o)  * b.applyAsFloat(o) :
+                        field.type.isDouble() ? (Tuple o) -> a.applyAsDouble(o) * b.applyAsDouble(o) :
+                        null;
+
+                @Override
+                public StructField field() {
+                    return field;
+                }
+
+                @Override
+                public Object apply(Tuple o) {
+                    Object x = a.apply(o);
+                    Object y = b.apply(o);
+                    if (x == null || y == null) return null;
+                    else return lambda.apply(o);
+                }
+
+                @Override
+                public int applyAsInt(Tuple o) {
+                    return a.applyAsInt(o) * b.applyAsInt(o);
+                }
+
+                @Override
+                public long applyAsLong(Tuple o) {
+                    return a.applyAsLong(o) * b.applyAsLong(o);
+                }
+
+                @Override
+                public float applyAsFloat(Tuple o) {
+                    return a.applyAsFloat(o) * b.applyAsFloat(o);
+                }
+
+                @Override
+                public double applyAsDouble(Tuple o) {
+                    return a.applyAsDouble(o) * b.applyAsDouble(o);
+                }
+            });
+        }
+
+        return features;
     }
 }

@@ -32,7 +32,6 @@ public interface TimeFunction extends Serializable {
     /**
      * Returns the function value at time step t.
      * @param t the discrete time step.
-     * @return the function value.
      */
     double apply(int t);
 
@@ -40,7 +39,6 @@ public interface TimeFunction extends Serializable {
      * Returns the constant learning rate.
      *
      * @param alpha the learning rate.
-     * @return the constant learning rate function.
      */
     static TimeFunction constant(double alpha) {
         return new TimeFunction() {
@@ -64,7 +62,6 @@ public interface TimeFunction extends Serializable {
      * @param boundaries A list of integers with strictly increasing entries.
      * @param values	 The values for the intervals defined by boundaries.
      *                   It should have one more element than boundaries.
-     * @return the piecewise learning rate function.
      */
     static TimeFunction piecewise(int[] boundaries, double[] values) {
         if (values.length != boundaries.length + 1) {
@@ -91,7 +88,6 @@ public interface TimeFunction extends Serializable {
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the decay steps.
-     * @return the linear learning rate function.
      */
     static TimeFunction linear(double initLearningRate, double decaySteps) {
         return linear(initLearningRate, decaySteps, 0.0001);
@@ -105,7 +101,6 @@ public interface TimeFunction extends Serializable {
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the decay steps.
      * @param endLearningRate the end learning rate.
-     * @return the linear learning rate function.
      */
     static TimeFunction linear(double initLearningRate, double decaySteps, double endLearningRate) {
         return polynomial(initLearningRate, decaySteps, endLearningRate, false, 1.0);
@@ -125,7 +120,6 @@ public interface TimeFunction extends Serializable {
      * @param endLearningRate the end learning rate.
      * @param cycle the flag whether or not it should cycle beyond decaySteps.
      * @param power the power of the polynomial.
-     * @return the polynomial learning rate function.
      */
     static TimeFunction polynomial(double initLearningRate, double decaySteps, double endLearningRate, boolean cycle, double power) {
         return new TimeFunction() {
@@ -148,13 +142,12 @@ public interface TimeFunction extends Serializable {
     }
 
     /**
-     * Returns the inverse decay function.
+     * Returns the inverse decay function
      * {@code initLearningRate * decaySteps / (t + decaySteps)}.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the decay steps that should be a small percentage
      *                   of the number of iterations.
-     * @return the inverse decay function.
      */
     static TimeFunction inverse(double initLearningRate, double decaySteps) {
         return new TimeFunction() {
@@ -171,20 +164,19 @@ public interface TimeFunction extends Serializable {
     }
 
     /**
-     * Returns the inverse decay function.
+     * Returns the inverse decay function
      * {@code initLearningRate / (1 + decayRate * t / decaySteps)}.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps how often to apply decay.
      * @param decayRate the decay rate.
-     * @return the inverse decay function.
      */
     static TimeFunction inverse(double initLearningRate, double decaySteps, double decayRate) {
         return inverse(initLearningRate, decaySteps, decayRate, false);
     }
 
     /**
-     * Returns the inverse decay function.
+     * Returns the inverse decay function
      * {@code initLearningRate / (1 + decayRate * t / decaySteps)}.
      *
      * @param initLearningRate the initial learning rate.
@@ -192,7 +184,6 @@ public interface TimeFunction extends Serializable {
      * @param decayRate the decay rate.
      * @param staircase the flag whether to apply decay in a discrete staircase,
      *                  as opposed to continuous, fashion.
-     * @return the inverse decay function.
      */
     static TimeFunction inverse(double initLearningRate, double decaySteps, double decayRate, boolean staircase) {
         return new TimeFunction() {
@@ -213,13 +204,12 @@ public interface TimeFunction extends Serializable {
     }
 
     /**
-     * Returns the exponential decay function.
+     * Returns the exponential decay function
      * {@code initLearningRate * exp(-t / decaySteps)}.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the decay steps that should be a small percentage
      *                   of the number of iterations.
-     * @return the exponential decay function.
      */
     static TimeFunction exp(double initLearningRate, double decaySteps) {
         return new TimeFunction() {
@@ -236,13 +226,12 @@ public interface TimeFunction extends Serializable {
     }
 
     /**
-     * Returns the exponential decay function.
+     * Returns the exponential decay function
      * {@code initLearningRate * pow(endLearningRate / initLearningRate, min(t, decaySteps) / decaySteps)}.
      *
      * @param initLearningRate the initial learning rate.
      * @param decaySteps the maximum decay steps.
      * @param endLearningRate the end learning rate.
-     * @return the exponential decay function.
      */
     static TimeFunction exp(double initLearningRate, double decaySteps, double endLearningRate) {
         double decayRate = endLearningRate / initLearningRate;
@@ -260,7 +249,7 @@ public interface TimeFunction extends Serializable {
     }
 
     /**
-     * Returns the exponential decay function.
+     * Returns the exponential decay function
      * {@code initLearningRate * pow(decayRate, t / decaySteps)}.
      *
      * @param initLearningRate the initial learning rate.
@@ -268,7 +257,6 @@ public interface TimeFunction extends Serializable {
      * @param decayRate the decay rate.
      * @param staircase the flag whether to apply decay in a discrete staircase,
      *                  as opposed to continuous, fashion.
-     * @return the exponential decay function.
      */
     static TimeFunction exp(double initLearningRate, double decaySteps, double decayRate, boolean staircase) {
         return new TimeFunction() {

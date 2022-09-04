@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.hash;
 
@@ -24,20 +24,23 @@ import java.util.Map;
 
 /**
  * A perfect hash of an array of strings to their index in the array.
- *
- * A perfect hash function for a set S is a hash function that maps
- * distinct elements in S to a set of integers, with no collisions.
- * In mathematical terms, it is an injective function.
- *
+ * <p>
+ * A perfect hash function for a set <code>S</code> is a hash function
+ * that maps distinct elements in <code>S</code> to a set of integers,
+ * with no collisions. In mathematical terms, it is an injective function.
+ * <p>
  * Perfect hash functions may be used to implement a lookup table with
  * constant worst-case access time.
+ * <p>
+ * A perfect hash function for a specific set <code>S</code> can be found by
+ * a randomized algorithm in a number of operations that is proportional
+ * to the size of <code>S</code>. The original construction of Fredman,
+ * Komlós and Szemerédi (1984) chooses a large prime <code>p</code>
+ * (larger than the size of the universe from which <code>S</code> is drawn),
+ * and a parameter <code>k</code>, and maps each element <code>x</code> of
+ * <code>S</code> to the index {@code g(x) = (kx mod p) mod n}.
  *
- * A perfect hash function for a specific set S can be found by a
- * randomized algorithm in a number of operations that is proportional
- * to the size of S. The original construction of Fredman, Komlós &
- * Szemerédi (1984) chooses a large prime p (larger than the size
- * of the universe from which S is drawn), and a parameter k, and maps
- * each element x of S to the index g(x) = (kx mod p) mode n.
+ * @author Haifeng Li
  */
 public class PerfectHash implements Serializable {
     /** The keyword set. */
@@ -131,7 +134,8 @@ public class PerfectHash implements Serializable {
 
         @Override
         public int compareTo(Key b) {
-            return Integer.signum(b.kfreq - kfreq);
+            // sort in descending order
+            return Integer.compare(b.kfreq, kfreq);
         }
     }
 
@@ -244,9 +248,9 @@ public class PerfectHash implements Serializable {
             }
         }
 
-        for (char i = (char)(freq.length - 1); i >= 0; i--) {
+        for (int i = freq.length - 1; i >= 0; i--) {
             if (freq[i] > 0) {
-                max = i;
+                max = (char) i;
                 break;
             }
         }

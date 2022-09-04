@@ -18,12 +18,10 @@
 package smile.math.kernel;
 
 import java.io.Serializable;
-import java.util.Properties;
 import java.util.function.ToDoubleBiFunction;
 import java.util.stream.IntStream;
 import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
-import smile.util.SparseArray;
 
 /**
  * Mercer kernel, also called covariance function in Gaussian process.
@@ -58,26 +56,17 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T, T>, Serializable 
 
     /**
      * Kernel function.
-     * @param x an object.
-     * @param y an object.
-     * @return the kernel value.
      */
     double k(T x, T y);
 
     /**
      * Computes the kernel and its gradient over hyperparameters.
-     * @param x an object.
-     * @param y an object.
-     * @return the kernel value and gradient.
      */
     double[] kg(T x, T y);
 
     /**
      * Kernel function.
      * This is simply for Scala convenience.
-     * @param x an object.
-     * @param y an object.
-     * @return the kernel value.
      */
     default double apply(T x, T y) {
         return k(x, y);
@@ -91,7 +80,7 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T, T>, Serializable 
     /**
      * Computes the kernel and gradient matrices.
      *
-     * @param x objects.
+     * @param x samples.
      * @return the kernel and gradient matrices.
      */
     default Matrix[] KG(T[] x) {
@@ -119,7 +108,7 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T, T>, Serializable 
     /**
      * Computes the kernel matrix.
      *
-     * @param x objects.
+     * @param x samples.
      * @return the kernel matrix.
      */
     default Matrix K(T[] x) {
@@ -139,8 +128,8 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T, T>, Serializable 
     /**
      * Returns the kernel matrix.
      *
-     * @param x objects.
-     * @param y objects.
+     * @param x samples.
+     * @param y samples.
      * @return the kernel matrix.
      */
     default Matrix K(T[] x, T[] y) {
@@ -157,132 +146,15 @@ public interface MercerKernel<T> extends ToDoubleBiFunction<T, T>, Serializable 
         return K;
     }
 
-    /**
-     * Returns the same kind kernel with the new hyperparameters.
-     * @param params the hyperparameters.
-     * @return the same kind kernel with the new hyperparameters.
-     */
+    /** Returns the same kind kernel with the new hyperparameters. */
     MercerKernel<T> of(double[] params);
 
-    /**
-     * Returns the hyperparameters of kernel.
-     * @return the hyperparameters of kernel.
-     */
+    /** Returns the hyperparameters for tuning. */
     double[] hyperparameters();
 
-    /**
-     * Returns the lower bound of hyperparameters (in hyperparameter tuning).
-     * @return the lower bound of hyperparameters.
-     */
+    /** Returns the lower bound of hyperparameters. */
     double[] lo();
 
-    /**
-     * Returns the upper bound of hyperparameters (in hyperparameter tuning).
-     * @return the upper bound of hyperparameters.
-     */
+    /** Returns the upper bound of hyperparameters. */
     double[] hi();
-
-    /**
-     * Returns a kernel instance.
-     * @param prop the hyper-parameters.
-     * @return the kernel.
-     */
-    static MercerKernel<double[]> of(Properties prop) {
-        double scale = Double.parseDouble(prop.getProperty("kernel.scale", "1.0"));
-        double offset = Double.parseDouble(prop.getProperty("kernel.offset", "0.0"));
-
-        String kernel = prop.getProperty("kernel", "Gaussian").toLowerCase();
-        switch (kernel) {
-            case "linear":
-                return new LinearKernel();
-            case "gaussian":
-                return new GaussianKernel(scale);
-            case "polynomial":
-                int degree = Integer.parseInt(prop.getProperty("kernel.degree", "2"));
-                return new PolynomialKernel(degree, scale, offset);
-            case "matern":
-                double nu = Double.parseDouble(prop.getProperty("matern.nu", "1.5"));
-                return new MaternKernel(scale, nu);
-            case "laplacian":
-                return new LaplacianKernel(scale);
-            case "hyperbolic":
-                return new HyperbolicTangentKernel(scale, offset);
-            case "spline":
-                return new ThinPlateSplineKernel(scale);
-            case "pearson":
-                String omega = prop.getProperty("pearson.omega");
-                if (omega == null) {
-                    throw new IllegalArgumentException("pearson.omega is not specified");
-                }
-                return new PearsonKernel(scale, Double.parseDouble(omega));
-            case "hellinger":
-                return new HellingerKernel();
-            default:
-                throw new IllegalArgumentException("Unsupported kernel: " + kernel);
-        }
-    }
-
-    /**
-     * Returns a sparse kernel instance.
-     * @param prop the hyper-parameters.
-     * @return the kernel.
-     */
-    static MercerKernel<SparseArray> sparse(Properties prop) {
-        double scale = Double.parseDouble(prop.getProperty("kernel.scale", "1.0"));
-        double offset = Double.parseDouble(prop.getProperty("kernel.offset", "0.0"));
-
-        String kernel = prop.getProperty("kernel", "Gaussian").toLowerCase();
-        switch (kernel) {
-            case "linear":
-                return new SparseLinearKernel();
-            case "gaussian":
-                return new SparseGaussianKernel(scale);
-            case "polynomial":
-                int degree = Integer.parseInt(prop.getProperty("kernel.degree", "2"));
-                return new SparsePolynomialKernel(degree, scale, offset);
-            case "matern":
-                double nu = Double.parseDouble(prop.getProperty("matern.nu", "1.5"));
-                return new SparseMaternKernel(scale, nu);
-            case "laplacian":
-                return new SparseLaplacianKernel(scale);
-            case "hyperbolic":
-                return new SparseHyperbolicTangentKernel(scale, offset);
-            case "spline":
-                return new SparseThinPlateSplineKernel(scale);
-            default:
-                throw new IllegalArgumentException("Unsupported kernel: " + kernel);
-        }
-    }
-
-    /**
-     * Returns a binary sparse kernel instance.
-     * @param prop the hyper-parameters.
-     * @return the kernel.
-     */
-    static MercerKernel<int[]> binary(Properties prop) {
-        double scale = Double.parseDouble(prop.getProperty("kernel.scale", "1.0"));
-        double offset = Double.parseDouble(prop.getProperty("kernel.offset", "0.0"));
-
-        String kernel = prop.getProperty("kernel", "Gaussian").toLowerCase();
-        switch (kernel) {
-            case "linear":
-                return new BinarySparseLinearKernel();
-            case "gaussian":
-                return new BinarySparseGaussianKernel(scale);
-            case "polynomial":
-                int degree = Integer.parseInt(prop.getProperty("kernel.degree", "2"));
-                return new BinarySparsePolynomialKernel(degree, scale, offset);
-            case "matern":
-                double nu = Double.parseDouble(prop.getProperty("matern.nu", "1.5"));
-                return new BinarySparseMaternKernel(scale, nu);
-            case "laplacian":
-                return new BinarySparseLaplacianKernel(scale);
-            case "hyperbolic":
-                return new BinarySparseHyperbolicTangentKernel(scale, offset);
-            case "spline":
-                return new BinarySparseThinPlateSplineKernel(scale);
-            default:
-                throw new IllegalArgumentException("Unsupported kernel: " + kernel);
-        }
-    }
 }

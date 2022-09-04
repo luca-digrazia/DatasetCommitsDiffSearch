@@ -72,38 +72,38 @@ public class SimpleCorpusTest {
     @Test
     public void testGetNumDocuments() {
         System.out.println("getNumDocuments");
-        assertEquals(5000, corpus.ndoc());
+        assertEquals(5000, corpus.getNumDocuments());
     }
 
     @Test
     public void testGetNumTerms() {
         System.out.println("getNumTerms");
-        assertEquals(15077, corpus.nterm());
+        assertEquals(15077, corpus.getNumTerms());
     }
 
     @Test
     public void testGetNumBigrams() {
         System.out.println("getNumBigrams");
-        assertEquals(18303, corpus.nbigram());
+        assertEquals(18303, corpus.getNumBigrams());
     }
 
     @Test
     public void testGetAverageDocumentSize() {
         System.out.println("getAverageDocumentSize");
-        assertEquals(11, corpus.avgDocSize());
+        assertEquals(11, corpus.getAverageDocumentSize());
     }
 
     @Test
     public void testGetTermFrequency() {
         System.out.println("getTermFrequency");
-        assertEquals(27, corpus.count("romantic"));
+        assertEquals(27, corpus.getTermFrequency("romantic"));
     }
 
     @Test
     public void testGetBigramFrequency() {
         System.out.println("getBigramFrequency");
         Bigram bigram = new Bigram("romantic", "comedy");
-        assertEquals(9, corpus.count(bigram));
+        assertEquals(9, corpus.getBigramFrequency(bigram));
     }
 
     @Test

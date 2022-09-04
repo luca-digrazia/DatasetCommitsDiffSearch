@@ -40,13 +40,9 @@ package smile.math.kernel;
 public class HyperbolicTangent implements DotProductKernel {
     private static final long serialVersionUID = 2L;
 
-    /** The scale parameter. */
     final double scale;
-    /** The offset parameter. */
     final double offset;
-    /** The lower bound of scale and offset for hyperparameter tuning. */
     final double[] lo;
-    /** The upper bound of scale and offset for hyperparameter tuning. */
     final double[] hi;
 
     /**
@@ -63,18 +59,12 @@ public class HyperbolicTangent implements DotProductKernel {
         this.hi = hi;
     }
 
-    /**
-     * Returns the scale of kernel.
-     * @return the scale of kernel.
-     */
+    /** Returns the scale of kernel. */
     public double scale() {
         return scale;
     }
 
-    /**
-     * Returns the offset of kernel.
-     * @return the offset of kernel.
-     */
+    /** Returns the offset of kernel. */
     public double offset() {
         return offset;
     }

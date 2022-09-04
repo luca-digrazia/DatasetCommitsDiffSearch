@@ -281,9 +281,6 @@ public interface LAPACK {
      *
      * @param lda The leading dimension of the matrix A. {@code LDA >= max(1,N)}.
      *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
-     *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
      *
@@ -333,9 +330,6 @@ public interface LAPACK {
      *          {@code A = U**T*U} or A = {@code L*L**T}.
      *
      * @param lda The leading dimension of the matrix A. {@code LDA >= max(1,N)}.
-     *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
      *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
@@ -387,9 +381,6 @@ public interface LAPACK {
      *
      * @param lda The leading dimension of the matrix A. {@code LDA >= max(1,N)}.
      *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
-     *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
      *
@@ -440,9 +431,6 @@ public interface LAPACK {
      *
      * @param lda The leading dimension of the matrix A. {@code LDA >= max(1,N)}.
      *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
-     *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
      *
@@ -490,9 +478,6 @@ public interface LAPACK {
      * @param A The symmetric packed matrix.
      *          On exit, the factor U or L from the Cholesky factorization
      *          {@code A = U**T*U} or A = {@code L*L**T}, in the same storage format as A.
-     *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
      *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
@@ -542,9 +527,6 @@ public interface LAPACK {
      *          On exit, the factor U or L from the Cholesky factorization
      *          {@code A = U**T*U} or A = {@code L*L**T}, in the same storage format as A.
      *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
-     *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
      *
@@ -593,9 +575,6 @@ public interface LAPACK {
      *          On exit, the factor U or L from the Cholesky factorization
      *          {@code A = U**T*U} or A = {@code L*L**T}, in the same storage format as A.
      *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
-     *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
      *
@@ -643,9 +622,6 @@ public interface LAPACK {
      * @param A The symmetric packed matrix.
      *          On exit, the factor U or L from the Cholesky factorization
      *          {@code A = U**T*U} or A = {@code L*L**T}, in the same storage format as A.
-     *
-     * @param ipiv The pivot indices that define the permutation matrix P;
-     *             row i of the matrix was interchanged with row IPIV(i).
      *
      * @param B On entry, the N-by-NRHS matrix of right hand side matrix B.
      *          On exit, if INFO = 0, the N-by-NRHS solution matrix X.
@@ -4199,8 +4175,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param trans The normal or transpose of the matrix A.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param nrhs The number of right hand sides, i.e., the number of columns
@@ -4237,8 +4211,6 @@ public interface LAPACK {
      * using the LU factorization computed by GETRF.
      *
      * @param layout The matrix layout.
-     *
-     * @param trans The normal or transpose of the matrix A.
      *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
@@ -4277,8 +4249,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param trans The normal or transpose of the matrix A.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param nrhs The number of right hand sides, i.e., the number of columns
@@ -4316,8 +4286,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param trans The normal or transpose of the matrix A.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param nrhs The number of right hand sides, i.e., the number of columns
@@ -4354,8 +4322,6 @@ public interface LAPACK {
      * using the LU factorization computed by GBTRF.
      *
      * @param layout The matrix layout.
-     *
-     * @param trans The normal or transpose of the matrix A.
      *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
@@ -4398,8 +4364,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param trans The normal or transpose of the matrix A.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param kl The number of subdiagonal elements of band matrix.
@@ -4440,8 +4404,6 @@ public interface LAPACK {
      * using the LU factorization computed by GBTRF.
      *
      * @param layout The matrix layout.
-     *
-     * @param trans The normal or transpose of the matrix A.
      *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
@@ -4484,8 +4446,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param trans The normal or transpose of the matrix A.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param kl The number of subdiagonal elements of band matrix.
@@ -4527,9 +4487,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param uplo The upper or lower triangular part of the matrix A is
-     *             to be referenced.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param nrhs The number of right hand sides, i.e., the number of columns
@@ -4564,9 +4521,6 @@ public interface LAPACK {
      * using the Bunch-Kaufman factorization computed by SPTRF.
      *
      * @param layout The matrix layout.
-     *
-     * @param uplo The upper or lower triangular part of the matrix A is
-     *             to be referenced.
      *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
@@ -4603,9 +4557,6 @@ public interface LAPACK {
      *
      * @param layout The matrix layout.
      *
-     * @param uplo The upper or lower triangular part of the matrix A is
-     *             to be referenced.
-     *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *
      * @param nrhs The number of right hand sides, i.e., the number of columns
@@ -4640,9 +4591,6 @@ public interface LAPACK {
      * using the Bunch-Kaufman factorization computed by SPTRF.
      *
      * @param layout The matrix layout.
-     *
-     * @param uplo The upper or lower triangular part of the matrix A is
-     *             to be referenced.
      *
      * @param n The number of linear equations, i.e., the order of the matrix A.
      *

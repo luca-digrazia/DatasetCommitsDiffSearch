@@ -30,15 +30,10 @@ package smile.math.kernel;
 public class Polynomial implements DotProductKernel {
     private static final long serialVersionUID = 2L;
 
-    /** The degree of polynomial. */
     final int degree;
-    /** The scale parameter. */
     final double scale;
-    /** The offset parameter. */
     final double offset;
-    /** The lower bound of scale and offset for hyperparameter tuning. */
     final double[] lo;
-    /** The upper bound of scale and offset for hyperparameter tuning. */
     final double[] hi;
 
     /**
@@ -65,26 +60,17 @@ public class Polynomial implements DotProductKernel {
         this.hi = hi;
     }
 
-    /**
-     * Returns the degree of polynomial.
-     * @return the degree of polynomial.
-     */
+    /** Returns the degree of kernel. */
     public int degree() {
         return degree;
     }
 
-    /**
-     * Returns the scale of kernel.
-     * @return the scale of kernel.
-     */
+    /** Returns the scale of kernel. */
     public double scale() {
         return scale;
     }
 
-    /**
-     * Returns the offset of kernel.
-     * @return the offset of kernel.
-     */
+    /** Returns the offset of kernel. */
     public double offset() {
         return offset;
     }
