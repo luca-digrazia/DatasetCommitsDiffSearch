@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import javax.annotation.Nullable;
 
 /**
  * A parser for options. Typical use case in a main method:
@@ -93,17 +92,14 @@ public class OptionsParser implements OptionsParsingResult {
   }
 
   /**
-   * A cache for the parsed options data. Both keys and values are immutable, so this is always
-   * safe. Only access this field through the {@link #getOptionsData} method for thread-safety! The
-   * cache is very unlikely to grow to a significant amount of memory, because there's only a fixed
-   * set of options classes on the classpath.
+   * A cache for the parsed options data. Both keys and values are immutable, so
+   * this is always safe. Only access this field through the {@link
+   * #getOptionsData} method for thread-safety! The cache is very unlikely to
+   * grow to a significant amount of memory, because there's only a fixed set of
+   * options classes on the classpath.
    */
   private static final Map<ImmutableList<Class<? extends OptionsBase>>, OptionsData> optionsData =
       new HashMap<>();
-
-  /** Skipped prefixes for starlark options. */
-  public static final ImmutableList<String> STARLARK_SKIPPED_PREFIXES =
-      ImmutableList.of("--//", "--no//", "--@", "--no@");
 
   /**
    * Returns {@link OpaqueOptionsData} suitable for passing along to {@link
@@ -118,7 +114,9 @@ public class OptionsParser implements OptionsParsingResult {
     return getOptionsDataInternal(optionsClasses);
   }
 
-  /** Returns the {@link OptionsData} associated with the given list of options classes. */
+  /**
+   * Returns the {@link OptionsData} associated with the given list of options classes.
+   */
   static synchronized OptionsData getOptionsDataInternal(
       List<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
     ImmutableList<Class<? extends OptionsBase>> immutableOptionsClasses =
@@ -136,7 +134,9 @@ public class OptionsParser implements OptionsParsingResult {
     return result;
   }
 
-  /** Returns the {@link OptionsData} associated with the given options class. */
+  /**
+   * Returns the {@link OptionsData} associated with the given options class.
+   */
   static OptionsData getOptionsDataInternal(Class<? extends OptionsBase> optionsClass)
       throws ConstructionException {
     return getOptionsDataInternal(ImmutableList.of(optionsClass));
@@ -191,10 +191,11 @@ public class OptionsParser implements OptionsParsingResult {
 
     /** Skip all the prefixes associated with Starlark options */
     public Builder skipStarlarkOptionPrefixes() {
-      for (String prefix : STARLARK_SKIPPED_PREFIXES) {
-        this.implBuilder.skippedPrefix(prefix);
-      }
-
+      this.implBuilder
+          .skippedPrefix("--//")
+          .skippedPrefix("--no//")
+          .skippedPrefix("--@")
+          .skippedPrefix("--no@");
       return this;
     }
 
@@ -211,12 +212,6 @@ public class OptionsParser implements OptionsParsingResult {
     /** Sets whether the parser should ignore internal-only options. */
     public Builder ignoreInternalOptions(boolean ignoreInternalOptions) {
       this.implBuilder.ignoreInternalOptions(ignoreInternalOptions);
-      return this;
-    }
-
-    /** Sets the string the parser should look for as an identifier for flag aliases. */
-    public Builder withAliasFlag(@Nullable String aliasFlag) {
-      this.implBuilder.withAliasFlag(aliasFlag);
       return this;
     }
 
@@ -320,14 +315,11 @@ public class OptionsParser implements OptionsParsingResult {
   }
 
   /**
-   * The verbosity with which option help messages are displayed: short (just the name), medium
-   * (name, type, default, abbreviation), and long (full description).
+   * The verbosity with which option help messages are displayed: short (just
+   * the name), medium (name, type, default, abbreviation), and long (full
+   * description).
    */
-  public enum HelpVerbosity {
-    LONG,
-    MEDIUM,
-    SHORT
-  }
+  public enum HelpVerbosity { LONG, MEDIUM, SHORT }
 
   /**
    * Returns a description of all the options this parser can digest. In addition to {@link Option}
@@ -551,8 +543,7 @@ public class OptionsParser implements OptionsParsingResult {
     Preconditions.checkNotNull(visitor, "Missing visitor.");
 
     OptionsData data = impl.getOptionsData();
-    data
-        .getOptionsClasses()
+    data.getOptionsClasses()
         // List all options
         .stream()
         .flatMap(optionsClass -> OptionsData.getAllOptionDefinitionsForClass(optionsClass).stream())
@@ -826,3 +817,4 @@ public class OptionsParser implements OptionsParsingResult {
     return data.getUsesOnlyCoreTypes(optionsClass);
   }
 }
+
