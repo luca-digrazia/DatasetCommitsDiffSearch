@@ -13,24 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime.commands;
 
-import com.google.common.collect.ImmutableSet;
+import com.google.common.io.Files;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
-import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.util.io.OutErr;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.util.TreeSet;
 
 /** A command that prints an embedded license text. */
 @Command(
@@ -42,15 +37,22 @@ import java.nio.file.attribute.BasicFileAttributes;
 )
 public class LicenseCommand implements BlazeCommand {
 
-  private static final ImmutableSet<String> JAVA_LICENSE_FILES =
-      ImmutableSet.of("ASSEMBLY_EXCEPTION", "DISCLAIMER", "LICENSE", "THIRD_PARTY_README");
+  private static final TreeSet<String> JAVA_LICENSE_FILES =
+      new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+
+  static {
+    JAVA_LICENSE_FILES.add("ASSEMBLY_EXCEPTION");
+    JAVA_LICENSE_FILES.add("DISCLAIMER");
+    JAVA_LICENSE_FILES.add("LICENSE");
+    JAVA_LICENSE_FILES.add("THIRD_PARTY_README");
+  }
 
   public static boolean isSupported() {
     return ResourceFileLoader.resourceExists(LicenseCommand.class, "LICENSE");
   }
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
     env.getEventBus().post(new NoBuildEvent());
     OutErr outErr = env.getReporter().getOutErr();
 
@@ -64,50 +66,35 @@ public class LicenseCommand implements BlazeCommand {
     }
 
     Path bundledJdk =
-        env.getDirectories()
-            .getEmbeddedBinariesRoot()
-            .getRelative("embedded_tools/jdk")
-            .getPathFile()
-            .toPath();
-    if (Files.exists(bundledJdk)) {
+        env.getDirectories().getEmbeddedBinariesRoot().getRelative("embedded_tools/jdk");
+    if (bundledJdk.exists()) {
       outErr.printOutLn(
           "This binary comes with a bundled JDK, which contains the following license files:\n");
       printJavaLicenseFiles(outErr, bundledJdk);
     }
 
     Path bundledJre =
-        env.getDirectories()
-            .getEmbeddedBinariesRoot()
-            .getRelative("embedded_tools/jre")
-            .getPathFile()
-            .toPath();
-    if (Files.exists(bundledJre)) {
+        env.getDirectories().getEmbeddedBinariesRoot().getRelative("embedded_tools/jre");
+    if (bundledJre.exists()) {
       outErr.printOutLn(
           "This binary comes with a bundled JRE, which contains the following license files:\n");
       printJavaLicenseFiles(outErr, bundledJre);
     }
 
-    return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+    return ExitCode.SUCCESS;
   }
 
   private static void printJavaLicenseFiles(OutErr outErr, Path bundledJdkOrJre) {
     try {
-      Files.walkFileTree(
-          bundledJdkOrJre,
-          new SimpleFileVisitor<Path>() {
-            @Override
-            public FileVisitResult visitFile(Path path, BasicFileAttributes basicFileAttributes)
-                throws IOException {
-              if (JAVA_LICENSE_FILES.contains(path.getFileName().toString())) {
-                outErr.printOutLn(path + ":\n");
-                Files.copy(path, outErr.getOutputStream());
-                outErr.printOutLn("\n");
-              }
-              return super.visitFile(path, basicFileAttributes);
-            }
-          });
+      for (Path path : bundledJdkOrJre.getDirectoryEntries()) {
+        if (JAVA_LICENSE_FILES.contains(path.getBaseName().toLowerCase())) {
+          outErr.printOutLn(path.getPathString() + ":\n");
+          Files.copy(path.getPathFile(), outErr.getOutputStream());
+          outErr.printOutLn("\n");
+        }
+      }
     } catch (IOException e) {
-      throw new UncheckedIOException(
+      throw new IllegalStateException(
           "I/O error while trying to print license file of bundled JDK or JRE: " + e.getMessage(),
           e);
     }

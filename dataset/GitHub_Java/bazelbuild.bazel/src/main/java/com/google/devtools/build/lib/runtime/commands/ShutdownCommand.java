@@ -19,8 +19,6 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
@@ -39,16 +37,12 @@ public final class ShutdownCommand implements BlazeCommand {
 
   public static class Options extends OptionsBase {
 
-    @Option(
-      name = "iff_heap_size_greater_than",
-      defaultValue = "0",
-      category = "misc",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.LOSES_INCREMENTAL_STATE, OptionEffectTag.EAGERNESS_TO_EXIT},
-      help =
-          "Iff non-zero, then shutdown will only shut down the server if the total memory (in MB) "
-              + "consumed by the JVM exceeds this value."
-    )
+    @Option(name="iff_heap_size_greater_than",
+            defaultValue = "0",
+            category = "misc",
+            help="Iff non-zero, then shutdown will only shut down the " +
+                 "server if the total memory (in MB) consumed by the JVM " +
+                 "exceeds this value.")
     public int heapSizeLimit;
   }
 

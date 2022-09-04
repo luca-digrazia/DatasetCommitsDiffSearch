@@ -19,6 +19,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -29,8 +30,6 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
@@ -51,6 +50,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mockito;
 
 /** Tests of CommandEnvironment's command-interrupting exit functionality. */
 @RunWith(JUnit4.class)
@@ -60,12 +60,7 @@ public final class CommandInterruptionTest {
   public static class WaitOptions extends OptionsBase {
     public WaitOptions() {}
 
-    @Option(
-      name = "expect_interruption",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.NO_OP},
-      defaultValue = "false"
-    )
+    @Option(name = "expect_interruption", defaultValue = "false")
     public boolean expectInterruption;
   }
 
@@ -362,6 +357,9 @@ public final class CommandInterruptionTest {
                   public void initializeRuleClasses(ConfiguredRuleClassProvider.Builder builder) {
                     // Can't create a Skylark environment without a tools repository!
                     builder.setToolsRepository(TestConstants.TOOLS_REPOSITORY);
+                    // Can't create a runtime without a configuration collection factory!
+                    builder.setConfigurationCollectionFactory(
+                        Mockito.mock(ConfigurationCollectionFactory.class));
                     // Can't create a defaults package without the base options in there!
                     builder.addConfigurationOptions(BuildConfiguration.Options.class);
                   }
@@ -371,7 +369,7 @@ public final class CommandInterruptionTest {
     dispatcher = new BlazeCommandDispatcher(runtime, snooze);
     BlazeDirectories blazeDirectories =
         new BlazeDirectories(serverDirectories, scratch.dir("workspace"), productName);
-    runtime.initWorkspace(blazeDirectories, /* binTools= */ null);
+    runtime.initWorkspace(blazeDirectories, /*bintools=*/ null);
   }
 
   @After

@@ -202,6 +202,7 @@ public class InfoCommand implements BlazeCommand {
             new InfoItem.BlazeBinInfoItem(productName),
             new InfoItem.BlazeGenfilesInfoItem(productName),
             new InfoItem.BlazeTestlogsInfoItem(productName),
+            new InfoItem.CommandLogInfoItem(),
             new InfoItem.MessageLogInfoItem(),
             new InfoItem.ReleaseInfoItem(productName),
             new InfoItem.ServerPidInfoItem(productName),

@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildTool;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.exec.local.LocalExecutionOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
@@ -39,7 +38,6 @@ import java.util.List;
          builds = true,
          options = { BuildRequestOptions.class,
                      ExecutionOptions.class,
-                     LocalExecutionOptions.class,
                      PackageCacheOptions.class,
                      SkylarkSemanticsOptions.class,
                      BuildView.Options.class,
@@ -59,7 +57,7 @@ public final class BuildCommand implements BlazeCommand {
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
     BlazeRuntime runtime = env.getRuntime();
-    List<String> targets = ProjectFileSupport.getTargets(runtime.getProjectFileProvider(), options);
+    List<String> targets = ProjectFileSupport.getTargets(runtime, options);
 
     BuildRequest request = BuildRequest.create(
         getClass().getAnnotation(Command.class).name(), options,

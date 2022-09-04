@@ -28,11 +28,10 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
+
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -42,19 +41,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Implementation of the dump command. */
-@Command(
-  allowResidue = false,
-  mustRunInWorkspace = false,
-  options = {DumpCommand.DumpOptions.class},
-  help =
-      "Usage: %{product} dump <options>\n"
-          + "Dumps the internal state of the %{product} server process.  This command is provided "
-          + "as an aid to debugging, not as a stable interface, so users should not try to "
-          + "parse the output; instead, use 'query' or 'info' for this purpose.\n%{options}",
-  name = "dump",
-  shortDescription = "Dumps the internal state of the %{product} server process."
-)
+/**
+ * Implementation of the dump command.
+ */
+@Command(allowResidue = false,
+         mustRunInWorkspace = false,
+         options = { DumpCommand.DumpOptions.class },
+         help = "Usage: %{product} dump <options>\n"
+         + "Dumps the internal state of the %{product} server process.  This command is provided "
+         + "as an aid to debugging, not as a stable interface, so users should not try to "
+         + "parse the output; instead, use 'query' or 'info' for this purpose.\n%{options}",
+         name = "dump",
+         shortDescription = "Dumps the internal state of the %{product} server process.")
 public class DumpCommand implements BlazeCommand {
 
   /**
@@ -63,55 +61,35 @@ public class DumpCommand implements BlazeCommand {
    */
   public static class DumpOptions extends OptionsBase {
 
-    @Option(
-      name = "packages",
-      defaultValue = "false",
-      category = "verbosity",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.BAZEL_MONITORING},
-      help = "Dump package cache content."
-    )
+    @Option(name = "packages",
+        defaultValue = "false",
+        category = "verbosity",
+        help = "Dump package cache content.")
     public boolean dumpPackages;
 
-    @Option(
-      name = "vfs",
-      defaultValue = "false",
-      category = "verbosity",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.BAZEL_MONITORING},
-      help = "Dump virtual filesystem cache content."
-    )
+    @Option(name = "vfs",
+        defaultValue = "false",
+        category = "verbosity",
+        help = "Dump virtual filesystem cache content.")
     public boolean dumpVfs;
 
-    @Option(
-      name = "action_cache",
-      defaultValue = "false",
-      category = "verbosity",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.BAZEL_MONITORING},
-      help = "Dump action cache content."
-    )
+    @Option(name = "action_cache",
+        defaultValue = "false",
+        category = "verbosity",
+        help = "Dump action cache content.")
     public boolean dumpActionCache;
 
-    @Option(
-      name = "rule_classes",
-      defaultValue = "false",
-      category = "verbosity",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.BAZEL_MONITORING},
-      help = "Dump rule classes."
-    )
+    @Option(name = "rule_classes",
+        defaultValue = "false",
+        category = "verbosity",
+        help = "Dump rule classes.")
     public boolean dumpRuleClasses;
 
-    @Option(
-      name = "skyframe",
-      defaultValue = "off",
-      category = "verbosity",
-      converter = SkyframeDumpEnumConverter.class,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
-      effectTags = {OptionEffectTag.BAZEL_MONITORING},
-      help = "Dump Skyframe graph: 'off', 'summary', or 'detailed'."
-    )
+    @Option(name = "skyframe",
+        defaultValue = "off",
+        category = "verbosity",
+        converter = SkyframeDumpEnumConverter.class,
+        help = "Dump Skyframe graph: 'off', 'summary', or 'detailed'.")
     public SkyframeDumpOption dumpSkyframe;
   }
 

@@ -32,6 +32,7 @@ import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.runtime.commands.ProjectFileSupport;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -45,7 +46,6 @@ import com.google.devtools.build.lib.util.io.DelegatingOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import com.google.devtools.common.options.OpaqueOptionsData;
 import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsParser;
@@ -348,14 +348,14 @@ public class BlazeCommandDispatcher {
     long execStartTimeNanos = runtime.getClock().nanoTime();
 
     // The initCommand call also records the start time for the timestamp granularity monitor.
-    CommandEnvironment env = runtime.getWorkspace().initCommand(commandAnnotation);
+    CommandEnvironment env = runtime.getWorkspace().initCommand();
     // Record the command's starting time for use by the commands themselves.
     env.recordCommandStartTime(firstContactTime);
 
     AbruptExitException exitCausingException = null;
     for (BlazeModule module : runtime.getBlazeModules()) {
       try {
-        module.beforeCommand(env);
+        module.beforeCommand(commandAnnotation, env);
       } catch (AbruptExitException e) {
         // Don't let one module's complaints prevent the other modules from doing necessary
         // setup. We promised to call beforeCommand exactly once per-module before each command
@@ -511,6 +511,7 @@ public class BlazeCommandDispatcher {
       try {
         // Notify the BlazeRuntime, so it can do some initial setup.
         env.beforeCommand(
+            commandAnnotation,
             optionsParser,
             commonOptions,
             execStartTimeNanos,

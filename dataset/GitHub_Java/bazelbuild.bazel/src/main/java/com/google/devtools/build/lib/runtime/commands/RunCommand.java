@@ -53,7 +53,6 @@ import com.google.devtools.build.lib.util.CommandDescriptionForm;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -63,11 +62,9 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -95,8 +92,6 @@ public class RunCommand implements BlazeCommand  {
       name = "script_path",
       category = "run",
       defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       converter = OptionsUtils.PathFragmentConverter.class,
       help =
           "If set, write a shell script to the given file which invokes the "
@@ -254,15 +249,16 @@ public class RunCommand implements BlazeCommand  {
             options.getOptions(BuildRequestOptions.class).getSymlinkPrefix(productName),
             productName);
     List<String> cmdLine = new ArrayList<>();
-    // process-wrapper does not work on Windows (nor is it necessary), so don't use it
-    // on that platform. Also we skip it when writing the command-line to a file instead
-    // of executing it directly.
-    if (OS.getCurrent() != OS.WINDOWS && runOptions.scriptPath == null) {
+    if (runOptions.scriptPath == null) {
       PathFragment processWrapperPath =
           env.getBlazeWorkspace().getBinTools().getExecPath(PROCESS_WRAPPER);
       Preconditions.checkNotNull(
           processWrapperPath, PROCESS_WRAPPER + " not found in embedded tools");
       cmdLine.add(env.getExecRoot().getRelative(processWrapperPath).getPathString());
+      cmdLine.add("-1");
+      cmdLine.add("15");
+      cmdLine.add("-");
+      cmdLine.add("-");
     }
     List<String> prettyCmdLine = new ArrayList<>();
     // Insert the command prefix specified by the "--run_under=<command-prefix>" option
