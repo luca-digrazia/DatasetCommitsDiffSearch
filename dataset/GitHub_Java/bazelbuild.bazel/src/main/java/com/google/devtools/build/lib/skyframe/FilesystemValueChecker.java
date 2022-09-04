@@ -260,8 +260,7 @@ public class FilesystemValueChecker {
             dirtyKeys.add(keyAndValue.getFirst());
           } else {
             for (Artifact artifact : actionValue.getAllFileValues().keySet()) {
-              if (!artifact.isMiddlemanArtifact()
-                  && shouldCheckFile(knownModifiedOutputFiles, artifact)) {
+              if (shouldCheckFile(knownModifiedOutputFiles, artifact)) {
                 fileToKeyAndValue.put(artifact, keyAndValue);
               }
             }

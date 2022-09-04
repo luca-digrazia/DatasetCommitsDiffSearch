@@ -95,11 +95,9 @@ class OutputStore {
     treeArtifactContents.computeIfAbsent(artifact, a -> Sets.newConcurrentHashSet()).add(contents);
   }
 
-  void injectRemoteFile(
-      Artifact output, byte[] digest, long size, int locationIndex, String actionId) {
+  void injectRemoteFile(Artifact output, byte[] digest, long size, int locationIndex) {
     injectOutputData(
-        output,
-        new FileArtifactValue.RemoteFileArtifactValue(digest, size, locationIndex, actionId));
+        output, new FileArtifactValue.RemoteFileArtifactValue(digest, size, locationIndex));
   }
 
   final void injectOutputData(Artifact output, FileArtifactValue artifactValue) {
