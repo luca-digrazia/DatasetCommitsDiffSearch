@@ -80,16 +80,23 @@ public class SVD {
     protected double tol;
 
     /**
-     * Constructor.
+     * Private constructor.
      */
     public SVD(DenseMatrix U, DenseMatrix V, double[] s) {
+        this(U, V, s, true);
+    }
+
+    /**
+     * Private constructor.
+     */
+    public SVD(DenseMatrix U, DenseMatrix V, double[] s, boolean full) {
         this.U = U;
         this.V = V;
         this.s = s;
+        this.full = full;
 
         m = U.nrows();
-        n = V.nrows();
-        full = s.length == Math.min(m, n);
+        n = V.ncols();
         tol = 0.5 * Math.sqrt(m + n + 1.0) * s[0] * Math.EPSILON;
     }
 
@@ -253,7 +260,7 @@ public class SVD {
     /**
      * Solve the least squares A*x = b.
      * @param b   right hand side of linear system.
-     * @param x   the output solution vector that minimizes the L2 norm of U*x - b.
+     * @param x   the output solution vector that minimizes the L2 norm of Q*R*x - b.
      * @exception  RuntimeException if matrix is rank deficient.
      */
     public void solve(double[] b, double[] x) {
