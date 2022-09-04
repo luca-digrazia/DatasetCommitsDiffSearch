@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.exec.TestAttempt;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -39,7 +38,7 @@ import javax.annotation.Nullable;
  */
 @ThreadSafe
 @Immutable
-public class TestResult implements ExtendedEventHandler.ProgressLike {
+public class TestResult {
 
   private final TestRunnerAction testAction;
   private final TestResultData data;
