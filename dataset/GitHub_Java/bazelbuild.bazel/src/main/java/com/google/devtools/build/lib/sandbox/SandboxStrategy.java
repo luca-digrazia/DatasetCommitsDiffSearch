@@ -158,11 +158,15 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
               executionContext.getArtifactExpander(),
               executionContext.getActionInputFileCache(),
               executionContext.getExecutor().getContext(FilesetActionContext.class));
-      // SpawnInputExpander#getInputMapping uses ArtifactExpander#expandArtifacts to expand
-      // middlemen and tree artifacts, which expands empty tree artifacts to no entry. However,
-      // actions that accept TreeArtifacts as inputs generally expect that the empty directory is
-      // created. So we add those explicitly here.
-      // TODO(ulfjack): Move this code to SpawnInputExpander.
+      Map<PathFragment, Path> mounts = new TreeMap<>();
+      for (Map.Entry<PathFragment, ActionInput> e : inputMap.entrySet()) {
+        mounts.put(e.getKey(), execRoot.getRelative(e.getValue().getExecPath()));
+      }
+
+      // ActionInputHelper#expandArtifacts above expands empty TreeArtifacts into an empty list.
+      // However, actions that accept TreeArtifacts as inputs generally expect that the empty
+      // directory is created. So here we explicitly mount the directories of the TreeArtifacts as
+      // inputs.
       for (ActionInput input : spawn.getInputFiles()) {
         if (input instanceof Artifact && ((Artifact) input).isTreeArtifact()) {
           List<Artifact> containedArtifacts = new ArrayList<>();
@@ -173,11 +177,6 @@ abstract class SandboxStrategy implements SandboxedSpawnActionContext {
             inputMap.put(input.getExecPath(), input);
           }
         }
-      }
-
-      Map<PathFragment, Path> mounts = new TreeMap<>();
-      for (Map.Entry<PathFragment, ActionInput> e : inputMap.entrySet()) {
-        mounts.put(e.getKey(), execRoot.getRelative(e.getValue().getExecPath()));
       }
       return mounts;
     } catch (IOException e) {

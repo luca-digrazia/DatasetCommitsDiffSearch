@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.exec;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.io.LineProcessor;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
@@ -70,7 +69,6 @@ public class SpawnInputExpander {
       Map<PathFragment, ActionInput> inputMappings,
       PathFragment targetLocation,
       ActionInput input) {
-    Preconditions.checkArgument(!targetLocation.isAbsolute(), targetLocation);
     if (!inputMappings.containsKey(targetLocation)) {
       inputMappings.put(targetLocation, input);
     }
@@ -88,17 +86,16 @@ public class SpawnInputExpander {
     for (Entry<PathFragment, Map<PathFragment, Artifact>> rootAndMappings :
         rootsAndMappings.entrySet()) {
       PathFragment root = rootAndMappings.getKey();
-      Preconditions.checkState(!root.isAbsolute(), root);
       for (Entry<PathFragment, Artifact> mapping : rootAndMappings.getValue().entrySet()) {
-        PathFragment location = root.getRelative(mapping.getKey());
+        PathFragment targetPrefix = root.getRelative(mapping.getKey());
         Artifact localArtifact = mapping.getValue();
         if (localArtifact != null) {
           if (strict && !actionFileCache.isFile(localArtifact)) {
             throw new IOException("Not a file: " + localArtifact.getPath().getPathString());
           }
-          addMapping(inputMap, location, localArtifact);
+          addMapping(inputMap, targetPrefix, localArtifact);
         } else {
-          addMapping(inputMap, location, EMPTY_FILE);
+          addMapping(inputMap, targetPrefix, EMPTY_FILE);
         }
       }
     }
@@ -119,16 +116,16 @@ public class SpawnInputExpander {
   }
 
   private final class ManifestLineProcessor implements LineProcessor<Object> {
-    private final Map<PathFragment, ActionInput> inputMap;
+    private final Map<PathFragment, ActionInput> inputMappings;
     private final String workspaceName;
     private final PathFragment targetPrefix;
     private int lineNum = 0;
 
     ManifestLineProcessor(
-        Map<PathFragment, ActionInput> inputMap,
+        Map<PathFragment, ActionInput> inputMappings,
         String workspaceName,
         PathFragment targetPrefix) {
-      this.inputMap = inputMap;
+      this.inputMappings = inputMappings;
       this.workspaceName = workspaceName;
       this.targetPrefix = targetPrefix;
     }
@@ -169,7 +166,7 @@ public class SpawnInputExpander {
         }
       }
 
-      addMapping(inputMap, targetPrefix.getRelative(location), artifact);
+      addMapping(inputMappings, targetPrefix.getRelative(location), artifact);
       return true;
     }
 
@@ -184,7 +181,7 @@ public class SpawnInputExpander {
     List<ActionInput> inputs =
         ActionInputHelper.expandArtifacts(spawn.getInputFiles(), artifactExpander);
     for (ActionInput input : inputs) {
-      addMapping(inputMap, input.getExecPath(), input);
+      inputMap.put(input.getExecPath(), input);
     }
   }
 
