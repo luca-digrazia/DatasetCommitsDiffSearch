@@ -75,7 +75,7 @@ public class ProcessPackageDirectory {
       SkyFunction.Environment env,
       Set<PathFragment> excludedPaths)
       throws InterruptedException {
-    PathFragment rootRelativePath = rootedPath.getRootRelativePath();
+    PathFragment rootRelativePath = rootedPath.getRelativePath();
 
     SkyKey fileKey = FileValue.key(rootedPath);
     FileValue fileValue;
@@ -170,7 +170,7 @@ public class ProcessPackageDirectory {
       RepositoryName repositoryName,
       Set<PathFragment> excludedPaths) {
     Root root = rootedPath.getRoot();
-    PathFragment rootRelativePath = rootedPath.getRootRelativePath();
+    PathFragment rootRelativePath = rootedPath.getRelativePath();
     boolean followSymlinks = shouldFollowSymlinksWhenTraversing(dirListingValue.getDirents());
     List<SkyKey> childDeps = new ArrayList<>();
     for (Dirent dirent : dirListingValue.getDirents()) {
