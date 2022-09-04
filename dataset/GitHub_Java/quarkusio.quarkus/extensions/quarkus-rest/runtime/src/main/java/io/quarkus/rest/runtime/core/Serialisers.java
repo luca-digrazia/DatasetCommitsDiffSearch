@@ -25,7 +25,6 @@ import java.util.function.Function;
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.Entity;
-import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
@@ -39,7 +38,6 @@ import io.quarkus.rest.runtime.client.QuarkusRestClientReaderInterceptorContext;
 import io.quarkus.rest.runtime.client.QuarkusRestClientWriterInterceptorContext;
 import io.quarkus.rest.runtime.core.serialization.EntityWriter;
 import io.quarkus.rest.runtime.core.serialization.FixedEntityWriterArray;
-import io.quarkus.rest.runtime.headers.HeaderUtil;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestConfiguration;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestWriterInterceptorContext;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
@@ -63,14 +61,13 @@ import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyWriter;
 import io.quarkus.rest.runtime.util.MediaTypeHelper;
 import io.quarkus.rest.runtime.util.QuarkusMultivaluedHashMap;
 import io.quarkus.rest.runtime.util.QuarkusMultivaluedMap;
-import io.vertx.core.MultiMap;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 
 public class Serialisers {
 
-    private static final Map<Class<?>, Class<?>> primitivesToWrappers = new HashMap<>();
+    private static Map<Class<?>, Class<?>> primitivesToWrappers = new HashMap<>();
 
     static {
         primitivesToWrappers.put(boolean.class, Boolean.class);
@@ -233,6 +230,7 @@ public class Serialisers {
             Serialisers serialisers, MediaType mediaType) throws IOException {
         //note that GenericEntity is not a factor here. It should have already been unwrapped
 
+        Response response = context.getResponse();
         WriterInterceptor[] writerInterceptors = context.getWriterInterceptors();
         boolean outputStreamSet = context.getOutputStream() != null;
         if (writer instanceof QuarkusRestMessageBodyWriter && writerInterceptors == null && !outputStreamSet) {
@@ -240,9 +238,9 @@ public class Serialisers {
             RuntimeResource target = context.getTarget();
             Serialisers.encodeResponseHeaders(context);
             if (quarkusRestWriter.isWriteable(entity.getClass(), target == null ? null : target.getLazyMethod(),
-                    context.getResponseContentMediaType())) {
+                    context.getProducesMediaType())) {
                 if (mediaType != null) {
-                    context.setResponseContentType(mediaType);
+                    context.setProducesMediaType(mediaType);
                 }
                 quarkusRestWriter.writeResponse(entity, context);
                 return true;
@@ -251,10 +249,9 @@ public class Serialisers {
             }
         } else {
             if (writer.isWriteable(entity.getClass(), context.getGenericReturnType(), context.getAllAnnotations(),
-                    context.getResponseContentMediaType())) {
-                Response response = context.getResponse().get();
+                    context.getProducesMediaType())) {
                 if (mediaType != null) {
-                    context.setResponseContentType(mediaType);
+                    context.setProducesMediaType(mediaType);
                 }
                 if (writerInterceptors == null) {
                     ByteArrayOutputStream baos = context.getOrCreateOutputStream();
@@ -393,7 +390,7 @@ public class Serialisers {
         readers.add(entityClass, reader);
     }
 
-    public List<MessageBodyWriter<?>> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType, String... produces) {
+    public List<ResourceWriter> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType, String... produces) {
         List<MediaType> type = new ArrayList<>();
         for (String i : produces) {
             type.add(MediaType.valueOf(i));
@@ -401,8 +398,7 @@ public class Serialisers {
         return findBuildTimeWriters(entityType, runtimeType, type);
     }
 
-    private List<MessageBodyWriter<?>> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType,
-            List<MediaType> produces) {
+    private List<ResourceWriter> findBuildTimeWriters(Class<?> entityType, RuntimeType runtimeType, List<MediaType> produces) {
         if (Response.class.isAssignableFrom(entityType)) {
             return Collections.emptyList();
         }
@@ -430,7 +426,7 @@ public class Serialisers {
             }
 
         }
-        return toMessageBodyWriters(findResourceWriters(writers, klass, produces, runtimeType));
+        return findResourceWriters(writers, klass, produces, runtimeType);
     }
 
     public MultivaluedMap<Class<?>, ResourceWriter> getWriters() {
@@ -463,7 +459,12 @@ public class Serialisers {
             writers = this.writers;
         }
 
-        return toMessageBodyWriters(findResourceWriters(writers, klass, mt, runtimeType));
+        List<ResourceWriter> resourceWriters = findResourceWriters(writers, klass, mt, runtimeType);
+        List<MessageBodyWriter<?>> ret = new ArrayList<>(resourceWriters.size());
+        for (ResourceWriter resourceWriter : resourceWriters) {
+            ret.add(resourceWriter.getInstance());
+        }
+        return ret;
     }
 
     private List<ResourceWriter> findResourceWriters(QuarkusMultivaluedMap<Class<?>, ResourceWriter> writers, Class<?> klass,
@@ -497,22 +498,6 @@ public class Serialisers {
                 klass = klass.getSuperclass();
         } while (klass != null);
 
-        return ret;
-    }
-
-    @SuppressWarnings("rawtypes")
-    private List<MessageBodyWriter<?>> toMessageBodyWriters(List<ResourceWriter> resourceWriters) {
-        List<MessageBodyWriter<?>> ret = new ArrayList<>(resourceWriters.size());
-        Set<Class<? extends MessageBodyWriter>> alreadySeenClasses = new HashSet<>(resourceWriters.size());
-        for (ResourceWriter resourceWriter : resourceWriters) {
-            MessageBodyWriter<?> instance = resourceWriter.getInstance();
-            Class<? extends MessageBodyWriter> instanceClass = instance.getClass();
-            if (alreadySeenClasses.contains(instanceClass)) {
-                continue;
-            }
-            ret.add(instance);
-            alreadySeenClasses.add(instanceClass);
-        }
         return ret;
     }
 
@@ -729,38 +714,17 @@ public class Serialisers {
 
     public static void encodeResponseHeaders(QuarkusRestRequestContext requestContext) {
         HttpServerResponse vertxResponse = requestContext.getContext().response();
-        if (!requestContext.getResponse().isCreated()) {
-            //fast path
-            //there is no response, so we just set the content type
-            if (requestContext.getResponseEntity() == null) {
-                vertxResponse.setStatusCode(Response.Status.NO_CONTENT.getStatusCode());
-            }
-            EncodedMediaType contentType = requestContext.getResponseContentType();
-            if (contentType != null) {
-                vertxResponse.putHeader(HttpHeaders.CONTENT_TYPE, contentType.toString());
-            }
-            return;
-        }
-        Response response = requestContext.getResponse().get();
+        Response response = requestContext.getResponse();
         vertxResponse.setStatusCode(response.getStatus());
-        MultiMap vertxHeaders = vertxResponse.headers();
-
-        // avoid using getStringHeaders() which does similar things but copies into yet another map
-        MultivaluedMap<String, Object> headers = response.getHeaders();
-        for (Map.Entry<String, List<Object>> entry : headers.entrySet()) {
+        if (response.getStatusInfo().getReasonPhrase() != null) {
+            vertxResponse.setStatusMessage(response.getStatusInfo().getReasonPhrase());
+        }
+        MultivaluedMap<String, String> headers = response.getStringHeaders();
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
             if (entry.getValue().size() == 1) {
-                Object o = entry.getValue().get(0);
-                if (o instanceof CharSequence) {
-                    vertxHeaders.set(entry.getKey(), (CharSequence) o);
-                } else {
-                    vertxHeaders.set(entry.getKey(), (CharSequence) HeaderUtil.headerToString(o));
-                }
+                vertxResponse.putHeader(entry.getKey(), entry.getValue().get(0));
             } else {
-                List<CharSequence> strValues = new ArrayList<>(entry.getValue().size());
-                for (Object o : entry.getValue()) {
-                    strValues.add(HeaderUtil.headerToString(o));
-                }
-                vertxHeaders.set(entry.getKey(), strValues);
+                vertxResponse.putHeader(entry.getKey(), entry.getValue());
             }
         }
     }
