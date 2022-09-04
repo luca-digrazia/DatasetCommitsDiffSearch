@@ -155,17 +155,13 @@ public class GenerateRobolectricResourceSymbolsAction {
         final PlaceholderIdFieldInitializerBuilder robolectricIds =
             PlaceholderIdFieldInitializerBuilder.from(aaptConfigOptions.androidJar);
         ParsedAndroidData.loadedFrom(
-                DependencyInfo.DependencyType.UNKNOWN,
-                options.data,
-                executorService,
-                AndroidParsedDataDeserializer.create())
+                options.data, executorService, AndroidParsedDataDeserializer.create())
             .writeResourcesTo(
                 new AndroidResourceSymbolSink() {
 
                   @Override
-                  public void acceptSimpleResource(
-                      DependencyInfo dependencyInfo, ResourceType type, String name) {
-                    robolectricIds.addSimpleResource(dependencyInfo, type, name);
+                  public void acceptSimpleResource(ResourceType type, String name) {
+                    robolectricIds.addSimpleResource(type, name);
                   }
 
                   @Override
@@ -176,10 +172,8 @@ public class GenerateRobolectricResourceSymbolsAction {
 
                   @Override
                   public void acceptStyleableResource(
-                      DependencyInfo dependencyInfo,
-                      FullyQualifiedName key,
-                      Map<FullyQualifiedName, Boolean> attrs) {
-                    robolectricIds.addStyleableResource(dependencyInfo, key, attrs);
+                      FullyQualifiedName key, Map<FullyQualifiedName, Boolean> attrs) {
+                    robolectricIds.addStyleableResource(key, attrs);
                   }
                 });
 

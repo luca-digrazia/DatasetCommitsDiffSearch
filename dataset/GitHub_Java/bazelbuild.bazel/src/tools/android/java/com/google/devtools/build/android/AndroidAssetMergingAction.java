@@ -24,6 +24,8 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -43,7 +45,12 @@ public class AndroidAssetMergingAction extends AbstractBusyBoxAction {
   }
 
   private static AndroidAssetMergingAction create() {
-    return new AndroidAssetMergingAction(OptionsParser.newOptionsParser(Options.class));
+    OptionsParser optionsParser =
+        OptionsParser.builder()
+            .optionsClasses(Options.class)
+            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
+            .build();
+    return new AndroidAssetMergingAction(optionsParser);
   }
 
   private AndroidAssetMergingAction(OptionsParser optionsParser) {
@@ -127,7 +134,7 @@ public class AndroidAssetMergingAction extends AbstractBusyBoxAction {
     Preconditions.checkNotNull(options.primary);
 
     MergedAndroidData mergedData =
-        AndroidResourceMerger.mergeData(
+        AndroidResourceMerger.mergeDataAndWrite(
             options.primary,
             /* primaryManifest = */ null,
             options.directData,
@@ -148,7 +155,7 @@ public class AndroidAssetMergingAction extends AbstractBusyBoxAction {
         "The asset merging action should not produce non-asset merge results!");
 
     ResourcesZip.from(ignored, mergedData.getAssetDir())
-        .writeTo(options.assetsOutput, true /* compress */);
+        .writeTo(options.assetsOutput, /* compress= */ true);
     logCompletion("Create assets zip");
   }
 

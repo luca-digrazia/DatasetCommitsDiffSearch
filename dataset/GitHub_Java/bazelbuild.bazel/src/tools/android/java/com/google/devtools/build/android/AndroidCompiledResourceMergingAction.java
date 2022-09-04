@@ -78,10 +78,9 @@ public class AndroidCompiledResourceMergingAction {
       }
       AndroidResourceClassWriter resourceClassWriter =
           AndroidResourceClassWriter.createWith(
-              options.targetLabel, aaptConfigOptions.androidJar, generatedSources, packageForR);
+              aaptConfigOptions.androidJar, generatedSources, packageForR);
       resourceClassWriter.setIncludeClassFile(true);
       resourceClassWriter.setIncludeJavaFile(false);
-      resourceClassWriter.setAnnotateTransitiveFields(options.annotateTransitiveFields);
 
       AndroidResourceMerger.mergeCompiledData(
           options.primaryData,

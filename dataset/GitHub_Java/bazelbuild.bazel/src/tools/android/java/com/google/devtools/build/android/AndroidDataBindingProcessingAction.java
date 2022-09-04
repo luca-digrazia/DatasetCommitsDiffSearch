@@ -28,7 +28,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -102,9 +101,7 @@ public class AndroidDataBindingProcessingAction {
 
     OptionsParser optionsParser =
         OptionsParser.builder()
-            .allowResidue(true)
-            .optionsClasses(
-                Options.class, AaptConfigOptions.class, ResourceProcessorCommonOptions.class)
+            .optionsClasses(Options.class, AaptConfigOptions.class)
             .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
             .build();
     optionsParser.parseAndExitUponError(args);
@@ -142,11 +139,10 @@ public class AndroidDataBindingProcessingAction {
 
       // 2. Zip all the layout info files into one zip file.
       try (ZipOutputStream layoutInfoZip =
-              new ZipOutputStream(Files.newOutputStream(options.dataBindingInfoOut));
+            new ZipOutputStream(Files.newOutputStream(options.dataBindingInfoOut));
           Stream<Path> layoutInfos = Files.list(dataBindingInfoOutDir.getPath())) {
-        Iterator<Path> it = layoutInfos.iterator();
-        while (it.hasNext()) {
-          Path layoutInfo = it.next();
+
+        for (Path layoutInfo : (Iterable<Path>) layoutInfos::iterator) {
           ZipEntry zipEntry = new ZipEntry(layoutInfo.getFileName().toString());
           layoutInfoZip.putNextEntry(zipEntry);
           Files.copy(layoutInfo, layoutInfoZip);

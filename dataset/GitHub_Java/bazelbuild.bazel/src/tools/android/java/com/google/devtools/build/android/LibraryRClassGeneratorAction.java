@@ -13,16 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.ide.common.res2.MergingException;
-import com.android.utils.StdLogger;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Strings;
+import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOptions;
 import com.google.devtools.build.android.Converters.PathConverter;
-import com.google.devtools.build.android.Converters.PathListConverter;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
@@ -43,14 +44,14 @@ public class LibraryRClassGeneratorAction {
   private static final Logger logger =
       Logger.getLogger(LibraryRClassGeneratorAction.class.getName());
 
-  private static final StdLogger stdLogger = new StdLogger(StdLogger.Level.WARNING);
-
   /** Flag specifications for this action. */
   public static final class Options extends OptionsBase {
     @Option(
       name = "classJarOutput",
       defaultValue = "null",
       converter = PathConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       category = "output",
       help = "Path for the generated java class jar."
     )
@@ -59,26 +60,53 @@ public class LibraryRClassGeneratorAction {
     @Option(
       name = "packageForR",
       defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       category = "config",
       help = "Custom java package to generate the R symbols files."
     )
     public String packageForR;
 
     @Option(
-      name = "symbols",
+      name = "symbol",
+      allowMultiple = true,
       defaultValue = "",
-      converter = PathListConverter.class,
+      converter = PathConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       category = "config",
       help = "Parsed symbol binaries to write as R classes."
     )
     public List<Path> symbols;
+
+    @Option(
+      name = "targetLabel",
+      defaultValue = "null",
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "A label to add to the output jar's manifest as 'Target-Label'"
+    )
+    public String targetLabel;
+
+    @Option(
+      name = "injectingRuleKind",
+      defaultValue = "null",
+      category = "input",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "A string to add to the output jar's manifest as 'Injecting-Rule-Kind'"
+    )
+    public String injectingRuleKind;
   }
 
   public static void main(String[] args) throws Exception {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(Options.class, AaptConfigOptions.class);
-    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
+        OptionsParser.builder()
+            .optionsClasses(Options.class, AaptConfigOptions.class)
+            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
+            .build();
     optionsParser.parseAndExitUponError(args);
     AaptConfigOptions aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     Options options = optionsParser.getOptions(Options.class);
@@ -96,7 +124,7 @@ public class LibraryRClassGeneratorAction {
       logger.fine(String.format("Setup finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       final ParsedAndroidData data =
-          AndroidDataDeserializer.deserializeSymbolsToData(options.symbols);
+          AndroidParsedDataDeserializer.deserializeSymbolsToData(options.symbols);
       logger.fine(
           String.format("Deserialization finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
@@ -105,7 +133,11 @@ public class LibraryRClassGeneratorAction {
       logger.fine(
           String.format("R writing finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
-      AndroidResourceOutputs.createClassJar(scopedTmp.getPath(), options.classJarOutput);
+      AndroidResourceOutputs.createClassJar(
+          scopedTmp.getPath(),
+          options.classJarOutput,
+          options.targetLabel,
+          options.injectingRuleKind);
       logger.fine(
           String.format(
               "Creating class jar finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));

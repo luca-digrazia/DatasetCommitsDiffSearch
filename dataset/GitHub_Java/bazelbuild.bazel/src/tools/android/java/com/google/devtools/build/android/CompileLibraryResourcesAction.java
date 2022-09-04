@@ -14,28 +14,23 @@
 
 package com.google.devtools.build.android;
 
-import com.android.builder.core.VariantType;
-import com.android.repository.Revision;
 import com.google.common.base.Preconditions;
-import com.google.common.util.concurrent.ListeningExecutorService;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.android.Converters.ExistingPathConverter;
 import com.google.devtools.build.android.Converters.PathConverter;
-import com.google.devtools.build.android.Converters.RevisionConverter;
+import com.google.devtools.build.android.Converters.UnvalidatedAndroidDirectoriesConverter;
+import com.google.devtools.build.android.aapt2.Aapt2ConfigOptions;
 import com.google.devtools.build.android.aapt2.ResourceCompiler;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import java.io.Closeable;
+import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
 import java.io.IOException;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.logging.Logger;
 
 /** Compiles resources using aapt2 and archives them to zip. */
@@ -46,14 +41,13 @@ public class CompileLibraryResourcesAction {
     @Option(
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
-      name = "resource",
-      defaultValue = "",
-      allowMultiple = true,
-      converter = ExistingPathConverter.class,
+      name = "resources",
+      defaultValue = "null",
+      converter = UnvalidatedAndroidDirectoriesConverter.class,
       category = "input",
       help = "The resources to compile with aapt2."
     )
-    public List<Path> resources;
+    public UnvalidatedAndroidDirectories resources;
 
     @Option(
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -65,28 +59,6 @@ public class CompileLibraryResourcesAction {
       help = "Path to write the zip of compiled resources."
     )
     public Path output;
-
-    @Option(
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      name = "aapt2",
-      defaultValue = "null",
-      converter = ExistingPathConverter.class,
-      category = "tool",
-      help = "Aapt2 tool location for resource compilation."
-    )
-    public Path aapt2;
-
-    @Option(
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      name = "buildToolsVersion",
-      defaultValue = "null",
-      converter = RevisionConverter.class,
-      category = "config",
-      help = "Version of the build tools (e.g. aapt) being used, e.g. 23.0.2"
-    )
-    public Revision buildToolsVersion;
 
     @Option(
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
@@ -125,87 +97,51 @@ public class CompileLibraryResourcesAction {
               + " This value is required for processing data binding."
     )
     public Path dataBindingInfoOut;
+
   }
 
   static final Logger logger = Logger.getLogger(CompileLibraryResourcesAction.class.getName());
 
   public static void main(String[] args) throws Exception {
-    OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
-    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
+    OptionsParser optionsParser =
+        OptionsParser.builder()
+            .optionsClasses(Options.class, Aapt2ConfigOptions.class)
+            .argsPreProcessor(new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()))
+            .build();
     optionsParser.parseAndExitUponError(args);
 
     Options options = optionsParser.getOptions(Options.class);
+    Aapt2ConfigOptions aapt2Options = optionsParser.getOptions(Aapt2ConfigOptions.class);
 
     Preconditions.checkNotNull(options.resources);
     Preconditions.checkNotNull(options.output);
-    Preconditions.checkNotNull(options.aapt2);
+    Preconditions.checkNotNull(aapt2Options.aapt2);
 
-    try (ScopedTemporaryDirectory scopedTmp =
-        new ScopedTemporaryDirectory("android_resources_tmp")) {
+    try (ExecutorServiceCloser executorService = ExecutorServiceCloser.createWithFixedPoolOf(15);
+        ScopedTemporaryDirectory scopedTmp =
+            new ScopedTemporaryDirectory("android_resources_tmp")) {
       final Path tmp = scopedTmp.getPath();
       final Path databindingResourcesRoot =
           Files.createDirectories(tmp.resolve("android_data_binding_resources"));
-      final Path databindingMetaData =
-          Files.createDirectories(tmp.resolve("android_data_binding_metadata"));
       final Path compiledResources = Files.createDirectories(tmp.resolve("compiled"));
-      // The reported availableProcessors may be higher than the actual resources
-      // (on a shared system). On the other hand, a lot of the work is I/O, so it's not completely
-      // CPU bound. As a compromise, divide by 2 the reported availableProcessors.
-      int numThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
-      final ListeningExecutorService executorService =
-          MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(numThreads));
-      try (final Closeable closeable = ExecutorServiceCloser.createWith(executorService)) {
-        final ResourceCompiler compiler =
-            ResourceCompiler.create(
-                executorService, compiledResources, options.aapt2, options.buildToolsVersion);
-        for (final Path resource :
-            maybeProcessDataBindings(
-                databindingResourcesRoot,
-                databindingMetaData,
-                options.dataBindingInfoOut,
-                options.manifest,
-                options.packagePath,
-                options.resources)) {
-          compiler.queueDirectoryForCompilation(resource);
-        }
-        AndroidResourceOutputs.archiveCompiledResources(
-            options.output,
-            databindingResourcesRoot,
-            compiledResources,
-            compiler.getCompiledArtifacts());
-      }
+
+      final ResourceCompiler compiler =
+          ResourceCompiler.create(
+              executorService,
+              compiledResources,
+              aapt2Options.aapt2,
+              aapt2Options.buildToolsVersion,
+              aapt2Options.generatePseudoLocale);
+      options
+          .resources
+          .toData(options.manifest)
+          .processDataBindings(
+              options.dataBindingInfoOut, options.packagePath, databindingResourcesRoot)
+          .compile(compiler, compiledResources)
+          .copyResourcesZipTo(options.output);
+    } catch (IOException | ExecutionException | InterruptedException e) {
+      logger.log(java.util.logging.Level.SEVERE, "Unexpected", e);
+      throw e;
     }
-  }
-
-  private static List<Path> maybeProcessDataBindings(
-      Path resourceRoot,
-      Path databindingMetaData,
-      Path dataBindingInfoOut,
-      Path manifest,
-      String packagePath,
-      List<Path> resources)
-      throws IOException {
-    if (dataBindingInfoOut == null) {
-      return resources;
-    }
-
-    Preconditions.checkNotNull(manifest);
-    Preconditions.checkNotNull(packagePath);
-
-    List<Path> processed = new ArrayList<>();
-    for (Path resource : resources) {
-      processed.add(
-          AndroidResourceProcessor.processDataBindings(
-              resourceRoot,
-              resource,
-              databindingMetaData,
-              VariantType.LIBRARY,
-              packagePath,
-              manifest,
-              false));
-    }
-
-    AndroidResourceOutputs.archiveDirectory(databindingMetaData, dataBindingInfoOut);
-    return processed;
   }
 }
