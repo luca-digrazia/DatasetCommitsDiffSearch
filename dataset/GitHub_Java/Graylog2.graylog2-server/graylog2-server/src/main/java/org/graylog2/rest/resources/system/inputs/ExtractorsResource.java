@@ -97,9 +97,7 @@ public class ExtractorsResource extends RestResource {
                     cer.targetField,
                     cer.extractorConfig,
                     cer.creatorUserId,
-                    loadConverters(cer.converters),
-                    Extractor.ConditionType.valueOf(cer.conditionType.toUpperCase()),
-                    cer.conditionValue
+                    loadConverters(cer.converters)
             );
         } catch (ExtractorFactory.NoSuchExtractorException e) {
             LOG.error("No such extractor type.", e);
@@ -213,8 +211,6 @@ public class ExtractorsResource extends RestResource {
         map.put("extractor_config", extractor.getExtractorConfig());
         map.put("creator_user_id", extractor.getCreatorUserId());
         map.put("converters", extractor.converterConfigMap());
-        map.put("condition_type", extractor.getConditionType().toString().toLowerCase());
-        map.put("condition_value", extractor.getConditionValue());
 
         map.put("exceptions", extractor.getExceptionCount());
         map.put("converter_exceptions", extractor.getConverterExceptionCount());

@@ -31,26 +31,16 @@ import java.util.Map;
  */
 public class ExtractorFactory {
 
-    // TODO: This parameter list is growing a bit out of control.
-    public static Extractor factory(String id,
-                                    String title,
-                                    Extractor.CursorStrategy cursorStrategy,
-                                    Extractor.Type type,
-                                    String sourceField,
-                                    String targetField,
-                                    Map<String, Object> extractorConfig,
-                                    String creatorUserId, List<Converter> converters,
-                                    Extractor.ConditionType conditionType,
-                                    String conditionValue)
+    public static Extractor factory(String id, String title, Extractor.CursorStrategy cursorStrategy, Extractor.Type type, String sourceField, String targetField, Map<String, Object> extractorConfig, String creatorUserId, List<Converter> converters)
             throws NoSuchExtractorException, Extractor.ReservedFieldException, ConfigurationException {
 
         switch (type) {
             case REGEX:
-                return new RegexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
+                return new RegexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters);
             case SUBSTRING:
-                return new SubstringExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
+                return new SubstringExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters);
             case SPLIT_AND_INDEX:
-                return new SplitAndIndexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters, conditionType, conditionValue);
+                return new SplitAndIndexExtractor(id, title, cursorStrategy, sourceField, targetField, extractorConfig, creatorUserId, converters);
             default:
                 throw new NoSuchExtractorException();
         }
