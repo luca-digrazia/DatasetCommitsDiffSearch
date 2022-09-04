@@ -25,6 +25,7 @@ import java.util.Map;
 public interface SearchType {
     String TYPE_FIELD = "type";
 
+    @JsonProperty(TYPE_FIELD)
     String type();
 
     @Nullable

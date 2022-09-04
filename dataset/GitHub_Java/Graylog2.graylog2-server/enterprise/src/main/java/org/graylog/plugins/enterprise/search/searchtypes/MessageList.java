@@ -19,6 +19,7 @@ public abstract class MessageList implements SearchType {
     public static final String NAME = "messages";
 
     @Override
+    @JsonProperty
     public abstract String type();
 
     @Nullable

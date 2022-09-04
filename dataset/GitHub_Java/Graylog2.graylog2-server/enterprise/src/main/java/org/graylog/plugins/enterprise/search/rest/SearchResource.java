@@ -69,9 +69,8 @@ public class SearchResource extends RestResource implements PluginRestResource {
             return Response.serverError().build();
         }
         LOG.info("Created new search object {}", saved.id());
-        final Query annotated = saved.withInfo(queryEngine.parse(saved));
         //noinspection ConstantConditions
-        return Response.created(URI.create(annotated.id())).entity(annotated).build();
+        return Response.created(URI.create(saved.id())).entity(saved).build();
     }
 
     @GET
@@ -79,7 +78,6 @@ public class SearchResource extends RestResource implements PluginRestResource {
     @Path("{id}")
     public Query getQuery(@ApiParam(name = "id") @PathParam("id") String queryId) {
         return queryDbService.get(queryId)
-                .map(query -> query.withInfo(queryEngine.parse(query)))
                 .orElseThrow(() -> new NotFoundException("No such search query " + queryId));
     }
 
@@ -88,7 +86,6 @@ public class SearchResource extends RestResource implements PluginRestResource {
     public List<Query> getAllQueries() {
         // TODO should be paginated and limited to own (or visible queries)
         return queryDbService.streamAll()
-                .map(query -> query.withInfo(queryEngine.parse(query)))
                 .collect(Collectors.toList());
     }
 
@@ -104,7 +101,8 @@ public class SearchResource extends RestResource implements PluginRestResource {
 
         final QueryJob queryJob = queryJobService.create(query);
 
-        queryEngine.execute(queryJob);
+        final CompletableFuture<QueryResult> futureResult = queryEngine.execute(queryJob);
+        queryJob.setResultFuture(futureResult);
 
         return Response.created(URI.create(BASE_PATH + "/status/" + queryJob.getId()))
                 .entity(ImmutableMap.of("job_id", queryJob.getId()))

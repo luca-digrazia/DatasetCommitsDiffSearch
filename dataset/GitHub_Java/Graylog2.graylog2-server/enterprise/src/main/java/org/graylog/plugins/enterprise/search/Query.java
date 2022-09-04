@@ -43,6 +43,7 @@ public abstract class Query {
     @JsonProperty
     public abstract String id();
 
+    @Nullable
     @JsonProperty
     public abstract TimeRange timerange();
 
@@ -61,10 +62,6 @@ public abstract class Query {
     @Nullable
     @JsonProperty
     public abstract Map<String, ParameterBinding> parameters();
-
-    @Nullable
-    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
-    public abstract QueryInfo info();
 
     public abstract Builder toBuilder();
 
@@ -128,10 +125,6 @@ public abstract class Query {
         return this;
     }
 
-    public Query withInfo(QueryInfo queryInfo) {
-        return toBuilder().info(queryInfo).build();
-    }
-
     @AutoValue.Builder
     public abstract static class Builder {
         @Id
@@ -152,9 +145,6 @@ public abstract class Query {
 
         @JsonProperty
         public abstract Builder parameters(Map<String, ParameterBinding> parameters);
-
-        @JsonIgnore
-        public abstract Builder info(@Nullable QueryInfo info);
 
         abstract Query autoBuild();
 
