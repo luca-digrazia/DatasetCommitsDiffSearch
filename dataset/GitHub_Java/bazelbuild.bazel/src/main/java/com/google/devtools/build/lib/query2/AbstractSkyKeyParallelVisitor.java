@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
-import com.google.devtools.build.lib.concurrent.ParallelVisitor;
-import com.google.devtools.build.lib.query2.ParallelVisitorUtils.ParallelQueryVisitor;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
@@ -24,17 +22,15 @@ import com.google.devtools.build.skyframe.SkyKey;
  * A {@link ParallelVisitor} whose visitations occur on {@link SkyKey}s and those keys map directly
  * to output keys.
  */
-public abstract class AbstractSkyKeyParallelVisitor<T>
-    extends ParallelQueryVisitor<SkyKey, SkyKey, T> {
+public abstract class AbstractSkyKeyParallelVisitor<T> extends ParallelVisitor<SkyKey, SkyKey, T> {
   private final Uniquifier<SkyKey> uniquifier;
 
   protected AbstractSkyKeyParallelVisitor(
       Uniquifier<SkyKey> visitationUniquifier,
       Callback<T> callback,
       int visitBatchSize,
-      int processResultsBatchSize,
-      VisitTaskStatusCallback visitTaskStatusCallback) {
-    super(callback, visitBatchSize, processResultsBatchSize, visitTaskStatusCallback);
+      int processResultsBatchSize) {
+    super(callback, visitBatchSize, processResultsBatchSize);
     this.uniquifier = visitationUniquifier;
   }
 
