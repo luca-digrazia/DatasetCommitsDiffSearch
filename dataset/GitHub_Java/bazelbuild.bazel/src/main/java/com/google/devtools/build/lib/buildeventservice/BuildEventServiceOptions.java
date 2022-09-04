@@ -139,15 +139,8 @@ public class BuildEventServiceOptions extends OptionsBase {
 
   /** Determines the mode that will be used to upload data to the Build Event Service. */
   public enum BesUploadMode {
-    /** Block at the end of the build waiting for the upload to complete */
     WAIT_FOR_UPLOAD_COMPLETE,
-    /** Block at the beginning of the next build waiting for upload completion */
-    NOWAIT_FOR_UPLOAD_COMPLETE,
-    /**
-     * Block at the beginning of the next build waiting for the client to finish uploading the data,
-     * but possibly not blocking on the server acknowledgement.
-     */
-    FULLY_ASYNC,
+    NOWAIT_FOR_UPLOAD_COMPLETE
   }
 
   /** Converter for {@link BesUploadMode} */
