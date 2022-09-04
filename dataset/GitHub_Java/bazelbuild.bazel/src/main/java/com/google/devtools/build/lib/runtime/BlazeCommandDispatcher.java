@@ -47,7 +47,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OpaqueOptionsData;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -252,7 +252,7 @@ public class BlazeCommandDispatcher {
             createOptionsParser(command),
             invocationPolicy);
     ExitCode earlyExitCode = optionHandler.parseOptions(args, storedEventHandler);
-    OptionsParsingResult options = optionHandler.getOptionsResult();
+    OptionsProvider options = optionHandler.getOptionsResult();
 
     CommandLineEvent originalCommandLineEvent =
         new CommandLineEvent.OriginalCommandLineEvent(
