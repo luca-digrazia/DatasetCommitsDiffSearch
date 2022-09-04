@@ -330,7 +330,6 @@ public class ObjcRuleClasses {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("$objc_crosstool_rule")
-          .ancestors(CppRuleClasses.CcLinkingRule.class)
           .type(RuleClassType.ABSTRACT)
           .build();
     }
@@ -460,7 +459,7 @@ public class ObjcRuleClasses {
               attr("deps", LABEL_LIST)
                   .direct_compile_time_input()
                   .allowedRuleClasses(ALLOWED_CC_DEPS_RULE_CLASSES)
-                  .mandatoryProviders(ObjcProvider.STARLARK_CONSTRUCTOR.id())
+                  .mandatoryProviders(ObjcProvider.SKYLARK_CONSTRUCTOR.id())
                   .allowedFileTypes())
           /* <!-- #BLAZE_RULE($objc_compiling_rule).ATTRIBUTE(runtime_deps) -->
           The list of framework targets that are late loaded at runtime.  They are included in the
@@ -469,7 +468,7 @@ public class ObjcRuleClasses {
           .add(
               attr("runtime_deps", LABEL_LIST)
                   .direct_compile_time_input()
-                  .mandatoryProviders(AppleDynamicFrameworkInfo.STARLARK_CONSTRUCTOR.id())
+                  .mandatoryProviders(AppleDynamicFrameworkInfo.SKYLARK_CONSTRUCTOR.id())
                   .allowedFileTypes())
           /* <!-- #BLAZE_RULE($objc_compiling_rule).ATTRIBUTE(defines) -->
           Extra <code>-D</code> flags to pass to the compiler. They should be in
@@ -741,7 +740,7 @@ public class ObjcRuleClasses {
               attr("deps", LABEL_LIST)
                   .direct_compile_time_input()
                   .allowedRuleClasses(ALLOWED_CC_DEPS_RULE_CLASSES)
-                  .mandatoryProviders(ObjcProvider.STARLARK_CONSTRUCTOR.id())
+                  .mandatoryProviders(ObjcProvider.SKYLARK_CONSTRUCTOR.id())
                   .cfg(splitTransitionProvider)
                   .aspect(objcProtoAspect)
                   .allowedFileTypes())
@@ -823,7 +822,7 @@ public class ObjcRuleClasses {
                   .mandatoryProviders(
                       ImmutableList.of(
                           StarlarkProviderIdentifier.forKey(
-                              AppleDynamicFrameworkInfo.STARLARK_CONSTRUCTOR.getKey())))
+                              AppleDynamicFrameworkInfo.SKYLARK_CONSTRUCTOR.getKey())))
                   .allowedFileTypes()
                   .aspect(objcProtoAspect))
           .build();
