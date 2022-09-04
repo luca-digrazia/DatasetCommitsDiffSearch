@@ -530,7 +530,7 @@ public class CompilationSupport {
     return new Pair<>(compilationOutputsBuilder.build(), ImmutableMap.copyOf(mergedOutputGroups));
   }
 
-  ObjcCppSemantics createObjcCppSemantics(
+  private ObjcCppSemantics createObjcCppSemantics(
       ObjcProvider objcProvider, Collection<Artifact> privateHdrs, Artifact pchHdr) {
     Iterable<Artifact> extraInputs = getExtraIncludeProcessingInputs(privateHdrs, pchHdr);
     return new ObjcCppSemantics(
@@ -1302,7 +1302,7 @@ public class CompilationSupport {
       Iterable<Artifact> objFiles, Artifact objList) {
     ImmutableSet<Artifact> dedupedObjFiles = ImmutableSet.copyOf(objFiles);
     CustomCommandLine.Builder objFilesToLinkParam = new CustomCommandLine.Builder();
-    NestedSetBuilder<Artifact> treeObjFiles = NestedSetBuilder.stableOrder();
+    ImmutableList.Builder<Artifact> treeObjFiles = new ImmutableList.Builder<>();
 
     for (Artifact objFile : dedupedObjFiles) {
       // If the obj file is a tree artifact, we need to expand it into the contained individual
