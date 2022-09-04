@@ -37,16 +37,15 @@ public class GELFUDPDispatcher extends FrameDecoder {
 
     private static final Logger LOG = Logger.getLogger(GELFUDPDispatcher.class);
 
-    private GELFProcessor processor;
+    private final GELFProcessor processor = new GELFProcessor();
     private GraylogServer server;
 
     public GELFUDPDispatcher(GraylogServer server) {
         this.server = server;
-        this.processor = new GELFProcessor(server);
     }
 
     @Override
-    protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer) {
+    protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer) throws Exception {
 
         byte[] readable = new byte[buffer.readableBytes()];
         buffer.toByteBuffer().get(readable, buffer.readerIndex(), buffer.readableBytes()); // I'm 12 years old and what is this? There must be a better way.
@@ -55,7 +54,7 @@ public class GELFUDPDispatcher extends FrameDecoder {
 
         if (msg.getGELFType() == GELFMessage.TYPE_CHUNKED) {
             // This is a GELF message chunk. Add chunk to manager.
-            server.getGELFChunkManager().insert(msg);
+            server.getGELFChunkManager().insert(msg.asChunk()); // XXX IMPROVE: this msg.asChunk() is a bit bumpy. better have a chunk from the beginning on.
         } else {
             // This is a non-chunked/complete GELF message. Process it.
             processor.messageReceived(msg);
