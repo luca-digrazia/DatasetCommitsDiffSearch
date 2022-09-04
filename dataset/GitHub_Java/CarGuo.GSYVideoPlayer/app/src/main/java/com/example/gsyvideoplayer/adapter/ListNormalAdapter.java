@@ -146,7 +146,6 @@ public class ListNormalAdapter extends BaseAdapter {
         holder.gsyVideoPlayer.setRotateViewAuto(!getListNeedAutoLand());
         holder.gsyVideoPlayer.setLockLand(!getListNeedAutoLand());
         holder.gsyVideoPlayer.setPlayTag(TAG);
-        holder.gsyVideoPlayer.setReleaseWhenLossAudio(false);
         holder.gsyVideoPlayer.setShowFullAnimation(!getListNeedAutoLand());
         holder.gsyVideoPlayer.setIsTouchWiget(false);
         //循环
@@ -157,7 +156,7 @@ public class ListNormalAdapter extends BaseAdapter {
 
         holder.gsyVideoPlayer.setPlayPosition(position);
 
-        holder.gsyVideoPlayer.setVideoAllCallBack(new GSYSampleCallBack() {
+        holder.gsyVideoPlayer.setStandardVideoAllCallBack(new GSYSampleCallBack() {
             @Override
             public void onClickStartIcon(String url, Object... objects) {
                 super.onClickStartIcon(url, objects);
