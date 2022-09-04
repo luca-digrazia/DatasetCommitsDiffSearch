@@ -41,9 +41,7 @@ public class DockerProcessor {
     private static final String DOCKERFILE_JVM = "Dockerfile.jvm";
     private static final String DOCKERFILE_NATIVE = "Dockerfile.native";
 
-    private final DockerWorking dockerWorking = new DockerWorking();
-
-    @BuildStep(onlyIf = { IsNormal.class }, onlyIfNot = NativeBuild.class)
+    @BuildStep(onlyIf = { IsNormal.class, DockerBuild.class }, onlyIfNot = NativeBuild.class)
     public void dockerBuildFromJar(DockerConfig dockerConfig,
             ContainerImageConfig containerImageConfig, // TODO: use to check whether we need to also push to registry
             OutputTargetBuildItem out,
@@ -60,10 +58,6 @@ public class DockerProcessor {
             return;
         }
 
-        if (!dockerWorking.getAsBoolean()) {
-            return;
-        }
-
         log.info("Building docker image for jar.");
 
         String image = containerImage.getImage();
@@ -76,7 +70,7 @@ public class DockerProcessor {
                 ImageUtil.getRepository(image), ImageUtil.getTag(image)));
     }
 
-    @BuildStep(onlyIf = { IsNormal.class, NativeBuild.class })
+    @BuildStep(onlyIf = { IsNormal.class, DockerBuild.class, NativeBuild.class })
     public void dockerBuildFromNativeImage(DockerConfig dockerConfig,
             ContainerImageConfig containerImageConfig,
             ContainerImageInfoBuildItem containerImage,
@@ -90,10 +84,6 @@ public class DockerProcessor {
 
         if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
                 && !pushRequest.isPresent()) {
-            return;
-        }
-
-        if (!dockerWorking.getAsBoolean()) {
             return;
         }
 
