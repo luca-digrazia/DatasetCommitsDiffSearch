@@ -324,7 +324,7 @@ public class ProtoCompileActionBuilder {
     }
 
     if (additionalCommandLineArguments != null) {
-      result.add(ImmutableList.copyOf(additionalCommandLineArguments));
+      result.add(additionalCommandLineArguments);
     }
 
     return result;
