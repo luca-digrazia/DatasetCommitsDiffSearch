@@ -69,7 +69,7 @@ public class HttpConfiguration {
     private String rootPath = "/*";
     
     @NotNull
-    @Pattern(regexp = "(blocking?|nonblocking(?:\\+ssl)?|legacy|socket\\+ssl)",
+    @Pattern(regexp = "(blocking(?:\\+ssl)?|nonblocking(?:\\+ssl)?|legacy)",
              flags = {Pattern.Flag.CASE_INSENSITIVE})
     @JsonProperty
     private String connectorType = "blocking";
@@ -183,7 +183,7 @@ public class HttpConfiguration {
             return ConnectorType.SOCKET;
         } else if ("nonblocking".equalsIgnoreCase(connectorType)) {
             return ConnectorType.SELECT_CHANNEL;
-        } else if ("socket+ssl".equalsIgnoreCase(connectorType)) {
+        } else if ("blocking+ssl".equalsIgnoreCase(connectorType)) {
             return ConnectorType.SOCKET_SSL;
         } else if ("nonblocking+ssl".equalsIgnoreCase(connectorType)) {
             return ConnectorType.SELECT_CHANNEL_SSL;
