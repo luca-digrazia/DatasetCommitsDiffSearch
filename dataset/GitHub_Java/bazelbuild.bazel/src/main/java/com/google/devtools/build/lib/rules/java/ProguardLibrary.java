@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -66,12 +67,7 @@ public final class ProguardLibrary {
     if (!localSpecs.isEmpty()) {
       // Pass our local proguard configs through the validator, which checks an allowlist.
       FilesToRunProvider proguardAllowlister =
-          JavaToolchainProvider.from(ruleContext).getProguardAllowlister();
-      if (proguardAllowlister == null) {
-        ruleContext.ruleError(
-            "java_toolchain.proguard_allowlister is required to use proguard_specs");
-        return specsBuilder.build();
-      }
+          ruleContext.getExecutablePrerequisite("$proguard_whitelister", TransitionMode.HOST);
       for (Artifact specToValidate : localSpecs) {
         specsBuilder.add(validateProguardSpec(proguardAllowlister, specToValidate));
       }
@@ -85,7 +81,7 @@ public final class ProguardLibrary {
     if (!ruleContext.attributes().has(LOCAL_SPEC_ATTRIBUTE, BuildType.LABEL_LIST)) {
       return ImmutableList.of();
     }
-    return ruleContext.getPrerequisiteArtifacts(LOCAL_SPEC_ATTRIBUTE).list();
+    return ruleContext.getPrerequisiteArtifacts(LOCAL_SPEC_ATTRIBUTE, TransitionMode.TARGET).list();
   }
 
   /**
@@ -98,7 +94,8 @@ public final class ProguardLibrary {
     }
     NestedSetBuilder<Artifact> dependencySpecsBuilder = NestedSetBuilder.naiveLinkOrder();
     for (ProguardSpecProvider provider :
-        ruleContext.getPrerequisites(attributeName, ProguardSpecProvider.PROVIDER)) {
+        ruleContext.getPrerequisites(
+            attributeName, TransitionMode.DONT_CHECK, ProguardSpecProvider.PROVIDER)) {
       dependencySpecsBuilder.addTransitive(provider.getTransitiveProguardSpecs());
     }
     return dependencySpecsBuilder.build();
