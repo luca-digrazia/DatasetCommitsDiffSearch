@@ -29,6 +29,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
@@ -45,12 +46,9 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import org.jboss.builder.BuildResult;
+import org.jboss.shamrock.deployment.ArchiveContextBuilder;
+import org.jboss.shamrock.deployment.BuildTimeGenerator;
 import org.jboss.shamrock.deployment.ClassOutput;
-import org.jboss.shamrock.deployment.ShamrockAugumentor;
-import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
-import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateOutputBuildItem;
 import org.jboss.shamrock.deployment.index.ResolvedArtifact;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -106,12 +104,12 @@ public class BuildMojo extends AbstractMojo {
             List<String> problems = new ArrayList<>();
             Set<String> whitelist = new HashSet<>();
             for (Artifact a : project.getArtifacts()) {
-                if (!"jar".equals(a.getType())) {
+                if ( ! "jar".equals(a.getType())) {
                     continue;
                 }
                 try (ZipFile zip = openZipFile(a)) {
                     if (!a.getScope().equals(PROVIDED) && zip.getEntry("META-INF/services/org.jboss.shamrock.deployment.ShamrockSetup") != null) {
-                        problems.add("Artifact " + a + " is a deployment artifact, however it does not have scope required. This will result in unnecessary jars being included in the final image");
+                         problems.add("Artifact " + a + " is a deployment artifact, however it does not have scope required. This will result in unnecessary jars being included in the final image");
                     }
                     ZipEntry deps = zip.getEntry(DEPENDENCIES_RUNTIME);
                     if (deps != null) {
@@ -176,7 +174,7 @@ public class BuildMojo extends AbstractMojo {
                     } else {
                         final String fileName = a.getGroupId() + "." + artifactFile.getName();
                         final Path targetPath = libDir.toPath().resolve(fileName);
-
+                        
                         Files.copy(artifactFile.toPath(), targetPath, StandardCopyOption.REPLACE_EXISTING);
                         classPath.append(" lib/" + fileName);
                     }
@@ -197,7 +195,7 @@ public class BuildMojo extends AbstractMojo {
                 cpCopy.addAll(classPathUrls);
 
                 URLClassLoader runnerClassLoader = new URLClassLoader(cpCopy.toArray(new URL[0]), getClass().getClassLoader());
-                ClassOutput classOutput = new ClassOutput() {
+                BuildTimeGenerator buildTimeGenerator = new BuildTimeGenerator(new ClassOutput() {
                     @Override
                     public void writeClass(boolean applicationClass, String className, byte[] data) throws IOException {
                         String location = className.replace('.', '/');
@@ -217,34 +215,15 @@ public class BuildMojo extends AbstractMojo {
                         }
                     }
 
-                };
-
-
+                }, runnerClassLoader, useStaticInit, new ArchiveContextBuilder());
                 ClassLoader old = Thread.currentThread().getContextClassLoader();
-                BuildResult result;
                 try {
                     Thread.currentThread().setContextClassLoader(runnerClassLoader);
 
-                    ShamrockAugumentor.Builder builder = ShamrockAugumentor.builder();
-                    builder.setRoot(outputDirectory.toPath());
-                    builder.setClassLoader(runnerClassLoader);
-                    builder.setOutput(classOutput);
-                    builder.addFinal(BytecodeTransformerBuildItem.class)
-                            .addFinal(MainClassBuildItem.class)
-                            .addFinal(SubstrateOutputBuildItem.class);
-                    result = builder.build().run();
+                    buildTimeGenerator.run(outputDirectory.toPath());
                 } finally {
                     Thread.currentThread().setContextClassLoader(old);
                 }
-
-                Map<String, List<BiFunction<String, ClassVisitor, ClassVisitor>>> bytecodeTransformers = new HashMap<>();
-                List<BytecodeTransformerBuildItem> bytecodeTransformerBuildItems = result.consumeMulti(BytecodeTransformerBuildItem.class);
-                if (!bytecodeTransformerBuildItems.isEmpty()) {
-                    for (BytecodeTransformerBuildItem i : bytecodeTransformerBuildItems) {
-                        bytecodeTransformers.computeIfAbsent(i.getClassToTransform(), (h) -> new ArrayList<>()).add(i.getVisitorFunction());
-                    }
-                }
-
                 Path wiringJar = Paths.get(wiringClassesDirectory.getAbsolutePath());
                 Files.walk(wiringJar).forEach(new Consumer<Path>() {
                     @Override
@@ -298,9 +277,9 @@ public class BuildMojo extends AbstractMojo {
 //                                if (!pathName.isEmpty()) {
 //                                    out.putNextEntry(new ZipEntry(pathName + "/"));
 //                                }
-                                } else if (pathName.endsWith(".class") && !bytecodeTransformers.isEmpty()) {
+                                } else if (pathName.endsWith(".class") && !buildTimeGenerator.getByteCodeTransformers().isEmpty()) {
                                     String className = pathName.substring(0, pathName.length() - 6).replace('/', '.');
-                                    List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = bytecodeTransformers.get(className);
+                                    List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = buildTimeGenerator.getByteCodeTransformers().get(className);
 
                                     if (visitors == null || visitors.isEmpty()) {
                                         runner.putNextEntry(new ZipEntry(pathName));
@@ -360,10 +339,10 @@ public class BuildMojo extends AbstractMojo {
 
     private ZipFile openZipFile(final Artifact a) {
         final File file = a.getFile();
-        if (file == null) {
+        if (file==null){
             throw new RuntimeException("No file for Artifact:" + a.toString());
         }
-        if (!Files.isReadable(file.toPath())) {
+        if (!Files.isReadable(file.toPath())){
             throw new RuntimeException("File not existing or not allowed for reading: " + file.getAbsolutePath());
         }
         try {
