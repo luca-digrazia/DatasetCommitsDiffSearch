@@ -251,7 +251,7 @@ public abstract class PersistentMap<K, V> extends ForwardingMap<K, V> {
    * @throws IOException
    */
   public void load() throws IOException {
-    load(/* failFast= */ false);
+    load(/*throwOnLoadFailure=*/ false);
   }
 
   @Override

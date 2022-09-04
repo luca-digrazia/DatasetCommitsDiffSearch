@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -25,17 +24,15 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.AutoProfiler.ElapsedTimeReceiver;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker.DirtyResult;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
 import com.google.devtools.build.lib.vfs.FileStatusWithDigest;
@@ -171,11 +168,9 @@ public class FilesystemValueChecker {
     logger.info("Accumulating dirty actions");
     final int numOutputJobs = Runtime.getRuntime().availableProcessors() * 4;
     final Set<SkyKey> actionSkyKeys = new HashSet<>();
-    try (SilentCloseable c = Profiler.instance().profile("getDirtyActionValues.filter_actions")) {
-      for (SkyKey key : valuesMap.keySet()) {
-        if (ACTION_FILTER.apply(key)) {
-          actionSkyKeys.add(key);
-        }
+    for (SkyKey key : valuesMap.keySet()) {
+      if (ACTION_FILTER.apply(key)) {
+        actionSkyKeys.add(key);
       }
     }
     final Sharder<Pair<SkyKey, ActionExecutionValue>> outputShards =
@@ -215,24 +210,16 @@ public class FilesystemValueChecker {
         }
       });
 
-    boolean interrupted;
-    try (SilentCloseable c = Profiler.instance().profile("getDirtyActionValues.stat_files")) {
-      for (List<Pair<SkyKey, ActionExecutionValue>> shard : outputShards) {
-        Runnable job =
-            (batchStatter == null)
-                ? outputStatJob(
-                    dirtyKeys, shard, knownModifiedOutputFiles, sortedKnownModifiedOutputFiles)
-                : batchStatJob(
-                    dirtyKeys,
-                    shard,
-                    batchStatter,
-                    knownModifiedOutputFiles,
-                    sortedKnownModifiedOutputFiles);
-        Future<?> unused = executor.submit(wrapper.wrap(job));
-      }
-
-      interrupted = ExecutorUtil.interruptibleShutdown(executor);
+    for (List<Pair<SkyKey, ActionExecutionValue>> shard : outputShards) {
+      Runnable job = (batchStatter == null)
+          ? outputStatJob(dirtyKeys, shard, knownModifiedOutputFiles,
+              sortedKnownModifiedOutputFiles)
+          : batchStatJob(dirtyKeys, shard, batchStatter, knownModifiedOutputFiles,
+              sortedKnownModifiedOutputFiles);
+      Future<?> unused = executor.submit(wrapper.wrap(job));
     }
+
+    boolean interrupted = ExecutorUtil.interruptibleShutdown(executor);
     Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     logger.info("Completed output file stat checks");
     if (interrupted) {
@@ -490,14 +477,17 @@ public class FilesystemValueChecker {
     final AtomicInteger numKeysScanned = new AtomicInteger(0);
     final AtomicInteger numKeysChecked = new AtomicInteger(0);
     ElapsedTimeReceiver elapsedTimeReceiver =
-        elapsedTimeNanos -> {
-          if (elapsedTimeNanos > 0) {
-            logger.info(
-                String.format(
-                    "Spent %d ms checking %d filesystem nodes (%d scanned)",
-                    TimeUnit.MILLISECONDS.convert(elapsedTimeNanos, TimeUnit.NANOSECONDS),
-                    numKeysChecked.get(),
-                    numKeysScanned.get()));
+        new ElapsedTimeReceiver() {
+          @Override
+          public void accept(long elapsedTimeNanos) {
+            if (elapsedTimeNanos > 0) {
+              logger.info(
+                  String.format(
+                      "Spent %d ms checking %d filesystem nodes (%d scanned)",
+                      TimeUnit.MILLISECONDS.convert(elapsedTimeNanos, TimeUnit.NANOSECONDS),
+                      numKeysChecked.get(),
+                      numKeysScanned.get()));
+            }
           }
         };
     try (AutoProfiler prof = AutoProfiler.create(elapsedTimeReceiver)) {
@@ -506,24 +496,20 @@ public class FilesystemValueChecker {
         if (!checker.applies(key)) {
           continue;
         }
+        final SkyValue value = fetcher.get(key);
+        if (!checkMissingValues && value == null) {
+          continue;
+        }
         executor.execute(
             wrapper.wrap(
-                () -> {
-                  SkyValue value;
-                  try {
-                    value = fetcher.get(key);
-                  } catch (InterruptedException e) {
-                    // Exit fast. Interrupt is handled below on the main thread.
-                    return;
-                  }
-                  if (!checkMissingValues && value == null) {
-                    return;
-                  }
-
-                  numKeysChecked.incrementAndGet();
-                  DirtyResult result = checker.check(key, value, tsgm);
-                  if (result.isDirty()) {
-                    batchResult.add(key, value, result.getNewValue());
+                new Runnable() {
+                  @Override
+                  public void run() {
+                    numKeysChecked.incrementAndGet();
+                    DirtyResult result = checker.check(key, value, tsgm);
+                    if (result.isDirty()) {
+                      batchResult.add(key, value, result.getNewValue());
+                    }
                   }
                 }));
       }

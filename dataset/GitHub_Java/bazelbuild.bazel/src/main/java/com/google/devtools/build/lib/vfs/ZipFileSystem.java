@@ -13,11 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs;
 
-import com.google.common.base.Predicate;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path.PathFactory;
-import com.google.devtools.build.lib.vfs.Path.PathFactory.TranslatedPath;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -28,6 +27,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.logging.Logger;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -35,8 +35,9 @@ import java.util.zip.ZipFile;
  * A FileSystem that provides a read-only filesystem view on a zip file.
  * Inherits the constraints imposed by ReadonlyFileSystem.
  */
-@ThreadSafe
+@ThreadCompatible  // Can only be accessed from one thread at a time (including its Path objects)
 public class ZipFileSystem extends ReadonlyFileSystem implements Closeable {
+  private static final Logger logger = Logger.getLogger(ZipFileSystem.class.getName());
 
   private final File tempFile;  // In case this needs to be written to the file system
   private final ZipFile zipFile;
@@ -113,8 +114,8 @@ public class ZipFileSystem extends ReadonlyFileSystem implements Closeable {
         }
 
         @Override
-        public TranslatedPath translatePath(Path parent, String child) {
-          return new TranslatedPath(parent, child);
+        public Path getCachedChildPathInternal(Path path, String childName) {
+          return Path.getCachedChildPathInternal(path, childName, /*cacheable=*/ true);
         }
       };
     }
@@ -161,7 +162,7 @@ public class ZipFileSystem extends ReadonlyFileSystem implements Closeable {
   private Collection<Path> populatePathTree() {
     Collection<Path> paths = new ArrayList<>();
     for (ZipEntry entry : Collections.list(zipFile.entries())) {
-      PathFragment frag = new PathFragment(entry.getName());
+      PathFragment frag = PathFragment.create(entry.getName());
       Path path = rootPath.getRelative(frag);
       paths.add(path);
       ((ZipPath) path).setZipEntry(entry);
@@ -206,15 +207,14 @@ public class ZipFileSystem extends ReadonlyFileSystem implements Closeable {
     Preconditions.checkState(open);
     zipEntryNonNull(path);
     final Collection<Path> result = new ArrayList<>();
-    ((ZipPath) path).applyToChildren(new Predicate<Path>() {
-        @Override
-        public boolean apply(Path child) {
-          if (zipEntry(child) != null) {
-            result.add(child);
-          }
-          return true;
-        }
-      });
+    ((ZipPath) path)
+        .applyToChildren(
+            child -> {
+              if (zipEntry(child) != null) {
+                result.add(child);
+              }
+              return true;
+            });
     return result;
   }
 
@@ -308,7 +308,14 @@ public class ZipFileSystem extends ReadonlyFileSystem implements Closeable {
   @Override
   public void close() {
     if (open) {
-      close();
+      try {
+        zipFile.close();
+      } catch (IOException e) {
+        // Not a lot can be done about this. Log an error and move on.
+        logger.warning(
+            String.format(
+                "Error while closing zip file '%s': %s", zipFile.getName(), e.getMessage()));
+      }
       if (tempFile != null) {
         tempFile.delete();
       }

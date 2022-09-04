@@ -14,52 +14,67 @@
 
 package com.google.devtools.build.lib.buildeventstream.transports;
 
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.MoreExecutors;
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
-import com.google.devtools.build.lib.util.AbruptExitException;
+import com.google.devtools.build.lib.buildeventstream.PathConverter;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.function.Consumer;
+import java.util.concurrent.Future;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * A simple {@link BuildEventTransport} that writes a varint delimited binary representation of
  * {@link BuildEvent} protocol buffers to a file.
  */
 public final class BinaryFormatFileTransport extends FileTransport {
-  BinaryFormatFileTransport(
-      String path,
-      BuildEventProtocolOptions options,
-      BuildEventArtifactUploader uploader,
-      Consumer<AbruptExitException> exitFunc)
-      throws IOException {
-    super(path, options, uploader, exitFunc);
+
+  private static final Logger logger = Logger.getLogger(BinaryFormatFileTransport.class.getName());
+
+  private static final int MAX_VARINT_BYTES = 9;
+  private final PathConverter pathConverter;
+
+  BinaryFormatFileTransport(String path, PathConverter pathConverter) {
+    super(path);
+    this.pathConverter = pathConverter;
   }
 
   @Override
   public String name() {
     return this.getClass().getSimpleName();
   }
-
+  
   @Override
   public synchronized void sendBuildEvent(BuildEvent event, final ArtifactGroupNamer namer) {
-    Futures.addCallback(asStreamProto(event, namer),
-        new FutureCallback<BuildEventStreamProtos.BuildEvent>() {
+    BuildEventConverters converters =
+        new BuildEventConverters() {
           @Override
-          public void onSuccess(BuildEventStreamProtos.BuildEvent protoEvent) {
-            write(protoEvent);
+          public PathConverter pathConverter() {
+            return pathConverter;
           }
+          @Override
+          public ArtifactGroupNamer artifactGroupNamer() {
+            return namer;
+          }
+        };
+    checkNotNull(event);
+    BuildEventStreamProtos.BuildEvent protoEvent = event.asStreamProto(converters);
 
-          @Override
-          public void onFailure(Throwable t) {
-            // Intentionally left empty. The error handling happens in
-            // FileTransport.
-          }
-        }, MoreExecutors.directExecutor());
+    int maxSerializedSize = MAX_VARINT_BYTES + protoEvent.getSerializedSize();
+    ByteArrayOutputStream out = new ByteArrayOutputStream(maxSerializedSize);
+
+    try {
+      protoEvent.writeDelimitedTo(out);
+      writeData(out.toByteArray());
+    } catch (IOException e) {
+      logger.log(Level.SEVERE, e.getMessage(), e);
+      @SuppressWarnings({"unused", "nullness"})
+      Future<?> possiblyIgnoredError = close();
+    }
   }
 }

@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -30,14 +30,12 @@ import java.util.logging.Logger;
 
 /** Common utilities for dealing with paths outside the package roots. */
 public class ExternalFilesHelper {
-  private static final boolean IN_TEST = System.getenv("TEST_TMPDIR") != null;
-
   private static final Logger logger = Logger.getLogger(ExternalFilesHelper.class.getName());
+  private static final int MAX_NUM_EXTERNAL_FILES_TO_LOG = 100;
 
   private final AtomicReference<PathPackageLocator> pkgLocator;
   private final ExternalFileAction externalFileAction;
   private final BlazeDirectories directories;
-  private final int maxNumExternalFilesToLog;
   private final AtomicInteger numExternalFilesLogged = new AtomicInteger(0);
 
   // These variables are set to true from multiple threads, but only read in the main thread.
@@ -45,42 +43,14 @@ public class ExternalFilesHelper {
   private boolean anyOutputFilesSeen = false;
   private boolean anyNonOutputExternalFilesSeen = false;
 
-  private ExternalFilesHelper(
+  public ExternalFilesHelper(
       AtomicReference<PathPackageLocator> pkgLocator,
       ExternalFileAction externalFileAction,
-      BlazeDirectories directories,
-      int maxNumExternalFilesToLog) {
+      BlazeDirectories directories) {
     this.pkgLocator = pkgLocator;
     this.externalFileAction = externalFileAction;
     this.directories = directories;
-    this.maxNumExternalFilesToLog = maxNumExternalFilesToLog;
   }
-
-  public static ExternalFilesHelper create(
-      AtomicReference<PathPackageLocator> pkgLocator,
-      ExternalFileAction externalFileAction,
-      BlazeDirectories directories) {
-    return IN_TEST
-        ? createForTesting(pkgLocator, externalFileAction, directories)
-        : new ExternalFilesHelper(
-            pkgLocator,
-            externalFileAction,
-            directories,
-            /*maxNumExternalFilesToLog=*/ 100);
-  }
-
-  public static ExternalFilesHelper createForTesting(
-      AtomicReference<PathPackageLocator> pkgLocator,
-      ExternalFileAction externalFileAction,
-      BlazeDirectories directories) {
-    return new ExternalFilesHelper(
-        pkgLocator,
-        externalFileAction,
-        directories,
-        // These log lines are mostly spam during unit and integration tests.
-        /*maxNumExternalFilesToLog=*/ 0);
-  }
-
 
   /**
    * The action to take when an external path is encountered. See {@link FileType} for the
@@ -167,8 +137,7 @@ public class ExternalFilesHelper {
   }
 
   ExternalFilesHelper cloneWithFreshExternalFilesKnowledge() {
-    return new ExternalFilesHelper(
-        pkgLocator, externalFileAction, directories, maxNumExternalFilesToLog);
+    return new ExternalFilesHelper(pkgLocator, externalFileAction, directories);
   }
 
   FileType getAndNoteFileType(RootedPath rootedPath) {
@@ -217,7 +186,7 @@ public class ExternalFilesHelper {
         throw new NonexistentImmutableExternalFileException();
       }
       if (fileType == FileType.EXTERNAL
-          && numExternalFilesLogged.incrementAndGet() < maxNumExternalFilesToLog) {
+          && numExternalFilesLogged.incrementAndGet() < MAX_NUM_EXTERNAL_FILES_TO_LOG) {
         logger.info("Encountered an external path " + rootedPath);
       }
       return;

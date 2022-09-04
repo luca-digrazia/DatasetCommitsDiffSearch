@@ -83,7 +83,7 @@ public final class BlazeWorkspace {
 
     if (directories.inWorkspace()) {
       writeOutputBaseReadmeFile();
-      writeDoNotBuildHereFile();
+      writeDoNotBuildHereFile(runtime.getStartupOptionsProvider());
     }
     setupExecRoot();
     // Here we use outputBase instead of outputPath because we need a file system to create the
@@ -286,11 +286,13 @@ public final class BlazeWorkspace {
     }
   }
 
-  private void writeDoNotBuildHereFile() {
+  private void writeDoNotBuildHereFile(OptionsProvider startupOptions) {
     Preconditions.checkNotNull(getWorkspace());
     writeDoNotBuildHereFile(getOutputBase().getRelative(DO_NOT_BUILD_FILE_NAME));
-    writeDoNotBuildHereFile(
-        getOutputBase().getRelative("execroot").getRelative(DO_NOT_BUILD_FILE_NAME));
+    if (startupOptions.getOptions(BlazeServerStartupOptions.class).deepExecRoot) {
+      writeDoNotBuildHereFile(
+          getOutputBase().getRelative("execroot").getRelative(DO_NOT_BUILD_FILE_NAME));
+    }
   }
 
   /**

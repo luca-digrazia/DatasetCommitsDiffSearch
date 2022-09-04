@@ -27,12 +27,12 @@ import com.google.devtools.common.options.OptionsBase;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.joda.time.format.DateTimeFormat;
+import org.joda.time.format.DateTimeFormatter;
 
 /**
  * BlazeCommandEventHandler: an event handler established for the duration of a
@@ -81,7 +81,7 @@ public class BlazeCommandEventHandler implements EventHandler {
 
     @Option(
       name = "show_progress_rate_limit",
-      defaultValue = "0.2", // A nice middle ground; snappy but not too spammy in logs.
+      defaultValue = "0.03", // A nice middle ground; snappy but not too spammy in logs.
       category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
@@ -194,7 +194,7 @@ public class BlazeCommandEventHandler implements EventHandler {
 
     @Option(
       name = "experimental_ui",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "verbosity",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
@@ -252,7 +252,7 @@ public class BlazeCommandEventHandler implements EventHandler {
   }
 
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
-      DateTimeFormatter.ofPattern("(MM-dd HH:mm:ss.SSS) ");
+      DateTimeFormat.forPattern("(MM-dd HH:mm:ss.SSS) ");
 
   protected final OutErr outErr;
 
@@ -359,6 +359,6 @@ public class BlazeCommandEventHandler implements EventHandler {
    * @return a string representing the current time, eg "04-26 13:47:32.124".
    */
   protected String timestamp() {
-    return TIMESTAMP_FORMAT.format(ZonedDateTime.now());
+    return TIMESTAMP_FORMAT.print(System.currentTimeMillis());
   }
 }

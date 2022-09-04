@@ -14,11 +14,11 @@
 
 package com.google.devtools.build.lib.util.io;
 
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.logging.Logger;
 
@@ -125,12 +125,12 @@ public class TimestampGranularityMonitor {
    * of a build file or source file with the specified time stamp.
    */
   @ThreadSafe
-  public void notifyDependenceOnFileTime(PathFragment path, long ctimeMillis) {
-    if (ctimeMillis == this.commandStartTimeMillis) {
+  public void notifyDependenceOnFileTime(PathFragment path, long mtime) {
+    if (mtime == this.commandStartTimeMillis) {
       logger.info("Will have to wait for a millisecond on completion because of " + path);
       this.waitAMillisecond = true;
     }
-    if (ctimeMillis == this.commandStartTimeMillisRounded) {
+    if (mtime == this.commandStartTimeMillisRounded) {
       logger.info("Will have to wait for a second on completion because of " + path);
       this.waitASecond = true;
     }

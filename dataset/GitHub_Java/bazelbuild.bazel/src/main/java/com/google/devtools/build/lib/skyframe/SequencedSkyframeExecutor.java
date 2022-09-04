@@ -123,6 +123,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
       PathFragment blacklistedPackagePrefixesFile,
+      String productName,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
@@ -138,6 +139,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         extraPrecomputedValues,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
         blacklistedPackagePrefixesFile,
+        productName,
         crossRepositoryLabelViolationStrategy,
         buildFilesByPriority,
         actionOnIOExceptionReadingBuildFile);
@@ -157,6 +159,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
       PathFragment blacklistedPackagePrefixesFile,
+      String productName,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
       List<BuildFileName> buildFilesByPriority,
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
@@ -174,6 +177,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             extraPrecomputedValues,
             customDirtinessCheckers,
             blacklistedPackagePrefixesFile,
+            productName,
             crossRepositoryLabelViolationStrategy,
             buildFilesByPriority,
             actionOnIOExceptionReadingBuildFile);

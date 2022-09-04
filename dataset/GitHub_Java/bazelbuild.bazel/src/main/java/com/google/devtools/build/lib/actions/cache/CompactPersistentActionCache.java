@@ -15,15 +15,14 @@ package com.google.devtools.build.lib.actions.cache;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics;
-import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
-import com.google.devtools.build.lib.clock.Clock;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadSafe;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.CompactStringIndexer;
 import com.google.devtools.build.lib.util.PersistentMap;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringIndexer;
 import com.google.devtools.build.lib.util.VarInt;
 import com.google.devtools.build.lib.vfs.Path;
@@ -36,11 +35,9 @@ import java.io.PrintStream;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Logger;
 
 /**
@@ -157,9 +154,8 @@ public class CompactPersistentActionCache implements ActionCache {
 
   private final PersistentMap<Integer, byte[]> map;
   private final PersistentStringIndexer indexer;
-
-  private final AtomicInteger hits = new AtomicInteger();
-  private final Map<MissReason, AtomicInteger> misses = new EnumMap<>(MissReason.class);
+  static final ActionCache.Entry CORRUPTED =
+      new ActionCache.Entry(null, ImmutableMap.<String, String>of(), false);
 
   public CompactPersistentActionCache(Path cacheRoot, Clock clock) throws IOException {
     Path cacheFile = cacheFile(cacheRoot);
@@ -190,15 +186,6 @@ public class CompactPersistentActionCache implements ActionCache {
         renameCorruptedFiles(cacheRoot);
         throw new IOException("Failed action cache referential integrity check: " + integrityError);
       }
-    }
-
-    for (MissReason reason : MissReason.values()) {
-      if (reason == MissReason.UNRECOGNIZED) {
-        // The presence of this enum value is a protobuf artifact and confuses our metrics
-        // externalization code below. Just skip it.
-        continue;
-      }
-      misses.put(reason, new AtomicInteger(0));
     }
   }
 
@@ -267,7 +254,7 @@ public class CompactPersistentActionCache implements ActionCache {
       return data != null ? CompactPersistentActionCache.decode(indexer, data) : null;
     } catch (IOException e) {
       // return entry marked as corrupted.
-      return ActionCache.Entry.CORRUPTED;
+      return CORRUPTED;
     }
   }
 
@@ -370,17 +357,17 @@ public class CompactPersistentActionCache implements ActionCache {
       // Estimate the size of the buffer:
       //   5 bytes max for the actionKey length
       // + the actionKey itself
-      // + 32 bytes for the digest
+      // + 16 bytes for the digest
       // + 5 bytes max for the file list length
       // + 5 bytes max for each file id
-      // + 32 bytes for the environment digest
+      // + 16 bytes for the environment digest
       int maxSize =
           VarInt.MAX_VARINT_SIZE
               + actionKeyBytes.length
-              + DigestUtils.ESTIMATED_SIZE
+              + Md5Digest.MD5_SIZE
               + VarInt.MAX_VARINT_SIZE
               + files.size() * VarInt.MAX_VARINT_SIZE
-              + DigestUtils.ESTIMATED_SIZE;
+              + Md5Digest.MD5_SIZE;
       ByteArrayOutputStream sink = new ByteArrayOutputStream(maxSize);
 
       VarInt.putVarInt(actionKeyBytes.length, sink);
@@ -415,65 +402,31 @@ public class CompactPersistentActionCache implements ActionCache {
       source.get(actionKeyBytes);
       String actionKey = new String(actionKeyBytes, ISO_8859_1);
 
-      byte[] digest = DigestUtils.read(source);
+      Md5Digest md5Digest = DigestUtils.read(source);
 
       int count = VarInt.getVarInt(source);
-      ImmutableList<String> files = null;
-      if (count != NO_INPUT_DISCOVERY_COUNT) {
-        ImmutableList.Builder<String> builder = ImmutableList.builderWithExpectedSize(count);
-        for (int i = 0; i < count; i++) {
-          int id = VarInt.getVarInt(source);
-          String filename = (id >= 0 ? indexer.getStringForIndex(id) : null);
-          if (filename == null) {
-            throw new IOException("Corrupted file index");
-          }
-          builder.add(filename);
+      ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
+      for (int i = 0; i < count; i++) {
+        int id = VarInt.getVarInt(source);
+        String filename = (id >= 0 ? indexer.getStringForIndex(id) : null);
+        if (filename == null) {
+          throw new IOException("Corrupted file index");
         }
-        files = builder.build();
+        builder.add(filename);
       }
 
-      byte[] usedClientEnvDigest = DigestUtils.read(source);
+      Md5Digest usedClientEnvDigest = DigestUtils.read(source);
 
       if (source.remaining() > 0) {
         throw new IOException("serialized entry data has not been fully decoded");
       }
-      return new ActionCache.Entry(actionKey, usedClientEnvDigest, files, digest);
+      return new Entry(
+          actionKey,
+          usedClientEnvDigest,
+          count == NO_INPUT_DISCOVERY_COUNT ? null : builder.build(),
+          md5Digest);
     } catch (BufferUnderflowException e) {
       throw new IOException("encoded entry data is incomplete", e);
-    }
-  }
-
-  @Override
-  public void accountHit() {
-    hits.incrementAndGet();
-  }
-
-  @Override
-  public void accountMiss(MissReason reason) {
-    AtomicInteger counter = misses.get(reason);
-    Preconditions.checkNotNull(counter, "Miss reason %s was not registered in the misses map "
-        + "during cache construction", reason);
-    counter.incrementAndGet();
-  }
-
-  @Override
-  public void mergeIntoActionCacheStatistics(ActionCacheStatistics.Builder builder) {
-    builder.setHits(hits.get());
-
-    int totalMisses = 0;
-    for (Map.Entry<MissReason, AtomicInteger> entry : misses.entrySet()) {
-      int count = entry.getValue().get();
-      builder.addMissDetailsBuilder().setReason(entry.getKey()).setCount(count);
-      totalMisses += count;
-    }
-    builder.setMisses(totalMisses);
-  }
-
-  @Override
-  public void resetStatistics() {
-    hits.set(0);
-    for (Map.Entry<MissReason, AtomicInteger> entry : misses.entrySet()) {
-      entry.getValue().set(0);
     }
   }
 }

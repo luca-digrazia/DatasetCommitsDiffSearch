@@ -14,18 +14,15 @@
 package com.google.devtools.build.lib.exec;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.skyframe.OutputService;
-import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -45,7 +42,7 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
   }
 
   @Override
-  public Set<SpawnResult> createSymlinks(
+  public void createSymlinks(
       SymlinkTreeAction action,
       ActionExecutionContext actionExecutionContext,
       ImmutableMap<String, String> shellEnvironment,
@@ -63,10 +60,13 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
               action.getOutputManifest().getPath(),
               action.isFilesetTree(),
               action.getOutputManifest().getExecPath().getParentDirectory());
-          return ImmutableSet.of();
         } else {
-          return helper.createSymlinks(
-              action, actionExecutionContext, binTools, shellEnvironment, enableRunfiles);
+          helper.createSymlinks(
+              action,
+              actionExecutionContext,
+              binTools,
+              shellEnvironment,
+              enableRunfiles);
         }
       } catch (ExecException e) {
         throw e.toActionExecutionException(

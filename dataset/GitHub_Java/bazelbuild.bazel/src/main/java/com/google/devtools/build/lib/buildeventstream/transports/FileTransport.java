@@ -111,12 +111,6 @@ abstract class FileTransport implements BuildEventTransport {
     }
   }
 
-  @Override
-  @SuppressWarnings("FutureReturnValueIgnored")
-  public void closeNow() {
-    close();
-  }
-
   private boolean closing() {
     return closeFuture != null;
   }

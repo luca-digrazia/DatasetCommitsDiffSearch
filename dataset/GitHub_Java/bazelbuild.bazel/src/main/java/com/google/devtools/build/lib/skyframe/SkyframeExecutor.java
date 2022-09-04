@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.MergedConfiguredTarget;
 import com.google.devtools.build.lib.analysis.MergedConfiguredTarget.DuplicateException;
-import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
@@ -118,7 +117,6 @@ import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.skyframe.ToolchainUtil.ToolchainContextException;
 import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -830,15 +828,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     PrecomputedValue value = (PrecomputedValue) buildDriver.getGraphForTesting()
         .getExistingValueForTesting(PrecomputedValue.WORKSPACE_STATUS_KEY.getKeyForTesting());
     return (WorkspaceStatusAction) value.get();
-  }
-
-  @VisibleForTesting
-  public ToolchainContext getToolchainContextForTesting(
-      List<Label> requiredToolchains, BuildConfiguration config, ExtendedEventHandler eventHandler)
-      throws ToolchainContextException, InterruptedException {
-    SkyFunctionEnvironmentForTesting env =
-        new SkyFunctionEnvironmentForTesting(buildDriver, eventHandler);
-    return ToolchainUtil.createToolchainContext(env, "", requiredToolchains, config);
   }
 
   /**

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.TargetParsingPhaseTimeEvent;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashSet;
 import java.util.List;
@@ -181,59 +181,46 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
     ImmutableSet<Target> targetsToLoad = targets.getTargets();
     ResolvedTargets<Target> expandedResult;
     try {
-      if (options.expandTestSuites) {
-        expandedResult = expandTestSuites(eventHandler, targetsToLoad, keepGoing);
-      } else {
-        expandedResult = ResolvedTargets.<Target>builder().addAll(targetsToLoad).build();
-      }
+      expandedResult = expandTestSuites(eventHandler, targetsToLoad, keepGoing);
     } catch (TargetParsingException e) {
       throw new LoadingFailedException("Loading failed; build aborted", e);
     }
     ImmutableSet<Target> expandedTargetsToLoad = expandedResult.getTargets();
-    ImmutableSet<Target> removedTargets =
+    ImmutableSet<Target> testSuiteTargets =
         ImmutableSet.copyOf(Sets.difference(targetsToLoad, expandedTargetsToLoad));
     long testSuiteTime = timer.stop().elapsed(TimeUnit.MILLISECONDS);
 
-    ImmutableSet<Label> targetLabels =
-        expandedTargetsToLoad.stream().map(Target::getLabel).collect(ImmutableSet.toImmutableSet());
-    ImmutableSet<Label> testsToRunLabels = null;
-    if (testsToRun != null) {
-      testsToRunLabels =
-          testsToRun.stream().map(Target::getLabel).collect(ImmutableSet.toImmutableSet());
-    }
-    ImmutableSet<Label> removedTargetLabels =
-        removedTargets.stream().map(Target::getLabel).collect(ImmutableSet.toImmutableSet());
-
     TargetPatternPhaseValue patternParsingValue =
         new TargetPatternPhaseValue(
-            targetLabels,
-            testsToRunLabels,
+            expandedTargetsToLoad,
+            testsToRun,
             targets.hasError(),
             expandedResult.hasError(),
-            removedTargetLabels,
+            filteredTargets,
+            testFilteredTargets,
+            testSuiteTargets,
             getWorkspaceName(eventHandler));
 
     // This is the same code as SkyframeLoadingPhaseRunner.
     eventHandler.post(
         new TargetParsingCompleteEvent(
             targets.getTargets(),
-            filteredTargets,
-            testFilteredTargets,
+            patternParsingValue.getFilteredTargets(),
+            patternParsingValue.getTestFilteredTargets(),
             targetPatterns,
-            expandedTargetsToLoad));
+            patternParsingValue.getTargets()));
     eventHandler.post(new TargetParsingPhaseTimeEvent(targetPatternEvalTime));
     if (callback != null) {
-      callback.notifyTargets(expandedTargetsToLoad);
+      callback.notifyTargets(patternParsingValue.getTargets());
     }
-
     eventHandler.post(
         new LoadingPhaseCompleteEvent(
-            expandedTargetsToLoad,
-            removedTargets,
+            patternParsingValue.getTargets(),
+            patternParsingValue.getTestSuiteTargets(),
             packageManager.getAndClearStatistics(),
             testSuiteTime));
     logger.info("Target pattern evaluation finished");
-    return patternParsingValue.toLoadingResult(eventHandler, packageManager);
+    return patternParsingValue.toLoadingResult();
   }
 
   private ResolvedTargets<Target> expandTestSuites(
