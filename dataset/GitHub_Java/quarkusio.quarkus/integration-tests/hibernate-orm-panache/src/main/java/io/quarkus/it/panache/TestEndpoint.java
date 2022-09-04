@@ -25,7 +25,7 @@ import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
 
 /**
- * Various tests covering Panache functionality. All tests should work in both standard JVM and in native mode.
+ * Various tests covering Panache functionality. All tests should work in both standard JVM and SubstrateVM.
  */
 @Path("test")
 public class TestEndpoint {
@@ -788,16 +788,5 @@ public class TestEndpoint {
         person.name = "Eddie";
         person.status = Status.DECEASED;
         return person;
-    }
-
-    @Inject
-    Bug5274EntityRepository bug5274EntityRepository;
-
-    @GET
-    @Path("5274")
-    @Transactional
-    public String testBug5274() {
-        bug5274EntityRepository.count();
-        return "OK";
     }
 }
