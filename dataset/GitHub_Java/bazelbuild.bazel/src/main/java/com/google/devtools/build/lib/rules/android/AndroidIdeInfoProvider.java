@@ -13,24 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.rules.android.AndroidSkylarkData.fromNoneable;
-
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
-import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidIdeInfoProviderApi;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -39,11 +32,7 @@ import javax.annotation.Nullable;
 
 /** An Android target provider to provide Android-specific info to IDEs. */
 @Immutable
-public final class AndroidIdeInfoProvider extends NativeInfo
-    implements AndroidIdeInfoProviderApi<Artifact, OutputJar> {
-
-  public static final String PROVIDER_NAME = "AndroidIdeInfo";
-  public static final Provider PROVIDER = new Provider();
+public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
 
   /** Builder for {@link AndroidIdeInfoProvider} */
   public static class Builder {
@@ -183,7 +172,7 @@ public final class AndroidIdeInfoProvider extends NativeInfo
   private final ImmutableCollection<Artifact> apksUnderTest;
   private final ImmutableMap<String, NestedSet<Artifact>> nativeLibs;
 
-  public AndroidIdeInfoProvider(
+  AndroidIdeInfoProvider(
       String javaPackage,
       String idlImportRoot,
       @Nullable Artifact manifest,
@@ -199,7 +188,6 @@ public final class AndroidIdeInfoProvider extends NativeInfo
       ImmutableCollection<Artifact> apksUnderTest,
       ImmutableMap<String, NestedSet<Artifact>> nativeLibs,
       Artifact resourceApk) {
-    super(PROVIDER);
     this.javaPackage = javaPackage;
     this.idlImportRoot = idlImportRoot;
     this.manifest = manifest;
@@ -217,146 +205,84 @@ public final class AndroidIdeInfoProvider extends NativeInfo
     this.resourceApk = resourceApk;
   }
 
-  @Override
+  /** Returns java package for this target. */
   public String getJavaPackage() {
     return javaPackage;
   }
 
-  @Override
+  /** Returns the direct AndroidManifest. */
   @Nullable
   public Artifact getManifest() {
     return manifest;
   }
 
-  @Override
+  /** Returns the direct generated AndroidManifest. */
   @Nullable
   public Artifact getGeneratedManifest() {
     return generatedManifest;
   }
 
-  @Override
+  /**
+   * Returns true if the target defined Android resources. Exposes {@link
+   * LocalResourceContainer#definesAndroidResources(AttributeMap)}
+   */
   public boolean definesAndroidResources() {
     return this.definesAndroidResources;
   }
 
-  @Override
   @Nullable
   public String getIdlImportRoot() {
     return idlImportRoot;
   }
 
-  @Override
+  /** Returns the direct debug key signed apk, if there is one. */
   @Nullable
   public Artifact getSignedApk() {
     return signedApk;
   }
 
-  @Override
   @Nullable
   public Artifact getIdlClassJar() {
     return idlClassJar;
   }
 
-  @Override
   @Nullable
   public Artifact getIdlSourceJar() {
     return idlSourceJar;
   }
 
-  @Override
   @Nullable
   public OutputJar getResourceJar() {
     return resourceJar;
   }
 
-  @Override
   @Nullable
   public Artifact getAar() {
     return aar;
   }
 
-  @Override
   @Nullable
   public Artifact getResourceApk() {
     return resourceApk;
   }
 
-  @Override
+  /** A list of sources from the "idl_srcs" attribute. */
   public ImmutableCollection<Artifact> getIdlSrcs() {
     return idlSrcs;
   }
 
-  @Override
+  /** A list of java files generated from the "idl_srcs" attribute. */
   public ImmutableCollection<Artifact> getIdlGeneratedJavaFiles() {
     return idlGeneratedJavaFiles;
   }
 
-  @Override
+  /** A list of the APKs related to the app under test, if any. */
   public ImmutableCollection<Artifact> getApksUnderTest() {
     return apksUnderTest;
   }
 
+  /** A map, keyed on architecture, of the native libs for the app, if any. */
   public ImmutableMap<String, NestedSet<Artifact>> getNativeLibs() {
     return nativeLibs;
-  }
-
-  @Override
-  public ImmutableMap<String, SkylarkNestedSet> getNativeLibsSkylark() {
-    ImmutableMap.Builder<String, SkylarkNestedSet> builder = ImmutableMap.builder();
-    for (Map.Entry<String, NestedSet<Artifact>> entry : getNativeLibs().entrySet()) {
-      builder.put(entry.getKey(), SkylarkNestedSet.of(Artifact.class, entry.getValue()));
-    }
-    return builder.build();
-  }
-
-  /** Provider class for {@link AndroidIdeInfoProvider} objects. */
-  public static class Provider extends BuiltinProvider<AndroidIdeInfoProvider>
-      implements AndroidIdeInfoProviderApi.Provider<Artifact, OutputJar> {
-    private Provider() {
-      super(PROVIDER_NAME, AndroidIdeInfoProvider.class);
-    }
-
-    @Override
-    public AndroidIdeInfoProvider createInfo(
-        String javaPackage,
-        Object manifest,
-        Object generatedManifest,
-        String idlImportRoot,
-        SkylarkList<Artifact> idlSrcs,
-        SkylarkList<Artifact> idlGeneratedJavaFiles,
-        Object idlSourceJar,
-        Object idlClassJar,
-        boolean definesAndroidResources,
-        Object resourceJar,
-        Artifact resourceApk,
-        Object signedApk,
-        Object aar,
-        SkylarkList<Artifact> apksUnderTest,
-        SkylarkDict<String, SkylarkNestedSet> nativeLibs)
-        throws EvalException {
-      Map<String, SkylarkNestedSet> nativeLibsMap =
-          nativeLibs.getContents(String.class, SkylarkNestedSet.class, "native_libs");
-
-      ImmutableMap.Builder<String, NestedSet<Artifact>> builder = ImmutableMap.builder();
-      for (Map.Entry<String, SkylarkNestedSet> entry : nativeLibsMap.entrySet()) {
-        builder.put(entry.getKey(), entry.getValue().getSet(Artifact.class));
-      }
-      return new AndroidIdeInfoProvider(
-          javaPackage,
-          idlImportRoot,
-          fromNoneable(manifest, Artifact.class),
-          fromNoneable(generatedManifest, Artifact.class),
-          fromNoneable(signedApk, Artifact.class),
-          fromNoneable(idlClassJar, Artifact.class),
-          fromNoneable(idlSourceJar, Artifact.class),
-          fromNoneable(resourceJar, OutputJar.class),
-          definesAndroidResources,
-          fromNoneable(aar, Artifact.class),
-          idlSrcs.getImmutableList(),
-          idlGeneratedJavaFiles.getImmutableList(),
-          apksUnderTest.getImmutableList(),
-          builder.build(),
-          resourceApk);
-    }
   }
 }
