@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,7 +20,7 @@ import java.io.IOException;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.Messager;
 
-import org.androidannotations.process.ModelProcessor;
+import org.androidannotations.processing.ModelProcessor.ProcessResult;
 
 import com.sun.codemodel.writer.PrologCodeWriter;
 
@@ -34,7 +34,7 @@ public class CodeModelGenerator {
 		this.messager = messager;
 	}
 
-	public void generate(ModelProcessor.ProcessResult processResult) throws IOException {
+	public void generate(ProcessResult processResult) throws IOException {
 
 		ApiCodeGenerator apiCodeGenerator = new ApiCodeGenerator(filer);
 		apiCodeGenerator.writeApiClasses(processResult.apiClassesToGenerate, processResult.originatingElements);
