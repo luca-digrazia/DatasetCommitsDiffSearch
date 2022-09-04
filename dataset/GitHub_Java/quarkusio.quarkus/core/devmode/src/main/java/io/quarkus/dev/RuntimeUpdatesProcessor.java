@@ -90,12 +90,11 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
 
     @Override
     public Throwable getDeploymentProblem() {
-        //we differentiate between these internally, however for the error reporting they are the same
-        return DevModeMain.compileProblem != null ? DevModeMain.compileProblem : DevModeMain.deploymentProblem;
+        return DevModeMain.deploymentProblem;
     }
 
     @Override
-    public boolean doScan(boolean userInitiated) throws IOException {
+    public boolean doScan() throws IOException {
         final long startNanoseconds = System.nanoTime();
         for (Runnable i : preScanSteps) {
             try {
@@ -108,12 +107,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         boolean classChanged = checkForChangedClasses();
         Set<String> configFileChanged = checkForFileChange();
 
-        //if there is a deployment problem we always restart on scan
-        //this is because we can't setup the config file watches
-        //in an ideal world we would just check every resource file for changes, however as everything is already
-        //all broken we just assume the reason that they have refreshed is because they have fixed something
-        //trying to watch all resource files is complex and this is likely a good enough solution for what is already an edge case
-        if (classChanged || !configFileChanged.isEmpty() || (DevModeMain.deploymentProblem != null && userInitiated)) {
+        if (classChanged || !configFileChanged.isEmpty()) {
             DevModeMain.restartApp(configFileChanged);
             log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
             return true;
@@ -147,9 +141,8 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
                         compiler.compile(sourcePath, changedSourceFiles.stream()
                                 .collect(groupingBy(this::getFileExtension, Collectors.toSet())));
                         hasChanges = true;
-                        DevModeMain.compileProblem = null;
                     } catch (Exception e) {
-                        DevModeMain.compileProblem = e;
+                        DevModeMain.deploymentProblem = e;
                         return false;
                     }
                 }

@@ -67,7 +67,6 @@ public class DevModeMain {
 
     private static Closeable runner;
     static volatile Throwable deploymentProblem;
-    static volatile Throwable compileProblem;
     static RuntimeUpdatesProcessor runtimeUpdatesProcessor;
 
     static final Map<Class<?>, Object> liveReloadContext = new ConcurrentHashMap<>();
@@ -98,7 +97,7 @@ public class DevModeMain {
         //TODO: we can't handle an exception on startup with hot replacement, as Undertow might not have started
 
         doStart(false, Collections.emptySet());
-        if (deploymentProblem != null || compileProblem != null) {
+        if (deploymentProblem != null) {
             log.error("Failed to start Quarkus, attempting to start hot replacement endpoint to recover");
             if (runtimeUpdatesProcessor != null) {
                 runtimeUpdatesProcessor.startupFailed();
@@ -187,7 +186,7 @@ public class DevModeMain {
         }
     }
 
-    public static synchronized void restartApp(Set<String> changedResources) {
+    public static synchronized void restartApp(Set<String> changedClasses) {
         if (runner != null) {
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(runtimeCl);
@@ -202,7 +201,7 @@ public class DevModeMain {
         SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
         DevModeMain.runner = null;
         Timing.restart();
-        doStart(true, changedResources);
+        doStart(true, changedClasses);
     }
 
     public static ClassLoader getCurrentAppClassLoader() {
