@@ -24,7 +24,6 @@ import com.google.devtools.skylark.skylint.Environment.NameInfo.Kind;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,10 +86,6 @@ public class Environment {
     return resolveName(name) != null;
   }
 
-  public boolean isDefinedInCurrentScope(String name) {
-    return blocks.get(blocks.size() - 1).resolve(name) != null;
-  }
-
   @Nullable
   public NameInfo resolveName(String name) {
     for (int i = blocks.size() - 1; i >= 0; i--) {
@@ -131,10 +126,6 @@ public class Environment {
     addName(blocks.size() - 1, createNameInfo(name, node, kind));
   }
 
-  public void addFunction(String name, ASTNode node) {
-    addName(GLOBALS_INDEX, createNameInfo(name, node, Kind.FUNCTION));
-  }
-
   public void addParameter(String name, ASTNode param) {
     addName(blocks.size() - 1, createNameInfo(name, param, Kind.PARAMETER));
   }
@@ -154,7 +145,7 @@ public class Environment {
   }
 
   private Collection<Integer> getNameIdsInBlock(int block) {
-    return Collections.unmodifiableCollection(blocks.get(block).nameToId.values());
+    return blocks.get(block).nameToId.values();
   }
 
   public NameInfo getNameInfo(int id) {
@@ -195,12 +186,11 @@ public class Environment {
     final ASTNode definition;
     final Kind kind;
 
-    /** Kind of definition where the name was declared. */
+    /** Kind of a symbol (builtin, imported, global, parameter, or local). */
     public enum Kind {
       BUILTIN,
       IMPORTED,
       GLOBAL,
-      FUNCTION,
       PARAMETER,
       LOCAL,
     }

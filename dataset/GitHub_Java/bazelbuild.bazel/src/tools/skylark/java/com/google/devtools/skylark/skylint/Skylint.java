@@ -29,7 +29,7 @@ public class Skylint {
     Path path = Paths.get(args[0]).toAbsolutePath();
     String content = new String(Files.readAllBytes(path), StandardCharsets.ISO_8859_1);
     BuildFileAST ast =
-        BuildFileAST.parseString(
+        BuildFileAST.parseSkylarkString(
             event -> {
               System.err.println(event);
             },

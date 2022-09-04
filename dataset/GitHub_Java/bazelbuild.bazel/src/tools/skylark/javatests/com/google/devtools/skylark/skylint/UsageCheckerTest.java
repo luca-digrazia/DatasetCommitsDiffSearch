@@ -27,7 +27,7 @@ public class UsageCheckerTest {
   private static List<Issue> findIssues(String... lines) {
     String content = String.join("\n", lines);
     BuildFileAST ast =
-        BuildFileAST.parseString(
+        BuildFileAST.parseSkylarkString(
             event -> {
               throw new IllegalArgumentException(event.getMessage());
             },
