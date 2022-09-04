@@ -47,7 +47,7 @@ public class Curator {
 
     public static CurateOutcome run(CuratedApplicationCreator ctx) throws AppCreatorException {
 
-        log.debug("provideOutcome depsOrigin=" + ctx.getDepsOrigin() + ", versionUpdate=" + ctx.getUpdate()
+        log.info("provideOutcome depsOrigin=" + ctx.getDepsOrigin() + ", versionUpdate=" + ctx.getUpdate()
                 + ", versionUpdateNumber="
                 + ctx.getUpdateNumber());
 
