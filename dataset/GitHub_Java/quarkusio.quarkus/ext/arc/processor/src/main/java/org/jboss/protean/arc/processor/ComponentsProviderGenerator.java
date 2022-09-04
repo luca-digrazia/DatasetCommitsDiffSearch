@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
@@ -47,7 +63,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
     Collection<Resource> generate(String name, BeanDeployment beanDeployment, Map<BeanInfo, String> beanToGeneratedName,
             Map<ObserverInfo, String> observerToGeneratedName) {
 
-        ResourceClassOutput classOutput = new ResourceClassOutput();
+        ResourceClassOutput classOutput = new ResourceClassOutput(true);
 
         String generatedName = SETUP_PACKAGE + "." + name + COMPONENTS_PROVIDER_SUFFIX;
         ClassCreator componentsProvider = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(ComponentsProvider.class).build();
@@ -97,8 +113,19 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
         Map<BeanInfo, ResultHandle> beanToResultHandle = new HashMap<>();
         List<BeanInfo> processed = new ArrayList<>();
 
-        // TODO handle circular dependencies
+        boolean stuck = false;
         while (!beanToInjections.isEmpty()) {
+            if (stuck) {
+                throw new IllegalStateException("Circular dependencies not supported: \n" + beanToInjections.entrySet()
+                        .stream()
+                        .map(e -> "\t " + e.getKey() + " injected into: " + e.getValue()
+                                .stream()
+                                .map(b -> b.getBeanClass()
+                                        .toString())
+                                .collect(Collectors.joining(", ")))
+                        .collect(Collectors.joining("\n")));
+            }
+            stuck = true;
             for (Iterator<Entry<BeanInfo, List<BeanInfo>>> iterator = beanToInjections.entrySet().iterator(); iterator.hasNext();) {
                 Entry<BeanInfo, List<BeanInfo>> entry = iterator.next();
                 BeanInfo bean = entry.getKey();
@@ -106,6 +133,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
                     addBean(getComponents, beansHandle, bean, beanToGeneratedName, beanToResultHandle);
                     iterator.remove();
                     processed.add(bean);
+                    stuck = false;
                 }
             }
         }
@@ -149,7 +177,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
             resources.add(resource);
             // TODO proper name conversion
             resources.add(ResourceImpl.serviceProvider(ComponentsProvider.class.getName(),
-                    (resource.getName().replace("/", ".")).getBytes(Charset.forName("UTF-8"))));
+                    (resource.getName().replace('/', '.')).getBytes(Charset.forName("UTF-8"))));
         }
         return resources;
     }
