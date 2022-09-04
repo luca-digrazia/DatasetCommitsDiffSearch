@@ -202,9 +202,8 @@ public class CcCompilationOutputs implements CcCompilationOutputsApi {
       return this;
     }
 
-    public Builder addLtoBitcodeFile(
-        Artifact fullBitcode, Artifact ltoIndexingBitcode, ImmutableList<String> copts) {
-      ltoCompilationContext.addBitcodeFile(fullBitcode, ltoIndexingBitcode, copts);
+    public Builder addLtoBitcodeFile(Artifact fullBitcode, Artifact ltoIndexingBitcode) {
+      ltoCompilationContext.addBitcodeFile(fullBitcode, ltoIndexingBitcode);
       return this;
     }
 

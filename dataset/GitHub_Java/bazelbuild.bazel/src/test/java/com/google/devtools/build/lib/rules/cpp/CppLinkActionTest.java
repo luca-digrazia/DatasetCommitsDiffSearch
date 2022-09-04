@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinationFactory;
-import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -652,28 +651,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   @Test
   public void testInterfaceOutputForDynamicLibrary() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            MockCcSupport.SUPPORTS_INTERFACE_SHARED_LIBRARIES,
-            "supports_interface_shared_objects: false");
-    useConfiguration();
-
-    scratch.file("foo/BUILD", "cc_library(name = 'foo', srcs = ['foo.cc'])");
-    ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:foo");
-    assertThat(configuredTarget).isNotNull();
-    ImmutableList<String> inputs =
-        ImmutableList.copyOf(getGeneratingAction(configuredTarget, "foo/libfoo.so").getInputs())
-            .stream()
-            .map(Artifact::getExecPathString)
-            .collect(ImmutableList.toImmutableList());
-    assertThat(inputs.stream().anyMatch(i -> i.contains("tools/cpp/link_dynamic_library")))
-        .isTrue();
-  }
-
-  @Test
-  public void testInterfaceOutputForDynamicLibraryLegacy() throws Exception {
     RuleContext ruleContext = createDummyRuleContext();
 
     FeatureConfiguration featureConfiguration =
@@ -750,6 +727,19 @@ public class CppLinkActionTest extends BuildViewTestCase {
             .setLibraryIdentifier("foo");
 
     assertError("static library link must be static", builder);
+  }
+
+  @Test
+  public void testStaticLinkWithSymbolsCountOutputIsError() throws Exception {
+    RuleContext ruleContext = createDummyRuleContext();
+
+    CppLinkActionBuilder builder =
+        createLinkBuilder(ruleContext, LinkTargetType.STATIC_LIBRARY)
+            .setLinkingMode(LinkingMode.STATIC)
+            .setLibraryIdentifier("foo")
+            .setSymbolCountsOutput(scratchArtifact("dummySymbolCounts"));
+
+    assertError("the symbol counts output must be null for static links", builder);
   }
 
   @Test
