@@ -1,7 +1,6 @@
 package org.litepal.crud;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -9,7 +8,6 @@ import java.util.Set;
 
 import org.litepal.crud.model.AssociationsInfo;
 import org.litepal.exceptions.DataSupportException;
-import static org.litepal.util.BaseUtility.*;
 
 import android.content.ContentValues;
 import android.database.sqlite.SQLiteDatabase;
@@ -40,7 +38,7 @@ class SaveHandler extends DataHandler {
 
 	/**
 	 * The open interface for other classes in CRUD package to save a model. It
-	 * is called when a model class calls the save method, First of all the
+	 * is called when a model class calls the save method. First of all, the
 	 * passed in baseObj will be saved into database. Then LitePal will analyze
 	 * the associations. If there're associated models detected, each associated
 	 * model which is persisted will build association with current model in
@@ -48,23 +46,50 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            Current model to persist.
-	 * @throws DataSupportException
 	 */
 	void onSave(DataSupport baseObj) {
 		String className = baseObj.getClassName();
 		List<Field> supportedFields = getSupportedFields(className);
-		try {
+		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
+		if (!baseObj.isSaved()) {
+			analyzeAssociatedModels(baseObj, associationInfos);
+			doSaveAction(baseObj, supportedFields);
+			analyzeAssociatedModels(baseObj, associationInfos);
+		} else {
+			analyzeAssociatedModels(baseObj, associationInfos);
+			doUpdateAction(baseObj, supportedFields);
+		}
+	}
+
+	/**
+	 * The open interface for other classes in CRUD package to save a model
+	 * collection. It is called when developer calls
+	 * {@link DataSupport#saveAll(Collection)}. Each model in the collection
+	 * will be persisted. If there're associated models detected, each
+	 * associated model which is persisted will build association with current
+	 * model in database.
+	 * 
+	 * @param collection
+	 *            Holds all models to persist.
+	 */
+	<T extends DataSupport> void onSaveAll(Collection<T> collection) {
+		if (collection != null && collection.size() > 0) {
+			DataSupport[] array = collection.toArray(new DataSupport[0]);
+			DataSupport firstObj = array[0];
+			String className = firstObj.getClassName();
+			List<Field> supportedFields = getSupportedFields(className);
 			Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
-			if (!baseObj.isSaved()) {
-				analyzeAssociatedModels(baseObj, associationInfos);
-				doSaveAction(baseObj, supportedFields);
-				analyzeAssociatedModels(baseObj, associationInfos);
-			} else {
-				analyzeAssociatedModels(baseObj, associationInfos);
-				doUpdateAction(baseObj, supportedFields);
+			for (DataSupport baseObj : array) {
+				if (!baseObj.isSaved()) {
+					analyzeAssociatedModels(baseObj, associationInfos);
+					doSaveAction(baseObj, supportedFields);
+					analyzeAssociatedModels(baseObj, associationInfos);
+				} else {
+					analyzeAssociatedModels(baseObj, associationInfos);
+					doUpdateAction(baseObj, supportedFields);
+				}
+				baseObj.clearAssociatedData();
 			}
-		} catch (Exception e) {
-			throw new DataSupportException(e.getMessage());
 		}
 	}
 
@@ -82,18 +107,8 @@ class SaveHandler extends DataHandler {
 	 *            Current model to persist.
 	 * @param supportedFields
 	 *            List of all supported fields.
-	 * @throws ClassNotFoundException
-	 * @throws IllegalAccessException
-	 * @throws InstantiationException
-	 * @throws IllegalArgumentException
-	 * @throws InvocationTargetException
-	 * @throws SecurityException
-	 * @throws NoSuchMethodException
-	 * @throws NoSuchFieldException
 	 */
-	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException, NoSuchFieldException {
+	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields) {
 		ContentValues values = new ContentValues();
 		beforeSave(baseObj, supportedFields, values);
 		long id = saving(baseObj, values);
@@ -111,15 +126,8 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for persisting.
-	 * @throws SecurityException
-	 * @throws IllegalArgumentException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalAccessException
-	 * @throws InvocationTargetException
 	 */
-	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values) {
 		putFieldsValue(baseObj, supportedFields, values);
 		putForeignKeyValue(values, baseObj);
 	}
@@ -147,15 +155,8 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param id
 	 *            The current model's id.
-	 * @throws DataSupportException
-	 * @throws SecurityException
-	 * @throws IllegalArgumentException
-	 * @throws NoSuchFieldException
-	 * @throws IllegalAccessException
 	 */
-	private void afterSave(DataSupport baseObj, List<Field> supportedFields, long id)
-			throws SecurityException, IllegalArgumentException, NoSuchFieldException,
-			IllegalAccessException {
+	private void afterSave(DataSupport baseObj, List<Field> supportedFields, long id) {
 		throwIfSaveFailed(id);
 		assignIdValue(baseObj, getIdField(supportedFields), id);
 		updateAssociatedTableWithFK(baseObj);
@@ -167,15 +168,8 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            The class of base object.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields) {
 		ContentValues values = new ContentValues();
 		beforeUpdate(baseObj, supportedFields, values);
 		updating(baseObj, values);
@@ -194,15 +188,8 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for updating.
-	 * @throws SecurityException
-	 * @throws IllegalArgumentException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalAccessException
-	 * @throws InvocationTargetException
 	 */
-	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values) {
 		putFieldsValue(baseObj, supportedFields, values);
 		putForeignKeyValue(values, baseObj);
 		for (String fkName : baseObj.getListToClearSelfFK()) {
@@ -279,37 +266,15 @@ class SaveHandler extends DataHandler {
 	 *            The field of id.
 	 * @param id
 	 *            The value of id.
-	 * @throws SecurityException
-	 * @throws IllegalArgumentException
-	 * @throws NoSuchFieldException
-	 * @throws IllegalAccessException
 	 */
-	private void assignIdValue(DataSupport baseObj, Field idField, long id)
-			throws SecurityException, IllegalArgumentException, NoSuchFieldException,
-			IllegalAccessException {
-		giveBaseObjIdValue(baseObj, id);
-		if (idField != null) {
-			giveModelIdValue(baseObj, idField.getName(), idField.getType(), id);
-		}
-	}
-
-	/**
-	 * Assign the generated id value to {@link DataSupport#baseObjId}. This
-	 * value will be used as identify of this model for system use.
-	 * 
-	 * @param baseObj
-	 *            The class of base object.
-	 * @param id
-	 *            The value of id.
-	 * @throws SecurityException
-	 * @throws NoSuchFieldException
-	 * @throws IllegalArgumentException
-	 * @throws IllegalAccessException
-	 */
-	private void giveBaseObjIdValue(DataSupport baseObj, long id) throws SecurityException,
-			NoSuchFieldException, IllegalArgumentException, IllegalAccessException {
-		if (id > 0) {
-			DynamicExecutor.setField(baseObj, "baseObjId", id, DataSupport.class);
+	private void assignIdValue(DataSupport baseObj, Field idField, long id) {
+		try {
+			giveBaseObjIdValue(baseObj, id);
+			if (idField != null) {
+				giveModelIdValue(baseObj, idField.getName(), idField.getType(), id);
+			}
+		} catch (Exception e) {
+			throw new DataSupportException(e.getMessage());
 		}
 	}
 
@@ -356,15 +321,8 @@ class SaveHandler extends DataHandler {
 	 *            Foreign key column name.
 	 * @param foreignKeyValue
 	 *            Foreign key column value.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	private void putForeignKeyValue(ContentValues values, DataSupport baseObj)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void putForeignKeyValue(ContentValues values, DataSupport baseObj) {
 		Map<String, Long> associatedModelMap = baseObj.getAssociatedModelsMapWithoutFK();
 		for (String associatedTableName : associatedModelMap.keySet()) {
 			values.put(getForeignKeyColumnName(associatedTableName),
@@ -383,8 +341,8 @@ class SaveHandler extends DataHandler {
 		ContentValues values = new ContentValues();
 		for (String associatedTableName : associatedModelMap.keySet()) {
 			values.clear();
-			String foreignKeyName = changeCase(getForeignKeyColumnName(baseObj.getTableName()));
-			values.put(foreignKeyName, baseObj.getBaseObjId());
+			String fkName = getForeignKeyColumnName(baseObj.getTableName());
+			values.put(fkName, baseObj.getBaseObjId());
 			Set<Long> ids = associatedModelMap.get(associatedTableName);
 			if (ids != null && !ids.isEmpty()) {
 				mDatabase.update(associatedTableName, values, getWhereOfIdsWithOr(ids), null);
@@ -436,27 +394,6 @@ class SaveHandler extends DataHandler {
 				mDatabase.insert(joinTableName, null, values);
 			}
 		}
-	}
-
-	/**
-	 * Get the where clause by the passed in id collection to update tables.
-	 * 
-	 * @param ids
-	 *            The id collection.
-	 * @return The where clause to execute.
-	 */
-	private String getWhereOfIdsWithOr(Collection<Long> ids) {
-		StringBuilder whereClause = new StringBuilder();
-		boolean needOr = false;
-		for (long id : ids) {
-			if (needOr) {
-				whereClause.append(" or ");
-			}
-			needOr = true;
-			whereClause.append("id = ");
-			whereClause.append(id);
-		}
-		return changeCase(whereClause.toString());
 	}
 
 	/**
