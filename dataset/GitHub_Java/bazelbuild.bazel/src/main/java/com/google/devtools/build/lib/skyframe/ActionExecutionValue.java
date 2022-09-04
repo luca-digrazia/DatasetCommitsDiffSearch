@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.serialization.UnshareableValue;
@@ -80,7 +79,7 @@ public class ActionExecutionValue implements SkyValue {
 
   @Nullable private final ImmutableList<FilesetOutputSymlink> outputSymlinks;
 
-  @Nullable private final NestedSet<Artifact> discoveredModules;
+  @Nullable private final ImmutableList<Artifact> discoveredModules;
 
   /**
    * @param artifactData Map from Artifacts to corresponding FileValues.
@@ -98,7 +97,7 @@ public class ActionExecutionValue implements SkyValue {
       Map<Artifact, TreeArtifactValue> treeArtifactData,
       Map<Artifact, FileArtifactValue> additionalOutputData,
       @Nullable ImmutableList<FilesetOutputSymlink> outputSymlinks,
-      @Nullable NestedSet<Artifact> discoveredModules) {
+      @Nullable ImmutableList<Artifact> discoveredModules) {
     this.artifactData = ImmutableMap.<Artifact, FileValue>copyOf(artifactData);
     this.additionalOutputData = ImmutableMap.copyOf(additionalOutputData);
     this.treeArtifactData = ImmutableMap.copyOf(treeArtifactData);
@@ -111,7 +110,7 @@ public class ActionExecutionValue implements SkyValue {
       Map<Artifact, TreeArtifactValue> treeArtifactData,
       Map<Artifact, FileArtifactValue> additionalOutputData,
       @Nullable ImmutableList<FilesetOutputSymlink> outputSymlinks,
-      @Nullable NestedSet<Artifact> discoveredModules,
+      @Nullable ImmutableList<Artifact> discoveredModules,
       boolean notifyOnActionCacheHitAction) {
     return notifyOnActionCacheHitAction
         ? new CrossServerUnshareableActionExecutionValue(
@@ -173,7 +172,7 @@ public class ActionExecutionValue implements SkyValue {
   }
 
   @Nullable
-  public NestedSet<Artifact> getDiscoveredModules() {
+  public ImmutableList<Artifact> getDiscoveredModules() {
     return discoveredModules;
   }
 
@@ -247,7 +246,7 @@ public class ActionExecutionValue implements SkyValue {
         Map<Artifact, TreeArtifactValue> treeArtifactData,
         Map<Artifact, FileArtifactValue> additionalOutputData,
         @Nullable ImmutableList<FilesetOutputSymlink> outputSymlinks,
-        @Nullable NestedSet<Artifact> discoveredModules) {
+        @Nullable ImmutableList<Artifact> discoveredModules) {
       super(
           artifactData, treeArtifactData, additionalOutputData, outputSymlinks, discoveredModules);
     }

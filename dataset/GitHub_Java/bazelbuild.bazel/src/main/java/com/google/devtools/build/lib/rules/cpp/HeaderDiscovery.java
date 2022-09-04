@@ -67,21 +67,20 @@ public class HeaderDiscovery {
   private final ImmutableMap<PathFragment, Artifact> allowedDerivedInputsMap;
 
   /**
-   * {@link #treeArtifacts} contains tree artifacts given as input to the action.
+   * treeArtifactPaths contains the paths of tree artifacts given as input to the action.
    *
    * <p>Header files whose prefix is in this set are considered as included, and will not trigger a
    * header inclusion error.
    */
-  private final ImmutableSet<Artifact> treeArtifacts;
+  private final ImmutableSet<PathFragment> treeArtifactPaths;
 
   /**
-   * {@link #pathToOwningTreeArtifact} caches answers to "does a fragment have a prefix in {@link
-   * #treeArtifacts}".
+   * allowedDirs caches answers to "does a fragment have a prefix in treeArtifactPaths".
    *
-   * <p>It is initialized to (a.path, a) for each a in {@link #treeArtifacts}, in order to speed up
-   * the typical case of headers coming from a flat tree artifact.
+   * <p>It is initialized to (p, true) for each p in treeArtifactPaths, in order to speed up the
+   * typical case of headers coming from a flat tree artifact.
    */
-  private final HashMap<PathFragment, Artifact> pathToOwningTreeArtifact;
+  private final HashMap<PathFragment, Boolean> allowedDirs;
 
   /**
    * Creates a HeaderDiscover instance
@@ -89,8 +88,8 @@ public class HeaderDiscovery {
    * @param action the action instance requiring header discovery
    * @param sourceFile the source file for the compile
    * @param shouldValidateInclusions true if include validation should be performed
-   * @param allowedDerivedInputsMap see javadoc for {@link #allowedDerivedInputsMap}
-   * @param treeArtifacts see javadoc for {@link #treeArtifacts}
+   * @param allowedDerivedInputsMap see javadoc for field
+   * @param treeArtifactPaths see javadoc for field
    */
   private HeaderDiscovery(
       Action action,
@@ -99,18 +98,18 @@ public class HeaderDiscovery {
       Collection<Path> dependencies,
       List<Path> permittedSystemIncludePrefixes,
       ImmutableMap<PathFragment, Artifact> allowedDerivedInputsMap,
-      ImmutableSet<Artifact> treeArtifacts) {
+      ImmutableSet<PathFragment> treeArtifactPaths) {
     this.action = Preconditions.checkNotNull(action);
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
     this.shouldValidateInclusions = shouldValidateInclusions;
     this.dependencies = dependencies;
     this.permittedSystemIncludePrefixes = permittedSystemIncludePrefixes;
     this.allowedDerivedInputsMap = allowedDerivedInputsMap;
-    this.treeArtifacts = treeArtifacts;
+    this.treeArtifactPaths = treeArtifactPaths;
 
-    this.pathToOwningTreeArtifact = new HashMap<>();
-    for (Artifact a : treeArtifacts) {
-      pathToOwningTreeArtifact.put(a.getExecPath(), a);
+    this.allowedDirs = new HashMap<>();
+    for (PathFragment p : treeArtifactPaths) {
+      allowedDirs.put(p, true);
     }
   }
 
@@ -167,16 +166,11 @@ public class HeaderDiscovery {
         }
       }
       if (artifact != null) {
-        // We don't need to add the sourceFile itself as it is a mandatory input.
-        if (!artifact.equals(sourceFile)) {
-          inputs.add(artifact);
-        }
+        inputs.add(artifact);
         continue;
       }
 
-      Artifact treeArtifact = findOwningTreeArtifact(execPathFragment);
-      if (treeArtifact != null) {
-        inputs.add(treeArtifact);
+      if (inTreeArtifact(execPathFragment)) {
         continue;
       }
 
@@ -190,16 +184,15 @@ public class HeaderDiscovery {
     return inputs.build();
   }
 
-  private Artifact findOwningTreeArtifact(PathFragment execPathFragment) {
+  private boolean inTreeArtifact(PathFragment execPathFragment) {
     PathFragment dir = execPathFragment.getParentDirectory();
-    Artifact artifact = pathToOwningTreeArtifact.get(dir);
-    if (artifact != null) {
-      return artifact;
+    Boolean allowed = allowedDirs.get(dir);
+    if (allowed != null) {
+      return allowed;
     }
-    return treeArtifacts.stream()
-        .filter(a -> dir.startsWith(a.getExecPath()))
-        .findAny()
-        .orElse(null);
+    allowed = treeArtifactPaths.stream().anyMatch(p -> dir.startsWith(p));
+    allowedDirs.put(execPathFragment, allowed);
+    return allowed;
   }
 
   /** A Builder for HeaderDiscovery */
@@ -251,10 +244,11 @@ public class HeaderDiscovery {
     /** Creates a CppHeaderDiscovery instance. */
     public HeaderDiscovery build() {
       Map<PathFragment, Artifact> allowedDerivedInputsMap = new HashMap<>();
-      ImmutableSet.Builder<Artifact> treeArtifacts = ImmutableSet.builder();
+      ImmutableSet.Builder<PathFragment> treeArtifactPrefixes = ImmutableSet.builder();
       for (Artifact a : allowedDerivedInputs) {
+        PathFragment execPath = a.getExecPath();
         if (a.isTreeArtifact()) {
-          treeArtifacts.add(a);
+          treeArtifactPrefixes.add(execPath);
         }
         // We may encounter duplicate keys in the derived inputs if two artifacts have different
         // owners. Just use the first one. The two artifacts must be generated by equivalent
@@ -265,7 +259,7 @@ public class HeaderDiscovery {
         // get an action cache hit in that case, since even if it previously depended on the
         // artifact whose path changed, that is not taken into account by the action cache, and it
         // will get an action cache hit using the remaining un-renamed artifact.
-        allowedDerivedInputsMap.putIfAbsent(a.getExecPath(), a);
+        allowedDerivedInputsMap.putIfAbsent(execPath, a);
       }
 
       return new HeaderDiscovery(
@@ -275,7 +269,7 @@ public class HeaderDiscovery {
           dependencies,
           permittedSystemIncludePrefixes,
           ImmutableMap.copyOf(allowedDerivedInputsMap),
-          treeArtifacts.build());
+          treeArtifactPrefixes.build());
     }
   }
 }

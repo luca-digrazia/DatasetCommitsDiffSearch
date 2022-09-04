@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.actions;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -64,9 +64,10 @@ public class ArtifactTest {
   public void testConstruction_badRootDir() throws IOException {
     Path f1 = scratch.file("/exec/dir/file.ext");
     Path bogusDir = scratch.file("/exec/dir/bogus");
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> new Artifact(ArtifactRoot.asDerivedRoot(execDir, bogusDir), f1.relativeTo(execDir)));
+    try {
+      new Artifact(ArtifactRoot.asDerivedRoot(execDir, bogusDir), f1.relativeTo(execDir));
+      fail("Expected IllegalArgumentException constructing artifact with a bad root dir");
+    } catch (IllegalArgumentException expected) {}
   }
 
   @Test
@@ -114,7 +115,11 @@ public class ArtifactTest {
   @Test
   public void testRootPrefixedExecPath_nullRootDir() throws IOException {
     Path f1 = scratch.file("/exec/dir/file.ext");
-    assertThrows(NullPointerException.class, () -> new Artifact(null, f1.relativeTo(execDir)));
+    try {
+      new Artifact(null, f1.relativeTo(execDir));
+      fail("Expected NullPointerException creating artifact with null root");
+    } catch (NullPointerException expected) {
+    }
   }
 
   @Test
@@ -316,6 +321,7 @@ public class ArtifactTest {
                 PathFragment.create("src/c"),
                 new LabelArtifactOwner(Label.parseAbsoluteUnchecked("//foo:bar"))))
         .addDependency(FileSystem.class, scratch.getFileSystem())
+        .addDependency(OutputBaseSupplier.class, () -> scratch.getFileSystem().getPath("/"))
         .runTests();
   }
 
@@ -327,6 +333,7 @@ public class ArtifactTest {
     artifactFactory.setSourceArtifactRoots(ImmutableMap.of(root, artifactRoot));
     ArtifactResolverSupplier artifactResolverSupplierForTest = () -> artifactFactory;
 
+    OutputBaseSupplier outputBaseSupplier = () -> scratch.getFileSystem().getPath("/");
     ObjectCodecs objectCodecs =
         new ObjectCodecs(
             AutoRegistry.get()
@@ -336,6 +343,7 @@ public class ArtifactTest {
                 .build(),
             ImmutableMap.of(
                 FileSystem.class, scratch.getFileSystem(),
+                OutputBaseSupplier.class, outputBaseSupplier,
                 ArtifactResolverSupplier.class, artifactResolverSupplierForTest));
 
     PathFragment pathFragment = PathFragment.create("src/foo.cc");

@@ -31,12 +31,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
+import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
@@ -55,7 +55,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -143,10 +142,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     Artifact input1 = createSourceArtifact("input1");
     Artifact input2 = createDerivedArtifact("input2");
     SpecialArtifact tree = createDerivedTreeArtifactWithAction("treeArtifact");
-    TreeFileArtifact treeFile1 = createFakeTreeFileArtifact(tree, "child1", "hello1");
-    TreeFileArtifact treeFile2 = createFakeTreeFileArtifact(tree, "child2", "hello2");
-    file(treeFile1.getPath(), "src1");
-    file(treeFile2.getPath(), "src2");
+    file(createFakeTreeFileArtifact(tree, "child1", "hello1").getPath(), "src1");
+    file(createFakeTreeFileArtifact(tree, "child2", "hello2").getPath(), "src2");
     Action action =
         new DummyAction(
             ImmutableList.of(input1, input2, tree), output, MiddlemanType.AGGREGATING_MIDDLEMAN);
@@ -155,14 +152,11 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     file(input1.getPath(), "source contents");
     evaluate(Iterables.toArray(ImmutableSet.of(input2, input1, input2, tree), SkyKey.class));
     SkyValue value = evaluateArtifactValue(output);
-    ArrayList<Pair<Artifact, ?>> inputs = new ArrayList<>();
-    inputs.addAll(((AggregatingArtifactValue) value).getFileArtifacts());
-    inputs.addAll(((AggregatingArtifactValue) value).getTreeArtifacts());
-    assertThat(inputs)
+    assertThat(((AggregatingArtifactValue) value).getInputs())
         .containsExactly(
             Pair.of(input1, create(input1)),
             Pair.of(input2, create(input2)),
-            Pair.of(tree, ((TreeArtifactValue) evaluateArtifactValue(tree))));
+            Pair.of(tree, ((TreeArtifactValue) evaluateArtifactValue(tree)).getSelfData()));
   }
 
   /**
@@ -175,11 +169,11 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     setupRoot(
         new CustomInMemoryFs() {
           @Override
-          public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+          public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
             if (path.getBaseName().equals("bad")) {
               throw exception;
             }
-            return super.statIfFound(path, followSymlinks);
+            return super.stat(path, followSymlinks);
           }
         });
     try {
@@ -401,7 +395,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
   private static class SimpleActionExecutionFunction implements SkyFunction {
     @Override
     public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-      Map<Artifact, ArtifactFileMetadata> artifactData = new HashMap<>();
+      Map<Artifact, FileValue> artifactData = new HashMap<>();
       Map<Artifact, TreeArtifactValue> treeArtifactData = new HashMap<>();
       Map<Artifact, FileArtifactValue> additionalOutputData = new HashMap<>();
       ActionLookupData actionLookupData = (ActionLookupData) skyKey.argument();
@@ -421,8 +415,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
               treeFileArtifact2, FileArtifactValue.create(treeFileArtifact2)));
           treeArtifactData.put(output, treeArtifactValue);
         } else if (action.getActionType() == MiddlemanType.NORMAL) {
-          ArtifactFileMetadata fileValue =
-              ActionMetadataHandler.fileMetadataFromArtifact(output, null, null);
+          FileValue fileValue = ActionMetadataHandler.fileValueFromArtifact(output, null, null);
           artifactData.put(output, fileValue);
           additionalOutputData.put(output, FileArtifactValue.create(output, fileValue));
        } else {

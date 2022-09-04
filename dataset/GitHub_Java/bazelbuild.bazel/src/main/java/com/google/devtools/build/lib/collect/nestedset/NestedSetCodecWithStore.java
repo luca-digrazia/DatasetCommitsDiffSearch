@@ -100,7 +100,9 @@ public class NestedSetCodecWithStore implements ObjectCodec<NestedSet<?>> {
         return intern(order, contents);
       case GROUP:
         ByteString fingerprint = ByteString.copyFrom(codedIn.readByteArray());
-        return intern(order, nestedSetStore.getContentsAndDeserialize(fingerprint, context));
+        ListenableFuture<Object[]> deserializationFuture =
+            nestedSetStore.getContentsAndDeserialize(fingerprint, context);
+        return intern(order, deserializationFuture);
     }
     throw new IllegalStateException("NestedSet size " + nestedSetSize + " not known");
   }
