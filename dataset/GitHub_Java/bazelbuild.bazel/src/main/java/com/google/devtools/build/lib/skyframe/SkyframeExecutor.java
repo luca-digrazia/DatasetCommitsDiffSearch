@@ -1355,7 +1355,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * returned list.
    */
   @ThreadSafety.ThreadSafe
-  private ImmutableMultimap<Dependency, ConfiguredTargetAndData> getConfiguredTargetMapForTesting(
+  public ImmutableMultimap<Dependency, ConfiguredTargetAndData> getConfiguredTargetMapForTesting(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
       Iterable<Dependency> keys) {
@@ -1452,10 +1452,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
                 new ConfiguredTargetAndData(
                     mergedTarget,
                     packageValue.getPackage().getTarget(configuredTarget.getLabel().getName()),
-                    // This is terrible, but our tests' use of configurations is terrible. It's only
-                    // by accident that getting a null-configuration ConfiguredTarget works even if
-                    // depConfig is not null.
-                    mergedTarget.getConfigurationKey() == null ? null : depConfig));
+                    mergedTarget.getConfiguration()));
 
           } catch (DuplicateException | NoSuchTargetException e) {
             throw new IllegalStateException(

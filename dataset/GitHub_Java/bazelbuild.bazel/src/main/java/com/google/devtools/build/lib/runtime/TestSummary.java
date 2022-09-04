@@ -23,8 +23,7 @@ import com.google.common.collect.MultimapBuilder;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
@@ -491,19 +490,7 @@ public class TestSummary implements Comparable<TestSummary>, BuildEventWithOrder
   }
 
   @Override
-  public ImmutableList<LocalFile> referencedLocalFiles() {
-    ImmutableList.Builder<LocalFile> localFiles = ImmutableList.builder();
-    for (Path path : getFailedLogs()) {
-      localFiles.add(new LocalFile(path, LocalFileType.FAILED_TEST_OUTPUT));
-    }
-    for (Path path : getPassedLogs()) {
-      localFiles.add(new LocalFile(path, LocalFileType.SUCCESSFUL_TEST_OUTPUT));
-    }
-    return localFiles.build();
-  }
-
-  @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
     PathConverter pathConverter = converters.pathConverter();
     BuildEventStreamProtos.TestSummary.Builder summaryBuilder =
         BuildEventStreamProtos.TestSummary.newBuilder()

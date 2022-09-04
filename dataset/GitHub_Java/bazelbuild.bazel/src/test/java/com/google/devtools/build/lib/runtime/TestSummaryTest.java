@@ -69,11 +69,9 @@ public class TestSummaryTest {
   }
 
   private TestSummary.Builder getTemplateBuilder() {
-    BuildConfiguration configuration = Mockito.mock(BuildConfiguration.class);
-    when(configuration.checksum()).thenReturn("abcdef");
     return TestSummary.newBuilder()
         .setTarget(stubTarget)
-        .setConfiguration(configuration)
+        .setConfiguration(stubTarget.getConfiguration())
         .setStatus(BlazeTestStatus.PASSED)
         .setNumCached(NOT_CACHED)
         .setActionRan(true)
@@ -456,9 +454,11 @@ public class TestSummaryTest {
   }
 
   private ConfiguredTarget target(String path, String targetName) throws Exception {
+    BuildConfiguration configuration = Mockito.mock(BuildConfiguration.class);
+    when(configuration.checksum()).thenReturn("abcdef");
     ConfiguredTarget target = Mockito.mock(ConfiguredTarget.class);
     when(target.getLabel()).thenReturn(Label.create(path, targetName));
-    when(target.getConfigurationChecksum()).thenReturn("abcdef");
+    when(target.getConfiguration()).thenReturn(configuration);
     return target;
   }
 

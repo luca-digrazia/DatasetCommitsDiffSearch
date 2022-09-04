@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
@@ -205,7 +204,7 @@ public class TestSummaryPrinter {
    */
   static String timeInSec(long time, TimeUnit unit) {
     double ms = TimeUnit.MILLISECONDS.convert(time, unit);
-    return String.format(Locale.US, "%.1fs", ms / 1000.0);
+    return String.format("%.1fs", ms / 1000.0);
   }
 
   static String getAttemptSummary(TestSummary summary) {
@@ -229,8 +228,7 @@ public class TestSummaryPrinter {
     } else if (summary.getNumCached() == summary.totalRuns()) {
       return "(cached) ";
     } else {
-      return String.format(
-          Locale.US, "(%d/%d cached) ", summary.getNumCached(), summary.totalRuns());
+      return String.format("(%d/%d cached) ", summary.getNumCached(), summary.totalRuns());
     }
   }
 
@@ -260,7 +258,6 @@ public class TestSummaryPrinter {
       // distribution of times on the next line.
       String maxTime = timeInSec(max, TimeUnit.MILLISECONDS);
       return String.format(
-          Locale.US,
           " in %s\n  Stats over %d runs: max = %s, min = %s, avg = %s, dev = %s",
           maxTime,
           summary.getTestTimes().size(),
