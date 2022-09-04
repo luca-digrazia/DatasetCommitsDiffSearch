@@ -25,38 +25,35 @@ import com.google.common.truth.ThrowableSubject;
  * functionality!
  */
 public class ErrorInfoSubject extends Subject<ErrorInfoSubject, ErrorInfo> {
-  private final ErrorInfo actual;
-
   public ErrorInfoSubject(FailureMetadata failureMetadata, ErrorInfo errorInfo) {
     super(failureMetadata, errorInfo);
-    this.actual = errorInfo;
   }
 
   public ThrowableSubject hasExceptionThat() {
     return check("getException()")
         .withMessage("Exception in " + actualAsString())
-        .that(actual.getException());
+        .that(getSubject().getException());
   }
 
   public IterableSubject hasCycleInfoThat() {
     isNotNull();
     return check("getCycleInfo()")
         .withMessage("CycleInfo in " + actualAsString())
-        .that(actual.getCycleInfo());
+        .that(getSubject().getCycleInfo());
   }
 
   public void rootCauseOfExceptionIs(SkyKey key) {
-    check("getRootCauseOfException()").that(actual.getRootCauseOfException()).isEqualTo(key);
+    check("getRootCauseOfException()").that(getSubject().getRootCauseOfException()).isEqualTo(key);
   }
 
   public void isTransient() {
-    if (!actual.isTransitivelyTransient()) {
+    if (!getSubject().isTransitivelyTransient()) {
       failWithActual(simpleFact("expected to be transient"));
     }
   }
 
   public void isNotTransient() {
-    if (actual.isTransitivelyTransient()) {
+    if (getSubject().isTransitivelyTransient()) {
       failWithActual(simpleFact("expected not to be transient"));
     }
   }

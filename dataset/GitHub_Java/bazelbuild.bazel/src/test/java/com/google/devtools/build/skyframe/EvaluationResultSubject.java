@@ -27,41 +27,39 @@ import com.google.common.truth.Subject;
  * functionality!
  */
 public class EvaluationResultSubject extends Subject<EvaluationResultSubject, EvaluationResult<?>> {
-  private final EvaluationResult<?> actual;
-
   public EvaluationResultSubject(
       FailureMetadata failureMetadata, EvaluationResult<?> evaluationResult) {
     super(failureMetadata, evaluationResult);
-    this.actual = evaluationResult;
   }
 
   public void hasError() {
-    if (!actual.hasError()) {
+    if (!getSubject().hasError()) {
       failWithActual(simpleFact("expected to have error"));
     }
   }
 
   public void hasNoError() {
-    if (actual.hasError()) {
+    if (getSubject().hasError()) {
       failWithActual(simpleFact("expected to have no error"));
     }
   }
 
   public Subject<?, ?> hasEntryThat(SkyKey key) {
-    return assertWithMessage("Entry for " + actualAsString()).that(actual.get(key));
+    return assertWithMessage("Entry for " + actualAsString()).that(getSubject().get(key));
   }
 
   public ErrorInfoSubject hasErrorEntryForKeyThat(SkyKey key) {
-    return assertThatErrorInfo(actual.getError(key)).named("Error entry for " + actualAsString());
+    return assertThatErrorInfo(getSubject().getError(key))
+        .named("Error entry for " + actualAsString());
   }
 
   public IterableSubject hasDirectDepsInGraphThat(SkyKey parent) throws InterruptedException {
     return assertWithMessage("Direct deps for " + parent + " in " + actualAsString())
-        .that(actual.getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent));
+        .that(getSubject().getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent));
   }
 
   public IterableSubject hasReverseDepsInGraphThat(SkyKey child) throws InterruptedException {
     return assertWithMessage("Reverse deps for " + child + " in " + actualAsString())
-        .that(actual.getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child));
+        .that(getSubject().getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child));
   }
 }
