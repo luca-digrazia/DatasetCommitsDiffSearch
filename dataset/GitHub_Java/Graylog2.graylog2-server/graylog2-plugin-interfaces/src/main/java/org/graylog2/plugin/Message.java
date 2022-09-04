@@ -27,7 +27,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.inputs.MessageInput;
@@ -41,7 +40,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -163,7 +161,7 @@ public class Message {
 
         obj.put(FIELD_MESSAGE, getMessage());
         obj.put(FIELD_SOURCE, getSource());
-        obj.putAll(fields);
+        obj.putAll(getFields());
 
         if (getField(FIELD_TIMESTAMP) instanceof DateTime) {
             obj.put(FIELD_TIMESTAMP, buildElasticSearchTimeFormat(((DateTime) getField(FIELD_TIMESTAMP)).withZone(UTC)));
@@ -298,22 +296,6 @@ public class Message {
 
     public Map<String, Object> getFields() {
         return ImmutableMap.copyOf(fields);
-    }
-
-    public Iterable<Map.Entry<String, Object>> getFieldsEntries() {
-        return Iterables.unmodifiableIterable(fields.entrySet());
-    }
-
-    public int getFieldCount() {
-        return fields.size();
-    }
-
-    public boolean hasField(String field) {
-        return fields.containsKey(field);
-    }
-
-    public Set<String> getFieldNames() {
-        return Collections.unmodifiableSet(fields.keySet());
     }
 
     public void setStreams(final List<Stream> streams) {
