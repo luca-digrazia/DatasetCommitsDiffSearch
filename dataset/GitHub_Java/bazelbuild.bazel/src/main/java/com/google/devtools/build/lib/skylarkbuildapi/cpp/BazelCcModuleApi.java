@@ -144,17 +144,6 @@ public interface BazelCcModuleApi<
             defaultValue = "[]",
             type = SkylarkList.class),
         @Param(
-            name = "framework_includes",
-            doc =
-                "Search paths for header files from Apple frameworks. They can be either relative "
-                    + "to the exec root or absolute. Usually passed with -F. Propagated to "
-                    + "dependents transitively.",
-            positional = false,
-            named = true,
-            noneable = true,
-            defaultValue = "[]",
-            type = SkylarkList.class),
-        @Param(
             name = "defines",
             doc = "Set of defines needed to compile this target. Each define is a string.",
             positional = false,
@@ -209,7 +198,6 @@ public interface BazelCcModuleApi<
       SkylarkList<String> includes,
       SkylarkList<String> quoteIncludes,
       SkylarkList<String> systemIncludes,
-      SkylarkList<String> frameworkIncludes,
       SkylarkList<String> defines,
       SkylarkList<String> userCompileFlags,
       SkylarkList<CompilationContextT> ccCompilationContexts,
@@ -252,10 +240,7 @@ public interface BazelCcModuleApi<
             named = true,
             defaultValue = "None",
             noneable = true,
-            allowedTypes = {
-              @ParamType(type = CcCompilationOutputsApi.class),
-              @ParamType(type = NoneType.class)
-            }),
+            type = CcCompilationOutputsApi.class),
         @Param(
             name = "user_link_flags",
             doc = "Additional list of linker options.",
@@ -318,7 +303,7 @@ public interface BazelCcModuleApi<
       SkylarkActionFactoryT skylarkActionFactoryApi,
       FeatureConfigurationT skylarkFeatureConfiguration,
       CcToolchainProviderT skylarkCcToolchainProvider,
-      Object compilationOutputs,
+      CompilationOutputsT compilationOutputs,
       SkylarkList<String> userLinkFlags,
       SkylarkList<LinkingContextT> linkingContexts,
       String name,
@@ -334,7 +319,6 @@ public interface BazelCcModuleApi<
   @SkylarkCallable(
       name = "create_compilation_outputs",
       doc = "Create compilation outputs object.",
-      useLocation = true,
       parameters = {
         @Param(
             name = "objects",
@@ -360,7 +344,7 @@ public interface BazelCcModuleApi<
             }),
       })
   CompilationOutputsT createCompilationOutputsFromSkylark(
-      Object objectsObject, Object picObjectsObject, Location location) throws EvalException;
+      Object objectsObject, Object picObjectsObject);
 
   @SkylarkCallable(
       name = "merge_compilation_outputs",
