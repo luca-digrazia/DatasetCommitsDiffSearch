@@ -297,7 +297,7 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
 
       OptionsParser parser;
       try {
-        parser = OptionsParser.builder().optionsClasses(optionClass).build();
+        parser = OptionsParser.newOptionsParser(optionClass);
         parser.parse("--" + optionName + "=" + expectedRawValue);
       } catch (OptionsParsingException ex) {
         ruleContext.attributeError(

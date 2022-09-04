@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.runtime;
 
 import static com.google.devtools.build.lib.analysis.config.CoreOptionConverters.BUILD_SETTING_CONVERTERS;
-import static com.google.devtools.build.lib.packages.RuleClass.Builder.SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
-import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
@@ -94,7 +92,7 @@ public class StarlarkOptionsParser {
       throws OptionsParsingException {
     ImmutableList.Builder<String> residue = new ImmutableList.Builder<>();
     // Map of <option name (label), <unparsed option value, loaded option>>.
-    Map<String, Pair<String, Target>> unparsedOptions =
+    Map<String, Pair<String, BuildSetting>> unparsedOptions =
         Maps.newHashMapWithExpectedSize(nativeOptionsParser.getResidue().size());
 
     // sort the old residue into starlark flags and legitimate residue
@@ -118,12 +116,10 @@ public class StarlarkOptionsParser {
     }
 
     ImmutableMap.Builder<String, Object> parsedOptions = new ImmutableMap.Builder<>();
-    for (Map.Entry<String, Pair<String, Target>> option : unparsedOptions.entrySet()) {
+    for (Map.Entry<String, Pair<String, BuildSetting>> option : unparsedOptions.entrySet()) {
       String loadedFlag = option.getKey();
       String unparsedValue = option.getValue().first;
-      Target buildSettingTarget = option.getValue().second;
-      BuildSetting buildSetting =
-          buildSettingTarget.getAssociatedRule().getRuleClassObject().getBuildSetting();
+      BuildSetting buildSetting = option.getValue().second;
       // Do not recognize internal options, which are treated as if they did not exist.
       if (!buildSetting.isFlag()) {
         throw new OptionsParsingException(
@@ -141,13 +137,7 @@ public class StarlarkOptionsParser {
                 loadedFlag, unparsedValue, unparsedValue, type),
             e);
       }
-      if (!value.equals(
-          buildSettingTarget
-              .getAssociatedRule()
-              .getAttributeContainer()
-              .getAttr(SKYLARK_BUILD_SETTING_DEFAULT_ATTR_NAME))) {
-        parsedOptions.put(loadedFlag, value);
-      }
+      parsedOptions.put(loadedFlag, value);
     }
     nativeOptionsParser.setStarlarkOptions(parsedOptions.build());
   }
@@ -155,7 +145,7 @@ public class StarlarkOptionsParser {
   private void parseArg(
       String arg,
       Iterator<String> unparsedArgs,
-      Map<String, Pair<String, Target>> unparsedOptions,
+      Map<String, Pair<String, BuildSetting>> unparsedOptions,
       Command command,
       ExtendedEventHandler eventHandler)
       throws OptionsParsingException {
@@ -168,9 +158,8 @@ public class StarlarkOptionsParser {
 
     if (value != null) {
       // --flag=value or -flag=value form
-      Target buildSettingTarget =
-          loadBuildSetting(name, nativeOptionsParser, command, eventHandler);
-      unparsedOptions.put(name, new Pair<>(value, buildSettingTarget));
+      BuildSetting current = loadBuildSetting(name, nativeOptionsParser, command, eventHandler);
+      unparsedOptions.put(name, new Pair<>(value, current));
     } else {
       boolean booleanValue = true;
       // check --noflag form
@@ -178,13 +167,10 @@ public class StarlarkOptionsParser {
         booleanValue = false;
         name = name.substring(2);
       }
-      Target buildSettingTarget =
-          loadBuildSetting(name, nativeOptionsParser, command, eventHandler);
-      BuildSetting current =
-          buildSettingTarget.getAssociatedRule().getRuleClassObject().getBuildSetting();
+      BuildSetting current = loadBuildSetting(name, nativeOptionsParser, command, eventHandler);
       if (current.getType().equals(BOOLEAN)) {
         // --boolean_flag or --noboolean_flag
-        unparsedOptions.put(name, new Pair<>(String.valueOf(booleanValue), buildSettingTarget));
+        unparsedOptions.put(name, new Pair<>(String.valueOf(booleanValue), current));
       } else {
         if (!booleanValue) {
           // --no(non_boolean_flag)
@@ -193,7 +179,7 @@ public class StarlarkOptionsParser {
         }
         if (unparsedArgs.hasNext()) {
           // --flag value
-          unparsedOptions.put(name, new Pair<>(unparsedArgs.next(), buildSettingTarget));
+          unparsedOptions.put(name, new Pair<>(unparsedArgs.next(), current));
         } else {
           throw new OptionsParsingException("Expected value after " + arg);
         }
@@ -201,13 +187,13 @@ public class StarlarkOptionsParser {
     }
   }
 
-  private Target loadBuildSetting(
+  private BuildSetting loadBuildSetting(
       String targetToBuild,
       OptionsParser optionsParser,
       Command command,
       ExtendedEventHandler eventHandler)
       throws OptionsParsingException {
-    Target buildSetting;
+    Rule associatedRule;
     try {
       TargetPatternPhaseValue result =
           skyframeExecutor.loadTargetPatterns(
@@ -218,19 +204,19 @@ public class StarlarkOptionsParser {
               SkyframeExecutor.DEFAULT_THREAD_COUNT,
               optionsParser.getOptions(KeepGoingOption.class).keepGoing,
               command.name().equals("test"));
-      buildSetting =
+      associatedRule =
           Iterables.getOnlyElement(
-              result.getTargets(eventHandler, skyframeExecutor.getPackageManager()));
+                  result.getTargets(eventHandler, skyframeExecutor.getPackageManager()))
+              .getAssociatedRule();
     } catch (InterruptedException | TargetParsingException e) {
       Thread.currentThread().interrupt();
       throw new OptionsParsingException(
           "Error loading option " + targetToBuild + ": " + e.getMessage(), e);
     }
-    Rule associatedRule = buildSetting.getAssociatedRule();
     if (associatedRule == null || associatedRule.getRuleClassObject().getBuildSetting() == null) {
       throw new OptionsParsingException("Unrecognized option: " + targetToBuild);
     }
-    return buildSetting;
+    return associatedRule.getRuleClassObject().getBuildSetting();
   }
 
   @VisibleForTesting
