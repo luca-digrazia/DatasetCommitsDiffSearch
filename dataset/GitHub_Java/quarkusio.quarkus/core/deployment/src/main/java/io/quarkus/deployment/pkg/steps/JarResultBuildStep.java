@@ -30,7 +30,6 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiPredicate;
@@ -134,8 +133,6 @@ public class JarResultBuildStep {
     public static final String TRANSFORMED_BYTECODE_JAR = "transformed-bytecode.jar";
     public static final String APP = "app";
     public static final String QUARKUS = "quarkus";
-
-    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows");
 
     @BuildStep
     OutputTargetBuildItem outputTarget(BuildSystemTargetBuildItem bst, PackageConfig packageConfig) {
@@ -628,15 +625,7 @@ public class JarResultBuildStep {
                 .map((s) -> new GeneratedClassBuildItem(true, s.getName(), s.getClassData()))
                 .collect(Collectors.toList()));
 
-        boolean uberJarRequested = !uberJarRequired.isEmpty() || packageConfig.uberJar;
-        if (uberJarRequested || IS_WINDOWS) {
-            if (!uberJarRequested) {
-                log.warn("Uber JAR strategy is used for native image source JAR generation on Windows. This is done " +
-                        "for the time being to work around a current GraalVM limitation on Windows concerning the " +
-                        "maximum command length (see https://github.com/oracle/graal/issues/2387).");
-            }
-            // Native image source jar generation with the uber jar strategy is provided as a workaround for Windows and
-            // will be removed once https://github.com/oracle/graal/issues/2387 is fixed.
+        if (!uberJarRequired.isEmpty() || packageConfig.uberJar) {
             return buildNativeImageUberJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses,
                     applicationArchivesBuildItem,
                     packageConfig, applicationInfo, allClasses, generatedResources, mainClassBuildItem, targetDirectory);
