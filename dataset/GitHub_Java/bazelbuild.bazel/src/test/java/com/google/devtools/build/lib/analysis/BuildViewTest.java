@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestBase;
 import com.google.devtools.build.lib.analysis.util.ExpectedTrimmedConfigurationErrors;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.OutputFilter.RegexOutputFilter;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
@@ -121,15 +120,12 @@ public class BuildViewTest extends BuildViewTestBase {
     ConfiguredTarget suite = getConfiguredTarget("//tests:smallTests");
     assertNoEvents(); // start from a clean slate
 
+
     Collection<ConfiguredTarget> targets =
         new LinkedHashSet<>(ImmutableList.of(test1, test2, suite));
-    targets =
-        Lists.<ConfiguredTarget>newArrayList(
-            BuildView.filterTestsByTargets(
-                targets,
-                Sets.newHashSet(test1.getTarget(), suite.getTarget()),
-                NullEventHandler.INSTANCE,
-                skyframeExecutor.getPackageManager()));
+    targets = Lists.<ConfiguredTarget>newArrayList(
+        BuildView.filterTestsByTargets(targets,
+            Sets.newHashSet(test1.getTarget(), suite.getTarget())));
     assertThat(targets).containsExactlyElementsIn(Sets.newHashSet(test1, suite));
   }
 

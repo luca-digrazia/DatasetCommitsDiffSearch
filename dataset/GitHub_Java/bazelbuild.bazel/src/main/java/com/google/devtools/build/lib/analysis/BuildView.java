@@ -26,7 +26,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -898,7 +897,7 @@ public class BuildView {
       throws EvalException, InvalidConfigurationException,
       InterruptedException, InconsistentAspectOrderException {
     return Collections2.transform(
-        skyframeExecutor.getConfiguredTargetsForTesting(
+        skyframeExecutor.getConfiguredTargets(
             eventHandler,
             ct.getConfiguration(),
             ImmutableSet.copyOf(
@@ -954,7 +953,7 @@ public class BuildView {
 
       @Override
       protected List<BuildConfiguration> getConfigurations(
-          ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments,
+          Set<Class<? extends BuildConfiguration.Fragment>> fragments,
           Iterable<BuildOptions> buildOptions) {
         Preconditions.checkArgument(ct.getConfiguration().fragmentClasses().equals(fragments));
         Dependency asDep = Dependency.withTransitionAndAspects(ct.getLabel(),
@@ -1019,7 +1018,7 @@ public class BuildView {
             eventHandler, target, configurations, toolchainContext);
 
     ImmutableMultimap<Dependency, ConfiguredTargetAndTarget> cts =
-        skyframeExecutor.getConfiguredTargetMapForTesting(
+        skyframeExecutor.getConfiguredTargetMap(
             eventHandler, target.getConfiguration(), ImmutableSet.copyOf(depNodeNames.values()));
 
     OrderedSetMultimap<Attribute, ConfiguredTargetAndTarget> result = OrderedSetMultimap.create();
