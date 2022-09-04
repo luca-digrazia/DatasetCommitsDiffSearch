@@ -19,6 +19,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.Builder;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
@@ -26,6 +27,8 @@ import com.google.devtools.build.lib.analysis.PlatformConfigurationLoader;
 import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
+import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyLoader;
+import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyOptions;
 import com.google.devtools.build.lib.bazel.rules.BazelToolchainType.BazelToolchainTypeRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
@@ -88,16 +91,15 @@ import com.google.devtools.build.lib.rules.android.DexArchiveAspect;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigAlias.XcodeConfigAliasRule;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigRule;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionRule;
 import com.google.devtools.build.lib.rules.apple.cpp.AppleCcToolchainRule;
 import com.google.devtools.build.lib.rules.apple.swift.SwiftCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
+import com.google.devtools.build.lib.rules.config.ConfigFeatureFlag;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlagConfiguration;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses;
 import com.google.devtools.build.lib.rules.config.ConfigSkylarkCommon;
-import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.cpp.CcIncLibraryRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainAlias;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
@@ -209,8 +211,8 @@ public class BazelRuleClassProvider {
         public void init(Builder builder) {
           builder
               .setProductName("bazel")
+              .setConfigurationCollectionFactory(new BazelConfigurationCollection())
               .setPrelude("//tools/build_rules:prelude_bazel")
-              .setNativeLauncherLabel("//tools/launcher:launcher")
               .setRunfilesPrefix(Label.DEFAULT_REPOSITORY_DIRECTORY)
               .setPrerequisiteValidator(new BazelPrerequisiteValidator());
 
@@ -218,6 +220,32 @@ public class BazelRuleClassProvider {
           builder.addConfigurationFragment(new BazelConfiguration.Loader());
           builder.addConfigurationOptions(BazelConfiguration.Options.class);
           builder.addConfigurationOptions(BuildConfiguration.Options.class);
+        }
+
+        @Override
+        public ImmutableList<RuleSet> requires() {
+          return ImmutableList.of();
+        }
+      };
+
+  public static final ImmutableSet<String> FEATURE_POLICY_FEATURES =
+      ImmutableSet.of(ConfigFeatureFlag.POLICY_NAME);
+
+  public static final RuleSet CORE_RULES =
+      new RuleSet() {
+        @Override
+        public void init(Builder builder) {
+          builder.addConfigurationOptions(FeaturePolicyOptions.class);
+          builder.addConfigurationFragment(new FeaturePolicyLoader(FEATURE_POLICY_FEATURES));
+          builder.addDynamicTransitionMaps(BaseRuleClasses.DYNAMIC_TRANSITIONS_MAP);
+
+          builder.addRuleDefinition(new BaseRuleClasses.RootRule());
+          builder.addRuleDefinition(new BaseRuleClasses.BaseRule());
+          builder.addRuleDefinition(new BaseRuleClasses.RuleBase());
+          builder.addRuleDefinition(new BaseRuleClasses.MakeVariableExpandingRule());
+          builder.addRuleDefinition(new BaseRuleClasses.BinaryBaseRule());
+          builder.addRuleDefinition(new BaseRuleClasses.TestBaseRule());
+          builder.addRuleDefinition(new BaseRuleClasses.ErrorRule());
         }
 
         @Override
@@ -244,7 +272,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -269,7 +297,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -289,7 +317,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -304,7 +332,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -320,7 +348,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -333,7 +361,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -349,7 +377,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -381,7 +409,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE);
+          return ImmutableList.of(CORE_RULES);
         }
       };
 
@@ -396,7 +424,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CPP_RULES);
+          return ImmutableList.of(CORE_RULES, CPP_RULES);
         }
       };
 
@@ -440,7 +468,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CPP_RULES);
+          return ImmutableList.of(CORE_RULES, CPP_RULES);
         }
       };
 
@@ -461,7 +489,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, JAVA_RULES);
+          return ImmutableList.of(CORE_RULES, JAVA_RULES);
         }
       };
 
@@ -508,7 +536,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CPP_RULES, JAVA_RULES);
+          return ImmutableList.of(CORE_RULES, CPP_RULES, JAVA_RULES);
         }
       };
 
@@ -530,7 +558,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CPP_RULES);
+          return ImmutableList.of(CORE_RULES, CPP_RULES);
         }
       };
 
@@ -593,13 +621,12 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ObjcRuleClasses.WatchApplicationBundleRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CrosstoolRule());
           builder.addRuleDefinition(new XcodeConfigRule());
-          builder.addRuleDefinition(new XcodeConfigAliasRule());
           builder.addRuleDefinition(new XcodeVersionRule());
         }
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CPP_RULES);
+          return ImmutableList.of(CORE_RULES, CPP_RULES);
         }
       };
 
@@ -625,7 +652,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CPP_RULES, JAVA_RULES, OBJC_RULES);
+          return ImmutableList.of(CORE_RULES, CPP_RULES, JAVA_RULES, OBJC_RULES);
         }
       };
 
@@ -649,14 +676,14 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CORE_WORKSPACE_RULES);
+          return ImmutableList.of(CORE_RULES, CORE_WORKSPACE_RULES);
         }
       };
 
   private static final ImmutableSet<RuleSet> RULE_SETS =
       ImmutableSet.of(
           BAZEL_SETUP,
-          CoreRules.INSTANCE,
+          CORE_RULES,
           CORE_WORKSPACE_RULES,
           GENERIC_RULES,
           CONFIG_RULES,
