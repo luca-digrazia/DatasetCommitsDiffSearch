@@ -201,7 +201,6 @@ public class BlazeCommandEventHandler implements EventHandler {
                 + "workspace directory or one of the directories specified by --package_path.")
     public boolean attemptToPrintRelativePaths;
 
-    @Deprecated
     @Option(
         name = "ui",
         oldName = "experimental_ui",
