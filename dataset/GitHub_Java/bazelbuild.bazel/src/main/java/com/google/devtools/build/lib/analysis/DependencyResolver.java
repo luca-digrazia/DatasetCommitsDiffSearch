@@ -21,6 +21,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.AspectCollection.AspectCycleOnPathException;
 import com.google.devtools.build.lib.analysis.DependencyKind.AttributeDependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyKind.ToolchainDependencyKind;
@@ -39,6 +40,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectClass;
+import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
@@ -61,7 +63,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.syntax.Location;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Starlark;
 
 /**
  * Resolver for dependencies between configured targets.
@@ -183,7 +186,7 @@ public abstract class DependencyResolver {
       @Nullable ToolchainCollection<ToolchainContext> toolchainContexts,
       boolean useToolchainTransition,
       @Nullable TransitionFactory<Rule> trimmingTransitionFactory)
-      throws Failure, InterruptedException, InconsistentAspectOrderException {
+      throws EvalException, InterruptedException, InconsistentAspectOrderException {
     NestedSetBuilder<Cause> rootCauses = NestedSetBuilder.stableOrder();
     OrderedSetMultimap<DependencyKind, DependencyKey> outgoingEdges =
         dependentNodeMap(
@@ -210,7 +213,7 @@ public abstract class DependencyResolver {
    * representing the given target and configuration.
    *
    * <p>Otherwise {@code aspects} represents an aspect path. The function returns dependent nodes of
-   * the entire path applied to given target and configuration. These are the dependent nodes of the
+   * the entire path applied to given target and configuration. These are the depenent nodes of the
    * last aspect in the path.
    *
    * <p>This also implements the first step of applying configuration transitions, namely, split
@@ -241,7 +244,7 @@ public abstract class DependencyResolver {
       boolean useToolchainTransition,
       NestedSetBuilder<Cause> rootCauses,
       @Nullable TransitionFactory<Rule> trimmingTransitionFactory)
-      throws Failure, InterruptedException, InconsistentAspectOrderException {
+      throws EvalException, InterruptedException, InconsistentAspectOrderException {
     Target target = node.getTarget();
     BuildConfiguration config = node.getConfiguration();
     OrderedSetMultimap<DependencyKind, Label> outgoingLabels = OrderedSetMultimap.create();
@@ -303,11 +306,11 @@ public abstract class DependencyResolver {
       partiallyResolveDependencies(
           OrderedSetMultimap<DependencyKind, Label> outgoingLabels,
           @Nullable Rule fromRule,
-          @Nullable ConfiguredAttributeMapper attributeMap,
+          ConfiguredAttributeMapper attributeMap,
           @Nullable ToolchainCollection<ToolchainContext> toolchainContexts,
           boolean useToolchainTransition,
           Iterable<Aspect> aspects)
-          throws Failure {
+          throws EvalException {
     OrderedSetMultimap<DependencyKind, PartiallyResolvedDependency> partiallyResolvedDeps =
         OrderedSetMultimap.create();
 
@@ -368,19 +371,6 @@ public abstract class DependencyResolver {
         continue;
       }
 
-      // Compute the set of aspects that could be applied to a dependency. This is composed of two
-      // parts:
-      //
-      // 1. The aspects are visible to this aspect being evaluated, if any (if another aspect is
-      //    visible on the configured target for this one, it should also be visible on the
-      //    dependencies for consistency). This is the argument "aspects".
-      // 2. The aspects propagated by the attributes of this configured target / aspect. This is
-      //    computed by collectPropagatingAspects().
-      //
-      // The presence of an aspect here does not necessarily mean that it will be available on a
-      // dependency: it can still be filtered out because it requires a provider that the configured
-      // target it should be attached to it doesn't advertise. This is taken into account in
-      // computeAspectCollections() once the Target instances for the dependencies are known.
       Attribute attribute = entry.getKey().getAttribute();
       ImmutableList.Builder<Aspect> propagatingAspects = ImmutableList.builder();
       propagatingAspects.addAll(attribute.getAspects(fromRule));
@@ -393,11 +383,15 @@ public abstract class DependencyResolver {
           String execGroup =
               ((ExecutionTransitionFactory) attribute.getTransitionFactory()).getExecGroup();
           if (!toolchainContexts.hasToolchainContext(execGroup)) {
-            throw new Failure(
-                fromRule != null ? fromRule.getLocation() : null,
+            String error =
                 String.format(
                     "Attr '%s' declares a transition for non-existent exec group '%s'",
-                    attribute.getName(), execGroup));
+                    attribute.getName(), execGroup);
+            if (fromRule != null) {
+              throw new EvalException(fromRule.getLocation(), error);
+            } else {
+              throw Starlark.errorf("%s", error);
+            }
           }
           if (toolchainContexts.getToolchainContext(execGroup).executionPlatform() != null) {
             executionPlatformLabel =
@@ -461,7 +455,7 @@ public abstract class DependencyResolver {
               trimmingTransitionFactory);
 
       AspectCollection requiredAspects =
-          computeAspectCollections(partiallyResolvedDependency.getPropagatingAspects(), toTarget);
+          filterPropagatingAspects(partiallyResolvedDependency.getPropagatingAspects(), toTarget);
 
       DependencyKey.Builder dependencyKeyBuilder =
           partiallyResolvedDependency.getDependencyKeyBuilder();
@@ -472,22 +466,6 @@ public abstract class DependencyResolver {
     return outgoingEdges;
   }
 
-  /** A DependencyResolver.Failure indicates a failure during dependency resolution. */
-  public static class Failure extends Exception {
-    @Nullable private final Location location;
-
-    private Failure(Location location, String message) {
-      super(message);
-      this.location = location;
-    }
-
-    /** Returns the location of the error, if known. */
-    @Nullable
-    public Location getLocation() {
-      return location;
-    }
-  }
-
   private void visitRule(
       TargetAndConfiguration node,
       BuildConfiguration hostConfig,
@@ -495,16 +473,12 @@ public abstract class DependencyResolver {
       ConfiguredAttributeMapper attributeMap,
       @Nullable ToolchainCollection<ToolchainContext> toolchainContexts,
       OrderedSetMultimap<DependencyKind, Label> outgoingLabels)
-      throws Failure {
+      throws EvalException {
     Preconditions.checkArgument(node.getTarget() instanceof Rule, node);
     BuildConfiguration ruleConfig = Preconditions.checkNotNull(node.getConfiguration(), node);
     Rule rule = (Rule) node.getTarget();
 
-    try {
-      attributeMap.validateAttributes();
-    } catch (ConfiguredAttributeMapper.ValidationException ex) {
-      throw new Failure(rule.getLocation(), ex.getMessage());
-    }
+    attributeMap.validateAttributes();
 
     visitTargetVisibility(node, outgoingLabels);
     resolveAttributes(outgoingLabels, rule, attributeMap, aspects, ruleConfig, hostConfig);
@@ -743,15 +717,11 @@ public abstract class DependencyResolver {
   }
 
   /**
-   * Compute the way aspects should be computed for the direct dependencies.
-   *
-   * <p>This is done by filtering the aspects that can be propagated on any attribute according to
-   * the providers advertised by direct dependencies and by creating the {@link AspectCollection}
-   * that tells how to compute the final set of providers based on the interdependencies between the
-   * propagating aspects.
+   * Filter the set of aspects that are to be propagated according to the dependency type and the
+   * set of advertised providers of the dependency.
    */
-  private static AspectCollection computeAspectCollections(
-      ImmutableList<Aspect> aspects, Target toTarget) throws InconsistentAspectOrderException {
+  private AspectCollection filterPropagatingAspects(ImmutableList<Aspect> aspects, Target toTarget)
+      throws InconsistentAspectOrderException {
     if (toTarget instanceof OutputFile) {
       aspects =
           aspects.stream()
@@ -766,6 +736,7 @@ public abstract class DependencyResolver {
 
     Rule toRule = (Rule) toTarget;
     ImmutableList.Builder<Aspect> filteredAspectPath = ImmutableList.builder();
+    ImmutableSet.Builder<AspectDescriptor> visibleAspects = ImmutableSet.builder();
 
     for (Aspect aspect : aspects) {
       if (aspect
@@ -773,10 +744,11 @@ public abstract class DependencyResolver {
           .getRequiredProviders()
           .isSatisfiedBy(toRule.getRuleClassObject().getAdvertisedProviders())) {
         filteredAspectPath.add(aspect);
+        visibleAspects.add(aspect.getDescriptor());
       }
     }
     try {
-      return AspectCollection.create(filteredAspectPath.build());
+      return AspectCollection.create(filteredAspectPath.build(), visibleAspects.build());
     } catch (AspectCycleOnPathException e) {
       throw new InconsistentAspectOrderException(toTarget, e);
     }
