@@ -113,6 +113,32 @@ public final class ApplicationManifest {
     return new ApplicationManifest(ruleContext, stubManifest, targetAaptVersion);
   }
 
+  public ApplicationManifest addInstantRunStubApplication(RuleContext ruleContext)
+      throws InterruptedException {
+
+    Artifact stubManifest =
+        ruleContext.getImplicitOutputArtifact(
+            AndroidRuleClasses.INSTANT_RUN_STUB_APPLICATION_MANIFEST);
+
+    SpawnAction.Builder builder =
+        new SpawnAction.Builder()
+            .setExecutable(ruleContext.getExecutablePrerequisite("$stubify_manifest", Mode.HOST))
+            .setProgressMessage("Injecting instant run stub application")
+            .setMnemonic("InjectInstantRunStubApplication")
+            .addInput(manifest)
+            .addOutput(stubManifest)
+            .addCommandLine(
+                CustomCommandLine.builder()
+                    .add("--mode=instant_run")
+                    .addExecPath("--input_manifest", manifest)
+                    .addExecPath("--output_manifest", stubManifest)
+                    .build());
+
+    ruleContext.registerAction(builder.build(ruleContext));
+
+    return new ApplicationManifest(ruleContext, stubManifest, targetAaptVersion);
+  }
+
   public static ApplicationManifest fromRule(RuleContext ruleContext) throws RuleErrorException {
     return fromExplicitManifest(
         ruleContext, ruleContext.getPrerequisiteArtifact("manifest", Mode.TARGET));
@@ -290,7 +316,6 @@ public final class ApplicationManifest {
       @Nullable Artifact rTxt,
       boolean incremental,
       Artifact proguardCfg,
-      Artifact mainDexProguardCfg,
       @Nullable String packageUnderTest,
       boolean hasLocalResourceFiles)
       throws InterruptedException, RuleErrorException {
@@ -317,7 +342,6 @@ public final class ApplicationManifest {
             .withPrimary(resourceContainer)
             .withDependencies(resourceDeps)
             .setProguardOut(proguardCfg)
-            .setMainDexProguardOut(mainDexProguardCfg)
             .setApplicationId(manifestValues.get("applicationId"))
             .setVersionCode(manifestValues.get("versionCode"))
             .setVersionName(manifestValues.get("versionName"))
@@ -345,7 +369,7 @@ public final class ApplicationManifest {
         processed,
         processed.getManifest(),
         proguardCfg,
-        mainDexProguardCfg);
+        null);
   }
 
   /** Packages up the manifest with resource and assets from the LocalResourceContainer. */

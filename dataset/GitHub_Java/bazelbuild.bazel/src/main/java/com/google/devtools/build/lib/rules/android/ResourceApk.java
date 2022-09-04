@@ -101,10 +101,10 @@ public final class ResourceApk {
    * <p>If the ResourceApk was generated from local resources, that will be the direct dependencies
    * and the rest will be transitive.
    */
-  public AndroidResourcesInfo toResourceInfo(Label label) {
+  public AndroidResourcesProvider toResourceProvider(Label label) {
     if (primaryResource == null) {
-      return resourceDeps.toInfo(label);
+      return resourceDeps.toProvider(label);
     }
-    return resourceDeps.toInfo(primaryResource);
+    return resourceDeps.toProvider(label, primaryResource);
   }
 }

@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -1402,7 +1401,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     assertThat(
             (List<Label>)
-                getConfiguredTargetAndTarget("@foo//:baz")
+                getConfiguredTarget("@foo//:baz")
                     .getTarget()
                     .getAssociatedRule()
                     .getAttributeContainer()
@@ -2036,11 +2035,10 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
       } catch (AssertionError e) {
         assertThat(e)
             .hasMessageThat()
-            .contains(
-                "cannot access field or method '"
-                    + Iterables.get(Splitter.on('(').split(attribute), 0)
-                    + "' of rule context for '//test:dep' outside of its own rule implementation "
-                    + "function");
+            .contains("cannot access field or method '"
+                + attribute.split("\\(")[0]
+                + "' of rule context for '//test:dep' outside of its own rule implementation "
+                + "function");
       }
     }
   }
@@ -2085,11 +2083,10 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
       } catch (AssertionError e) {
         assertThat(e)
             .hasMessageThat()
-            .contains(
-                "cannot access field or method '"
-                    + Iterables.get(Splitter.on('(').split(attribute), 0)
-                    + "' of rule context for '//test:dep' outside of its own rule implementation "
-                    + "function");
+            .contains("cannot access field or method '"
+                + attribute.split("\\(")[0]
+                + "' of rule context for '//test:dep' outside of its own rule implementation "
+                + "function");
       }
     }
   }
