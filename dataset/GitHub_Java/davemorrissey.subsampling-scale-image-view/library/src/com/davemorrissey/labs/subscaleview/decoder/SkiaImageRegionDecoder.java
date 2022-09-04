@@ -10,6 +10,7 @@ import android.graphics.Bitmap.Config;
 import android.net.Uri;
 import android.text.TextUtils;
 
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -26,6 +27,19 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
     private static final String FILE_PREFIX = "file://";
     private static final String ASSET_PREFIX = FILE_PREFIX + "/android_asset/";
     private static final String RESOURCE_PREFIX = ContentResolver.SCHEME_ANDROID_RESOURCE + "://";
+
+    private final Bitmap.Config bitmapConfig;
+
+    public SkiaImageRegionDecoder() {
+        this(null);
+    }
+
+    public SkiaImageRegionDecoder(Bitmap.Config bitmapConfig) {
+        if (bitmapConfig == null)
+            this.bitmapConfig = Bitmap.Config.RGB_565;
+        else
+            this.bitmapConfig = bitmapConfig;
+    }
 
     @Override
     public Point init(Context context, Uri uri) throws Exception {
@@ -60,8 +74,16 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
         } else if (uriString.startsWith(FILE_PREFIX)) {
             decoder = BitmapRegionDecoder.newInstance(uriString.substring(FILE_PREFIX.length()), false);
         } else {
-            ContentResolver contentResolver = context.getContentResolver();
-            decoder = BitmapRegionDecoder.newInstance(contentResolver.openInputStream(uri), false);
+            InputStream inputStream = null;
+            try {
+                ContentResolver contentResolver = context.getContentResolver();
+                inputStream = contentResolver.openInputStream(uri);
+                decoder = BitmapRegionDecoder.newInstance(inputStream, false);
+            } finally {
+                if (inputStream != null) {
+                    try { inputStream.close(); } catch (Exception e) { }
+                }
+            }
         }
         return new Point(decoder.getWidth(), decoder.getHeight());
     }
@@ -71,9 +93,12 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
         synchronized (decoderLock) {
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inSampleSize = sampleSize;
-            options.inPreferredConfig = Config.RGB_565;
-            options.inDither = true;
-            return decoder.decodeRegion(sRect, options);
+            options.inPreferredConfig = bitmapConfig;
+            Bitmap bitmap = decoder.decodeRegion(sRect, options);
+            if (bitmap == null) {
+                throw new RuntimeException("Skia image decoder returned null bitmap - image format may not be supported");
+            }
+            return bitmap;
         }
     }
 
