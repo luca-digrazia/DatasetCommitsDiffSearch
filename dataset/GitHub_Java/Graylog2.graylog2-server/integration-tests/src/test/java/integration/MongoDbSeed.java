@@ -24,6 +24,6 @@ import java.lang.annotation.Target;
 @Target({ElementType.METHOD, ElementType.CONSTRUCTOR, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface MongoDbSeed {
-    String[] locations();
-    String database() default "graylog2";
+    String location();
+    String database();
 }

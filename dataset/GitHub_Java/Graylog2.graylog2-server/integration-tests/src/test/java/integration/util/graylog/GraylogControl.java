@@ -16,27 +16,23 @@
  */
 package integration.util.graylog;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.http.client.utils.URIBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.testng.SkipException;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.net.URL;
+import java.net.*;
 
 public class GraylogControl {
-    private static final Logger log = LoggerFactory.getLogger(GraylogControl.class);
     private URL url;
     private static final int HTTP_TIMEOUT = 1000;
 
     public GraylogControl() {
-        this.url = getDefaultServerUrl();
+        this.url = getServerUrl();
     }
 
     public GraylogControl(URL url) {
@@ -44,7 +40,7 @@ public class GraylogControl {
     }
 
     public void startServer() {
-        log.debug("Starting Graylog server...");
+        System.out.println("Starting Graylog server...");
         try {
             URL startupUrl = new URL("http", url.getHost(), 5000, "/sv/up/graylog-server");
 
@@ -56,7 +52,7 @@ public class GraylogControl {
     }
 
     public void stopServer() {
-        log.debug("Stopping Graylog server...");
+        System.out.println("Stoping Graylog server...");
         try {
             URL shutdownUrl = new URL("http", url.getHost(), 5000, "/sv/down/graylog-server");
 
@@ -68,7 +64,7 @@ public class GraylogControl {
 
     }
     public void restartServer() {
-        log.debug("Reestarting Graylog server...");
+        System.out.println("Reestarting Graylog server...");
         stopServer();
         startServer();
     }
@@ -145,25 +141,31 @@ public class GraylogControl {
             InputStream inputStream = connection.getInputStream();
             JsonNode json = mapper.readTree(inputStream);
             return json.get("server_id").toString();
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        } catch (ProtocolException e) {
+            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
         return "00000000-0000-0000-0000-000000000000";
     }
 
-    public URL getUrl() {
-        return url;
-    }
-
-    private URL getDefaultServerUrl() {
+    public URL getServerUrl() {
+        URL url;
         try {
-            final URIBuilder uriBuilder = new URIBuilder(System.getProperty("gl2.baseuri", "http://localhost"));
+            URIBuilder uriBuilder = new URIBuilder(System.getProperty("gl2.baseuri", "http://localhost"));
             uriBuilder.setPort(Integer.parseInt(System.getProperty("gl2.port", "12900")));
             uriBuilder.setUserInfo(System.getProperty("gl2.admin_user", "admin"), System.getProperty("gl2.admin_password", "admin"));
-            return uriBuilder.build().toURL();
-        } catch (URISyntaxException | MalformedURLException e) {
-            throw new RuntimeException("Invalid URI given. Skipping integration tests.");
+            url = uriBuilder.build().toURL();
+        } catch (URISyntaxException e) {
+            throw new SkipException("Invalid URI given. Skipping integration tests.");
+        } catch (MalformedURLException e) {
+            throw new SkipException("Invalid URI given. Skipping integration tests.");
         }
+        return url;
     }
 
     private static void sleep(long millis) {
