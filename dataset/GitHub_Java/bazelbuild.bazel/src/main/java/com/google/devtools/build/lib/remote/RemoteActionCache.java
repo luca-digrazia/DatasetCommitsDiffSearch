@@ -14,58 +14,72 @@
 
 package com.google.devtools.build.lib.remote;
 
-import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
+import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
+import com.google.devtools.build.lib.remote.Digests.ActionKey;
+import com.google.devtools.build.lib.remote.TreeNodeRepository.TreeNode;
+import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
-
+import com.google.devtools.remoteexecution.v1test.ActionResult;
+import com.google.devtools.remoteexecution.v1test.Command;
 import java.io.IOException;
 import java.util.Collection;
+import javax.annotation.Nullable;
 
-/**
- * A cache for storing artifacts (input and output) as well as the output of running an action.
- */
+/** A cache for storing artifacts (input and output) as well as the output of running an action. */
 @ThreadCompatible
 interface RemoteActionCache {
+  // CAS API
+
+  // TODO(buchgr): consider removing the CacheNotFoundException, and replacing it with other
+  // ways to signal a cache miss.
+
   /**
-   * Put the file in cache if it is not already in it. No-op if the file is already stored in
-   * cache.
+   * Ensures that the tree structure of the inputs, the input files themselves, and the command are
+   * available in the remote cache, such that the tree can be reassembled and executed on another
+   * machine given the root digest.
    *
-   * @return The key for fetching the file from cache.
-   */
-  String putFileIfNotExist(Path file) throws IOException;
-
-  /**
-   * Same as {@link putFileIfNotExist(Path)} but this methods takes an ActionInput.
+   * <p>The cache may check whether files or parts of the tree structure are already present, and do
+   * not need to be uploaded again.
    *
-   * @return The key for fetching the file from cache.
+   * <p>Note that this method is only required for remote execution, not for caching itself.
+   * However, remote execution uses a cache to store input files, and that may be a separate
+   * end-point from the executor itself, so the functionality lives here. A pure remote caching
+   * implementation that does not support remote execution may choose not to implement this
+   * function, and throw {@link UnsupportedOperationException} instead. If so, it should be clearly
+   * documented that it cannot be used for remote execution.
    */
-  String putFileIfNotExist(ActionInputFileCache cache, ActionInput file) throws IOException;
+  void ensureInputsPresent(
+      TreeNodeRepository repository, Path execRoot, TreeNode root, Command command)
+          throws IOException, InterruptedException;
 
   /**
-   * Write the file in cache identified by key to the file system. The key must uniquely identify
-   * the content of the file. Throws CacheNotFoundException if the file is not found in cache.
-   */
-  void writeFile(String key, Path dest, boolean executable)
-      throws IOException, CacheNotFoundException;
-
-  /**
-   * Write the action output files identified by the key to the file system. The key must uniquely
-   * identify the action and the content of action inputs.
+   * Download the output files and directory trees of a remotely executed action to the local
+   * machine, as well stdin / stdout to the given files.
    *
-   * @throws CacheNotFoundException if action output is not found in cache.
+   * <p>In case of failure, this method must delete any output files it might have already created.
+   *
+   * @throws CacheNotFoundException in case of a cache miss.
+   * @throws ExecException in case clean up after a failed download failed.
    */
-  void writeActionOutput(String key, Path execRoot)
-      throws IOException, CacheNotFoundException;
+  // TODO(olaola): will need to amend to include the TreeNodeRepository for updating.
+  void download(ActionResult result, Path execRoot, FileOutErr outErr)
+      throws ExecException, IOException, InterruptedException;
+  /**
+   * Attempts to look up the given action in the remote cache and return its result, if present.
+   * Returns {@code null} if there is no such entry. Note that a successful result from this method
+   * does not guarantee the availability of the corresponding output files in the remote cache.
+   */
+  @Nullable
+  ActionResult getCachedActionResult(ActionKey actionKey) throws IOException, InterruptedException;
 
   /**
-   * Update the cache with the action outputs for the specified key.
+   * Upload the result of a locally executed action to the cache by uploading any necessary files,
+   * stdin / stdout, as well as adding an entry for the given action key to the cache.
    */
-  void putActionOutput(String key, Collection<? extends ActionInput> outputs)
-      throws IOException;
+  void upload(ActionKey actionKey, Path execRoot, Collection<Path> files, FileOutErr outErr)
+      throws IOException, InterruptedException;
 
-  /**
-   * Update the cache with the files for the specified key.
-   */
-  void putActionOutput(String key, Path execRoot, Collection<Path> files) throws IOException;
+  /** Release resources associated with the cache. The cache may not be used after calling this. */
+  void close();
 }

@@ -36,6 +36,8 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.remoteexecution.v1test.ActionCacheGrpc;
 import com.google.devtools.remoteexecution.v1test.ActionCacheGrpc.ActionCacheBlockingStub;
 import com.google.devtools.remoteexecution.v1test.ActionResult;
+import com.google.devtools.remoteexecution.v1test.BatchUpdateBlobsRequest;
+import com.google.devtools.remoteexecution.v1test.BatchUpdateBlobsResponse;
 import com.google.devtools.remoteexecution.v1test.Command;
 import com.google.devtools.remoteexecution.v1test.ContentAddressableStorageGrpc;
 import com.google.devtools.remoteexecution.v1test.ContentAddressableStorageGrpc.ContentAddressableStorageBlockingStub;
@@ -46,10 +48,11 @@ import com.google.devtools.remoteexecution.v1test.FindMissingBlobsResponse;
 import com.google.devtools.remoteexecution.v1test.GetActionResultRequest;
 import com.google.devtools.remoteexecution.v1test.OutputFile;
 import com.google.devtools.remoteexecution.v1test.UpdateActionResultRequest;
-import io.grpc.CallCredentials;
+import com.google.protobuf.ByteString;
 import io.grpc.Channel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
+import io.grpc.protobuf.StatusProto;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -66,7 +69,7 @@ import java.util.concurrent.TimeUnit;
 @ThreadSafe
 public class GrpcRemoteCache implements RemoteActionCache {
   private final RemoteOptions options;
-  private final CallCredentials credentials;
+  private final ChannelOptions channelOptions;
   private final Channel channel;
   private final Retrier retrier;
 
@@ -76,32 +79,32 @@ public class GrpcRemoteCache implements RemoteActionCache {
       MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
 
   @VisibleForTesting
-  public GrpcRemoteCache(Channel channel, CallCredentials credentials, RemoteOptions options,
+  public GrpcRemoteCache(Channel channel, ChannelOptions channelOptions, RemoteOptions options,
       Retrier retrier) {
     this.options = options;
-    this.credentials = credentials;
+    this.channelOptions = channelOptions;
     this.channel = channel;
     this.retrier = retrier;
 
-    uploader = new ByteStreamUploader(options.remoteInstanceName, channel, credentials,
-        options.remoteTimeout, retrier, retryScheduler);
+    uploader = new ByteStreamUploader(options.remoteInstanceName, channel,
+        channelOptions.getCallCredentials(), options.remoteTimeout, retrier, retryScheduler);
   }
 
   private ContentAddressableStorageBlockingStub casBlockingStub() {
     return ContentAddressableStorageGrpc.newBlockingStub(channel)
-        .withCallCredentials(credentials)
+        .withCallCredentials(channelOptions.getCallCredentials())
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
 
   private ByteStreamBlockingStub bsBlockingStub() {
     return ByteStreamGrpc.newBlockingStub(channel)
-        .withCallCredentials(credentials)
+        .withCallCredentials(channelOptions.getCallCredentials())
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
 
   private ActionCacheBlockingStub acBlockingStub() {
     return ActionCacheGrpc.newBlockingStub(channel)
-        .withCallCredentials(credentials)
+        .withCallCredentials(channelOptions.getCallCredentials())
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
 
@@ -147,11 +150,27 @@ public class GrpcRemoteCache implements RemoteActionCache {
     repository.getDataFromDigests(missingDigests, missingActionInputs, missingTreeNodes);
 
     if (!missingTreeNodes.isEmpty()) {
-      List<Chunker> toUpload = new ArrayList<>(missingTreeNodes.size());
+      // TODO(olaola): split this into multiple requests if total size is > 10MB.
+      BatchUpdateBlobsRequest.Builder treeBlobRequest =
+          BatchUpdateBlobsRequest.newBuilder().setInstanceName(options.remoteInstanceName);
       for (Directory d : missingTreeNodes) {
-        toUpload.add(new Chunker(d.toByteArray()));
+        byte[] data = d.toByteArray();
+        treeBlobRequest
+            .addRequestsBuilder()
+            .setContentDigest(Digests.computeDigest(data))
+            .setData(ByteString.copyFrom(data));
       }
-      uploader.uploadBlobs(toUpload);
+      retrier.execute(
+          () -> {
+            BatchUpdateBlobsResponse response =
+                casBlockingStub().batchUpdateBlobs(treeBlobRequest.build());
+            for (BatchUpdateBlobsResponse.Response r : response.getResponsesList()) {
+              if (!Status.fromCodeValue(r.getStatus().getCode()).isOk()) {
+                throw StatusProto.toStatusRuntimeException(r.getStatus());
+              }
+            }
+            return null;
+          });
     }
     uploadBlob(command.toByteArray());
     if (!missingActionInputs.isEmpty()) {
