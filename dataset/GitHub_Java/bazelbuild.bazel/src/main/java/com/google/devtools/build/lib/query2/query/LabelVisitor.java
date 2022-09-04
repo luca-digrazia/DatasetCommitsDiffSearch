@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.concurrent.ErrorClassifier;
 import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.events.ErrorSensingEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDefinition;
@@ -158,7 +159,7 @@ final class LabelVisitor {
     this.edgeFilter = edgeFilter;
   }
 
-  void syncWithVisitor(
+  public void syncWithVisitor(
       ExtendedEventHandler eventHandler,
       Set<Target> targetsToVisit,
       boolean keepGoing,
@@ -180,7 +181,7 @@ final class LabelVisitor {
    * cache the result.
    */
   public void syncUncached(
-      ExtendedEventHandler eventHandler,
+      ErrorSensingEventHandler eventHandler,
       Iterable<Target> targetsToVisit,
       boolean keepGoing,
       int parallelThreads,
@@ -276,7 +277,7 @@ final class LabelVisitor {
       return !errorObserver.hasErrors();
     }
 
-    void stopNewActions() {
+    public void stopNewActions() {
       executorService.shutdownNow();
     }
 
@@ -405,7 +406,7 @@ final class LabelVisitor {
         visit(null, null, rule, depth + 1, count + 1);
       }
 
-      LabelVisitationUtils.visitTarget(
+      LabelVisitationUtils.visitTargetExceptionally(
           target,
           edgeFilter,
           (fromTarget, attribute, toLabel) ->

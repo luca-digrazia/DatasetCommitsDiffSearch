@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.query;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -55,7 +56,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
 /**
@@ -240,8 +240,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
       callback.process(
           new PathLabelVisitor(targetProvider, dependencyFilter).somePath(eventHandler, from, to));
     } catch (NoSuchThingException e) {
-      throw new QueryException(
-          caller, e.getMessage(), e, e.getDetailedExitCode().getFailureDetail());
+      throw new QueryException(caller, e.getMessage());
     }
   }
 
@@ -253,7 +252,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
       callback.process(
           new PathLabelVisitor(targetProvider, dependencyFilter).allPaths(eventHandler, from, to));
     } catch (NoSuchThingException e) {
-      throw new QueryException(caller, e.getMessage(), e.getDetailedExitCode().getFailureDetail());
+      throw new QueryException(caller, e.getMessage());
     }
   }
 
@@ -266,7 +265,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
           new PathLabelVisitor(targetProvider, dependencyFilter)
               .samePkgDirectRdeps(eventHandler, from));
     } catch (NoSuchThingException e) {
-      throw new QueryException(caller, e.getMessage(), e.getDetailedExitCode().getFailureDetail());
+      throw new QueryException(caller, e.getMessage());
     }
   }
 
@@ -283,7 +282,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
           new PathLabelVisitor(targetProvider, dependencyFilter)
               .rdeps(eventHandler, from, universe, maxDepth));
     } catch (NoSuchThingException e) {
-      throw new QueryException(caller, e.getMessage(), e.getDetailedExitCode().getFailureDetail());
+      throw new QueryException(caller, e.getMessage());
     }
   }
 
