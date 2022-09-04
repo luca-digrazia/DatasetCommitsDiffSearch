@@ -29,7 +29,7 @@ import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.SecurityContext;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Locale;
 
 @Priority(Priorities.AUTHORIZATION)
 public class ShiroAuthorizationFilter implements ContainerRequestFilter {
@@ -47,14 +47,14 @@ public class ShiroAuthorizationFilter implements ContainerRequestFilter {
             final ShiroSecurityContext context = (ShiroSecurityContext) securityContext;
             final String userName = RestTools.getUserNameFromRequest(requestContext);
             final ContextAwarePermissionAnnotationHandler annotationHandler = new ContextAwarePermissionAnnotationHandler(context);
-            final String[] requiredPermissions = annotation.value();
             try {
-                LOG.debug("Checking authorization for user [{}], needs permissions: {}", userName, requiredPermissions);
+                LOG.debug("Checking authorization for user [{}], needs permissions: {}", userName, annotation.value());
                 annotationHandler.assertAuthorized(annotation);
             } catch (AuthorizationException e) {
-                LOG.info("Not authorized. User <{}> is missing permissions {} to perform <{} {}>",
-                        userName, Arrays.toString(requiredPermissions), requestContext.getMethod(), requestContext.getUriInfo().getPath());
-                throw new ForbiddenException("Not authorized");
+                final String msg = String.format(Locale.US, "User [%s] not authorized. (%s %s)", userName,
+                        requestContext.getMethod(), requestContext.getUriInfo().getPath());
+                LOG.info(msg);
+                throw new ForbiddenException(msg);
             }
         } else {
             throw new ForbiddenException();
