@@ -343,14 +343,14 @@ public class BeanInfo {
         // TODO we should add way more validations
     }
 
-    void init(List<Throwable> errors) {
+    void init() {
         for (Injection injection : injections) {
             for (InjectionPointInfo injectionPoint : injection.injectionPoints) {
-                Beans.resolveInjectionPoint(beanDeployment, this, injectionPoint, errors);
+                Beans.resolveInjectionPoint(beanDeployment, this, injectionPoint);
             }
         }
         if (disposer != null) {
-            disposer.init(errors);
+            disposer.init();
         }
         interceptedMethods = initInterceptedMethods();
         lifecycleInterceptors = initLifecycleInterceptors();
@@ -445,10 +445,10 @@ public class BeanInfo {
         builder.append(", qualifiers=");
         builder.append(qualifiers);
         builder.append(", target=");
-        builder.append(target.isPresent() ? target.get() : "n/a");
+        builder.append(target);
         if (declaringBean != null) {
             builder.append(", declaringBean=");
-            builder.append(declaringBean.target.isPresent() ? declaringBean.target.get() : "n/a");
+            builder.append(declaringBean.target);
         }
         builder.append("]");
         return builder.toString();
