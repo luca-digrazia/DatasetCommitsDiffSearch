@@ -689,6 +689,11 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     return deployJar;
   }
 
+  private static JavaOptimizationMode getJavaOptimizationMode(RuleContext ruleContext) {
+    return ruleContext.getConfiguration().getFragment(JavaConfiguration.class)
+        .getJavaOptimizationMode();
+  }
+
   /**
    * Applies the proguard specifications, and creates a ProguardedJar. Proguard's output artifacts
    * are added to the given {@code filesBuilder}.
@@ -765,7 +770,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             semantics,
             proguardOutputMap);
     outputs.addAllToSet(failures);
-    JavaOptimizationMode optMode = ProguardHelper.getJavaOptimizationMode(ruleContext);
+    JavaOptimizationMode optMode = getJavaOptimizationMode(ruleContext);
     ruleContext.registerAction(
         new FailAction(
             ruleContext.getActionOwner(),
