@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,17 +13,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
 import java.util.Properties;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
-import smile.math.matrix.Matrix;
-import smile.util.IntSet;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.EVD;
 import smile.util.Strings;
 
 /**
@@ -91,11 +90,11 @@ public class LDA implements SoftClassifier<double[]> {
      * to discriminant functions, normalized so that common covariance
      * matrix is spherical.
      */
-    private final Matrix scaling;
+    private final DenseMatrix scaling;
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private final ClassLabel labels;
 
     /**
      * Constructor.
@@ -104,8 +103,8 @@ public class LDA implements SoftClassifier<double[]> {
      * @param eigen the eigen values of common variance matrix.
      * @param scaling the eigen vectors of common covariance matrix.
      */
-    public LDA(double[] priori, double[][] mu, double[] eigen, Matrix scaling) {
-        this(priori, mu, eigen, scaling, IntSet.of(priori.length));
+    public LDA(double[] priori, double[][] mu, double[] eigen, DenseMatrix scaling) {
+        this(priori, mu, eigen, scaling, ClassLabel.of(priori.length));
     }
 
     /**
@@ -116,7 +115,7 @@ public class LDA implements SoftClassifier<double[]> {
      * @param scaling the eigen vectors of common covariance matrix.
      * @param labels class labels
      */
-    public LDA(double[] priori, double[][] mu, double[] eigen, Matrix scaling, IntSet labels) {
+    public LDA(double[] priori, double[][] mu, double[] eigen, DenseMatrix scaling, ClassLabel labels) {
         this.k = priori.length;
         this.p = mu[0].length;
         this.priori = priori;
@@ -148,7 +147,7 @@ public class LDA implements SoftClassifier<double[]> {
      * @param data the data frame of the explanatory and response variables.
      */
     public static LDA fit(Formula formula, DataFrame data, Properties prop) {
-        double[][] x = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
+        double[][] x = formula.x(data).toArray();
         int[] y = formula.y(data).toIntArray();
         return fit(x, y, prop);
     }
@@ -184,17 +183,19 @@ public class LDA implements SoftClassifier<double[]> {
      */
     public static LDA fit(double[][] x, int[] y, double[] priori, double tol) {
         DiscriminantAnalysis da = DiscriminantAnalysis.fit(x, y, priori, tol);
-        Matrix St = DiscriminantAnalysis.St(x, da.mean, da.k, tol);
-        Matrix.EVD eigen = St.eigen().sort();
+
+        DenseMatrix St = DiscriminantAnalysis.St(x, da.mean, da.k, tol);
+
+        EVD eigen = St.eigen();
 
         tol = tol * tol;
-        for (double s : eigen.wr) {
+        for (double s : eigen.getEigenValues()) {
             if (s < tol) {
                 throw new IllegalArgumentException("The covariance matrix is close to singular.");
             }
         }
 
-        return new LDA(da.priori, da.mu, eigen.wr, eigen.Vr, da.labels);
+        return new LDA(da.priori, da.mu, eigen.getEigenValues(), eigen.getEigenVectors(), da.labels);
     }
 
     /**
@@ -224,7 +225,7 @@ public class LDA implements SoftClassifier<double[]> {
                 d[j] = x[j] - mean[j];
             }
 
-            scaling.tv(d, ux);
+            scaling.atx(d, ux);
 
             double f = 0.0;
             for (int j = 0; j < p; j++) {
@@ -234,6 +235,6 @@ public class LDA implements SoftClassifier<double[]> {
             posteriori[i] = logppriori[i] - 0.5 * f;
         }
 
-        return labels.valueOf(MathEx.softmax(posteriori));
+        return labels.label(MathEx.softmax(posteriori));
     }
 }

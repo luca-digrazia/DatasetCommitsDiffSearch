@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.classification;
 
-import java.util.Arrays;
 import smile.math.MathEx;
 import smile.math.distance.Distance;
 import smile.math.distance.EuclideanDistance;
@@ -27,7 +26,6 @@ import smile.neighbor.KDTree;
 import smile.neighbor.KNNSearch;
 import smile.neighbor.LinearSearch;
 import smile.neighbor.Neighbor;
-import smile.util.IntSet;
 
 /**
  * K-nearest neighbor classifier. The k-nearest neighbor algorithm (k-NN) is
@@ -87,7 +85,7 @@ public class KNN<T> implements SoftClassifier<T> {
     /**
      * The class labels.
      */
-    private IntSet labels;
+    private ClassLabel labels;
     /**
      * Constructor.
      * @param knn k-nearest neighbor search data structure of training instances.
@@ -98,7 +96,7 @@ public class KNN<T> implements SoftClassifier<T> {
         this.knn = knn;
         this.k = k;
         this.y = y;
-        labels = ClassLabels.fit(y).labels;
+        labels = ClassLabel.fit(y).labels;
     }
 
     /**
@@ -108,7 +106,7 @@ public class KNN<T> implements SoftClassifier<T> {
      * @param distance the distance measure for finding nearest neighbors.
      */
     public static <T> KNN<T> fit(T[] x, int[] y, Distance<T> distance) {
-        return fit(x, y, 1, distance);
+        return fit(x, y, distance, 1);
     }
 
     /**
@@ -118,7 +116,7 @@ public class KNN<T> implements SoftClassifier<T> {
      * @param y training labels.
      * @param distance the distance measure for finding nearest neighbors.
      */
-    public static <T> KNN<T> fit(T[] x, int[] y, int k, Distance<T> distance) {
+    public static <T> KNN<T> fit(T[] x, int[] y, Distance<T> distance, int k) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -175,54 +173,33 @@ public class KNN<T> implements SoftClassifier<T> {
     public int predict(T x) {
         Neighbor<T,T>[] neighbors = knn.knn(x, k);
         if (k == 1) {
-            if (neighbors[0] == null) {
-                throw new IllegalStateException("No neighbor found.");
-            }
             return y[neighbors[0].index];
         }
 
         int[] count = new int[labels.size()];
-        for (Neighbor<T,T> neighbor : neighbors) {
-            if (neighbor != null) {
-                count[labels.indexOf(y[neighbor.index])]++;
-            }
+        for (int i = 0; i < k; i++) {
+            count[labels.id(y[neighbors[i].index])]++;
         }
 
-        int y = MathEx.whichMax(count);
-        if (count[y] == 0) {
-            throw new IllegalStateException("No neighbor found.");
-        }
-
-        return labels.valueOf(y);
+        return labels.label(MathEx.whichMax(count));
     }
 
     @Override
     public int predict(T x, double[] posteriori) {
         Neighbor<T,T>[] neighbors = knn.knn(x, k);
         if (k == 1) {
-            if (neighbors[0] == null) {
-                throw new IllegalStateException("No neighbor found.");
-            }
-
-            Arrays.fill(posteriori, 0.0);
-            posteriori[labels.indexOf(y[neighbors[0].index])] = 1.0;
             return y[neighbors[0].index];
         }
 
         int[] count = new int[labels.size()];
         for (int i = 0; i < k; i++) {
-            count[labels.indexOf(y[neighbors[i].index])]++;
-        }
-
-        int y = MathEx.whichMax(count);
-        if (count[y] == 0) {
-            throw new IllegalStateException("No neighbor found.");
+            count[labels.id(y[neighbors[i].index])]++;
         }
 
         for (int i = 0; i < count.length; i++) {
             posteriori[i] = (double) count[i] / k;
         }
 
-        return labels.valueOf(y);
+        return labels.label(MathEx.whichMax(count));
     }
 }
