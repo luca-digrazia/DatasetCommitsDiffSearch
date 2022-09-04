@@ -19,7 +19,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.Concatable.Concatter;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
-import java.io.IOException;
+import java.util.Collections;
 import java.util.IllegalFormatException;
 
 /**
@@ -55,22 +55,7 @@ public final class BinaryOperatorExpression extends Expression {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    // TODO(bazel-team): Possibly omit parentheses when they are not needed according to operator
-    // precedence rules. This requires passing down more contextual information.
-    buffer.append('(');
-    lhs.prettyPrint(buffer);
-    buffer.append(' ');
-    buffer.append(operator.toString());
-    buffer.append(' ');
-    rhs.prettyPrint(buffer);
-    buffer.append(')');
-  }
-
-  @Override
   public String toString() {
-    // This omits the parentheses for brevity, but is not correct in general due to operator
-    // precedence rules.
     return lhs + " " + operator + " " + rhs;
   }
 
@@ -335,8 +320,7 @@ public final class BinaryOperatorExpression extends Expression {
   }
 
   /** Implements Operator.PERCENT. */
-  private static Object percent(Object lval, Object rval, Location location)
-      throws EvalException {
+  private static Object percent(Object lval, Object rval, Location location) throws EvalException {
     // int % int
     if (lval instanceof Integer && rval instanceof Integer) {
       if (rval.equals(0)) {
@@ -359,9 +343,9 @@ public final class BinaryOperatorExpression extends Expression {
       String pattern = (String) lval;
       try {
         if (rval instanceof Tuple) {
-          return Printer.formatWithList(pattern, (Tuple) rval);
+          return Printer.formatToString(pattern, (Tuple) rval);
         }
-        return Printer.format(pattern, rval);
+        return Printer.formatToString(pattern, Collections.singletonList(rval));
       } catch (IllegalFormatException e) {
         throw new EvalException(location, e.getMessage());
       }
