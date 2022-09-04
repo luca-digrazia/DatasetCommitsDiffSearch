@@ -356,15 +356,14 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       // Early exit. We need to guarantee that the ErrOut and Reporter setup below never error out,
       // so any invariants they need must be checked before this point.
       if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-        replayEarlyExitEvents(
+        return replayEarlyExitEvents(
             outErr,
             optionHandler,
             storedEventHandler,
             env,
+            earlyExitCode,
             new NoBuildEvent(
                 commandName, firstContactTime, false, true, env.getCommandId().toString()));
-        result = BlazeCommandResult.exitCode(earlyExitCode);
-        return result;
       }
 
       try (SilentCloseable closeable = Profiler.instance().profile("setup event handler")) {
@@ -478,8 +477,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         env.beforeCommand(waitTimeInMs, invocationPolicy);
       } catch (AbruptExitException e) {
         reporter.handle(Event.error(e.getMessage()));
-        result = BlazeCommandResult.exitCode(e.getExitCode());
-        return result;
+        return BlazeCommandResult.exitCode(e.getExitCode());
       }
 
       // Log the command line now that the modules have all had a change to register their listeners
@@ -514,30 +512,28 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
           earlyExitCode = e.getExitCode();
         }
         if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-          replayEarlyExitEvents(
+          return replayEarlyExitEvents(
               outErr,
               optionHandler,
               storedEventHandler,
               env,
+              earlyExitCode,
               new NoBuildEvent(
                   commandName, firstContactTime, false, true, env.getCommandId().toString()));
-          result = BlazeCommandResult.exitCode(earlyExitCode);
-          return result;
         }
       }
 
       // Parse starlark options.
       earlyExitCode = optionHandler.parseStarlarkOptions(env, storedEventHandler);
       if (!earlyExitCode.equals(ExitCode.SUCCESS)) {
-        replayEarlyExitEvents(
+        return replayEarlyExitEvents(
             outErr,
             optionHandler,
             storedEventHandler,
             env,
+            earlyExitCode,
             new NoBuildEvent(
                 commandName, firstContactTime, false, true, env.getCommandId().toString()));
-        result = BlazeCommandResult.exitCode(earlyExitCode);
-        return result;
       }
       options = optionHandler.getOptionsResult();
 
@@ -572,11 +568,12 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     }
   }
 
-  private static void replayEarlyExitEvents(
+  private static BlazeCommandResult replayEarlyExitEvents(
       OutErr outErr,
       BlazeOptionHandler optionHandler,
       StoredEventHandler storedEventHandler,
       CommandEnvironment env,
+      ExitCode earlyExitCode,
       NoBuildEvent noBuildEvent) {
     PrintingEventHandler printingEventHandler =
         new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
@@ -590,6 +587,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       env.getEventBus().post(post);
     }
     env.getEventBus().post(noBuildEvent);
+    return BlazeCommandResult.exitCode(earlyExitCode);
   }
 
   private OutErr bufferOut(OutErr outErr) {

@@ -102,6 +102,7 @@ public class AggregatingTestListener {
     AggregationPolicy policy =
         new AggregationPolicy(
             eventBus,
+            executionOptions.runsPerTestDetectsFlakes,
             executionOptions.testCheckUpToDate,
             summaryOptions.testVerboseTimeoutWarnings);
     // Add all target runs to the map, assuming 1:1 status artifact <-> result.
