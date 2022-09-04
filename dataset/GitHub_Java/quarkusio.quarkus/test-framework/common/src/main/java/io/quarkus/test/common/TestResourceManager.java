@@ -13,11 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
@@ -29,7 +26,7 @@ import org.jboss.jandex.Indexer;
 
 public class TestResourceManager {
 
-    private final List<QuarkusTestResourceLifecycleManager> testResources;
+    private final Set<QuarkusTestResourceLifecycleManager> testResources;
     private Map<String, String> oldSystemProps;
 
     public TestResourceManager(Class<?> testClass) {
@@ -81,7 +78,7 @@ public class TestResourceManager {
     }
 
     @SuppressWarnings("unchecked")
-    private List<QuarkusTestResourceLifecycleManager> getTestResources(Class<?> testClass) {
+    private Set<QuarkusTestResourceLifecycleManager> getTestResources(Class<?> testClass) {
         IndexView index = indexTestClasses(testClass);
 
         Set<Class<? extends QuarkusTestResourceLifecycleManager>> testResourceRunnerClasses = new LinkedHashSet<>();
@@ -95,7 +92,7 @@ public class TestResourceManager {
             }
         }
 
-        List<QuarkusTestResourceLifecycleManager> testResourceRunners = new ArrayList<>();
+        Set<QuarkusTestResourceLifecycleManager> testResourceRunners = new LinkedHashSet<>();
 
         for (Class<? extends QuarkusTestResourceLifecycleManager> testResourceRunnerClass : testResourceRunnerClasses) {
             try {
@@ -106,12 +103,9 @@ public class TestResourceManager {
             }
         }
 
-        for (QuarkusTestResourceLifecycleManager quarkusTestResourceLifecycleManager : ServiceLoader
-                .load(QuarkusTestResourceLifecycleManager.class)) {
-            testResourceRunners.add(quarkusTestResourceLifecycleManager);
+        for (QuarkusTestResourceLifecycleManager i : ServiceLoader.load(QuarkusTestResourceLifecycleManager.class)) {
+            testResourceRunners.add(i);
         }
-
-        Collections.sort(testResourceRunners, new QuarkusTestResourceLifecycleManagerComparator());
 
         return testResourceRunners;
     }

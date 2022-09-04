@@ -1,30 +1,15 @@
-/*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.test.junit4;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import io.quarkus.test.common.RestAssuredURLManager;
-import io.quarkus.test.common.TestResourceManager;
 import org.junit.runner.Description;
 import org.junit.runner.Result;
 import org.junit.runner.notification.RunListener;
 import org.junit.runner.notification.RunNotifier;
+
+import io.quarkus.test.common.RestAssuredURLManager;
+import io.quarkus.test.common.TestResourceManager;
 
 abstract class AbstractQuarkusRunListener extends RunListener {
 
@@ -38,15 +23,18 @@ abstract class AbstractQuarkusRunListener extends RunListener {
 
     private boolean failed = false;
 
+    private final RestAssuredURLManager restAssuredURLManager;
+
     protected AbstractQuarkusRunListener(Class<?> testClass, RunNotifier runNotifier) {
         this.testClass = testClass;
         this.runNotifier = runNotifier;
         this.testResourceManager = new TestResourceManager(testClass);
+        this.restAssuredURLManager = new RestAssuredURLManager(false);
     }
 
     @Override
     public void testStarted(Description description) throws Exception {
-        RestAssuredURLManager.setURL();
+        restAssuredURLManager.setURL();
         if (!started) {
             List<RunListener> stopListeners = new ArrayList<>();
 
@@ -92,10 +80,12 @@ abstract class AbstractQuarkusRunListener extends RunListener {
     @Override
     public void testFinished(Description description) throws Exception {
         super.testFinished(description);
-        RestAssuredURLManager.clearURL();
+        restAssuredURLManager.clearURL();
     }
 
-
+    public void inject(Object testInstance) {
+        testResourceManager.inject(testInstance);
+    }
 
     protected abstract void startQuarkus() throws Exception;
 
