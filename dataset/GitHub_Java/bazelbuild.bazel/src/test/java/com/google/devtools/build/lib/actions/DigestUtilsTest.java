@@ -85,10 +85,8 @@ public class DigestUtilsTest {
     FileSystemUtils.writeContentAsLatin1(myFile1, Strings.repeat("a", fileSize1));
     FileSystemUtils.writeContentAsLatin1(myFile2, Strings.repeat("b", fileSize2));
 
-    TestThread thread1 =
-        new TestThread(() -> DigestUtils.getDigestWithManualFallback(myFile1, fileSize1));
-    TestThread thread2 =
-        new TestThread(() -> DigestUtils.getDigestWithManualFallback(myFile2, fileSize2));
+    TestThread thread1 = new TestThread(() -> DigestUtils.getDigestOrFail(myFile1, fileSize1));
+    TestThread thread2 = new TestThread(() -> DigestUtils.getDigestOrFail(myFile2, fileSize2));
      thread1.start();
      thread2.start();
      if (!expectConcurrent) { // Synchronized case.
@@ -112,8 +110,7 @@ public class DigestUtilsTest {
   public void testCalculationConcurrency() throws Exception {
     final int small = DigestUtils.MULTI_THREADED_DIGEST_MAX_FILE_SIZE;
     final int large = DigestUtils.MULTI_THREADED_DIGEST_MAX_FILE_SIZE + 1;
-    for (DigestHashFunction hf :
-        Arrays.asList(DigestHashFunction.SHA256, DigestHashFunction.SHA1)) {
+    for (DigestHashFunction hf : Arrays.asList(DigestHashFunction.MD5, DigestHashFunction.SHA1)) {
       assertDigestCalculationConcurrency(true, true, small, small, hf);
       assertDigestCalculationConcurrency(true, true, large, large, hf);
       assertDigestCalculationConcurrency(true, false, small, small, hf);
@@ -153,7 +150,7 @@ public class DigestUtilsTest {
       return this;
     }
 
-    void check() {
+    void check() throws Exception {
       assertThat(stats.evictionCount()).isEqualTo(expectedEvictionCount);
       assertThat(stats.hitCount()).isEqualTo(expectedHitCount);
       assertThat(stats.missCount()).isEqualTo(expectedMissCount);
@@ -168,7 +165,7 @@ public class DigestUtilsTest {
     FileSystem tracingFileSystem =
         new InMemoryFileSystem(BlazeClock.instance()) {
           @Override
-          protected byte[] getFastDigest(Path path) {
+          protected byte[] getFastDigest(Path path) throws IOException {
             getFastDigestCounter.incrementAndGet();
             return null;
           }
@@ -189,12 +186,12 @@ public class DigestUtilsTest {
     FileSystemUtils.writeContentAsLatin1(file2, "some other contents");
     FileSystemUtils.writeContentAsLatin1(file3, "and something else");
 
-    byte[] digest1 = DigestUtils.getDigestWithManualFallback(file1, file1.getFileSize());
+    byte[] digest1 = DigestUtils.getDigestOrFail(file1, file1.getFileSize());
     assertThat(getFastDigestCounter.get()).isEqualTo(1);
     assertThat(getDigestCounter.get()).isEqualTo(1);
     new CacheStatsChecker().evictionCount(0).hitCount(0).missCount(1).check();
 
-    byte[] digest2 = DigestUtils.getDigestWithManualFallback(file1, file1.getFileSize());
+    byte[] digest2 = DigestUtils.getDigestOrFail(file1, file1.getFileSize());
     assertThat(getFastDigestCounter.get()).isEqualTo(2);
     assertThat(getDigestCounter.get()).isEqualTo(1);
     new CacheStatsChecker().evictionCount(0).hitCount(1).missCount(1).check();
@@ -202,79 +199,14 @@ public class DigestUtilsTest {
     assertThat(digest2).isEqualTo(digest1);
 
     // Evict the digest for the previous file.
-    DigestUtils.getDigestWithManualFallback(file2, file2.getFileSize());
-    DigestUtils.getDigestWithManualFallback(file3, file3.getFileSize());
+    DigestUtils.getDigestOrFail(file2, file2.getFileSize());
+    DigestUtils.getDigestOrFail(file3, file3.getFileSize());
     new CacheStatsChecker().evictionCount(1).hitCount(1).missCount(3).check();
 
     // And now try to recompute it.
-    byte[] digest3 = DigestUtils.getDigestWithManualFallback(file1, file1.getFileSize());
+    byte[] digest3 = DigestUtils.getDigestOrFail(file1, file1.getFileSize());
     new CacheStatsChecker().evictionCount(2).hitCount(1).missCount(4).check();
 
     assertThat(digest3).isEqualTo(digest1);
-  }
-
-  @Test
-  public void testCacheWithSymlinks_cacheHit() throws Exception {
-    final AtomicInteger getFastDigestCounter = new AtomicInteger(0);
-    final AtomicInteger getDigestCounter = new AtomicInteger(0);
-
-    FileSystem tracingFileSystem =
-        new InMemoryFileSystem(BlazeClock.instance()) {
-          @Override
-          protected byte[] getFastDigest(Path path) {
-            getFastDigestCounter.incrementAndGet();
-            return null;
-          }
-
-          @Override
-          protected byte[] getDigest(Path path) throws IOException {
-            getDigestCounter.incrementAndGet();
-            return super.getDigest(path);
-          }
-        };
-
-    DigestUtils.configureCache(2);
-
-    final Path file1 = tracingFileSystem.getPath("/file1.txt");
-    FileSystemUtils.writeContentAsLatin1(file1, "some contents");
-    // Create a symlink to file1
-    final Path directory = tracingFileSystem.getPath("/dir");
-    directory.createDirectory();
-    final Path symlink = tracingFileSystem.getPath("/dir/symlink_to_file1.txt");
-    symlink.createSymbolicLink(file1);
-
-    byte[] digest1 = DigestUtils.getDigestWithManualFallback(file1, file1.getFileSize());
-    assertThat(getFastDigestCounter.get()).isEqualTo(1);
-    assertThat(getDigestCounter.get()).isEqualTo(1);
-    new CacheStatsChecker().evictionCount(0).hitCount(0).missCount(1).check();
-
-    // Check that there is a cache hit for the symlink
-    byte[] digest2 = DigestUtils.getDigestWithManualFallback(symlink, symlink.getFileSize());
-    assertThat(getFastDigestCounter.get()).isEqualTo(2);
-    assertThat(getDigestCounter.get()).isEqualTo(1);
-    new CacheStatsChecker().evictionCount(0).hitCount(1).missCount(1).check();
-
-    assertThat(digest1).isEqualTo(digest2);
-  }
-
-  @Test
-  public void manuallyComputeDigest() throws Exception {
-    byte[] digest = {1, 2, 3};
-    FileSystem noDigestFileSystem =
-        new InMemoryFileSystem(BlazeClock.instance()) {
-          @Override
-          protected byte[] getFastDigest(Path path) {
-            throw new AssertionError("Unexpected call to getFastDigest");
-          }
-
-          @Override
-          protected byte[] getDigest(Path path) {
-            return digest;
-          }
-        };
-    Path file = noDigestFileSystem.getPath("/f.txt");
-    FileSystemUtils.writeContentAsLatin1(file, "contents");
-
-    assertThat(DigestUtils.manuallyComputeDigest(file, /*fileSize=*/ 8)).isEqualTo(digest);
   }
 }

@@ -69,8 +69,7 @@ public class ParallelVisitorTest {
           /*processResultsBatchSize=*/ 1,
           /*minPendingTasks=*/ MIN_PENDING_TASKS,
           /*batchCallbackSize=*/ BATCH_CALLBACK_SIZE,
-          Executors.newFixedThreadPool(3),
-          VisitTaskStatusCallback.NULL_INSTANCE);
+          Executors.newFixedThreadPool(3));
       this.invocationLatch = invocationLatch;
       this.delayLatch = delayLatch;
     }
@@ -141,8 +140,7 @@ public class ParallelVisitorTest {
           processResultsBatchSize,
           MIN_PENDING_TASKS,
           BATCH_CALLBACK_SIZE,
-          Executors.newFixedThreadPool(3),
-          VisitTaskStatusCallback.NULL_INSTANCE);
+          Executors.newFixedThreadPool(3));
       this.successorMap = successors;
     }
 

@@ -13,17 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.dynamic;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
-import static junit.framework.TestCase.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -57,7 +54,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
@@ -78,14 +74,6 @@ public class DynamicSpawnStrategyTest {
   private static void countDownAndWait(CountDownLatch countDownLatch) throws InterruptedException {
     countDownLatch.countDown();
     countDownLatch.await();
-  }
-
-  /** Hook to implement per-test custom logic in the {@link MockSpawnStrategy}. */
-  @FunctionalInterface
-  interface DoExec {
-    List<SpawnResult> run(
-        MockSpawnStrategy self, Spawn spawn, ActionExecutionContext actionExecutionContext)
-        throws ExecException, InterruptedException;
   }
 
   /**
@@ -110,6 +98,13 @@ public class DynamicSpawnStrategyTest {
 
     /** Tracks whether {@link #exec} completed successfully or not. */
     private CountDownLatch succeeded = new CountDownLatch(1);
+
+    @FunctionalInterface
+    interface DoExec {
+      List<SpawnResult> run(
+          MockSpawnStrategy self, Spawn spawn, ActionExecutionContext actionExecutionContext)
+          throws ExecException, InterruptedException;
+    }
 
     /** Hook to implement per-test custom logic. */
     private final DoExec doExec;
@@ -184,6 +179,11 @@ public class DynamicSpawnStrategyTest {
     /** Returns true if {@link #exec} was called and completed successfully; does not block. */
     boolean succeeded() {
       return succeeded.getCount() == 0;
+    }
+
+    /** Blocks until {@link #exec} completes and returns true in that case. */
+    boolean awaitSuccess() throws InterruptedException {
+      return succeeded.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
   }
 
@@ -737,230 +737,141 @@ public class DynamicSpawnStrategyTest {
     assertThat(outErr.getErrorPath().exists()).isFalse();
   }
 
-  /** Hook to validate the result of the strategy's execution. */
-  @FunctionalInterface
-  interface CheckExecResult {
-    void check(@Nullable Exception e) throws Exception;
-  }
-
-  /**
-   * Runs a test to check that both spawns finished under various conditions before the strategy's
-   * {@code exec} method returns control.
-   *
-   * @param executionFails causes one of the branches in the execution to terminate with an
-   *     execution exception
-   * @param interruptThread causes the strategy's execution to be interrupted while it is waiting
-   *     for its branches to complete
-   * @param checkExecResult a lambda to validate the result of the execution. Receives null if the
-   *     execution completed successfully, or else the raised exception.
-   */
-  private void assertThatStrategyWaitsForBothSpawnsToFinish(
-      boolean executionFails, boolean interruptThread, CheckExecResult checkExecResult)
+  private void strategyWaitsForBothSpawnsToFinish(boolean interruptThread, boolean executionFails)
       throws Exception {
-    AtomicBoolean stopLocal = new AtomicBoolean(false);
+    CountDownLatch waitToFinish = new CountDownLatch(1);
+    CountDownLatch wasInterrupted = new CountDownLatch(1);
     CountDownLatch executionCanProceed = new CountDownLatch(2);
-    CountDownLatch remoteDone = new CountDownLatch(1);
 
     MockLocalSpawnStrategy localStrategy =
         new MockLocalSpawnStrategy(
             testRoot,
             (self, spawn, actionExecutionContext) -> {
               executionCanProceed.countDown();
-
-              // We cannot use a synchronization primitive to block termination of this thread
-              // because we expect to be interrupted by the remote strategy, and even in that case
-              // we want to control exactly when this finishes. We could wait for and swallow the
-              // interrupt before waiting again on a latch here... but swallowing the interrupt can
-              // lead to race conditions.
-              while (!stopLocal.get()) {
-                Uninterruptibles.sleepUninterruptibly(1, TimeUnit.MILLISECONDS);
+              try {
+                Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
+                throw new IllegalStateException("Should have been interrupted");
+              } catch (InterruptedException e) {
+                // Expected.
               }
-              throw new InterruptedException("Local stopped");
+              wasInterrupted.countDown();
+              try {
+                checkState(waitToFinish.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS));
+              } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+              }
+              return ImmutableList.of();
             });
 
     MockRemoteSpawnStrategy remoteStrategy =
         new MockRemoteSpawnStrategy(
             testRoot,
             (self, spawn, actionExecutionContext) -> {
-              try {
-                // Wait until the local branch has started so that our completion causes it to be
-                // interrupted in a known location.
-                countDownAndWait(executionCanProceed);
-
-                if (executionFails) {
-                  self.failExecution(actionExecutionContext);
-                  throw new AssertionError("Not reachable");
-                }
-                return ImmutableList.of();
-              } finally {
-                remoteDone.countDown();
+              if (executionFails) {
+                self.failExecution(actionExecutionContext);
               }
+              countDownAndWait(executionCanProceed);
+              return ImmutableList.of();
             });
 
     SpawnActionContext dynamicSpawnStrategy = createSpawnStrategy(localStrategy, remoteStrategy);
+
     TestThread testThread =
         new TestThread(
             () -> {
               try {
                 Spawn spawn = newDynamicSpawn();
                 dynamicSpawnStrategy.exec(spawn, actionExecutionContext);
-                checkExecResult.check(null);
-              } catch (Exception e) {
-                checkExecResult.check(e);
+                checkState(!interruptThread && !executionFails);
+              } catch (InterruptedException e) {
+                checkState(interruptThread && !executionFails);
+                checkState(!Thread.currentThread().isInterrupted());
+              } catch (ExecException e) {
+                checkState(executionFails);
+                checkState(Thread.currentThread().isInterrupted() == interruptThread);
               }
             });
     testThread.start();
-    try {
-      remoteDone.await();
-      // At this point, the remote branch is done and the local branch is waiting until we allow it
-      // to complete later on. This is necessary to let us assert the state of the thread's
-      // liveliness.
-      //
-      // However, note that "done" just means that our DoExec hook for remoteStrategy finished.
-      // Any exception raised from within it may still be propagating up, so the interrupt below
-      // races with that (and thus an InterruptedException can "win" over our own exception). There
-      // is no way to handle this condition in the test other than having to acknowledge that it may
-      // happen.
-
-      if (interruptThread) {
-        testThread.interrupt();
-      }
-
-      // The thread running the exec via the strategy must still be alive regardless of our
-      // interrupt request (because the local branch is stuck). Wait for a little bit to ensure
-      // this is true; any multi-second wait should be sufficient to catch the majority of the
-      // bugs.
-      testThread.join(2000);
-      assertThat(testThread.isAlive()).isTrue();
-    } finally {
-      // Unblocking the local branch allows the strategy to collect its result and then unblock the
-      // thread.
-      stopLocal.set(true);
-      testThread.joinAndAssertState(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
+    if (!executionFails) {
+      assertThat(remoteStrategy.awaitSuccess()).isTrue();
     }
+    assertThat(wasInterrupted.await(TestUtils.WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)).isTrue();
+    assertThat(testThread.isAlive()).isTrue();
+    if (interruptThread) {
+      testThread.interrupt();
+    }
+    // Wait up to 5 seconds for this thread to finish. It should not have finished.
+    testThread.join(5000);
+    assertThat(testThread.isAlive()).isTrue();
+    waitToFinish.countDown();
+    testThread.joinAndAssertState(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
   }
 
   @Test
   public void strategyWaitsForBothSpawnsToFinish() throws Exception {
-    assertThatStrategyWaitsForBothSpawnsToFinish(
-        /*executionFails=*/ false,
-        /*interruptThread=*/ false,
-        (e) -> {
-          if (e != null) {
-            throw new IllegalStateException("Expected exec to finish successfully", e);
-          }
-        });
+    strategyWaitsForBothSpawnsToFinish(false, false);
   }
 
   @Test
   public void strategyWaitsForBothSpawnsToFinishEvenIfInterrupted() throws Exception {
-    assertThatStrategyWaitsForBothSpawnsToFinish(
-        /*executionFails=*/ false,
-        /*interruptThread=*/ true,
-        (e) -> {
-          if (e == null) {
-            fail("No exception raised");
-          } else if (e instanceof InterruptedException) {
-            assertThat(Thread.currentThread().isInterrupted()).isFalse();
-          } else {
-            throw e;
-          }
-        });
+    strategyWaitsForBothSpawnsToFinish(true, false);
   }
 
   @Test
   public void strategyWaitsForBothSpawnsToFinishOnFailure() throws Exception {
-    assertThatStrategyWaitsForBothSpawnsToFinish(
-        /*executionFails=*/ true,
-        /*interruptThread=*/ false,
-        (e) -> {
-          if (e == null) {
-            fail("No exception raised");
-          } else if (e instanceof ExecException) {
-            assertThat(Thread.currentThread().isInterrupted()).isFalse();
-          } else {
-            throw e;
-          }
-        });
+    strategyWaitsForBothSpawnsToFinish(false, true);
   }
 
   @Test
   public void strategyWaitsForBothSpawnsToFinishOnFailureEvenIfInterrupted() throws Exception {
-    assertThatStrategyWaitsForBothSpawnsToFinish(
-        /*executionFails=*/ true,
-        /*interruptThread=*/ true,
-        (e) -> {
-          if (e == null) {
-            fail("No exception raised");
-          } else if (e instanceof InterruptedException) {
-            // See comment in strategyWaitsForBothSpawnsToFinish regarding the race between the
-            // exception we raise on failure and the interrupt. We have to handle this case even
-            // though it is supposedly rare.
-          } else if (e instanceof ExecException) {
-            assertThat(Thread.currentThread().isInterrupted()).isTrue();
-          } else {
-            throw e;
-          }
-        });
+    strategyWaitsForBothSpawnsToFinish(true, true);
   }
 
-  private void assertThatStrategyPropagatesException(
-      DoExec localExec, DoExec remoteExec, Exception expectedException) throws Exception {
-    checkArgument(
-        !(expectedException instanceof IllegalStateException),
-        "Using an IllegalStateException for testing is fragile because we use that exception "
-            + "internally in the DynamicSpawnScheduler and we cannot distinguish it from the "
-            + "test's own exception");
+  @Test
+  public void strategyPropagatesFasterLocalException() throws Exception {
+    strategyPropagatesException(true);
+  }
 
-    MockLocalSpawnStrategy localStrategy = new MockLocalSpawnStrategy(testRoot, localExec);
-    MockRemoteSpawnStrategy remoteStrategy = new MockRemoteSpawnStrategy(testRoot, remoteExec);
+  @Test
+  public void strategyPropagatesFasterRemoteException() throws Exception {
+    strategyPropagatesException(false);
+  }
+
+  private void strategyPropagatesException(boolean preferLocal) throws Exception {
+    String message = "Mock spawn execution exception";
+
+    MockLocalSpawnStrategy localStrategy =
+        new MockLocalSpawnStrategy(
+            testRoot,
+            (self, spawn, actionExecutionContext) -> {
+              if (!preferLocal) {
+                Thread.sleep(60000);
+              }
+              throw new IllegalStateException(message);
+            });
+
+    MockRemoteSpawnStrategy remoteStrategy =
+        new MockRemoteSpawnStrategy(
+            testRoot,
+            (self, spawn, actionExecutionContext) -> {
+              if (preferLocal) {
+                Thread.sleep(60000);
+              }
+              throw new IllegalStateException(message);
+            });
+
     SpawnActionContext dynamicSpawnStrategy = createSpawnStrategy(localStrategy, remoteStrategy);
 
     Spawn spawn = newDynamicSpawn();
-    Exception e =
+    ExecException e =
         assertThrows(
-            expectedException.getClass(),
-            () -> dynamicSpawnStrategy.exec(spawn, actionExecutionContext));
-    assertThat(e).hasMessageThat().matches(expectedException.getMessage());
+            ExecException.class, () -> dynamicSpawnStrategy.exec(spawn, actionExecutionContext));
+    assertThat(e).hasMessageThat().matches("java.lang.IllegalStateException: " + message);
 
     Spawn executedSpawn = localStrategy.getExecutedSpawn();
     executedSpawn = executedSpawn == null ? remoteStrategy.getExecutedSpawn() : executedSpawn;
     assertThat(executedSpawn).isEqualTo(spawn);
     assertThat(localStrategy.succeeded()).isFalse();
     assertThat(remoteStrategy.succeeded()).isFalse();
-  }
-
-  @Test
-  public void strategyPropagatesFasterLocalException() throws Exception {
-    RuntimeException e = new IllegalArgumentException("Local spawn execution exception");
-    DoExec localExec =
-        (self, spawn, actionExecutionContext) -> {
-          throw e;
-        };
-
-    DoExec remoteExec =
-        (self, spawn, actionExecutionContext) -> {
-          Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
-          throw new AssertionError("Not reachable");
-        };
-
-    assertThatStrategyPropagatesException(localExec, remoteExec, new UserExecException(e));
-  }
-
-  @Test
-  public void strategyPropagatesFasterRemoteException() throws Exception {
-    DoExec localExec =
-        (self, spawn, actionExecutionContext) -> {
-          Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
-          throw new AssertionError("Not reachable");
-        };
-
-    RuntimeException e = new IllegalArgumentException("Remote spawn execution exception");
-    DoExec remoteExec =
-        (self, spawn, actionExecutionContext) -> {
-          throw e;
-        };
-
-    assertThatStrategyPropagatesException(localExec, remoteExec, new UserExecException(e));
   }
 }
