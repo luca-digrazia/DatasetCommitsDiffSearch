@@ -17,9 +17,14 @@
 
 package smile.regression;
 
+import java.io.Serializable;
+import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.math.matrix.Cholesky;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.QR;
 import smile.math.matrix.SVD;
 
 /**
@@ -42,7 +47,7 @@ import smile.math.matrix.SVD;
  *
  * @author Sam Erickson
  */
-public class RLS implements OnlineRegression<double[]> {
+public class RLS implements OnlineRegression<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -193,7 +198,7 @@ public class RLS implements OnlineRegression<double[]> {
 
         System.arraycopy(x, 0, x1, 0, p);
         double v = 1 + V.xax(x1);
-        // If 1/v is NaN, then the update to V will no longer be invertible.
+        // If 1/v is NaN, then the update to gamma will no longer be invertible.
         // See https://en.wikipedia.org/wiki/Sherman%E2%80%93Morrison_formula#Statement
         if (Double.isNaN(1/v)){
             throw new IllegalStateException("The updated V matrix is no longer invertible.");
@@ -207,9 +212,6 @@ public class RLS implements OnlineRegression<double[]> {
             }
         }
 
-        // V has been updated. Compute Vx again.
-        V.ax(x1, Vx);
-        
         double err = y - predict(x);
         for (int i = 0; i <= p; i++){
             w[i] += Vx[i] * err;
@@ -230,7 +232,7 @@ public class RLS implements OnlineRegression<double[]> {
      */
     public void setForgettingFactor(double lambda) {
         if (lambda <= 0 || lambda > 1){
-           throw new IllegalArgumentException("The forgetting factor must be in (0, 1]");
+           throw new IllegalArgumentException("The forgetting factor is not between 0 (exclusive) and 1 (inclusive)"); 
         }
         this.lambda = lambda;
     }
