@@ -37,7 +37,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ExecutableSymlinkActionTest {
   private Scratch scratch = new Scratch();
-  private Path execRoot;
   private ArtifactRoot inputRoot;
   private ArtifactRoot outputRoot;
   TestFileOutErr outErr;
@@ -47,7 +46,7 @@ public class ExecutableSymlinkActionTest {
   @Before
   public final void createExecutor() throws Exception  {
     final Path inputDir = scratch.dir("/in");
-    execRoot = scratch.getFileSystem().getPath("/");
+    Path execRoot = scratch.getFileSystem().getPath("/");
     inputRoot = ArtifactRoot.asDerivedRoot(execRoot, inputDir);
     outputRoot = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/out"));
     outErr = new TestFileOutErr();
@@ -126,7 +125,6 @@ public class ExecutableSymlinkActionTest {
     ExecutableSymlinkAction action = new ExecutableSymlinkAction(NULL_ACTION_OWNER, input, output);
     new SerializationTester(action)
         .addDependency(FileSystem.class, scratch.getFileSystem())
-        .addDependency(OutputBaseSupplier.class, () -> execRoot)
         .setVerificationFunction(
             (in, out) -> {
               ExecutableSymlinkAction inAction = (ExecutableSymlinkAction) in;
