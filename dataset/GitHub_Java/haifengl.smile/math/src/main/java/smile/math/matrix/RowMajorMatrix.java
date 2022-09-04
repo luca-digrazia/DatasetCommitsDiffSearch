@@ -103,27 +103,14 @@ public class RowMajorMatrix implements DenseMatrix {
         return B;
     }
 
-    public ColumnMajorMatrix toColumnMajor() {
-        ColumnMajorMatrix B = new ColumnMajorMatrix(nrows, ncols);
-        for (int k = 0; k < A.length; k++) {
-            int i = k / ncols;
-            int j = k % ncols;
-            B.set(i, j, A[k]);
-        }
-
-        return B;
-    }
-
     @Override
     public RowMajorMatrix ata() {
-        RowMajorMatrix at = transpose();
-        ColumnMajorMatrix column = toColumnMajor();
         RowMajorMatrix C = new RowMajorMatrix(ncols, ncols);
         for (int i = 0; i < ncols; i++) {
             for (int j = 0; j < ncols; j++) {
                 double v = 0.0;
                 for (int k = 0; k < nrows; k++) {
-                    v += at.get(i, k) * column.get(k, j);
+                    v += get(k, i) * get(k, j);
                 }
                 C.set(i, j, v);
             }
@@ -215,61 +202,79 @@ public class RowMajorMatrix implements DenseMatrix {
 
     @Override
     public void ax(double[] x, double[] y) {
+        int n = Math.min(nrows, y.length);
+        int p = Math.min(ncols, x.length);
+
         Arrays.fill(y, 0.0);
-        for (int i = 0, j = 0; i < nrows; i++) {
-            for (int k = 0; k < ncols; k++, j++) {
-                y[i] += A[j] * x[k];
+        for (int i = 0; i < n; i++) {
+            for (int k = 0; k < p; k++) {
+                y[i] += get(i, k) * x[k];
             }
         }
     }
 
     @Override
     public void axpy(double[] x, double[] y) {
-        for (int i = 0, j = 0; i < nrows; i++) {
-            for (int k = 0; k < ncols; k++, j++) {
-                y[i] += A[j] * x[k];
+        int n = Math.min(nrows, y.length);
+        int p = Math.min(ncols, x.length);
+
+        for (int i = 0; i < n; i++) {
+            for (int k = 0; k < p; k++) {
+                y[i] += get(i, k) * x[k];
             }
         }
     }
 
     @Override
     public void axpy(double[] x, double[] y, double b) {
-        for (int i = 0, j = 0; i < nrows; i++) {
+        int n = Math.min(nrows, y.length);
+        int p = Math.min(ncols, x.length);
+
+        for (int i = 0; i < n; i++) {
             y[i] *= b;
-            for (int k = 0; k < ncols; k++, j++) {
-                y[i] += A[j] * x[k];
+            for (int k = 0; k < p; k++) {
+                y[i] += get(i, k) * x[k];
             }
         }
     }
 
     @Override
     public void atx(double[] x, double[] y) {
+        int n = Math.min(ncols, y.length);
+        int p = Math.min(nrows, x.length);
+
         Arrays.fill(y, 0.0);
-        for (int k = 0, j = 0; k < nrows; k++) {
-            for (int i = 0; i < ncols; i++, j++) {
-                y[i] += A[j] * x[k];
+        for (int k = 0; k < p; k++) {
+            for (int i = 0; i < n; i++) {
+                y[i] += get(k, i) * x[k];
             }
         }
     }
 
     @Override
     public void atxpy(double[] x, double[] y) {
-        for (int k = 0, j = 0; k < nrows; k++) {
-            for (int i = 0; i < ncols; i++, j++) {
-                y[i] += A[j] * x[k];
+        int n = Math.min(ncols, y.length);
+        int p = Math.min(nrows, x.length);
+
+        for (int k = 0; k < p; k++) {
+            for (int i = 0; i < n; i++) {
+                y[i] += get(k, i) * x[k];
             }
         }
     }
 
     @Override
     public void atxpy(double[] x, double[] y, double b) {
-        for (int i = 0; i < y.length; i++) {
+        int n = Math.min(ncols, y.length);
+        int p = Math.min(nrows, x.length);
+
+        for (int i = 0; i < n; i++) {
             y[i] *= b;
         }
 
-        for (int k = 0, j = 0; k < nrows; k++) {
-            for (int i = 0; i < ncols; i++, j++) {
-                y[i] += A[j] * x[k];
+        for (int k = 0; k < p; k++) {
+            for (int i = 0; i < n; i++) {
+                y[i] += get(k, i) * x[k];
             }
         }
     }

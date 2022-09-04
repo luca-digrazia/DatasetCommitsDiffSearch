@@ -95,17 +95,6 @@ public class ColumnMajorMatrix implements DenseMatrix {
         return B;
     }
 
-    public RowMajorMatrix toRowMajor() {
-        RowMajorMatrix B = new RowMajorMatrix(nrows, ncols);
-        for (int k = 0; k < A.length; k++) {
-            int i = k / nrows;
-            int j = k % nrows;
-            B.set(i, j, A[k]);
-        }
-
-        return B;
-    }
-
     @Override
     public ColumnMajorMatrix ata() {
         ColumnMajorMatrix C = new ColumnMajorMatrix(ncols, ncols);
@@ -123,14 +112,12 @@ public class ColumnMajorMatrix implements DenseMatrix {
 
     @Override
     public ColumnMajorMatrix aat() {
-        ColumnMajorMatrix at = transpose();
-        RowMajorMatrix row = toRowMajor();
         ColumnMajorMatrix C = new ColumnMajorMatrix(nrows, nrows);
         for (int i = 0; i < nrows; i++) {
             for (int j = 0; j < nrows; j++) {
                 double v = 0.0;
                 for (int k = 0; k < ncols; k++) {
-                    v += row.get(i, k) * at.get(k, j);
+                    v += get(i, k) * get(j, k);
                 }
                 C.set(i, j, v);
             }

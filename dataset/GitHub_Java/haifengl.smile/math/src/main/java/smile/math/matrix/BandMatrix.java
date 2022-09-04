@@ -58,7 +58,7 @@ import java.util.Arrays;
  * 
  * @author Haifeng Li
  */
-public class BandMatrix implements Matrix, LinearSolver {
+public class BandMatrix implements IMatrix {
     /**
      * Compact store of band matrix as A[0, n-1][0, m1+m2].
      */
@@ -137,6 +137,11 @@ public class BandMatrix implements Matrix, LinearSolver {
 
     @Override
     public double get(int i, int j) {
+        return A[i][j-i+m1];
+    }
+
+    @Override
+    public double apply(int i, int j) {
         return A[i][j-i+m1];
     }
 
@@ -401,13 +406,19 @@ public class BandMatrix implements Matrix, LinearSolver {
     }
 
     @Override
-    public double[] diag() {
-        double[] d = new double[n];
+    public void asolve(double[] b, double[] x) {
         for (int i = 0; i < n; i++) {
-            d[i] = A[i][m1];
+            x[i] = A[i][m1] != 0.0 ? b[i] / A[i][m1] : b[i];
         }
+    }
 
-        return d;
+    /**
+     * Solve A*x = b. b will be overwritten with the solution vector on output.
+     * @param b   a vector with as many rows as A.
+     * @throws RuntimeException if matrix is singular.
+     */
+    public void solve(double[] b) {
+        solve(b, b);
     }
 
     /**
@@ -416,7 +427,7 @@ public class BandMatrix implements Matrix, LinearSolver {
      * @param x   is output vector so that L*U*X = b(piv,:)
      * @throws RuntimeException if matrix is singular.
      */
-    public double solve(double[] b, double[] x) {
+    public void solve(double[] b, double[] x) {
         if (b.length != n) {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but b is %d x 1", n, n, b.length));
         }
@@ -463,8 +474,6 @@ public class BandMatrix implements Matrix, LinearSolver {
                 l++;
             }
         }
-
-        return 0.0;
     }
 
     /**
@@ -484,7 +493,7 @@ public class BandMatrix implements Matrix, LinearSolver {
         axpy(x, r, -1.0);
 
         // Solve for the error term.
-        solve(r, r);
+        solve(r);
 
         // Subtract the error from the old solution.
         for (int i = 0; i < n; i++) {
