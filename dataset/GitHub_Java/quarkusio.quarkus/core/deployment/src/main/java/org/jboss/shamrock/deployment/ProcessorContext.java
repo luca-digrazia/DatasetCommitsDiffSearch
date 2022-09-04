@@ -3,8 +3,6 @@ package org.jboss.shamrock.deployment;
 import java.io.IOException;
 import java.util.function.Function;
 
-import org.jboss.jandex.FieldInfo;
-import org.jboss.jandex.MethodInfo;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.objectweb.asm.ClassVisitor;
 
@@ -39,17 +37,9 @@ public interface ProcessorContext {
      * <p>
      * It is used in the graal output to allow the class to be reflected when running on substrate VM
      *
-     * This will add all constructors, as well as all methods and fields if the appropriate fields are set.
-     *
-     * Where possible consider using the more fine grained addReflective* variants
-     *
      * @param className The class name
      */
     void addReflectiveClass(boolean methods, boolean fields, String... className);
-
-    void addReflectiveField(FieldInfo fieldInfo);
-
-    void addReflectiveMethod(MethodInfo methodInfo);
 
     /**
      *
@@ -61,14 +51,6 @@ public interface ProcessorContext {
     void addGeneratedClass(boolean applicationClass, String name, byte[] classData) throws IOException;
 
     /**
-     * Creates a resources with the provided contents
-     * @param name
-     * @param data
-     * @throws IOException
-     */
-    void createResource(String name, byte[] data) throws IOException;
-
-    /**
      * Adds a bytecode transformer that can transform application classes.
      * <p>
      * This takes the form of a function that takes a string, and returns an ASM visitor, or null if transformation
@@ -77,11 +59,4 @@ public interface ProcessorContext {
      * At present these transformations are only applied to application classes, not classes provided by dependencies
      */
     void addByteCodeTransformer(Function<String, Function<ClassVisitor, ClassVisitor>> visitorFunction);
-
-    /**
-     * Adds a resource to the image that will be accessible when running under substrate.
-     *
-     * @param name The resource path
-     */
-    void addResource(String name);
 }

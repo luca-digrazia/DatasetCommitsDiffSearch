@@ -27,27 +27,21 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.jboss.jandex.CompositeIndex;
-import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.shamrock.deployment.buildconfig.BuildConfig;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorderImpl;
-import org.jboss.shamrock.deployment.index.ApplicationArchiveLoader;
-import org.jboss.shamrock.runtime.ResourceHelper;
+import org.jboss.shamrock.deployment.index.IndexLoader;
 import org.jboss.shamrock.runtime.StartupContext;
 import org.jboss.shamrock.runtime.StartupTask;
 import org.jboss.shamrock.runtime.Timing;
@@ -63,8 +57,6 @@ import org.objectweb.asm.Type;
  * Class that does the build time processing
  */
 public class BuildTimeGenerator {
-
-    private static final Logger log = Logger.getLogger(BuildTimeGenerator.class.getName());
 
     private static final AtomicInteger COUNT = new AtomicInteger();
     public static final String MAIN_CLASS_INTERNAL = "org/jboss/shamrock/runner/GeneratedMain";
@@ -129,35 +121,54 @@ public class BuildTimeGenerator {
                     return FileVisitResult.CONTINUE;
                 }
             });
-            Index appIndex = indexer.complete();
-            List<ApplicationArchive> applicationArchives = ApplicationArchiveLoader.scanForOtherIndexes(classLoader, config);
+            List<IndexView> composite = new ArrayList<>();
+            composite.add(indexer.complete());
+            composite.addAll(IndexLoader.scanForOtherIndexes(classLoader, config));
 
 
-            ArchiveContext context = new ArchiveContextImpl(new ApplicationArchiveImpl(appIndex, root, null), applicationArchives, config);
+            ArchiveContext context = new ArchiveContextImpl(CompositeIndex.create(composite), root, config);
             ProcessorContextImpl processorContext = new ProcessorContextImpl();
-            try {
-                for (ResourceProcessor processor : processors) {
-                    try {
-                        injection.injectClass(processor);
-                        processor.process(context, processorContext);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                processorContext.writeMainClass();
-                processorContext.writeReflectionAutoFeature();
-            } finally {
-                for(ApplicationArchive archive : context.getAllApplicationArchives()) {
-                    try {
-                        archive.close();
-                    } catch (Exception e) {
-                        log.log(Level.SEVERE, "Failed to close archive " + archive.getArchiveRoot(), e);
-                    }
+            for (ResourceProcessor processor : processors) {
+                try {
+                    injection.injectClass(processor);
+                    processor.process(context, processorContext);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
+            processorContext.writeMainClass();
+            processorContext.writeAutoFeature();
         } finally {
             Thread.currentThread().setContextClassLoader(old);
+        }
+    }
 
+
+    private static class ArchiveContextImpl implements ArchiveContext {
+
+        private final IndexView index;
+        private final Path root;
+        private final BuildConfig buildConfig;
+
+        private ArchiveContextImpl(IndexView index, Path root, BuildConfig buildConfig) {
+            this.index = index;
+            this.root = root;
+            this.buildConfig = buildConfig;
+        }
+
+        @Override
+        public IndexView getIndex() {
+            return index;
+        }
+
+        @Override
+        public Path getArchiveRoot() {
+            return root;
+        }
+
+        @Override
+        public BuildConfig getBuildConfig() {
+            return buildConfig;
         }
     }
 
@@ -168,7 +179,6 @@ public class BuildTimeGenerator {
         private final List<DeploymentTaskHolder> tasks = new ArrayList<>();
         private final List<DeploymentTaskHolder> staticInitTasks = new ArrayList<>();
         private final Map<String, ReflectionInfo> reflectiveClasses = new LinkedHashMap<>();
-        private final Set<String> resources = new HashSet<>();
 
         @Override
         public BytecodeRecorder addStaticInitTask(int priority) {
@@ -204,11 +214,6 @@ public class BuildTimeGenerator {
         @Override
         public void addByteCodeTransformer(Function<String, Function<ClassVisitor, ClassVisitor>> visitorFunction) {
             bytecodeTransformers.add(visitorFunction);
-        }
-
-        @Override
-        public void addResource(String name) {
-            resources.add(name);
         }
 
         void writeMainClass() throws IOException {
@@ -288,7 +293,7 @@ public class BuildTimeGenerator {
             output.writeClass(true, MAIN_CLASS_INTERNAL, file.toByteArray());
         }
 
-        void writeReflectionAutoFeature() throws IOException {
+        void writeAutoFeature() throws IOException {
 
             ClassWriter file = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
             file.visit(Opcodes.V1_8, ACC_PUBLIC | ACC_SUPER, GRAAL_AUTOFEATURE, null, Type.getInternalName(Object.class), new String[]{"org/graalvm/nativeimage/Feature"});
@@ -305,12 +310,6 @@ public class BuildTimeGenerator {
 
             mv = file.visitMethod(ACC_PUBLIC, "beforeAnalysis", "(Lorg/graalvm/nativeimage/Feature$BeforeAnalysisAccess;)V", null, null);
 
-            //TODO: at some point we are going to need to break this up, as if it get too big it will hit the method size limit
-
-            for(String i : resources) {
-                mv.visitLdcInsn(i);
-                mv.visitMethodInsn(INVOKESTATIC, Type.getInternalName(ResourceHelper.class), "registerResources", "(Ljava/lang/String;)V", false);
-            }
 
             for (Map.Entry<String, ReflectionInfo> entry : reflectiveClasses.entrySet()) {
                 Label lTryBlockStart = new Label();
