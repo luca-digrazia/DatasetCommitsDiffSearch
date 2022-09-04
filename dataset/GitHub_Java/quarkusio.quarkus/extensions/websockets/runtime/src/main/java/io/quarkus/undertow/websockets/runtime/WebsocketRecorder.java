@@ -17,8 +17,8 @@ import io.netty.channel.EventLoopGroup;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.annotations.Recorder;
+import io.undertow.websockets.UndertowContainerProvider;
 import io.undertow.websockets.WebSocketDeploymentInfo;
 import io.undertow.websockets.util.ContextSetupHandler;
 import io.undertow.websockets.util.ObjectFactory;
@@ -107,6 +107,7 @@ public class WebsocketRecorder {
 
     public Handler<RoutingContext> createHandler(BeanContainer beanContainer, Supplier<EventLoopGroup> eventLoopGroupSupplier,
             WebSocketDeploymentInfo info) throws DeploymentException {
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
         ManagedContext requestContext = Arc.container().requestContext();
         VertxServerWebSocketContainer container = new VertxServerWebSocketContainer(new ObjectIntrospecter() {
             @Override
@@ -137,28 +138,40 @@ public class WebsocketRecorder {
                         return new Action<T, C>() {
                             @Override
                             public T call(C context) throws Exception {
-                                requestContext.activate();
+                                ClassLoader old = Thread.currentThread().getContextClassLoader();
+                                Thread.currentThread().setContextClassLoader(cl);
+                                boolean required = !requestContext.isActive();
+                                if (required) {
+                                    requestContext.activate();
+                                }
                                 try {
                                     return action.call(context);
                                 } finally {
-                                    requestContext.terminate();
+                                    try {
+                                        if (required) {
+                                            requestContext.terminate();
+                                        }
+                                    } finally {
+                                        Thread.currentThread().setContextClassLoader(old);
+                                    }
                                 }
                             }
                         };
                     }
-                }), false,
-                new Supplier<Executor>() {
-                    @Override
-                    public Executor get() {
-                        return ExecutorRecorder.getCurrent();
-                    }
-                });
+                }),
+                info.isDispatchToWorkerThread(),
+                null,
+                null,
+                info.getExecutor(),
+                Collections.emptyList(),
+                info.getMaxFrameSize());
         for (Class<?> i : info.getAnnotatedEndpoints()) {
             container.addEndpoint(i);
         }
         for (ServerEndpointConfig i : info.getProgramaticEndpoints()) {
             container.addEndpoint(i);
         }
+        UndertowContainerProvider.setDefaultContainer(container);
         return new VertxWebSocketHandler(container, info);
     }
 
