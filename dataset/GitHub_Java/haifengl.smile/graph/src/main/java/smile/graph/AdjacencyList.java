@@ -25,7 +25,6 @@ import java.util.LinkedList;
 import java.util.Queue;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.SparseMatrix;
-import smile.sort.QuickSort;
 import smile.util.PriorityQueue;
 
 /**
@@ -625,10 +624,11 @@ public class AdjacencyList implements Graph {
         int[] colSize = new int[n];
         int[] pos = new int[n];
         int[] colIndex = new int[n + 1];
-        for (int i = 0; i < n; i++) {
-            LinkedList<Edge> edges = graph[i];
+        for (LinkedList<Edge> edges : graph) {
             size += edges.size();
-            colSize[i] = edges.size();
+            for (Edge edge : edges) {
+                colSize[edge.v2] += 1;
+            }
         }
 
         for (int i = 0; i < n; i++) {
@@ -638,28 +638,19 @@ public class AdjacencyList implements Graph {
         int[] rowIndex = new int[size];
         double[] x = new double[size];
 
-        for (int i = 0; i < n; i++) {
-            LinkedList<Edge> edges = graph[i];
-            int ni = edges.size();
-            int[] index = new int[ni];
-            double[] w = new double[ni];
-
-            int j = 0;
+        for (LinkedList<Edge> edges : graph) {
             for (Edge edge : edges) {
-                index[j] = edge.v1 == i ? edge.v2 : edge.v1;
-                w[j++] = edge.weight;
-            }
+                int i = edge.v1;
+                int j = edge.v2;
+                int k = colIndex[j] + pos[j];
 
-            QuickSort.sort(index, w);
-
-            int k = colIndex[i];
-            for (j = 0; j < ni; j++, k++) {
-                rowIndex[k] = index[j];
-                x[k] = w[j];
+                rowIndex[k] = i;
+                x[k] = edge.weight;
+                pos[j]++;
             }
         }
 
-        return new SparseMatrix(n, n, x, rowIndex, colIndex).transpose();
+        return new SparseMatrix(n, n, x, rowIndex, colIndex);
     }
 
     /**
