@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BuiltinFunction.ExtraArgKind;
+import com.google.devtools.build.lib.syntax.FuncallExpression.MethodDescriptor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -232,18 +233,13 @@ public class SkylarkSignatureProcessor {
   }
 
   static Object getDefaultValue(Param param, Iterator<Object> iterator) {
-    return getDefaultValue(param.name(), param.defaultValue(), iterator);
-  }
-
-  static Object getDefaultValue(
-      String paramName, String paramDefaultValue, Iterator<Object> iterator) {
     if (iterator != null) {
       return iterator.next();
-    } else if (paramDefaultValue.isEmpty()) {
+    } else if (param.defaultValue().isEmpty()) {
       return Runtime.NONE;
     } else {
       try {
-        Object defaultValue = defaultValueCache.getIfPresent(paramDefaultValue);
+        Object defaultValue = defaultValueCache.getIfPresent(param.defaultValue());
         if (defaultValue != null) {
           return defaultValue;
         }
@@ -256,16 +252,14 @@ public class SkylarkSignatureProcessor {
                   .setEventHandler(Environment.FAIL_FAST_HANDLER)
                   .build()
                   .update("unbound", Runtime.UNBOUND);
-          defaultValue = BuildFileAST.eval(env, paramDefaultValue);
-          defaultValueCache.put(paramDefaultValue, defaultValue);
+          defaultValue = BuildFileAST.eval(env, param.defaultValue());
+          defaultValueCache.put(param.defaultValue(), defaultValue);
           return defaultValue;
         }
       } catch (Exception e) {
-        throw new RuntimeException(
-            String.format(
-                "Exception while processing @SkylarkSignature.Param %s, default value %s",
-                paramName, paramDefaultValue),
-            e);
+        throw new RuntimeException(String.format(
+            "Exception while processing @SkylarkSignature.Param %s, default value %s",
+            param.name(), param.defaultValue()), e);
       }
     }
   }

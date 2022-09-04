@@ -58,17 +58,6 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     this.spawnRunner = spawnRunner;
   }
 
-  /**
-   * Get's the {@link SpawnRunner} that this {@link AbstractSpawnStrategy} uses to actually run
-   * spawns.
-   *
-   * <p>This is considered a stop-gap until we refactor the entire SpawnStrategy / SpawnRunner
-   * mechanism to no longer need Spawn strategies.
-   */
-  public SpawnRunner getSpawnRunner() {
-    return spawnRunner;
-  }
-
   @Override
   public List<SpawnResult> exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
@@ -81,9 +70,9 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
-
-    actionExecutionContext.maybeReportSubcommand(spawn);
-
+    if (actionExecutionContext.reportsSubcommands()) {
+      actionExecutionContext.reportSubcommand(spawn);
+    }
     final Duration timeout = Spawns.getTimeout(spawn);
     SpawnExecutionContext context =
         new SpawnExecutionContextImpl(spawn, actionExecutionContext, writeOutputFiles, timeout);
@@ -124,7 +113,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
         spawnLogContext.logSpawn(
             spawn,
             actionExecutionContext.getMetadataProvider(),
-            context.getInputMapping(true),
+            context.getInputMapping(),
             context.getTimeout(),
             spawnResult);
       } catch (IOException e) {
@@ -184,9 +173,10 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     @Override
     public void prefetchInputs() throws IOException {
       if (Spawns.shouldPrefetchInputsForLocalExecution(spawn)) {
-        actionExecutionContext
-            .getActionInputPrefetcher()
-            .prefetchFiles(getInputMapping(true).values());
+        // TODO(philwo): Benchmark whether using an ExecutionService to do multiple operations in
+        // parallel speeds up prefetching of inputs.
+        // TODO(philwo): Do we have to expand middleman artifacts here?
+        actionExecutionContext.getActionInputPrefetcher().prefetchFiles(getInputMapping().values());
       }
     }
 
@@ -231,16 +221,13 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     }
 
     @Override
-    public SortedMap<PathFragment, ActionInput> getInputMapping(
-        boolean expandTreeArtifactsInRunfiles) throws IOException {
+    public SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException {
       if (lazyInputMapping == null) {
         lazyInputMapping =
             spawnInputExpander.getInputMapping(
                 spawn,
                 actionExecutionContext.getArtifactExpander(),
-                actionExecutionContext.getPathResolver(),
-                actionExecutionContext.getMetadataProvider(),
-                expandTreeArtifactsInRunfiles);
+                actionExecutionContext.getMetadataProvider());
       }
       return lazyInputMapping;
     }

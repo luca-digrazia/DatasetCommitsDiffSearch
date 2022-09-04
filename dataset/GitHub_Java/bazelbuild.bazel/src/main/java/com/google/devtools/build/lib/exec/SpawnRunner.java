@@ -17,7 +17,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.FutureSpawn;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -194,28 +193,10 @@ public interface SpawnRunner {
     /** The files to which to write stdout and stderr. */
     FileOutErr getFileOutErr();
 
-    SortedMap<PathFragment, ActionInput> getInputMapping(boolean expandTreeArtifactsInRunfiles)
-        throws IOException;
+    SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException;
 
     /** Reports a progress update to the Spawn strategy. */
     void report(ProgressStatus state, String name);
-  }
-
-  /**
-   * Run the given spawn asynchronously. The default implementation is synchronous for migration.
-   *
-   * @param spawn the spawn to run
-   * @param context the spawn execution context
-   * @return the result from running the spawn
-   * @throws InterruptedException if the calling thread was interrupted, or if the runner could not
-   *     lock the output files (see {@link SpawnExecutionContext#lockOutputFiles()})
-   * @throws IOException if something went wrong reading or writing to the local file system
-   * @throws ExecException if the request is malformed
-   */
-  default FutureSpawn execAsync(Spawn spawn, SpawnExecutionContext context)
-      throws InterruptedException, IOException, ExecException {
-    // TODO(ulfjack): Remove this default implementation. [exec-async]
-    return FutureSpawn.immediate(exec(spawn, context));
   }
 
   /**
