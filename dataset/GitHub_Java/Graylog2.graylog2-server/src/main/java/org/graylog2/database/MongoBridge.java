@@ -126,12 +126,11 @@ public class MongoBridge {
         getConnection().getMessageCountsColl().insert(obj);
     }
 
-    public void writeActivity(Activity activity, String nodeId) {
+    public void writeActivity(Activity activity) {
         BasicDBObject obj = new BasicDBObject();
         obj.put("timestamp", Tools.getUTCTimestamp());
         obj.put("content", activity.getMessage());
         obj.put("caller", activity.getCaller().getCanonicalName());
-        obj.put("node_id", nodeId);
         
         connection.getDatabase().getCollection("server_activities").insert(obj);
     }
