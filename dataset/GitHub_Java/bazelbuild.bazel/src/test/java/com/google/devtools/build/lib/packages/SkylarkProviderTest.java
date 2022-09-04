@@ -37,7 +37,7 @@ public final class SkylarkProviderTest {
     assertThat(provider.isExported()).isFalse();
     assertThat(provider.getName()).isEqualTo("<no name>");
     assertThat(provider.getPrintableName()).isEqualTo("<no name>");
-    assertThat(provider.getErrorMessageFormatForUnknownField())
+    assertThat(provider.getErrorMessageFormatForInstances())
         .isEqualTo("Object has no '%s' attribute.");
     assertThat(provider.isImmutable()).isFalse();
     assertThat(Printer.repr(provider)).isEqualTo("<provider>");
@@ -53,7 +53,7 @@ public final class SkylarkProviderTest {
     assertThat(provider.isExported()).isTrue();
     assertThat(provider.getName()).isEqualTo("prov");
     assertThat(provider.getPrintableName()).isEqualTo("prov");
-    assertThat(provider.getErrorMessageFormatForUnknownField())
+    assertThat(provider.getErrorMessageFormatForInstances())
         .isEqualTo("'prov' object has no attribute '%s'");
     assertThat(provider.isImmutable()).isTrue();
     assertThat(Printer.repr(provider)).isEqualTo("<provider>");
@@ -64,7 +64,7 @@ public final class SkylarkProviderTest {
   public void schemalessProvider_Instantiation() throws Exception {
     SkylarkProvider provider = SkylarkProvider.createUnexportedSchemaless(/*location=*/ null);
     SkylarkInfo info = instantiateWithA1B2C3(provider);
-    assertThat(info.isCompact()).isFalse();
+    assertThat(info).isInstanceOf(SkylarkInfo.MapBackedSkylarkInfo.class);
     assertHasExactlyValuesA1B2C3(info);
   }
 
@@ -73,7 +73,7 @@ public final class SkylarkProviderTest {
     SkylarkProvider provider = SkylarkProvider.createUnexportedSchemaful(
         ImmutableList.of("a", "b", "c"), /*location=*/ null);
     SkylarkInfo info = instantiateWithA1B2C3(provider);
-    assertThat(info.isCompact()).isTrue();
+    assertThat(info).isInstanceOf(SkylarkInfo.CompactSkylarkInfo.class);
     assertHasExactlyValuesA1B2C3(info);
   }
 
@@ -140,7 +140,7 @@ public final class SkylarkProviderTest {
 
   /** Asserts that a {@link SkylarkInfo} has fields a=1, b=2, c=3 (and nothing else). */
   private static void assertHasExactlyValuesA1B2C3(SkylarkInfo info) {
-    assertThat(info.getFieldNames()).containsExactly("a", "b", "c");
+    assertThat(info.getKeys()).containsExactly("a", "b", "c");
     assertThat(info.getValue("a")).isEqualTo(1);
     assertThat(info.getValue("b")).isEqualTo(2);
     assertThat(info.getValue("c")).isEqualTo(3);

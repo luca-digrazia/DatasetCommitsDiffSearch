@@ -48,7 +48,6 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
   private static final FunctionSignature.WithValues<Object, SkylarkType> SCHEMALESS_SIGNATURE =
       FunctionSignature.WithValues.create(FunctionSignature.KWARGS);
 
-  /** Default value for {@link #errorMessageFormatForUnknownField}. */
   private static final String DEFAULT_ERROR_MESSAGE_FORMAT = "Object has no '%s' attribute.";
 
   /**
@@ -66,7 +65,7 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
   private SkylarkKey key;
 
   /** Error message format. Reassigned upon exporting. */
-  private String errorMessageFormatForUnknownField;
+  private String errorMessageFormatForInstances;
 
   /**
    * Creates an unexported {@link SkylarkProvider} with no schema.
@@ -133,9 +132,9 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
     super(/*name=*/ null, buildSignature(fields), location);
     this.layout = buildLayout(fields);
     this.key = key;  // possibly null
-    this.errorMessageFormatForUnknownField =
+    this.errorMessageFormatForInstances =
         key == null ? DEFAULT_ERROR_MESSAGE_FORMAT
-            : makeErrorMessageFormatForUnknownField(key.getExportedName());
+            : makeErrorMessageFormatForInstances(key.getExportedName());
   }
 
 
@@ -168,10 +167,10 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
     if (layout == null) {
       @SuppressWarnings("unchecked")
       Map<String, Object> kwargs = (Map<String, Object>) args[0];
-      return SkylarkInfo.createSchemaless(this, kwargs, loc);
+      return SkylarkInfo.fromMap(this, kwargs, loc);
     } else {
       // Note: This depends on the layout map using the same ordering as args.
-      return SkylarkInfo.createSchemaful(this, args, loc);
+      return new SkylarkInfo.CompactSkylarkInfo(this, layout, args, loc);
     }
   }
 
@@ -202,37 +201,26 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
    * <p>Note: In the future, this method may be replaced by one that returns more detailed schema
    * information (if/when the allowed schemas for structs become more complex).
    */
-  @Nullable
-  public ImmutableList<String> getFields() {
+  public @Nullable ImmutableList<String> getFields() {
     if (layout == null) {
       return null;
     }
     return ImmutableList.copyOf(layout.keySet());
   }
 
-  /**
-   * Returns the layout, or null if the provider is schemaless.
-   *
-   * <p>This is used only by SkylarkInfo.
-   */
-  @Nullable
-  ImmutableMap<String, Integer> getLayout() {
-    return layout;
-  }
-
   @Override
-  public String getErrorMessageFormatForUnknownField() {
-    return errorMessageFormatForUnknownField;
+  public String getErrorMessageFormatForInstances() {
+    return errorMessageFormatForInstances;
   }
 
   @Override
   public void export(Label extensionLabel, String exportedName) {
     Preconditions.checkState(!isExported());
     this.key = new SkylarkKey(extensionLabel, exportedName);
-    this.errorMessageFormatForUnknownField = makeErrorMessageFormatForUnknownField(exportedName);
+    this.errorMessageFormatForInstances = makeErrorMessageFormatForInstances(exportedName);
   }
 
-  private static String makeErrorMessageFormatForUnknownField(String exportedName) {
+  private static String makeErrorMessageFormatForInstances(String exportedName) {
     return String.format("'%s' object has no attribute '%%s'", exportedName);
   }
 

@@ -440,14 +440,10 @@ public abstract class BaseFunction implements SkylarkValue {
     canonicalizeArguments(arguments, loc);
 
     try {
-      if (Callstack.enabled) {
-        Callstack.push(this);
-      }
+      Callstack.push(this);
       return call(arguments, ast, env);
     } finally {
-      if (Callstack.enabled) {
-        Callstack.pop();
-      }
+      Callstack.pop();
     }
   }
 

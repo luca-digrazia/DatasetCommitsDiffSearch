@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.analysis.skylark;
 
 import static com.google.devtools.build.lib.analysis.BaseRuleClasses.RUN_UNDER;
-import static com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy.DATA;
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
@@ -754,7 +754,7 @@ public class SkylarkRuleClassFunctions {
                 && ((String) attribute.getDefaultValue(null)).isEmpty()) {
               hasDefault = false; // isValueSet() is always true for attr.string.
             }
-            if (!Attribute.isImplicit(nativeName) && !Attribute.isLateBound(nativeName)) {
+            if (!Attribute.isImplicit(nativeName)) {
               if (!attribute.checkAllowedValues() || attribute.getType() != Type.STRING) {
                 throw new EvalException(
                     ast.getLocation(),
@@ -776,7 +776,7 @@ public class SkylarkRuleClassFunctions {
                           nativeName, allowed.getErrorReason(defaultVal)));
                 }
               }
-            } else if (!hasDefault) { // Implicit or late bound attribute
+            } else if (!hasDefault) { // Implicit attribute
               String skylarkName = "_" + nativeName.substring(1);
               throw new EvalException(
                   ast.getLocation(),
@@ -1062,11 +1062,11 @@ public class SkylarkRuleClassFunctions {
 
         private void printProtoTextMessage(
             ClassObject object, StringBuilder sb, int indent, Location loc) throws EvalException {
-          // For determinism sort the fields alphabetically.
-          List<String> fields = new ArrayList<>(object.getFieldNames());
-          Collections.sort(fields);
-          for (String field : fields) {
-            printProtoTextMessage(field, object.getValue(field), sb, indent, loc);
+          // For determinism sort the keys alphabetically
+          List<String> keys = new ArrayList<>(object.getKeys());
+          Collections.sort(keys);
+          for (String key : keys) {
+            printProtoTextMessage(key, object.getValue(key), sb, indent, loc);
           }
         }
 
@@ -1175,13 +1175,13 @@ public class SkylarkRuleClassFunctions {
             sb.append("{");
 
             String join = "";
-            for (String field : ((ClassObject) value).getFieldNames()) {
+            for (String subKey : ((ClassObject) value).getKeys()) {
               sb.append(join);
               join = ",";
               sb.append("\"");
-              sb.append(field);
+              sb.append(subKey);
               sb.append("\":");
-              printJson(((ClassObject) value).getValue(field), sb, loc, "struct field", field);
+              printJson(((ClassObject) value).getValue(subKey), sb, loc, "struct field", subKey);
             }
             sb.append("}");
           } else if (value instanceof List) {
