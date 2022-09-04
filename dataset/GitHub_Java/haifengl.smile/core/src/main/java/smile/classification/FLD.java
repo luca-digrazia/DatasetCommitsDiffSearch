@@ -18,11 +18,13 @@
 package smile.classification;
 
 import java.util.Properties;
-import smile.data.CategoricalEncoder;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.EVD;
+import smile.math.matrix.SVD;
 import smile.projection.Projection;
 import smile.util.IntSet;
 
@@ -77,7 +79,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
     /**
      * Project matrix.
      */
-    private final Matrix scaling;
+    private final DenseMatrix scaling;
     /**
      * Projected mean vector.
      */
@@ -97,7 +99,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * @param mu the mean vectors of each class.
      * @param scaling the projection matrix.
      */
-    public FLD(double[] mean, double[][] mu, Matrix scaling) {
+    public FLD(double[] mean, double[][] mu, DenseMatrix scaling) {
         this(mean, mu, scaling, IntSet.of(mu.length));
     }
 
@@ -108,7 +110,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * @param scaling the projection matrix.
      * @param labels class labels
      */
-    public FLD(double[] mean, double[][] mu, Matrix scaling, IntSet labels) {
+    public FLD(double[] mean, double[][] mu, DenseMatrix scaling, IntSet labels) {
         this.k = mu.length;
         this.p = mean.length;
         this.scaling = scaling;
@@ -116,11 +118,11 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
 
         int L = scaling.ncols();
         this.mean = new double[L];
-        scaling.tv(mean, this.mean);
+        scaling.atx(mean, this.mean);
 
         this.mu = new double[k][L];
         for (int i = 0; i < k; i++) {
-            scaling.tv(mu[i], this.mu[i]);
+            scaling.atx(mu[i], this.mu[i]);
         }
     }
 
@@ -143,7 +145,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
     public static FLD fit(Formula formula, DataFrame data, Properties prop) {
         int L = Integer.valueOf(prop.getProperty("smile.fld.dimension", "-1"));
         double tol = Double.valueOf(prop.getProperty("smile.fld.tolerance", "1E-4"));
-        double[][] x = formula.x(data).toArray(false, CategoricalEncoder.DUMMY);
+        double[][] x = formula.x(data).toArray();
         int[] y = formula.y(data).toIntArray();
         return fit(x, y, L, tol);
     }
@@ -187,7 +189,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
         double[] mean = da.mean;
         double[][] mu = da.mu;
 
-        Matrix scaling;
+        DenseMatrix scaling;
         if (n - k < p) {
             scaling = small(L, x, mean, mu, da.priori, tol);
         } else {
@@ -198,12 +200,22 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
     }
 
     /** FLD when the sample size is large. */
-    private static Matrix fld(int L, double[][] x, double[] mean, double[][] mu, double tol) {
+    private static DenseMatrix fld(int L, double[][] x, double[] mean, double[][] mu, double tol) {
         int k = mu.length;
         int p = mean.length;
 
-        // Total scatter
-        Matrix St = DiscriminantAnalysis.St(x, mean, k, tol);
+        DenseMatrix St = DiscriminantAnalysis.St(x, mean, k, tol);
+        EVD eigen = St.eigen();
+
+        tol = tol * tol;
+        double[] s = eigen.getEigenValues();
+        for (int i = 0; i < s.length; i++) {
+            if (s[i] < tol) {
+                throw new IllegalArgumentException("The covariance matrix is close to singular.");
+            }
+
+            s[i] = 1.0 / s[i];
+        }
 
         for (int i = 0; i < k; i++) {
             double[] mui = mu[i];
@@ -213,7 +225,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
         }
 
         // Between class scatter
-        Matrix Sb = new Matrix(p, p);
+        DenseMatrix Sb = Matrix.zeros(p, p);
         for (int c = 0; c < k; c++) {
             double[] mui = mu[c];
             for (int j = 0; j < p; j++) {
@@ -230,23 +242,32 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        // Within class scatter
-        Matrix Sw = St.sub(1.0, Sb);
-        Matrix SwInvSb = Sw.inverse().mm(Sb);
-        Matrix scaling = SwInvSb.eigen().Vr.submatrix(0, 0, p-1, L-1);
+        DenseMatrix U = eigen.getEigenVectors();
+        DenseMatrix UB = U.atbmm(Sb);
+
+        for (int j = 0; j < p; j++) {
+            double sj = s[j];
+            for (int i = 0; i < k; i++) {
+                UB.mul(i, j, sj);
+            }
+        }
+
+        DenseMatrix StInvSb = U.abmm(UB);
+        StInvSb.setSymmetric(true);
+        DenseMatrix scaling = StInvSb.eigen().getEigenVectors().submat(0, 0, p, L);
 
         return scaling;
     }
 
     /** Generalized FLD for small sample size. */
-    private static Matrix small(int L, double[][] x, double[] mean, double[][] mu, double[] priori, double tol) {
+    private static DenseMatrix small(int L, double[][] x, double[] mean, double[][] mu, double[] priori, double tol) {
         int k = mu.length;
         int p = mean.length;
 
         int n = x.length;
         double sqrtn = Math.sqrt(n);
 
-        Matrix X = new Matrix(p, n);
+        DenseMatrix X = Matrix.zeros(p, n);
         for (int i = 0; i < n; i++) {
             double[] xi = x[i];
             for (int j = 0; j < p; j++) {
@@ -261,7 +282,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        Matrix M = new Matrix(p, k);
+        DenseMatrix M = Matrix.zeros(p, k);
         for (int i = 0; i < k; i++) {
             double pi = Math.sqrt(priori[i]);
             double[] mui = mu[i];
@@ -270,12 +291,12 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        Matrix.SVD svd = X.svd();
-        Matrix U = svd.U;
-        double[] s = svd.s;
+        SVD svd = X.svd(true);
+        DenseMatrix U = svd.getU();
+        double[] s = svd.getSingularValues();
 
         tol = tol * tol;
-        Matrix UTM = U.tm(M);
+        DenseMatrix UTM = U.atbmm(M);
         for (int i = 0; i < n; i++) {
             // Since the rank of St is only n - k, there are some singular values of 0.
             double si = 0.0;
@@ -288,8 +309,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        Matrix StInvM = U.mm(UTM);
-        Matrix U2 = U.tm(StInvM.svd().U.submatrix(0, 0, p-1, L-1));
+        DenseMatrix StInvM = U.abmm(UTM);
+        DenseMatrix U2 = U.atbmm(StInvM.svd(true).getU().submat(0, 0, p+1, L));
 
         for (int i = 0; i < n; i++) {
             // Since the rank of St is only n - k, there are some singular values of 0.
@@ -303,7 +324,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             }
         }
 
-        Matrix scaling = U.mm(U2);
+        DenseMatrix scaling = U.abmm(U2);
         return scaling;
     }
 
@@ -334,7 +355,8 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
         }
 
-        double[] y = scaling.tv(x);
+        double[] y = new double[scaling.ncols()];
+        scaling.atx(x, y);
         MathEx.sub(y, mean);
         return y;
     }
@@ -348,7 +370,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
                 throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x[i].length, p));
             }
 
-            scaling.tv(x[i], y[i]);
+            scaling.atx(x[i], y[i]);
             MathEx.sub(y[i], mean);
         }
         
@@ -359,7 +381,7 @@ public class FLD implements Classifier<double[]>, Projection<double[]> {
      * Returns the projection matrix W. The dimension reduced data can be obtained
      * by y = W' * x.
      */
-    public Matrix getProjection() {
+    public DenseMatrix getProjection() {
         return scaling;
     }
 }

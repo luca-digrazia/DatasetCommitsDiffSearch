@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,10 +13,11 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.classification;
 
+import smile.data.measure.DiscreteMeasure;
 import smile.math.MathEx;
 import smile.util.IntSet;
 import smile.util.SparseArray;
@@ -83,7 +84,7 @@ import java.util.Arrays;
  */
 public class DiscreteNaiveBayes implements OnlineClassifier<int[]>, SoftClassifier<int[]> {
     private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DiscreteNaiveBayes.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DiscreteMeasure.class);
 
     /**
      * The generation models of naive Bayes classifier.
