@@ -1,19 +1,18 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.mds;
 
@@ -106,10 +105,18 @@ public class MDSTest {
             {  911.230500,   205.93020}
         };
 
-        MDS mds = MDS.of(eurodist);
-        assertTrue(MathEx.equals(eigs, mds.scores, 1E-4));
+        MDS mds = new MDS(eurodist);
+        for (int i = 0; i < eigs.length; i++) {
+                System.out.print(eigs[i] + " ");
+        }
+        System.out.println("==============");
+        for (int i = 0; i < mds.getEigenValues().length; i++) {
+                System.out.print(mds.getEigenValues()[i] + " ");
+        }
+        System.out.println();
+        assertTrue(MathEx.equals(eigs, mds.getEigenValues(), 1E-4));
 
-        double[][] coords = mds.coordinates;
+        double[][] coords = mds.getCoordinates();
         for (int i = 0; i < points.length; i++) {
             for (int j = 0; j < points[0].length; j++) {
                 assertEquals(Math.abs(points[i][j]), Math.abs(coords[i][j]), 1E-2);
@@ -149,10 +156,10 @@ public class MDSTest {
             { 1319.918808,   295.010834}
         };
 
-        MDS mds = MDS.of(eurodist, 2, true);
-        assertTrue(MathEx.equals(eigs, mds.scores, 1E-1));
+        MDS mds = new MDS(eurodist, 2, true);
+        assertTrue(MathEx.equals(eigs, mds.getEigenValues(), 1E-1));
 
-        double[][] coords = mds.coordinates;
+        double[][] coords = mds.getCoordinates();
         for (int i = 0; i < points.length; i++) {
             for (int j = 0; j < points[0].length; j++) {
                 assertEquals(Math.abs(points[i][j]), Math.abs(coords[i][j]), 1E-2);

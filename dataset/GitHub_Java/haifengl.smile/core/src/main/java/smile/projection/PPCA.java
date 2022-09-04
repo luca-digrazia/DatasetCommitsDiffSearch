@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.projection;
 
 import java.io.Serializable;
@@ -25,14 +23,13 @@ import smile.math.matrix.Cholesky;
 import smile.math.matrix.EVD;
 
 /**
- * Probabilistic principal component analysis. Probabilistic PCA is
- * a simplified factor analysis that employs a latent variable model
- * with linear relationship:
+ * Probabilistic principal component analysis. PPCA is a simplified factor analysis
+ * that employs a latent variable model with linear relationship:
  * <pre>
  *     y &sim; W * x + &mu; + &epsilon;
  * </pre>
  * where latent variables x &sim; N(0, I), error (or noise) &epsilon; &sim; N(0, &Psi;),
- * and &mu; is the location term (mean). In probabilistic PCA, an isotropic noise model is used,
+ * and &mu; is the location term (mean). In PPCA, an isotropic noise model is used,
  * i.e., noise variances constrained to be equal (&Psi;<sub>i</sub> = &sigma;<sup>2</sup>).
  * A close form of estimation of above parameters can be obtained
  * by maximum likelihood method.
@@ -46,8 +43,8 @@ import smile.math.matrix.EVD;
  *
  * @author Haifeng Li
  */
-public class PPCA implements LinearProjection, Serializable {
-    private static final long serialVersionUID = 2L;
+public class PPCA implements Projection<double[]>, Serializable {
+    private static final long serialVersionUID = 1L;
 
     /**
      * The sample mean.
@@ -62,30 +59,13 @@ public class PPCA implements LinearProjection, Serializable {
      */
     private double noise;
     /**
-     * The loading matrix.
+     * Loading matrix.
      */
     private DenseMatrix loading;
     /**
-     * The projection matrix.
+     * Projection matrix.
      */
     private DenseMatrix projection;
-
-    /**
-     * Constructor.
-     * @param noise the variance of noise.
-     * @param mu the mean of samples.
-     * @param loading the loading matrix.
-     * @param projection the projection matrix.
-     */
-    public PPCA(double noise, double[] mu, DenseMatrix loading, DenseMatrix projection) {
-        this.noise = noise;
-        this.mu = mu;
-        this.loading = loading;
-        this.projection = projection;
-
-        pmu = new double[projection.nrows()];
-        projection.ax(mu, pmu);
-    }
 
     /**
      * Returns the variable loading matrix, ordered from largest to smallest
@@ -113,7 +93,6 @@ public class PPCA implements LinearProjection, Serializable {
      * Returns the projection matrix. Note that this is not the matrix W in the
      * latent model.
      */
-    @Override
     public DenseMatrix getProjection() {
         return projection;
     }
@@ -145,15 +124,15 @@ public class PPCA implements LinearProjection, Serializable {
     }
 
     /**
-     * Fits probabilistic principal component analysis.
+     * Constructor. Learn probabilistic principal component analysis.
      * @param data training data of which each row is a sample.
      * @param k the number of principal component to learn.
      */
-    public static PPCA fit(double[][] data, int k) {
+    public PPCA(double[][] data, int k) {
         int m = data.length;
         int n = data[0].length;
 
-        double[] mu = MathEx.colMeans(data);
+        mu = MathEx.colMeans(data);
         DenseMatrix cov = Matrix.zeros(n, n);
         for (int l = 0; l < m; l++) {
             for (int i = 0; i < n; i++) {
@@ -175,13 +154,13 @@ public class PPCA implements LinearProjection, Serializable {
         double[] evalues = eigen.getEigenValues();
         DenseMatrix evectors = eigen.getEigenVectors();
 
-        double noise = 0.0;
+        noise = 0.0;
         for (int i = k; i < n; i++) {
             noise += evalues[i];
         }
         noise /= (n - k);
 
-        DenseMatrix loading = Matrix.zeros(n, k);
+        loading = Matrix.zeros(n, k);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < k; j++) {
                 loading.set(i, j, evectors.get(i, j) * Math.sqrt(evalues[j] - noise));
@@ -195,8 +174,9 @@ public class PPCA implements LinearProjection, Serializable {
 
         Cholesky chol = M.cholesky();
         DenseMatrix Mi = chol.inverse();
-        DenseMatrix projection = Mi.abtmm(loading);
+        projection = Mi.abtmm(loading);
 
-        return new PPCA(noise, mu, loading, projection);
+        pmu = new double[projection.nrows()];
+        projection.ax(mu, pmu);
     }
 }

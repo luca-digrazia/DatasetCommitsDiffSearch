@@ -1,20 +1,18 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.mds;
 
 import org.junit.After;
@@ -156,19 +154,30 @@ public class IsotonicMDSTest {
             {-7.62133456223296, 30.975890997191055}
         };
 
-        IsotonicMDS mds = IsotonicMDS.of(swiss);
+        IsotonicMDS mds = new IsotonicMDS(swiss, 2);
 
-        double sign = Math.signum(points[0][0] / mds.coordinates[0][0]);
+        double sign = Math.signum(points[0][0] / mds.getCoordinates()[0][0]);
         for (int i = 0; i < points.length; i++) {
             points[i][0] *= sign;
         }
 
-        sign = Math.signum(points[0][1] / mds.coordinates[0][1]);
+        sign = Math.signum(points[0][1] / mds.getCoordinates()[0][1]);
         for (int i = 0; i < points.length; i++) {
             points[i][1] *= sign;
         }
 
-        assertEquals(0.023190, mds.stress, 1E-6);
-        assertTrue(MathEx.equals(points, mds.coordinates, 1E-6));
+        assertEquals(0.023190, mds.getStress(), 1E-6);
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < points[i].length; j++)
+                System.out.print(points[i][j] + " ");
+            System.out.println();
+        }
+        System.out.println("==============");
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < mds.getCoordinates()[i].length; j++)
+                System.out.print(mds.getCoordinates()[i][j] + " ");
+            System.out.println();
+        }
+        assertTrue(MathEx.equals(points, mds.getCoordinates(), 1E-6));
     }
 }

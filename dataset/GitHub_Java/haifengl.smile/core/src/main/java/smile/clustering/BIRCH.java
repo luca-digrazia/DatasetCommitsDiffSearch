@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.clustering;
 
 import java.io.Serializable;
@@ -58,7 +56,7 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class BIRCH implements Clustering<double[]> {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * Branching factor. Maximum number of children nodes.
@@ -85,7 +83,7 @@ public class BIRCH implements Clustering<double[]> {
      * Internal node of CF tree.
      */
     class Node implements Serializable {
-        private static final long serialVersionUID = 2L;
+        private static final long serialVersionUID = 1L;
 
         /**
          * The number of observations
@@ -421,8 +419,16 @@ public class BIRCH implements Clustering<double[]> {
         centroids = centers.toArray(new double[n][]);
 
         if (n > k) {
-            Linkage linkage = WardLinkage.of(centroids);
-            HierarchicalClustering hc = HierarchicalClustering.fit(linkage);
+            double[][] proximity = new double[n][];
+            for (int i = 0; i < n; i++) {
+                proximity[i] = new double[i + 1];
+                for (int j = 0; j < i; j++) {
+                    proximity[i][j] = MathEx.distance(centroids[i], centroids[j]);
+                }
+            }
+
+            Linkage linkage = new WardLinkage(proximity);
+            HierarchicalClustering hc = new HierarchicalClustering(linkage);
 
             int[] y = hc.partition(k);
 

@@ -1,29 +1,26 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.clustering;
-
-import java.io.Serializable;
-import java.util.stream.IntStream;
 
 import smile.math.MathEx;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EVD;
+
+import java.io.Serializable;
 
 /**
  * Spectral Clustering. Given a set of data points, the similarity matrix may
@@ -45,50 +42,70 @@ import smile.math.matrix.EVD;
  * 
  * @author Haifeng Li
  */
-public class SpectralClustering extends PartitionClustering implements Serializable {
-    private static final long serialVersionUID = 2L;
+public class SpectralClustering implements Serializable {
+    private static final long serialVersionUID = 1L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SpectralClustering.class);
 
     /**
+     * The number of clusters.
+     */
+    private int k;
+    /**
+     * The cluster labels of data.
+     */
+    private int[] y;
+    /**
+     * The number of samples in each cluster.
+     */
+    private int[] size;
+    /**
+     * The width of Gaussian kernel.
+     */
+    private double sigma;
+    /**
      * The distortion in feature space.
      */
-    public final double distortion;
+    private double distortion;
 
     /**
-     * Constructor.
-     * @param distortion the total distortion.
-     * @param k the number of clusters.
-     * @param y the cluster labels.
-     */
-    public SpectralClustering(double distortion, int k, int[] y) {
-        super(k, y);
-        this.distortion = distortion;
-    }
-
-    /**
-     * Spectral graph clustering.
-     * @param W the adjacency matrix of graph, which will be modified.
+     * Constructor. Spectral graph clustering.
+     * @param W the adjacency matrix of graph.
      * @param k the number of clusters.
      */
-    public static SpectralClustering fit(DenseMatrix W, int k) {
-        return fit(W, k, 100, 1E-4);
-    }
-
-    /**
-     * Spectral graph clustering.
-     * @param W the adjacency matrix of graph, which will be modified.
-     * @param k the number of clusters.
-     * @param maxIter the maximum number of iterations for each running.
-     * @param tol the tolerance of convergence test.
-     */
-    public static SpectralClustering fit(DenseMatrix W, int k, int maxIter, double tol) {
+    public SpectralClustering(double[][] W, int k) {
         if (k < 2) {
             throw new IllegalArgumentException("Invalid number of clusters: " + k);
         }
 
-        int n = W.nrows();
-        double[] D = W.colSums();
+        this.k = k;        
+        int n = W.length;
+        
         for (int i = 0; i < n; i++) {
+            if (W[i].length != n) {
+                throw new IllegalArgumentException("The adjacency matrix is not square.");
+            }
+            
+            if (W[i][i] != 0.0) {
+                throw new IllegalArgumentException(String.format("Vertex %d has self loop: ", i));
+            }
+            
+            for (int j = 0; j < i; j++) {
+                if (W[i][j] != W[j][i]) {
+                    throw new IllegalArgumentException("The adjacency matrix is not symmetric.");                    
+                }
+                
+                if (W[i][j] < 0.0) {
+                    throw new IllegalArgumentException("Negative entry of adjacency matrix: " + W[i][j]);                    
+                }
+            }
+        }
+        
+        double[] D = new double[n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                D[i] += W[i][j];
+            }
+            
             if (D[i] == 0.0) {
                 throw new IllegalArgumentException("Isolated vertex: " + i);                    
             }
@@ -96,50 +113,38 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             D[i] = 1.0 / Math.sqrt(D[i]);
         }
 
+        DenseMatrix L = Matrix.zeros(n, n);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < i; j++) {
-                double w = D[i] * W.get(i, j) * D[j];
-                W.set(i, j, w);
-                W.set(j, i, w);
+                double l = D[i] * W[i][j] * D[j];
+                L.set(i, j, l);
+                L.set(j, i, l);
             }
         }
 
-        W.setSymmetric(true);
-        EVD eigen = W.eigen(k);
-        double[][] Y = eigen.getEigenVectors().toArray();
+        L.setSymmetric(true);
+        EVD eigen = L.eigen(k);
+        double[][] Y = eigen.getEigenVectors().array();
         for (int i = 0; i < n; i++) {
             MathEx.unitize2(Y[i]);
         }
 
-        KMeans kmeans = KMeans.fit(Y, k, maxIter, tol);
-        return new SpectralClustering(kmeans.distortion, k, kmeans.y);
+        KMeans kmeans = new KMeans(Y, k);
+        distortion = kmeans.distortion;
+        y = kmeans.getClusterLabel();
+        size = kmeans.getClusterSize();
     }
 
     /**
-     * Spectral clustering the data.
-     * @param data the input data of which each row is an observation.
+     * Constructor. Spectral clustering the data.
+     * @param data the dataset for clustering.
      * @param k the number of clusters.
-     * @param sigma the smooth/width parameter of Gaussian kernel, which is
-     *              a somewhat sensitive parameter. To search for the best
-     *              setting, one may pick the value that gives the tightest
-     *              clusters (smallest distortion) in feature space.
+     * @param sigma the smooth/width parameter of Gaussian kernel, which
+     * is a somewhat sensitive parameter. To search for the best setting,
+     * one may pick the value that gives the tightest clusters (smallest
+     * distortion, see {@link #distortion()}) in feature space.
      */
-    public static SpectralClustering fit(double[][] data, int k, double sigma) {
-        return fit(data, k, sigma, 100, 1E-4);
-    }
-
-    /**
-     * Spectral clustering the data.
-     * @param data the input data of which each row is an observation.
-     * @param k the number of clusters.
-     * @param sigma the smooth/width parameter of Gaussian kernel, which is
-     *              a somewhat sensitive parameter. To search for the best
-     *              setting, one may pick the value that gives the tightest
-     *              clusters (smallest distortion) in feature space.
-     * @param maxIter the maximum number of iterations for each running.
-     * @param tol the tolerance of convergence test.
-     */
-    public static SpectralClustering fit(double[][] data, int k, double sigma, int maxIter, double tol) {
+    public SpectralClustering(double[][] data, int k, double sigma) {
         if (k < 2) {
             throw new IllegalArgumentException("Invalid number of clusters: " + k);
         }
@@ -147,6 +152,9 @@ public class SpectralClustering extends PartitionClustering implements Serializa
         if (sigma <= 0.0) {
             throw new IllegalArgumentException("Invalid standard deviation of Gaussian kernel: " + sigma);
         }
+
+        this.k = k;
+        this.sigma = sigma;
 
         int n = data.length;
         double gamma = -0.5 / (sigma * sigma);
@@ -159,37 +167,53 @@ public class SpectralClustering extends PartitionClustering implements Serializa
                 W.set(j, i, w);
             }
         }
+        
+        double[] D = new double[n];
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                D[i] += W.get(i, j);
+            }
 
-        return fit(W, k, maxIter, tol);
+            if (D[i] < 1E-5) {
+                logger.error(String.format("Small D[%d] = %f. The data may contain outliers.", i, D[i]));
+            }
+            
+            D[i] = 1.0 / Math.sqrt(D[i]);
+        }
+
+        DenseMatrix L = W;
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < i; j++) {
+                double l = D[i] * W.get(i, j) * D[j];
+                L.set(i, j, l);
+                L.set(j, i, l);
+            }
+        }
+
+        L.setSymmetric(true);
+        EVD eigen = L.eigen(k);
+        double[][] Y = eigen.getEigenVectors().array();
+        for (int i = 0; i < n; i++) {
+            MathEx.unitize2(Y[i]);
+        }
+
+        KMeans kmeans = new KMeans(Y, k);
+        distortion = kmeans.distortion;
+        y = kmeans.getClusterLabel();
+        size = kmeans.getClusterSize();
     }
 
     /**
-     * Spectral clustering with Nystrom approximation.
-     * @param data the input data of which each row is an observation.
-     * @param k the number of clusters.
+     * Constructor. Spectral clustering with Nystrom approximation.
+     * @param data the dataset for clustering.
      * @param l the number of random samples for Nystrom approximation.
-     * @param sigma the smooth/width parameter of Gaussian kernel, which is
-     *              a somewhat sensitive parameter. To search for the best
-     *              setting, one may pick the value that gives the tightest
-     *              clusters (smallest distortion) in feature space.
-     */
-    public static SpectralClustering fit(double[][] data, int k, int l, double sigma) {
-        return fit(data, k, l, sigma, 100, 1E-4);
-    }
-
-    /**
-     * Spectral clustering with Nystrom approximation.
-     * @param data the input data of which each row is an observation.
      * @param k the number of clusters.
-     * @param l the number of random samples for Nystrom approximation.
-     * @param sigma the smooth/width parameter of Gaussian kernel, which is
-     *              a somewhat sensitive parameter. To search for the best
-     *              setting, one may pick the value that gives the tightest
-     *              clusters (smallest distortion) in feature space.
-     * @param maxIter the maximum number of iterations for each running.
-     * @param tol the tolerance of convergence test.
+     * @param sigma the smooth/width parameter of Gaussian kernel, which
+     * is a somewhat sensitive parameter. To search for the best setting,
+     * one may pick the value that gives the tightest clusters (smallest
+     * distortion, see {@link #distortion()}) in feature space.
      */
-    public static SpectralClustering fit(double[][] data, int k, int l, double sigma, int maxIter, double tol) {
+    public SpectralClustering(double[][] data, int k, int l, double sigma) {
         if (l < k || l >= data.length) {
             throw new IllegalArgumentException("Invalid number of random samples: " + l);
         }
@@ -202,6 +226,9 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             throw new IllegalArgumentException("Invalid standard deviation of Gaussian kernel: " + sigma);
         }
         
+        this.k = k;
+        this.sigma = sigma;
+
         int n = data.length;
         double gamma = -0.5 / (sigma * sigma);
 
@@ -210,28 +237,27 @@ public class SpectralClustering extends PartitionClustering implements Serializa
         for (int i = 0; i < n; i++) {
             x[i] = data[index[i]];
         }
-
+        data = x;
+        
         DenseMatrix C = Matrix.zeros(n, l);
         double[] D = new double[n];
-
-        IntStream.range(0, n).parallel().forEach(i -> {
+        for (int i = 0; i < n; i++) {
+            double sum = 0.0;
             for (int j = 0; j < n; j++) {
                 if (i != j) {
-                    double w = Math.exp(gamma * MathEx.squaredDistance(x[i], x[j]));
-                    D[i] += w;
+                    double w = Math.exp(gamma * MathEx.squaredDistance(data[i], data[j]));
+                    sum += w;
                     if (j < l) {
                         C.set(i, j, w);
                     }
                 }
             }
-        });
-
-        for (int i = 0; i < n; i++) {
-            if (D[i] < 1E-4) {
-                logger.error(String.format("Small D[%d] = %f. The data may contain outliers.", i, D[i]));
+            
+            if (sum < 1E-5) {
+                logger.error(String.format("Small D[%d] = %f. The data may contain outliers.", i, sum));
             }
             
-            D[i] = 1.0 / Math.sqrt(D[i]);
+            D[i] = 1.0 / Math.sqrt(sum);
         }
         
         for (int i = 0; i < n; i++) {
@@ -240,14 +266,19 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             }
         }
 
-        DenseMatrix W = C.submat(0, 0, l, l);
+        DenseMatrix W = Matrix.zeros(l, l);
+        for (int i = 0; i < l; i++) {
+            for (int j = 0; j < l; j++) {
+                W.set(i, j, C.get(i, j));
+            }
+        }
 
         W.setSymmetric(true);
         EVD eigen = W.eigen(k);
         double[] e = eigen.getEigenValues();
         double scale = Math.sqrt((double)l / n);
         for (int i = 0; i < k; i++) {
-            if (e[i] <= 1E-8) {
+            if (e[i] <= 0.0) {
                 throw new IllegalStateException("Non-positive eigen value: " + e[i]);
             }
             
@@ -261,17 +292,68 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             }
         }
         
-        double[][] Y = C.abmm(U).toArray();
+        double[][] Y = C.abmm(U).array();
         for (int i = 0; i < n; i++) {
             MathEx.unitize2(Y[i]);
         }
 
-        KMeans kmeans = KMeans.fit(Y, k, maxIter, tol);
-        int[] y = new int[n];
+        KMeans kmeans = new KMeans(Y, k);
+        distortion = kmeans.distortion;
+        size = kmeans.getClusterSize();
+
+        int[] label = kmeans.getClusterLabel();
+        y = new int[n];
         for (int i = 0; i < n; i++) {
-            y[index[i]] = kmeans.y[i];
+            y[index[i]] = label[i];
+        }
+    }
+    
+    /**
+     * Returns the number of clusters.
+     */
+    public int getNumClusters() {
+        return k;
+    }
+
+    /**
+     * Returns the cluster labels of data.
+     */
+    public int[] getClusterLabel() {
+        return y;
+    }
+
+    /**
+     * Returns the size of clusters.
+     */
+    public int[] getClusterSize() {
+        return size;
+    }
+
+    /**
+     * Returns the width of Gaussian kernel.
+     */
+    public double getGaussianKernelWidth() {
+        return sigma;
+    }
+
+    /**
+     * Returns the distortion in feature space.
+     */
+    public double distortion() {
+        return distortion;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(String.format("Spectral Clustering distortion in feature space: %.5f%n", distortion));
+        sb.append(String.format("Clusters of %d data points:%n", y.length));
+        for (int i = 0; i < k; i++) {
+            int r = (int) MathEx.round(1000.0 * size[i] / y.length);
+            sb.append(String.format("%3d\t%5d (%2d.%1d%%)%n", i, size[i], r / 10, r % 10));
         }
 
-        return new SpectralClustering(kmeans.distortion, k, y);
+        return sb.toString();
     }
 }

@@ -1,26 +1,28 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.manifold;
 
 import java.util.Arrays;
-import java.util.stream.IntStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
 import smile.math.MathEx;
 import smile.stat.distribution.GaussianDistribution;
+import smile.util.MulticoreExecutor;
 
 /**
  * The t-distributed stochastic neighbor embedding (t-SNE) is a nonlinear
@@ -58,7 +60,7 @@ public class TSNE {
     /**
      * Coordinate matrix.
      */
-    public final double[][] coordinates;
+    private double[][] coordinates;
 
     private double eta             = 500;
     private double momentum        = 0.5;
@@ -137,14 +139,24 @@ public class TSNE {
             }
         }
 
-        update(iterations);
+        learn(iterations);
     }
 
-    /** Performs additional iterations. */
-    public void update(int iterations) {
+    /** Continue to learn additional iterations. */
+    public void learn(int iterations) {
         double[][] Y = coordinates;
         int n = Y.length;
         int d = Y[0].length;
+
+        int nprocs = MulticoreExecutor.getThreadPoolSize();
+        int chunk = n / nprocs;
+        List<SNETask> tasks = new ArrayList<>();
+        for (int i = 0; i < nprocs; i++) {
+            int start = i * chunk;
+            int end = i == nprocs-1 ? n : (i+1) * chunk;
+            SNETask task = new SNETask(start, end);
+            tasks.add(task);
+        }
 
         for (int iter = 1; iter <= iterations; iter++, totalIter++) {
             MathEx.pdist(Y, Q, true, false);
@@ -160,7 +172,11 @@ public class TSNE {
             }
             Qsum *= 2.0;
 
-            IntStream.range(0, n).parallel().forEach(i -> sne(i));
+            try {
+                MulticoreExecutor.run(tasks);
+            } catch (Exception e) {
+                logger.error("t-SNE iteration task fails: {}", e);
+            }
 
             if (totalIter == momentumSwitchIter) {
                 momentum = finalMomentum;
@@ -199,40 +215,60 @@ public class TSNE {
         }
     }
 
-    /** Computes the gradients and updates the coordinates. */
-    private void sne(int i) {
-        double[] dC = new double[coordinates[0].length];
-        double[][] Y = coordinates;
-        int n = Y.length;
-        int d = Y[0].length;
+    private class SNETask implements Callable<Void> {
+        int start, end;
+        double[] dC;
 
-        // Compute gradient
-        // dereference before the loop for better performance
-        double[] Yi = Y[i];
-        double[] Pi = P[i];
-        double[] Qi = Q[i];
-        double[] dYi = dY[i];
-        double[] g = gains[i];
-        for (int j = 0; j < n; j++) {
-            if (i != j) {
-                double[] Yj = Y[j];
-                double q = Qi[j];
-                double z = (Pi[j] - (q / Qsum)) * q;
-                for (int k = 0; k < d; k++) {
-                    dC[k] += 4.0 * (Yi[k] - Yj[k]) * z;
-                }
-            }
+
+        SNETask(int start, int end) {
+            this.start = start;
+            this.end = end;
+            this.dC = new double[coordinates[0].length];
         }
 
-        // Perform the update
-        for (int k = 0; k < d; k++) {
-            // Update gains
-            g[k] = (Math.signum(dC[k]) != Math.signum(dYi[k])) ? (g[k] + .2) : (g[k] * .8);
-            if (g[k] < minGain) g[k] = minGain;
+        @Override
+        public Void call() {
+            for (int i = start; i < end; i++) {
+                compute(i);
+            }
 
-            // gradient update with momentum and gains
-            Yi[k] += dYi[k];
-            dYi[k] = momentum * dYi[k] - eta * g[k] * dC[k];
+            return null;
+        }
+
+        private void compute(int i) {
+            double[][] Y = coordinates;
+            int n = Y.length;
+            int d = Y[0].length;
+            Arrays.fill(dC, 0.0);
+
+            // Compute gradient
+            // dereference before the loop for better performance
+            double[] Yi = Y[i];
+            double[] Pi = P[i];
+            double[] Qi = Q[i];
+            double[] dYi = dY[i];
+            double[] g = gains[i];
+            for (int j = 0; j < n; j++) {
+                if (i != j) {
+                    double[] Yj = Y[j];
+                    double q = Qi[j];
+                    double z = (Pi[j] - (q / Qsum)) * q;
+                    for (int k = 0; k < d; k++) {
+                        dC[k] += 4.0 * (Yi[k] - Yj[k]) * z;
+                    }
+                }
+            }
+
+            // Perform the update
+            for (int k = 0; k < d; k++) {
+                // Update gains
+                g[k] = (Math.signum(dC[k]) != Math.signum(dYi[k])) ? (g[k] + .2) : (g[k] * .8);
+                if (g[k] < minGain) g[k] = minGain;
+
+                // gradient update with momentum and gains
+                Yi[k] += dYi[k];
+                dYi[k] = momentum * dYi[k] - eta * g[k] * dC[k];
+            }
         }
     }
 
@@ -242,7 +278,53 @@ public class TSNE {
         double[][] P   = new double[n][n];
         double[] DiSum = MathEx.rowSums(D);
 
-        IntStream.range(0, n).parallel().forEach(i -> {
+        int nprocs = MulticoreExecutor.getThreadPoolSize();
+        int chunk = n / nprocs;
+        List<PerplexityTask> tasks = new ArrayList<>();
+        for (int i = 0; i < nprocs; i++) {
+            int start = i * chunk;
+            int end = i == nprocs-1 ? n : (i+1) * chunk;
+            PerplexityTask task = new PerplexityTask(start, end, D, P, DiSum, perplexity, tol);
+            tasks.add(task);
+        }
+
+        try {
+            MulticoreExecutor.run(tasks);
+        } catch (Exception e) {
+            logger.error("t-SNE Gaussian kernel width search task fails: {}", e);
+        }
+
+        return P;
+    }
+
+    private class PerplexityTask implements Callable<Void> {
+        int start, end;
+        double[][] D;
+        double[][] P;
+        double[] DiSum;
+        double perplexity;
+        double tol;
+
+        PerplexityTask(int start, int end, double[][] D, double[][] P, double[] DiSum, double perplexity, double tol) {
+            this.start = start;
+            this.end = end;
+            this.D = D;
+            this.P = P;
+            this.DiSum = DiSum;
+            this.perplexity = perplexity;
+            this.tol = tol;
+        }
+
+        @Override
+        public Void call() {
+            for (int i = start; i < end; i++) {
+                compute(i);
+            }
+            return null;
+        }
+
+        private void compute(int i) {
+            int n       = D.length;
             double logU = MathEx.log2(perplexity);
 
             double[] Pi = P[i];
@@ -294,8 +376,13 @@ public class TSNE {
 
                 logger.debug("Hdiff = {}, beta[{}] = {}, H = {}, logU = {}", Hdiff, i, beta, H, logU);
             }
-        });
+        }
+    }
 
-        return P;
+    /**
+     * Returns the coordinates of projected data.
+     */
+    public double[][] getCoordinates() {
+        return coordinates;
     }
 }

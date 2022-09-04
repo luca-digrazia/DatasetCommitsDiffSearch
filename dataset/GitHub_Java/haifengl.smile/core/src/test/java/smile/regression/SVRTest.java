@@ -1,37 +1,32 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.regression;
+
+import smile.math.kernel.PolynomialKernel;
+import smile.data.AttributeDataset;
+import smile.data.parser.ArffParser;
 
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.*;
-import smile.math.kernel.GaussianKernel;
-import smile.math.kernel.LinearKernel;
 import smile.math.MathEx;
 import smile.validation.CrossValidation;
-import smile.validation.LOOCV;
-import smile.validation.RMSE;
-import smile.validation.Validation;
-
-import static org.junit.Assert.assertEquals;
 
 /**
  *
@@ -58,71 +53,42 @@ public class SVRTest {
     public void tearDown() {
     }
 
-    @Test(expected = Test.None.class)
-    public void testLongley() throws Exception {
-        System.out.println("longley");
-
-        double[] prediction = LOOCV.regression(Longley.x, Longley.y, (x, y) -> SVR.fit(x, y, 2.0, 10.0, 1E-3));
-        double rmse = RMSE.of(Longley.y, prediction);
-
-        System.out.println("LOOCV RMSE = " + rmse);
-        assertEquals(1.6140026106705365, rmse, 1E-4);
-
-        Regression<double[]> model = SVR.fit(Longley.x, Longley.y, 2.0, 10.0, 1E-3);
-        java.nio.file.Path temp = smile.data.Serialize.write(model);
-        smile.data.Serialize.read(temp);
-    }
-
+    /**
+     * Test of learn method, of class SVR.
+     */
     @Test
     public void testCPU() {
         System.out.println("CPU");
+        ArffParser parser = new ArffParser();
+        parser.setResponseIndex(6);
+        try {
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/cpu.arff"));
+            double[] datay = data.toArray(new double[data.size()]);
+            double[][] datax = data.toArray(new double[data.size()][]);
+            MathEx.standardize(datax);
 
-        double[][] x = MathEx.clone(CPU.x);
-        MathEx.standardize(x);
+            int n = datax.length;
+            int k = 10;
 
-        MathEx.setSeed(19650218); // to get repeatable results.
-        double[] prediction = CrossValidation.regression(10, x, CPU.y, (xi, yi) -> SVR.fit(xi, yi,40.0, 10.0, 1E-3));
-        double rmse = RMSE.of(CPU.y, prediction);
+            CrossValidation cv = new CrossValidation(n, k);
+            double rss = 0.0;
+            for (int i = 0; i < k; i++) {
+                double[][] trainx = MathEx.slice(datax, cv.train[i]);
+                double[] trainy = MathEx.slice(datay, cv.train[i]);
+                double[][] testx = MathEx.slice(datax, cv.test[i]);
+                double[] testy = MathEx.slice(datay, cv.test[i]);
 
-        System.out.println("10-CV RMSE = " + rmse);
-        assertEquals(54.63430240465948, rmse, 1E-4);
-    }
+                SVR<double[]> svr = new SVR<>(trainx, trainy, new PolynomialKernel(3, 1.0, 1.0), 0.1, 1.0);
 
-    @Test
-    public void tesProstate() {
-        System.out.println("Prostate");
+                for (int j = 0; j < testx.length; j++) {
+                    double r = testy[j] - svr.predict(testx[j]);
+                    rss += r * r;
+                }
+            }
 
-        GaussianKernel kernel = new GaussianKernel(6.0);
-        KernelMachine<double[]> model = SVR.fit(Prostate.x, Prostate.y, kernel, 0.5, 5, 1E-3);
-
-        double[] prediction = Validation.test(model, Prostate.testx);
-        double rmse = RMSE.of(Prostate.testy, prediction);
-        System.out.println("Test RMSE = " + rmse);
-        assertEquals(0.9112183360712871, rmse, 1E-4);
-    }
-
-    @Test
-    public void tesAbalone() {
-        System.out.println("Abalone");
-        GaussianKernel kernel = new GaussianKernel(5.0);
-        KernelMachine<double[]> model = SVR.fit(Abalone.x, Abalone.y, kernel, 1.5, 100, 1E-3);
-
-        double[] prediction = Validation.test(model, Abalone.testx);
-        double rmse = RMSE.of(Abalone.testy, prediction);
-        System.out.println("Test RMSE = " + rmse);
-        assertEquals(2.1098880372502586, rmse, 1E-4);
-    }
-
-    @Test
-    public void tesDiabetes() {
-        System.out.println("Diabetes");
-
-        MathEx.setSeed(19650218); // to get repeatable results.
-        GaussianKernel kernel = new GaussianKernel(5.0);
-        double[] prediction = CrossValidation.regression(10, Diabetes.x, Diabetes.y, (x, y) -> SVR.fit(x, y, kernel, 50, 1000, 1E-3));
-        double rmse = RMSE.of(Diabetes.y, prediction);
-
-        System.out.println("Diabetes 10-CV RMSE = " + rmse);
-        assertEquals(61.710080572519516, rmse, 1E-4);
+            System.out.println("10-CV RMSE = " + Math.sqrt(rss / n));
+         } catch (Exception ex) {
+             System.err.println(ex);
+         }
     }
 }

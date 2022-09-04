@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.regression;
 
 import org.junit.After;
@@ -22,13 +20,12 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import smile.data.*;
-import smile.data.formula.Formula;
+import smile.data.AttributeDataset;
+import smile.data.parser.ArffParser;
 import smile.math.MathEx;
 import smile.sort.QuickSort;
 import smile.validation.CrossValidation;
 import smile.validation.LOOCV;
-import smile.validation.RMSE;
 import smile.validation.Validation;
 
 import static org.junit.Assert.assertEquals;
@@ -64,58 +61,140 @@ public class RegressionTreeTest {
     @Test
     public void testLongley() {
         System.out.println("longley");
+        
+        double[][] longley = {
+            {234.289,      235.6,        159.0,    107.608, 1947,   60.323},
+            {259.426,      232.5,        145.6,    108.632, 1948,   61.122},
+            {258.054,      368.2,        161.6,    109.773, 1949,   60.171},
+            {284.599,      335.1,        165.0,    110.929, 1950,   61.187},
+            {328.975,      209.9,        309.9,    112.075, 1951,   63.221},
+            {346.999,      193.2,        359.4,    113.270, 1952,   63.639},
+            {365.385,      187.0,        354.7,    115.094, 1953,   64.989},
+            {363.112,      357.8,        335.0,    116.219, 1954,   63.761},
+            {397.469,      290.4,        304.8,    117.388, 1955,   66.019},
+            {419.180,      282.2,        285.7,    118.734, 1956,   67.857},
+            {442.769,      293.6,        279.8,    120.445, 1957,   68.169},
+            {444.546,      468.1,        263.7,    121.950, 1958,   66.513},
+            {482.704,      381.3,        255.2,    123.366, 1959,   68.655},
+            {502.601,      393.1,        251.4,    125.368, 1960,   69.564},
+            {518.173,      480.6,        257.2,    127.852, 1961,   69.331},
+            {554.894,      400.7,        282.7,    130.081, 1962,   70.551}
+        };
 
-        RegressionTree model = RegressionTree.fit(Longley.formula, Longley.data, 100, 2);
-        System.out.println("----- dot -----");
-        System.out.println(model);
+        double[] y = {
+            83.0,  88.5,  88.2,  89.5,  96.2,  98.1,  99.0, 100.0, 101.2,
+            104.6, 108.4, 110.8, 112.6, 114.2, 115.7, 116.9
+        };
 
-        double[] importance = model.importance();
-        System.out.println("----- importance -----");
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
+        int n = longley.length;
+        LOOCV loocv = new LOOCV(n);
+        double rss = 0.0;
+        for (int i = 0; i < n; i++) {
+            double[][] trainx = MathEx.slice(longley, loocv.train[i]);
+            double[] trainy = MathEx.slice(y, loocv.train[i]);
+            RegressionTree tree = new RegressionTree(trainx, trainy, 3);
+
+            double r = y[loocv.test[i]] - tree.predict(longley[loocv.test[i]]);
+            rss += r * r;
         }
 
-        double[] prediction = LOOCV.regression(Longley.data, x -> RegressionTree.fit(Longley.formula, x, 100, 2));
-        double rmse = RMSE.apply(Longley.y, prediction);
-
-        System.out.println("LOOCV MSE = " + rmse);
-        assertEquals(3.0848729264302333, rmse, 1E-4);
+        System.out.println("MSE = " + rss/n);
+        assertEquals(41.933087445771115, rss/n, 1E-4);
     }
+    
+    public void test(String dataset, String url, int response) {
+        System.out.println(dataset);
+        ArffParser parser = new ArffParser();
+        parser.setResponseIndex(response);
+        try {
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile(url));
+            double[] datay = data.toArray(new double[data.size()]);
+            double[][] datax = data.toArray(new double[data.size()][]);
+            
+            int n = datax.length;
+            int k = 10;
 
-    public void test(String name, Formula formula, DataFrame data, double expected) {
-        System.out.println(name);
+            CrossValidation cv = new CrossValidation(n, k);
+            double rss = 0.0;
+            double ad = 0.0;
+            for (int i = 0; i < k; i++) {
+                double[][] trainx = MathEx.slice(datax, cv.train[i]);
+                double[] trainy = MathEx.slice(datay, cv.train[i]);
+                double[][] testx = MathEx.slice(datax, cv.test[i]);
+                double[] testy = MathEx.slice(datay, cv.test[i]);
 
-        MathEx.setSeed(19650218); // to get repeatable results.
+                RegressionTree tree = new RegressionTree(data.attributes(), trainx, trainy, 20);
 
-        RegressionTree model = RegressionTree.fit(formula, data);
-        System.out.println("----- dot -----");
-        System.out.println(model);
+                for (int j = 0; j < testx.length; j++) {
+                    double r = testy[j] - tree.predict(testx[j]);
+                    rss += r * r;
+                    ad += Math.abs(r);
+                }
+            }
 
-        double[] importance = model.importance();
-        System.out.println("----- importance -----");
-        for (int i = 0; i < importance.length; i++) {
-            System.out.format("%-15s %.4f%n", model.schema().fieldName(i), importance[i]);
-        }
-
-        double[] prediction = CrossValidation.regression(10, data, x -> RegressionTree.fit(formula, x));
-        double rmse = RMSE.apply(formula.y(data).toDoubleArray(), prediction);
-        System.out.format("10-CV RMSE = %.4f%n", rmse);
-        assertEquals(expected, rmse, 1E-4);
+            System.out.format("10-CV RMSE = %.4f \t AbsoluteDeviation = %.4f%n", Math.sqrt(rss/n), ad/n);
+         } catch (Exception ex) {
+             System.err.println(ex);
+         }
     }
-
+    
     /**
      * Test of learn method, of class RegressionTree.
      */
     @Test
     public void testAll() {
-        test("CPU", CPU.formula, CPU.data, 88.6985);
-        test("2dplanes", Planes.formula, Planes.data, 2.0976630570457164);
-        test("abalone", Abalone.formula, Abalone.train, 2.5596429888189594);
-        test("ailerons", Ailerons.formula, Ailerons.data, 0.0003);
-        test("bank32nh", Bank32nh.formula, Bank32nh.data, 0.09799630724747005);
-        test("autoMPG", AutoMPG.formula, AutoMPG.data, 3.6601134209470363);
-        test("cal_housing", CalHousing.formula, CalHousing.data, 83789.70080922866);
-        test("puma8nh", Puma8NH.formula, Puma8NH.data, 4.046871978193681);
-        test("kin8nm", Kin8nm.formula, Kin8nm.data, 0.2189);
+        test("CPU", "weka/cpu.arff", 6);
+        //test("2dplanes", "weka/regression/2dplanes.arff", 6);
+        //test("abalone", "weka/regression/abalone.arff", 8);
+        //test("ailerons", "weka/regression/ailerons.arff", 40);
+        //test("bank32nh", "weka/regression/bank32nh.arff", 32);
+        test("autoMPG", "weka/regression/autoMpg.arff", 7);
+        test("cal_housing", "weka/regression/cal_housing.arff", 8);
+        test("puma8nh", "weka/regression/puma8NH.arff", 8);
+        test("kin8nm", "weka/regression/kin8nm.arff", 8);
+    }
+    
+    /**
+     * Test of learn method, of class RegressionTree.
+     */
+    @Test
+    public void testCPU() {
+        System.out.println("CPU");
+        ArffParser parser = new ArffParser();
+        parser.setResponseIndex(6);
+        try {
+            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/cpu.arff"));
+            double[] datay = data.toArray(new double[data.size()]);
+            double[][] datax = data.toArray(new double[data.size()][]);
+
+            int n = datax.length;
+            int m = 3 * n / 4;
+            int[] index = MathEx.permutate(n);
+            
+            double[][] trainx = new double[m][];
+            double[] trainy = new double[m];            
+            for (int i = 0; i < m; i++) {
+                trainx[i] = datax[index[i]];
+                trainy[i] = datay[index[i]];
+            }
+            
+            double[][] testx = new double[n-m][];
+            double[] testy = new double[n-m];            
+            for (int i = m; i < n; i++) {
+                testx[i-m] = datax[index[i]];
+                testy[i-m] = datay[index[i]];                
+            }
+
+            RegressionTree tree = new RegressionTree(data.attributes(), trainx, trainy, 20);
+            System.out.format("RMSE = %.4f%n", Validation.test(tree, testx, testy));
+            
+            double[] importance = tree.importance();
+            index = QuickSort.sort(importance);
+            for (int i = importance.length; i-- > 0; ) {
+                System.out.format("%s importance is %.4f%n", data.attributes()[index[i]], importance[i]);
+            }
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
     }
 }

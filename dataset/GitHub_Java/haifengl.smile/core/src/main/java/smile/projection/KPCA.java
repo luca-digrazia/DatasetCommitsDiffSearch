@@ -1,25 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.projection;
 
 import java.io.Serializable;
-import java.util.Arrays;
-
 import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 import smile.math.matrix.Matrix;
@@ -60,7 +56,7 @@ import smile.math.matrix.EVD;
  * @author Haifeng Li
  */
 public class KPCA<T> implements Projection<T>, Serializable {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The dimension of feature space.
@@ -83,11 +79,11 @@ public class KPCA<T> implements Projection<T>, Serializable {
      */
     private double mu;
     /**
-     * The eigenvalues of kernel principal components.
+     * Eigenvalues of kernel principal components.
      */
     private double[] latent;
     /**
-     * The projection matrix.
+     * Projection matrix.
      */
     private DenseMatrix projection;
     /**
@@ -96,45 +92,35 @@ public class KPCA<T> implements Projection<T>, Serializable {
     private double[][] coordinates;
 
     /**
-     * Constructor.
-     * @param data training data.
-     * @param kernel Mercer kernel.
-     * @param mean the row/column average of kernel matrix.
-     * @param mu the average of kernel matrix.
-     * @param coordinates the coordinates of projected training data.
-     * @param latent the projection matrix.
-     * @param projection the projection matrix.
+     * Constructor. Learn kernel principal component analysis.
+     * @param data learning data.
+     * @param kernel Mercer kernel to compute kernel matrix.
+     * @param threshold only principal components with eigenvalues larger than
+     * the given threshold will be kept.
      */
-    public KPCA(T[] data, MercerKernel<T> kernel, double[] mean, double mu, double[][] coordinates, double[] latent, DenseMatrix projection) {
-        this.data = data;
-        this.kernel = kernel;
-        this.mean = mean;
-        this.mu = mu;
-        this.coordinates = coordinates;
-        this.latent = latent;
-        this.projection = projection;
-        this.p = projection.nrows();
+    public KPCA(T[] data, MercerKernel<T> kernel, double threshold) {
+        this(data, kernel, data.length, threshold);
     }
 
     /**
-     * Fits kernel principal component analysis.
-     * @param data training data.
-     * @param kernel Mercer kernel.
-     * @param k choose up to k principal components (larger than 0.0001) used for projection.
+     * Constructor. Learn kernel principal component analysis.
+     * @param data learning data.
+     * @param kernel Mercer kernel to compute kernel matrix.
+     * @param k choose upto k principal components (larger than 0.0001) used for projection.
      */
-    public static <T> KPCA<T> fit(T[] data, MercerKernel<T> kernel, int k) {
-        return fit(data, kernel, k, 0.0001);
+    public KPCA(T[] data, MercerKernel<T> kernel, int k) {
+        this(data, kernel, k, 0.0001);
     }
 
     /**
-     * Fits kernel principal component analysis.
-     * @param data training data.
-     * @param kernel Mercer kernel.
+     * Constructor. Constructor. Learn kernel principal component analysis.
+     * @param data learning data.
+     * @param kernel Mercer kernel to compute kernel matrix.
      * @param k choose top k principal components used for projection.
-     * @param threshold only principal components with eigenvalues
-     *                  larger than the given threshold will be kept.
+     * @param threshold only principal components with eigenvalues larger than
+     * the given threshold will be kept.
      */
-    public static <T> KPCA<T> fit(T[] data, MercerKernel<T> kernel, int k, double threshold) {
+    public KPCA(T[] data, MercerKernel<T> kernel, int k, double threshold) {
         if (threshold < 0) {
             throw new IllegalArgumentException("Invalid threshold = " + threshold);
         }
@@ -143,6 +129,8 @@ public class KPCA<T> implements Projection<T>, Serializable {
             throw new IllegalArgumentException("Invalid dimension of feature space: " + k);
         }
 
+        this.data = data;
+        this.kernel = kernel;
         int n = data.length;
 
         DenseMatrix K = Matrix.zeros(n, n);
@@ -154,8 +142,8 @@ public class KPCA<T> implements Projection<T>, Serializable {
             }
         }
 
-        double[] mean = K.rowMeans();
-        double mu = MathEx.mean(mean);
+        mean = K.rowMeans();
+        mu = MathEx.mean(mean);
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j <= i; j++) {
@@ -168,30 +156,33 @@ public class KPCA<T> implements Projection<T>, Serializable {
         K.setSymmetric(true);
         EVD eigen = K.eigen(k);
 
-        double[] eigvalues = eigen.getEigenValues();
-        DenseMatrix eigvectors = eigen.getEigenVectors();
+        p = 0;
+        for (int i = 0; i < k; i++) {
+            double e = (eigen.getEigenValues()[i] /= n);
+            if (e > threshold) {
+                p++;
+            } else {
+                break;
+            }
+        }
 
-        int p = (int) Arrays.stream(eigvalues).limit(k).filter(e -> e/n > threshold).count();
-
-        double[] latent = new double[p];
-        DenseMatrix projection = Matrix.zeros(p, n);
+        latent = new double[p];
+        projection = Matrix.zeros(p, n);
         for (int j = 0; j < p; j++) {
-            latent[j] = eigvalues[j];
+            latent[j] = eigen.getEigenValues()[j];
             double s = Math.sqrt(latent[j]);
             for (int i = 0; i < n; i++) {
-                projection.set(j, i, eigvectors.get(i, j) / s);
+                projection.set(j, i, eigen.getEigenVectors().get(i, j) / s);
             }
         }
 
         DenseMatrix coord = projection.abmm(K);
-        double[][] coordinates = new double[n][p];
+        coordinates = new double[n][p];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < p; j++) {
                 coordinates[i][j] = coord.get(j, i);
             }
         }
-
-        return new KPCA<T>(data, kernel, mean, mu, coordinates, latent, projection);
     }
 
     /**
