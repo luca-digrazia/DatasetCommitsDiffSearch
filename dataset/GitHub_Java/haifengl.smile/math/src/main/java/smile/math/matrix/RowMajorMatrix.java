@@ -24,7 +24,7 @@ import smile.stat.distribution.GaussianDistribution;
  * A dense matrix whose data is stored in a single 1D array of
  * doubles in row major order.
  */
-public class RowMajorMatrix extends DenseMatrix implements MatrixMultiplication<RowMajorMatrix, RowMajorMatrix> {
+public class RowMajorMatrix implements DenseMatrix {
 
     /**
      * The original matrix.
@@ -44,38 +44,7 @@ public class RowMajorMatrix extends DenseMatrix implements MatrixMultiplication<
      * @param A the array of matrix.
      */
     public RowMajorMatrix(double[][] A) {
-        this(A, false);
-    }
-
-    /**
-     * Constructor.
-     * If the matrix is updated, no check on if the matrix is symmetric.
-     * @param A the array of matrix.
-     * @param symmetric true if the matrix is symmetric.
-     */
-    public RowMajorMatrix(double[][] A, boolean symmetric) {
-        this(A, symmetric, false);
-    }
-
-    /**
-     * Constructor.
-     * If the matrix is updated, no check on if the matrix is symmetric
-     * and/or positive definite. The symmetric and positive definite
-     * properties are intended for read-only matrices.
-     * @param A the array of matrix.
-     * @param symmetric true if the matrix is symmetric.
-     * @param positive true if the matrix is positive definite.
-     */
-    public RowMajorMatrix(double[][] A, boolean symmetric, boolean positive) {
-        super(symmetric, positive);
-
-        if (symmetric && A.length != A[0].length) {
-            throw new IllegalArgumentException("A is not square");
-        }
-
-        this.nrows = A.length;
-        this.ncols = A[0].length;
-        this.A = new double[nrows*ncols];
+        this(A.length, A[0].length);
 
         int pos = 0;
         for (int i = 0; i < nrows; i++) {
@@ -120,51 +89,6 @@ public class RowMajorMatrix extends DenseMatrix implements MatrixMultiplication<
      */
     public double[] array() {
         return A;
-    }
-
-    @Override
-    public int nrows() {
-        return nrows;
-    }
-
-    @Override
-    public int ncols() {
-        return ncols;
-    }
-
-    @Override
-    public double get(int i, int j) {
-        return A[i*ncols + j];
-    }
-
-    @Override
-    public RowMajorMatrix set(int i, int j, double x) {
-        A[i*ncols + j] = x;
-        return this;
-    }
-
-    @Override
-    public RowMajorMatrix add(int i, int j, double x) {
-        A[i*ncols + j] += x;
-        return this;
-    }
-
-    @Override
-    public RowMajorMatrix sub(int i, int j, double x) {
-        A[i*ncols + j] -= x;
-        return this;
-    }
-
-    @Override
-    public RowMajorMatrix mul(int i, int j, double x) {
-        A[i*ncols + j] *= x;
-        return this;
-    }
-
-    @Override
-    public RowMajorMatrix div(int i, int j, double x) {
-        A[i*ncols + j] /= x;
-        return this;
     }
 
     @Override
@@ -220,6 +144,73 @@ public class RowMajorMatrix extends DenseMatrix implements MatrixMultiplication<
             }
         }
         return C;
+    }
+
+    /**
+     * Sets the diagonal to the values of <code>diag</code> as long
+     * as possible (i.e while there are elements left in diag or the dim of matrix
+     * is not big enough.
+     */
+    public void setDiag(double[] diag) {
+        for (int i = 0; i < ncols && i < nrows && i < diag.length; i++) {
+            set(i, i, diag[i]);
+        }
+    }
+
+    @Override
+    public int nrows() {
+        return nrows;
+    }
+
+    @Override
+    public int ncols() {
+        return ncols;
+    }
+
+    @Override
+    public double get(int i, int j) {
+        return A[i*ncols + j];
+    }
+
+    @Override
+    public double apply(int i, int j) {
+        return A[i*ncols + j];
+    }
+
+    @Override
+    public RowMajorMatrix set(int i, int j, double x) {
+        A[i*ncols + j] = x;
+        return this;
+    }
+
+    @Override
+    public RowMajorMatrix update(int i, int j, double x) {
+        A[i*ncols + j] = x;
+        return this;
+    }
+
+    @Override
+    public RowMajorMatrix add(int i, int j, double x) {
+        A[i*ncols + j] += x;
+        return this;
+    }
+
+    @Override
+    public RowMajorMatrix sub(int i, int j, double x) {
+        A[i*ncols + j] -= x;
+        return this;
+    }
+
+    @Override
+    public RowMajorMatrix mul(int i, int j, double x) {
+        A[i*ncols + j] *= x;
+        return this;
+    }
+
+    @Override
+    public RowMajorMatrix div(int i, int j, double x) {
+        A[i*ncols + j] /= x;
+        return this;
     }
 
     @Override
@@ -284,21 +275,14 @@ public class RowMajorMatrix extends DenseMatrix implements MatrixMultiplication<
     }
 
     @Override
-    public RowMajorMatrix mm(RowMajorMatrix B) {
-        if (ncols() != B.nrows()) {
-            throw new IllegalArgumentException(String.format("Matrix multiplication A * B: %d x %d vs %d x %d", nrows(), ncols(), B.nrows(), B.ncols()));
+    public void asolve(double[] b, double[] x) {
+        if (nrows != ncols) {
+            throw new IllegalStateException("Matrix is not square.");
         }
 
-        RowMajorMatrix C = new RowMajorMatrix(nrows, B.ncols());
         for (int i = 0; i < nrows; i++) {
-            for (int j = 0; j < B.ncols(); j++) {
-                double v = 0.0;
-                for (int k = 0; k < ncols; k++) {
-                    v += get(i, k) * B.get(k, j);
-                }
-                C.set(i, j, v);
-            }
+            double Aii = get(i, i);
+            x[i] = Aii != 0.0 ? b[i] / Aii : b[i];
         }
-        return C;
     }
 }
