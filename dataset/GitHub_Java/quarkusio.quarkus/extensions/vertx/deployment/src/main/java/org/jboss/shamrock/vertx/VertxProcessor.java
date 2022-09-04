@@ -16,7 +16,11 @@
 
 package org.jboss.shamrock.vertx;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +67,6 @@ import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import org.jboss.shamrock.deployment.util.HashUtil;
 import org.jboss.shamrock.vertx.runtime.ConsumeEvent;
 import org.jboss.shamrock.vertx.runtime.EventConsumerInvoker;
 import org.jboss.shamrock.vertx.runtime.VertxConfiguration;
@@ -73,14 +76,14 @@ import org.jboss.shamrock.vertx.runtime.VertxTemplate;
 import io.vertx.core.eventbus.Message;
 
 class VertxProcessor {
-
+    
     private static final Logger LOGGER = Logger.getLogger(VertxProcessor.class.getName());
-
+    
     private static final DotName CONSUME_EVENT = DotName.createSimple(ConsumeEvent.class.getName());
     private static final DotName MESSAGE = DotName.createSimple(Message.class.getName());
     private static final DotName COMPLETION_STAGE = DotName.createSimple(CompletionStage.class.getName());
     private static final String INVOKER_SUFFIX = "_VertxInvoker";
-
+    
     @Inject
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
 
@@ -139,7 +142,7 @@ class VertxProcessor {
         }
         template.configureVertx(beanContainer.getValue(), vertx, messageConsumerConfigurations);
     }
-
+    
     @BuildStep
     public UnremovableBeanBuildItem unremovableBeans() {
         return new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(CONSUME_EVENT));
@@ -174,7 +177,7 @@ class VertxProcessor {
             }
         });
     }
-
+    
     @BuildStep
     AnnotationsTransformerBuildItem annotationTransformer() {
         return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
@@ -196,7 +199,7 @@ class VertxProcessor {
             }
         });
     }
-
+    
     private String generateInvoker(BeanInfo bean, MethodInfo method, ClassOutput classOutput) {
 
         String baseName;
@@ -206,13 +209,13 @@ class VertxProcessor {
             baseName = DotNames.simpleName(bean.getImplClazz().name());
         }
         String targetPackage = DotNames.packageName(bean.getImplClazz().name());
-
+        
         StringBuilder sigBuilder = new StringBuilder();
         sigBuilder.append(method.name()).append("_").append(method.returnType().name().toString());
         for (Type i : method.parameters()) {
             sigBuilder.append(i.name().toString());
         }
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + "_" + method.name() + "_" + HashUtil.sha1(sigBuilder.toString());
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + INVOKER_SUFFIX + "_" + method.name() + "_" + sha1(sigBuilder.toString());
 
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(EventConsumerInvoker.class).build();
 
@@ -265,4 +268,15 @@ class VertxProcessor {
         invokerCreator.close();
         return generatedName.replace('/', '.');
     }
+
+    static String sha1(String value) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            return Base64.getUrlEncoder()
+                    .encodeToString(md.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+    
 }
