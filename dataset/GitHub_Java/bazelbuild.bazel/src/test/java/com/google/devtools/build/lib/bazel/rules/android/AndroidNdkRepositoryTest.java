@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AttributeContainer;
-import com.google.devtools.build.lib.packages.RepositoryFetchException;
+import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.util.BazelMockCcSupport;
 import com.google.devtools.build.lib.packages.util.ResourceLoader;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -52,12 +52,12 @@ public class AndroidNdkRepositoryTest extends BuildViewTestCase {
     scratch.overwriteFile(
         "/bazel_tools_workspace/tools/build_defs/cc/action_names.bzl",
         ResourceLoader.readFromResources(
-            TestConstants.RULES_CC_REPOSITORY_EXECROOT + "cc/action_names.bzl"));
+            TestConstants.BAZEL_REPO_PATH + "tools/build_defs/cc/action_names.bzl"));
 
     scratch.overwriteFile(
         "/bazel_tools_workspace/tools/cpp/cc_toolchain_config_lib.bzl",
         ResourceLoader.readFromResources(
-            TestConstants.RULES_CC_REPOSITORY_EXECROOT + "cc/cc_toolchain_config_lib.bzl"));
+            TestConstants.BAZEL_REPO_PATH + "tools/cpp/cc_toolchain_config_lib.bzl"));
     scratch.file("/ndk/source.properties", "Pkg.Desc = Android NDK", "Pkg.Revision = 13.1.3345770");
   }
 
@@ -206,8 +206,8 @@ public class AndroidNdkRepositoryTest extends BuildViewTestCase {
         "    path = '/ndk',",
         ")");
     invalidatePackages(false);
-    RepositoryFetchException e =
-        assertThrows(RepositoryFetchException.class, () -> getTarget("@androidndk//:files"));
+    BuildFileNotFoundException e =
+        assertThrows(BuildFileNotFoundException.class, () -> getTarget("@androidndk//:files"));
     assertThat(e)
         .hasMessageThat()
         .contains(
