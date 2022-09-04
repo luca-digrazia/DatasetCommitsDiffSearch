@@ -29,6 +29,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import javax.inject.Singleton;
+import javax.net.ssl.TrustManager;
 import javax.servlet.DispatcherType;
 import javax.ws.rs.ApplicationPath;
 import javax.ws.rs.Consumes;
@@ -40,6 +41,8 @@ import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.SecurityContext;
+import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ContextResolver;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
@@ -67,8 +70,6 @@ import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
 
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -230,15 +231,12 @@ public class ResteasyScanningProcessor {
     }
 
     @BuildStep
-    void scanForProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers, CombinedIndexBuildItem indexBuildItem,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
+    void scanForProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers, CombinedIndexBuildItem indexBuildItem) {
         for (AnnotationInstance i : indexBuildItem.getIndex().getAnnotations(PROVIDER)) {
             if (i.target().kind() == AnnotationTarget.Kind.CLASS) {
                 providers.produce(new ResteasyJaxrsProviderBuildItem(i.target().asClass().name().toString()));
             }
         }
-        // Providers should never be removed
-        unremovableBeans.produce(new UnremovableBeanBuildItem(new BeanClassAnnotationExclusion(PROVIDER)));
     }
 
     @BuildStep
