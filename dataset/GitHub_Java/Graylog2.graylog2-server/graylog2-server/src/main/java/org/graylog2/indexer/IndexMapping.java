@@ -18,12 +18,20 @@ package org.graylog2.indexer;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.elasticsearch.action.ActionFuture;
+import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
+import org.elasticsearch.action.admin.indices.mapping.put.PutMappingResponse;
+import org.elasticsearch.client.Client;
+import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.plugin.Tools;
 
+import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Map;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Representing the message type mapping in ElasticSearch. This is giving ES more
@@ -32,6 +40,55 @@ import java.util.Map;
 @Singleton
 public class IndexMapping {
     public static final String TYPE_MESSAGE = "message";
+    public static final String TYPE_INDEX_RANGE = "index_range";
+
+    private final Client client;
+
+    @Inject
+    public IndexMapping(Client client) {
+        this.client = checkNotNull(client);
+    }
+
+    public ActionFuture<PutMappingResponse> createMapping(final String index, final String type, final Map<String, Object> mapping) {
+        return client.admin().indices().putMapping(mappingRequest(index, type, mapping));
+    }
+
+    private PutMappingRequest mappingRequest(final String index, final String type, final Map<String, Object> mapping) {
+        return client.admin().indices().preparePutMapping(index)
+                .setType(type)
+                .setSource(ImmutableMap.of(type, mapping))
+                .request();
+    }
+
+    public Map<String, Object> metaMapping() {
+        final ImmutableMap<String, ? extends Serializable> stringProperty = ImmutableMap.of(
+                "type", "string",
+                "index", "not_analyzed",
+                "doc_values", true);
+        final ImmutableMap<String, ? extends Serializable> dateProperty = ImmutableMap.of(
+                "type", "date",
+                "format", "date_time",
+                "index", "not_analyzed",
+                "doc_values", true);
+        final ImmutableMap<String, ? extends Serializable> intProperty = ImmutableMap.of(
+                "type", "integer",
+                "index", "no",
+                "doc_values", true);
+        final Map<String, ? extends Serializable> properties = ImmutableMap.of(
+                IndexRange.FIELD_INDEX_NAME, stringProperty,
+                IndexRange.FIELD_BEGIN, dateProperty,
+                IndexRange.FIELD_END, dateProperty,
+                IndexRange.FIELD_CALCULATED_AT, dateProperty,
+                IndexRange.FIELD_TOOK_MS, intProperty
+        );
+
+        return ImmutableMap.<String, Object>of(
+                "properties", properties,
+                "_source", enabled(),
+                "_timestamp", ImmutableMap.of(
+                        "enabled", true,
+                        "format", "date_time"));
+    }
 
     public Map<String, Object> messageMapping(final String analyzer) {
         return ImmutableMap.of(
