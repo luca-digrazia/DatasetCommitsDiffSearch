@@ -15,6 +15,7 @@ package com.google.devtools.build.android.desugar;
 
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.commons.ClassRemapper;
+import org.objectweb.asm.commons.Remapper;
 
 /**
  * A visitor that renames packages so configured using {@link CoreLibrarySupport}..
@@ -22,6 +23,23 @@ import org.objectweb.asm.commons.ClassRemapper;
 class CorePackageRenamer extends ClassRemapper {
 
   public CorePackageRenamer(ClassVisitor cv, CoreLibrarySupport support) {
-    super(cv, support.getRemapper());
+    super(cv, new CorePackageRemapper(support));
+  }
+
+  private static final class CorePackageRemapper extends Remapper {
+    private final CoreLibrarySupport support;
+
+    private CorePackageRemapper(CoreLibrarySupport support) {
+      this.support = support;
+    }
+
+    public boolean isRenamed(String owner) {
+      return support.isRenamedCoreLibrary(owner);
+    }
+
+    @Override
+    public String map(String typeName) {
+      return isRenamed(typeName) ? support.renameCoreLibrary(typeName) : typeName;
+    }
   }
 }
