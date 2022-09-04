@@ -25,6 +25,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
+import com.google.common.collect.MapMaker;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -55,7 +56,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 
 /**
@@ -785,9 +785,7 @@ public class ParallelSkyQueryUtils {
 
     private ThreadSafeAggregateAllSkyKeysCallback(int concurrencyLevel) {
       this.results =
-          Collections.newSetFromMap(
-              new ConcurrentHashMap<>(
-                  /*initialCapacity=*/ concurrencyLevel, /*loadFactor=*/ 0.75f));
+          Collections.newSetFromMap(new MapMaker().concurrencyLevel(concurrencyLevel).makeMap());
     }
 
     @Override
