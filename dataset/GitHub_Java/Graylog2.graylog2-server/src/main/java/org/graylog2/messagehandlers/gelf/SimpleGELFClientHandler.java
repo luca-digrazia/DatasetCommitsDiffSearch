@@ -30,6 +30,7 @@ import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.messagehandlers.common.HostUpsertHook;
 import org.graylog2.messagehandlers.common.MessageCounterHook;
+import org.graylog2.messagehandlers.common.MessageFilterHook;
 import org.graylog2.messagehandlers.common.MessageParserHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
 import org.productivity.java.syslog4j.Syslog;
@@ -81,8 +82,6 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
             }
         } else if(clientMessage instanceof String) {
             this.clientMessage = (String) clientMessage;
-        } else if(clientMessage instanceof GELFMessage) {
-        	this.message = (GELFMessage) clientMessage;
         }
         
     }
@@ -95,13 +94,11 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
     public boolean handle() {
         try {
              // Fills properties with values from JSON.
-        	if(this.clientMessage instanceof String) {
-	            try { this.parse(); } catch(Exception e) {
-	                Log.warn("Could not parse GELF JSON: " + e.toString() + " - clientMessage was: " + this.clientMessage);
-	                return false;
-	            }
-        	} 
-        	
+            try { this.parse(); } catch(Exception e) {
+                Log.warn("Could not parse GELF JSON: " + e.toString() + " - clientMessage was: " + this.clientMessage);
+                return false;
+            }
+
             // Add AMQP receiver queue as additional field if set.
             if (this.getAmqpReceiverQueue() != null) {
                 this.message.addAdditionalData("_amqp_queue", this.getAmqpReceiverQueue());
@@ -113,7 +110,10 @@ public class SimpleGELFClientHandler extends GELFClientHandlerBase implements GE
 
             // Insert message into MongoDB.
             ReceiveHookManager.preProcess(new MessageParserHook(), message);
-            if(!message.getFilterOut()) {
+            if( message.getFilterOut() ) {
+            	if(Main.debugMode)
+            		Syslog.getInstance("udp").debug("Not inserting event into database.");
+            } else {
                 // Store in MongoDB.
                 // Connect to database.
             	MongoBridge m = new MongoBridge();
