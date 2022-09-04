@@ -101,6 +101,7 @@ public class WorkerSpawnRunnerTest {
             createWorkerPool(),
             /* multiplex */ false,
             reporter,
+            null,
             localEnvProvider,
             /* binTools */ null,
             resourceManager,
@@ -109,8 +110,9 @@ public class WorkerSpawnRunnerTest {
     WorkerKey key = createWorkerKey(fs, "mnem", false);
     Path logFile = fs.getPath("/worker.log");
     when(worker.getLogFile()).thenReturn(logFile);
-    when(worker.getResponse(0))
-        .thenReturn(WorkResponse.newBuilder().setExitCode(0).setOutput("out").build());
+    when(worker.getResponse())
+        .thenReturn(
+            WorkResponse.newBuilder().setExitCode(0).setOutput("out").setRequestId(1).build());
     WorkResponse response =
         runner.execInWorker(
             spawn,
@@ -124,7 +126,7 @@ public class WorkerSpawnRunnerTest {
 
     assertThat(response).isNotNull();
     assertThat(response.getExitCode()).isEqualTo(0);
-    assertThat(response.getRequestId()).isEqualTo(0);
+    assertThat(response.getRequestId()).isEqualTo(1);
     assertThat(response.getOutput()).isEqualTo("out");
     assertThat(logFile.exists()).isFalse();
   }
@@ -138,6 +140,7 @@ public class WorkerSpawnRunnerTest {
             createWorkerPool(),
             /* multiplex */ false,
             reporter,
+            null,
             localEnvProvider,
             /* binTools */ null,
             resourceManager,
@@ -146,7 +149,7 @@ public class WorkerSpawnRunnerTest {
     WorkerKey key = createWorkerKey(fs, "mnem", false);
     Path logFile = fs.getPath("/worker.log");
     when(worker.getLogFile()).thenReturn(logFile);
-    when(worker.getResponse(0)).thenThrow(new IOException("Bad protobuf"));
+    when(worker.getResponse()).thenThrow(new IOException("Bad protobuf"));
     when(worker.getRecordingStreamMessage()).thenReturn(recordedResponse);
     String workerLog = "Log from worker\n";
     FileSystemUtils.writeIsoLatin1(logFile, workerLog);
