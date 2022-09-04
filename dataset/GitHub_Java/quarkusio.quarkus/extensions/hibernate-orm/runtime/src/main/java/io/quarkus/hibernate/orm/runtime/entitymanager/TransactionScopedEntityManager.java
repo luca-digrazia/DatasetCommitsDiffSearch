@@ -30,55 +30,52 @@ import io.quarkus.runtime.BlockingOperationControl;
 public class TransactionScopedEntityManager implements EntityManager {
 
     protected static final String TRANSACTION_IS_NOT_ACTIVE = "Transaction is not active, consider adding @Transactional to your method to automatically activate one.";
-
     private final TransactionManager transactionManager;
-    private final TransactionSynchronizationRegistry transactionSynchronizationRegistry;
-    private final EntityManagerFactory entityManagerFactory;
+    private final TransactionSynchronizationRegistry tsr;
+    private final EntityManagerFactory emf;
     private final String unitName;
-    private final String entityManagerKey;
-    private final Instance<RequestScopedEntityManagerHolder> requestScopedEntityManagers;
+    private final Object entityManagerKey;
+    private final Instance<RequestScopedEntityManagerHolder> requestScopedEms;
 
     public TransactionScopedEntityManager(TransactionManager transactionManager,
-            TransactionSynchronizationRegistry transactionSynchronizationRegistry,
-            EntityManagerFactory entityManagerFactory,
-            String unitName,
-            Instance<RequestScopedEntityManagerHolder> requestScopedEntityManagers) {
+            TransactionSynchronizationRegistry tsr,
+            EntityManagerFactory emf,
+            String unitName, Instance<RequestScopedEntityManagerHolder> requestScopedEms) {
         this.transactionManager = transactionManager;
-        this.transactionSynchronizationRegistry = transactionSynchronizationRegistry;
-        this.entityManagerFactory = entityManagerFactory;
+        this.tsr = tsr;
+        this.emf = emf;
         this.unitName = unitName;
+        this.requestScopedEms = requestScopedEms;
         this.entityManagerKey = this.getClass().getSimpleName() + "-" + unitName;
-        this.requestScopedEntityManagers = requestScopedEntityManagers;
     }
 
     EntityManagerResult getEntityManager() {
         if (isInTransaction()) {
-            EntityManager entityManager = (EntityManager) transactionSynchronizationRegistry.getResource(entityManagerKey);
-            if (entityManager != null) {
-                return new EntityManagerResult(entityManager, false, true);
+            EntityManager em = (EntityManager) tsr.getResource(entityManagerKey);
+            if (em != null) {
+                return new EntityManagerResult(em, false, true);
             }
-            EntityManager newEntityManager = entityManagerFactory.createEntityManager();
-            newEntityManager.joinTransaction();
-            transactionSynchronizationRegistry.putResource(entityManagerKey, newEntityManager);
-            transactionSynchronizationRegistry.registerInterposedSynchronization(new Synchronization() {
+            EntityManager newEm = emf.createEntityManager();
+            newEm.joinTransaction();
+            tsr.putResource(entityManagerKey, newEm);
+            tsr.registerInterposedSynchronization(new Synchronization() {
                 @Override
                 public void beforeCompletion() {
-                    newEntityManager.flush();
+                    newEm.flush();
                 }
 
                 @Override
                 public void afterCompletion(int i) {
-                    newEntityManager.close();
+                    newEm.close();
                 }
             });
-            return new EntityManagerResult(newEntityManager, false, true);
+            return new EntityManagerResult(newEm, false, true);
         } else {
             //this will throw an exception if the request scope is not active
             //this is expected as either the request scope or an active transaction
             //is required to properly managed the EM lifecycle
-            RequestScopedEntityManagerHolder requestScopedEntityManagers = this.requestScopedEntityManagers.get();
-            return new EntityManagerResult(requestScopedEntityManagers.getOrCreateEntityManager(unitName, entityManagerFactory),
-                    false, false);
+            RequestScopedEntityManagerHolder requestScopedEms = this.requestScopedEms.get();
+            return new EntityManagerResult(requestScopedEms.getOrCreateEntityManager(unitName, emf), false, false);
         }
     }
 
@@ -113,7 +110,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.persist(entity);
+            emr.em.persist(entity);
         }
     }
 
@@ -124,7 +121,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            return emr.entityManager.merge(entity);
+            return emr.em.merge(entity);
         }
     }
 
@@ -135,7 +132,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.remove(entity);
+            emr.em.remove(entity);
         }
     }
 
@@ -143,7 +140,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> T find(Class<T> entityClass, Object primaryKey) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.find(entityClass, primaryKey);
+            return emr.em.find(entityClass, primaryKey);
         }
     }
 
@@ -151,7 +148,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> T find(Class<T> entityClass, Object primaryKey, Map<String, Object> properties) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.find(entityClass, primaryKey, properties);
+            return emr.em.find(entityClass, primaryKey, properties);
         }
     }
 
@@ -159,7 +156,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> T find(Class<T> entityClass, Object primaryKey, LockModeType lockMode) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.find(entityClass, primaryKey, lockMode);
+            return emr.em.find(entityClass, primaryKey, lockMode);
         }
     }
 
@@ -167,7 +164,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> T find(Class<T> entityClass, Object primaryKey, LockModeType lockMode, Map<String, Object> properties) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.find(entityClass, primaryKey, lockMode, properties);
+            return emr.em.find(entityClass, primaryKey, lockMode, properties);
         }
     }
 
@@ -175,7 +172,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> T getReference(Class<T> entityClass, Object primaryKey) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getReference(entityClass, primaryKey);
+            return emr.em.getReference(entityClass, primaryKey);
         }
     }
 
@@ -186,21 +183,21 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.flush();
+            emr.em.flush();
         }
     }
 
     @Override
     public void setFlushMode(FlushModeType flushMode) {
         try (EntityManagerResult emr = getEntityManager()) {
-            emr.entityManager.setFlushMode(flushMode);
+            emr.em.setFlushMode(flushMode);
         }
     }
 
     @Override
     public FlushModeType getFlushMode() {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getFlushMode();
+            return emr.em.getFlushMode();
         }
     }
 
@@ -211,7 +208,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.lock(entity, lockMode);
+            emr.em.lock(entity, lockMode);
         }
     }
 
@@ -222,7 +219,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.lock(entity, lockMode, properties);
+            emr.em.lock(entity, lockMode, properties);
         }
     }
 
@@ -233,7 +230,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.refresh(entity);
+            emr.em.refresh(entity);
         }
     }
 
@@ -244,7 +241,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.refresh(entity, properties);
+            emr.em.refresh(entity, properties);
         }
     }
 
@@ -255,7 +252,7 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.refresh(entity, lockMode);
+            emr.em.refresh(entity, lockMode);
         }
     }
 
@@ -266,28 +263,28 @@ public class TransactionScopedEntityManager implements EntityManager {
             if (!emr.allowModification) {
                 throw new TransactionRequiredException(TRANSACTION_IS_NOT_ACTIVE);
             }
-            emr.entityManager.refresh(entity, lockMode, properties);
+            emr.em.refresh(entity, lockMode, properties);
         }
     }
 
     @Override
     public void clear() {
         try (EntityManagerResult emr = getEntityManager()) {
-            emr.entityManager.clear();
+            emr.em.clear();
         }
     }
 
     @Override
     public void detach(Object entity) {
         try (EntityManagerResult emr = getEntityManager()) {
-            emr.entityManager.detach(entity);
+            emr.em.detach(entity);
         }
     }
 
     @Override
     public boolean contains(Object entity) {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.contains(entity);
+            return emr.em.contains(entity);
         }
     }
 
@@ -295,21 +292,21 @@ public class TransactionScopedEntityManager implements EntityManager {
     public LockModeType getLockMode(Object entity) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getLockMode(entity);
+            return emr.em.getLockMode(entity);
         }
     }
 
     @Override
     public void setProperty(String propertyName, Object value) {
         try (EntityManagerResult emr = getEntityManager()) {
-            emr.entityManager.setProperty(propertyName, value);
+            emr.em.setProperty(propertyName, value);
         }
     }
 
     @Override
     public Map<String, Object> getProperties() {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getProperties();
+            return emr.em.getProperties();
         }
     }
 
@@ -318,7 +315,7 @@ public class TransactionScopedEntityManager implements EntityManager {
         checkBlocking();
         //TODO: this needs some thought for how it works outside a tx
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createQuery(qlString);
+            return emr.em.createQuery(qlString);
         }
     }
 
@@ -326,7 +323,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> TypedQuery<T> createQuery(CriteriaQuery<T> criteriaQuery) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createQuery(criteriaQuery);
+            return emr.em.createQuery(criteriaQuery);
         }
     }
 
@@ -334,7 +331,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public Query createQuery(CriteriaUpdate updateQuery) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createQuery(updateQuery);
+            return emr.em.createQuery(updateQuery);
         }
     }
 
@@ -342,7 +339,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public Query createQuery(CriteriaDelete deleteQuery) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createQuery(deleteQuery);
+            return emr.em.createQuery(deleteQuery);
         }
     }
 
@@ -350,7 +347,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> TypedQuery<T> createQuery(String qlString, Class<T> resultClass) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createQuery(qlString, resultClass);
+            return emr.em.createQuery(qlString, resultClass);
         }
     }
 
@@ -358,7 +355,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public Query createNamedQuery(String name) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createNamedQuery(name);
+            return emr.em.createNamedQuery(name);
         }
     }
 
@@ -366,7 +363,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> TypedQuery<T> createNamedQuery(String name, Class<T> resultClass) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createNamedQuery(name, resultClass);
+            return emr.em.createNamedQuery(name, resultClass);
         }
     }
 
@@ -374,7 +371,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public Query createNativeQuery(String sqlString) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createNativeQuery(sqlString);
+            return emr.em.createNativeQuery(sqlString);
         }
     }
 
@@ -382,7 +379,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public Query createNativeQuery(String sqlString, Class resultClass) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createNativeQuery(sqlString, resultClass);
+            return emr.em.createNativeQuery(sqlString, resultClass);
         }
     }
 
@@ -390,7 +387,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public Query createNativeQuery(String sqlString, String resultSetMapping) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createNativeQuery(sqlString, resultSetMapping);
+            return emr.em.createNativeQuery(sqlString, resultSetMapping);
         }
     }
 
@@ -398,7 +395,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public StoredProcedureQuery createNamedStoredProcedureQuery(String name) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createNamedStoredProcedureQuery(name);
+            return emr.em.createNamedStoredProcedureQuery(name);
         }
     }
 
@@ -406,7 +403,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public StoredProcedureQuery createStoredProcedureQuery(String procedureName) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createStoredProcedureQuery(procedureName);
+            return emr.em.createStoredProcedureQuery(procedureName);
         }
     }
 
@@ -414,7 +411,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     public StoredProcedureQuery createStoredProcedureQuery(String procedureName, Class... resultClasses) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createStoredProcedureQuery(procedureName, resultClasses);
+            return emr.em.createStoredProcedureQuery(procedureName, resultClasses);
         }
     }
 
@@ -422,21 +419,21 @@ public class TransactionScopedEntityManager implements EntityManager {
     public StoredProcedureQuery createStoredProcedureQuery(String procedureName, String... resultSetMappings) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createStoredProcedureQuery(procedureName, resultSetMappings);
+            return emr.em.createStoredProcedureQuery(procedureName, resultSetMappings);
         }
     }
 
     @Override
     public void joinTransaction() {
         try (EntityManagerResult emr = getEntityManager()) {
-            emr.entityManager.joinTransaction();
+            emr.em.joinTransaction();
         }
     }
 
     @Override
     public boolean isJoinedToTransaction() {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.isJoinedToTransaction();
+            return emr.em.isJoinedToTransaction();
         }
     }
 
@@ -444,14 +441,14 @@ public class TransactionScopedEntityManager implements EntityManager {
     public <T> T unwrap(Class<T> cls) {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.unwrap(cls);
+            return emr.em.unwrap(cls);
         }
     }
 
     @Override
     public Object getDelegate() {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getDelegate();
+            return emr.em.getDelegate();
         }
     }
 
@@ -473,7 +470,7 @@ public class TransactionScopedEntityManager implements EntityManager {
     @Override
     public EntityManagerFactory getEntityManagerFactory() {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getEntityManagerFactory();
+            return emr.em.getEntityManagerFactory();
         }
     }
 
@@ -481,53 +478,53 @@ public class TransactionScopedEntityManager implements EntityManager {
     public CriteriaBuilder getCriteriaBuilder() {
         checkBlocking();
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getCriteriaBuilder();
+            return emr.em.getCriteriaBuilder();
         }
     }
 
     @Override
     public Metamodel getMetamodel() {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getMetamodel();
+            return emr.em.getMetamodel();
         }
     }
 
     @Override
     public <T> EntityGraph<T> createEntityGraph(Class<T> rootType) {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createEntityGraph(rootType);
+            return emr.em.createEntityGraph(rootType);
         }
     }
 
     @Override
     public EntityGraph<?> createEntityGraph(String graphName) {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.createEntityGraph(graphName);
+            return emr.em.createEntityGraph(graphName);
         }
     }
 
     @Override
     public EntityGraph<?> getEntityGraph(String graphName) {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getEntityGraph(graphName);
+            return emr.em.getEntityGraph(graphName);
         }
     }
 
     @Override
     public <T> List<EntityGraph<? super T>> getEntityGraphs(Class<T> entityClass) {
         try (EntityManagerResult emr = getEntityManager()) {
-            return emr.entityManager.getEntityGraphs(entityClass);
+            return emr.em.getEntityGraphs(entityClass);
         }
     }
 
     static class EntityManagerResult implements AutoCloseable {
 
-        final EntityManager entityManager;
+        final EntityManager em;
         final boolean closeOnEnd;
         final boolean allowModification;
 
-        EntityManagerResult(EntityManager entityManager, boolean closeOnEnd, boolean allowModification) {
-            this.entityManager = entityManager;
+        EntityManagerResult(EntityManager em, boolean closeOnEnd, boolean allowModification) {
+            this.em = em;
             this.closeOnEnd = closeOnEnd;
             this.allowModification = allowModification;
         }
@@ -535,7 +532,7 @@ public class TransactionScopedEntityManager implements EntityManager {
         @Override
         public void close() {
             if (closeOnEnd) {
-                entityManager.close();
+                em.close();
             }
         }
     }
