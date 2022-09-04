@@ -41,7 +41,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.After;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -181,7 +180,6 @@ public class HttpDownloaderTest {
     }
   }
 
-  @Ignore("b/182150157")
   @Test
   public void downloadFrom2UrlsFirstSocketTimeoutOnBodyReadSecondOk()
       throws IOException, InterruptedException {
@@ -248,7 +246,6 @@ public class HttpDownloaderTest {
     }
   }
 
-  @Ignore("b/182150157")
   @Test
   public void downloadFrom2UrlsBothSocketTimeoutDuringBodyRead()
       throws IOException, InterruptedException {
