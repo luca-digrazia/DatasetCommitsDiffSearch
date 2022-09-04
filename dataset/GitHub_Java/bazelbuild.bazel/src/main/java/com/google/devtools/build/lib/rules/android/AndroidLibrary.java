@@ -145,7 +145,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     ResourceDependencies resourceDeps = ResourceDependencies.fromRuleDeps(ruleContext, isNeverLink);
     AssetDependencies assetDeps = AssetDependencies.fromRuleDeps(ruleContext, isNeverLink);
 
-    final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
     final ResourceApk resourceApk;
     if (definesLocalResources) {
       if (androidConfig.decoupleDataProcessing()) {
@@ -154,10 +153,10 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
 
         ValidatedAndroidResources resources =
             AndroidResources.from(ruleContext, "resource_files")
-                .process(ruleContext, dataContext, manifest, isNeverLink);
+                .process(ruleContext, manifest, isNeverLink);
 
         MergedAndroidAssets assets =
-            AndroidAssets.from(ruleContext).process(dataContext, assetDeps);
+            AndroidAssets.from(ruleContext).process(ruleContext, isNeverLink);
 
         resourceApk = ResourceApk.of(resources, assets, null, null);
       } else {
