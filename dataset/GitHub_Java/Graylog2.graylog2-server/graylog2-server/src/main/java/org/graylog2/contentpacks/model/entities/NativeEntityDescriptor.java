@@ -24,8 +24,6 @@ import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.contentpacks.model.Typed;
 
-import javax.annotation.Nullable;
-
 /**
  * The unique description of a native entity by ID and type.
  */
@@ -33,7 +31,6 @@ import javax.annotation.Nullable;
 @JsonDeserialize(builder = AutoValue_NativeEntityDescriptor.Builder.class)
 public abstract class NativeEntityDescriptor implements Identified, Typed {
     public static final String FIELD_ENTITY_ID = "content_pack_entity_id";
-    public static final String FIELD_ENTITY_FOUND_ON_SYSTEM = "found_on_system";
     public static final String FIELD_ENTITY_TITLE = "title";
 
     @JsonProperty(FIELD_ENTITY_ID)
@@ -41,12 +38,6 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
 
     @JsonProperty(FIELD_ENTITY_TITLE)
     public abstract String title();
-
-    @JsonProperty(FIELD_ENTITY_FOUND_ON_SYSTEM)
-    @Nullable
-    public abstract Boolean foundOnSystem();
-
-    public abstract Builder toBuilder();
 
     public static NativeEntityDescriptor create(ModelId contentPackEntityId, ModelId id, ModelType type, String title) {
         return builder()
@@ -57,36 +48,15 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
                 .build();
     }
 
-    public static NativeEntityDescriptor create(ModelId contentPackEntityId, ModelId id, ModelType type, String title,
-                                                Boolean foundOnServer) {
-        return builder()
-                .contentPackEntityId(contentPackEntityId)
-                .id(id)
-                .title(title)
-                .type(type)
-                .foundOnSystem(foundOnServer)
-                .build();
-    }
-
     /**
-     * Shortcut for {@link #create(String, String, ModelType, String, Boolean)}
+     * Shortcut for {@link #create(String, String, ModelType, String)}
      */
-    public static NativeEntityDescriptor create(String contentPackEntityId, String nativeId, ModelType type, String title,
-                                                Boolean foundOnServer) {
-        return create(ModelId.of(contentPackEntityId), ModelId.of(nativeId), type, title, foundOnServer);
-    }
-
     public static NativeEntityDescriptor create(String contentPackEntityId, String nativeId, ModelType type, String title) {
-        return create(ModelId.of(contentPackEntityId), ModelId.of(nativeId), type, title, false);
-    }
-
-    public static NativeEntityDescriptor create(ModelId contentPackEntityId, String nativeId, ModelType type, String title,
-                                                Boolean foundOnServer) {
-        return create(contentPackEntityId, ModelId.of(nativeId), type, title, foundOnServer);
+        return create(ModelId.of(contentPackEntityId), ModelId.of(nativeId), type, title);
     }
 
     public static NativeEntityDescriptor create(ModelId contentPackEntityId, String nativeId, ModelType type, String title) {
-        return create(contentPackEntityId, ModelId.of(nativeId), type, title, false);
+        return create(contentPackEntityId, ModelId.of(nativeId), type, title);
     }
 
     public static Builder builder() {
@@ -101,9 +71,6 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
 
         @JsonProperty(FIELD_ENTITY_TITLE)
         abstract Builder title(String title);
-
-        @JsonProperty(FIELD_ENTITY_FOUND_ON_SYSTEM)
-        public abstract Builder foundOnSystem(Boolean foundOnServer);
 
         public abstract NativeEntityDescriptor build();
     }

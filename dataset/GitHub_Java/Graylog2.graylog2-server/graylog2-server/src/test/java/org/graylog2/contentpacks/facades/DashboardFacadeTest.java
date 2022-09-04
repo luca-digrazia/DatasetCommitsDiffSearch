@@ -28,7 +28,6 @@ import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
-import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelTypes;
 import org.graylog2.contentpacks.model.entities.AbsoluteRangeEntity;
@@ -38,6 +37,7 @@ import org.graylog2.contentpacks.model.entities.Entity;
 import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.EntityExcerpt;
 import org.graylog2.contentpacks.model.entities.EntityV1;
+import org.graylog2.contentpacks.model.entities.EntityWithConstraints;
 import org.graylog2.contentpacks.model.entities.NativeEntity;
 import org.graylog2.contentpacks.model.entities.NativeEntityDescriptor;
 import org.graylog2.contentpacks.model.entities.RelativeRangeEntity;
@@ -137,12 +137,11 @@ public class DashboardFacadeTest {
         final DashboardImpl dashboard = new DashboardImpl(fields);
         dashboard.addWidget(dashboardWidget);
 
-        final EntityDescriptor dashboardDescriptor = EntityDescriptor.create(dashboard.getId(), ModelTypes.DASHBOARD_V1);
-        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(dashboardDescriptor);
-        final Entity entity = facade.exportNativeEntity(dashboard, entityDescriptorIds);
+        final EntityWithConstraints entityWithConstraints = facade.exportNativeEntity(dashboard);
+        final Entity entity = entityWithConstraints.entity();
 
         assertThat(entity).isInstanceOf(EntityV1.class);
-        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(dashboardDescriptor).orElse(null)));
+        assertThat(entity.id()).isNotNull();
         assertThat(entity.type()).isEqualTo(ModelTypes.DASHBOARD_V1);
 
         final EntityV1 entityV1 = (EntityV1) entity;
@@ -174,12 +173,11 @@ public class DashboardFacadeTest {
     @UsingDataSet(locations = "/org/graylog2/contentpacks/dashboards.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void exportEntity() {
         final EntityDescriptor descriptor = EntityDescriptor.create("5a82f5974b900a7a97caa1e5", ModelTypes.DASHBOARD_V1);
-        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(descriptor);
-        final Optional<Entity> optionalEntity = facade.exportEntity(descriptor, entityDescriptorIds);
-        final Entity entity = optionalEntity.orElseThrow(AssertionError::new);
+        final Optional<EntityWithConstraints> entityWithConstraints = facade.exportEntity(descriptor);
+        final Entity entity = entityWithConstraints.orElseThrow(AssertionError::new).entity();
 
         assertThat(entity).isInstanceOf(EntityV1.class);
-        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(descriptor).orElse(null)));
+        assertThat(entity.id()).isNotNull();
         assertThat(entity.type()).isEqualTo(ModelTypes.DASHBOARD_V1);
 
         final EntityV1 entityV1 = (EntityV1) entity;
@@ -224,15 +222,14 @@ public class DashboardFacadeTest {
     @Test
     @UsingDataSet(locations = "/org/graylog2/contentpacks/dashboards.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void collectEntity() {
-        final EntityDescriptor dashboardDescriptor = EntityDescriptor.create("5a82f5974b900a7a97caa1e5", ModelTypes.DASHBOARD_V1);
-        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(dashboardDescriptor);
-        final Optional<Entity> collectedEntity = facade.exportEntity(dashboardDescriptor, entityDescriptorIds);
+        final Optional<EntityWithConstraints> collectedEntity = facade.exportEntity(EntityDescriptor.create("5a82f5974b900a7a97caa1e5", ModelTypes.DASHBOARD_V1));
         assertThat(collectedEntity)
                 .isPresent()
+                .map(EntityWithConstraints::entity)
                 .containsInstanceOf(EntityV1.class);
 
-        final EntityV1 entity = (EntityV1) collectedEntity.orElseThrow(AssertionError::new);
-        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(dashboardDescriptor).orElse(null)));
+        final EntityV1 entity = (EntityV1) collectedEntity.map(EntityWithConstraints::entity).orElseThrow(AssertionError::new);
+        assertThat(entity.id()).isNotNull();
         assertThat(entity.type()).isEqualTo(ModelTypes.DASHBOARD_V1);
         final DashboardEntity dashboardEntity = objectMapper.convertValue(entity.data(), DashboardEntity.class);
         assertThat(dashboardEntity.title()).isEqualTo(ValueReference.of("Test"));
@@ -358,7 +355,7 @@ public class DashboardFacadeTest {
         assertThat(dashboard.getWidgets().size()).isEqualTo(1);
         assertThat(dashboard.getWidgets()).containsKeys("12345");
 
-        final NativeEntityDescriptor expectedDescriptor = NativeEntityDescriptor.create(dashboardEntity.id(), savedDashboard.getId(), ModelTypes.DASHBOARD_V1, savedDashboard.getTitle(), null);
+        final NativeEntityDescriptor expectedDescriptor = NativeEntityDescriptor.create(dashboardEntity.id(), savedDashboard.getId(), ModelTypes.DASHBOARD_V1, savedDashboard.getTitle());
         assertThat(nativeEntity.descriptor()).isEqualTo(expectedDescriptor);
     }
 }

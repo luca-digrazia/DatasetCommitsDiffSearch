@@ -106,7 +106,7 @@ public class StreamFacade implements EntityFacade<Stream> {
     }
 
     @Override
-    public Entity exportNativeEntity(Stream stream) {
+    public EntityWithConstraints exportNativeEntity(Stream stream) {
         final List<StreamRuleEntity> streamRules = stream.getStreamRules().stream()
                 .map(this::encodeStreamRule)
                 .collect(Collectors.toList());
@@ -133,14 +133,14 @@ public class StreamFacade implements EntityFacade<Stream> {
                 ValueReference.of(stream.getRemoveMatchesFromDefaultStream()));
 
         final JsonNode data = objectMapper.convertValue(streamEntity, JsonNode.class);
-        return EntityV1.builder()
+        final EntityV1 entity = EntityV1.builder()
                 .type(ModelTypes.STREAM_V1)
                 .data(data)
                 .build();
+        return EntityWithConstraints.create(entity, versionConstraints(streamAlarmCallbacks));
     }
 
     private Set<Constraint> versionConstraints(List<StreamAlarmCallbackEntity> alarmCallbacks) {
-        Set<Constraint> result = EntityFacade.super.versionConstraints();
         // Try to collect plugin dependencies by looking that the package names of the alarm callbacks and the loaded
         // plugins
         return alarmCallbacks.stream()
@@ -148,7 +148,7 @@ public class StreamFacade implements EntityFacade<Stream> {
                 .flatMap(packageName -> pluginMetaData.stream()
                         .filter(metaData -> packageName.startsWith(metaData.getClass().getPackage().getName()))
                         .map(PluginVersionConstraint::of))
-                .collect(Collectors.toCollection(() -> result));
+                .collect(Collectors.toSet());
     }
 
     private StreamRuleEntity encodeStreamRule(StreamRule streamRule) {
@@ -348,7 +348,7 @@ public class StreamFacade implements EntityFacade<Stream> {
     }
 
     @Override
-    public Optional<Entity> exportEntity(EntityDescriptor entityDescriptor) {
+    public Optional<EntityWithConstraints> exportEntity(EntityDescriptor entityDescriptor) {
         final ModelId modelId = entityDescriptor.id();
         try {
             final Stream stream = streamService.load(modelId.id());
