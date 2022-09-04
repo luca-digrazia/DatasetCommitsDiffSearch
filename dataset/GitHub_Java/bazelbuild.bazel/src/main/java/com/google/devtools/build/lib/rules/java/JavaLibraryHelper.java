@@ -34,11 +34,11 @@ import javax.annotation.Nullable;
 
 /**
  * A class to create Java compile actions in a way that is consistent with java_library. Rules that
- * generate source files and emulate java_library on top of that should use this class instead of
- * the lower-level API in JavaCompilationHelper.
+ * generate source files and emulate java_library on top of that should use this class
+ * instead of the lower-level API in JavaCompilationHelper.
  *
- * <p>Rules that want to use this class are required to have an implicit dependency on the Java
- * compiler.
+ * <p>Rules that want to use this class are required to have an implicit dependency on the
+ * Java compiler.
  */
 public final class JavaLibraryHelper {
   private final RuleContext ruleContext;
@@ -52,7 +52,6 @@ public final class JavaLibraryHelper {
    * Contains all the dependencies; these are treated as both compile-time and runtime dependencies.
    */
   private final List<JavaCompilationArgsProvider> deps = new ArrayList<>();
-
   private final List<JavaCompilationArgsProvider> exports = new ArrayList<>();
   private JavaPluginInfoProvider plugins = JavaPluginInfoProvider.empty();
   private ImmutableList<String> javacOpts = ImmutableList.of();
@@ -86,13 +85,17 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  /** Adds the given source jars. Any .java files in these jars will be compiled. */
+  /**
+   * Adds the given source jars. Any .java files in these jars will be compiled.
+   */
   public JavaLibraryHelper addSourceJars(Iterable<Artifact> sourceJars) {
     Iterables.addAll(this.sourceJars, sourceJars);
     return this;
   }
 
-  /** Adds the given source jars. Any .java files in these jars will be compiled. */
+  /**
+   * Adds the given source jars. Any .java files in these jars will be compiled.
+   */
   public JavaLibraryHelper addSourceJars(Artifact... sourceJars) {
     return this.addSourceJars(Arrays.asList(sourceJars));
   }
@@ -108,14 +111,27 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  /** Adds the given source files to be compiled. */
+  /**
+   * Adds the given source files to be compiled.
+   */
   public JavaLibraryHelper addSourceFiles(Iterable<Artifact> sourceFiles) {
     Iterables.addAll(this.sourceFiles, sourceFiles);
     return this;
   }
 
+  public JavaLibraryHelper addAllDeps(
+      Iterable<JavaCompilationArgsProvider> providers) {
+    Iterables.addAll(deps, providers);
+    return this;
+  }
+
   public JavaLibraryHelper addExport(JavaCompilationArgsProvider provider) {
     exports.add(provider);
+    return this;
+  }
+
+  public JavaLibraryHelper addAllExports(Iterable<JavaCompilationArgsProvider> providers) {
+    Iterables.addAll(exports, providers);
     return this;
   }
 
@@ -126,7 +142,9 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  /** Sets the compiler options. */
+  /**
+   * Sets the compiler options.
+   */
   public JavaLibraryHelper setJavacOpts(Iterable<String> javacOpts) {
     this.javacOpts = ImmutableList.copyOf(javacOpts);
     return this;
@@ -167,7 +185,7 @@ public final class JavaLibraryHelper {
    * @param semantics implementation specific java rules semantics
    * @param javaToolchainProvider used for retrieving misc java tools
    * @param hostJavabase the target of the host javabase used to retrieve the java executable and
-   *     its necessary inputs
+   *        its necessary inputs
    * @param jacocoInstrumental jacoco jars needed when running coverage
    * @param outputJarsBuilder populated with the outputs of the created actions
    * @param outputSourceJar if not-null, the output of an source jar action that will be created
@@ -222,19 +240,18 @@ public final class JavaLibraryHelper {
     }
 
     if (isStrict() && classpathMode != JavaClasspathMode.OFF) {
-      JavaCompilationHelper.addDependencyArtifactsToAttributes(attributes, deps);
+      JavaCompilationHelper.addDependencyArtifactsToAttributes(
+          attributes, deps);
     }
 
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     JavaCompilationHelper helper =
-        new JavaCompilationHelper(
-            ruleContext,
-            semantics,
-            javacOpts,
-            attributes,
+        new JavaCompilationHelper(ruleContext, semantics, javacOpts, attributes,
             javaToolchainProvider,
             hostJavabase,
             jacocoInstrumental);
+    Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(output, artifactsBuilder);
+
     Artifact manifestProtoOutput = helper.createManifestProtoOutput(output);
 
     Artifact genSourceJar = null;
@@ -247,13 +264,13 @@ public final class JavaLibraryHelper {
 
     Artifact nativeHeaderOutput = helper.createNativeHeaderJar(output);
 
-    JavaCompileAction javaCompileAction =
-        helper.createCompileAction(
-            output,
-            manifestProtoOutput,
-            genSourceJar,
-            /* instrumentationMetadataJar= */ null,
-            nativeHeaderOutput);
+    helper.createCompileAction(
+        output,
+        manifestProtoOutput,
+        genSourceJar,
+        outputDepsProto,
+        /* instrumentationMetadataJar= */ null,
+        nativeHeaderOutput);
 
     Artifact iJar = null;
     if (!sourceJars.isEmpty() || !sourceFiles.isEmpty()) {
@@ -269,7 +286,7 @@ public final class JavaLibraryHelper {
         outputSourceJar == null ? ImmutableList.of() : ImmutableList.of(outputSourceJar);
     outputJarsBuilder
         .addOutputJar(new OutputJar(output, iJar, manifestProtoOutput, outputSourceJars))
-        .setJdeps(javaCompileAction.getOutputDepsProto())
+        .setJdeps(outputDepsProto)
         .setNativeHeaders(nativeHeaderOutput);
 
     JavaCompilationArtifacts javaArtifacts = artifactsBuilder.build();
@@ -351,6 +368,7 @@ public final class JavaLibraryHelper {
     attributes.addRuntimeClassPathEntries(argsProvider.getRuntimeJars());
     attributes.addInstrumentationMetadataEntries(argsProvider.getInstrumentationMetadata());
   }
+
 
   private boolean isStrict() {
     return strictDepsMode != OFF;
