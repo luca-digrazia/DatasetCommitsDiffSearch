@@ -243,7 +243,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     useConfiguration(
         "--crosstool_top=//cc:suite", "--cpu=ppc", "--host_cpu=ppc", "--compiler=compiler");
     Action action = getGeneratingAction(getConfiguredTarget("//a:a"), "a/ao");
-    assertThat(ActionsTestUtil.baseArtifactNames(action.getInputs())).contains("cc_Clinux-files");
+    assertThat(ActionsTestUtil.baseArtifactNames(action.getInputs())).contains("linux-marker");
 
     NestedSet<Artifact> suiteFiles = getFilesToBuild(getConfiguredTarget("//cc:suite"));
     assertThat(ActionsTestUtil.baseArtifactNames(suiteFiles))
@@ -413,7 +413,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         ") for NAME in TOOLCHAIN_NAMES]",
         "[cc_toolchain(",
         "    name = NAME + '-override',",
-        "    cpu = NAME,",
+        "    cpu = 'banana',",
         "    all_files = ':empty',",
         "    ar_files = ':empty',",
         "    as_files = ':empty',",
@@ -458,7 +458,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
         ")",
         "cc_toolchain(",
         "    name = 'wrong-compiler',",
-        "    cpu = 'k8',",
+        "    cpu = 'banana',",
         "    all_files = ':empty',",
         "    ar_files = ':empty',",
         "    as_files = ':empty',",
@@ -685,6 +685,19 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
       assertThat(e)
           .hasMessageThat()
           .contains("Multiple toolchains with 'duplicate-toolchain' identifier");
+    }
+
+    try {
+      useConfiguration("--crosstool_top=//cc:suite", "--compiler=right-compiler", "--cpu=k8");
+      getConfiguration(getConfiguredTarget("//a:b")).getFragment(CppConfiguration.class);
+      fail("expected failure because toolchain.compiler does not equal --compiler");
+    } catch (InvalidConfigurationException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains(
+              "The selected toolchain's cpu and compiler must match the command line options:\n"
+                  + "  --cpu: k8, toolchain.target_cpu: k8\n"
+                  + "  --compiler: right-compiler, toolchain.compiler: wrong-compiler");
     }
   }
 

@@ -288,8 +288,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
             errorMessage
                 + String.format(
                     ", you may want to add an entry for '%s|%s' into toolchains and "
-                        + "toolchain_identifier '%s' into the corresponding cc_toolchain rule "
-                        + "(see --incompatible_disable_cc_toolchain_label_from_crosstool_proto).",
+                        + "toolchain_identifier '%s' into the corresponding cc_toolchain rule.",
                     toolchain.getTargetCpu(),
                     toolchain.getCompiler(),
                     toolchain.getToolchainIdentifier()));
