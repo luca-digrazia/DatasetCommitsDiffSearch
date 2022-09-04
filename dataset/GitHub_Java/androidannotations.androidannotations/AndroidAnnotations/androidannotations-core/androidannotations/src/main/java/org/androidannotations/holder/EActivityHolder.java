@@ -54,8 +54,8 @@ import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JMod;
 import com.helger.jcodemodel.JVar;
 
-public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasActivityLifecycleMethods,
-		HasReceiverRegistration, HasPreferenceHeaders {
+public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration,
+		HasPreferenceHeaders {
 
 	private ActivityIntentBuilder intentBuilder;
 	private JMethod onCreate;
@@ -726,14 +726,15 @@ public class EActivityHolder extends EComponentWithViewSupportHolder implements 
 		return onPauseAfterSuperBlock;
 	}
 
+
 	@Override
-	public JBlock getStartLifecycleAfterSuperBlock() {
-		return getOnCreateAfterSuperBlock();
+	public JBlock getOnAttachAfterSuperBlock() {
+		return receiverRegistrationDelegate.getOnAttachAfterSuperBlock();
 	}
 
 	@Override
-	public JBlock getEndLifecycleBeforeSuperBlock() {
-		return getOnDestroyAfterSuperBlock();
+	public JBlock getOnDetachBeforeSuperBlock() {
+		return receiverRegistrationDelegate.getOnDetachBeforeSuperBlock();
 	}
 
 	@Override

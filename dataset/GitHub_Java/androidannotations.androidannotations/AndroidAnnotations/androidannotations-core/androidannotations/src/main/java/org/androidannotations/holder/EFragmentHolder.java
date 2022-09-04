@@ -51,8 +51,7 @@ import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JMod;
 import com.helger.jcodemodel.JVar;
 
-public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasActivityLifecycleMethods,
-		HasReceiverRegistration, HasPreferences {
+public class EFragmentHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration, HasPreferences {
 
 	private JFieldVar contentView;
 	private JFieldVar viewDestroyedField;
@@ -253,14 +252,14 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		onDestroyViewAfterSuperBlock = body.blockSimple();
 	}
 
-	public JBlock getOnDestroyViewAfterSuperBlock() {
+	private JBlock getOnDestroyViewAfterSuperBlock() {
 		if (onDestroyViewAfterSuperBlock == null) {
 			setContentViewRelatedMethods();
 		}
 		return onDestroyViewAfterSuperBlock;
 	}
 
-	public void clearInjectedView(IJAssignmentTarget fieldRef) {
+	public void clearInjectedView(JFieldRef fieldRef) {
 		JBlock block = getOnDestroyViewAfterSuperBlock();
 		block.assign(fieldRef, _null());
 	}
@@ -488,16 +487,6 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 	}
 
 	@Override
-	public JBlock getStartLifecycleAfterSuperBlock() {
-		return getOnCreateAfterSuperBlock();
-	}
-
-	@Override
-	public JBlock getEndLifecycleBeforeSuperBlock() {
-		return getOnDestroyBeforeSuperBlock();
-	}
-
-	@Override
 	public JBlock getOnCreateAfterSuperBlock() {
 		if (onCreateAfterSuperBlock == null) {
 			setOnCreate();
@@ -545,6 +534,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		return onPauseBeforeSuperBlock;
 	}
 
+	@Override
 	public JBlock getOnAttachAfterSuperBlock() {
 		if (onAttachAfterSuperBlock == null) {
 			setOnAttach();
@@ -552,6 +542,7 @@ public class EFragmentHolder extends EComponentWithViewSupportHolder implements 
 		return onAttachAfterSuperBlock;
 	}
 
+	@Override
 	public JBlock getOnDetachBeforeSuperBlock() {
 		if (onDetachBeforeSuperBlock == null) {
 			setOnDetach();
