@@ -120,11 +120,11 @@ public class ElasticsearchConfiguration {
     @Parameter(value = "index_optimization_max_num_segments", validator = PositiveIntegerValidator.class)
     private int indexOptimizationMaxNumSegments = 1;
 
+    @Parameter(value = "elasticsearch_store_timestamps_as_doc_values")
+    private boolean storeTimestampsAsDocValues = true;
+
     @Parameter(value = "elasticsearch_request_timeout", validator = PositiveDurationValidator.class)
     private Duration requestTimeout = Duration.minutes(1L);
-
-    @Parameter(value = "elasticsearch_index_range_expiration", validator = PositiveDurationValidator.class)
-    private Duration indexRangeExpiration = Duration.minutes(1L);
 
     public String getClusterName() {
         return clusterName;
@@ -254,11 +254,11 @@ public class ElasticsearchConfiguration {
         return pathData;
     }
 
-    public Duration getRequestTimeout() {
-        return requestTimeout;
+    public boolean isStoreTimestampsAsDocValues() {
+        return storeTimestampsAsDocValues;
     }
 
-    public Duration getIndexRangeExpiration() {
-        return indexRangeExpiration;
+    public Duration getRequestTimeout() {
+        return requestTimeout;
     }
 }
