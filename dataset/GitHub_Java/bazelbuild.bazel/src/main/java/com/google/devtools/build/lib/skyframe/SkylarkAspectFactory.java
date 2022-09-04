@@ -21,13 +21,13 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
-import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
+import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetUtil;
+import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -66,19 +66,19 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
       }
       Environment env =
           Environment.builder(mutability)
+              .setGlobals(skylarkAspect.getFuncallEnv().getGlobals())
               .setSemantics(analysisEnv.getSkylarkSemantics())
               .setEventHandler(analysisEnv.getEventHandler())
-              // NB: loading phase functions are not available: this is analysis already, so we do
-              // *not* setLoadingPhase().
-              .build();
+              .build(); // NB: loading phase functions are not available: this is analysis already,
+      // so we do *not* setLoadingPhase().
       Object aspectSkylarkObject;
       try {
         aspectSkylarkObject =
             skylarkAspect
                 .getImplementation()
                 .call(
-                    /*args=*/ ImmutableList.of(base, skylarkRuleContext),
-                    /*kwarg=*/ ImmutableMap.of(),
+                    ImmutableList.<Object>of(base, skylarkRuleContext),
+                    ImmutableMap.<String, Object>of(),
                     /*ast=*/ null,
                     env);
 
