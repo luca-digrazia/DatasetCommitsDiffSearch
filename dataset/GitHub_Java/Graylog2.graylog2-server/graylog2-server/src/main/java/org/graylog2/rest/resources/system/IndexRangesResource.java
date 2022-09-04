@@ -22,7 +22,6 @@ package org.graylog2.rest.resources.system;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.plugin.Tools;
@@ -46,7 +45,6 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@RequiresAuthentication
 @Api(value = "System/IndexRanges", description = "Index timeranges")
 @Path("/system/indices/ranges")
 public class IndexRangesResource extends RestResource {
