@@ -37,8 +37,7 @@ public class ConfigRecorder {
                                 "No config value of type " + entry.getValue() + " exists for: " + entry.getKey());
                     }
                 } catch (IllegalArgumentException e) {
-                    throw new DeploymentException(
-                            "Failed to load config value of type " + entry.getValue() + " for: " + entry.getKey(), e);
+                    throw new DeploymentException(e);
                 }
             }
         }

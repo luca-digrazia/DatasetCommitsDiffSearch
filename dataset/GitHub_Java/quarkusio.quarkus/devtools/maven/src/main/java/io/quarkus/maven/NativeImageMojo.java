@@ -279,7 +279,7 @@ public class NativeImageMojo extends AbstractMojo {
                     .build();
             appCoords.setPath(resolver.resolve(appMvnArtifact).getArtifact().getFile().toPath());
 
-            try (CuratedApplication curatedApplication = QuarkusBootstrap.builder(appCoords.getPaths().getSinglePath())
+            try (CuratedApplication curatedApplication = QuarkusBootstrap.builder(appCoords.getPath())
                     .setProjectRoot(project.getBasedir().toPath())
                     .setBuildSystemProperties(realProperties)
                     .setAppArtifact(appCoords)
