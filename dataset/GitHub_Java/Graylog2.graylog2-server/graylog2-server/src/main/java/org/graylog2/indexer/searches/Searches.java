@@ -221,8 +221,6 @@ public class Searches {
         stats.order(TermsStatsFacet.ComparatorType.fromString(order.toString().toLowerCase()));
         stats.size(size);
 
-        terms.facetFilter(standardFilters(range, filter));
-
         srb.addFacet(stats);
 
         final SearchRequest request = srb.request();
