@@ -20,12 +20,14 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import org.graylog2.indexer.Indexer;
+import indexer.Indexer;
 import org.apache.log4j.Logger;
 import org.graylog2.Tools;
 import org.graylog2.blacklists.Blacklist;
+import org.graylog2.database.MongoBridge;
 import org.graylog2.forwarders.Forwarder;
 import org.graylog2.messagehandlers.common.HostUpsertHook;
+import org.graylog2.messagehandlers.common.MessageCounterHook;
 import org.graylog2.messagehandlers.common.MessageParserHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
 
@@ -33,7 +35,6 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
 import java.util.zip.DataFormatException;
-import org.graylog2.messagehandlers.common.MessageCountUpdateHook;
 
 /**
  * ChunkedGELFClient.java: Sep 14, 2010 6:38:38 PM
@@ -157,17 +158,16 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
                 return true;
             }
 
-            // PreProcess message based on filters. Insert message into indexer.
+            // PreProcess message based on filters. Insert message into MongoDB.
             ReceiveHookManager.preProcess(new MessageParserHook(), message);
             if(!message.getFilterOut()) {
-                // Index message and post-process if it was successful.
-                if (Indexer.index(message)) {
-                    // Update periodic counts collection.
-                    ReceiveHookManager.postProcess(new MessageCountUpdateHook(), message);
+                ////////////////////////////m.insertGelfMessage(message);
+                Indexer.index(message);
+                // This is doing the upcounting for statistics.
+                ReceiveHookManager.postProcess(new MessageCounterHook(), message);
 
-                    // Counts up host in hosts collection.
-                    ReceiveHookManager.postProcess(new HostUpsertHook(), message);
-                }
+                // Counts up host in hosts collection.
+                ReceiveHookManager.postProcess(new HostUpsertHook(), message);
             }
 
             // Forward.
