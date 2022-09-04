@@ -20,7 +20,6 @@
 
 package org.graylog2.inputs.gelf;
 
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.TimerContext;
 import java.util.Map;
 import java.util.Set;
@@ -48,24 +47,24 @@ public class GELFProcessor {
     }
 
     public void messageReceived(GELFMessage message) {
-        Metrics.newMeter(GELFProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS).mark();
+        server.getMeter(GELFProcessor.class, "IncomingMessages", "messages").mark();
         
         // Convert to LogMessage
         LogMessage lm = parse(message.getJSON());
 
         if (!lm.isComplete()) {
-            Metrics.newMeter(GELFProcessor.class, "IncompleteMessages", "messages", TimeUnit.SECONDS).mark();
+            server.getMeter(GELFProcessor.class, "IncompleteMessages", "messages").mark();
             LOG.debug("Skipping incomplete message.");
         }
 
         // Add to process buffer.
         LOG.debug("Adding received GELF message <" + lm.getId() +"> to process buffer: " + lm);
-        Metrics.newMeter(GELFProcessor.class, "ProcessedMessages", "messages", TimeUnit.SECONDS).mark();
+        server.getMeter(GELFProcessor.class, "ProcessedMessages", "messages").mark();
         server.getProcessBuffer().insert(lm);
     }
 
     private LogMessage parse(String message) {
-        TimerContext tcx = Metrics.newTimer(GELFProcessor.class, "GELFParsedTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
+        TimerContext tcx = server.getTimer(GELFProcessor.class, "GELFParsedTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
 
         JSONObject json;
         LogMessage lm = new LogMessage();
@@ -113,8 +112,8 @@ public class GELFProcessor {
         }
 
         // Add additional data if there is some.
-        Set<Map.Entry<String, Object>> entrySet = json.entrySet();
-        for(Map.Entry<String, Object> entry : entrySet) {
+        Set<Map.Entry<String, String>> entrySet = json.entrySet();
+        for(Map.Entry<String, String> entry : entrySet) {
 
             String key = entry.getKey();
 

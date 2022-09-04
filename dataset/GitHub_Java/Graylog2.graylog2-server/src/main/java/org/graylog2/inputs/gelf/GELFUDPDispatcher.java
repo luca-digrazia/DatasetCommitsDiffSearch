@@ -23,17 +23,17 @@ package org.graylog2.inputs.gelf;
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
 import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ExceptionEvent;
-import org.jboss.netty.handler.codec.frame.FrameDecoder;
+import org.jboss.netty.channel.MessageEvent;
+import org.jboss.netty.channel.SimpleChannelHandler;
 
 /**
  * GELFUDPDispatcher.java: 12.04.2012 10:40:21
  *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class GELFUDPDispatcher extends FrameDecoder {
+public class GELFUDPDispatcher extends SimpleChannelHandler {
 
     private static final Logger LOG = Logger.getLogger(GELFUDPDispatcher.class);
 
@@ -46,22 +46,29 @@ public class GELFUDPDispatcher extends FrameDecoder {
     }
 
     @Override
-    protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer) throws Exception {
+    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
+        server.getMeter(GELFUDPDispatcher.class, "ReceivedDatagrams", "datagrams").mark();
+        
+        ChannelBuffer buffer = (ChannelBuffer) e.getMessage();
 
         byte[] readable = new byte[buffer.readableBytes()];
-        buffer.toByteBuffer().get(readable, buffer.readerIndex(), buffer.readableBytes()); // I'm 12 years old and what is this? There must be a better way.
+        buffer.toByteBuffer().get(readable, buffer.readerIndex(), buffer.readableBytes());
 
         GELFMessage msg = new GELFMessage(readable);
-
-        if (msg.getGELFType() == GELFMessage.TYPE_CHUNKED) {
-            // This is a GELF message chunk. Add chunk to manager.
-            server.getGELFChunkManager().insert(msg.asChunk()); // XXX IMPROVE: this msg.asChunk() is a bit bumpy. better have a chunk from the beginning on.
-        } else {
-            // This is a non-chunked/complete GELF message. Process it.
+        
+        switch(msg.getGELFType()) {
+        case CHUNKED:
+            server.getMeter(GELFUDPDispatcher.class, "DispatchedMessagesChunks", "messages").mark();
+            server.getGELFChunkManager().insert(msg);
+            break;
+        case ZLIB:
+        case GZIP:
+        case UNCOMPRESSED:
+        case UNSUPPORTED:
+            server.getMeter(GELFUDPDispatcher.class, "DispatchedNonChunkedMessages", "messages").mark();
             processor.messageReceived(msg);
+            break;
         }
-
-        return buffer.readBytes(buffer.readableBytes());
     }
 
 
