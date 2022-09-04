@@ -9,7 +9,7 @@ import io.quarkus.runtime.annotations.Recorder;
 @Recorder
 public class ExceptionMapperRecorder {
 
-    public void setStaticResourceRoots(Set<String> resources) {
+    public void setStaticResource(Set<String> resources) {
         NotFoundExceptionMapper.staticResources(resources);
     }
 

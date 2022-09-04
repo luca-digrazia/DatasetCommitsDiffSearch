@@ -7,6 +7,7 @@ import org.hamcrest.Matchers;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -39,7 +40,7 @@ public class NotFoundExceptionMapperTestCase {
                 .then()
                 .statusCode(404)
                 .contentType(ContentType.HTML)
-                .body(containsString("index.html")) // check that index.html is displayed
+                .body(containsString("\"/index.html")) // check that index.html is displayed
                 .body(Matchers.containsString("<h1 class=\"container\">404 - Resource Not Found</h1>"));
     }
 
@@ -53,8 +54,9 @@ public class NotFoundExceptionMapperTestCase {
                 .contentType(ContentType.JSON);
     }
 
+    @Disabled("https://github.com/quarkusio/quarkus/issues/5424")
     @Test
-    public void shouldDisplayNewAddedFileIn404ErrorPage() {
+    public void shouldDisplayNewAddedFileIn404ErrorPage() throws InterruptedException {
         String CONTENT = "html content";
         test.addResourceFile(META_INF_RESOURCES + "index2.html", CONTENT);
 
@@ -72,8 +74,9 @@ public class NotFoundExceptionMapperTestCase {
                 .body(containsString("index2.html")); // check that index2.html is displayed
     }
 
+    @Disabled("https://github.com/quarkusio/quarkus/issues/5424")
     @Test
-    public void shouldNotDisplayDeletedFileIn404ErrorPage() {
+    public void shouldNotDisplayDeletedFileIn404ErrorPage() throws InterruptedException {
         String TEST_CONTENT = "test html content";
         test.addResourceFile(META_INF_RESOURCES + "test.html", TEST_CONTENT);
 
