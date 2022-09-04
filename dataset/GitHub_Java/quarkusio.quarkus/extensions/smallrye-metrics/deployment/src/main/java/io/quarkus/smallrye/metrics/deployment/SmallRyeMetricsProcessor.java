@@ -53,9 +53,8 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -64,7 +63,6 @@ import io.quarkus.smallrye.metrics.deployment.jandex.JandexMemberInfoAdapter;
 import io.quarkus.smallrye.metrics.runtime.SmallRyeMetricsRecorder;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
-import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
 import io.smallrye.metrics.MetricProducer;
 import io.smallrye.metrics.MetricRegistries;
@@ -98,16 +96,9 @@ public class SmallRyeMetricsProcessor {
     @Record(STATIC_INIT)
     void createRoute(BuildProducer<RouteBuildItem> routes,
             SmallRyeMetricsRecorder recorder,
-            HttpRootPathBuildItem httpRoot,
-            BuildProducer<NotFoundPageDisplayableEndpointBuildItem> displayableEndpoints,
-            LaunchModeBuildItem launchModeBuildItem) {
+            HttpRootPathBuildItem httpRoot) {
         Function<Router, Route> route = recorder.route(metrics.path + (metrics.path.endsWith("/") ? "*" : "/*"));
         Function<Router, Route> slash = recorder.route(metrics.path);
-
-        // add metrics endpoint for not found display in dev or test mode
-        if (launchModeBuildItem.getLaunchMode().isDevOrTest()) {
-            displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(metrics.path));
-        }
         routes.produce(new RouteBuildItem(route, recorder.handler(httpRoot.adjustPath(metrics.path)), HandlerType.BLOCKING));
         routes.produce(new RouteBuildItem(slash, recorder.handler(httpRoot.adjustPath(metrics.path)), HandlerType.BLOCKING));
     }
@@ -131,13 +122,6 @@ public class SmallRyeMetricsProcessor {
     @BuildStep
     AnnotationsTransformerBuildItem transformBeanScope(BeanArchiveIndexBuildItem index) {
         return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
-
-            @Override
-            public int getPriority() {
-                // this specifically should run after the JAX-RS AnnotationTransformers
-                return BuildExtension.DEFAULT_PRIORITY - 100;
-            }
-
             @Override
             public boolean appliesTo(AnnotationTarget.Kind kind) {
                 return kind == org.jboss.jandex.AnnotationTarget.Kind.CLASS;
@@ -146,11 +130,11 @@ public class SmallRyeMetricsProcessor {
             @Override
             public void transform(TransformationContext ctx) {
                 if (ctx.isClass()) {
-                    if (BuiltinScope.isIn(ctx.getAnnotations())) {
+                    if (BuiltinScope.isDeclaredOn(ctx.getTarget().asClass())) {
                         return;
                     }
                     ClassInfo clazz = ctx.getTarget().asClass();
-                    if (!isJaxRsEndpoint(clazz) && !isJaxRsProvider(clazz)) {
+                    if (!isJaxRsEndpoint(clazz)) {
                         while (clazz != null && clazz.superName() != null) {
                             Map<DotName, List<AnnotationInstance>> annotations = clazz.annotations();
                             if (annotations.containsKey(GAUGE)
@@ -407,10 +391,6 @@ public class SmallRyeMetricsProcessor {
     private boolean isJaxRsEndpoint(ClassInfo clazz) {
         return clazz.annotations().containsKey(SmallRyeMetricsDotNames.JAXRS_PATH) ||
                 clazz.annotations().containsKey(SmallRyeMetricsDotNames.REST_CONTROLLER);
-    }
-
-    private boolean isJaxRsProvider(ClassInfo clazz) {
-        return clazz.annotations().containsKey(SmallRyeMetricsDotNames.JAXRS_PROVIDER);
     }
 
 }
