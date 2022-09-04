@@ -67,28 +67,6 @@ public interface TimeSeries {
     }
 
     /**
-     * Autocovariance function.
-     *
-     * @param x time series
-     * @param lag the lag
-     */
-    static double cov(double[] x, int lag) {
-        if (lag < 0) {
-            lag = -lag;
-        }
-
-        int T = x.length;
-        double mu = MathEx.mean(x);
-
-        double cov = 0.0;
-        for (int i = lag; i < T; i++) {
-            cov += (x[i] - mu) * (x[i-lag] - mu);
-        }
-
-        return cov;
-    }
-
-    /**
      * Autocorrelation function.
      *
      * @param x time series
@@ -138,18 +116,18 @@ public interface TimeSeries {
             return acf(x, lag);
         }
 
+        double[] acf = new double[lag];
         double[] r = new double[lag];
         for (int i = 0; i < lag; i++) {
-            r[i] = acf(x, i+1);
+            acf[i] = acf(x, i);
         }
 
-        double[] r1 = new double[lag];
-        r1[0] = 1.0;
-        System.arraycopy(r, 0, r1, 1, lag - 1);
-        Matrix toeplitz = Matrix.toeplitz(r1);
+        Matrix toeplitz = Matrix.toeplitz(acf);
+        System.arraycopy(acf, 1, r, 0, lag - 1);
+        r[lag - 1] = acf(x, lag);
 
-        Matrix.Cholesky cholesky = toeplitz.cholesky();
-        double[] pacf = cholesky.solve(r);
+        Matrix.Cholesky qr = toeplitz.cholesky();
+        double[] pacf = qr.solve(r);
 
         return pacf[lag - 1];
     }
