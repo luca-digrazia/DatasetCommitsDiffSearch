@@ -1,6 +1,4 @@
 /**
- * Copyright 2014 Lennart Koopmann <lennart@torch.sh>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,15 +13,16 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.inputs.amqp;
 
+import com.google.common.util.concurrent.Uninterruptibles;
 import com.rabbitmq.client.*;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.RadioMessage;
+import org.graylog2.plugin.buffers.Buffer;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import org.graylog2.plugin.buffers.ProcessingDisabledException;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.joda.time.DateTime;
 import org.msgpack.MessagePack;
@@ -36,17 +35,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class Consumer {
+import static com.google.common.base.Strings.isNullOrEmpty;
 
+public class Consumer {
     private static final Logger LOG = LoggerFactory.getLogger(Consumer.class);
 
     // Not threadsafe!
 
     private final String hostname;
     private final int port;
+    private final String virtualHost;
     private final String username;
     private final String password;
     private final int prefetchCount;
@@ -58,18 +56,19 @@ public class Consumer {
     private Connection connection;
     private Channel channel;
 
-    private final InputHost graylogServer;
+    private final Buffer processBuffer;
     private final MessageInput sourceInput;
 
     private AtomicLong totalBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesRead = new AtomicLong(0);
     private AtomicLong lastSecBytesReadTmp = new AtomicLong(0);
 
-    public Consumer(String hostname, int port, String username, String password,
+    public Consumer(String hostname, int port, String virtualHost, String username, String password,
                     int prefetchCount, String queue, String exchange, String routingKey,
-                    InputHost graylogServer, MessageInput sourceInput) {
+                    Buffer processBuffer, MessageInput sourceInput) {
         this.hostname = hostname;
         this.port = port;
+        this.virtualHost = virtualHost;
         this.username = username;
         this.password = password;
         this.prefetchCount = prefetchCount;
@@ -77,24 +76,23 @@ public class Consumer {
         this.queue = queue;
         this.exchange = exchange;
         this.routingKey = routingKey;
+        this.processBuffer = processBuffer;
 
-        this.graylogServer = graylogServer;
         this.sourceInput = sourceInput;
+
+        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+        scheduler.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                lastSecBytesRead.set(lastSecBytesReadTmp.getAndSet(0));
+            }
+        }, 1, 1, TimeUnit.SECONDS);
     }
 
     public void run() throws IOException {
         if (!isConnected()) {
             connect();
         }
-
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
-        scheduler.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                lastSecBytesRead.set(lastSecBytesReadTmp.get());
-                lastSecBytesReadTmp.set(0);
-            }
-        }, 1, 1, TimeUnit.SECONDS);
 
         final MessagePack msgpack = new MessagePack();
 
@@ -124,25 +122,39 @@ public class Consumer {
                         event.addLongFields(msg.longs);
                         event.addDoubleFields(msg.doubles);
 
-                        graylogServer.getProcessBuffer().insertCached(event, sourceInput);
-
+                        processBuffer.insertFailFast(event, sourceInput);
+                        channel.basicAck(deliveryTag, false);
+                    } catch (BufferOutOfCapacityException e) {
+                        LOG.debug("Input buffer full, requeuing message. Delaying 10 ms until trying next message.");
+                        if (channel.isOpen()) {
+                            channel.basicNack(deliveryTag, false, true);
+                            Uninterruptibles.sleepUninterruptibly(10, TimeUnit.MILLISECONDS); // TODO magic number
+                        }
+                    } catch (ProcessingDisabledException e) {
+                        LOG.debug("Message processing is disabled, requeuing message. Delaying 100 ms until trying next message.");
+                        if (channel.isOpen()) {
+                            channel.basicNack(deliveryTag, false, true);
+                            Uninterruptibles.sleepUninterruptibly(100, TimeUnit.MILLISECONDS); // TODO magic number
+                        }
                     } catch (Exception e) {
-                        LOG.error("Error while trying to process AMQP message.", e);
+                        LOG.error("Error while trying to process AMQP message, requeuing message", e);
+                        if (channel.isOpen()) {
+                            channel.basicNack(deliveryTag, false, true);
+                        }
                     }
-
-                    channel.basicAck(deliveryTag, false);
                 }
             }
         );
     }
 
     public void connect() throws IOException {
-        ConnectionFactory factory = new ConnectionFactory();
+        final ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(hostname);
         factory.setPort(port);
+        factory.setVirtualHost(virtualHost);
 
         // Authenticate?
-        if(username != null && !username.isEmpty() && password != null && !password.isEmpty()) {
+        if(!isNullOrEmpty(username) && !isNullOrEmpty(password)) {
             factory.setUsername(username);
             factory.setPassword(password);
         }
@@ -150,11 +162,43 @@ public class Consumer {
         connection = factory.newConnection();
         channel = connection.createChannel();
 
-        if (prefetchCount > 0) {
+        if(null == channel) {
+            LOG.error("No channel descriptor available!");
+        }
+
+        if (null != channel && prefetchCount > 0) {
             channel.basicQos(prefetchCount);
 
             LOG.info("AMQP prefetch count overriden to <{}>.", prefetchCount);
         }
+
+        connection.addShutdownListener(new ShutdownListener() {
+            @Override
+            public void shutdownCompleted(ShutdownSignalException cause) {
+                if (cause.isInitiatedByApplication()) {
+                    LOG.info("Not reconnecting connection, we disconnected explicitly.");
+                    return;
+                }
+                while (true) {
+                    try {
+                        LOG.error("AMQP connection lost! Trying reconnect in 1 second.");
+
+                        Uninterruptibles.sleepUninterruptibly(1, TimeUnit.SECONDS);
+
+                        connect();
+
+                        LOG.info("Connected! Re-starting consumer.");
+
+                        run();
+
+                        LOG.info("Consumer running.");
+                        break;
+                    } catch(IOException e) {
+                        LOG.error("Could not re-connect to AMQP broker.", e);
+                    }
+                }
+            }
+        });
     }
 
 
