@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.bazel.rules.ninja.file.GenericParsingException;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -81,7 +80,7 @@ public final class NinjaTarget {
       return this;
     }
 
-    public NinjaTarget build() throws GenericParsingException {
+    public NinjaTarget build() {
       Preconditions.checkNotNull(ruleName);
       String internedName = nameInterner.intern(ruleName);
       ImmutableSortedMap<String, String> variables = variablesBuilder.build();
@@ -92,8 +91,8 @@ public final class NinjaTarget {
       } else {
         NinjaRule ninjaRule = scope.findRule(offset, ruleName);
         if (ninjaRule == null) {
-          throw new GenericParsingException(
-              String.format("could not resolve rule '%s'", internedName));
+          // TODO(cparsons): This indicates no rule was found, so throw a parse exception instead.
+          ruleVariables = ImmutableSortedMap.of();
         } else {
           ruleVariables =
               reduceRuleVariables(scope, offset, ninjaRule.getVariables(), variables, nameInterner);

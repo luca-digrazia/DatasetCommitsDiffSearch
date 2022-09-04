@@ -15,15 +15,25 @@
 
 package com.google.devtools.build.lib.bazel.rules.ninja.parser;
 
+import static com.google.common.base.Strings.nullToEmpty;
+
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
+import com.google.common.collect.Interner;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.util.Pair;
+import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -31,56 +41,206 @@ import javax.annotation.Nullable;
  * definition (and redefinition).
  */
 public class NinjaScope {
-  private final Map<String, List<Pair<Integer, NinjaVariableValue>>> variables;
-  private final Map<String, List<Pair<Integer, NinjaRule>>> rules;
+  /** Parent scope for the case of subninja/include command */
+  @Nullable private final NinjaScope parentScope;
+  /** If include command was used for the current scope, the offset of that include command */
+  @Nullable private final Long includePoint;
+
+  private final NavigableMap<Long, NinjaScope> includedScopes;
+  private final NavigableMap<Long, NinjaScope> subNinjaScopes;
+  private Map<String, List<Pair<Long, String>>> expandedVariables;
+  private final Map<String, List<Pair<Long, NinjaRule>>> rules;
+  private final Map<String, List<Pair<Long, NinjaPool>>> pools;
 
   public NinjaScope() {
-    variables = Maps.newHashMap();
-    rules = Maps.newHashMap();
+    this(null, null);
   }
 
-  public void addVariable(String name, int offset, NinjaVariableValue value) {
-    variables.computeIfAbsent(name, k -> Lists.newArrayList()).add(Pair.of(offset, value));
+  private NinjaScope(@Nullable NinjaScope parentScope, @Nullable Long includePoint) {
+    this.parentScope = parentScope;
+    this.includePoint = includePoint;
+    this.rules = Maps.newTreeMap();
+    this.pools = Maps.newTreeMap();
+    this.includedScopes = Maps.newTreeMap();
+    this.subNinjaScopes = Maps.newTreeMap();
+    this.expandedVariables = Maps.newHashMap();
   }
 
-  public void addRule(int offset, NinjaRule rule) {
-    rules.computeIfAbsent(rule.getName(), k -> Lists.newArrayList()).add(Pair.of(offset, rule));
+  public void setRules(Map<String, List<Pair<Long, NinjaRule>>> rules) {
+    this.rules.putAll(rules);
+  }
+
+  public void setPools(Map<String, List<Pair<Long, NinjaPool>>> pools) {
+    this.pools.putAll(pools);
   }
 
   @VisibleForTesting
-  public Map<String, List<Pair<Integer, NinjaVariableValue>>> getVariables() {
-    return variables;
-  }
-
-  @VisibleForTesting
-  public Map<String, List<Pair<Integer, NinjaRule>>> getRules() {
+  public Map<String, List<Pair<Long, NinjaRule>>> getRules() {
     return rules;
   }
 
   @VisibleForTesting
-  public void sortResults() {
-    for (List<Pair<Integer, NinjaVariableValue>> list : variables.values()) {
-      list.sort(Comparator.comparing(Pair::getFirst));
+  public Map<String, List<Pair<Long, NinjaPool>>> getPools() {
+    return pools;
+  }
+
+  public Collection<NinjaScope> getIncludedScopes() {
+    return includedScopes.values();
+  }
+
+  public Collection<NinjaScope> getSubNinjaScopes() {
+    return subNinjaScopes.values();
+  }
+
+  /**
+   * Expands variable value at the given offset. If some of the variable references, used in the
+   * value, can not be found, uses an empty string as their value.
+   */
+  public String getExpandedValue(long offset, NinjaVariableValue value) {
+    // Cache expanded variables values to save time replacing several references to the same
+    // variable.
+    // This cache is local to the offset, it depends on the offset of the variable we are expanding.
+    Map<String, String> cache = Maps.newHashMap();
+    // We are using the start offset of the value holding the reference to the variable.
+    // Do the same as Ninja implementation: if the variable is not found, use empty string.
+    Function<String, String> expander =
+        ref -> cache.computeIfAbsent(ref, (key) -> nullToEmpty(findExpandedVariable(offset, key)));
+    return value.getExpandedValue(expander);
+  }
+
+  /**
+   * Partially expands variable value at the given offset. If some of the variable references, used
+   * in the value, can not be found, they are left unexpanded.
+   */
+  public NinjaVariableValue getReducedValue(
+      long offset,
+      NinjaVariableValue value,
+      ImmutableSet<String> variablesToNotExpand,
+      Interner<String> interner) {
+    // Cache expanded variables values to save time replacing several references to the same
+    // variable.
+    // This cache is local to the offset, it depends on the offset of the variable we are expanding.
+    Map<String, String> cache = Maps.newHashMap();
+    // We are using the start offset of the value holding the reference to the variable.
+    // Do the same as Ninja implementation: if the variable is not found, use empty string.
+    Function<String, String> expander =
+        ref -> computeExpandedString(offset, ref, cache, variablesToNotExpand, interner);
+    return value.reduce(expander);
+  }
+
+  private String computeExpandedString(
+      long offset,
+      String key,
+      Map<String, String> cache,
+      ImmutableSet<String> variablesToNotExpand,
+      Interner<String> interner) {
+    String cachedValue = cache.get(key);
+    if (cachedValue != null) {
+      return cachedValue;
     }
-    for (List<Pair<Integer, NinjaRule>> list : rules.values()) {
-      list.sort(Comparator.comparing(Pair::getFirst));
+    if (variablesToNotExpand.contains(key)) {
+      return null;
     }
+    String expandedValue = findExpandedVariable(offset, key);
+    // It's very important an interner is used here, as there is considerable duplication of
+    // string literals in expanded rule-variable-parts over the course of a large build.
+    return expandedValue == null ? null : interner.intern(expandedValue);
   }
 
-  @Nullable
-  public NinjaVariableValue findVariable(int offset, String name) {
-    return findByNameAndOffset(offset, name, variables);
+  public void addExpandedVariable(Long offset, String name, String value) {
+    expandedVariables.computeIfAbsent(name, k -> Lists.newArrayList()).add(Pair.of(offset, value));
   }
 
-  @Nullable
-  public NinjaRule findRule(int offset, String name) {
-    return findByNameAndOffset(offset, name, rules);
+  public NinjaScope addIncluded(Long offset) {
+    NinjaScope scope = new NinjaScope(this, offset);
+    includedScopes.put(offset, scope);
+    return scope;
   }
 
+  public NinjaScope addSubNinja(Long offset) {
+    NinjaScope scope = new NinjaScope(this, offset);
+    subNinjaScopes.put(offset, scope);
+    return scope;
+  }
+
+  /**
+   * Finds expanded variable with the name <code>name</code> to be used in the reference to it at
+   * <code>offset</code>. Returns null if nothing was found.
+   */
   @Nullable
-  private static <T> T findByNameAndOffset(
-      int offset, String name, Map<String, List<Pair<Integer, T>>> map) {
-    List<Pair<Integer, T>> pairs = map.get(name);
+  public String findExpandedVariable(long offset, String name) {
+    return findByNameAndOffsetRecursively(offset, name, scope -> scope.expandedVariables);
+  }
+
+  /**
+   * Finds a rule with the name <code>name</code> to be used in the reference to it at <code>offset
+   * </code>. Returns null if nothing was found.
+   */
+  @Nullable
+  public NinjaRule findRule(long offset, String name) {
+    return findByNameAndOffsetRecursively(offset, name, scope -> scope.rules);
+  }
+
+  /**
+   * Finds a variable or rule with the name <code>name</code> to be used in the reference to it at
+   * <code>offset</code>.
+   *
+   * <p>The following checks are made: - the last definition of variable/rule before the offset in
+   * the current scope is looked up. - the last definition of variable/rule inside the relevant
+   * included scopes (i.e. in the files from include statements before offset)
+   *
+   * <p>If any of the definitions are found in the current or included scopes, the value with the
+   * largest offset is returned.
+   *
+   * <p>If nothing is found, we make an attempt to find the definition in the parent scope at offset
+   * before the offset at which the current scope was introduced to parent.
+   *
+   * <p>If no definition was found, we return null.
+   */
+  @Nullable
+  private <T> T findByNameAndOffsetRecursively(
+      long offset,
+      String name,
+      Function<NinjaScope, Map<String, List<Pair<Long, T>>>> mapSupplier) {
+    Pair<Long, T> currentScopeValue = findByNameAndOffset(offset, name, this, mapSupplier);
+
+    Long currentScopeOffset =
+        currentScopeValue != null ? Preconditions.checkNotNull(currentScopeValue.getFirst()) : -1L;
+
+    // Search in included scopes, which were included after the current scope, so they could
+    // override the value, but before the reference offset.
+    NavigableMap<Long, NinjaScope> subMap =
+        includedScopes.subMap(currentScopeOffset, false, offset, false);
+    // Search in descending order, so that the first found value is the result.
+    for (NinjaScope includedScope : subMap.descendingMap().values()) {
+      T includedValue =
+          includedScope.findByNameAndOffsetRecursively(Long.MAX_VALUE, name, mapSupplier);
+      if (includedValue != null) {
+        return includedValue;
+      }
+    }
+    if (currentScopeValue != null) {
+      return currentScopeValue.getSecond();
+    }
+    if (parentScope != null) {
+      Preconditions.checkNotNull(includePoint);
+      // -1 is used in order not to conflict with the current scope.
+      return parentScope.findByNameAndOffsetRecursively(includePoint - 1, name, mapSupplier);
+    }
+    return null;
+  }
+
+  /**
+   * Finds the variable or rule with the name <code>name</code>, defined in the current scope before
+   * the <code>offset</code>. (Ninja allows to re-define the values of rules and variables.)
+   */
+  @Nullable
+  private static <T> Pair<Long, T> findByNameAndOffset(
+      long offset,
+      String name,
+      NinjaScope scope,
+      Function<NinjaScope, Map<String, List<Pair<Long, T>>>> mapFunction) {
+    List<Pair<Long, T>> pairs = Preconditions.checkNotNull(mapFunction.apply(scope)).get(name);
     if (pairs == null) {
       // We may want to search in the parent scope.
       return null;
@@ -98,23 +258,25 @@ public class NinjaScope {
       // Check the parent scope.
       return null;
     }
-    return pairs.get(idx).getSecond();
+    Pair<Long, T> pair = pairs.get(idx);
+    return Pair.of(pair.getFirst(), pair.getSecond());
   }
 
-  public static NinjaScope mergeScopeParts(Collection<NinjaScope> parts) {
-    NinjaScope result = new NinjaScope();
-    for (NinjaScope part : parts) {
-      for (String name : part.variables.keySet()) {
-        result
-            .variables
-            .computeIfAbsent(name, k -> Lists.newArrayList())
-            .addAll(part.variables.get(name));
-      }
-      for (String name : part.rules.keySet()) {
-        result.rules.computeIfAbsent(name, k -> Lists.newArrayList()).addAll(part.rules.get(name));
-      }
+  public NinjaScope createScopeFromExpandedValues(
+      ImmutableSortedMap<String, List<Pair<Long, String>>> expandedVariables) {
+    NinjaScope scope = new NinjaScope(this, Long.MAX_VALUE);
+    scope.expandedVariables.putAll(expandedVariables);
+    return scope;
+  }
+
+  public void iterate(Consumer<NinjaScope> consumer) {
+    ArrayDeque<NinjaScope> queue = new ArrayDeque<>();
+    queue.add(this);
+    while (!queue.isEmpty()) {
+      NinjaScope currentScope = queue.removeFirst();
+      consumer.accept(currentScope);
+      queue.addAll(currentScope.getIncludedScopes());
+      queue.addAll(currentScope.getSubNinjaScopes());
     }
-    result.sortResults();
-    return result;
   }
 }
