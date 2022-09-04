@@ -31,7 +31,9 @@ public class StringMessageBodyWriter implements QrsMessageBodyWriter<String> {
     }
 
     @Override
-    public void writeResponse(String o, RequestContext context) throws WebApplicationException {
+    public void writeTo(String o, Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType,
+            MultivaluedMap<String, Object> httpHeaders, RequestContext context)
+            throws WebApplicationException {
         // FIXME: use response encoding
         HttpServerResponse vertxResponse = context.getContext().response();
         vertxResponse.end(o);
