@@ -152,17 +152,9 @@ public final class Dict<K, V>
   // SkylarkInterfaceUtils.getSkylarkCallable. The two 'get' methods cause it to get
   // confused as to which one has the annotation. Fix it and remove "2" suffix.
   public Object get2(Object key, Object defaultValue, StarlarkThread thread) throws EvalException {
-    Object v = this.get(key);
-    if (v != null) {
-      return v;
+    if (containsKey(key, null, thread)) {
+      return this.get(key);
     }
-
-    // This statement is executed for its effect, which is to throw "unhashable"
-    // if key is unhashable, instead of returning defaultValue.
-    // I think this is a bug: the correct behavior is simply 'return defaultValue'.
-    // See https://github.com/bazelbuild/starlark/issues/65.
-    containsKey(thread.getSemantics(), key);
-
     return defaultValue;
   }
 
@@ -186,7 +178,7 @@ public final class Dict<K, V>
   public Object pop(Object key, Object defaultValue, StarlarkThread thread) throws EvalException {
     Object value = get(key);
     if (value != null) {
-      remove(key, (Location) null);
+      remove(key, /*loc=*/ null);
       return value;
     }
     if (defaultValue != Starlark.UNBOUND) {
@@ -211,7 +203,7 @@ public final class Dict<K, V>
     }
     Object key = keySet().iterator().next();
     Object value = get(key);
-    remove(key, (Location) null);
+    remove(key, /*loc=*/ null);
     return Tuple.pair(key, value);
   }
 
@@ -239,7 +231,7 @@ public final class Dict<K, V>
     if (value != null) {
       return value;
     }
-    put(key, (V) defaultValue, (Location) null);
+    put(key, (V) defaultValue, /*loc=*/ null);
     return defaultValue;
   }
 
@@ -278,7 +270,7 @@ public final class Dict<K, V>
             ? (Dict<K, V>) args
             : getDictFromArgs("update", args, thread.mutability());
     dict = Dict.plus(dict, (Dict<K, V>) kwargs, thread.mutability());
-    putAll(dict, (Location) null);
+    putAll(dict, /*loc=*/ null);
     return Starlark.NONE;
   }
 
@@ -387,11 +379,11 @@ public final class Dict<K, V>
    *
    * @param key the key of the added entry
    * @param value the value of the added entry
-   * @param unused a nonce value to select this overload, not Map.put
+   * @param loc the location to use for error reporting
    * @throws EvalException if the key is invalid or the dict is frozen
    */
-  public void put(K key, V value, Location unused) throws EvalException {
-    checkMutable();
+  public void put(K key, V value, Location loc) throws EvalException {
+    checkMutable(loc);
     EvalUtils.checkHashable(key);
     contents.put(key, value);
   }
@@ -400,12 +392,12 @@ public final class Dict<K, V>
    * Puts all the entries from a given map into the dict, after validating that mutation is allowed.
    *
    * @param map the map whose entries are added
-   * @param unused a nonce value to select this overload, not Map.put
+   * @param loc the location to use for error reporting
    * @throws EvalException if some key is invalid or the dict is frozen
    */
-  public <KK extends K, VV extends V> void putAll(Map<KK, VV> map, Location unused)
+  public <KK extends K, VV extends V> void putAll(Map<KK, VV> map, Location loc)
       throws EvalException {
-    checkMutable();
+    checkMutable(loc);
     for (Map.Entry<KK, VV> e : map.entrySet()) {
       KK k = e.getKey();
       EvalUtils.checkHashable(k);
@@ -417,12 +409,12 @@ public final class Dict<K, V>
    * Deletes the entry associated with the given key.
    *
    * @param key the key to delete
-   * @param unused a nonce value to select this overload, not Map.put
+   * @param loc the location to use for error reporting
    * @return the value associated to the key, or {@code null} if not present
    * @throws EvalException if the dict is frozen
    */
-  V remove(Object key, Location unused) throws EvalException {
-    checkMutable();
+  V remove(Object key, Location loc) throws EvalException {
+    checkMutable(loc);
     return contents.remove(key);
   }
 
@@ -435,11 +427,11 @@ public final class Dict<K, V>
   /**
    * Clears the dict.
    *
-   * @param unused a nonce value to select this overload, not Map.put
+   * @param loc the location to use for error reporting
    * @throws EvalException if the dict is frozen
    */
-  private void clear(Location unused) throws EvalException {
-    checkMutable();
+  void clear(Location loc) throws EvalException {
+    checkMutable(loc);
     contents.clear();
   }
 
@@ -516,16 +508,21 @@ public final class Dict<K, V>
   }
 
   @Override
-  public Object getIndex(StarlarkSemantics semantics, Object key) throws EvalException {
-    Object v = get(key);
-    if (v == null) {
-      throw Starlark.errorf("key %s not found in dictionary", Starlark.repr(key));
+  public final Object getIndex(Object key, Location loc) throws EvalException {
+    if (!this.containsKey(key)) {
+      throw new EvalException(loc, Starlark.format("key %r not found in dictionary", key));
     }
-    return v;
+    return this.get(key);
   }
 
   @Override
-  public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
+  public final boolean containsKey(Object key, Location loc) throws EvalException {
+    return this.containsKey(key);
+  }
+
+  @Override
+  public final boolean containsKey(Object key, Location loc, StarlarkThread thread)
+      throws EvalException {
     EvalUtils.checkHashable(key);
     return this.containsKey(key);
   }
@@ -619,12 +616,6 @@ public final class Dict<K, V>
   }
 
   // disallowed java.util.Map update operations
-
-  // TODO(adonovan): make MutabilityException a subclass of (unchecked)
-  // UnsupportedOperationException, allowing the primary Dict operations
-  // to satisfy the Map operations below in the usual way (like ImmutableMap does).
-  // Add "ForStarlark" suffix to disambiguate SkylarkCallable-annotated methods.
-  // Same for StarlarkList.
 
   @Deprecated
   @Override
