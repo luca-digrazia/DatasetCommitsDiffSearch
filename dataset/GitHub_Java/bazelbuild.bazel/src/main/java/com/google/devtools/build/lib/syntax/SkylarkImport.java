@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.Serializable;
 import javax.annotation.Nullable;
@@ -22,7 +24,10 @@ import javax.annotation.Nullable;
  * Encapsulates the four syntactic variants of Skylark imports: Absolute paths, relative paths,
  * absolute labels, and relative labels.
  */
+@AutoCodec(strategy = AutoCodec.Strategy.POLYMORPHIC)
 public interface SkylarkImport extends Serializable {
+  ObjectCodec<SkylarkImport> CODEC = new SkylarkImport_AutoCodec();
+
   /**
    * Returns the string originally used to specify the import (may represent a label or a path).
    */
@@ -45,4 +50,17 @@ public interface SkylarkImport extends Serializable {
    * @throws IllegalStateException if this import takes the form of an absolute path.
    */
   Label getLabel(@Nullable Label containingFileLabel);
+
+  /**
+   * True if this import takes the form of an absolute path.
+   */
+  boolean hasAbsolutePath();
+
+  /**
+   * Returns a {@link PathFragment} representing the import path.
+   * 
+   * @throws IllegalStateException if this import does not take the form of an absolute path.
+   */
+  PathFragment getAbsolutePath();
 }
+
