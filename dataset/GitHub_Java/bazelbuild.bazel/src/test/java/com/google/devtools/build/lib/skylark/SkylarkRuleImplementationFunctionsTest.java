@@ -1314,123 +1314,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testAdvertisedProviders() throws Exception {
-    scratch.file(
-        "test/foo.bzl",
-        "FooInfo = provider()",
-        "BarInfo = provider()",
-        "def _impl(ctx):",
-        "    foo = FooInfo()",
-        "    bar = BarInfo()",
-        "    return [foo, bar]",
-        "foo_rule = rule(",
-        "    implementation = _impl,",
-        "    provides = [FooInfo, BarInfo]",
-        ")");
-    scratch.file(
-        "test/bar.bzl",
-        "load(':foo.bzl', 'FooInfo')",
-        "def _impl(ctx):",
-        "    dep = ctx.attr.deps[0]",
-        "    proxy = dep[FooInfo]", // The goal is to test this object
-        "    return struct(proxy = proxy)", // so we return it here
-        "bar_rule = rule(",
-        "    implementation = _impl,",
-        "    attrs = {",
-        "       'deps': attr.label_list(allow_files=True),",
-        "    }",
-        ")");
-    scratch.file(
-        "test/BUILD",
-        "load(':foo.bzl', 'foo_rule')",
-        "load(':bar.bzl', 'bar_rule')",
-        "foo_rule(name = 'dep_rule')",
-        "bar_rule(name = 'my_rule', deps = [':dep_rule'])");
-    ConfiguredTarget configuredTarget = getConfiguredTarget("//test:my_rule");
-    Object provider = configuredTarget.get("proxy");
-    assertThat(provider).isInstanceOf(Info.class);
-    assertThat(((Info) provider).getProvider().getKey())
-        .isEqualTo(new SkylarkKey(Label.parseAbsolute("//test:foo.bzl"), "FooInfo"));
-  }
-
-  @Test
-  public void testLacksAdvertisedDeclaredProvider() throws Exception {
-    scratch.file(
-        "test/foo.bzl",
-        "FooInfo = provider()",
-        "def _impl(ctx):",
-        "    default = DefaultInfo(",
-        "        runfiles=ctx.runfiles(ctx.files.runs),",
-        "    )",
-        "    return struct(providers=[default])",
-        "foo_rule = rule(",
-        "    implementation = _impl,",
-        "    attrs = {",
-        "       'runs': attr.label_list(allow_files=True),",
-        "    },",
-        "    provides = [FooInfo, DefaultInfo]",
-        ")");
-    scratch.file(
-        "test/BUILD",
-        "load(':foo.bzl', 'foo_rule')",
-        "foo_rule(name = 'my_rule', runs = ['run.file', 'run2.file'])");
-
-    AssertionError expected =
-        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:my_rule"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains("rule advertised the 'FooInfo' provider, "
-            + "but this provider was not among those returned");
-  }
-
-  @Test
-  public void testLacksAdvertisedNativeProvider() throws Exception {
-    scratch.file(
-        "test/foo.bzl",
-        "FooInfo = provider()",
-        "def _impl(ctx):",
-        "    MyFooInfo = FooInfo()",
-        "    return struct(providers=[MyFooInfo])",
-        "foo_rule = rule(",
-        "    implementation = _impl,",
-        "    provides = [FooInfo, JavaInfo]",
-        ")");
-    scratch.file(
-        "test/BUILD",
-        "load(':foo.bzl', 'foo_rule')",
-        "foo_rule(name = 'my_rule')");
-
-    AssertionError expected =
-        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:my_rule"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains("rule advertised the 'JavaInfo' provider, "
-            + "but this provider was not among those returned");
-  }
-
-  @Test
-  public void testBadlySpecifiedProvides() throws Exception {
-    scratch.file(
-        "test/foo.bzl",
-        "def _impl(ctx):",
-        "    return struct()",
-        "foo_rule = rule(",
-        "    implementation = _impl,",
-        "    provides = [1]",
-        ")");
-    scratch.file("test/BUILD", "load(':foo.bzl', 'foo_rule')", "foo_rule(name = 'my_rule')");
-
-
-    AssertionError expected =
-        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:my_rule"));
-    assertThat(expected)
-        .hasMessageThat()
-        .contains(
-            "element in 'provides' is of unexpected type. "
-                + "Should be list of providers, but got item of type int");
-  }
-
-  @Test
   public void testSingleDeclaredProvider() throws Exception {
     scratch.file(
         "test/foo.bzl",
@@ -2295,26 +2178,24 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testLazyArgsWithParamFile() throws Exception {
-    scratch.file(
-        "test/main_rule.bzl",
-        "def _impl(ctx):",
-        "  args = ctx.actions.args()",
-        "  args.add('--foo')",
-        "  args.use_param_file('--file=%s', use_always=True)",
-        "  output=ctx.actions.declare_file('out')",
-        "  ctx.actions.run_shell(",
-        "    inputs = [output],",
-        "    outputs = [output],",
-        "    arguments = [args],",
-        "    command = 'touch out',",
-        "  )",
-        "main_rule = rule(implementation = _impl)");
-    scratch.file(
-        "test/BUILD", "load('//test:main_rule.bzl', 'main_rule')", "main_rule(name='main')");
-    ConfiguredTarget ct = getConfiguredTarget("//test:main");
-    Artifact output = getBinArtifact("out", ct);
-    SpawnAction action = (SpawnAction) getGeneratingAction(output);
-    assertThat(paramFileArgsForAction(action)).containsExactly("--foo");
+    SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
+    evalRuleContextCode(
+        ruleContext,
+        "foo_args = ruleContext.actions.args()",
+        "foo_args.add('--foo')",
+        "foo_args.use_param_file('--file=%s', use_always=True)",
+        "output=ruleContext.actions.declare_file('out')",
+        "ruleContext.actions.run(",
+        "  inputs = depset(ruleContext.files.srcs),",
+        "  outputs = [output],",
+        "  arguments = [foo_args],",
+        "  executable = ruleContext.files.tools[0],",
+        ")");
+    List<ActionAnalysisMetadata> actions =
+        ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions();
+    assertThat(actions.stream().anyMatch(a -> a instanceof ParameterFileWriteAction)).isTrue();
+    SpawnAction action =
+        (SpawnAction) actions.stream().filter(a -> a instanceof SpawnAction).findAny().get();
     // Assert that there is a file argument. Don't bother matching the exact string
     assertThat(action.getArguments().stream().anyMatch(arg -> arg.matches("--file=.*"))).isTrue();
   }
@@ -2337,7 +2218,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         actions.stream().filter(a -> a instanceof ParameterFileWriteAction).findFirst();
     assertThat(action.isPresent()).isTrue();
     ParameterFileWriteAction paramAction = (ParameterFileWriteAction) action.get();
-    assertThat(paramAction.getArguments()).containsExactly("--foo");
+    assertThat(paramAction.getContents()).containsExactly("--foo");
   }
 
   @Test
