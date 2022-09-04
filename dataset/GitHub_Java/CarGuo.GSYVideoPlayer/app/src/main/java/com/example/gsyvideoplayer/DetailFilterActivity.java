@@ -1,6 +1,5 @@
 package com.example.gsyvideoplayer;
 
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.opengl.Matrix;
 import android.os.Bundle;
@@ -9,12 +8,10 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
-import android.widget.Toast;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.request.RequestOptions;
 import com.example.gsyvideoplayer.effect.PixelationEffect;
-import com.example.gsyvideoplayer.utils.CommonUtil;
 import com.example.gsyvideoplayer.utils.JumpUtils;
 import com.example.gsyvideoplayer.video.SampleControlVideo;
 import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
@@ -45,16 +42,10 @@ import com.shuyu.gsyvideoplayer.effect.SharpnessEffect;
 import com.shuyu.gsyvideoplayer.effect.TemperatureEffect;
 import com.shuyu.gsyvideoplayer.effect.TintEffect;
 import com.shuyu.gsyvideoplayer.effect.VignetteEffect;
-import com.shuyu.gsyvideoplayer.listener.GSYVideoShotListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
-import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -62,8 +53,8 @@ import butterknife.BindView;
 import butterknife.ButterKnife;
 
 /**
- * 滤镜
  * Created by guoshuyu on 2017/6/18.
+ * 滤镜
  */
 
 public class DetailFilterActivity extends GSYBaseActivityDetail {
@@ -139,8 +130,7 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
         jump.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                shotImage(v);
-                //JumpUtils.gotoControl(DetailFilterActivity.this);
+                JumpUtils.gotoControl(DetailFilterActivity.this);
                 //startActivity(new Intent(DetailControlActivity.this, MainActivity.class));
             }
         });
@@ -194,37 +184,39 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
         cancelTask();
     }
 
-    /**
-     * 视频截图
-     */
-    private void shotImage(final View v) {
-        if (detailPlayer.getCurrentPlayer().getRenderProxy() != null) {
-            //每次设置一个监听
-            detailPlayer.getCurrentPlayer().getRenderProxy().setCurrentFrameBitmapListener(new GSYVideoShotListener() {
-                @Override
-                public void getBitmap(Bitmap bitmap) {
-                    if (bitmap != null) {
-                        try {
-                            CommonUtil.saveBitmap(bitmap);
-                        } catch (FileNotFoundException e) {
-                            showToast("save fail ");
-                            e.printStackTrace();
-                            return;
-                        }
-                        showToast("save success ");
-                    } else {
-                        showToast("get bitmap fail ");
-                    }
-                }
-            });
-            //获取截图
-            detailPlayer.getCurrentPlayer().getRenderProxy().taskShotPic();
+    private void cancelTask() {
+        if (mTimerTask != null) {
+            mTimerTask.cancel();
+            mTimerTask = null;
         }
     }
 
-    /**
-     * 加载第三秒的帧数作为封面
-     */
+    private class TaskLocal extends TimerTask {
+        @Override
+        public void run() {
+            float[] transform = new float[16];
+            switch (percentageType) {
+                case 1:
+                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 1.0f, 0, 0.0f);
+                    break;
+                case 2:
+                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 0.0f, 1.0f, 0.0f);
+                    break;
+                case 3:
+                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 0.0f, 0, 1.0f);
+                    break;
+                case 4:
+                    Matrix.setRotateM(transform, 0, 360, 0.0f, 0, 1.0f);
+                    break;
+            }
+            detailPlayer.setMatrixGL(transform);
+            percentage++;
+            if (percentage > 100) {
+                percentage = 1;
+            }
+        }
+    }
+
     private void loadCover(ImageView imageView, String url) {
 
         imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
@@ -248,7 +240,8 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
     }
 
     /**
-     * 切换滤镜
+     * 显示比例
+     * 注意，GSYVideoType.setShowType是全局静态生效，除非重启APP。
      */
     private void resolveTypeUI() {
         GSYVideoGLView.ShaderInterface effect = new NoEffect();
@@ -343,54 +336,4 @@ public class DetailFilterActivity extends GSYBaseActivityDetail {
     }
 
 
-    private void cancelTask() {
-        if (mTimerTask != null) {
-            mTimerTask.cancel();
-            mTimerTask = null;
-        }
-    }
-
-    /**
-     * 设置GLRender的VertexShader的transformMatrix
-     * 注意，这是android.opengl.Matrix
-     */
-    private class TaskLocal extends TimerTask {
-        @Override
-        public void run() {
-            float[] transform = new float[16];
-            switch (percentageType) {
-                case 1:
-                    //给予x变化
-                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 1.0f, 0, 0.0f);
-                    break;
-                case 2:
-                    //给予y变化
-                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 0.0f, 1.0f, 0.0f);
-                    break;
-                case 3:
-                    //给予z变化
-                    Matrix.setRotateM(transform, 0, 360 * percentage / 100, 0.0f, 0, 1.0f);
-                    break;
-                case 4:
-                    Matrix.setRotateM(transform, 0, 360, 0.0f, 0, 1.0f);
-                    break;
-            }
-            //设置渲染transform
-            detailPlayer.setMatrixGL(transform);
-            percentage++;
-            if (percentage > 100) {
-                percentage = 1;
-            }
-        }
-    }
-
-
-    private void showToast(final String tip) {
-        detailPlayer.post(new Runnable() {
-            @Override
-            public void run() {
-                Toast.makeText(DetailFilterActivity.this, tip, Toast.LENGTH_LONG).show();
-            }
-        });
-    }
 }
