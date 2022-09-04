@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import java.util.Collection;
 import java.util.stream.Collectors;
@@ -41,7 +42,7 @@ public class JavaStrictCompilationArgsProvider implements TransitiveInfoProvider
   public static JavaStrictCompilationArgsProvider merge(
       Collection<JavaStrictCompilationArgsProvider> providers) {
     Collection<JavaCompilationArgsProvider> javaCompilationArgsProviders =
-        providers.stream()
+        Streams.stream(providers)
             .map(JavaStrictCompilationArgsProvider::getJavaCompilationArgsProvider)
             .collect(Collectors.toList());
     return new JavaStrictCompilationArgsProvider(
