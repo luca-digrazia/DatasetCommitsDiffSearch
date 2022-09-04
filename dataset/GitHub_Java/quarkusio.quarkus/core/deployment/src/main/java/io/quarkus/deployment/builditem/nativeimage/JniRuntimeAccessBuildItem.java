@@ -1,7 +1,6 @@
 package io.quarkus.deployment.builditem.nativeimage;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import io.quarkus.builder.item.MultiBuildItem;
@@ -21,10 +20,6 @@ public final class JniRuntimeAccessBuildItem extends MultiBuildItem {
         this(constructors, methods, fields, false, classes);
     }
 
-    public JniRuntimeAccessBuildItem(boolean constructors, boolean methods, boolean fields, String... className) {
-        this(constructors, methods, fields, false, className);
-    }
-
     public JniRuntimeAccessBuildItem(boolean constructors, boolean methods, boolean fields, boolean finalFieldsWriteable,
             Class<?>... classes) {
         List<String> names = new ArrayList<>();
@@ -35,20 +30,6 @@ public final class JniRuntimeAccessBuildItem extends MultiBuildItem {
             names.add(i.getName());
         }
         this.className = names;
-        this.constructors = constructors;
-        this.methods = methods;
-        this.fields = fields;
-        this.finalFieldsWriteable = finalFieldsWriteable;
-    }
-
-    public JniRuntimeAccessBuildItem(boolean constructors, boolean methods, boolean fields, boolean finalFieldsWriteable,
-            String... className) {
-        for (String i : className) {
-            if (i == null) {
-                throw new NullPointerException();
-            }
-        }
-        this.className = Arrays.asList(className);
         this.constructors = constructors;
         this.methods = methods;
         this.fields = fields;
