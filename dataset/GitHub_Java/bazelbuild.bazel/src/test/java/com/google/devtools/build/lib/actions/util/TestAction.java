@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -91,7 +90,7 @@ public class TestAction extends AbstractAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
     for (Artifact artifact : getInputs()) {
       // Do not check *.optional artifacts - artifacts with such extension are
@@ -121,8 +120,6 @@ public class TestAction extends AbstractAction {
     } catch (IOException e) {
       throw new AssertionError(e);
     }
-
-    return ActionResult.EMPTY;
   }
 
   @Override

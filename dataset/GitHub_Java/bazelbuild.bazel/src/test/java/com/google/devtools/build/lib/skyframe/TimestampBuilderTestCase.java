@@ -82,7 +82,6 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
-import com.google.devtools.build.skyframe.SequencedRecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -117,7 +116,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   protected Clock clock = BlazeClock.instance();
   protected TimestampGranularityMonitor tsgm;
-  protected RecordingDifferencer differencer = new SequencedRecordingDifferencer();
+  protected RecordingDifferencer differencer = new RecordingDifferencer();
   private Set<ActionAnalysisMetadata> actions;
 
   protected AtomicReference<EventBus> eventBusRef = new AtomicReference<>();
@@ -171,7 +170,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
         pkgLocator,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
         directories);
-    differencer = new SequencedRecordingDifferencer();
+    differencer = new RecordingDifferencer();
 
     ActionExecutionStatusReporter statusReporter =
         ActionExecutionStatusReporter.create(new StoredEventHandler());

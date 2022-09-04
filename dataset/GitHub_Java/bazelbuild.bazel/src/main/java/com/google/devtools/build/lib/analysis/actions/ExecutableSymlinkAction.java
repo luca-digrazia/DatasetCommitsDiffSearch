@@ -35,7 +35,7 @@ public final class ExecutableSymlinkAction extends SymlinkAction {
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
-    Path inputPath = getPrimaryInput().getPath();
+    Path inputPath = actionExecutionContext.getExecRoot().getRelative(getInputPath());
     try {
       // Validate that input path is a file with the executable bit is set.
       if (!inputPath.isFile()) {

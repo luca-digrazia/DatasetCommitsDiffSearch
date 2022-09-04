@@ -39,7 +39,7 @@ public final class FailAction extends AbstractAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+  public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
     throw new ActionExecutionException(errorMessage, this, false);
   }

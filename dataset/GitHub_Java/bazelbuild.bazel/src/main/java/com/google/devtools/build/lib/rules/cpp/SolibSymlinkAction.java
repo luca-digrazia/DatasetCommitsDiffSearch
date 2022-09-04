@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
@@ -55,8 +54,8 @@ public final class SolibSymlinkAction extends AbstractAction {
   }
 
   @Override
-  public ActionResult execute(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException {
+  public void execute(
+      ActionExecutionContext actionExecutionContext) throws ActionExecutionException {
     Path mangledPath = symlink.getPath();
     try {
       mangledPath.createSymbolicLink(target);
@@ -64,7 +63,6 @@ public final class SolibSymlinkAction extends AbstractAction {
       throw new ActionExecutionException("failed to create _solib symbolic link '"
           + symlink.prettyPrint() + "' to target '" + target + "'", e, this, false);
     }
-    return ActionResult.EMPTY;
   }
 
 
