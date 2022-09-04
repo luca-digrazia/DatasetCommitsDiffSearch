@@ -36,6 +36,7 @@ import org.graylog2.bindings.providers.*;
 import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
+import org.graylog2.caches.DiskJournalCache;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.filters.FilterService;
 import org.graylog2.filters.FilterServiceImpl;
@@ -49,6 +50,9 @@ import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.indexer.searches.Searches;
+import org.graylog2.inputs.BasicCache;
+import org.graylog2.inputs.InputCache;
+import org.graylog2.inputs.OutputCache;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.RulesEngine;
@@ -132,12 +136,11 @@ public class ServerBindings extends AbstractModule {
 
         bind(MongoConnection.class).toInstance(mongoConnection);
 
-        Multibinder<ServerStatus.Capability> capabilityBinder =
-                Multibinder.newSetBinder(binder(), ServerStatus.Capability.class);
-        capabilityBinder.addBinding().toInstance(ServerStatus.Capability.SERVER);
+        ServerStatus serverStatus = new ServerStatus(configuration);
+        serverStatus.addCapability(ServerStatus.Capability.SERVER);
         if (configuration.isMaster())
-            capabilityBinder.addBinding().toInstance(ServerStatus.Capability.MASTER);
-        bind(ServerStatus.class).in(Scopes.SINGLETON);
+            serverStatus.addCapability(ServerStatus.Capability.MASTER);
+        bind(ServerStatus.class).toInstance(serverStatus);
 
         bind(OutputBufferWatermark.class).toInstance(new OutputBufferWatermark());
         bind(Indexer.class).toProvider(IndexerProvider.class);
@@ -150,6 +153,14 @@ public class ServerBindings extends AbstractModule {
         bind(SystemJobFactory.class).toProvider(SystemJobFactoryProvider.class);
         bind(AsyncHttpClient.class).toProvider(AsyncHttpClientProvider.class);
         bind(GracefulShutdown.class).in(Scopes.SINGLETON);
+
+        if (configuration.isMessageCacheOffHeap()) {
+            bind(InputCache.class).to(DiskJournalCache.Input.class).in(Scopes.SINGLETON);
+            bind(OutputCache.class).to(DiskJournalCache.Output.class).in(Scopes.SINGLETON);
+        } else {
+            bind(InputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
+            bind(OutputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
+        }
     }
 
     private void bindInterfaces() {
