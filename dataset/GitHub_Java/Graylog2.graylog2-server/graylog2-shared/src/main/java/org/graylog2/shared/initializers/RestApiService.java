@@ -33,7 +33,6 @@ import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.rest.PluginRestResource;
 import org.graylog2.shared.rest.CORSFilter;
-import org.graylog2.shared.rest.NodeIdResponseFilter;
 import org.graylog2.shared.rest.PrintModelProcessor;
 import org.graylog2.shared.rest.exceptionmappers.AnyExceptionClassMapper;
 import org.graylog2.shared.rest.exceptionmappers.JacksonPropertyExceptionMapper;
@@ -67,6 +66,8 @@ import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.ext.ContextResolver;
 import javax.ws.rs.ext.ExceptionMapper;
+import javax.ws.rs.ext.MessageBodyReader;
+import javax.ws.rs.ext.MessageBodyWriter;
 import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -282,8 +283,7 @@ public class RestApiService extends AbstractIdleService {
                     }
                 })
                 .registerFinder(new PackageNamesScanner(restControllerPackages, true))
-                .registerResources(additionalResources)
-                .register(NodeIdResponseFilter.class);
+                .registerResources(additionalResources);
 
         for (Class<? extends ExceptionMapper> exceptionMapper : exceptionMappers) {
             rc.registerClasses(exceptionMapper);
