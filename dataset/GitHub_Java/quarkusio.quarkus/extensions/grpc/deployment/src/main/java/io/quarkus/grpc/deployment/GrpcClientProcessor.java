@@ -30,7 +30,6 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.grpc.runtime.GrpcClientInterceptorContainer;
 import io.quarkus.grpc.runtime.annotations.GrpcService;
 import io.quarkus.grpc.runtime.supports.GrpcClientConfigProvider;
 
@@ -42,7 +41,6 @@ public class GrpcClientProcessor {
     void registerBeans(BuildProducer<AdditionalBeanBuildItem> beans) {
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcService.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcClientConfigProvider.class));
-        beans.produce(AdditionalBeanBuildItem.unremovableOf(GrpcClientInterceptorContainer.class));
     }
 
     @BuildStep
