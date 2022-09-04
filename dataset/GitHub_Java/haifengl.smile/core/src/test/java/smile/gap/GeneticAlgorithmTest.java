@@ -87,7 +87,7 @@ public class GeneticAlgorithmTest {
             seeds[i] = new BitString(15, new Knapnack(), BitString.Crossover.UNIFORM, 1.0, 0.2);
         }
         
-        GeneticAlgorithm<BitString> instance = new GeneticAlgorithm<BitString>(seeds, GeneticAlgorithm.Selection.TOURNAMENT);
+        GeneticAlgorithm<BitString> instance = new GeneticAlgorithm<>(seeds, GeneticAlgorithm.Selection.TOURNAMENT);
         instance.setElitism(2);
         instance.setTournament(3, 0.95);
         
@@ -95,7 +95,7 @@ public class GeneticAlgorithmTest {
         assertEquals(18, result.fitness(), 1E-7);
 
         int[] best = {1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        for (int i : result.bits()) {
+        for (int i = 0; i < best.length; i++) {
             assertEquals(best[i], result.bits()[i]);
         }
         
