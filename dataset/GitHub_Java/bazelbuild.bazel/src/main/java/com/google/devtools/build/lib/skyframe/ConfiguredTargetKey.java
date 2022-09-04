@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.ActionLookupKey;
@@ -135,13 +134,10 @@ public class ConfiguredTargetKey implements ActionLookupKey {
 
   @Override
   public final String toString() {
-    // TODO(b/162809183): consider reverting to less verbose toString when bug is resolved.
-    MoreObjects.ToStringHelper helper =
-        MoreObjects.toStringHelper(this).add("label", label).add("config", configurationKey);
     if (getToolchainContextKey() != null) {
-      helper.add("toolchainContextKey", getToolchainContextKey());
+      return String.format("%s %s %s", label, configurationKey, getToolchainContextKey());
     }
-    return helper.toString();
+    return String.format("%s %s", label, configurationKey);
   }
 
   @AutoCodec.VisibleForSerialization
