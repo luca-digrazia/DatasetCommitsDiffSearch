@@ -17,6 +17,7 @@ package com.google.testing.junit.runner;
 import com.google.testing.junit.runner.internal.SignalHandlers;
 import com.google.testing.junit.runner.internal.SignalHandlersFactory;
 import com.google.testing.junit.runner.junit4.CancellableRequestFactoryFactory;
+import com.google.testing.junit.runner.junit4.ClockFactory;
 import com.google.testing.junit.runner.junit4.CurrentRunningTestFactory;
 import com.google.testing.junit.runner.junit4.JUnit4ConfigFactory;
 import com.google.testing.junit.runner.junit4.JUnit4InstanceModules;
@@ -37,7 +38,6 @@ import com.google.testing.junit.runner.junit4.SignalHandlerInstallerFactory;
 import com.google.testing.junit.runner.junit4.StackTraceListenerFactory;
 import com.google.testing.junit.runner.junit4.TestSuiteModelSupplierFactory;
 import com.google.testing.junit.runner.junit4.TextListenerFactory;
-import com.google.testing.junit.runner.junit4.TickerFactory;
 import com.google.testing.junit.runner.junit4.TopLevelSuiteFactory;
 import com.google.testing.junit.runner.junit4.TopLevelSuiteNameFactory;
 import com.google.testing.junit.runner.junit4.XmlListenerFactory;
@@ -50,17 +50,17 @@ import com.google.testing.junit.runner.sharding.ShardingFilters;
 import com.google.testing.junit.runner.sharding.ShardingFiltersFactory;
 import com.google.testing.junit.runner.util.MemoizingSupplier;
 import com.google.testing.junit.runner.util.SetFactory;
-import com.google.testing.junit.runner.util.Supplier;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.junit.internal.TextListener;
 import org.junit.runner.Request;
 import org.junit.runner.notification.RunListener;
 
 /**
- * Utility class to create a JUnit4Runner instance from a {@link Builder}. All required 
- * dependencies are being injected automatically.
+ * Utility class to create a JUnit4Runner instance from a {@link Builder}. All required dependencies
+ * are being injected automatically.
  */
 public final class JUnit4Bazel {
   private Supplier<Class<?>> topLevelSuiteSupplier;
@@ -153,7 +153,7 @@ public final class JUnit4Bazel {
 
     this.builderSupplier =
         TestSuiteModelBuilderFactory.create(
-            TickerFactory.create(),
+            ClockFactory.create(),
             shardingFiltersSupplier,
             ShardingEnvironmentFactory.create(),
             resultWriterSupplier);
@@ -163,8 +163,8 @@ public final class JUnit4Bazel {
                 requestMemoizingSupplier, topLevelSuiteNameSupplier, builderSupplier));
 
     this.provideTestSuiteModelSupplierMemoizingSupplier =
-        new MemoizingSupplier<>(TestSuiteModelSupplierFactory.create(
-                jUnit4TestModelBuilderMemoizingSupplier));
+        new MemoizingSupplier<Supplier<TestSuiteModel>>(
+            TestSuiteModelSupplierFactory.create(jUnit4TestModelBuilderMemoizingSupplier));
 
     this.stdoutStreamMemoizingSupplier = new MemoizingSupplier<>(StdoutStreamFactory.create());
 
@@ -172,7 +172,7 @@ public final class JUnit4Bazel {
         new MemoizingSupplier<>(JUnit4OptionsFactory.create(builder.config));
 
     this.configMemoizingSupplier =
-        new MemoizingSupplier<>(JUnit4ConfigFactory.create(optionsMemoizingSupplier));
+        new MemoizingSupplier<Object>(JUnit4ConfigFactory.create(optionsMemoizingSupplier));
 
     this.signalHandlersSupplier =
         SignalHandlersFactory.create(SignalHandlerInstallerFactory.create());
@@ -187,10 +187,11 @@ public final class JUnit4Bazel {
         StackTraceListenerFactory.create(jUnit4TestStackTraceListenerMemoizingSupplier);
 
     this.provideXmlStreamMemoizingSupplier =
-        new MemoizingSupplier<>(ProvideXmlStreamFactory.create(configMemoizingSupplier));
+        new MemoizingSupplier<OutputStream>(
+            ProvideXmlStreamFactory.create(configMemoizingSupplier));
 
     this.jUnit4TestXmlListenerMemoizingSupplier =
-        new MemoizingSupplier<>(JUnit4TestXmlListenerFactory.create(
+        new MemoizingSupplier<Object>(JUnit4TestXmlListenerFactory.create(
             provideTestSuiteModelSupplierMemoizingSupplier,
             cancellableRequestFactorySupplier,
             signalHandlersSupplier,
@@ -203,7 +204,7 @@ public final class JUnit4Bazel {
         new MemoizingSupplier<>(CurrentRunningTestFactory.create(builder.jUnit4RunnerModule));
 
     this.jUnit4TestNameListenerMemoizingSupplier =
-        new MemoizingSupplier<>(
+        new MemoizingSupplier<Object>(
             JUnit4TestNameListenerFactory.create(provideCurrentRunningTestMemoizingSupplier));
 
     this.nameListenerSupplier = NameListenerFactory.create(jUnit4TestNameListenerMemoizingSupplier);
@@ -238,7 +239,7 @@ public final class JUnit4Bazel {
   }
 
   /**
-   * A builder for instantiating {@ JUnit4Bazel}.
+   * A builder for instantiating {@link JUnit4Bazel}.
    */
   public static final class Builder {
     private JUnit4InstanceModules.SuiteClass suiteClass;

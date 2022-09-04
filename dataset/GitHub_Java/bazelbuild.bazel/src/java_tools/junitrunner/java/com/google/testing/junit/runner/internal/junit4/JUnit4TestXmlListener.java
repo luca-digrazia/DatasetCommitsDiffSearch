@@ -18,9 +18,9 @@ import com.google.testing.junit.runner.internal.SignalHandlers;
 import com.google.testing.junit.runner.internal.Stderr;
 import com.google.testing.junit.runner.internal.Xml;
 import com.google.testing.junit.runner.model.TestSuiteModel;
-import com.google.testing.junit.runner.util.Supplier;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.util.function.Supplier;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import org.junit.Ignore;
@@ -57,6 +57,13 @@ public class JUnit4TestXmlListener extends RunListener  {
   @Override
   public void testRunStarted(Description description) throws Exception {
     model = modelSupplier.get();
+
+    /*
+     * At this point, command line filtering has been applied. Mark all remaining tests as
+     * "pending"; any other tests will be considered "filtered".
+     */
+    model.testRunStarted(description);
+
     signalHandlers.installHandler(new Signal("TERM"), new WriteXmlSignalHandler());
   }
 

@@ -15,64 +15,45 @@
 package com.google.testing.junit.runner.junit4;
 
 import static com.google.testing.junit.runner.sharding.ShardingFilters.DEFAULT_SHARDING_STRATEGY;
-import static dagger.Provides.Type.SET;
 
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
-import com.google.testing.junit.junit4.runner.MemoizingRequest;
 import com.google.testing.junit.runner.internal.Stdout;
-import com.google.testing.junit.runner.junit4.JUnit4InstanceModules.SuiteClass;
+import com.google.testing.junit.runner.internal.junit4.MemoizingRequest;
 import com.google.testing.junit.runner.model.TestSuiteModel;
 import com.google.testing.junit.runner.sharding.api.ShardingFilterFactory;
-
-import dagger.Module;
-import dagger.Multibindings;
-import dagger.Provides;
-
-import org.junit.internal.TextListener;
-import org.junit.runner.Request;
-import org.junit.runner.notification.RunListener;
-
+import com.google.testing.junit.runner.util.MemoizingSupplier;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
-
+import java.util.function.Supplier;
 import javax.inject.Singleton;
+import org.junit.internal.TextListener;
+import org.junit.runner.Request;
+import org.junit.runner.notification.RunListener;
 
 /**
- * Dagger module for creating a {@link JUnit4Runner}. This contains the common
- * bindings used when either the runner runs actual tests or when we do
- * integration tests of the runner itself.
- *
+ * Utility class for creating a {@link JUnit4Runner}. This contains the common bindings used when
+ * either the runner runs actual tests or when we do integration tests of the runner itself.
+ * This is a legacy Dagger module.
  */
-@Module(includes = SuiteClass.class)
-public final class JUnit4RunnerBaseModule {
+public abstract class JUnit4RunnerBaseModule {
 
-  @Multibindings
-  interface MultiBindings {
-    Set<JUnit4Runner.Initializer> initializers();
-  }
-
-  @Provides
+  abstract Set<JUnit4Runner.Initializer> initializers();
+  
   static ShardingFilterFactory shardingFilterFactory() {
     return DEFAULT_SHARDING_STRATEGY;
   }
 
-  @Provides(type = SET)
   static RunListener textListener(TextListener impl) {
     return impl;
   }
 
-
-  @Provides
   @Singleton
   static Supplier<TestSuiteModel> provideTestSuiteModelSupplier(JUnit4TestModelBuilder builder) {
-    return Suppliers.memoize(builder);
+    return new MemoizingSupplier<>(builder);
   }
 
-  @Provides
   @Singleton
   static TextListener provideTextListener(@Stdout PrintStream testRunnerOut) {
     return new TextListener(asUtf8PrintStream(testRunnerOut));
@@ -86,15 +67,20 @@ public final class JUnit4RunnerBaseModule {
     }
   }
 
-  @Provides
   @Singleton
   static Request provideRequest(@TopLevelSuite Class<?> suiteClass) {
     /*
      * JUnit4Runner requests the Runner twice, once to build the model (before
      * filtering) and once to run the tests (after filtering). Constructing the
      * Runner can be expensive, so Memoize the Runner.
+     *
+     * <p>Note that as of JUnit 4.11, Request.aClass() will memoize the runner,
+     * but users of Bazel might use an earlier version of JUnit, so to be safe
+     * we keep the memoization here.
      */
     Request request = Request.aClass(suiteClass);
     return new MemoizingRequest(request);
   }
+
+  private JUnit4RunnerBaseModule() {} // no instances
 }
