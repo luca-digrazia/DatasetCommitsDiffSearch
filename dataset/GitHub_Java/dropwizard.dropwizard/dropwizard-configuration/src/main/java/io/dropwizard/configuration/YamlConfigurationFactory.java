@@ -1,5 +1,6 @@
 package io.dropwizard.configuration;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,11 +15,13 @@ import com.fasterxml.jackson.dataformat.yaml.snakeyaml.error.MarkedYAMLException
 import com.fasterxml.jackson.dataformat.yaml.snakeyaml.error.YAMLException;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
 
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,8 +40,7 @@ public class YamlConfigurationFactory<T> implements ConfigurationFactory<T> {
 
     private static final Pattern ESCAPED_COMMA_PATTERN = Pattern.compile("\\\\,");
     private static final Splitter ESCAPED_COMMA_SPLITTER = Splitter.on(Pattern.compile("(?<!\\\\),")).trimResults();
-    private static final Pattern ESCAPED_DOT_PATTERN = Pattern.compile("\\\\\\.");
-    private static final Splitter ESCAPED_DOT_SPLITTER = Splitter.on(Pattern.compile("(?<!\\\\)\\.")).trimResults();
+    private static final Splitter DOT_SPLITTER = Splitter.on('.').trimResults();
 
     private final Class<T> klass;
     private final String propertyPrefix;
@@ -66,7 +68,8 @@ public class YamlConfigurationFactory<T> implements ConfigurationFactory<T> {
             mapper = null;
             yamlFactory = null;
         } else {
-            mapper = objectMapper;
+            mapper = objectMapper.copy()
+                    .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
             yamlFactory = new YAMLFactory();
         }
         this.validator = validator;
@@ -103,7 +106,7 @@ public class YamlConfigurationFactory<T> implements ConfigurationFactory<T> {
         try {
             final JsonNode node = mapper.valueToTree(klass.newInstance());
             return build(node, "default configuration");
-        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | SecurityException e) {
+        } catch (InstantiationException | IllegalAccessException e) {
             throw new IllegalArgumentException("Unable create an instance " +
                     "of the configuration class: '" + klass.getCanonicalName() + "'", e);
         }
@@ -154,18 +157,16 @@ public class YamlConfigurationFactory<T> implements ConfigurationFactory<T> {
 
     protected void addOverride(JsonNode root, String name, String value) {
         JsonNode node = root;
-        final List<String> parts = ESCAPED_DOT_SPLITTER.splitToList(name).stream()
-                .map(key -> ESCAPED_DOT_PATTERN.matcher(key).replaceAll("."))
-                .collect(Collectors.toList());
-        for (int i = 0; i < parts.size(); i++) {
-            final String key = parts.get(i);
+        final String[] parts = Iterables.toArray(DOT_SPLITTER.split(name), String.class);
+        for (int i = 0; i < parts.length; i++) {
+            final String key = parts[i];
 
             if (!(node instanceof ObjectNode)) {
                 throw new IllegalArgumentException("Unable to override " + name + "; it's not a valid path.");
             }
             final ObjectNode obj = (ObjectNode) node;
 
-            final String remainingPath = Joiner.on('.').join(parts.subList(i, parts.size()));
+            final String remainingPath = Joiner.on('.').join(Arrays.copyOfRange(parts, i, parts.length));
             if (obj.has(remainingPath) && !remainingPath.equals(key)) {
                 if (obj.get(remainingPath).isValueNode()) {
                     obj.put(remainingPath, value);
@@ -174,7 +175,7 @@ public class YamlConfigurationFactory<T> implements ConfigurationFactory<T> {
             }
 
             JsonNode child;
-            final boolean moreParts = i < parts.size() - 1;
+            final boolean moreParts = i < parts.length - 1;
 
             if (key.matches(".+\\[\\d+\\]$")) {
                 final int s = key.indexOf('[');

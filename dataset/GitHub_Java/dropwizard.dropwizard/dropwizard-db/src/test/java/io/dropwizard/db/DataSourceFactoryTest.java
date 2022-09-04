@@ -6,13 +6,11 @@ import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.util.Duration;
 import io.dropwizard.validation.BaseValidator;
-import org.apache.tomcat.jdbc.pool.interceptor.ConnectionState;
-import org.apache.tomcat.jdbc.pool.interceptor.StatementFinalizer;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.annotation.Nullable;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -20,14 +18,11 @@ import java.sql.SQLException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class DataSourceFactoryTest {
     private final MetricRegistry metricRegistry = new MetricRegistry();
 
     private DataSourceFactory factory;
-
-    @Nullable
     private ManagedDataSource dataSource;
 
     @Before
@@ -49,14 +44,6 @@ public class DataSourceFactoryTest {
         dataSource = factory.build(metricRegistry, "test");
         dataSource.start();
         return dataSource;
-    }
-
-    @Test
-    public void testInitialSizeIsZero() throws Exception {
-        factory.setUrl("nonsense invalid url");
-        factory.setInitialSize(0);
-        ManagedDataSource dataSource = factory.build(metricRegistry, "test");
-        dataSource.start();
     }
 
     @Test
@@ -92,13 +79,12 @@ public class DataSourceFactoryTest {
         }
     }
 
-    @Test
-    public void invalidJDBCDriverClassThrowsSQLException() {
+    @Test(expected = SQLException.class)
+    public void invalidJDBCDriverClassThrowsSQLException() throws SQLException {
         final DataSourceFactory factory = new DataSourceFactory();
         factory.setDriverClass("org.example.no.driver.here");
 
-        assertThatExceptionOfType(SQLException.class).isThrownBy(() ->
-            factory.build(metricRegistry, "test").getConnection());
+        factory.build(metricRegistry, "test").getConnection();
     }
 
     @Test
@@ -107,22 +93,12 @@ public class DataSourceFactoryTest {
         try (Connection connection = dataSource().getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement("select 1")) {
                 try (ResultSet rs = statement.executeQuery()) {
-                    assertThat(rs.next()).isTrue();
+                    assertThat(rs.next());
                     assertThat(rs.getInt(1)).isEqualTo(1);
                 }
             }
         }
         assertThat(CustomConnectionValidator.loaded).isTrue();
-    }
-
-    @Test
-    public void testJdbcInterceptors() throws Exception {
-        factory.setJdbcInterceptors(Optional.of("StatementFinalizer;ConnectionState"));
-        final ManagedPooledDataSource source = (ManagedPooledDataSource) dataSource();
-
-        assertThat(source.getPoolProperties().getJdbcInterceptorsAsArray())
-            .extracting("interceptorClass")
-            .contains(StatementFinalizer.class, ConnectionState.class);
     }
 
     @Test

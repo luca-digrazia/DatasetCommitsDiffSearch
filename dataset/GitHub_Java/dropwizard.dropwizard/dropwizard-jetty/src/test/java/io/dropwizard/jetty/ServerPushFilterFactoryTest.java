@@ -2,6 +2,7 @@ package io.dropwizard.jetty;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.Resources;
+
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.util.Duration;
@@ -15,11 +16,9 @@ import java.io.File;
 import java.util.EnumSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.*;
 
 public class ServerPushFilterFactoryTest {
 

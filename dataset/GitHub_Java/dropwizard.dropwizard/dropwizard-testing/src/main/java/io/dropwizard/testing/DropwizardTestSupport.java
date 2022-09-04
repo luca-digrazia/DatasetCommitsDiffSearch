@@ -6,7 +6,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
-import io.dropwizard.cli.Command;
 import io.dropwizard.cli.ServerCommand;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.lifecycle.Managed;
@@ -22,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Throwables.propagate;
@@ -42,7 +40,6 @@ public class DropwizardTestSupport<C extends Configuration> {
     protected final String configPath;
     protected final Set<ConfigOverride> configOverrides;
     protected final Optional<String> customPropertyPrefix;
-    protected final Function<Application<C>, Command> commandInstantiator;
 
     /**
      * Flag that indicates whether instance was constructed with an explicit
@@ -65,19 +62,11 @@ public class DropwizardTestSupport<C extends Configuration> {
 
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, String configPath,
                                  Optional<String> customPropertyPrefix, ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, customPropertyPrefix, ServerCommand::new, configOverrides);
-    }
-
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, String configPath,
-                                 Optional<String> customPropertyPrefix,
-                                 Function<Application<C>, Command> commandInstantiator,
-                                 ConfigOverride... configOverrides) {
         this.applicationClass = applicationClass;
         this.configPath = configPath;
         this.configOverrides = ImmutableSet.copyOf(firstNonNull(configOverrides, new ConfigOverride[0]));
         this.customPropertyPrefix = customPropertyPrefix;
         explicitConfig = false;
-        this.commandInstantiator = commandInstantiator;
     }
 
     /**
@@ -92,23 +81,7 @@ public class DropwizardTestSupport<C extends Configuration> {
      *   be manipulated in any way, no overriding
      */
     public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 C configuration) {
-        this(applicationClass, configuration, ServerCommand::new);
-    }
-
-
-    /**
-     * Alternate constructor that allows specifying the command the Dropwizard application is started with.
-     * @since 1.1.0
-     * @param applicationClass Type of Application to create
-     * @param configuration Pre-constructed configuration object caller provides; will not
-     *   be manipulated in any way, no overriding
-     * @param commandInstantiator The {@link Function} used to instantiate the {@link Command} used to
-     *   start the Application
-     */
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass,
-                                 C configuration, Function<Application<C>,
-                                 Command> commandInstantiator) {
+            C configuration) {
         if (configuration == null) {
             throw new IllegalArgumentException("Can not pass null configuration for explicitly configured instance");
         }
@@ -118,7 +91,6 @@ public class DropwizardTestSupport<C extends Configuration> {
         customPropertyPrefix = Optional.empty();
         this.configuration = configuration;
         explicitConfig = true;
-        this.commandInstantiator = commandInstantiator;
     }
 
     public DropwizardTestSupport<C> addListener(ServiceListener<C> listener) {
@@ -211,7 +183,7 @@ public class DropwizardTestSupport<C extends Configuration> {
             }
 
             application.initialize(bootstrap);
-            final Command command = commandInstantiator.apply(application);
+            final ServerCommand<C> command = new ServerCommand<>(application);
 
             final ImmutableMap.Builder<String, Object> file = ImmutableMap.builder();
             if (!Strings.isNullOrEmpty(configPath)) {
@@ -235,7 +207,7 @@ public class DropwizardTestSupport<C extends Configuration> {
 
     public int getAdminPort() {
         final Connector[] connectors = jettyServer.getConnectors();
-        return ((ServerConnector) connectors[connectors.length - 1]).getLocalPort();
+        return ((ServerConnector) connectors[connectors.length -1]).getLocalPort();
     }
 
     public int getPort(int connectorIndex) {
@@ -244,7 +216,7 @@ public class DropwizardTestSupport<C extends Configuration> {
 
     public Application<C> newApplication() {
         try {
-            return applicationClass.getConstructor().newInstance();
+            return applicationClass.newInstance();
         } catch (Exception e) {
             throw propagate(e);
         }

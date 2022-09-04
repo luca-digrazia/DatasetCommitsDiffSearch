@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.io.CharStreams;
 import com.google.common.io.Resources;
+
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
@@ -30,7 +31,6 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 
@@ -46,7 +46,7 @@ public class SimpleServerFactoryTest {
     public void setUp() throws Exception {
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleAppenderFactory.class,
                 FileAppenderFactory.class, SyslogAppenderFactory.class, HttpConnectorFactory.class);
-        http = (SimpleServerFactory) new YamlConfigurationFactory<>(ServerFactory.class, validator, objectMapper, "dw")
+        http = new YamlConfigurationFactory<>(SimpleServerFactory.class, validator, objectMapper, "dw")
                 .build(new File(Resources.getResource("yaml/simple_server.yml").toURI()));
     }
 
@@ -93,8 +93,8 @@ public class SimpleServerFactoryTest {
     public void testConfiguredEnvironment() {
         http.configure(environment);
 
-        assertEquals(http.getAdminContextPath(), environment.getAdminContext().getContextPath());
-        assertEquals(http.getApplicationContextPath(), environment.getApplicationContext().getContextPath());
+    	assertEquals(http.getAdminContextPath(), environment.getAdminContext().getContextPath());
+    	assertEquals(http.getApplicationContextPath(), environment.getApplicationContext().getContextPath());
     }
 
     private static String httpRequest(String requestMethod, String url) throws Exception {

@@ -3,6 +3,7 @@ package io.dropwizard.jetty;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.io.Resources;
+
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
@@ -14,11 +15,7 @@ import io.dropwizard.util.Size;
 import io.dropwizard.validation.BaseValidator;
 import org.eclipse.jetty.io.ArrayByteBufferPool;
 import org.eclipse.jetty.io.ByteBufferPool;
-import org.eclipse.jetty.server.ForwardedRequestCustomizer;
-import org.eclipse.jetty.server.HttpConfiguration;
-import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.ThreadPool;
@@ -162,23 +159,4 @@ public class HttpConnectorFactoryTest {
         connector.stop();
         server.stop();
     }
-
-    @Test
-    public void testDefaultAcceptQueueSize() throws Exception {
-        HttpConnectorFactory http = new HttpConnectorFactory();
-        http.setBindHost("127.0.0.1");
-        http.setAcceptorThreads(1);
-        http.setSelectorThreads(2);
-        http.setSoLingerTime(Duration.seconds(30));
-
-        Server server = new Server();
-        MetricRegistry metrics = new MetricRegistry();
-        ThreadPool threadPool = new QueuedThreadPool();
-
-        ServerConnector connector = (ServerConnector) http.build(server, metrics, "test-http-connector", threadPool);
-        assertThat(connector.getAcceptQueueSize()).isEqualTo(NetUtil.getTcpBacklog());
-
-        connector.stop();
-    }
-
 }

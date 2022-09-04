@@ -2,14 +2,15 @@ package io.dropwizard.metrics;
 
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.Resources;
+
 import io.dropwizard.configuration.YamlConfigurationFactory;
-import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
-import io.dropwizard.util.Resources;
 import io.dropwizard.validation.BaseValidator;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.File;
 
@@ -22,27 +23,26 @@ public class CsvReporterFactoryTest {
                                            BaseValidator.newValidator(),
                                            objectMapper, "dw");
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleReporterFactory.class,
                                                            CsvReporterFactory.class,
                                                            Slf4jReporterFactory.class);
     }
 
     @Test
-    void isDiscoverable() throws Exception {
+    public void isDiscoverable() throws Exception {
         assertThat(new DiscoverableSubtypeResolver().getDiscoveredSubtypes())
                 .contains(CsvReporterFactory.class);
     }
 
     @Test
-    void directoryCreatedOnStartup() throws Exception {
+    public void directoryCreatedOnStartup() throws Exception {
         File dir = new File("metrics");
         dir.delete();
 
         MetricsFactory config = factory.build(new File(Resources.getResource("yaml/metrics.yml").toURI()));
-        MetricRegistry metricRegistry = new MetricRegistry();
-        config.configure(new LifecycleEnvironment(metricRegistry), metricRegistry);
+        config.configure(new LifecycleEnvironment(), new MetricRegistry());
         assertThat(dir.exists()).isEqualTo(true);
     }
 }

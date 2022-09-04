@@ -1,10 +1,11 @@
 package io.dropwizard.client;
 
+import com.google.common.io.Resources;
+
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.validation.Validators;
-import io.dropwizard.util.Resources;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import java.io.File;
 
@@ -13,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class JerseyClientConfigurationTest {
 
     @Test
-    void testBasicJerseyClient() throws Exception {
+    public void testBasicJerseyClient() throws Exception {
         final JerseyClientConfiguration configuration = new YamlConfigurationFactory<>(JerseyClientConfiguration.class,
                 Validators.newValidator(), Jackson.newObjectMapper(), "dw")
                 .build(new File(Resources.getResource("yaml/jersey-client.yml").toURI()));
