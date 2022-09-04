@@ -28,17 +28,18 @@ import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.rules.cpp.ArtifactCategory;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
+import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FdoContext;
@@ -48,6 +49,7 @@ import com.google.devtools.build.lib.rules.cpp.LibraryToLink.CcLinkingContext.Li
 import com.google.devtools.build.lib.rules.cpp.Link;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
+import com.google.devtools.build.lib.rules.cpp.LtoCompilationContext;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -123,6 +125,9 @@ public abstract class NativeDepsHelper {
     }
 
     PathFragment labelName = PathFragment.create(ruleContext.getLabel().getName());
+    String libraryIdentifier = ruleContext.getUniqueDirectory(ANDROID_UNIQUE_DIR)
+        .getRelative(labelName.replaceName("lib" + labelName.getBaseName()))
+        .getPathString();
     Artifact nativeDeps = ruleContext.getUniqueDirectoryArtifact(ANDROID_UNIQUE_DIR,
         labelName.replaceName("lib" + labelName.getBaseName() + ".so"),
         configuration.getBinDirectory(ruleContext.getRule().getRepository()));
@@ -134,6 +139,7 @@ public abstract class NativeDepsHelper {
             configuration,
             toolchain,
             nativeDeps,
+            libraryIdentifier,
             configuration.getBinDirectory(ruleContext.getRule().getRepository()),
             cppSemantics)
         .getLibrary();
@@ -181,6 +187,7 @@ public abstract class NativeDepsHelper {
       BuildConfiguration configuration,
       CcToolchainProvider toolchain,
       Artifact nativeDeps,
+      String libraryIdentifier,
       ArtifactRoot bindirIfShared,
       CppSemantics cppSemantics)
       throws InterruptedException, RuleErrorException {
@@ -200,6 +207,7 @@ public abstract class NativeDepsHelper {
             ruleContext, CppBuildInfo.KEY, configuration);
 
     boolean shareNativeDeps = configuration.getFragment(CppConfiguration.class).shareNativeDeps();
+    NestedSet<LibraryToLink> linkerInputs = ccLinkingContext.getLibraries();
     Artifact sharedLibrary;
     if (shareNativeDeps) {
       PathFragment sharedPath =
@@ -211,6 +219,7 @@ public abstract class NativeDepsHelper {
                   .collect(ImmutableList.toImmutableList()),
               buildInfoArtifacts,
               ruleContext.getFeatures());
+      libraryIdentifier = sharedPath.getPathString();
       sharedLibrary = ruleContext.getShareableArtifact(
           sharedPath.replaceName(sharedPath.getBaseName() + ".so"),
           configuration.getBinDirectory(ruleContext.getRule().getRepository()));
@@ -229,27 +238,70 @@ public abstract class NativeDepsHelper {
             /* requestedFeatures= */ requestedFeatures.build(),
             /* unsupportedFeatures= */ ruleContext.getDisabledFeatures(),
             toolchain);
+    CppLinkActionBuilder builder =
+        new CppLinkActionBuilder(
+            ruleContext,
+            sharedLibrary,
+            configuration,
+            toolchain,
+            fdoContext,
+            featureConfiguration,
+            cppSemantics);
+    builder.setRuntimeInputs(
+        ArtifactCategory.STATIC_LIBRARY,
+        toolchain.getStaticRuntimeLinkMiddleman(ruleContext, featureConfiguration),
+        toolchain.getStaticRuntimeLinkInputs(ruleContext, featureConfiguration));
+    LtoCompilationContext.Builder ltoCompilationContext = new LtoCompilationContext.Builder();
+    for (LibraryToLink lib : linkerInputs) {
+      if (lib.getPicLtoCompilationContext() != null
+          && !lib.getPicLtoCompilationContext().isEmpty()) {
+        ltoCompilationContext.addAll(lib.getPicLtoCompilationContext());
+      } else if (lib.getLtoCompilationContext() != null
+          && !lib.getLtoCompilationContext().isEmpty()) {
+        ltoCompilationContext.addAll(lib.getLtoCompilationContext());
+      }
+    }
 
-    new CcLinkingHelper(
-            ruleContext, cppSemantics, featureConfiguration, toolchain, fdoContext, configuration)
-        .setLinkerOutputArtifact(sharedLibrary)
-        .setLinkingMode(LinkingMode.STATIC)
-        .addLinkopts(extraLinkOpts)
-        .setNativeDeps(true)
-        .setNeverLink(true)
-        .setShouldCreateStaticLibraries(false)
-        .addCcLinkingContexts(ImmutableList.of(ccLinkingContext))
+    Iterable<Artifact> nonCodeInputs = ccLinkingContext.getNonCodeInputs();
+    if (nonCodeInputs == null) {
+      nonCodeInputs = ImmutableList.of();
+    }
+
+    builder
         .setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY)
-        .setDynamicLinkType(LinkTargetType.DYNAMIC_LIBRARY)
-        .link(CcCompilationOutputs.EMPTY);
+        .setLinkerFiles(toolchain.getLinkerFiles())
+        .addLibrariesToLink(linkerInputs)
+        .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
+        .setLinkingMode(LinkingMode.STATIC)
+        .setLibraryIdentifier(libraryIdentifier)
+        .addLinkopts(linkopts)
+        .setNativeDeps(true)
+        .addLinkstamps(linkstamps)
+        .addLtoCompilationContext(ltoCompilationContext.build())
+        .addNonCodeInputs(nonCodeInputs);
+
+    if (builder.hasLtoBitcodeInputs() && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
+      builder.setLtoIndexing(true);
+      builder.setUsePicForLtoBackendActions(
+          toolchain.usePicForDynamicLibraries(featureConfiguration));
+      CppLinkAction indexAction = builder.build();
+      if (indexAction != null) {
+        ruleContext.registerAction(indexAction);
+      }
+      builder.setLtoIndexing(false);
+    }
+
+    CppLinkAction linkAction = builder.build();
+    ruleContext.registerAction(linkAction);
+    Artifact linkerOutput = linkAction.getPrimaryOutput();
 
     if (shareNativeDeps) {
-      ruleContext.registerAction(
-          SymlinkAction.toArtifact(ruleContext.getActionOwner(), sharedLibrary, nativeDeps, null));
+      ruleContext.registerAction(SymlinkAction.toArtifact(
+          ruleContext.getActionOwner(), linkerOutput, nativeDeps, null));
       return new NativeDepsRunfiles(nativeDeps);
     }
 
-    return new NativeDepsRunfiles(sharedLibrary);
+    return new NativeDepsRunfiles(linkerOutput);
   }
 
   /**

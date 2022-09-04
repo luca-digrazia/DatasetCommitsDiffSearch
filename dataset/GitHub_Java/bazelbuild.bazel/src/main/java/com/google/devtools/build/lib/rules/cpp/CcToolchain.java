@@ -24,9 +24,8 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.events.Location;
-import java.io.Serializable;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
 
 /**
@@ -45,10 +44,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    validateToolchain(ruleContext);
     CcToolchainAttributesProvider attributes =
         new CcToolchainAttributesProvider(
-            ruleContext, isAppleToolchain(), getAdditionalBuildVariablesComputer(ruleContext));
+            ruleContext, isAppleToolchain(), getAdditionalBuildVariables(ruleContext));
 
     RuleConfiguredTargetBuilder ruleConfiguredTargetBuilder =
         new RuleConfiguredTargetBuilder(ruleContext)
@@ -106,28 +104,20 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * This method marks that the toolchain at hand is actually apple_cc_toolchain. Good job me for
-   * object design and encapsulation.
+   * Add local build variables from subclasses into {@link CcToolchainVariables} returned from
+   * {@link CcToolchainProviderHelper#getBuildVariables(RuleContext, CcToolchainAttributesProvider,
+   * PathFragment, CcToolchainVariables)}.
+   *
+   * <p>This method is meant to be overridden by subclasses of CcToolchain.
    */
   protected boolean isAppleToolchain() {
     // To be overridden in subclass.
     return false;
   }
 
-  /** Functional interface for a function that accepts cpu and {@link BuildOptions}. */
-  protected interface AdditionalBuildVariablesComputer {
-    CcToolchainVariables apply(BuildOptions buildOptions);
-  }
-
-  /** Returns a function that will be called to retrieve root {@link CcToolchainVariables}. */
-  protected AdditionalBuildVariablesComputer getAdditionalBuildVariablesComputer(
-      RuleContext ruleContextPossiblyInHostConfiguration) {
-    return (AdditionalBuildVariablesComputer & Serializable)
-        (options) -> CcToolchainVariables.EMPTY;
-  }
-
-  /** Will be called during analysis to ensure target attributes are set correctly. */
-  protected void validateToolchain(RuleContext ruleContext) throws RuleErrorException {
+  protected CcToolchainVariables getAdditionalBuildVariables(RuleContext ruleContext)
+      throws RuleErrorException {
     // To be overridden in subclass.
+    return CcToolchainVariables.EMPTY;
   }
 }
