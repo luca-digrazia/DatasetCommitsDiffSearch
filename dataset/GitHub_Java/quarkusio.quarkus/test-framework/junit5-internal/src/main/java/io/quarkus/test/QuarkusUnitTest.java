@@ -218,7 +218,7 @@ public class QuarkusUnitTest
             ProxyFactory<?> factory = new ProxyFactory<>(new ProxyConfiguration<>()
                     .setAnchorClass(testClass)
                     .setProxyNameSuffix("$$QuarkusUnitTestProxy")
-                    .setClassLoader(new DefineClassVisibleClassLoader(testClass.getClassLoader()))
+                    .setClassLoader(testClass.getClassLoader())
                     .setSuperClass((Class<Object>) testClass));
             store.put(proxyFactoryKey(testClass), factory);
         }
@@ -273,7 +273,6 @@ public class QuarkusUnitTest
                     fail("The build was expected to fail");
                 }
                 started = true;
-                System.setProperty("test.url", TestHTTPResourceManager.getUri());
                 Instance<?> factory;
                 try {
                     factory = CDI.current()
