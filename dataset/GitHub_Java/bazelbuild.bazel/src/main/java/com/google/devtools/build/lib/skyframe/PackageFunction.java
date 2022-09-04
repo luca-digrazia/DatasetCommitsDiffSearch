@@ -438,14 +438,14 @@ public class PackageFunction implements SkyFunction {
     Path buildFilePath = buildFileRootedPath.asPath();
     String replacementContents = null;
 
-    if (isDefaultsPackage(packageId) && PrecomputedValue.isInMemoryToolsDefaults(env)) {
-      replacementContents = PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.get(env);
-      if (replacementContents == null) {
+    if (!isDefaultsPackage(packageId)) {
+      buildFileValue = getBuildFileValue(env, buildFileRootedPath);
+      if (buildFileValue == null) {
         return null;
       }
     } else {
-      buildFileValue = getBuildFileValue(env, buildFileRootedPath);
-      if (buildFileValue == null) {
+      replacementContents = PrecomputedValue.DEFAULTS_PACKAGE_CONTENTS.get(env);
+      if (replacementContents == null) {
         return null;
       }
     }
