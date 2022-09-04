@@ -212,17 +212,26 @@ public class Parser {
   }
 
   /**
-   * Entry-point for parsing a file with comments.
-   *
-   * @param input the input to parse
-   * @param eventHandler a reporter for parsing errors
-   * @param parsingMode if set to {@link ParsingMode#BUILD}, restricts the parser to just the
-   *     features present in the Build language
+   * Entry-point to parser that parses a build file with comments. All errors encountered during
+   * parsing are reported via "reporter".
    */
-  public static ParseResult parseFile(
-      ParserInputSource input, EventHandler eventHandler, ParsingMode parsingMode) {
+  public static ParseResult parseFile(ParserInputSource input, EventHandler eventHandler) {
     Lexer lexer = new Lexer(input, eventHandler);
-    Parser parser = new Parser(lexer, eventHandler, parsingMode);
+    Parser parser = new Parser(lexer, eventHandler, BUILD);
+    List<Statement> statements = parser.parseFileInput();
+    return new ParseResult(statements, parser.comments, locationFromStatements(lexer, statements),
+        parser.errorsCount > 0 || lexer.containsErrors());
+  }
+
+  /**
+   * Entry-point to parser that parses a build file with comments. All errors encountered during
+   * parsing are reported via "reporter". Enable Skylark extensions that are not part of the core
+   * BUILD language.
+   */
+  public static ParseResult parseFileForSkylark(
+      ParserInputSource input, EventHandler eventHandler) {
+    Lexer lexer = new Lexer(input, eventHandler);
+    Parser parser = new Parser(lexer, eventHandler, SKYLARK);
     List<Statement> statements = parser.parseFileInput();
     return new ParseResult(
         statements,
@@ -231,49 +240,21 @@ public class Parser {
         parser.errorsCount > 0 || lexer.containsErrors());
   }
 
-  /** Convenience method for {@code parseFile} with the Build language. */
-  public static ParseResult parseFile(ParserInputSource input, EventHandler eventHandler) {
-    return parseFile(input, eventHandler, BUILD);
-  }
-
-  /** Convenience method for {@code parseFile} with Skylark. */
-  public static ParseResult parseFileForSkylark(
-      ParserInputSource input, EventHandler eventHandler) {
-    return parseFile(input, eventHandler, SKYLARK);
-  }
-
   /**
-   * Entry-point for parsing an expression. The expression may be followed by newline tokens.
-   *
-   * @param input the input to parse
-   * @param eventHandler a reporter for parsing errors
-   * @param parsingMode if set to {@link ParsingMode#BUILD}, restricts the parser to just the
-   *     features present in the Build language
+   * Entry-point to parser that parses an expression.  All errors encountered
+   * during parsing are reported via "reporter".  The expression may be followed
+   * by newline tokens.
    */
   @VisibleForTesting
-  public static Expression parseExpression(
-      ParserInputSource input, EventHandler eventHandler, ParsingMode parsingMode) {
+  public static Expression parseExpression(ParserInputSource input, EventHandler eventHandler) {
     Lexer lexer = new Lexer(input, eventHandler);
-    Parser parser = new Parser(lexer, eventHandler, parsingMode);
+    Parser parser = new Parser(lexer, eventHandler, null);
     Expression result = parser.parseExpression();
     while (parser.token.kind == TokenKind.NEWLINE) {
       parser.nextToken();
     }
     parser.expect(TokenKind.EOF);
     return result;
-  }
-
-  /** Convenience method for {@code parseExpression} with the Build language. */
-  @VisibleForTesting
-  public static Expression parseExpression(ParserInputSource input, EventHandler eventHandler) {
-    return parseExpression(input, eventHandler, BUILD);
-  }
-
-  /** Convenience method for {@code parseExpression} with Skylark. */
-  @VisibleForTesting
-  public static Expression parseExpressionForSkylark(
-      ParserInputSource input, EventHandler eventHandler) {
-    return parseExpression(input, eventHandler, SKYLARK);
   }
 
   private void reportError(Location location, String message) {
@@ -1219,16 +1200,14 @@ public class Parser {
       nextToken();
       Expression rvalue = parseExpression();
       return setLocation(
-          new AssignmentStatement(new LValue(expression), rvalue),
-          start, rvalue);
+          new AssignmentStatement(/*lvalue=*/ expression, /*expression=*/ rvalue), start, rvalue);
     } else if (augmentedAssignmentMethods.containsKey(token.kind)) {
       Operator operator = augmentedAssignmentMethods.get(token.kind);
       nextToken();
       Expression operand = parseExpression();
       int end = operand.getLocation().getEndOffset();
       return setLocation(
-          new AugmentedAssignmentStatement(operator, new LValue(expression), operand),
-          start, end);
+          new AugmentedAssignmentStatement(operator, expression, operand), start, end);
     } else {
       return setLocation(new ExpressionStatement(expression), start, expression);
     }
@@ -1275,7 +1254,7 @@ public class Parser {
     enterLoop();
     try {
       List<Statement> block = parseSuite();
-      Statement stmt = new ForStatement(new LValue(loopVar), collection, block);
+      Statement stmt = new ForStatement(loopVar, collection, block);
       list.add(setLocation(stmt, start, token.right));
     } finally {
       exitLoop();

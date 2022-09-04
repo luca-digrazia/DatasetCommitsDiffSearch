@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,9 @@ package com.google.devtools.build.lib.syntax;
 public enum Operator {
 
   AND("and"),
+  DIVIDE("/"),
   EQUALS_EQUALS("=="),
+  FLOOR_DIVIDE("//"),
   GREATER(">"),
   GREATER_EQUALS(">="),
   IN("in"),
@@ -29,8 +31,10 @@ public enum Operator {
   MULT("*"),
   NOT("not"),
   NOT_EQUALS("!="),
+  NOT_IN("not in"),
   OR("or"),
   PERCENT("%"),
+  PIPE("|"),
   PLUS("+");
 
   private final String name;
