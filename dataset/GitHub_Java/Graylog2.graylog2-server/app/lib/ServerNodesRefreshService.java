@@ -22,6 +22,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
+import lib.security.Graylog2ServerUnavailableException;
 import models.Node;
 import models.api.responses.cluster.NodeSummaryResponse;
 import models.api.responses.cluster.NodesResponse;
@@ -35,8 +36,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
-import static lib.Configuration.apiTimeout;
 
 @Singleton
 public class ServerNodesRefreshService {
@@ -90,12 +89,7 @@ public class ServerNodesRefreshService {
         // resolve all configured nodes, to figure out the proper transport addresses in this network
         final Collection<Node> configuredNodes = serverNodes.getConfiguredNodes();
         final Map<Node, NodeSummaryResponse> responses =
-                api.get(NodeSummaryResponse.class)
-                        .path("/system/cluster/node")
-                        .nodes(configuredNodes)
-                        .unauthenticated()
-                        .timeout(apiTimeout("node_refresh", 2, TimeUnit.SECONDS))
-                        .executeOnAll();
+                api.get(NodeSummaryResponse.class).path("/system/cluster/node").nodes(configuredNodes).timeout(2, TimeUnit.SECONDS).executeOnAll();
         List<Node> resolvedNodes = Lists.newArrayList();
         for (Map.Entry<Node, NodeSummaryResponse> nsr : responses.entrySet()) {
             if (nsr.getValue() == null) {
