@@ -22,7 +22,6 @@ import com.google.bytestream.ByteStreamProto.ReadResponse;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
 import com.google.bytestream.ByteStreamProto.WriteResponse;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -210,26 +209,16 @@ public class GrpcRemoteCache implements RemoteActionCache {
             file.getContent().writeTo(stream);
           }
         } else {
-          try {
-            retrier.execute(
-                () -> {
-                  try (OutputStream stream = path.getOutputStream()) {
-                    Iterator<ReadResponse> replies = readBlob(digest);
-                    while (replies.hasNext()) {
-                      replies.next().getData().writeTo(stream);
-                    }
-                  }
-                  Digest receivedDigest = Digests.computeDigest(path);
-                  if (!receivedDigest.equals(digest)) {
-                    throw new IOException(
-                        "Digest does not match " + receivedDigest + " != " + digest);
+          retrier.execute(
+              () -> {
+                try (OutputStream stream = path.getOutputStream()) {
+                  Iterator<ReadResponse> replies = readBlob(digest);
+                  while (replies.hasNext()) {
+                    replies.next().getData().writeTo(stream);
                   }
                   return null;
-                });
-          } catch (RetryException e) {
-            Throwables.throwIfInstanceOf(e.getCause(), CacheNotFoundException.class);
-            throw e;
-          }
+                }
+              });
         }
       }
       path.setExecutable(file.getIsExecutable());
@@ -261,19 +250,7 @@ public class GrpcRemoteCache implements RemoteActionCache {
     }
   }
 
-  /**
-   * This method can throw {@link StatusRuntimeException}, but the RemoteCache interface does not
-   * allow throwing such an exception. Any caller must make sure to catch the
-   * {@link StatusRuntimeException}. Note that the retrier implicitly catches it, so if this is used
-   * in the context of {@link Retrier#execute}, that's perfectly safe.
-   *
-   * <p>On the other hand, this method can also throw {@link CacheNotFoundException}, but the
-   * retrier also implicitly catches that and wraps it in a {@link RetryException}, so any caller
-   * that wants to propagate the {@link CacheNotFoundException} needs to catch
-   * {@link RetryException} and rethrow the cause if it is a {@link CacheNotFoundException}.
-   */
-  private Iterator<ReadResponse> readBlob(Digest digest)
-      throws CacheNotFoundException, StatusRuntimeException {
+  private Iterator<ReadResponse> readBlob(Digest digest) throws CacheNotFoundException {
     String resourceName = "";
     if (!options.remoteInstanceName.isEmpty()) {
       resourceName += options.remoteInstanceName + "/";
@@ -305,12 +282,10 @@ public class GrpcRemoteCache implements RemoteActionCache {
                           .setActionDigest(actionKey.getDigest())
                           .setActionResult(result)
                           .build()));
-    } catch (RetryException e) {
-      if (e.causedByStatusCode(Status.Code.UNIMPLEMENTED)) {
-        // Silently return without upload.
-        return;
+    } catch (StatusRuntimeException e) {
+      if (e.getStatus().getCode() != Status.Code.UNIMPLEMENTED) {
+        throw e;
       }
-      throw e;
     }
   }
 
@@ -494,28 +469,24 @@ public class GrpcRemoteCache implements RemoteActionCache {
       return new byte[0];
     }
     byte[] result = new byte[(int) digest.getSizeBytes()];
-    try {
-      retrier.execute(
-          () -> {
-            Iterator<ReadResponse> replies = readBlob(digest);
-            int offset = 0;
-            while (replies.hasNext()) {
-              ByteString data = replies.next().getData();
-              data.copyTo(result, offset);
-              offset += data.size();
-            }
-            Preconditions.checkState(digest.getSizeBytes() == offset);
-            return null;
-          });
-    } catch (RetryException e) {
-      Throwables.throwIfInstanceOf(e.getCause(), CacheNotFoundException.class);
-      throw e;
-    }
+    retrier.execute(
+        () -> {
+          Iterator<ReadResponse> replies = readBlob(digest);
+          int offset = 0;
+          while (replies.hasNext()) {
+            ByteString data = replies.next().getData();
+            data.copyTo(result, offset);
+            offset += data.size();
+          }
+          Preconditions.checkState(digest.getSizeBytes() == offset);
+          return null;
+        });
     return result;
   }
 
   // Execution Cache API
 
+  /** Returns a cached result for a given Action digest, or null if not found in cache. */
   @Override
   public ActionResult getCachedActionResult(ActionKey actionKey)
       throws IOException, InterruptedException {
@@ -530,7 +501,6 @@ public class GrpcRemoteCache implements RemoteActionCache {
                           .build()));
     } catch (RetryException e) {
       if (e.causedByStatusCode(Status.Code.NOT_FOUND)) {
-        // Return null to indicate that it was a cache miss.
         return null;
       }
       throw e;

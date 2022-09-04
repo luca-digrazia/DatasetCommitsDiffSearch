@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.remote;
 
+import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.remoteexecution.v1test.ExecuteRequest;
@@ -28,7 +29,6 @@ import com.google.watcher.v1.ChangeBatch;
 import com.google.watcher.v1.Request;
 import com.google.watcher.v1.WatcherGrpc;
 import com.google.watcher.v1.WatcherGrpc.WatcherBlockingStub;
-import io.grpc.CallCredentials;
 import io.grpc.Channel;
 import io.grpc.Status.Code;
 import io.grpc.StatusRuntimeException;
@@ -40,42 +40,43 @@ import javax.annotation.Nullable;
 
 /** A remote work executor that uses gRPC for communicating the work, inputs and outputs. */
 @ThreadSafe
-final class GrpcRemoteExecutor {
-
+public class GrpcRemoteExecutor {
+  private final RemoteOptions options;
+  private final ChannelOptions channelOptions;
   private final Channel channel;
-  private final CallCredentials callCredentials;
-  private final int callTimeoutSecs;
   private final Retrier retrier;
 
-  public GrpcRemoteExecutor(Channel channel, @Nullable CallCredentials callCredentials,
-      int callTimeoutSecs, Retrier retrier) {
-    Preconditions.checkArgument(callTimeoutSecs > 0, "callTimeoutSecs must be gt 0.");
+  public static boolean isRemoteExecutionOptions(RemoteOptions options) {
+    return options.remoteExecutor != null;
+  }
+
+  public GrpcRemoteExecutor(Channel channel, ChannelOptions channelOptions, RemoteOptions options) {
+    this.options = options;
+    this.channelOptions = channelOptions;
     this.channel = channel;
-    this.callCredentials = callCredentials;
-    this.callTimeoutSecs = callTimeoutSecs;
-    this.retrier = retrier;
+    this.retrier = new Retrier(options);
   }
 
   private ExecutionBlockingStub execBlockingStub() {
     return ExecutionGrpc.newBlockingStub(channel)
-        .withCallCredentials(callCredentials)
-        .withDeadlineAfter(callTimeoutSecs, TimeUnit.SECONDS);
+        .withCallCredentials(channelOptions.getCallCredentials())
+        .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
 
   private WatcherBlockingStub watcherBlockingStub() {
     return WatcherGrpc.newBlockingStub(channel)
-        .withCallCredentials(callCredentials);
+        .withCallCredentials(channelOptions.getCallCredentials());
   }
 
   private @Nullable ExecuteResponse getOperationResponse(Operation op)
-      throws IOException {
+      throws IOException, UserExecException {
     if (op.getResultCase() == Operation.ResultCase.ERROR) {
       StatusRuntimeException e = StatusProto.toStatusRuntimeException(op.getError());
       if (e.getStatus().getCode() == Code.DEADLINE_EXCEEDED) {
         // This was caused by the command itself exceeding the timeout,
         // therefore it is not retriable.
         // TODO(olaola): this should propagate a timeout SpawnResult instead of raising.
-        throw new IOException("Remote execution time out");
+        throw new UserExecException("Remote execution time out", true);
       }
       throw e;
     }
@@ -91,7 +92,7 @@ final class GrpcRemoteExecutor {
   }
 
   public ExecuteResponse executeRemotely(ExecuteRequest request)
-      throws IOException, InterruptedException {
+      throws InterruptedException, IOException, UserExecException {
     Operation op = retrier.execute(() -> execBlockingStub().execute(request));
     ExecuteResponse resp = getOperationResponse(op);
     if (resp != null) {
