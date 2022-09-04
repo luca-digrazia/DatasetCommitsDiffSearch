@@ -325,10 +325,6 @@ public class CppCompileActionBuilder {
     if (grepIncludes != null) {
       realMandatoryInputsBuilder.add(grepIncludes);
     }
-    if (!shouldScanIncludes && dotdFile == null) {
-      realMandatoryInputsBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
-      realMandatoryInputsBuilder.addAll(additionalPrunableHeaders);
-    }
     return realMandatoryInputsBuilder.build();
   }
 

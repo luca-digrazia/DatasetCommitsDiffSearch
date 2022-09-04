@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
@@ -1148,7 +1147,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testSrcCompileActionMnemonic() throws Exception {
+  public void testCppCompileActionMnemonicOfSrc() throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(
@@ -1163,7 +1162,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testHeaderCompileActionMnemonic() throws Exception {
+  public void testCppCompileActionMnemonicOfPrivateHdr() throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(
@@ -1172,36 +1171,26 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
 
     ConfiguredTarget x =
-        scratchConfiguredTarget(
-            "foo", "x", "cc_library(name = 'x', srcs = ['y.h'], hdrs = ['z.h'])");
+        scratchConfiguredTarget("foo", "x", "cc_library(name = 'x', srcs = ['y.h'])");
 
     assertThat(getGeneratingCompileAction("_objs/x/y.h.processed", x).getMnemonic())
-        .isEqualTo("CppCompile");
-    assertThat(getGeneratingCompileAction("_objs/x/z.h.processed", x).getMnemonic())
         .isEqualTo("CppCompile");
   }
 
   @Test
-  public void testIncompatibleUseCppCompileHeaderMnemonic() throws Exception {
+  public void testCppCompileActionMnemonicOfPublicHdr() throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(
             mockToolsConfig,
             CcToolchainConfig.builder().withFeatures(CppRuleClasses.PARSE_HEADERS));
-    useConfiguration(
-        "--incompatible_use_cpp_compile_header_mnemonic",
-        "--features=parse_headers",
-        "--process_headers_in_dependencies");
+    useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
 
     ConfiguredTarget x =
-        scratchConfiguredTarget(
-            "foo", "x", "cc_library(name = 'x', srcs = ['a.cc', 'y.h'], hdrs = ['z.h'])");
+        scratchConfiguredTarget("foo", "x", "cc_library(name = 'x', hdrs = ['z.h'])");
 
-    assertThat(getGeneratingCompileAction("_objs/x/a.o", x).getMnemonic()).isEqualTo("CppCompile");
-    assertThat(getGeneratingCompileAction("_objs/x/y.h.processed", x).getMnemonic())
-        .isEqualTo("CppCompileHeader");
     assertThat(getGeneratingCompileAction("_objs/x/z.h.processed", x).getMnemonic())
-        .isEqualTo("CppCompileHeader");
+        .isEqualTo("CppCompile");
   }
 
   private CppCompileAction getGeneratingCompileAction(
@@ -1225,9 +1214,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         ")");
     ConfiguredTarget target = getConfiguredTarget("//foo");
     CppCompileAction action = getCppCompileAction(target);
-    String genfilesDir =
-        getConfiguration(target).getGenfilesFragment(RepositoryName.MAIN).toString();
-    String binDir = getConfiguration(target).getBinFragment(RepositoryName.MAIN).toString();
+    String genfilesDir = getConfiguration(target).getGenfilesFragment().toString();
+    String binDir = getConfiguration(target).getBinFragment().toString();
     // Local include paths come first.
     assertContainsSublist(
         action.getCompilerOptions(),
