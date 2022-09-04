@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -92,28 +91,18 @@ public final class BuildOptions implements Cloneable, Serializable {
   }
 
   /**
-   * Returns {@code BuildOptions} that are otherwise identical to this one, but contain only options
-   * from the given {@link FragmentOptions} classes (plus build configuration options).
-   *
-   * <p>If nothing needs to be trimmed, this instance is returned.
+   * Returns an equivalent instance to this one with only options from the given {@link
+   * FragmentOptions} classes.
    */
   public BuildOptions trim(Set<Class<? extends FragmentOptions>> optionsClasses) {
-    List<FragmentOptions> retainedOptions =
-        Lists.newArrayListWithExpectedSize(optionsClasses.size() + 1);
+    Builder builder = builder();
     for (FragmentOptions options : fragmentOptionsMap.values()) {
       if (optionsClasses.contains(options.getClass())
           // TODO(bazel-team): make this non-hacky while not requiring BuildConfiguration access
           // to BuildOptions.
-          || options.getClass().getName().endsWith("BuildConfiguration$Options")) {
-        retainedOptions.add(options);
+          || options.toString().contains("BuildConfiguration$Options")) {
+        builder.addFragmentOptions(options);
       }
-    }
-    if (retainedOptions.size() == fragmentOptionsMap.size()) {
-      return this; // Nothing to trim.
-    }
-    Builder builder = builder();
-    for (FragmentOptions options : retainedOptions) {
-      builder.addFragmentOptions(options);
     }
     return builder.addStarlarkOptions(skylarkOptionsMap).build();
   }
