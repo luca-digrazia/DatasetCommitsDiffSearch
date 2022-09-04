@@ -30,7 +30,6 @@ import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
-import org.graylog2.shared.security.RestPermissions;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.graylog2.shared.security.ldap.LdapSettings;
 import org.graylog2.shared.users.Role;
@@ -170,26 +169,19 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
             ((UserImpl) user).setHashedPassword("User synced from LDAP.");
         }
 
-        if (user.getPermissions() == null) {
-            user.setPermissions(Lists.newArrayList(RestPermissions.userSelfEditPermissions(username)));
-        } else {
-            user.setPermissions(Lists.newArrayList(Sets.union(RestPermissions.userSelfEditPermissions(username),
-                                                              Sets.newHashSet(user.getPermissions()))));
-        }
-
         // map ldap groups to user roles, if the mapping is present
         final Set<String> translatedRoleIds = Sets.newHashSet(Sets.union(Sets.newHashSet(ldapSettings.getDefaultGroupId()),
                                                                          ldapSettings.getAdditionalDefaultGroupIds()));
         if (!userEntry.getGroups().isEmpty()) {
             try {
-                final Map<String, Role> roleNameToRole = roleService.loadAllLowercaseNameMap();
+                final Map<String, Role> roleIdToRole = roleService.loadAllIdMap();
                 for (String ldapGroupName : userEntry.getGroups()) {
-                    final String roleName = ldapSettings.getGroupMapping().get(ldapGroupName);
-                    if (roleName == null) {
+                    final String roleId = ldapSettings.getGroupMapping().get(ldapGroupName);
+                    if (roleId == null) {
                         LOG.warn("User {}: No group mapping for ldap group <{}>", username, ldapGroupName);
                         continue;
                     }
-                    final Role role = roleNameToRole.get(roleName.toLowerCase());
+                    final Role role = roleIdToRole.get(roleId);
                     if (role != null) {
                         LOG.warn("User {}: Mapping ldap group <{}> to role <{}>", username, ldapGroupName, role.getName());
                         translatedRoleIds.add(role.getId());

@@ -40,7 +40,6 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validator;
-import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -136,7 +135,7 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public RoleImpl load(String roleName) throws NotFoundException {
-        final RoleImpl role = dbCollection.findOne(is(NAME_LOWER, roleName.toLowerCase(Locale.ENGLISH)));
+        final RoleImpl role = dbCollection.findOne(is(NAME_LOWER, roleName.toLowerCase()));
 
         if (role == null) {
             throw new NotFoundException("No role found with name " + roleName);
@@ -146,7 +145,7 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public boolean exists(String roleName) {
-        return dbCollection.getCount(is(NAME_LOWER, roleName.toLowerCase(Locale.ENGLISH))) == 1;
+        return dbCollection.getCount(is(NAME_LOWER, roleName.toLowerCase())) == 1;
     }
 
     @Override
@@ -195,7 +194,7 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public int delete(String roleName) {
-        final DBQuery.Query nameMatchesAndNotReadonly = and(is(READ_ONLY, false), is(NAME_LOWER, roleName.toLowerCase(Locale.ENGLISH)));
+        final DBQuery.Query nameMatchesAndNotReadonly = and(is(READ_ONLY, false), is(NAME_LOWER, roleName.toLowerCase()));
         return dbCollection.remove(nameMatchesAndNotReadonly).getN();
     }
 
