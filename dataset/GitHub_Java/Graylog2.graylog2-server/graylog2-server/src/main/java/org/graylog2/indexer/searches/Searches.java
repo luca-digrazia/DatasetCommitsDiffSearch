@@ -75,6 +75,8 @@ public class Searches {
     private final IndexRangeService indexRangeService;
 	private final Client c;
 
+    private final static int LIMIT = 150;
+
     private final static String TERMS_FACET_NAME = "gl2_terms";
     private final static String STATS_FACET_NAME = "gl2_stats";
     private final static String TERMS_STATS_FACET_NAME = "gl2_termsstats";
@@ -120,11 +122,6 @@ public class Searches {
 
         // only request the fields we asked for otherwise we can't figure out which fields will be in the result set
         // until we've scrolled through the entire set.
-        // TODO: Check if we can get away without loading the _source field.
-        // http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-request-fields.html#search-request-fields
-        // "For backwards compatibility, if the fields parameter specifies fields which are not stored , it will
-        // load the _source and extract it from it. This functionality has been replaced by the source filtering
-        // parameter." -- So we should look at the source filtering parameter once we switched to ES 1.x.
         srb.addFields(fields.toArray(new String[fields.size()]));
         srb.addField("_source"); // always request the _source field because otherwise we can't access non-stored values
 
@@ -146,25 +143,27 @@ public class Searches {
 	}
 
     public SearchResult search(String query, String filter, TimeRange range, int limit, int offset, Sorting sorting) throws IndexHelper.InvalidRangeFormatException {
-        final SearchesConfig searchesConfig = SearchesConfigBuilder.newConfig()
-                .setQuery(query)
-                .setFilter(filter)
-                .setRange(range)
-                .setLimit(limit)
-                .setOffset(offset)
-                .setSorting(sorting)
-                .build();
+        if(limit <= 0) {
+            limit = LIMIT;
+        }
 
-        return search(searchesConfig);
-    }
+        Set<String> indices = IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, range);
 
-    public SearchResult search(SearchesConfig config) throws IndexHelper.InvalidRangeFormatException {
-        Set<String> indices = IndexHelper.determineAffectedIndices(indexer, indexRangeService, deflector, config.range());
+        SearchRequest request;
 
-        SearchRequest request = searchRequest(config, indices).request();
+        if (filter == null) {
+            request = standardSearchRequest(query,
+                                            indices,
+                                            limit,
+                                            offset,
+                                            range,
+                                            sorting).request();
+        } else {
+            request = filteredSearchRequest(query, filter, indices, limit, offset, range, sorting).request();
+        }
 
         SearchResponse r = c.search(request).actionGet();
-        return new SearchResult(r.getHits(), indices, config.query(), request.source(), r.getTook());
+        return new SearchResult(r.getHits(), indices, query, request.source(), r.getTook());
     }
 
     public TermsResult terms(String field, int size, String query, String filter, TimeRange range) throws IndexHelper.InvalidRangeFormatException {
@@ -222,7 +221,7 @@ public class Searches {
         stats.order(TermsStatsFacet.ComparatorType.fromString(order.toString().toLowerCase()));
         stats.size(size);
 
-        stats.facetFilter(standardFilters(range, filter));
+        terms.facetFilter(standardFilters(range, filter));
 
         srb.addFacet(stats);
 
@@ -341,27 +340,6 @@ public class Searches {
 
     public SearchHit lastOfIndex(String index) {
         return oneOfIndex(index, matchAllQuery(), SortOrder.ASC);
-    }
-
-    private SearchRequestBuilder searchRequest(SearchesConfig config, Set<String> indices) throws IndexHelper.InvalidRangeFormatException {
-        final SearchRequestBuilder request;
-
-        if (config.filter() == null) {
-            request = standardSearchRequest(config.query(), indices, config.limit(), config.offset(), config.range(), config.sorting());
-        } else {
-            request = filteredSearchRequest(config.query(), config.filter(), indices, config.limit(), config.offset(), config.range(), config.sorting());
-        }
-
-        if (config.fields() != null) {
-            // http://www.elasticsearch.org/guide/en/elasticsearch/reference/current/search-request-fields.html#search-request-fields
-            // "For backwards compatibility, if the fields parameter specifies fields which are not stored , it will
-            // load the _source and extract it from it. This functionality has been replaced by the source filtering
-            // parameter."
-            // TODO: Look at the source filtering parameter once we switched to ES 1.x.
-            request.addFields(config.fields().toArray(new String[config.fields().size()]));
-        }
-
-        return request;
     }
 
     private SearchRequestBuilder standardSearchRequest(String query, Set<String> indices) throws IndexHelper.InvalidRangeFormatException {
