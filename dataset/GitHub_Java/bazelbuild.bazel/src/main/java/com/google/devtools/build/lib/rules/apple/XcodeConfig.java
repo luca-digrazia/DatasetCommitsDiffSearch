@@ -353,8 +353,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
               localVersions.getDefaultVersion().getVersion(),
               printableXcodeVersions(remoteVersions.getAvailableVersions())));
       availability = Availability.LOCAL;
-    } else if (remoteAliasesToVersionMap.containsKey(
-        localVersions.getDefaultVersion().getVersion().toString())) {
+    } else if (mutuallyAvailableVersions.contains(localVersions.getDefaultVersion())) {
       availability = Availability.BOTH;
     } else {
       ruleContext.ruleWarning(
