@@ -28,13 +28,11 @@ import com.googlecode.androidannotations.annotations.Background;
 import com.googlecode.androidannotations.annotations.Bean;
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.EBean;
-import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.RootContext;
 import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.Transactional;
 import com.googlecode.androidannotations.annotations.UiThread;
-import com.googlecode.androidannotations.annotations.UiThreadDelayed;
 import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.annotations.res.StringRes;
 import com.googlecode.androidannotations.test15.ThreadActivity;
@@ -69,9 +67,6 @@ public class EnhancedClass {
 	@App
 	SampleRoboApplication customApplication;
 
-	@Extra("Test")
-	String testExtra;
-
 	@StringRes
 	String hello;
 
@@ -84,7 +79,7 @@ public class EnhancedClass {
 
 	}
 
-	@UiThreadDelayed(2000)
+	@UiThread(delay = 2000)
 	@Trace
 	void uiThreadDelayed() {
 
