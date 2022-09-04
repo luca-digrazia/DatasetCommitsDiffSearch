@@ -16,6 +16,8 @@
 
 package io.quarkus.dev;
 
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
@@ -26,26 +28,31 @@ import io.quarkus.deployment.devmode.HotReplacementSetup;
 
 public class RuntimeCompilationSetup {
 
+    public static final String PROP_RUNNER_CLASSES = "quarkus-internal.runner.classes";
+    public static final String PROP_RUNNER_SOURCES = "quarkus-internal.runner.sources";
+    public static final String PROP_RUNNER_RESOURCES = "quarkus-internal.runner.resources";
+
     private static Logger log = Logger.getLogger(RuntimeCompilationSetup.class.getName());
 
-    public static RuntimeUpdatesProcessor setup(DevModeContext context) throws Exception {
-        if (!context.getModules().isEmpty()) {
+    public static RuntimeUpdatesProcessor setup() throws Exception {
+        String classesDir = System.getProperty(PROP_RUNNER_CLASSES);
+        String sourcesDir = System.getProperty(PROP_RUNNER_SOURCES);
+        String resourcesDir = System.getProperty(PROP_RUNNER_RESOURCES);
+        if (classesDir != null) {
             ServiceLoader<CompilationProvider> serviceLoader = ServiceLoader.load(CompilationProvider.class);
             List<CompilationProvider> compilationProviders = new ArrayList<>();
-            for (CompilationProvider provider : serviceLoader) {
-                compilationProviders.add(provider);
-                context.getModules().forEach(moduleInfo -> moduleInfo.addSourcePaths(provider.handleSourcePaths()));
-            }
             serviceLoader.iterator().forEachRemaining(compilationProviders::add);
-            ClassLoaderCompiler compiler;
+            ClassLoaderCompiler compiler = null;
             try {
-                compiler = new ClassLoaderCompiler(Thread.currentThread().getContextClassLoader(),
-                        compilationProviders, context);
+                compiler = new ClassLoaderCompiler(Thread.currentThread().getContextClassLoader(), new File(classesDir),
+                        compilationProviders);
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Failed to create compiler, runtime compilation will be unavailable", e);
                 return null;
             }
-            RuntimeUpdatesProcessor processor = new RuntimeUpdatesProcessor(context, compiler);
+            RuntimeUpdatesProcessor processor = new RuntimeUpdatesProcessor(Paths.get(classesDir),
+                    sourcesDir == null ? null : Paths.get(sourcesDir), resourcesDir == null ? null : Paths.get(resourcesDir),
+                    compiler);
 
             for (HotReplacementSetup service : ServiceLoader.load(HotReplacementSetup.class)) {
                 service.setupHotDeployment(processor);
