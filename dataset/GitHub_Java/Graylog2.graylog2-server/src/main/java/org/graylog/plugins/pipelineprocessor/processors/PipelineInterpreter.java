@@ -73,8 +73,6 @@ import static org.jooq.lambda.tuple.Tuple.tuple;
 public class PipelineInterpreter implements MessageProcessor {
     private static final Logger log = LoggerFactory.getLogger(PipelineInterpreter.class);
 
-    public static final String GL2_PROCESSING_ERROR = "gl2_processing_error";
-
     private final RuleService ruleService;
     private final PipelineService pipelineService;
     private final PipelineStreamConnectionsService pipelineStreamConnectionsService;
@@ -333,10 +331,10 @@ public class PipelineInterpreter implements MessageProcessor {
 
     private void appendProcessingError(Rule rule, Message message, String errorString) {
         final String msg = "For rule '" + rule.name() + "': " + errorString;
-        if (message.hasField(GL2_PROCESSING_ERROR)) {
-            message.addField(GL2_PROCESSING_ERROR, message.getFieldAs(String.class, GL2_PROCESSING_ERROR) + "," + msg);
+        if (message.hasField("gl2_processing_error")) {
+            message.addField("gl2_processing_error", message.getFieldAs(String.class, "gl2_processor_error") + "," + msg);
         } else {
-            message.addField(GL2_PROCESSING_ERROR, msg);
+            message.addField("gl2_processing_error", msg);
         }
     }
 
