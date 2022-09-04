@@ -47,10 +47,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.util.Collection;
 
-@Api(value = "Pipelines/Pipelines", description = "Pipelines for the pipeline message processor")
+@Api(value = "Pipelines", description = "Pipelines for the pipeline message processor")
 @Path("/system/pipelines")
-@Consumes(MediaType.APPLICATION_JSON)
-@Produces(MediaType.APPLICATION_JSON)
 public class PipelineResource extends RestResource implements PluginRestResource {
 
     private static final Logger log = LoggerFactory.getLogger(PipelineResource.class);
@@ -61,27 +59,26 @@ public class PipelineResource extends RestResource implements PluginRestResource
 
     @Inject
     public PipelineResource(PipelineSourceService pipelineSourceService,
-                        PipelineRuleParser pipelineRuleParser,
-                        @ClusterEventBus EventBus clusterBus) {
+                            PipelineRuleParser pipelineRuleParser,
+                            @ClusterEventBus EventBus clusterBus) {
         this.pipelineSourceService = pipelineSourceService;
         this.pipelineRuleParser = pipelineRuleParser;
         this.clusterBus = clusterBus;
     }
 
-
     @ApiOperation(value = "Create a processing pipeline from source", notes = "")
+    @Consumes(MediaType.TEXT_PLAIN)
+    @Produces(MediaType.APPLICATION_JSON)
     @POST
     @Path("/pipeline")
-    public PipelineSource createFromParser(@ApiParam(name = "pipeline", required = true) @NotNull PipelineSource pipelineSource) throws ParseException {
+    public PipelineSource createFromParser(@ApiParam(name = "pipeline", required = true) @NotNull String pipelineSource) throws ParseException {
         try {
-            pipelineRuleParser.parsePipeline(pipelineSource);
+            pipelineRuleParser.parsePipelines(pipelineSource);
         } catch (ParseException e) {
             throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
         }
         final PipelineSource newPipelineSource = PipelineSource.builder()
-                .title(pipelineSource.title())
-                .description(pipelineSource.description())
-                .source(pipelineSource.source())
+                .source(pipelineSource)
                 .createdAt(DateTime.now())
                 .modifiedAt(DateTime.now())
                 .build();
@@ -91,32 +88,18 @@ public class PipelineResource extends RestResource implements PluginRestResource
         return save;
     }
 
-    @ApiOperation(value = "Parse a processing pipeline without saving it", notes = "")
-    @POST
-    @Path("/pipeline/parse")
-    public PipelineSource parse(@ApiParam(name = "pipeline", required = true) @NotNull PipelineSource pipelineSource) throws ParseException {
-        try {
-            pipelineRuleParser.parsePipeline(pipelineSource);
-        } catch (ParseException e) {
-            throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
-        }
-        return PipelineSource.builder()
-                .title(pipelineSource.title())
-                .description(pipelineSource.description())
-                .source(pipelineSource.source())
-                .createdAt(DateTime.now())
-                .modifiedAt(DateTime.now())
-                .build();
-    }
-
     @ApiOperation(value = "Get all processing pipelines")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     @GET
     @Path("/pipeline")
     public Collection<PipelineSource> getAll() {
-        return  pipelineSourceService.loadAll();
+        return pipelineSourceService.loadAll();
     }
 
     @ApiOperation(value = "Get a processing pipeline", notes = "It can take up to a second until the change is applied")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     @Path("/pipeline/{id}")
     @GET
     public PipelineSource get(@ApiParam(name = "id") @PathParam("id") String id) throws NotFoundException {
@@ -124,19 +107,19 @@ public class PipelineResource extends RestResource implements PluginRestResource
     }
 
     @ApiOperation(value = "Modify a processing pipeline", notes = "It can take up to a second until the change is applied")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     @Path("/pipeline/{id}")
     @PUT
     public PipelineSource update(@ApiParam(name = "id") @PathParam("id") String id,
                              @ApiParam(name = "pipeline", required = true) @NotNull PipelineSource update) throws NotFoundException {
         final PipelineSource pipelineSource = pipelineSourceService.load(id);
         try {
-            pipelineRuleParser.parsePipeline(update);
+            pipelineRuleParser.parsePipelines(update.source());
         } catch (ParseException e) {
             throw new BadRequestException(Response.status(Response.Status.BAD_REQUEST).entity(e.getErrors()).build());
         }
         final PipelineSource toSave = pipelineSource.toBuilder()
-                .title(update.title())
-                .description(update.description())
                 .source(update.source())
                 .modifiedAt(DateTime.now())
                 .build();
@@ -147,10 +130,11 @@ public class PipelineResource extends RestResource implements PluginRestResource
     }
 
     @ApiOperation(value = "Delete a processing pipeline", notes = "It can take up to a second until the change is applied")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     @Path("/pipeline/{id}")
     @DELETE
-    public void delete(@ApiParam(name = "id") @PathParam("id") String id) throws NotFoundException {
-        pipelineSourceService.load(id);
+    public void delete(@ApiParam(name = "id") @PathParam("id") String id) {
         pipelineSourceService.delete(id);
         clusterBus.post(PipelinesChangedEvent.deletedPipelineId(id));
     }
