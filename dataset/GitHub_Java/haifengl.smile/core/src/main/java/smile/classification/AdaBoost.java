@@ -17,6 +17,8 @@
 package smile.classification;
 
 import java.util.Arrays;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
@@ -58,7 +60,7 @@ import smile.validation.ClassificationMeasure;
  */
 public class AdaBoost implements SoftClassifier<double[]> {
     private static final long serialVersionUID = 1L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AdaBoost.class);
+    private static final Logger logger = LoggerFactory.getLogger(AdaBoost.class);
     private static final String INVALID_NUMBER_OF_TREES = "Invalid number of trees: ";
 
     /**

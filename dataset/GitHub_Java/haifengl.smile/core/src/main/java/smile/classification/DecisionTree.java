@@ -18,11 +18,8 @@ package smile.classification;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.function.IntPredicate;
-import smile.data.Attribute;
-import smile.data.NominalAttribute;
-import smile.data.NumericAttribute;
-import smile.math.Math;
+import smile.data.type.StructType;
+import smile.math.MathEx;
 import smile.sort.QuickSort;
 import smile.util.MulticoreExecutor;
 
@@ -96,12 +93,12 @@ import smile.util.MulticoreExecutor;
  * @author Haifeng Li
  */
 public class DecisionTree implements SoftClassifier<double[]> {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
 
     /**
      * The attributes of independent variable.
      */
-    private Attribute[] attributes;
+    private StructType schema;
     /**
      * Variable importance. Every time a split of a node is made on variable
      * the (GINI, information gain, etc.) impurity criterion for the two
@@ -136,114 +133,11 @@ public class DecisionTree implements SoftClassifier<double[]> {
      */
     private int mtry;
     /**
-     * An index of training values. Initially, order[i] is a set of indices that iterate through the
-     * training values for attribute i in ascending order. During training, the array is rearranged
-     * so that all values for each leaf node occupy a contiguous range, but within that range they
-     * maintain the original ordering. Note that only numeric attributes will be sorted; non-numeric
-     * attributes will have a null in the corresponding place in the array.
+     * The index of training values in ascending order. Note that only numeric
+     * attributes will be sorted.
      */
     private transient int[][] order;
 
-    /**
-     * An index of training values that maps their current position in the {@link #order} arrays to
-     * their original locations.
-     */
-    private transient int[] originalOrder;
-
-    /**
-     * Trainer for decision tree classifiers.
-     */
-    public static class Trainer extends ClassifierTrainer<double[]> {
-        /**
-         * The splitting rule.
-         */
-        private SplitRule rule = SplitRule.GINI;
-        /**
-         * The minimum size of leaf nodes.
-         */
-        private int nodeSize = 1;
-        /**
-         * The maximum number of leaf nodes in the tree.
-         */
-        private int maxNodes = 100;
-
-        /**
-         * Default constructor of maximal 100 leaf nodes in the tree.
-         */
-        public Trainer() {
-
-        }
-
-        /**
-         * Constructor.
-         * 
-         * @param maxNodes the maximum number of leaf nodes in the tree.
-         */
-        public Trainer(int maxNodes) {
-            if (maxNodes < 2) {
-                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
-            }
-            
-            this.maxNodes = maxNodes;
-        }
-        
-        /**
-         * Constructor.
-         * 
-         * @param attributes the attributes of independent variable.
-         * @param maxNodes the maximum number of leaf nodes in the tree.
-         */
-        public Trainer(Attribute[] attributes, int maxNodes) {
-            super(attributes);
-            
-            if (maxNodes < 2) {
-                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
-            }
-            
-            this.maxNodes = maxNodes;
-        }
-        
-        /**
-         * Sets the splitting rule.
-         * @param rule the splitting rule.
-         */
-        public Trainer setSplitRule(SplitRule rule) {
-            this.rule = rule;
-            return this;
-        }
-        
-        /**
-         * Sets the maximum number of leaf nodes in the tree.
-         * @param maxNodes the maximum number of leaf nodes in the tree.
-         */
-        public Trainer setMaxNodes(int maxNodes) {
-            if (maxNodes < 2) {
-                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
-            }
-            
-            this.maxNodes = maxNodes;
-            return this;
-        }
-
-        /**
-         * Sets the minimum size of leaf nodes.
-         * @param nodeSize the minimum size of leaf nodes..
-         */
-        public Trainer setNodeSize(int nodeSize) {
-            if (nodeSize < 1) {
-                throw new IllegalArgumentException("Invalid minimum size of leaf nodes: " + nodeSize);
-            }
-
-            this.nodeSize = nodeSize;
-            return this;
-        }
-
-        @Override
-        public DecisionTree train(double[][] x, int[] y) {
-            return new DecisionTree(attributes, x, y, maxNodes, nodeSize, rule);
-        }
-    }
-    
     /**
      * The criterion to choose variable to split instances.
      */
@@ -331,7 +225,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
             if (trueChild == null && falseChild == null) {
                 return output;
             } else {
-                if (attributes[splitFeature].getType() == Attribute.Type.NOMINAL) {
+                if (schema.measure(splitFeature) == Attribute.Type.NOMINAL) {
                     if (x[splitFeature] == splitValue) {
                         return trueChild.predict(x);
                     } else {
@@ -399,25 +293,15 @@ public class DecisionTree implements SoftClassifier<double[]> {
          * sampling with replacement.
          */
         int[] samples;
-        /**
-         * The lower bound (inclusive) in the order array of the samples belonging to this node.
-         */
-        int low;
-        /**
-         * The upper bound (exclusive) in the order array of the samples belonging to this node.
-         */
-        int high;
 
         /**
          * Constructor.
          */
-        public TrainNode(Node node, double[][] x, int[] y, int[] samples, int low, int high) {
+        public TrainNode(Node node, double[][] x, int[] y, int[] samples) {
             this.node = node;
             this.x = x;
             this.y = y;
             this.samples = samples;
-            this.low = low;
-            this.high = high;
         }
 
         @Override
@@ -435,14 +319,6 @@ public class DecisionTree implements SoftClassifier<double[]> {
              */
             int n;
             /**
-             * The lower bound (inclusive) in the order array of the samples belonging to this node.
-             */
-            int low;
-            /**
-             * The upper bound (exclusive) in the order array of the samples belonging to this node.
-             */
-            int high;
-            /**
              * The sample count in each class.
              */
             int[] count;
@@ -451,14 +327,12 @@ public class DecisionTree implements SoftClassifier<double[]> {
              */
             double impurity;
             /**
-             * The variable for this task to attempt to split on.
+             * The index of variables for this task.
              */
             int j;
 
-            SplitTask(int n, int low, int high, int[] count, double impurity, int j) {
+            SplitTask(int n, int[] count, double impurity, int j) {
                 this.n = n;
-                this.low = low;
-                this.high = high;
                 this.count = count;
                 this.impurity = impurity;
                 this.j = j;
@@ -468,7 +342,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
             public Node call() {
                 // An array to store sample count in each class for false child node.
                 int[] falseCount = new int[k];
-                return findBestSplit(n, low, high, count, falseCount, impurity, j);
+                return findBestSplit(n, count, falseCount, impurity, j);
             }
         }
 
@@ -479,13 +353,14 @@ public class DecisionTree implements SoftClassifier<double[]> {
         public boolean findBestSplit() {
             int label = -1;
             boolean pure = true;
-            for (int i = low; i < high; i++) {
-                int o = originalOrder[i];
-                if (label == -1) {
-                    label = y[o];
-                } else if (y[o] != label) {
-                    pure = false;
-                    break;
+            for (int i = 0; i < x.length; i++) {
+                if (samples[i] > 0) {
+                    if (label == -1) {
+                        label = y[i];
+                    } else if (y[i] != label) {
+                        pure = false;
+                        break;
+                    }
                 }
             }
             
@@ -494,34 +369,38 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 return false;
             }
 
-            // Sample count in each class.
-            int[] count = new int[k];
             int n = 0;
-            for (int i = low; i < high; i++) {
-                int o = originalOrder[i];
-                int s = samples[o];
+            for (int s : samples) {
                 n += s;
-                count[y[o]] += s;
             }
 
             if (n <= nodeSize) {
                 return false;
             }
 
-            double impurity = impurity(count, n);
-
-            int p = attributes.length;
-            if (mtry < p) {
-                int[] variables = new int[p];
-                for (int i = 0; i < p; i++) {
-                    variables[i] = i;
+            // Sample count in each class.
+            int[] count = new int[k];
+            int[] falseCount = new int[k];
+            for (int i = 0; i < x.length; i++) {
+                if (samples[i] > 0) {
+                    count[y[i]] += samples[i];
                 }
-                Math.permutate(variables);
-                int[] falseCount = new int[k];
+            }
+
+            double impurity = impurity(count, n);
+            
+            int p = attributes.length;
+            int[] variables = new int[p];
+            for (int i = 0; i < p; i++) {
+                variables[i] = i;
+            }
+            
+            if (mtry < p) {
+                MathEx.permutate(variables);
 
                 // Random forest already runs on parallel.
                 for (int j = 0; j < mtry; j++) {
-                    Node split = findBestSplit(n, low, high, count, falseCount, impurity, variables[j]);
+                    Node split = findBestSplit(n, count, falseCount, impurity, variables[j]);
                     if (split.splitScore > node.splitScore) {
                         node.splitFeature = split.splitFeature;
                         node.splitValue = split.splitValue;
@@ -533,8 +412,8 @@ public class DecisionTree implements SoftClassifier<double[]> {
             } else {
 
                 List<SplitTask> tasks = new ArrayList<>(mtry);
-                for (int j = 0; j < p; j++) {
-                    tasks.add(new SplitTask(n, low, high, count, impurity, j));
+                for (int j = 0; j < mtry; j++) {
+                    tasks.add(new SplitTask(n, count, impurity, variables[j]));
                 }
 
                 try {
@@ -548,9 +427,8 @@ public class DecisionTree implements SoftClassifier<double[]> {
                         }
                     }
                 } catch (Exception ex) {
-                    int[] falseCount = new int[k];
-                    for (int j = 0; j < p; j++) {
-                        Node split = findBestSplit(n, low, high, count, falseCount, impurity, j);
+                    for (int j = 0; j < mtry; j++) {
+                        Node split = findBestSplit(n, count, falseCount, impurity, variables[j]);
                         if (split.splitScore > node.splitScore) {
                             node.splitFeature = split.splitFeature;
                             node.splitValue = split.splitValue;
@@ -567,28 +445,27 @@ public class DecisionTree implements SoftClassifier<double[]> {
         
         /**
          * Finds the best split cutoff for attribute j at the current node.
-         * @param n the number of instances in this node.
-         * @param low the lower bound (inclusive) of the samples belonging to this node.
-         * @param high the upp bound (exclusive) of the samples belonging to this node.
+         * @param n the number instances in this node.
          * @param count the sample count in each class.
          * @param falseCount an array to store sample count in each class for false child node.
          * @param impurity the impurity of this node.
          * @param j the attribute to split on.
          */
-        public Node findBestSplit(int n, int low, int high, int[] count, int[] falseCount, double impurity, int j) {
+        public Node findBestSplit(int n, int[] count, int[] falseCount, double impurity, int j) {
             Node splitNode = new Node();
 
             if (attributes[j].getType() == Attribute.Type.NOMINAL) {
                 int m = ((NominalAttribute) attributes[j]).size();
                 int[][] trueCount = new int[m][k];
 
-                for (int i = low; i < high; i++) {
-                    int o = originalOrder[i];
-                    trueCount[(int) x[o][j]][y[o]] += samples[o];
+                for (int i = 0; i < x.length; i++) {
+                    if (samples[i] > 0) {
+                        trueCount[(int) x[i][j]][y[i]] += samples[i];
+                    }
                 }
 
                 for (int l = 0; l < m; l++) {
-                    int tc = Math.sum(trueCount[l]);
+                    int tc = MathEx.sum(trueCount[l]);
                     int fc = n - tc;
 
                     // If either side is empty, skip this feature.
@@ -600,6 +477,8 @@ public class DecisionTree implements SoftClassifier<double[]> {
                         falseCount[q] = count[q] - trueCount[l][q];
                     }
 
+                    int trueLabel = MathEx.whichMax(trueCount[l]);
+                    int falseLabel = MathEx.whichMax(falseCount);
                     double gain = impurity - (double) tc / n * impurity(trueCount[l], tc) - (double) fc / n * impurity(falseCount, fc);
 
                     if (gain > splitNode.splitScore) {
@@ -607,54 +486,56 @@ public class DecisionTree implements SoftClassifier<double[]> {
                         splitNode.splitFeature = j;
                         splitNode.splitValue = l;
                         splitNode.splitScore = gain;
-                        splitNode.trueChildOutput = Math.whichMax(trueCount[l]);
-                        splitNode.falseChildOutput = Math.whichMax(falseCount);
+                        splitNode.trueChildOutput = trueLabel;
+                        splitNode.falseChildOutput = falseLabel;
                     }
                 }
             } else if (attributes[j].getType() == Attribute.Type.NUMERIC) {
                 int[] trueCount = new int[k];
-                int[] variableOrder = order[j];
                 double prevx = Double.NaN;
                 int prevy = -1;
 
-                for (int i = low; i < high; i++) {
-                    int o = variableOrder[i];
-                    if (Double.isNaN(prevx) || x[o][j] == prevx || y[o] == prevy) {
-                        prevx = x[o][j];
-                        prevy = y[o];
-                        trueCount[y[o]] += samples[o];
-                        continue;
+                for (int i : order[j]) {
+                    if (samples[i] > 0) {
+                        if (Double.isNaN(prevx) || x[i][j] == prevx || y[i] == prevy) {
+                            prevx = x[i][j];
+                            prevy = y[i];
+                            trueCount[y[i]] += samples[i];
+                            continue;
+                        }
+
+                        int tc = MathEx.sum(trueCount);
+                        int fc = n - tc;
+
+                        // If either side is empty, skip this feature.
+                        if (tc < nodeSize || fc < nodeSize) {
+                            prevx = x[i][j];
+                            prevy = y[i];
+                            trueCount[y[i]] += samples[i];
+                            continue;
+                        }
+
+                        for (int l = 0; l < k; l++) {
+                            falseCount[l] = count[l] - trueCount[l];
+                        }
+
+                        int trueLabel = MathEx.whichMax(trueCount);
+                        int falseLabel = MathEx.whichMax(falseCount);
+                        double gain = impurity - (double) tc / n * impurity(trueCount, tc) - (double) fc / n * impurity(falseCount, fc);
+
+                        if (gain > splitNode.splitScore) {
+                            // new best split
+                            splitNode.splitFeature = j;
+                            splitNode.splitValue = (x[i][j] + prevx) / 2;
+                            splitNode.splitScore = gain;
+                            splitNode.trueChildOutput = trueLabel;
+                            splitNode.falseChildOutput = falseLabel;
+                        }
+
+                        prevx = x[i][j];
+                        prevy = y[i];
+                        trueCount[y[i]] += samples[i];
                     }
-
-                    int tc = Math.sum(trueCount);
-                    int fc = n - tc;
-
-                    // If either side is empty, skip this feature.
-                    if (tc < nodeSize || fc < nodeSize) {
-                        prevx = x[o][j];
-                        prevy = y[o];
-                        trueCount[y[o]] += samples[o];
-                        continue;
-                    }
-
-                    for (int l = 0; l < k; l++) {
-                        falseCount[l] = count[l] - trueCount[l];
-                    }
-
-                    double gain = impurity - (double) tc / n * impurity(trueCount, tc) - (double) fc / n * impurity(falseCount, fc);
-
-                    if (gain > splitNode.splitScore) {
-                        // new best split
-                        splitNode.splitFeature = j;
-                        splitNode.splitValue = (x[o][j] + prevx) / 2;
-                        splitNode.splitScore = gain;
-                        splitNode.trueChildOutput = Math.whichMax(trueCount);
-                        splitNode.falseChildOutput = Math.whichMax(falseCount);
-                    }
-
-                    prevx = x[o][j];
-                    prevy = y[o];
-                    trueCount[y[o]] += samples[o];
                 }
             } else {
                 throw new IllegalStateException("Unsupported attribute type: " + attributes[j].getType());
@@ -671,38 +552,41 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 throw new IllegalStateException("Split a node with invalid feature.");
             }
 
-            int n = high - low;
+            int n = x.length;
             int tc = 0;
             int fc = 0;
+            // reuse samples for false branch child
+            int[] trueSamples = new int[n];
+            //int[] falseSamples = new int[n];
 
-            double[] trueChildPosteriori = new double[k];
-            double[] falseChildPosteriori = new double[k];
-            int split = low;
-            IntPredicate goesLeft;
             if (attributes[node.splitFeature].getType() == Attribute.Type.NOMINAL) {
-                goesLeft = new IntPredicate() {
-                    public boolean test(int o) { return x[o][node.splitFeature] == node.splitValue; }
-                    };
+                for (int i = 0; i < n; i++) {
+                    if (samples[i] > 0) {
+                        if (x[i][node.splitFeature] == node.splitValue) {
+                            trueSamples[i] = samples[i];
+                            tc += trueSamples[i];
+                            samples[i] = 0;
+                        } else {
+                            //falseSamples[i] = samples[i];
+                            fc += samples[i];
+                        }
+                    }
+                }
             } else if (attributes[node.splitFeature].getType() == Attribute.Type.NUMERIC) {
-                goesLeft = new IntPredicate() {
-                    public boolean test(int o) { return x[o][node.splitFeature] <= node.splitValue; }
-                    };
+                for (int i = 0; i < n; i++) {
+                    if (samples[i] > 0) {
+                        if (x[i][node.splitFeature] <= node.splitValue) {
+                            trueSamples[i] = samples[i];
+                            tc += trueSamples[i];
+                            samples[i] = 0;
+                        } else {
+                            //falseSamples[i] = samples[i];
+                            fc += samples[i];
+                        }
+                    }
+                }
             } else {
                 throw new IllegalStateException("Unsupported attribute type: " + attributes[node.splitFeature].getType());
-            }
-
-            for (int i = low; i < high; i++) {
-                int o = originalOrder[i];
-                int yi = y[o];
-                int s = samples[o];
-                if (goesLeft.test(o)) {
-                    tc += s;
-                    trueChildPosteriori[yi] += s;
-                    split++;
-                } else {
-                    fc += s;
-                    falseChildPosteriori[yi] += s;
-                }
             }
 
             if (tc < nodeSize || fc < nodeSize) {
@@ -710,6 +594,14 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 node.splitValue = Double.NaN;
                 node.splitScore = 0.0;
                 return false;
+            }
+
+            double[] trueChildPosteriori = new double[k];
+            double[] falseChildPosteriori = new double[k];
+            for (int i = 0; i < n; i++) {
+                int yi = y[i];
+                trueChildPosteriori[yi] += trueSamples[i];
+                falseChildPosteriori[yi] += samples[i];
             }
 
             // add-k smoothing of posteriori probability
@@ -720,11 +612,8 @@ public class DecisionTree implements SoftClassifier<double[]> {
 
             node.trueChild = new Node(node.trueChildOutput, trueChildPosteriori);
             node.falseChild = new Node(node.falseChildOutput, falseChildPosteriori);
-
-            int[] buffer = new int[high - split];
-            partitionOrder(low, split, high, goesLeft, buffer);
-
-            TrainNode trueChild = new TrainNode(node.trueChild, x, y, samples, low, split);
+            
+            TrainNode trueChild = new TrainNode(node.trueChild, x, y, trueSamples);
             if (tc > nodeSize && trueChild.findBestSplit()) {
                 if (nextSplits != null) {
                     nextSplits.add(trueChild);
@@ -733,7 +622,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 }
             }
 
-            TrainNode falseChild = new TrainNode(node.falseChild, x, y, samples, split, high);
+            TrainNode falseChild = new TrainNode(node.falseChild, x, y, samples);
             if (fc > nodeSize && falseChild.findBestSplit()) {
                 if (nextSplits != null) {
                     nextSplits.add(falseChild);
@@ -759,25 +648,31 @@ public class DecisionTree implements SoftClassifier<double[]> {
 
         switch (rule) {
             case GINI:
-                double squared_sum = 0;
+                impurity = 1.0;
                 for (int i = 0; i < count.length; i++) {
                     if (count[i] > 0) {
-                        squared_sum += (double) count[i] * count[i];
+                        double p = (double) count[i] / n;
+                        impurity -= p * p;
                     }
                 }
-                impurity = 1 - squared_sum / ((double) n * n);
                 break;
 
             case ENTROPY:
                 for (int i = 0; i < count.length; i++) {
                     if (count[i] > 0) {
                         double p = (double) count[i] / n;
-                        impurity -= p * Math.log2(p);
+                        impurity -= p * MathEx.log2(p);
                     }
                 }
                 break;
             case CLASSIFICATION_ERROR:
-                impurity = Math.abs(1 - Math.max(count) / (double)n);
+                impurity = 0;
+                for (int i = 0; i < count.length; i++) {
+                    if (count[i] > 0) {
+                        impurity = Math.max(impurity, count[i] / (double)n);
+                    }
+                }
+                impurity = Math.abs(1 - impurity);
                 break;
         }
 
@@ -881,10 +776,15 @@ public class DecisionTree implements SoftClassifier<double[]> {
      * @param samples the sample set of instances for stochastic learning.
      * samples[i] is the number of sampling for instance i.
      */
-    public DecisionTree(Attribute[] attributes, double[][] x, int[] y, int maxNodes, int nodeSize, int mtry, SplitRule rule, int[] samples, int[][] order) {
+    public static DecisionTree fit(Attribute[] attributes, double[][] x, int[] y, Properties prop, int[] samples, int[][] order) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
+
+        int mtry = prop.getProperty("mtry");
+        int maxNodes = prop.getProperty("max.nodes");
+        int nodeSize = prop.getProperty("node.size");
+        SplitRule rule = SplitRule.valueOf(prop.getProperty("split.rule", "GINI"));
 
         if (mtry < 1 || mtry > x[0].length) {
             throw new IllegalArgumentException("Invalid number of variables to split on at a node of the tree: " + mtry);
@@ -899,7 +799,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
         }
 
         // class label set.
-        int[] labels = Math.unique(y);
+        int[] labels = MathEx.unique(y);
         Arrays.sort(labels);
         
         for (int i = 0; i < labels.length; i++) {
@@ -962,25 +862,19 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 samples[i] = 1;
                 count[y[i]]++;
             }
-            makeCompressedOrder(samples, order != null, true);
         } else {
-            boolean allPresent = true;
             for (int i = 0; i < n; i++) {
                 count[y[i]] += samples[i];
-                if (samples[i] == 0) {
-                    allPresent = false;
-                }
             }
-            makeCompressedOrder(samples, order != null, allPresent);
         }
 
         double[] posteriori = new double[k];
         for (int i = 0; i < k; i++) {
             posteriori[i] = (double) count[i] / n;
         }
-        root = new Node(Math.whichMax(count), posteriori);
+        root = new Node(MathEx.whichMax(count), posteriori);
         
-        TrainNode trainRoot = new TrainNode(root, x, y, samples, 0, originalOrder.length);
+        TrainNode trainRoot = new TrainNode(root, x, y, samples);
         // Now add splits to the tree until max tree size is reached
         if (trainRoot.findBestSplit()) {
             nextSplits.add(trainRoot);
@@ -997,119 +891,6 @@ public class DecisionTree implements SoftClassifier<double[]> {
 
             node.split(nextSplits); // Split the parent node into two children nodes
         }
-
-        this.order = null;
-        this.originalOrder = null;
-    }
-
-    /**
-     * Modifies {@link #order} so that it includes only elements where samples != 0. Populates
-     * {@link #originalOrder} to be an ascending index of elements where samples != 0.
-     * @param samples how many times each element occurs in the training set.
-     * @param mustCopyOrder whether {@link #order} variable must be copied, even if the copy
-     *        contains no changes.
-     * @param allPresent whether every element in samples is non-zero.
-     */
-    private void makeCompressedOrder(int[] samples, boolean mustCopyOrder, boolean allPresent) {
-        int p = order.length;
-        int n = samples.length;
-        if (allPresent && mustCopyOrder) {
-            int[][] orderCopy = new int[p][];
-            for (int i = 0; i < p; i++) {
-                if (order[i] != null) {
-                    orderCopy[i] = order[i].clone();
-                }
-            }
-            order = orderCopy;
-        }
-
-        if (!allPresent) {
-            int[][] compressedOrder;
-            if (mustCopyOrder) {
-                compressedOrder = new int[p][];
-            } else {
-                // Rewrite in place.
-                compressedOrder = order;
-            }
-            int presentCount = 0;
-            for (int i = 0; i < n; i++) {
-                if (samples[i] != 0) {
-                    presentCount++;
-                }
-            }
-            for (int i = 0; i < p; i++) {
-                if (order[i] != null) {
-                    int[] variableOrder = order[i];
-                    int[] compressedVariableOrder = new int[presentCount];
-                    int k = 0;
-                    for (int j = 0; j < n; j++) {
-                        if (samples[variableOrder[j]] != 0) {
-                            compressedVariableOrder[k++] = variableOrder[j];
-                        }
-                    }
-                    compressedOrder[i] = compressedVariableOrder;
-                }
-            }
-            order = compressedOrder;
-
-            originalOrder = new int[presentCount];
-            int k = 0;
-            for (int i = 0; i < n; i++) {
-                if (samples[i] != 0) {
-                    originalOrder[k++] = i;
-                }
-            }
-        } else {
-            originalOrder = new int[n];
-            for (int i = 0; i < n; i++) {
-                originalOrder[i] = i;
-            }
-        }
-    }
-
-    /**
-     * Modifies {@link #order} and {@link #originalOrder} by partitioning the range from low
-     * (inclusive) to high (exclusive) so that all elements o for which goesLeft(o) is true come
-     * before all elements for which it is false, but element ordering is otherwise preserved. The
-     * number of true elements in left must equal split-low.
-     * @param low the low bound of the segment of the order arrays which will be partitioned.
-     * @param split where the partition's split point will end up.
-     * @param high the high bound of the segment of the order arrays which will be partitioned.
-     * @param goesLeft whether an element goes to the left side or the right side of the
-     *        partition.
-     * @param buffer scratch space large enough to hold all elements for which left is false.
-     */
-    private void partitionOrder(int low, int split, int high, IntPredicate goesLeft, int[] buffer) {
-        for (int[] variableOrder : order) {
-            if (variableOrder != null) {
-                partitionArray(variableOrder, low, split, high, goesLeft, buffer);
-            }
-        }
-        partitionArray(originalOrder, low, split, high, goesLeft, buffer);
-    }
-
-    /**
-     * Modifies an array in-place by partitioning the range from low (inclusive) to high
-     * (exclusive) so that all elements i for which left[i - low] is true come before all elements
-     * for which it is false, but element ordering is otherwise preserved. The number of true
-     * elements in left must equal split-low. buffer is scratch space large enough to hold all
-     * elements for which left is false.
-     */
-    private void partitionArray(int[] a, int low, int split, int high, IntPredicate goesLeft, int[] buffer) {
-        int n = high - low;
-        int j = low;
-        int k = 0;
-        for (int i = low; i < high; i++) {
-            if (goesLeft.test(a[i])) {
-                a[j++] = a[i];
-            } else {
-                buffer[k++] = a[i];
-            }
-        }
-        if (k != high - split || j != split) {
-            System.err.println("Messed up partition: " + low + ".." + split + ".." + high + " ended up splitting at " + j);
-        }
-        System.arraycopy(buffer, 0, a, split, k);
     }
 
     /**

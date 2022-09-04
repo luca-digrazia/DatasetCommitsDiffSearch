@@ -1,25 +1,28 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.regression;
 
-import smile.math.blas.UPLO;
+import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.Cholesky;
+import smile.math.matrix.LU;
+import smile.math.matrix.EVD;
 
 /**
  * Gaussian Process for Regression. A Gaussian process is a stochastic process
@@ -65,15 +68,78 @@ import smile.math.matrix.Matrix;
  * </ol>
  * @author Haifeng Li
  */
-public class GaussianProcessRegression {
+public class GaussianProcessRegression <T> implements Regression<T> {
+    private static final long serialVersionUID = 1L;
+
     /**
-     * Fits a regular Gaussian process model.
+     * The control points in the regression.
+     */
+    private T[] knots;
+    /**
+     * The linear weights.
+     */
+    private double[] w;
+    /**
+     * The distance functor.
+     */
+    private MercerKernel<T> kernel;
+    /**
+     * The shrinkage/regularization parameter.
+     */
+    private double lambda;
+
+    /**
+     * Trainer for Gaussian Process for Regression.
+     */
+    public static class Trainer<T> extends RegressionTrainer<T> {
+        /**
+         * The Mercer kernel.
+         */
+        private MercerKernel<T> kernel;
+        /**
+         * The shrinkage/regularization parameter.
+         */
+        private double lambda;
+
+        /**
+         * Constructor.
+         * 
+         * @param kernel the Mercer kernel.
+         * @param lambda the shrinkage/regularization parameter.
+         */
+        public Trainer(MercerKernel<T> kernel, double lambda) {
+            this.kernel = kernel;
+            this.lambda = lambda;
+        }
+        
+        @Override
+        public GaussianProcessRegression<T> train(T[] x, double[] y) {
+            return new GaussianProcessRegression<>(x, y, kernel, lambda);
+        }
+        
+        /**
+         * Learns a Gaussian Process with given subset of regressors.
+         * 
+         * @param x training samples.
+         * @param y training labels in [0, k), where k is the number of classes.
+         * @param t the inducing input, which are pre-selected or inducing samples
+         * acting as active set of regressors. Commonly, these can be chosen as
+         * the centers of k-means clustering.
+         * @return a trained Gaussian Process.
+         */
+        public GaussianProcessRegression<T> train(T[] x, double[] y, T[] t) {
+            return new GaussianProcessRegression<>(x, y, t, kernel, lambda);
+        }
+    }
+    
+    /**
+     * Constructor. Fitting a regular Gaussian process model.
      * @param x the training dataset.
      * @param y the response variable.
      * @param kernel the Mercer kernel.
      * @param lambda the shrinkage/regularization parameter.
      */
-    public static <T> KernelMachine<T> fit(T[] x, double[] y, MercerKernel<T> kernel, double lambda) {
+    public GaussianProcessRegression(T[] x, double[] y, MercerKernel<T> kernel, double lambda) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -82,10 +148,13 @@ public class GaussianProcessRegression {
             throw new IllegalArgumentException("Invalid regularization parameter lambda = " + lambda);
         }
 
+        this.kernel = kernel;
+        this.lambda = lambda;
+        this.knots = x;
+        
         int n = x.length;
 
-        Matrix K = new Matrix(n, n);
-        K.uplo(UPLO.LOWER);
+        DenseMatrix K = Matrix.zeros(n, n);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j <= i; j++) {
                 double k = kernel.k(x[i], x[j]);
@@ -96,14 +165,14 @@ public class GaussianProcessRegression {
             K.add(i, i, lambda);
         }
 
-        Matrix.Cholesky cholesky = K.cholesky();
-        double[] w = cholesky.solve(y);
-
-        return new KernelMachine<>(kernel, x, w);
+        Cholesky cholesky = K.cholesky();
+        w = y.clone();
+        cholesky.solve(w);
     }
 
     /**
-     * Fits an approximate Gaussian process model by the method of subset of regressors.
+     * Constructor. Fits an approximate Gaussian process model by the method
+     * of subset of regressors.
      * @param x the training dataset.
      * @param y the response variable.
      * @param t the inducing input, which are pre-selected or inducing samples
@@ -112,7 +181,7 @@ public class GaussianProcessRegression {
      * @param kernel the Mercer kernel.
      * @param lambda the shrinkage/regularization parameter.
      */
-    public static <T> KernelMachine<T> fit(T[] x, double[] y, T[] t, MercerKernel<T> kernel, double lambda) {
+    public GaussianProcessRegression(T[] x, double[] y, T[] t, MercerKernel<T> kernel, double lambda) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -121,17 +190,21 @@ public class GaussianProcessRegression {
             throw new IllegalArgumentException("Invalid regularization parameter lambda = " + lambda);
         }
 
+        this.kernel = kernel;
+        this.lambda = lambda;
+        this.knots = t;
+        
         int n = x.length;
         int m = t.length;
 
-        Matrix G = new Matrix(n, m);
-        for (int j = 0; j < m; j++) {
-            for (int i = 0; i < n; i++) {
+        DenseMatrix G = Matrix.zeros(n, m);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
                 G.set(i, j, kernel.k(x[i], t[j]));
             }
         }
 
-        Matrix K = G.ata();
+        DenseMatrix K = G.ata();;
         for (int i = 0; i < m; i++) {
             for (int j = 0; j <= i; j++) {
                 K.add(i, j, lambda * kernel.k(t[i], t[j]));
@@ -139,24 +212,26 @@ public class GaussianProcessRegression {
             }
         }
 
-        double[] Gty = G.tv(y);
+        w = new double[m];
+        G.atx(y, w);
 
-        Matrix.LU lu = K.lu();
-        double[] w = lu.solve(Gty);
-
-        return new KernelMachine<>(kernel, t, w);
+        LU lu = K.lu(true);
+        lu.solve(w);
     }
 
     /**
-     * Fits an approximate Gaussian process model with Nystrom approximation of kernel matrix.
+     * Constructor. Fits an approximate Gaussian process model with
+     * Nystrom approximation of kernel matrix.
      * @param x the training dataset.
      * @param y the response variable.
      * @param t the inducing input for Nystrom approximation. Commonly, these
      * can be chosen as the centers of k-means clustering.
      * @param kernel the Mercer kernel.
      * @param lambda the shrinkage/regularization parameter.
+     * @param nystrom THe value of this parameter doesn't really matter. The purpose is to be different from
+     *                the constructor of regressor approximation.
      */
-    public static <T> KernelMachine<T> nystrom(T[] x, double[] y, T[] t, MercerKernel<T> kernel, double lambda) {
+    GaussianProcessRegression(T[] x, double[] y, T[] t, MercerKernel<T> kernel, double lambda, boolean nystrom) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -165,17 +240,21 @@ public class GaussianProcessRegression {
             throw new IllegalArgumentException("Invalid regularization parameter lambda = " + lambda);
         }
 
+        this.kernel = kernel;
+        this.lambda = lambda;
+        this.knots = x;
+        
         int n = x.length;
         int m = t.length;
 
-        Matrix E = new Matrix(n, m);
-        for (int j = 0; j < m; j++) {
-            for (int i = 0; i < n; i++) {
+        DenseMatrix E = Matrix.zeros(n, m);
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
                 E.set(i, j, kernel.k(x[i], t[j]));
             }
         }
 
-        Matrix W = new Matrix(m, m);
+        DenseMatrix W = Matrix.zeros(m, m);
         for (int i = 0; i < m; i++) {
             for (int j = 0; j <= i; j++) {
                 double k = kernel.k(t[i], t[j]);
@@ -184,32 +263,57 @@ public class GaussianProcessRegression {
             }
         }
 
-        W.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = W.eigen().sort();
-        Matrix U = eigen.Vr;
-        Matrix D = eigen.diag();
+        W.setSymmetric(true);
+        EVD eigen = W.eigen();
+        DenseMatrix U = eigen.getEigenVectors();
+        DenseMatrix D = eigen.getD();
         for (int i = 0; i < m; i++) {
             D.set(i, i, 1.0 / Math.sqrt(D.get(i, i)));
         }
 
-        Matrix UD = U.mm(D);
-        Matrix UDUt = UD.mt(U);
-        Matrix L = E.mm(UDUt);
+        DenseMatrix UD = U.abmm(D);
+        DenseMatrix UDUt = UD.abtmm(U);
+        DenseMatrix L = E.abmm(UDUt);
         
-        Matrix LtL = L.ata();
+        DenseMatrix LtL = L.ata();
         for (int i = 0; i < m; i++) {
             LtL.add(i, i, lambda);
         }
 
-        Matrix.Cholesky chol = LtL.cholesky();
-        Matrix invLtL = chol.inverse();
-        Matrix K = L.mm(invLtL).mt(L);
-
-        double[] w = K.tv(y);
+        Cholesky chol = LtL.cholesky();
+        DenseMatrix invLtL = chol.inverse();
+        DenseMatrix K = L.abmm(invLtL).abtmm(L);
+        
+        w = new double[n];
+        K.atx(y, w);
+        
         for (int i = 0; i < n; i++) {
             w[i] = (y[i] - w[i]) / lambda;
         }
+    }
 
-        return new KernelMachine<>(kernel, x, w);
+    /**
+     * Returns the coefficients.
+     */
+    public double[] coefficients() {
+        return w;
+    }
+
+    /**
+     * Returns the shrinkage parameter.
+     */
+    public double shrinkage() {
+        return lambda;
+    }
+
+    @Override
+    public double predict(T x) {
+        double f = 0.0;
+        
+        for (int i = 0; i < knots.length; i++) {
+            f += w[i] * kernel.k(x, knots[i]);
+        }
+
+        return f;
     }
 }

@@ -20,8 +20,7 @@ import java.util.Arrays;
 
 import smile.clustering.CLARANS;
 import smile.clustering.KMeans;
-import smile.data.Attribute;
-import smile.math.Math;
+import smile.math.MathEx;
 import smile.math.distance.Metric;
 import smile.math.rbf.GaussianRadialBasis;
 import smile.sort.QuickSort;
@@ -32,6 +31,11 @@ import smile.sort.QuickSort;
  * @author Haifeng Li
  */
 public class SmileUtils {
+    /** Utility classes should not have public constructors. */
+    private SmileUtils() {
+
+    }
+
     /**
      * Sorts each variable and returns the index of values in ascending order.
      * Only numeric attributes will be sorted. Note that the order of original
@@ -80,7 +84,7 @@ public class SmileUtils {
         double r0 = 0.0;
         for (int i = 0; i < k; i++) {
             for (int j = 0; j < i; j++) {
-                double d = Math.distance(centers[i], centers[j]);
+                double d = MathEx.distance(centers[i], centers[j]);
                 if (r0 < d) {
                     r0 = d;
                 }
@@ -117,7 +121,7 @@ public class SmileUtils {
         GaussianRadialBasis[] rbf = new GaussianRadialBasis[k];
         for (int i = 0; i < k; i++) {
             for (int j = 0; j < k; j++) {
-                r[j] = Math.distance(centers[i], centers[j]);
+                r[j] = MathEx.distance(centers[i], centers[j]);
             }
             
             Arrays.sort(r);
@@ -155,7 +159,7 @@ public class SmileUtils {
         int[] y = kmeans.getClusterLabel();
         double[] sigma = new double[k];
         for (int i = 0; i < n; i++) {
-            sigma[y[i]] += Math.squaredDistance(x[i], centers[y[i]]);
+            sigma[y[i]] += MathEx.squaredDistance(x[i], centers[y[i]]);
         }
 
         int[] ni = kmeans.getClusterSize();
@@ -167,7 +171,7 @@ public class SmileUtils {
                 sigma[i] = Double.POSITIVE_INFINITY;
                 for (int j = 0; j < k; j++) {
                     if (i != j) {
-                        double d = Math.distance(centers[i], centers[j]);
+                        double d = MathEx.distance(centers[i], centers[j]);
                         if (d < sigma[i]) {
                             sigma[i] = d;
                         }
@@ -198,7 +202,7 @@ public class SmileUtils {
      */
     public static <T> GaussianRadialBasis learnGaussianRadialBasis(T[] x, T[] centers, Metric<T> distance) {
         int k = centers.length;
-        CLARANS<T> clarans = new CLARANS<T>(x, distance, k, Math.min(100, (int) Math.round(0.01 * k * (x.length-k))));
+        CLARANS<T> clarans = new CLARANS<>(x, distance, k, Math.min(100, (int) Math.round(0.01 * k * (x.length - k))));
         System.arraycopy(clarans.medoids(), 0, centers, 0, k);
 
         double r0 = 0.0;
@@ -234,7 +238,7 @@ public class SmileUtils {
         }
         
         int k = centers.length;
-        CLARANS<T> clarans = new CLARANS<T>(x, distance, k, Math.min(100, (int) Math.round(0.01 * k * (x.length-k))));
+        CLARANS<T> clarans = new CLARANS<>(x, distance, k, Math.min(100, (int) Math.round(0.01 * k * (x.length - k))));
         System.arraycopy(clarans.medoids(), 0, centers, 0, k);
 
         p = Math.min(p, k-1);
@@ -274,14 +278,14 @@ public class SmileUtils {
         }
         
         int k = centers.length;
-        CLARANS<T> clarans = new CLARANS<T>(x, distance, k, Math.min(100, (int) Math.round(0.01 * k * (x.length-k))));
+        CLARANS<T> clarans = new CLARANS<>(x, distance, k, Math.min(100, (int) Math.round(0.01 * k * (x.length - k))));
         System.arraycopy(clarans.medoids(), 0, centers, 0, k);
 
         int n = x.length;
         int[] y = clarans.getClusterLabel();
         double[] sigma = new double[k];
         for (int i = 0; i < n; i++) {
-            sigma[y[i]] += Math.sqr(distance.d(x[i], centers[y[i]]));
+            sigma[y[i]] += MathEx.sqr(distance.d(x[i], centers[y[i]]));
         }
 
         int[] ni = clarans.getClusterSize();

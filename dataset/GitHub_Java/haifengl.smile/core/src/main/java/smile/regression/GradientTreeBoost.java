@@ -1,36 +1,28 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.regression;
 
 import java.util.Arrays;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.stream.IntStream;
-import smile.base.cart.*;
-import smile.data.DataFrame;
-import smile.data.Tuple;
-import smile.data.formula.Formula;
-import smile.data.type.DataTypes;
-import smile.data.type.StructField;
-import smile.data.type.StructType;
-import smile.data.vector.DoubleVector;
+
+import smile.data.Attribute;
+import smile.data.AttributeDataset;
+import smile.data.NumericAttribute;
 import smile.math.MathEx;
 import smile.sort.QuickSelect;
+import smile.util.SmileUtils;
 import smile.validation.RMSE;
 import smile.validation.RegressionMeasure;
 
@@ -107,13 +99,13 @@ import smile.validation.RegressionMeasure;
  * 
  * @author Haifeng Li
  */
-public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression {
-    private static final long serialVersionUID = 2L;
+public class GradientTreeBoost implements Regression<double[]> {
+    private static final long serialVersionUID = 1L;
 
     /**
      * Regression loss function.
      */
-    public enum Loss {
+    public static enum Loss {
         /**
          * Least squares regression. Least-squares is highly efficient for
          * normally distributed errors but is prone to long tails and outliers.
@@ -134,22 +126,15 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
          */
         Huber,
     }
-
-    /**
-     * Design matrix formula
-     */
-    private Formula formula;
-
+    
     /**
      * Forest of regression trees.
      */
     private RegressionTree[] trees;
-
     /**
      * The intercept.
      */
     private double b = 0.0;
-
     /**
      * Variable importance. Every time a split of a node is made on variable
      * the impurity criterion for the two descendent nodes is less than the
@@ -157,175 +142,320 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
      * all trees in the forest gives a simple variable importance.
      */
     private double[] importance;
-
+    /**
+     * Loss function.
+     */
+    private Loss loss = Loss.LeastAbsoluteDeviation;
     /**
      * The shrinkage parameter in (0, 1] controls the learning rate of procedure.
      */
     private double shrinkage = 0.005;
+    /**
+     * The number of leaves in each tree.
+     */
+    private int maxNodes = 6;
+    /**
+     * The number of trees.
+     */
+    private int ntrees = 500;
+    /**
+     * The sampling rate for stochastic tree boosting.
+     */
+    private double f = 0.7;
+    
+    /**
+     * Trainer for GradientTreeBoost regression.
+     */
+    public static class Trainer extends RegressionTrainer<double[]> {
+        /**
+         * Loss function.
+         */
+        private Loss loss = Loss.LeastAbsoluteDeviation;
+        /**
+         * The number of trees.
+         */
+        private int ntrees = 500;
+        /**
+         * The shrinkage parameter in (0, 1] controls the learning rate of procedure.
+         */
+        private double shrinkage = 0.005;
+        /**
+         * The number of leaves in each tree.
+         */
+        private int maxNodes = 6;
+        /**
+         * The sampling rate for stochastic tree boosting.
+         */
+        private double f = 0.7;
+        
+        /**
+         * Constructor.
+         * 
+         * @param ntrees the number of trees.
+         */
+        public Trainer(int ntrees) {
+            if (ntrees < 1) {
+                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            }
 
+            this.ntrees = ntrees;
+        }
+
+        /**
+         * Constructor.
+         * 
+         * @param attributes the attributes of independent variable.
+         * @param ntrees the number of trees.
+         */
+        public Trainer(Attribute[] attributes, int ntrees) {
+            super(attributes);
+
+            if (ntrees < 1) {
+                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            }
+
+            this.ntrees = ntrees;
+        }
+        
+        /**
+         * Sets the loss function.
+         * @param loss the loss function.
+         */
+        public Trainer setLoss(Loss loss) {
+            this.loss = loss;
+            return this;
+        }
+        
+        /**
+         * Sets the number of trees in the random forest.
+         * @param ntrees the number of trees.
+         */
+        public Trainer setNumTrees(int ntrees) {
+            if (ntrees < 1) {
+                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            }
+
+            this.ntrees = ntrees;
+            return this;
+        }
+        
+        /**
+         * Sets the maximum number of leaf nodes in the tree.
+         * @param maxNodes the maximum number of leaf nodes in the tree.
+         */
+        public Trainer setMaxNodes(int maxNodes) {
+            if (maxNodes < 2) {
+                throw new IllegalArgumentException("Invalid number of leaf nodes: " + maxNodes);
+            }
+            
+            this.maxNodes = maxNodes;
+            return this;
+        }
+        
+        /**
+         * Sets the shrinkage parameter in (0, 1] controls the learning rate of procedure.
+         * @param shrinkage the learning rate.
+         */
+        public Trainer setShrinkage(double shrinkage) {
+            if (shrinkage <= 0 || shrinkage > 1) {
+                throw new IllegalArgumentException("Invalid shrinkage: " + shrinkage);
+            }
+
+            this.shrinkage = shrinkage;
+            return this;
+        }
+
+        /**
+         * Sets the sampling rate for stochastic tree boosting.
+         * @param f the sampling rate for stochastic tree boosting.
+         */
+        public Trainer setSamplingRates(double f) {
+            if (f <= 0 || f > 1) {
+                throw new IllegalArgumentException("Invalid sampling fraction: " + f);
+            }
+
+            this.f = f;
+            return this;
+        }
+        
+        @Override
+        public GradientTreeBoost train(double[][] x, double[] y) {
+            return new GradientTreeBoost(attributes, x, y, loss, ntrees, maxNodes, shrinkage, f);
+        }
+    }
+    
+    /**
+     * Constructor. Learns a gradient tree boosting for regression.
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of iterations (trees).
+     */
+    public GradientTreeBoost(double[][] x, double[] y, int ntrees) {
+        this(null, x, y, ntrees);
+    }
+    
     /**
      * Constructor. Learns a gradient tree boosting for regression.
      *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param trees forest of regression trees.
-     * @param b the intercept
-     * @param importance variable importance
-     */
-    public GradientTreeBoost(Formula formula, RegressionTree[] trees, double b, double shrinkage, double[] importance) {
-        this.formula = formula;
-        this.trees = trees;
-        this.b = b;
-        this.shrinkage = shrinkage;
-        this.importance = importance;
-    }
-
-    /**
-     * Learns a gradient tree boosting for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static GradientTreeBoost fit(Formula formula, DataFrame data) {
-        return fit(formula, data, new Properties());
-    }
-
-    /**
-     * Learns a gradient tree boosting for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static GradientTreeBoost fit(Formula formula, DataFrame data, Properties prop) {
-        int ntrees = Integer.valueOf(prop.getProperty("smile.gbt.trees", "500"));
-        Loss loss = Loss.valueOf(prop.getProperty("smile.gbt.loss", "LeastAbsoluteDeviation"));
-        int maxNodes = Integer.valueOf(prop.getProperty("smile.gbt.max.nodes", "6"));
-        int nodeSize = Integer.valueOf(prop.getProperty("smile.gbt.node.size", "5"));
-        double shrinkage = Double.valueOf(prop.getProperty("smile.gbt.shrinkage", "0.05"));
-        double subsample = Double.valueOf(prop.getProperty("smile.gbt.sample.rate", "0.7"));
-        return fit(formula, data, loss, ntrees, maxNodes, nodeSize, shrinkage, subsample);
-    }
-
-    /**
-     * Learns a gradient tree boosting for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
+     * @param x the training instances. 
+     * @param y the response variable.
      * @param loss loss function for regression. By default, least absolute
      * deviation is employed for robust regression.
      * @param ntrees the number of iterations (trees).
      * @param maxNodes the number of leaves in each tree.
-     * @param nodeSize the number of instances in a node below which the tree will
-     *                 not split, setting nodeSize = 5 generally gives good results.
      * @param shrinkage the shrinkage parameter in (0, 1] controls the learning rate of procedure.
-     * @param subsample the sampling fraction for stochastic tree boosting.
+     * @param f the sampling rate for stochastic tree boosting.
      */
-    public static GradientTreeBoost fit(Formula formula, DataFrame data, Loss loss, int ntrees, int maxNodes, int nodeSize, double shrinkage, double subsample) {
-        if (ntrees < 1) {
-            throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
-        }
+    public GradientTreeBoost(double[][] x, double[] y, Loss loss, int ntrees, int maxNodes, double shrinkage, double f) {
+        this(null, x, y, loss, ntrees, maxNodes, shrinkage, f);
+    }
 
-        if (maxNodes < 2) {
-            throw new IllegalArgumentException("Invalid maximum number of leaves: " + maxNodes);
-        }
+    /**
+     * Constructor. Learns a gradient tree boosting for regression.
+     * 
+     * @param attributes the attribute properties.
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of iterations (trees).
+     */
+    public GradientTreeBoost(Attribute[] attributes, double[][] x, double[] y, int ntrees) {
+        this(attributes, x, y, Loss.LeastAbsoluteDeviation, ntrees, 6, x.length < 2000 ? 0.005 : 0.05, 0.7);
+    }
 
-        if (nodeSize < 1) {
-            throw new IllegalArgumentException("Invalid minimum size of leaves: " + nodeSize);
-        }
+    /**
+     * Constructor. Learns a gradient tree boosting for regression.
+     *
+     * @param data the dataset.
+     * @param ntrees the number of iterations (trees).
+     */
+    public GradientTreeBoost(AttributeDataset data, int ntrees) {
+        this(data.attributes(), data.x(), data.y(), ntrees);
+    }
 
+    /**
+     * Constructor. Learns a gradient tree boosting for regression.
+     *
+     * @param data the dataset.
+     * @param loss loss function for regression. By default, least absolute
+     * deviation is employed for robust regression.
+     * @param ntrees the number of iterations (trees).
+     * @param maxNodes the number of leaves in each tree.
+     * @param shrinkage the shrinkage parameter in (0, 1] controls the learning rate of procedure.
+     * @param f the sampling fraction for stochastic tree boosting.
+     */
+    public GradientTreeBoost(AttributeDataset data, Loss loss, int ntrees, int maxNodes, double shrinkage, double f) {
+        this(data.attributes(), data.x(), data.y(), loss, ntrees, maxNodes, shrinkage, f);
+    }
+
+    /**
+     * Constructor. Learns a gradient tree boosting for regression.
+     *
+     * @param attributes variable attributes.
+     * @param x the training samples.
+     * @param y the training sample responses.
+     * @param loss loss function for regression. By default, least absolute
+     * deviation is employed for robust regression.
+     * @param ntrees the number of iterations (trees).
+     * @param maxNodes the number of leaves in each tree.
+     * @param shrinkage the shrinkage parameter in (0, 1] controls the learning rate of procedure.
+     * @param f the sampling fraction for stochastic tree boosting.
+     */
+    public GradientTreeBoost(Attribute[] attributes, double[][] x, double[] y, Loss loss, int ntrees, int maxNodes, double shrinkage, double f) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
+        }
+        
         if (shrinkage <= 0 || shrinkage > 1) {
             throw new IllegalArgumentException("Invalid shrinkage: " + shrinkage);            
         }
 
-        if (subsample <= 0 || subsample > 1) {
-            throw new IllegalArgumentException("Invalid sampling fraction: " + subsample);
+        if (f <= 0 || f > 1) {
+            throw new IllegalArgumentException("Invalid sampling fraction: " + f);            
         }
+        
+        if (attributes == null) {
+            int p = x[0].length;
+            attributes = new Attribute[p];
+            for (int i = 0; i < p; i++) {
+                attributes[i] = new NumericAttribute("V" + (i + 1));
+            }
+        }
+        
+        this.loss = loss;
+        this.ntrees = ntrees;
+        this.maxNodes = maxNodes;
+        this.shrinkage = shrinkage;
+        this.f = f;
 
-        DataFrame x = formula.x(data);
-        double[] y = formula.y(data).toDoubleArray();
-
-        final int n = x.nrows();
-        final int N = (int) Math.round(n * subsample);
-        final int[][] order = CART.order(x);
-
-        int[] permutation = IntStream.range(0, n).toArray();
+        int n = x.length;
+        int N = (int) Math.round(n * f);
+        
+        int[] perm = new int[n];
         int[] samples = new int[n];
+        for (int i = 0; i < n; i++) {
+            perm[i] = i;
+        }        
         
         double[] residual = new double[n];
-        double[] response = loss == Loss.LeastSquares ? residual : new double[n]; // response variable for regression tree.
-        StructField field = new StructField("residual", DataTypes.DoubleType);
-
-        RegressionNodeOutput output = null;
-        double b = 0.0;
-        switch (loss) {
-            case LeastSquares:
-                output = new LeastSquaresNodeOutput(residual);
-                b = MathEx.mean(y);
-                break;
-
-            case LeastAbsoluteDeviation:
-                output = new LeastAbsoluteDeviationNodeOutput(residual);
-                System.arraycopy(y, 0, residual, 0, n);
-                b = QuickSelect.median(residual);
-                break;
-
-            case Huber:
-                System.arraycopy(y, 0, residual, 0, n);
-                b = QuickSelect.median(residual);
-                break;
-
-            default:
-                throw new IllegalArgumentException("Unsupported loss: " + loss);
+        double[] response = null; // response variable for regression tree.
+        
+        RegressionTree.NodeOutput output = null;
+        if (loss == Loss.LeastSquares) {
+            response = residual;
+            b = MathEx.mean(y);
+            for (int i = 0; i < n; i++) {
+                residual[i] = y[i] - b;
+            }
+        } else if (loss == Loss.LeastAbsoluteDeviation) {
+            output = new LADNodeOutput(residual);
+            System.arraycopy(y, 0, residual, 0, n);
+            b = QuickSelect.median(residual);
+            response = new double[n];
+            for (int i = 0; i < n; i++) {
+                residual[i] = y[i] - b;
+                response[i] = Math.signum(residual[i]);
+            }
+        } else if (loss == Loss.Huber) {
+            response = new double[n];
+            System.arraycopy(y, 0, residual, 0, n);
+            b = QuickSelect.median(residual);
+            for (int i = 0; i < n; i++) {
+                residual[i] = y[i] - b;
+            }
         }
-
-        for (int i = 0; i < n; i++) {
-            residual[i] = y[i] - b;
-        }
-
-        RegressionTree[] trees = new RegressionTree[ntrees];
+        
+        int[][] order = SmileUtils.sort(attributes, x);        
+        trees = new RegressionTree[ntrees];
 
         for (int m = 0; m < ntrees; m++) {
             Arrays.fill(samples, 0);
-            MathEx.permutate(permutation);
+            
+            MathEx.permutate(perm);
             for (int i = 0; i < N; i++) {
-                samples[permutation[i]]++;
+                samples[perm[i]] = 1;
             }
             
-            switch (loss) {
-                case Huber:
-                    output = new HuberNodeOutput(residual, response, 0.9);
-                    break;
-
-                case LeastAbsoluteDeviation:
-                    for (int i = 0; i < n; i++) response[i] = Math.signum(residual[i]);
-                    break;
+            if (loss == Loss.Huber) {
+                output = new HuberNodeOutput(residual, response, 0.9);                
             }
-
-            trees[m] = new RegressionTree(x, response, field, maxNodes, nodeSize, x.ncols(), samples, order, output);
-
+            
+            trees[m] = new RegressionTree(attributes, x, response, maxNodes, 5, x[0].length, order, samples, output);
+            
             for (int i = 0; i < n; i++) {
-                residual[i] -= shrinkage * trees[m].predict(x.get(i));
+                residual[i] -= shrinkage * trees[m].predict(x[i]);
+                if (loss == Loss.LeastAbsoluteDeviation) {
+                    response[i] = Math.signum(residual[i]);
+                }
             }
         }
         
-        double[] importance = new double[x.ncols()];
+        importance = new double[attributes.length];
         for (RegressionTree tree : trees) {
             double[] imp = tree.importance();
             for (int i = 0; i < imp.length; i++) {
                 importance[i] += imp[i];
             }
         }
-
-        return new GradientTreeBoost(formula, trees, b, shrinkage, importance);
-    }
-
-    @Override
-    public Optional<Formula> formula() {
-        return Optional.of(formula);
-    }
-
-    @Override
-    public Optional<StructType> schema() {
-        return trees[0].schema();
     }
 
     /**
@@ -342,6 +472,138 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
     }
     
     /**
+     * Class to calculate node output for LAD regression.
+     */
+    class LADNodeOutput implements RegressionTree.NodeOutput {
+
+        /**
+         * Residuals to fit.
+         */
+        double[] residual;
+        /**
+         * Constructor.
+         * @param residual response to fit.
+         */
+        public LADNodeOutput(double[] residual) {
+            this.residual = residual;
+        }
+        
+        @Override
+        public double calculate(int[] samples) {
+            int n = 0;
+            for (int s : samples) {
+                if (s > 0) n++;
+            }
+            
+            double[] r = new double[n];
+            for (int i = 0, j = 0; i < samples.length; i++) {
+                if (samples[i] > 0) {
+                    r[j++] = residual[i];
+                }
+            }
+            
+            return QuickSelect.median(r);
+        }        
+    }
+    
+    /**
+     * Returns the sampling rate for stochastic gradient tree boosting.
+     * @return the sampling rate for stochastic gradient tree boosting.
+     */
+    public double getSamplingRate() {
+        return f;
+    }
+  
+    /**
+     * Returns the maximum number of leaves in decision tree.
+     * @return the maximum number of leaves in decision tree.
+     */
+    public int getmaxNodes() {
+        return maxNodes;
+    }
+    
+    /**
+     * Returns the loss function.
+     * @return the loss function.
+     */
+    public Loss getLossFunction() {
+        return loss;
+    }
+    
+    /**
+     * Class to calculate node output for Huber regression.
+     */
+    class HuberNodeOutput implements RegressionTree.NodeOutput {
+
+        /**
+         * Residuals.
+         */
+        double[] residual;
+        /**
+         * Responses to fit.
+         */
+        double[] response;
+        /**
+         * The value to choose &alpha;-quantile of residuals.
+         */
+        double alpha;
+        /**
+         * Cutoff.
+         */
+        double delta;
+        /**
+         * Constructor.
+         */
+        public HuberNodeOutput(double[] residual, double[] response, double alpha) {
+            this.residual = residual;
+            this.response = response;
+            this.alpha = alpha;
+            
+            int n = residual.length;
+            for (int i = 0; i < n; i++) {
+                response[i] = Math.abs(residual[i]);
+            }
+            
+            delta = QuickSelect.select(response, (int) (n * alpha));
+            
+            for (int i = 0; i < n; i++) {
+                if (Math.abs(residual[i]) <= delta) {
+                    response[i] = residual[i];
+                } else {
+                    response[i] = delta * Math.signum(residual[i]);
+                }
+            }
+        }
+        
+        @Override
+        public double calculate(int[] samples) {
+            int n = 0;
+            for (int s : samples) {
+                if (s > 0) n++;
+            }
+            
+            double[] res = new double[n];
+            for (int i = 0, j = 0; i < samples.length; i++) {
+                if (samples[i] > 0) {
+                    res[j++] = residual[i];
+                }
+            }
+            
+            double r = QuickSelect.median(res);
+            double output = 0.0;
+            for (int i = 0; i < samples.length; i++) {
+                if (samples[i] > 0) {
+                    double d = residual[i] - r;
+                    output += Math.signum(d) * Math.min(delta, Math.abs(d));
+                }
+            }
+            
+            output = r + output / n;
+            return output;
+        }        
+    }
+    
+    /**
      * Returns the number of trees in the model.
      * 
      * @return the number of trees in the model 
@@ -349,14 +611,7 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
     public int size() {
         return trees.length;
     }
-
-    /**
-     * Returns the regression trees.
-     */
-    public RegressionTree[] trees() {
-        return trees;
-    }
-
+    
     /**
      * Trims the tree model set to a smaller size in case of over-fitting.
      * Or if extra decision trees in the model don't improve the performance,
@@ -374,42 +629,81 @@ public class GradientTreeBoost implements Regression<Tuple>, DataFrameRegression
             throw new IllegalArgumentException("Invalid new model size: " + ntrees);
         }
         
-        trees = Arrays.copyOf(trees, ntrees);
+        if (ntrees < trees.length) {
+            trees = Arrays.copyOf(trees, ntrees);
+            this.ntrees = ntrees;
+        }
     }
     
     @Override
-    public double predict(Tuple x) {
-        Tuple xt = formula.x(x);
+    public double predict(double[] x) {
         double y = b;
-        for (RegressionTree tree : trees) {
-            y += shrinkage * tree.predict(xt);
+        for (int i = 0; i < ntrees; i++) {
+            y += shrinkage * trees[i].predict(x);
         }
         
         return y;
+    }    
+    
+    /**
+     * Test the model on a validation dataset.
+     * 
+     * @param x the test data set.
+     * @param y the test data response values.
+     * @return RMSEs with first 1, 2, ..., regression trees.
+     */
+    public double[] test(double[][] x, double[] y) {
+        double[] rmse = new double[ntrees];
+
+        int n = x.length;
+        double[] prediction = new double[n];
+        Arrays.fill(prediction, b);
+
+        RMSE measure = new RMSE();
+        
+        for (int i = 0; i < ntrees; i++) {
+            for (int j = 0; j < n; j++) {
+                prediction[j] += shrinkage * trees[i].predict(x[j]);
+            }
+
+            rmse[i] = measure.measure(y, prediction);
+        }
+
+        return rmse;
+    }
+    
+    /**
+     * Test the model on a validation dataset.
+     * 
+     * @param x the test data set.
+     * @param y the test data output values.
+     * @param measures the performance measures of regression.
+     * @return performance measures with first 1, 2, ..., regression trees.
+     */
+    public double[][] test(double[][] x, double[] y, RegressionMeasure[] measures) {
+        int m = measures.length;
+        double[][] results = new double[ntrees][m];
+
+        int n = x.length;
+        double[] prediction = new double[n];
+        Arrays.fill(prediction, b);
+
+        for (int i = 0; i < ntrees; i++) {
+            for (int j = 0; j < n; j++) {
+                prediction[j] += shrinkage * trees[i].predict(x[j]);
+            }
+
+            for (int j = 0; j < m; j++) {
+                results[i][j] = measures[j].measure(y, prediction);
+            }
+        }
+        return results;
     }
 
     /**
-     * Test the model on a validation dataset.
-     *
-     * @param data the test data set.
-     * @return the predictions with first 1, 2, ..., regression trees.
+     * Returns the regression trees.
      */
-    public double[][] test(DataFrame data) {
-        DataFrame x = formula.x(data);
-
-        int n = x.nrows();
-        int ntrees = trees.length;
-        double[][] prediction = new double[ntrees][n];
-
-        for (int j = 0; j < n; j++) {
-            Tuple xj = x.get(j);
-            double base = b;
-            for (int i = 0; i < ntrees; i++) {
-                base += shrinkage * trees[i].predict(xj);
-                prediction[i][j] = base;
-            }
-        }
-
-        return prediction;
+    public RegressionTree[] getTrees() {
+        return trees;
     }
 }
