@@ -4,7 +4,6 @@ import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 
 import io.quarkus.runtime.annotations.ConfigDocSection;
@@ -93,7 +92,7 @@ public class HibernateOrmConfig {
      * Class name of the Hibernate PhysicalNamingStrategy implementation
      */
     @ConfigItem
-    public Optional<String> physicalNamingStrategy;
+    Optional<String> physicalNamingStrategy;
 
     /**
      * Pluggable strategy for applying implicit naming rules when an explicit name is not given.
@@ -101,7 +100,7 @@ public class HibernateOrmConfig {
      * Class name of the Hibernate ImplicitNamingStrategy implementation
      */
     @ConfigItem
-    public Optional<String> implicitNamingStrategy;
+    Optional<String> implicitNamingStrategy;
 
     /**
      * Defines the method for multi-tenancy (DATABASE, NONE, SCHEMA). The complete list of allowed values is available in the
@@ -286,13 +285,13 @@ public class HibernateOrmConfig {
          * How many rows are fetched at a time by the JDBC driver.
          */
         @ConfigItem
-        public OptionalInt statementFetchSize;
+        public Optional<Integer> statementFetchSize;
 
         /**
          * The number of updates (inserts, updates and deletes) that are sent by the JDBC driver at one time for execution.
          */
         @ConfigItem
-        public OptionalInt statementBatchSize;
+        public Optional<Integer> statementBatchSize;
 
         public boolean isAnyPropertySet() {
             return timezone.isPresent() || statementFetchSize.isPresent() || statementBatchSize.isPresent();
