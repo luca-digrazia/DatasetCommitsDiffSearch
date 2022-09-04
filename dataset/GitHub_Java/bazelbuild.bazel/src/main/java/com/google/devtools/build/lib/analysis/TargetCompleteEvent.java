@@ -119,6 +119,11 @@ public final class TargetCompleteEvent
   private final ExecutableTargetData executableTargetData;
   private final boolean bepReportOnlyImportantArtifacts;
 
+  private static final String DISABLE_PREFIX_NAME =
+      "com.google.devtools.build.lib.analysis.TargetCompleteEvent.disable_path_prefix";
+  private static final boolean INCLUDE_PATH_PREFIX =
+      !"1".equals(System.getProperty(DISABLE_PREFIX_NAME));
+
   private TargetCompleteEvent(
       ConfiguredTargetAndData targetAndData,
       NestedSet<Cause> rootCauses,
@@ -319,7 +324,7 @@ public final class TargetCompleteEvent
       String name, Artifact artifact) {
     File.Builder builder =
         File.newBuilder().setName(name == null ? artifact.getRootRelativePathString() : name);
-    if (artifact.getRoot().getComponents() != null) {
+    if (INCLUDE_PATH_PREFIX && artifact.getRoot().getComponents() != null) {
       builder.addAllPathPrefix(
           Iterables.transform(artifact.getRoot().getComponents(), PathFragment::getPathString));
     }
