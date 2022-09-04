@@ -330,6 +330,14 @@ public class Core implements GraylogServer, InputHost {
                         + " because of missing or invalid configuration.", e);
             }
         }*/
+
+        activityWriter.write(new Activity("Started up.", Core.class));
+        LOG.info("Graylog2 up and running.");
+
+        while (true) {
+            try { Thread.sleep(1000); } catch (InterruptedException e) { /* lol, i don't care */ }
+        }
+
     }
 
     public void setLdapConnector(LdapConnector ldapConnector) {
@@ -629,26 +637,6 @@ public class Core implements GraylogServer, InputHost {
 
     public MetricRegistry metrics() {
         return metricRegistry;
-    }
-
-    /**
-     * Shortcut to delete an index. This is for plugin compat. We seriously need proper DI.
-     *
-     * @param indexName The name of the index to delete.
-     */
-    @Override
-    public void deleteIndexShortcut(String indexName) {
-        getIndexer().indices().delete(indexName);
-    }
-
-    /**
-     * Shortcut to close an index. This is for plugin compat. We seriously need proper DI.
-     *
-     * @param indexName The name of the index to close.
-     */
-    @Override
-    public void closeIndexShortcut(String indexName) {
-        getIndexer().indices().close(indexName);
     }
 
     public Initializers initializers() {
