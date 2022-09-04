@@ -150,12 +150,12 @@ public class QuarkusJsonPlatformDescriptorResolver {
                 return loadFromFile(jsonDescriptor);
             }
             return resolveJsonDescriptor(artifactResolver);
-        } catch (VersionNotAvailableException | PlatformDescriptorLoadingException e) {
+        } catch (PlatformDescriptorLoadingException e) {
             throw new IllegalStateException("Failed to load Quarkus platform descriptor", e);
         }
     }
 
-    private QuarkusPlatformDescriptor loadFromFile(Path jsonFile) throws PlatformDescriptorLoadingException, VersionNotAvailableException {
+    private QuarkusPlatformDescriptor loadFromFile(Path jsonFile) throws PlatformDescriptorLoadingException {
         log.debug("Loading Quarkus platform descriptor from %s", jsonFile);
         if(!Files.exists(jsonFile)) {
             throw new IllegalArgumentException("Failed to locate extensions JSON file at " + jsonFile);
@@ -176,8 +176,6 @@ public class QuarkusJsonPlatformDescriptorResolver {
 
         try (InputStream is = Files.newInputStream(jsonFile)) {
             return loadPlatformDescriptor(artifactResolver, is, quarkusCoreVersion);
-        } catch (VersionNotAvailableException e) {
-            throw e;
         } catch (Exception e) {
             throw new PlatformDescriptorLoadingException("Failed to load Quarkus platform descriptor from " + jsonFile, e);
         }
@@ -297,7 +295,7 @@ public class QuarkusJsonPlatformDescriptorResolver {
         bomGroupId = this.bomGroupId;
         if(bomGroupId != null) {
             if(!bomGroupId.equals(getGroupId(bundledBom))) {
-                throw new IllegalStateException("Failed to resolve Quarkus platform using the requested BOM groupId " + bomGroupId);
+                throw new IllegalStateException("Failed to resolve Quarkus platform BOM with the requested groupId " + bomGroupId);
             }
         } else {
             bomGroupId = getGroupId(bundledBom);
@@ -309,7 +307,7 @@ public class QuarkusJsonPlatformDescriptorResolver {
         bomArtifactId = this.bomArtifactId;
         if(bomArtifactId != null) {
             if(!bomArtifactId.equals(getArtifactId(bundledBom))) {
-                throw new IllegalStateException("Failed to resolve Quarkus platform using the requested BOM artifactId " + bomArtifactId);
+                throw new IllegalStateException("Failed to resolve Quarkus platform BOM with the requested artifactId " + bomArtifactId);
             }
         } else {
             bomArtifactId = getArtifactId(bundledBom);
@@ -321,7 +319,7 @@ public class QuarkusJsonPlatformDescriptorResolver {
         bomVersion = this.bomVersion;
         if(bomVersion != null) {
             if(!bomVersion.equals(getVersion(bundledBom))) {
-                throw new IllegalStateException("Failed to resolve Quarkus platform using the requested BOM version " + bomVersion);
+                throw new IllegalStateException("Failed to resolve Quarkus platform BOM with the requested version " + bomVersion);
             }
         } else if(this.bomVersionRange == null) {
             bomVersion = getVersion(bundledBom);
@@ -420,7 +418,7 @@ public class QuarkusJsonPlatformDescriptorResolver {
 
     @SuppressWarnings("rawtypes")
     private QuarkusPlatformDescriptor loadPlatformDescriptor(AppModelResolver mvn, final InputStream jsonStream,
-            String quarkusCoreVersion) throws PlatformDescriptorLoadingException, VersionNotAvailableException {
+            String quarkusCoreVersion) throws PlatformDescriptorLoadingException {
 
         ClassLoader jsonDescrLoaderCl = null;
 
@@ -455,8 +453,6 @@ public class QuarkusJsonPlatformDescriptorResolver {
                 resourceLoader = Files.isDirectory(path) ? new DirectoryResourceLoader(path) : new ZipResourceLoader(path);
                 log.debug("Quarkus platform resources will be loaded from %s", path);
                 jsonDescrUrl = path.toUri().toURL();
-            } catch (AppModelResolverException e) {
-                throw new VersionNotAvailableException("Failed to resolve " + jsonDescrArtifact, e);
             } catch (Exception e) {
                 throw new PlatformDescriptorLoadingException("Failed to resolve " + jsonDescrArtifact, e);
             }
