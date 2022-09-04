@@ -34,6 +34,8 @@ import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
 
 /**
+ * GELFProcessor.java: 12.04.2012 10:59:57
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GELFProcessor {
@@ -111,8 +113,8 @@ public class GELFProcessor {
         }
 
         // Add additional data if there is some.
-        Set<Map.Entry<String, String>> entrySet = json.entrySet();
-        for(Map.Entry<String, String> entry : entrySet) {
+        Set<Map.Entry<String, Object>> entrySet = json.entrySet();
+        for(Map.Entry<String, Object> entry : entrySet) {
 
             String key = entry.getKey();
 
