@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -62,8 +61,8 @@ public final class Runtime {
     }
 
     @Override
-    public void repr(SkylarkPrinter printer) {
-      printer.append("None");
+    public void write(Appendable buffer, char quotationMark) {
+      Printer.append(buffer, "None");
     }
   }
 
@@ -83,8 +82,8 @@ public final class Runtime {
     }
 
     @Override
-    public void repr(SkylarkPrinter printer) {
-      printer.append("<unbound>");
+    public void write(Appendable buffer, char quotationMark) {
+      Printer.append(buffer, "<unbound>");
     }
   }
 

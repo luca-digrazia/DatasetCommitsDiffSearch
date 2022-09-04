@@ -13,17 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.collect;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-import static java.util.stream.Collectors.toCollection;
+import static com.google.common.collect.Sets.newEnumSet;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -31,7 +28,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -110,7 +106,13 @@ public final class CollectionUtils {
    */
   @SuppressWarnings("unchecked")
   public static <T> ImmutableList<T> asListWithoutNulls(T... elements) {
-    return Arrays.stream(elements).filter(Objects::nonNull).collect(toImmutableList());
+    ImmutableList.Builder<T> builder = ImmutableList.builder();
+    for (T element : elements) {
+      if (element != null) {
+        builder.add(element);
+      }
+    }
+    return builder.build();
   }
 
   /**
@@ -137,7 +139,11 @@ public final class CollectionUtils {
    * Given an iterable, returns an immutable iterable with the same contents.
    */
   public static <T> Iterable<T> makeImmutable(Iterable<T> iterable) {
-    return isImmutable(iterable) ? iterable : ImmutableList.copyOf(iterable);
+    if (isImmutable(iterable)) {
+      return iterable;
+    } else {
+      return ImmutableList.copyOf(iterable);
+    }
   }
 
   /**
@@ -172,9 +178,14 @@ public final class CollectionUtils {
   public static <T extends Enum<T>> EnumSet<T> fromBits(int value, Class<T> clazz) {
     T[] elements = clazz.getEnumConstants();
     Preconditions.checkArgument(elements.length <= 32);
-    return Arrays.stream(elements)
-        .filter(element -> (value & (1 << element.ordinal())) != 0)
-        .collect(toCollection(() -> EnumSet.noneOf(clazz)));
+    ArrayList<T> result = new ArrayList<>();
+    for (T element : elements) {
+      if ((value & (1 << element.ordinal())) != 0) {
+        result.add(element);
+      }
+    }
+
+    return newEnumSet(result, clazz);
   }
 
   /**
@@ -189,7 +200,11 @@ public final class CollectionUtils {
    */
   public static <KEY_1, KEY_2, VALUE> ImmutableMap<KEY_1, ImmutableMap<KEY_2, VALUE>> toImmutable(
       Map<KEY_1, Map<KEY_2, VALUE>> map) {
-    return ImmutableMap.copyOf(Maps.transformValues(map, ImmutableMap::copyOf));
+    ImmutableMap.Builder<KEY_1, ImmutableMap<KEY_2, VALUE>> builder = ImmutableMap.builder();
+    for (Map.Entry<KEY_1, Map<KEY_2, VALUE>> entry : map.entrySet()) {
+      builder.put(entry.getKey(), ImmutableMap.copyOf(entry.getValue()));
+    }
+    return builder.build();
   }
 
   /**
@@ -197,6 +212,10 @@ public final class CollectionUtils {
    */
   public static <KEY_1, KEY_2, VALUE> Map<KEY_1, Map<KEY_2, VALUE>> copyOf(
       Map<KEY_1, ? extends Map<KEY_2, VALUE>> map) {
-    return new HashMap<>(Maps.transformValues(map, HashMap::new));
+    Map<KEY_1, Map<KEY_2, VALUE>> result = new HashMap<>();
+    for (Map.Entry<KEY_1, ? extends Map<KEY_2, VALUE>> entry : map.entrySet()) {
+      result.put(entry.getKey(), new HashMap<>(entry.getValue()));
+    }
+    return result;
   }
 }

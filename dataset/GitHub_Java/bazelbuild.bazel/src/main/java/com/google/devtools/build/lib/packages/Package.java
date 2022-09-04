@@ -193,8 +193,6 @@ public class Package {
   private ImmutableList<Event> events;
   private ImmutableList<Postable> posts;
 
-  private ImmutableList<Label> registeredToolchainLabels;
-
   /**
    * Package initialization, part 1 of 3: instantiates a new package with the
    * given name.
@@ -319,7 +317,6 @@ public class Package {
     this.features = ImmutableSortedSet.copyOf(builder.features);
     this.events = ImmutableList.copyOf(builder.events);
     this.posts = ImmutableList.copyOf(builder.posts);
-    this.registeredToolchainLabels = ImmutableList.copyOf(builder.registeredToolchainLabels);
   }
 
   /**
@@ -646,10 +643,6 @@ public class Package {
     return defaultRestrictedTo;
   }
 
-  public ImmutableList<Label> getRegisteredToolchainLabels() {
-    return registeredToolchainLabels;
-  }
-
   @Override
   public String toString() {
     return "Package(" + name + ")="
@@ -701,7 +694,6 @@ public class Package {
    * {@link com.google.devtools.build.lib.skyframe.PackageFunction}.
    */
   public static class Builder {
-
     public static interface Helper {
       /**
        * Returns a fresh {@link Package} instance that a {@link Builder} will internally mutate
@@ -763,8 +755,6 @@ public class Package {
     protected ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
 
     protected ExternalPackageBuilder externalPackageData = new ExternalPackageBuilder();
-
-    protected List<Label> registeredToolchainLabels = new ArrayList<>();
 
     /**
      * True iff the "package" function has already been called in this package.
@@ -1278,10 +1268,6 @@ public class Package {
     void addRule(Rule rule) throws NameConflictException, InterruptedException {
       checkForConflicts(rule);
       addRuleUnchecked(rule);
-    }
-
-    void addRegisteredToolchainLabels(List<Label> toolchains) {
-      this.registeredToolchainLabels.addAll(toolchains);
     }
 
     private Builder beforeBuild(boolean discoverAssumedInputFiles) throws InterruptedException {

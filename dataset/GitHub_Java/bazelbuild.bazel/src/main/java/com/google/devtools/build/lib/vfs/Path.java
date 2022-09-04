@@ -216,8 +216,7 @@ public class Path implements Comparable<Path>, Serializable {
   }
 
   private void writeObject(ObjectOutputStream out) throws IOException {
-    Preconditions.checkState(
-        fileSystem == fileSystemForSerialization, "%s %s", fileSystem, fileSystemForSerialization);
+    Preconditions.checkState(fileSystem == fileSystemForSerialization, fileSystem);
     out.writeUTF(getPathString());
   }
 

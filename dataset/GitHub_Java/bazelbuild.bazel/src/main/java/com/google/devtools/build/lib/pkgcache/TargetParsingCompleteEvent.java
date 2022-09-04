@@ -36,6 +36,7 @@ public class TargetParsingCompleteEvent implements BuildEvent {
   private final ImmutableSet<Target> filteredTargets;
   private final ImmutableSet<Target> testFilteredTargets;
   private final ImmutableSet<Target> expandedTargets;
+  private final long timeInMs;
 
   /**
    * Construct the event.
@@ -46,8 +47,10 @@ public class TargetParsingCompleteEvent implements BuildEvent {
       Collection<Target> targets,
       Collection<Target> filteredTargets,
       Collection<Target> testFilteredTargets,
+      long timeInMs,
       List<String> originalTargetPattern,
       Collection<Target> expandedTargets) {
+    this.timeInMs = timeInMs;
     this.targets = ImmutableSet.copyOf(targets);
     this.filteredTargets = ImmutableSet.copyOf(filteredTargets);
     this.testFilteredTargets = ImmutableSet.copyOf(testFilteredTargets);
@@ -61,6 +64,7 @@ public class TargetParsingCompleteEvent implements BuildEvent {
         targets,
         ImmutableSet.<Target>of(),
         ImmutableSet.<Target>of(),
+        0,
         ImmutableList.<String>of(),
         targets);
   }
@@ -88,6 +92,10 @@ public class TargetParsingCompleteEvent implements BuildEvent {
    */
   public ImmutableSet<Target> getTestFilteredTargets() {
     return testFilteredTargets;
+  }
+
+  public long getTimeInMs() {
+    return timeInMs;
   }
 
   @Override

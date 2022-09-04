@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
@@ -25,7 +24,7 @@ import java.util.List;
 
 /**
  * Class for creating paths that are specific to the structure of the Android NDK, but which are
- * common to all crosstool toolchains.
+ * common to all crosstool toolchains. 
  */
 public class NdkPaths {
 
@@ -40,14 +39,11 @@ public class NdkPaths {
   private final String repositoryName;
   private final String hostPlatform;
   private final ApiLevel apiLevel;
-  private final Integer majorRevision;
 
-  public NdkPaths(
-      String repositoryName, String hostPlatform, ApiLevel apiLevel, Integer majorRevision) {
+  public NdkPaths(String repositoryName, String hostPlatform, ApiLevel apiLevel) {
     this.repositoryName = repositoryName;
     this.hostPlatform = hostPlatform;
     this.apiLevel = apiLevel;
-    this.majorRevision = majorRevision;
   }
 
   public ImmutableList<ToolPath> createToolpaths(String toolchainName, String targetPlatform,
@@ -58,7 +54,7 @@ public class NdkPaths {
     for (Tool tool : CppConfiguration.Tool.values()) {
 
       // Some toolchains don't have particular tools.
-      if (!Arrays.asList(excludedTools).contains(tool)) {
+      if (!Arrays.asList(excludedTools).contains(tool)) {      
 
         String toolPath = createToolPath(toolchainName, targetPlatform + "-" + tool.getNamePart());
 
@@ -163,13 +159,6 @@ public class NdkPaths {
                 .replace("%includeFolderName%", includeFolderName));
   }
 
-  /**
-   * NDK 14 and below. Each API level has its own headers. See
-   * https://android.googlesource.com/platform/ndk/+/ndk-r15-release/docs/UnifiedHeaders.md#supporting-unified-headers-in-your-build-system
-   *
-   * @param targetCpu the target CPU architecture
-   * @return the path to the compile time sysroot
-   */
   public String createBuiltinSysroot(String targetCpu) {
 
     String correctedApiLevel = apiLevel.getCpuCorrectedApiLevel(targetCpu);
@@ -181,22 +170,6 @@ public class NdkPaths {
         .replace("%repositoryName%", repositoryName)
         .replace("%apiLevel%", correctedApiLevel)
         .replace("%arch%", targetCpu);
-  }
-
-  /**
-   * NDK 15 and above. The headers have been unified into ndk/sysroot.
-   *
-   * @return the sysroot location for NDK 15 and above.
-   */
-  public String createBuiltinSysroot() {
-    // This location does not exist prior to NDK 15
-    Preconditions.checkState(majorRevision >= 15);
-
-    return "external/%repositoryName%/ndk/sysroot".replace("%repositoryName%", repositoryName);
-  }
-
-  public String getCorrectedApiLevel(String targetCpu) {
-    return apiLevel.getCpuCorrectedApiLevel(targetCpu);
   }
 
   ImmutableList<String> createGnuLibstdcIncludePaths(String gccVersion, String targetCpu) {
@@ -234,21 +207,10 @@ public class NdkPaths {
     String prefix =
         "external/%repositoryName%/ndk/sources/".replace("%repositoryName%", repositoryName);
 
-    ImmutableList.Builder<String> includePaths = ImmutableList.builder();
-    
-    if (majorRevision <= 12) {
-      includePaths.add(prefix + "cxx-stl/llvm-libc++/libcxx/include");
-      includePaths.add(prefix + "cxx-stl/llvm-libc++abi/libcxxabi/include");
-    } else {
-      // libcxx/include was moved one level up from r13 onwards.
-      // See https://github.com/bazelbuild/bazel/issues/3641
-      includePaths.add(prefix + "cxx-stl/llvm-libc++/include");
-      includePaths.add(prefix + "cxx-stl/llvm-libc++abi/include");
-    }
-
-    includePaths.add(prefix + "android/support/include");
-
-    return includePaths.build();
+    return ImmutableList.of(
+        prefix + "cxx-stl/llvm-libc++/libcxx/include",
+        prefix + "cxx-stl/llvm-libc++abi/libcxxabi/include",
+        prefix + "android/support/include");
   }
 
   /**
@@ -260,7 +222,7 @@ public class NdkPaths {
    */
   static String createStlRuntimeLibsGlob(
       String stl, String gccVersion, String targetCpu, String fileExtension) {
-
+    
     if (gccVersion != null) {
       stl += "/" + gccVersion;
     }
@@ -274,15 +236,4 @@ public class NdkPaths {
         .replace("%targetCpu%", targetCpu)
         .replace("%fileExtension%", fileExtension);
   }
-
-  /**
-   * @param targetCpu Target CPU
-   * @return the directory of the target CPU's runtime .a files for linking
-   */
-  public String createLibcppLinkerPath(String targetCpu) {
-    return "external/%repositoryName%/ndk/sources/cxx-stl/llvm-libc++/libs/%targetCpu%"
-        .replace("%repositoryName%", repositoryName)
-        .replace("%targetCpu%", targetCpu);
-  }
 }
-

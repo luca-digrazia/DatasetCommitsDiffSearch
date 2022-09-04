@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -86,11 +87,7 @@ final class ProtocolBuffers2Support {
   public ProtocolBuffers2Support registerCompilationActions()
       throws RuleErrorException, InterruptedException {
     CompilationSupport compilationSupport =
-        new CompilationSupport.Builder()
-            .setRuleContext(ruleContext)
-            .doNotUseDeps()
-            .doNotUsePch()
-            .build();
+        new CompilationSupport.Builder().setRuleContext(ruleContext).doNotUseDeps().build();
 
     compilationSupport.registerCompileAndArchiveActions(getCommon());
     return this;
@@ -135,6 +132,7 @@ final class ProtocolBuffers2Support {
     Iterable<Artifact> generatedSources = getGeneratedProtoOutputs(getSourceExtension());
     return new CompilationArtifacts.Builder()
         .setIntermediateArtifacts(new IntermediateArtifacts(ruleContext, ""))
+        .setPchFile(Optional.<Artifact>absent())
         .addAdditionalHdrs(getGeneratedProtoOutputs(getHeaderExtension()))
         .addAdditionalHdrs(generatedSources)
         .addNonArcSrcs(generatedSources)

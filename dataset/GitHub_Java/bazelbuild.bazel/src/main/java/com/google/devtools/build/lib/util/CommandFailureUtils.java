@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.util;
 
 import static java.util.Map.Entry.comparingByKey;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Ordering;
 import java.io.File;
 import java.util.Collection;
@@ -38,7 +37,7 @@ public class CommandFailureUtils {
     void describeCommandBeginIsolate(StringBuilder message);
     void describeCommandEndIsolate(StringBuilder message);
     void describeCommandCwd(String cwd, StringBuilder message);
-    void describeCommandEnvPrefix(StringBuilder message, boolean isolated);
+    void describeCommandEnvPrefix(StringBuilder message);
     void describeCommandEnvVar(StringBuilder message, Map.Entry<String, String> entry);
     void describeCommandElement(StringBuilder message, String commandElement);
     void describeCommandExec(StringBuilder message);
@@ -62,10 +61,8 @@ public class CommandFailureUtils {
     }
 
     @Override
-    public void describeCommandEnvPrefix(StringBuilder message, boolean isolated) {
-      message.append(isolated
-          ? "env - \\\n  "
-          : "env \\\n  ");
+    public void describeCommandEnvPrefix(StringBuilder message) {
+      message.append("env - \\\n  ");
     }
 
     @Override
@@ -105,7 +102,7 @@ public class CommandFailureUtils {
     }
 
     @Override
-    public void describeCommandEnvPrefix(StringBuilder message, boolean isolated) { }
+    public void describeCommandEnvPrefix(StringBuilder message) { }
 
     @Override
     public void describeCommandEnvVar(StringBuilder message, Map.Entry<String, String> entry) {
@@ -184,8 +181,7 @@ public class CommandFailureUtils {
        * (in ProcessEnvironment.StringEnvironment.toEnvironmentBlock()).
        */
       if (environment != null) {
-        describeCommandImpl.describeCommandEnvPrefix(
-            message, form != CommandDescriptionForm.COMPLETE_UNISOLATED);
+        describeCommandImpl.describeCommandEnvPrefix(message);
         // A map can never have two keys with the same value, so we only need to compare the keys.
         Comparator<Map.Entry<String, String>> mapEntryComparator = comparingByKey();
         for (Map.Entry<String, String> entry :

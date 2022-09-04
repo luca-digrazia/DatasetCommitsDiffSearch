@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.featurecontrol.FeaturePolicyConfiguration;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.syntax.Type;
@@ -154,9 +153,8 @@ public class ConfigRuleClasses {
                   .undocumented("the feature flag feature has not yet been launched")
                   .allowedFileTypes()
                   .mandatoryProviders(
-                      ImmutableList.of(ConfigFeatureFlagProvider.SKYLARK_CONSTRUCTOR.id()))
+                      ImmutableList.of(ConfigFeatureFlagProvider.SKYLARK_IDENTIFIER))
                   .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
-          .requiresConfigurationFragments(FeaturePolicyConfiguration.class)
           .setIsConfigMatcherForConfigSettingOnly()
           .setOptionReferenceFunctionForConfigSettingOnly(
               rule ->
@@ -246,9 +244,7 @@ config_setting(
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
           .setUndocumented(/* It's unusable as yet, as there are no ways to interact with it. */)
-          .requiresConfigurationFragments(
-              ConfigFeatureFlagConfiguration.class,
-              FeaturePolicyConfiguration.class)
+          .requiresConfigurationFragments(ConfigFeatureFlagConfiguration.class)
           .add(
               attr("allowed_values", STRING_LIST)
                   .mandatory()

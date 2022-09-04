@@ -192,6 +192,7 @@ public final class CppFileTypes {
     String fileName = source.getFilename();
     return !ASSEMBLER.matches(fileName)
         && !PIC_ASSEMBLER.matches(fileName)
+        && !CLIF_INPUT_PROTO.matches(fileName)
         && !CPP_MODULE.matches(fileName);
   }
 

@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SelectorValue;
 import com.google.devtools.build.lib.syntax.Type;
@@ -294,10 +293,10 @@ public final class BuildType {
         convertedFrom.computeIfAbsent(label, k -> new ArrayList<Object>());
         convertedFrom.get(label).add(original);
       }
-      BasePrinter errorMessage = Printer.getPrinter();
+      StringBuilder errorMessage = new StringBuilder();
       errorMessage.append("duplicate labels");
       if (what != null) {
-        errorMessage.append(" in ").append(what.toString());
+        errorMessage.append(" in ").append(what);
       }
       errorMessage.append(':');
       boolean isFirstEntry = true;
@@ -311,9 +310,9 @@ public final class BuildType {
           errorMessage.append(',');
         }
         errorMessage.append(' ');
-        errorMessage.str(entry.getKey());
+        errorMessage.append(entry.getKey());
         errorMessage.append(" (as ");
-        errorMessage.repr(entry.getValue());
+        Printer.write(errorMessage, entry.getValue());
         errorMessage.append(')');
       }
       throw new ConversionException(errorMessage.toString());

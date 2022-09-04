@@ -1091,8 +1091,6 @@ public class Parser {
   // load '(' STRING (COMMA [IDENTIFIER EQUALS] STRING)* COMMA? ')'
   private void parseLoad(List<Statement> list) {
     int start = token.left;
-    expect(TokenKind.LOAD);
-    expect(TokenKind.LPAREN);
     if (token.kind != TokenKind.STRING) {
       expect(TokenKind.STRING);
       return;
@@ -1116,7 +1114,6 @@ public class Parser {
 
     LoadStatement stmt = new LoadStatement(importString, symbols);
     list.add(setLocation(stmt, start, token.left));
-    expectAndRecover(TokenKind.NEWLINE);
   }
 
   /**
@@ -1168,12 +1165,21 @@ public class Parser {
   }
 
   private void parseTopLevelStatement(List<Statement> list) {
-    // Unlike Python imports, load statements can appear only at top-level.
-    if (token.kind == TokenKind.LOAD) {
-      parseLoad(list);
-    } else {
-      parseStatement(list, ParsingLevel.TOP_LEVEL);
+    // In Python grammar, there is no "top-level statement" and imports are
+    // considered as "small statements". We are a bit stricter than Python here.
+    // Check if there is an include
+    if (token.kind == TokenKind.IDENTIFIER) {
+      Token identToken = token;
+      Identifier ident = parseIdent();
+
+      if (ident.getName().equals("load") && token.kind == TokenKind.LPAREN) {
+        expect(TokenKind.LPAREN);
+        parseLoad(list);
+        return;
+      }
+      pushToken(identToken); // push the ident back to parse it as a statement
     }
+    parseStatement(list, ParsingLevel.TOP_LEVEL);
   }
 
   // small_stmt | 'pass'

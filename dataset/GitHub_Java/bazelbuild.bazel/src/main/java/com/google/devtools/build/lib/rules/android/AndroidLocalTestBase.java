@@ -289,6 +289,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
           generatedExtensionRegistryProvider);
     }
 
+    addExtraProviders(builder, javaCommon, classJar, srcJar, genClassJar, genSourceJar);
+
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = javaRuleOutputJarsProviderBuilder.build();
 
     javaCommon.addTransitiveInfoProviders(builder, filesToBuild, classJar);
@@ -330,6 +332,14 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
   }
 
   protected abstract JavaSemantics createJavaSemantics();
+
+  protected abstract void addExtraProviders(
+      RuleConfiguredTargetBuilder builder,
+      JavaCommon javaCommon,
+      Artifact classJar,
+      Artifact srcJar,
+      Artifact genClassJar,
+      Artifact genSourceJar);
 
   protected abstract ImmutableList<String> getJvmFlags(RuleContext ruleContext, String testClass);
 

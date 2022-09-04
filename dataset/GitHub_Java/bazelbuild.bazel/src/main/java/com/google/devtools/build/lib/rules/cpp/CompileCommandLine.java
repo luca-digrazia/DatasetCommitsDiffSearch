@@ -152,7 +152,10 @@ public final class CompileCommandLine {
     }
     addFilteredOptions(options, featureConfiguration.getCommandLine(actionName, updatedVariables));
 
-    addFilteredOptions(options, copts);
+    // Users don't expect the explicit copts to be filtered by coptsFilter, add them verbatim.
+    // Make sure these are added after the options from the feature configuration, so that
+    // those options can be overriden.
+    options.addAll(copts);
 
     // Unfiltered compiler options contain system include paths. These must be added after
     // the user provided options, otherwise users adding include paths will not pick up their

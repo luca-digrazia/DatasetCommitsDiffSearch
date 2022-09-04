@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
@@ -44,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
@@ -92,11 +90,11 @@ public class CppCompileActionBuilder {
   // New fields need to be added to the copy constructor.
 
   /**
-   * Creates a builder from a rule. This also uses the configuration and artifact factory from the
-   * rule.
+   * Creates a builder from a rule. This also uses the configuration and
+   * artifact factory from the rule.
    */
-  public CppCompileActionBuilder(
-      RuleContext ruleContext, Label sourceLabel, CcToolchainProvider ccToolchain) {
+  public CppCompileActionBuilder(RuleContext ruleContext, Label sourceLabel,
+      CcToolchainProvider ccToolchain) {
     this(
         ruleContext.getActionOwner(),
         sourceLabel,
@@ -106,12 +104,11 @@ public class CppCompileActionBuilder {
         ccToolchain);
   }
 
-  /** Creates a builder from a rule and configuration. */
-  public CppCompileActionBuilder(
-      RuleContext ruleContext,
-      Label sourceLabel,
-      CcToolchainProvider ccToolchain,
-      BuildConfiguration configuration) {
+  /**
+   * Creates a builder from a rule and configuration.
+   */
+  public CppCompileActionBuilder(RuleContext ruleContext, Label sourceLabel,
+      CcToolchainProvider ccToolchain, BuildConfiguration configuration) {
     this(
         ruleContext.getActionOwner(),
         sourceLabel,
@@ -121,7 +118,9 @@ public class CppCompileActionBuilder {
         ccToolchain);
   }
 
-  /** Creates a builder from a rule and configuration. */
+  /**
+   * Creates a builder from a rule and configuration.
+   */
   private CppCompileActionBuilder(
       ActionOwner actionOwner,
       Label sourceLabel,
@@ -293,51 +292,29 @@ public class CppCompileActionBuilder {
   }
 
   /**
-   * Builds the Action as configured and performs some validations on the action. Uses {@link
-   * RuleContext#throwWithRuleError(String)} to report errors. Prefer this method over {@link
-   * CppCompileActionBuilder#buildOrThrowIllegalStateException()} whenever possible (meaning
-   * whenever you have access to {@link RuleContext}).
+   * Builds the action and performs some validations on the action.
    *
-   * <p>This method may be called multiple times to create multiple compile actions (usually after
-   * calling some setters to modify the generated action).
+   * <p>This method may be called multiple times to create multiple compile
+   * actions (usually after calling some setters to modify the generated
+   * action).
    */
-  public CppCompileAction buildOrThrowRuleError(RuleContext ruleContext) throws RuleErrorException {
-    List<String> errorMessages = new ArrayList<>();
-    CppCompileAction result =
-        buildAndVerify((String errorMessage) -> errorMessages.add(errorMessage));
-
-    if (!errorMessages.isEmpty()) {
-      for (String errorMessage : errorMessages) {
-        ruleContext.ruleError(errorMessage);
-      }
-
-      throw new RuleErrorException();
+  public CppCompileAction buildAndValidate(RuleContext ruleContext) {
+    CppCompileAction action = build();
+    if (cppSemantics.needsIncludeValidation()) {
+      verifyActionIncludePaths(action, ruleContext);
     }
-
-    return result;
+    return action;
   }
 
   /**
-   * Builds the Action as configured and performs some validations on the action. Throws {@link
-   * IllegalStateException} to report errors. Prefer {@link
-   * CppCompileActionBuilder#buildOrThrowRuleError(RuleContext)} over this method whenever possible
-   * (meaning whenever you have access to {@link RuleContext}).
+   * Builds the Action as configured without validations. Users may want to call
+   * {@link #buildAndValidate} instead.
    *
-   * <p>This method may be called multiple times to create multiple compile actions (usually after
-   * calling some setters to modify the generated action).
+   * <p>This method may be called multiple times to create multiple compile
+   * actions (usually after calling some setters to modify the generated
+   * action).
    */
-  public CppCompileAction buildOrThrowIllegalStateException() {
-    return buildAndVerify(
-        (String errorMessage) -> {
-          throw new IllegalStateException(errorMessage);
-        });
-  }
-
-  /**
-   * Builds the Action as configured and performs some validations on the action. Uses given {@link
-   * Consumer} to collect validation errors.
-   */
-  public CppCompileAction buildAndVerify(Consumer<String> errorCollector) {
+  public CppCompileAction build() {
     // This must be set either to false or true by CppSemantics, otherwise someone forgot to call
     // finalizeCompileActionBuilder on this builder.
     Preconditions.checkNotNull(shouldScanIncludes);
@@ -345,6 +322,9 @@ public class CppCompileActionBuilder {
         allowUsingHeaderModules
             && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES);
 
+    // If the crosstool uses action_configs to configure cc compilation, collect execution info
+    // from there, otherwise, use no execution info.
+    // TODO(b/27903698): Assert that the crosstool has an action_config for this action.
     if (featureConfiguration.actionIsConfigured(getActionName())) {
       for (String executionRequirement :
           featureConfiguration.getToolForAction(getActionName()).getExecutionRequirements()) {
@@ -376,80 +356,72 @@ public class CppCompileActionBuilder {
     NestedSet<Artifact> prunableInputs = prunableInputBuilder.build();
 
     // Copying the collections is needed to make the builder reusable.
-    CppCompileAction action;
     boolean fake = tempOutputFile != null;
     if (fake) {
-      action =
-          new FakeCppCompileAction(
-              owner,
-              allInputs,
-              ImmutableList.copyOf(features),
-              featureConfiguration,
-              variables,
-              sourceFile,
-              shouldScanIncludes,
-              shouldPruneModules(),
-              usePic,
-              useHeaderModules,
-              sourceLabel,
-              realMandatoryInputs,
-              prunableInputs,
-              outputFile,
-              tempOutputFile,
-              dotdFile,
-              localShellEnvironment,
-              cppConfiguration,
-              context,
-              actionContext,
-              ImmutableList.copyOf(copts),
-              getNocoptPredicate(nocopts),
-              getLipoScannables(realMandatoryInputs),
-              cppSemantics,
-              ccToolchain,
-              ImmutableMap.copyOf(executionInfo));
+      return new FakeCppCompileAction(
+          owner,
+          allInputs,
+          ImmutableList.copyOf(features),
+          featureConfiguration,
+          variables,
+          sourceFile,
+          shouldScanIncludes,
+          shouldPruneModules(),
+          usePic,
+          useHeaderModules,
+          sourceLabel,
+          realMandatoryInputs,
+          prunableInputs,
+          outputFile,
+          tempOutputFile,
+          dotdFile,
+          localShellEnvironment,
+          cppConfiguration,
+          context,
+          actionContext,
+          ImmutableList.copyOf(copts),
+          getNocoptPredicate(nocopts),
+          getLipoScannables(realMandatoryInputs),
+          cppSemantics,
+          ccToolchain,
+          ImmutableMap.copyOf(executionInfo));
     } else {
-      action =
-          new CppCompileAction(
-              owner,
-              allInputs,
-              ImmutableList.copyOf(features),
-              featureConfiguration,
-              variables,
-              sourceFile,
-              shouldScanIncludes,
-              shouldPruneModules(),
-              usePic,
-              useHeaderModules,
-              sourceLabel,
-              realMandatoryInputs,
-              prunableInputs,
-              outputFile,
-              dotdFile,
-              gcnoFile,
-              dwoFile,
-              ltoIndexingFile,
-              optionalSourceFile,
-              localShellEnvironment,
-              cppConfiguration,
-              context,
-              actionContext,
-              ImmutableList.copyOf(copts),
-              getNocoptPredicate(nocopts),
-              specialInputsHandler,
-              getLipoScannables(realMandatoryInputs),
-              additionalIncludeFiles.build(),
-              actionClassId,
-              ImmutableMap.copyOf(executionInfo),
-              ImmutableMap.copyOf(environment),
-              getActionName(),
-              cppSemantics,
-              ccToolchain);
+      return new CppCompileAction(
+          owner,
+          allInputs,
+          ImmutableList.copyOf(features),
+          featureConfiguration,
+          variables,
+          sourceFile,
+          shouldScanIncludes,
+          shouldPruneModules(),
+          usePic,
+          useHeaderModules,
+          sourceLabel,
+          realMandatoryInputs,
+          prunableInputs,
+          outputFile,
+          dotdFile,
+          gcnoFile,
+          dwoFile,
+          ltoIndexingFile,
+          optionalSourceFile,
+          localShellEnvironment,
+          cppConfiguration,
+          context,
+          actionContext,
+          ImmutableList.copyOf(copts),
+          getNocoptPredicate(nocopts),
+          specialInputsHandler,
+          getLipoScannables(realMandatoryInputs),
+          additionalIncludeFiles.build(),
+          actionClassId,
+          ImmutableMap.copyOf(executionInfo),
+          ImmutableMap.copyOf(environment),
+          getActionName(),
+          cppSemantics,
+          ccToolchain);
     }
-
-    if (cppSemantics.needsIncludeValidation()) {
-      verifyActionIncludePaths(action, errorCollector);
-    }
-    return action;
   }
 
   /**
@@ -489,30 +461,27 @@ public class CppCompileActionBuilder {
     return cppConfiguration.getPruneCppModules() && shouldScanIncludes && useHeaderModules();
   }
 
-  private void verifyActionIncludePaths(CppCompileAction action, Consumer<String> errorReporter) {
+  private static void verifyActionIncludePaths(CppCompileAction action, RuleContext ruleContext) {
     Iterable<PathFragment> ignoredDirs = action.getValidationIgnoredDirs();
     // We currently do not check the output of:
     // - getQuoteIncludeDirs(): those only come from includes attributes, and are checked in
     //   CcCommon.getIncludeDirsFromIncludesAttribute().
     // - getBuiltinIncludeDirs(): while in practice this doesn't happen, bazel can be configured
     //   to use an absolute system root, in which case the builtin include dirs might be absolute.
-
-    Iterable<PathFragment> includePathsToVerify =
-        Iterables.concat(action.getIncludeDirs(), action.getSystemIncludeDirs());
-    for (PathFragment includePath : includePathsToVerify) {
-      if (FileSystemUtils.startsWithAny(includePath, ignoredDirs)) {
+    for (PathFragment include :
+        Iterables.concat(action.getIncludeDirs(), action.getSystemIncludeDirs())) {
+      // Ignore headers from built-in include directories.
+      if (FileSystemUtils.startsWithAny(include, ignoredDirs)) {
         continue;
       }
       // One starting ../ is okay for getting to a sibling repository.
-      if (includePath.startsWith(Label.EXTERNAL_PATH_PREFIX)) {
-        includePath = includePath.relativeTo(Label.EXTERNAL_PATH_PREFIX);
+      if (include.startsWith(Label.EXTERNAL_PATH_PREFIX)) {
+        include = include.relativeTo(Label.EXTERNAL_PATH_PREFIX);
       }
-      if (includePath.isAbsolute()
-          || !PathFragment.EMPTY_FRAGMENT.getRelative(includePath).normalize().isNormalized()) {
-        errorReporter.accept(
-            String.format(
-                "The include path '%s' references a path outside of the execution root.",
-                includePath));
+      if (include.isAbsolute()
+          || !PathFragment.EMPTY_FRAGMENT.getRelative(include).normalize().isNormalized()) {
+        ruleContext.ruleError(
+            "The include path '" + include + "' references a path outside of the execution root.");
       }
     }
   }
@@ -727,5 +696,4 @@ public class CppCompileActionBuilder {
   public CcToolchainProvider getToolchain() {
     return ccToolchain;
   }
-
 }

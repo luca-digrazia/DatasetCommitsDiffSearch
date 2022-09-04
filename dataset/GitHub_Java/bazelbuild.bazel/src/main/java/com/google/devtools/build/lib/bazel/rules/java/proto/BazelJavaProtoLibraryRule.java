@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.proto.JavaProtoLibrary;
-import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 
 /** Declaration of the {@code java_proto_library} rule. */
 public class BazelJavaProtoLibraryRule implements RuleDefinition {
@@ -49,7 +48,7 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
                 .build();
 
     return builder
-        .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
+        .requiresConfigurationFragments(JavaConfiguration.class)
         /* <!-- #BLAZE_RULE(java_proto_library).ATTRIBUTE(deps) -->
         The list of <a href="protocol-buffer.html#proto_library"><code>proto_library</code></a>
         rules to generate Java code for.

@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -81,6 +82,11 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
   private static final String OBJC_MODULE_FEATURE_NAME = "use_objc_modules";
   private static final String NO_ENABLE_MODULES_FEATURE_NAME = "no_enable_modules";
   private static final String DEAD_STRIP_FEATURE_NAME = "dead_strip";
+  private static final String RUN_COVERAGE_FEATURE_NAME = "run_coverage";
+  /** Produce artifacts for coverage in llvm coverage mapping format. */
+  private static final String LLVM_COVERAGE_MAP_FORMAT = "llvm_coverage_map_format";
+  /** Produce artifacts for coverage in gcc coverage mapping format. */
+  private static final String GCC_COVERAGE_MAP_FORMAT = "gcc_coverage_map_format";
   /**
    * Enabled if this target's rule is not a test rule.  Binary stripping should not be applied in
    * the link step. TODO(b/36562173): Replace this behavior with a condition on bundle creation.
@@ -132,8 +138,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         CompilationAttributes.Builder.fromRuleContext(ruleContext).build(),
         /*useDeps=*/ true,
         outputGroupCollector,
-        /*isTestRule=*/ false,
-        /*usePch=*/ true);
+        /*isTestRule=*/ false);
   }
 
   /**
@@ -144,7 +149,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
    * @param intermediateArtifacts IntermediateArtifacts for deriving artifact paths
    * @param compilationAttributes attributes of the calling target
    * @param useDeps true if deps should be used
-   * @param usePch true if pch should be used
    */
   public CrosstoolCompilationSupport(
       RuleContext ruleContext,
@@ -153,8 +157,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       CompilationAttributes compilationAttributes,
       boolean useDeps,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
-      boolean isTestRule,
-      boolean usePch) {
+      boolean isTestRule) {
     super(
         ruleContext,
         buildConfiguration,
@@ -162,8 +165,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         compilationAttributes,
         useDeps,
         outputGroupCollector,
-        isTestRule,
-        usePch);
+        isTestRule);
   }
 
   @Override
@@ -394,7 +396,10 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                 Streams.stream(attributes.hdrs()),
                 Streams.stream(compilationArtifacts.getAdditionalHdrs()))
             .collect(toImmutableSortedSet(naturalOrder()));
-    Artifact pchHdr = getPchFile().orNull();
+    Artifact pchHdr = null;
+    if (ruleContext.attributes().has("pch", BuildType.LABEL)) {
+      pchHdr = ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET);
+    }
     ObjcCppSemantics semantics =
         new ObjcCppSemantics(
             objcProvider,
@@ -474,8 +479,17 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
     if (configuration.getFragment(ObjcConfiguration.class).shouldStripBinary()) {
       activatedCrosstoolSelectables.add(DEAD_STRIP_FEATURE_NAME);
     }
-    if (getPchFile().isPresent()) {
+    if (ruleContext.attributes().has("pch", BuildType.LABEL)
+        && ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET) != null) {
       activatedCrosstoolSelectables.add("pch");
+    }
+    if (configuration.isCodeCoverageEnabled()) {
+      activatedCrosstoolSelectables.add(RUN_COVERAGE_FEATURE_NAME);
+    }
+    if (configuration.isLLVMCoverageMapFormatEnabled()) {
+      activatedCrosstoolSelectables.add(LLVM_COVERAGE_MAP_FORMAT);
+    } else {
+      activatedCrosstoolSelectables.add(GCC_COVERAGE_MAP_FORMAT);
     }
     if (!isTestRule) {
       activatedCrosstoolSelectables.add(IS_NOT_TEST_TARGET_FEATURE_NAME);

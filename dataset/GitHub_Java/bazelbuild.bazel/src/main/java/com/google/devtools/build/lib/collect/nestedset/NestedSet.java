@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /**
@@ -110,7 +111,7 @@ public final class NestedSet<E> implements Iterable<E> {
             children[n++] = a;
             leaf = false;
           } else {
-            if (!alreadyInserted.contains(c) && hoisted.add((E) c)) {
+            if (!alreadyInserted.contains((E) c) && hoisted.add((E) c)) {
               children[n++] = c;
             }
           }
@@ -230,9 +231,11 @@ public final class NestedSet<E> implements Iterable<E> {
    * different from both standard Java objects and collection-like objects.
    */
   public int shallowHashCode() {
-    return isSingleton()
-        ? Objects.hash(order, children)
-        : Objects.hash(order, Arrays.hashCode((Object[]) children));
+    if (isSingleton()) {
+      return Objects.hash(order, children);
+    } else {
+      return Objects.hash(order, Arrays.hashCode((Object[]) children));
+    }
   }
 
   @Override
@@ -243,20 +246,20 @@ public final class NestedSet<E> implements Iterable<E> {
   // TODO:  this leaves LINK_ORDER backwards
   private static String childrenToString(Object children) {
     if (children instanceof Object[]) {
-      return Arrays.stream((Object[]) children)
-          .map(NestedSet::childrenToString)
-          .collect(joining(", ", "{", "}"));
+      return "{"
+          + Stream.of((Object[]) children).map(Stringer.INSTANCE).collect(joining(", "))
+          + "}";
     } else {
       return children.toString();
     }
   }
 
-  private enum Stringer implements Function<Object, String> {
+  private static enum Stringer implements Function<Object, String> {
     INSTANCE;
     @Override public String apply(Object o) {
       return childrenToString(o);
     }
-  }
+  };
 
   @Override
   public Iterator<E> iterator() {
@@ -272,7 +275,7 @@ public final class NestedSet<E> implements Iterable<E> {
   private ImmutableList<E> expand() {
     // This value is only set in the constructor, so safe to test here with no lock.
     if (memo == LEAF_MEMO) {
-      return ImmutableList.copyOf(new ArraySharingCollection<>((Object[]) children));
+      return ImmutableList.<E>copyOf(new ArraySharingCollection<E>((Object[]) children));
     }
     CompactHashSet<E> members = lockedExpand();
     if (members != null) {
@@ -335,17 +338,19 @@ public final class NestedSet<E> implements Iterable<E> {
    */
   private int walk(CompactHashSet<Object> sets, CompactHashSet<E> members,
                    Object[] children, int pos) {
-    for (Object child : children) {
-      if ((pos >> 3) >= memo.length) {
+    int n = children.length;
+    for (int i = 0; i < n; ++i) {
+      if ((pos>>3) >= memo.length) {
         memo = Arrays.copyOf(memo, memo.length * 2);
       }
-      if (child instanceof Object[]) {
-        if (sets.add(child)) {
+      Object c = children[i];
+      if (c instanceof Object[]) {
+        if (sets.add(c)) {
           int prepos = pos;
           int presize = members.size();
-          pos = walk(sets, members, (Object[]) child, pos + 1);
+          pos = walk(sets, members, (Object[]) c, pos + 1);
           if (presize < members.size()) {
-            memo[prepos >> 3] |= 1 << (prepos & 7);
+            memo[prepos>>3] |= 1<<(prepos&7);
           } else {
             // We didn't find any new nodes, so don't mark this branch as taken.
             // Rewind pos.  The rest of the array is still zeros because no one
@@ -356,8 +361,8 @@ public final class NestedSet<E> implements Iterable<E> {
           ++pos;
         }
       } else {
-        if (members.add((E) child)) {
-          memo[pos >> 3] |= 1 << (pos & 7);
+        if (members.add((E) c)) {
+          memo[pos>>3] |= 1<<(pos&7);
         }
         ++pos;
       }
@@ -371,12 +376,14 @@ public final class NestedSet<E> implements Iterable<E> {
    */
   private static <E> int replay(ImmutableList.Builder<E> output, Object[] children,
                                 byte[] memo, int pos) {
-    for (Object child : children) {
-      if ((memo[pos >> 3] & (1 << (pos & 7))) != 0) {
-        if (child instanceof Object[]) {
-          pos = replay(output, (Object[]) child, memo, pos + 1);
+    int n = children.length;
+    for (int i = 0; i < n; ++i) {
+      Object c = children[i];
+      if ((memo[pos>>3] & (1<<(pos&7))) != 0) {
+        if (c instanceof Object[]) {
+          pos = replay(output, (Object[]) c, memo, pos + 1);
         } else {
-          output.add((E) child);
+          output.add((E) c);
           ++pos;
         }
       } else {

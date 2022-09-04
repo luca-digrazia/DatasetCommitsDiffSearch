@@ -504,7 +504,10 @@ public abstract class OutputFormatter implements Serializable {
           } else if (value instanceof TriState) {
             value = ((TriState) value).toInt();
           }
-          return Printer.repr(value);
+          // It is *much* faster to write to a StringBuilder compared to the PrintStream object.
+          StringBuilder builder = new StringBuilder();
+          Printer.write(builder, value);
+          return builder.toString();
         }
 
         /**
@@ -527,6 +530,7 @@ public abstract class OutputFormatter implements Serializable {
           }
           return String.join(" + ", selectors);
         }
+
 
         @Override
         public void processOutput(Iterable<Target> partialResult) throws InterruptedException {

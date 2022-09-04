@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Collections2;
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.vfs.OsPathPolicy;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.OS;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -47,8 +47,8 @@ class InMemoryDirectoryInfo extends InMemoryContentInfo {
    * ensure that no entry of that name exists already.
    */
   synchronized void addChild(String name, InMemoryContentInfo inode) {
-    Preconditions.checkNotNull(name);
-    Preconditions.checkNotNull(inode);
+    if (name == null) { throw new NullPointerException(); }
+    if (inode == null) { throw new NullPointerException(); }
     if (directoryContent.put(new InMemoryFileName(name), inode) != null) {
       throw new IllegalArgumentException("File already exists: " + name);
     }
@@ -123,7 +123,7 @@ class InMemoryDirectoryInfo extends InMemoryContentInfo {
 
     @Override
     public int hashCode() {
-      return OsPathPolicy.getFilePathOs().hash(value);
+      return OS.getCurrent() == OS.WINDOWS ? value.toLowerCase().hashCode() : value.hashCode();
     }
 
     @Override
@@ -134,7 +134,12 @@ class InMemoryDirectoryInfo extends InMemoryContentInfo {
       if (!(obj instanceof InMemoryFileName)) {
         return false;
       }
-      return OsPathPolicy.getFilePathOs().equals(this.value, ((InMemoryFileName) obj).value);
+      InMemoryFileName that = (InMemoryFileName) obj;
+      if (OS.getCurrent() != OS.WINDOWS) {
+        return Objects.equals(this.value, that.value);
+      } else {
+        return Objects.equals(this.value.toLowerCase(), that.value.toLowerCase());
+      }
     }
   }
 }

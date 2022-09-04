@@ -60,8 +60,8 @@ public class FunctionExpression extends QueryExpression {
   }
 
   @Override
-  public <T> T accept(QueryExpressionVisitor<T> visitor) {
-    return visitor.visit(this);
+  public QueryExpression getMapped(QueryExpressionMapper mapper) {
+    return mapper.map(this);
   }
 
   @Override

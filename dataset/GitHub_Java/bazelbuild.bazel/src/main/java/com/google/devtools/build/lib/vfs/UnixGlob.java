@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.vfs;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Splitter;
@@ -35,6 +34,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -449,8 +449,8 @@ public final class UnixGlob {
       return delegate;
     }
 
-    public void setException(Throwable throwable) {
-      delegate.setException(throwable);
+    public void setException(IOException exception) {
+      delegate.setException(exception);
     }
 
     public void set(List<Path> paths) {
@@ -488,7 +488,7 @@ public final class UnixGlob {
     private final ThreadPoolExecutor executor;
     private final AtomicLong totalOps = new AtomicLong(0);
     private final AtomicLong pendingOps = new AtomicLong(0);
-    private final AtomicReference<Throwable> failure = new AtomicReference<>();
+    private final AtomicReference<IOException> failure = new AtomicReference<>();
     private volatile boolean canceled = false;
 
     GlobVisitor(
@@ -593,7 +593,7 @@ public final class UnixGlob {
           Profiler.instance().startTask(ProfilerTask.VFS_GLOB, this);
           try {
             reallyGlob(base, baseIsDir, idx, context);
-          } catch (Throwable e) {
+          } catch (IOException e) {
             failure.set(e);
           } finally {
             Profiler.instance().completeTask(ProfilerTask.VFS_GLOB);

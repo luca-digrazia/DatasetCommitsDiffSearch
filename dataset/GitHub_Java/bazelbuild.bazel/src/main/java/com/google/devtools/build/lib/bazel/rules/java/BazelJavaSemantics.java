@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
-import com.google.devtools.build.lib.rules.test.TestConfiguration;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -262,7 +261,7 @@ public class BazelJavaSemantics implements JavaSemantics {
     arguments.add(Substitution.of("%workspace_prefix%", workspacePrefix));
     arguments.add(Substitution.of("%javabin%", javaExecutable));
     arguments.add(Substitution.of("%needs_runfiles%",
-        JavaCommon.getJavaExecutable(ruleContext).isAbsolute() ? "0" : "1"));
+        ruleContext.getFragment(Jvm.class).getJavaExecutable().isAbsolute() ? "0" : "1"));
 
     TransitiveInfoCollection testSupport = getTestSupport(ruleContext);
     NestedSet<Artifact> testSupportJars =
@@ -665,9 +664,7 @@ public class BazelJavaSemantics implements JavaSemantics {
   public List<String> getExtraArguments(RuleContext ruleContext, ImmutableList<Artifact> sources) {
     if (ruleContext.getRule().getRuleClass().equals("java_test")) {
       if (useLegacyJavaTest(ruleContext)) {
-        TestConfiguration testConfiguration =
-            ruleContext.getConfiguration().getFragment(TestConfiguration.class);
-        if (testConfiguration.getTestArguments().isEmpty()
+        if (ruleContext.getConfiguration().getTestArguments().isEmpty()
             && !ruleContext.attributes().isAttributeValueExplicitlySpecified("args")) {
           ImmutableList.Builder<String> builder = ImmutableList.builder();
           for (Artifact artifact : sources) {

@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -55,18 +56,12 @@ import java.util.Map;
   category = SkylarkModuleCategory.PROVIDER,
   doc = "A provider for compilation and linking of objc."
 )
-public final class ObjcProvider extends SkylarkClassObject
-    implements TransitiveInfoProvider, TransitiveInfoProvider.WithLegacySkylarkName {
+public final class ObjcProvider extends SkylarkClassObject implements TransitiveInfoProvider {
 
   /**
    * The skylark struct key name for a rule implementation to use when exporting an ObjcProvider.
    */
   public static final String OBJC_SKYLARK_PROVIDER_NAME = "objc";
-
-  @Override
-  public String getSkylarkName() {
-    return OBJC_SKYLARK_PROVIDER_NAME;
-  }
 
   /**
    * Represents one of the things this provider can provide transitively. Things are provided as
@@ -506,8 +501,8 @@ public final class ObjcProvider extends SkylarkClassObject
   // Items which should be passed to strictly direct dependers, but not transitive dependers.
   private final ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems;
 
-  private static final NativeClassObjectConstructor<ObjcProvider> OBJC_PROVIDER =
-      new NativeClassObjectConstructor<ObjcProvider>(ObjcProvider.class, "objc_provider") {
+  private static final ClassObjectConstructor OBJC_PROVIDER =
+      new NativeClassObjectConstructor("objc_provider") {
         @Override
         public String getErrorMessageFormatForInstances() {
           return "ObjcProvider field %s could not be instantiated";

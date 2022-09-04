@@ -72,7 +72,7 @@ public final class LoadingPhaseCompleteEvent implements ExtendedEventHandler.Pos
   }
 
   /**
-   * Returns package manager statistics.
+   * Returns the PackageCache statistics.
    */
   public PackageManager.PackageManagerStatistics getPkgManagerStats() {
     return pkgManagerStats;

@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
+import static java.util.Comparator.comparingInt;
+
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -28,10 +30,8 @@ import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.server.FailureDetails.TargetPatterns;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -63,65 +63,6 @@ public final class CompileOneDependencyTransformer {
     return builder.build();
   }
 
-  private Target transformCompileOneDependency(ExtendedEventHandler eventHandler, Target target)
-      throws TargetParsingException, InterruptedException {
-    if (!(target instanceof FileTarget)) {
-      throw new TargetParsingException(
-          "--compile_one_dependency target '" + target.getLabel() + "' must be a file",
-          TargetPatterns.Code.TARGET_MUST_BE_A_FILE);
-    }
-
-    Rule result = null;
-    Iterable<Rule> orderedRuleList = getOrderedRuleList(target.getPackage());
-    for (Rule rule : orderedRuleList) {
-      Set<Label> labels = getInputLabels(rule);
-      if (listContainsFile(eventHandler, labels, target.getLabel(), Sets.<Label>newHashSet())) {
-        if (rule.getRuleClassObject().isPreferredDependency(target.getName())) {
-          result = rule;
-          break;
-        }
-        if (result == null) {
-          result = rule;
-        }
-      }
-    }
-
-    if (result == null) {
-      throw new TargetParsingException(
-          "Couldn't find dependency on target '" + target.getLabel() + "'",
-          TargetPatterns.Code.DEPENDENCY_NOT_FOUND);
-    }
-
-    // TODO(djasper): Check whether parse_headers is disabled and just return if not.
-    // If the rule has source targets, return it.
-    if (result.getRuleClassObject().hasAttr("srcs", BuildType.LABEL_LIST)
-        && !RawAttributeMapper.of(result).getMergedValues("srcs", BuildType.LABEL_LIST).isEmpty()) {
-      return result;
-    }
-
-    // Try to find a rule in the same package that has 'result' as a dependency.
-    for (Rule rule : orderedRuleList) {
-      RawAttributeMapper attributes = RawAttributeMapper.of(rule);
-      // We don't know which path to follow for configurable attributes, so skip them.
-      if (attributes.isConfigurable("deps") || attributes.isConfigurable("srcs")) {
-        continue;
-      }
-      RuleClass ruleClass = rule.getRuleClassObject();
-      if (ruleClass.hasAttr("deps", BuildType.LABEL_LIST)
-          && ruleClass.hasAttr("srcs", BuildType.LABEL_LIST)) {
-        for (Label dep : attributes.get("deps", BuildType.LABEL_LIST)) {
-          if (dep.equals(result.getLabel())) {
-            if (!attributes.get("srcs", BuildType.LABEL_LIST).isEmpty()) {
-              return rule;
-            }
-          }
-        }
-      }
-    }
-
-    return result;
-  }
-
   /**
    * Returns a list of rules in the given package sorted by BUILD file order. When
    * multiple rules depend on a target, we choose the first match in this list (after
@@ -133,7 +74,7 @@ public final class CompileOneDependencyTransformer {
       orderedList.add(rule);
     }
 
-    Collections.sort(orderedList, Comparator.comparing(arg -> arg.getLocation()));
+    Collections.sort(orderedList, comparingInt(arg -> arg.getLocation().getStartOffset()));
     return orderedList;
   }
 
@@ -182,6 +123,63 @@ public final class CompileOneDependencyTransformer {
       }
     }
     return false;
+  }
+
+  private Target transformCompileOneDependency(ExtendedEventHandler eventHandler, Target target)
+      throws TargetParsingException, InterruptedException {
+    if (!(target instanceof FileTarget)) {
+      throw new TargetParsingException(
+          "--compile_one_dependency target '" + target.getLabel() + "' must be a file");
+    }
+
+    Rule result = null;
+    Iterable<Rule> orderedRuleList = getOrderedRuleList(target.getPackage());
+    for (Rule rule : orderedRuleList) {
+      Set<Label> labels = getInputLabels(rule);
+      if (listContainsFile(eventHandler, labels, target.getLabel(), Sets.<Label>newHashSet())) {
+        if (rule.getRuleClassObject().isPreferredDependency(target.getName())) {
+          result = rule;
+          break;
+        }
+        if (result == null) {
+          result = rule;
+        }
+      }
+    }
+
+    if (result == null) {
+      throw new TargetParsingException(
+          "Couldn't find dependency on target '" + target.getLabel() + "'");
+    }
+
+    // TODO(djasper): Check whether parse_headers is disabled and just return if not.
+    // If the rule has source targets, return it.
+    if (!RawAttributeMapper.of(result).getMergedValues("srcs", BuildType.LABEL_LIST).isEmpty()) {
+      return result;
+    }
+
+    // Try to find a rule in the same package that has 'result' as a dependency.
+    for (Rule rule : orderedRuleList) {
+      RawAttributeMapper attributes = RawAttributeMapper.of(rule);
+      // We don't know which path to follow for configurable attributes, so skip them.
+      if (attributes.isConfigurable("deps")
+          || attributes.isConfigurable("srcs")) {
+        continue;
+      }
+      RuleClass ruleClass = rule.getRuleClassObject();
+      if (ruleClass.hasAttr("deps", BuildType.LABEL_LIST)
+          && ruleClass.hasAttr("srcs", BuildType.LABEL_LIST)) {
+        for (Label dep : attributes.get("deps", BuildType.LABEL_LIST)) {
+          if (dep.equals(result.getLabel())) {
+            if (!attributes.get("srcs", BuildType.LABEL_LIST).isEmpty()) {
+              return rule;
+            }
+          }
+        }
+      }
+    }
+    
+    return result;
   }
 
   /** Returns all labels that are contained in direct compile time inputs of {@code rule}. */

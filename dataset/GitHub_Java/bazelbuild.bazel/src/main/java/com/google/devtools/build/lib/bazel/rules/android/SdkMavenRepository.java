@@ -21,7 +21,6 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -200,10 +199,8 @@ final class SdkMavenRepository {
     private static final String DEFAULT_PACKAGING = "jar";
 
     static Pom parse(Path path) throws IOException, ParserConfigurationException, SAXException {
-      Document pomDocument = null;
-      try (InputStream in = path.getInputStream()) {
-        pomDocument = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(in);
-      }
+      Document pomDocument =
+          DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(path.getInputStream());
       Node packagingNode = pomDocument.getElementsByTagName("packaging").item(0);
       String packaging = packagingNode == null ? DEFAULT_PACKAGING : packagingNode.getTextContent();
       MavenCoordinate coordinate = MavenCoordinate.create(

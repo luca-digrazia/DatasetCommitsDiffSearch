@@ -14,14 +14,11 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location.LineAndColumn;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.Serializable;
@@ -41,9 +38,7 @@ import java.util.regex.Pattern;
  * their buffer using {@link #create}. The client can then ask for the line and column given a
  * position using ({@link #getLineAndColumn(int)}).
  */
-@AutoCodec(strategy = AutoCodec.Strategy.POLYMORPHIC)
 public abstract class LineNumberTable implements Serializable {
-  public static final ObjectCodec<LineNumberTable> CODEC = new LineNumberTable_AutoCodec();
 
   /**
    * Returns the (line, column) pair for the specified offset.
@@ -66,15 +61,16 @@ public abstract class LineNumberTable implements Serializable {
     // by gconfig2blaze.  We ignore all actual newlines and compute the logical
     // LNT based only on the presence of #line markers.
     return StringUtilities.containsSubarray(buffer, "\n#line ".toCharArray())
-        ? HashLine.create(buffer, path)
+        ? new HashLine(buffer, path)
         : new Regular(buffer, path);
   }
 
-  /** Line number table implementation for regular source files. Records offsets of newlines. */
-  @AutoCodec
+  /**
+   * Line number table implementation for regular source files.  Records
+   * offsets of newlines.
+   */
   @Immutable
   public static class Regular extends LineNumberTable {
-    public static final ObjectCodec<Regular> CODEC = new LineNumberTable_Regular_AutoCodec();
 
     /**
      * A mapping from line number (line >= 1) to character offset into the file.
@@ -84,14 +80,32 @@ public abstract class LineNumberTable implements Serializable {
     private final int bufferLength;
 
     public Regular(char[] buffer, PathFragment path) {
-      this(computeLinestart(buffer), path, buffer.length);
-    }
+      // Compute the size.
+      int size = 2;
+      for (int i = 0; i < buffer.length; i++) {
+        if (buffer[i] == '\n') {
+          size++;
+        }
+      }
+      linestart = new int[size];
 
-    @AutoCodec.Instantiator
-    Regular(int[] linestart, PathFragment path, int bufferLength) {
-      this.linestart = linestart;
+      int index = 0;
+      linestart[index++] = 0; // The 0th line does not exist - so we fill something in
+      // to make sure the start pos for the 1st line ends up at
+      // linestart[1]. Using 0 is useful for tables that are
+      // completely empty.
+      linestart[index++] = 0; // The first line ("line 1") starts at offset 0.
+
+      // Scan the buffer and record the offset of each line start. Doing this
+      // once upfront is faster than checking each char as it is pulled from
+      // the buffer.
+      for (int i = 0; i < buffer.length; i++) {
+        if (buffer[i] == '\n') {
+          linestart[index++] = i + 1;
+        }
+      }
+      this.bufferLength = buffer.length;
       this.path = path;
-      this.bufferLength = bufferLength;
     }
 
     private int getLineAt(int offset) {
@@ -155,51 +169,19 @@ public abstract class LineNumberTable implements Serializable {
           && Arrays.equals(this.linestart, that.linestart)
           && Objects.equals(this.path, that.path);
     }
-
-    private static int[] computeLinestart(char[] buffer) {
-      // Compute the size.
-      int size = 2;
-      for (int i = 0; i < buffer.length; i++) {
-        if (buffer[i] == '\n') {
-          size++;
-        }
-      }
-      int[] linestart = new int[size];
-
-      int index = 0;
-      linestart[index++] = 0; // The 0th line does not exist - so we fill something in
-      // to make sure the start pos for the 1st line ends up at
-      // linestart[1]. Using 0 is useful for tables that are
-      // completely empty.
-      linestart[index++] = 0; // The first line ("line 1") starts at offset 0.
-
-      // Scan the buffer and record the offset of each line start. Doing this
-      // once upfront is faster than checking each char as it is pulled from
-      // the buffer.
-      for (int i = 0; i < buffer.length; i++) {
-        if (buffer[i] == '\n') {
-          linestart[index++] = i + 1;
-        }
-      }
-      return linestart;
-    }
   }
 
   /**
-   * Line number table implementation for source files that have been preprocessed. Ignores newlines
-   * and uses only #line directives.
+   * Line number table implementation for source files that have been
+   * preprocessed. Ignores newlines and uses only #line directives.
    */
-  @AutoCodec
   @Immutable
   public static class HashLine extends LineNumberTable {
-    public static final ObjectCodec<HashLine> CODEC = new LineNumberTable_HashLine_AutoCodec();
 
-    /** Represents a "#line" directive */
-    @AutoCodec
-    static class SingleHashLine implements Serializable {
-      public static final ObjectCodec<SingleHashLine> CODEC =
-          new LineNumberTable_HashLine_SingleHashLine_AutoCodec();
-
+    /**
+     * Represents a "#line" directive
+     */
+    private static class SingleHashLine implements Serializable {
       private final int offset;
       private final int line;
       private final PathFragment path;
@@ -208,23 +190,6 @@ public abstract class LineNumberTable implements Serializable {
         this.offset = offset;
         this.line = line;
         this.path = path;
-      }
-
-      @Override
-      public int hashCode() {
-        return Objects.hash(offset, line, path);
-      }
-
-      @Override
-      public boolean equals(Object obj) {
-        if (obj == null) {
-          return false;
-        }
-        if (!(obj instanceof SingleHashLine)) {
-          return false;
-        }
-        SingleHashLine that = (SingleHashLine) obj;
-        return offset == that.offset && line == that.line && Objects.equals(path, that.path);
       }
     }
 
@@ -239,11 +204,11 @@ public abstract class LineNumberTable implements Serializable {
 
     private static final Pattern pattern = Pattern.compile("\n#line ([0-9]+) \"([^\"\\n]+)\"");
 
-    private final ImmutableList<SingleHashLine> table;
+    private final List<SingleHashLine> table;
     private final PathFragment defaultPath;
     private final int bufferLength;
 
-    public static HashLine create(char[] buffer, PathFragment defaultPath) {
+    public HashLine(char[] buffer, PathFragment defaultPath) {
       CharSequence bufString = CharBuffer.wrap(buffer);
       Matcher m = pattern.matcher(bufString);
       List<SingleHashLine> unorderedTable = new ArrayList<>();
@@ -256,17 +221,9 @@ public abstract class LineNumberTable implements Serializable {
                 Integer.parseInt(m.group(1)),  // line number
                 pathFragment));  // filename is an absolute path
       }
-      return new HashLine(
-          hashOrdering.immutableSortedCopy(unorderedTable),
-          Preconditions.checkNotNull(defaultPath),
-          buffer.length);
-    }
-
-    @AutoCodec.Instantiator
-    HashLine(ImmutableList<SingleHashLine> table, PathFragment defaultPath, int bufferLength) {
-      this.table = table;
-      this.defaultPath = defaultPath;
-      this.bufferLength = bufferLength;
+      this.table = hashOrdering.immutableSortedCopy(unorderedTable);
+      this.bufferLength = buffer.length;
+      this.defaultPath = Preconditions.checkNotNull(defaultPath);
     }
 
     private SingleHashLine getHashLine(int offset) {

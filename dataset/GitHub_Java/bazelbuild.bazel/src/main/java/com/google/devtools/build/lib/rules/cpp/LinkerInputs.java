@@ -136,7 +136,7 @@ public abstract class LinkerInputs {
    * has a library identifier.
    */
   public interface LibraryToLink extends LinkerInput {
-    ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles();
+    ImmutableMap<Artifact, Artifact> getLTOBitcodeFiles();
 
     /**
      * Return the identifier for the library. This is used for de-duplication of linker inputs: two
@@ -192,7 +192,7 @@ public abstract class LinkerInputs {
     }
 
     @Override
-    public ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles() {
+    public ImmutableMap<Artifact, Artifact> getLTOBitcodeFiles() {
       return ImmutableMap.of();
     }
 
@@ -319,7 +319,7 @@ public abstract class LinkerInputs {
     }
 
     @Override
-    public ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles() {
+    public ImmutableMap<Artifact, Artifact> getLTOBitcodeFiles() {
       return ltoBitcodeFiles;
     }
 

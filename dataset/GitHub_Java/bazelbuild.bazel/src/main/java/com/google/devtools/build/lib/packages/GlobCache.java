@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.Iterables;
@@ -24,6 +23,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.packages.Globber.BadGlobException;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 import java.io.IOException;
@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Caches the results of glob expansion for a package.
  */
+  // Used outside of Bazel!
 @ThreadSafety.ThreadCompatible
 public class GlobCache {
   /**
@@ -173,10 +174,6 @@ public class GlobCache {
       // invalid as a label, plus users should say explicitly if they
       // really want to name the package directory.
       if (!relative.isEmpty()) {
-        if (relative.charAt(0) == '@') {
-          // Add explicit colon to disambiguate from external repository.
-          relative = ":" + relative;
-        }
         result.add(relative);
       }
     }

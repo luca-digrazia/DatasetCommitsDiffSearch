@@ -22,10 +22,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.bazel.repository.downloader.RetryingInputStream.Reconnector;
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.Sleeper;
 import java.io.IOException;
 import java.io.InputStream;
@@ -137,7 +137,8 @@ final class HttpConnectorMultiplexer {
       }
       // Create the worker thread pool.
       for (int i = 0; i < Math.min(urls.size(), MAX_THREADS_PER_CONNECT); i++) {
-        Thread thread = new Thread(new Worker(context), "HttpConnector");
+        Thread thread = new Thread(new Worker(context));
+        thread.setName("HttpConnector");
         // These threads will not start doing anything until we release the lock below.
         thread.start();
         context.threads.add(thread);

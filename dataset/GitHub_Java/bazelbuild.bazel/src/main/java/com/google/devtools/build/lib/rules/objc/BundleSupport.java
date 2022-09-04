@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR
 
 import com.google.common.base.Optional;
 import com.google.common.base.Verify;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -34,9 +33,9 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
+import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashMap;
@@ -70,7 +69,7 @@ final class BundleSupport {
   // RuleErrorConsumer).
   private final RuleContext ruleContext;
   private final AppleConfiguration appleConfiguration;
-  private final ApplePlatform platform;
+  private final Platform platform;
   private final ExtraActoolArgs extraActoolArgs;
   private final Bundling bundling;
   private final Attributes attributes;
@@ -84,12 +83,8 @@ final class BundleSupport {
    * @param bundling bundle information as configured for this rule
    * @param extraActoolArgs any additional parameters to be used for invoking {@code actool}
    */
-  public BundleSupport(
-      RuleContext ruleContext,
-      AppleConfiguration appleConfiguration,
-      ApplePlatform platform,
-      Bundling bundling,
-      ExtraActoolArgs extraActoolArgs) {
+  public BundleSupport(RuleContext ruleContext, AppleConfiguration appleConfiguration,
+      Platform platform, Bundling bundling, ExtraActoolArgs extraActoolArgs) {
     this.ruleContext = ruleContext;
     this.appleConfiguration = appleConfiguration;
     this.platform = platform;
@@ -128,11 +123,11 @@ final class BundleSupport {
    * @return this bundle support
    */
   public BundleSupport validatePlatform() {
-    ApplePlatform platform = null;
+    Platform platform = null;
     for (String architecture : appleConfiguration.getIosMultiCpus()) {
       if (platform == null) {
-        platform = ApplePlatform.forTarget(PlatformType.IOS, architecture);
-      } else if (platform != ApplePlatform.forTarget(PlatformType.IOS, architecture)) {
+        platform = Platform.forTarget(PlatformType.IOS, architecture);
+      } else if (platform != Platform.forTarget(PlatformType.IOS, architecture)) {
         ruleContext.ruleError(
             String.format("In builds which require bundling, --ios_multi_cpus does not currently "
                 + "allow values for both simulator and device builds. Flag was %s",
@@ -448,8 +443,8 @@ final class BundleSupport {
     }
 
     return commandLine
-        .add(ImmutableList.copyOf(PathFragment.safePathStrings(provider.get(XCASSETS_DIR))))
-        .add(ImmutableList.copyOf(extraActoolArgs))
+        .add(PathFragment.safePathStrings(provider.get(XCASSETS_DIR)))
+        .add(extraActoolArgs)
         .build();
   }
 

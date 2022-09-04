@@ -94,7 +94,7 @@ class ParallelSkyQueryUtils {
   }
 
   /** A helper class that computes 'rbuildfiles(<blah>)' via BFS. */
-  private static class RBuildFilesVisitor extends ParallelVisitor<SkyKey, Target> {
+  private static class RBuildFilesVisitor extends ParallelVisitor<SkyKey> {
     private final SkyQueryEnvironment env;
     private final MultisetSemaphore<PackageIdentifier> packageSemaphore;
 
@@ -130,9 +130,9 @@ class ParallelSkyQueryUtils {
     }
 
     @Override
-    protected void processPartialResults(
+    protected void processResultantTargets(
         Iterable<SkyKey> keysToUseForResult, Callback<Target> callback)
-        throws QueryException, InterruptedException {
+            throws QueryException, InterruptedException {
       Set<PackageIdentifier> pkgIdsNeededForResult =
           Streams.stream(keysToUseForResult)
               .map(SkyQueryEnvironment.PACKAGE_SKYKEY_TO_PACKAGE_IDENTIFIER)
@@ -164,8 +164,7 @@ class ParallelSkyQueryUtils {
    * even with 10M edges, the memory overhead is around 160M, and the memory can be reclaimed by
    * regular GC.
    */
-  private static class AllRdepsUnboundedVisitor
-      extends ParallelVisitor<Pair<SkyKey, SkyKey>, Target> {
+  private static class AllRdepsUnboundedVisitor extends ParallelVisitor<Pair<SkyKey, SkyKey>> {
     private final SkyQueryEnvironment env;
     private final MultisetSemaphore<PackageIdentifier> packageSemaphore;
 
@@ -202,7 +201,7 @@ class ParallelSkyQueryUtils {
       }
 
       @Override
-      public ParallelVisitor<Pair<SkyKey, SkyKey>, Target> create() {
+      public ParallelVisitor<Pair<SkyKey, SkyKey>> create() {
         return new AllRdepsUnboundedVisitor(env, uniquifier, callback, packageSemaphore);
       }
     }
@@ -271,9 +270,9 @@ class ParallelSkyQueryUtils {
     }
 
     @Override
-    protected void processPartialResults(
+    protected void processResultantTargets(
         Iterable<SkyKey> keysToUseForResult, Callback<Target> callback)
-        throws QueryException, InterruptedException {
+            throws QueryException, InterruptedException {
       Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap =
           env.makePackageKeyToTargetKeyMap(keysToUseForResult);
       Set<PackageIdentifier> pkgIdsNeededForResult =

@@ -94,11 +94,10 @@ public abstract class ImplicitOutputsFunction {
           attrValues.put(attrName, value == null ? Runtime.NONE : value);
         }
       }
-      ClassObject attrs =
-          NativeProvider.STRUCT.create(
-              attrValues,
-              "Attribute '%s' either doesn't exist "
-                  + "or uses a select() (i.e. could have multiple values)");
+      ClassObject attrs = NativeClassObjectConstructor.STRUCT.create(
+          attrValues,
+          "Attribute '%s' either doesn't exist "
+          + "or uses a select() (i.e. could have multiple values)");
       try {
         ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
         for (Map.Entry<String, String> entry : castMap(callback.call(attrs),

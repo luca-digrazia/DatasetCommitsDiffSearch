@@ -17,40 +17,27 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.FilteringQueryFunction;
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 /**
- * An abstract class that provides generic regex filter expression. Actual expression are
- * implemented by the subclasses.
+ * An abstract class that provides generic regex filter expression. Actual
+ * expression are implemented by the subclasses.
  */
-public abstract class RegexFilterExpression extends FilteringQueryFunction {
-  protected final boolean invert;
-
-  protected RegexFilterExpression(boolean invert) {
-    this.invert = invert;
+public abstract class RegexFilterExpression implements QueryFunction {
+  protected RegexFilterExpression() {
   }
 
   @Override
   public <T> QueryTaskFuture<Void> eval(
       final QueryEnvironment<T> env,
-      QueryExpressionContext<T> context,
+      VariableContext<T> context,
       QueryExpression expression,
       final List<Argument> args,
       Callback<T> callback) {
-    return evalInternal(env, context, expression, args, callback, /*invert=*/ false);
-  }
-
-  private <T> QueryTaskFuture<Void> evalInternal(
-      final QueryEnvironment<T> env,
-      QueryExpressionContext<T> context,
-      QueryExpression expression,
-      final List<Argument> args,
-      Callback<T> callback,
-      boolean invert) {
     String rawPattern = getPattern(args);
     final Pattern compiledPattern;
     try {
@@ -71,21 +58,16 @@ public abstract class RegexFilterExpression extends FilteringQueryFunction {
         target -> {
           for (String str : getFilterStrings(env, args, target)) {
             if ((str != null) && compiledPattern.matcher(str).find()) {
-              return !invert;
+              return true;
             }
           }
-          return invert;
+          return false;
         };
 
     return env.eval(
-        args.get(getExpressionToFilterIndex()).getExpression(),
+        Iterables.getLast(args).getExpression(),
         context,
         new FilteredCallback<>(callback, matchFilter));
-  }
-
-  @Override
-  public final int getExpressionToFilterIndex() {
-    return getMandatoryArguments() - 1;
   }
 
   /**

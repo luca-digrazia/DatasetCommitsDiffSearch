@@ -16,13 +16,15 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.MoreObjects.ToStringHelper;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.skyframe.LegacySkyKey;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.ArrayList;
@@ -40,9 +42,9 @@ public class ActionLookupValue implements SkyValue {
   private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
   private static Actions.GeneratingActions filterSharedActionsAndThrowRuntimeIfConflict(
-      ActionKeyContext actionKeyContext, List<ActionAnalysisMetadata> actions) {
+      List<ActionAnalysisMetadata> actions) {
     try {
-      return Actions.filterSharedActionsAndThrowActionConflict(actionKeyContext, actions);
+      return Actions.filterSharedActionsAndThrowActionConflict(actions);
     } catch (ActionConflictException e) {
       // Programming bug.
       throw new IllegalStateException(e);
@@ -51,19 +53,12 @@ public class ActionLookupValue implements SkyValue {
 
   @VisibleForTesting
   public ActionLookupValue(
-      ActionKeyContext actionKeyContext,
-      List<ActionAnalysisMetadata> actions,
-      boolean removeActionsAfterEvaluation) {
-    this(
-        filterSharedActionsAndThrowRuntimeIfConflict(actionKeyContext, actions),
-        removeActionsAfterEvaluation);
+      List<ActionAnalysisMetadata> actions, boolean removeActionsAfterEvaluation) {
+    this(filterSharedActionsAndThrowRuntimeIfConflict(actions), removeActionsAfterEvaluation);
   }
 
-  protected ActionLookupValue(
-      ActionKeyContext actionKeyContext,
-      ActionAnalysisMetadata action,
-      boolean removeActionAfterEvaluation) {
-    this(actionKeyContext, ImmutableList.of(action), removeActionAfterEvaluation);
+  protected ActionLookupValue(ActionAnalysisMetadata action, boolean removeActionAfterEvaluation) {
+    this(ImmutableList.of(action), removeActionAfterEvaluation);
   }
 
   protected ActionLookupValue(
@@ -149,6 +144,11 @@ public class ActionLookupValue implements SkyValue {
     return getStringHelper().toString();
   }
 
+  @VisibleForTesting
+  public static SkyKey key(ActionLookupKey ownerKey) {
+    return ownerKey.getSkyKey();
+  }
+
   public int getNumActions() {
     return actions.size();
   }
@@ -183,14 +183,43 @@ public class ActionLookupValue implements SkyValue {
   }
 
   /**
-   * All subclasses of ActionLookupValue "own" artifacts with {@link ArtifactOwner}s that are
-   * subclasses of ActionLookupKey. This allows callers to easily find the value key, while
-   * remaining agnostic to what ActionLookupValues actually exist.
+   * ArtifactOwner is not a SkyKey, but we wish to convert any ArtifactOwner into a SkyKey as simply
+   * as possible. To that end, all subclasses of ActionLookupValue "own" artifacts with
+   * ArtifactOwners that are subclasses of ActionLookupKey. This allows callers to easily find the
+   * value key, while remaining agnostic to what ActionLookupValues actually exist.
+   *
+   * <p>The methods of this class should only be called by {@link ActionLookupValue#key}.
    */
-  public abstract static class ActionLookupKey implements ArtifactOwner, SkyKey {
+  public abstract static class ActionLookupKey implements ArtifactOwner {
     @Override
     public Label getLabel() {
       return null;
+    }
+
+    /**
+     * Subclasses must override this to specify their specific value type, unless they override
+     * {@link #getSkyKey}, in which case they are free not to implement this method.
+     */
+    protected abstract SkyFunctionName getType();
+
+    protected SkyKey getSkyKeyInternal() {
+      return LegacySkyKey.create(getType(), this);
+    }
+
+    /**
+     * Prefer {@link ActionLookupValue#key} to calling this method directly.
+     *
+     * <p>Subclasses may override {@link #getSkyKeyInternal} if the {@link SkyKey} argument should
+     * not be this {@link ActionLookupKey} itself.
+     */
+    public final SkyKey getSkyKey() {
+      SkyKey result = getSkyKeyInternal();
+      Preconditions.checkState(
+          result.argument() instanceof ActionLookupKey,
+          "Not ActionLookupKey for %s: %s",
+          this,
+          result);
+      return result;
     }
   }
 }
