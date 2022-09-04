@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
 import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionMiddlemanEvent;
-import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.ActionResultReceivedEvent;
 import com.google.devtools.build.lib.actions.ActionScanningCompletedEvent;
@@ -829,8 +828,7 @@ public final class SkyframeActionExecutor {
           profiler.profileAction(
               ProfilerTask.ACTION,
               action.describe(),
-              action.getPrimaryOutput().getExecPathString(),
-              getOwnerLabelAsString(action))) {
+              action.getPrimaryOutput().getExecPathString())) {
         String message = action.getProgressMessage();
         if (message != null) {
           reporter.startTask(null, prependExecPhaseStats(message));
@@ -897,18 +895,6 @@ public final class SkyframeActionExecutor {
 
         return continueAction(env.getListener(), runFully(action, actionExecutionContext));
       }
-    }
-
-    private String getOwnerLabelAsString(Action action) {
-      ActionOwner owner = action.getOwner();
-      if (owner == null) {
-        return "";
-      }
-      Label ownerLabel = owner.getLabel();
-      if (ownerLabel == null) {
-        return "";
-      }
-      return ownerLabel.getCanonicalForm();
     }
 
     private void notifyActionCompletion(
