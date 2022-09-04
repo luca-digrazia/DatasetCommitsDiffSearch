@@ -1,5 +1,8 @@
 package io.quarkus.deployment.devmode;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
+
 import io.quarkus.runtime.TemplateHtmlBuilder;
 
 /**
@@ -11,9 +14,16 @@ public class ReplacementDebugPage {
         TemplateHtmlBuilder builder = new TemplateHtmlBuilder("Error restarting Quarkus", exception.getClass().getName(),
                 generateHeaderMessage(exception));
 
-        builder.stack(exception);
+        builder.stack(generateStackTrace(exception));
 
         return builder.toString();
+    }
+
+    private static String generateStackTrace(final Throwable exception) {
+        StringWriter stringWriter = new StringWriter();
+        exception.printStackTrace(new PrintWriter(stringWriter));
+
+        return stringWriter.toString().trim();
     }
 
     private static String generateHeaderMessage(final Throwable exception) {

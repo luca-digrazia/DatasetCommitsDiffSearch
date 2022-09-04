@@ -1,5 +1,7 @@
 package io.quarkus.resteasy.test;
 
+import static org.hamcrest.Matchers.is;
+
 import org.hamcrest.Matchers;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -17,21 +19,11 @@ public class NotFoundExceptionMapperTestCase {
                     .addClasses(RootResource.class));
 
     @Test
-    public void testResourceNotFound() {
-        // test the exception mapper provided in dev mode, if no accept, will just return a plain 404
+    public void testHtmlResourceNotFound() {
+        // test the default exception mapper provided in dev mode : displays HTML by default
         RestAssured.when().get("/not_found")
                 .then()
-                .statusCode(404);
-    }
-
-    @Test
-    public void testHtmlResourceNotFound() {
-        // test the exception mapper provided in dev mode, if no accept, will just return a plain 404
-        RestAssured.given().accept(ContentType.HTML)
-                .when().get("/not_found")
-                .then()
                 .statusCode(404)
-                .contentType(ContentType.HTML)
                 .body(Matchers.containsString("<h1 class=\"container\">404 - Resource Not Found</h1>"));
     }
 
@@ -42,7 +34,8 @@ public class NotFoundExceptionMapperTestCase {
                 .when().get("/not_found")
                 .then()
                 .statusCode(404)
-                .contentType(ContentType.JSON);
+                .body("errorMessage", is("404 - Resource Not Found"))
+                .body("existingResourcesDetails[0].basePath", is("/"));
     }
 
 }
