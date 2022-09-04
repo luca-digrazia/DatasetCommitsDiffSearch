@@ -10,7 +10,6 @@ import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxKeyCertO
 import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOptions;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import org.jboss.logging.Logger;
 
@@ -150,15 +149,6 @@ public class PgPoolRecorder {
         configurePemKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePem);
         configureJksKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificateJks);
         configurePfxKeyCertOptions(pgConnectOptions, dataSourceReactiveRuntimeConfig.keyCertificatePfx);
-
-        pgConnectOptions.setReconnectAttempts(dataSourceReactiveRuntimeConfig.reconnectAttempts);
-
-        pgConnectOptions.setReconnectInterval(dataSourceReactiveRuntimeConfig.reconnectInterval.toMillis());
-
-        if (dataSourceReactiveRuntimeConfig.idleTimeout.isPresent()) {
-            int idleTimeout = Math.toIntExact(dataSourceReactiveRuntimeConfig.idleTimeout.get().toMillis());
-            pgConnectOptions.setIdleTimeout(idleTimeout).setIdleTimeoutUnit(TimeUnit.MILLISECONDS);
-        }
 
         return pgConnectOptions;
     }

@@ -1,5 +1,6 @@
 package io.quarkus.reactive.pg.client.runtime;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -8,6 +9,7 @@ import org.jboss.logging.Logger;
 
 import io.vertx.pgclient.PgPool;
 
+@ApplicationScoped
 public class PgPoolProducer {
 
     private static final Logger LOGGER = Logger.getLogger(PgPoolProducer.class);
