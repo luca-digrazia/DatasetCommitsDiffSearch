@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.select;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -117,9 +116,9 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
     assertThat(rawMapper.getConfigurabilityKeys("srcs", BuildType.LABEL_LIST))
         .containsExactly(
-            Label.parseAbsolute("//conditions:a", ImmutableMap.of()),
-            Label.parseAbsolute("//conditions:b", ImmutableMap.of()),
-            Label.parseAbsolute("//conditions:default", ImmutableMap.of()));
+            Label.parseAbsolute("//conditions:a"),
+            Label.parseAbsolute("//conditions:b"),
+            Label.parseAbsolute("//conditions:default"));
     assertThat(rawMapper.getConfigurabilityKeys("data", BuildType.LABEL_LIST)).isEmpty();
   }
 
@@ -133,11 +132,10 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
         "        '//conditions:b': ['b.sh', 'c.sh'],",
         "    }))");
     RawAttributeMapper rawMapper = RawAttributeMapper.of(rule);
-    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST))
-        .containsExactly(
-            Label.parseAbsolute("//x:a.sh", ImmutableMap.of()),
-            Label.parseAbsolute("//x:b.sh", ImmutableMap.of()),
-            Label.parseAbsolute("//x:c.sh", ImmutableMap.of()))
+    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST)).containsExactly(
+        Label.parseAbsolute("//x:a.sh"),
+        Label.parseAbsolute("//x:b.sh"),
+        Label.parseAbsolute("//x:c.sh"))
         .inOrder();
   }
 
@@ -154,13 +152,12 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
         "            '//conditions:b2': ['b2.sh']})",
         "    )");
     RawAttributeMapper rawMapper = RawAttributeMapper.of(rule);
-    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST))
-        .containsExactly(
-            Label.parseAbsolute("//x:a1.sh", ImmutableMap.of()),
-            Label.parseAbsolute("//x:b1.sh", ImmutableMap.of()),
-            Label.parseAbsolute("//x:another_b1.sh", ImmutableMap.of()),
-            Label.parseAbsolute("//x:a2.sh", ImmutableMap.of()),
-            Label.parseAbsolute("//x:b2.sh", ImmutableMap.of()))
+    assertThat(rawMapper.getMergedValues("srcs", BuildType.LABEL_LIST)).containsExactly(
+        Label.parseAbsolute("//x:a1.sh"),
+        Label.parseAbsolute("//x:b1.sh"),
+        Label.parseAbsolute("//x:another_b1.sh"),
+        Label.parseAbsolute("//x:a2.sh"),
+        Label.parseAbsolute("//x:b2.sh"))
         .inOrder();
   }
 }
