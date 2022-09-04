@@ -1011,6 +1011,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "tools/build_defs/cc/rule.bzl",
         "def _impl(ctx):",
         "  compilation_context = cc_common.create_compilation_context(",
+        "    ctx=ctx,",
         "    headers=depset([ctx.file._header]),",
         "    system_includes=depset([ctx.attr._system_include]),",
         "    includes=depset([ctx.attr._include]),",
@@ -1090,7 +1091,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
         "def _impl(ctx):",
-        "  compilation_context = cc_common.create_compilation_context()",
+        "  compilation_context = cc_common.create_compilation_context(ctx=ctx)",
         "  return struct()",
         "crule = rule(",
         "  _impl,",
@@ -1112,7 +1113,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     scratch.file(
         "tools/build_defs/cc/rule.bzl",
         "def _impl(ctx):",
-        "  compilation_context = cc_common.create_compilation_context(headers=[])",
+        "  compilation_context = cc_common.create_compilation_context(ctx=ctx, headers=[])",
         "  return struct()",
         "crule = rule(",
         "  _impl,",
@@ -4260,6 +4261,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "                abi_version = 'abi',",
         "                tool_paths = [tool_path(name = 'name1', path = 'path1')],",
         "                cc_target_os = 'os',",
+        "                needs_pic = True,",
         "                builtin_sysroot = 'sysroot',",
         "                make_variables = [make_variable(name = 'acs', value = 'asd')])",
         "cc_toolchain_config_rule = rule(",
@@ -4615,6 +4617,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "                compiler = 'compiler',",
         "                abi_libc_version = 'abi_libc',",
         "                abi_version = 'abi',",
+        "                needs_pic = True,",
         "                tool_paths = [tool_path(name = 'name1', path = 'path1')],",
         "                make_variables = [make_variable(name = 'variable', value = '--a -b -c')],",
         "                builtin_sysroot = 'sysroot',",
@@ -4652,6 +4655,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     assertThat(toolchain.getCompiler()).isEqualTo("compiler");
     assertThat(toolchain.getAbiLibcVersion()).isEqualTo("abi_libc");
     assertThat(toolchain.getAbiVersion()).isEqualTo("abi");
+    assertThat(toolchain.getNeedsPic()).isTrue();
     ToolPath toolPath = Iterables.getOnlyElement(toolchain.getToolPathList());
     assertThat(toolPath.getName()).isEqualTo("name1");
     assertThat(toolPath.getPath()).isEqualTo("path1");

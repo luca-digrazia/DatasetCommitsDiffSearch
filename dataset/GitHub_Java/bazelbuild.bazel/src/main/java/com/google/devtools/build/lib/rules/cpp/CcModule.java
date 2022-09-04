@@ -401,6 +401,10 @@ public class CcModule
       Location location,
       Environment environment)
       throws EvalException, InterruptedException {
+    CcCommon.checkLocationWhitelisted(
+        environment.getSemantics(),
+        location,
+        environment.getGlobals().getLabel().getPackageIdentifier().toString());
     SkylarkRuleContext skylarkRuleContext =
         nullIfNone(skylarkRuleContextObject, SkylarkRuleContext.class);
     Artifact library = nullIfNone(libraryObject, Artifact.class);
@@ -426,10 +430,6 @@ public class CcModule
             + parameters;
 
     if (skylarkRuleContext != null || library != null || skylarkArtifactCategory != null) {
-      CcCommon.checkLocationWhitelisted(
-          environment.getSemantics(),
-          location,
-          environment.getGlobals().getLabel().getPackageIdentifier().toString());
       if (skylarkRuleContext == null
           || library == null
           || skylarkArtifactCategory == null
@@ -603,6 +603,12 @@ public class CcModule
       documented = false,
       parameters = {
         @Param(
+            name = "ctx",
+            positional = false,
+            named = true,
+            type = SkylarkRuleContextApi.class,
+            doc = "The rule context."),
+        @Param(
             name = "headers",
             doc = "the set of headers needed to compile this target",
             positional = false,
@@ -647,12 +653,14 @@ public class CcModule
             type = Object.class)
       })
   public CcCompilationContext createCcCompilationContext(
+      SkylarkRuleContext skylarkRuleContext,
       Object headers,
       Object systemIncludes,
       Object includes,
       Object quoteIncludes,
       Object defines)
       throws EvalException, InterruptedException {
+    CcCommon.checkRuleWhitelisted(skylarkRuleContext);
     CcCompilationContext.Builder ccCompilationContext =
         new CcCompilationContext.Builder(/* ruleContext= */ null);
     ccCompilationContext.addDeclaredIncludeSrcs(
@@ -716,6 +724,10 @@ public class CcModule
       Location location,
       Environment environment)
       throws EvalException, InterruptedException {
+    CcCommon.checkLocationWhitelisted(
+        environment.getSemantics(),
+        location,
+        environment.getGlobals().getLabel().getPackageIdentifier().toString());
     SkylarkRuleContext skylarkRuleContext =
         nullIfNone(skylarkRuleContextObject, SkylarkRuleContext.class);
     CcLinkParams staticModeParamsForDynamicLibrary =
@@ -744,10 +756,6 @@ public class CcModule
         || staticModeParamsForExecutable != null
         || dynamicModeParamsForDynamicLibrary != null
         || dynamicModeParamsForExecutable != null) {
-      CcCommon.checkLocationWhitelisted(
-          environment.getSemantics(),
-          location,
-          environment.getGlobals().getLabel().getPackageIdentifier().toString());
       if (skylarkRuleContext == null
           || staticModeParamsForDynamicLibrary == null
           || staticModeParamsForExecutable == null
@@ -1027,6 +1035,12 @@ public class CcModule
         @Param(name = "abi_version", positional = false, type = String.class, named = true),
         @Param(name = "abi_libc_version", positional = false, type = String.class, named = true),
         @Param(
+            name = "needs_pic",
+            positional = false,
+            type = Boolean.class,
+            defaultValue = "False",
+            named = true),
+        @Param(
             name = "tool_paths",
             positional = false,
             named = true,
@@ -1067,6 +1081,7 @@ public class CcModule
       String compiler,
       String abiVersion,
       String abiLibcVersion,
+      Boolean needsPic,
       SkylarkList<Object> toolPaths,
       SkylarkList<Object> makeVariables,
       Object builtinSysroot,
@@ -1237,7 +1252,8 @@ public class CcModule
         .setTargetLibc(targetLibc)
         .setCompiler(compiler)
         .setAbiVersion(abiVersion)
-        .setAbiLibcVersion(abiLibcVersion);
+        .setAbiLibcVersion(abiLibcVersion)
+        .setNeedsPic(needsPic);
 
     if (convertFromNoneable(ccTargetOs, /* defaultValue= */ null) != null) {
       cToolchain.setCcTargetOs((String) ccTargetOs);
@@ -1266,7 +1282,7 @@ public class CcModule
         /* staticRuntimesFilegroup= */ "",
         /* dynamicRuntimesFilegroup= */ "",
         supportsFission,
-        /* needsPic= */ false,
+        needsPic,
         toolPathList,
         /* compilerFlags= */ ImmutableList.of(),
         /* cxxFlags= */ ImmutableList.of(),
