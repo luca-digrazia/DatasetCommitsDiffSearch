@@ -323,7 +323,6 @@ public class JavaToolchainProvider extends NativeInfo
 
   /** Return the {@link Artifact} of the allowlist used by the one-version compliance checker. */
   @Nullable
-  @Override
   public Artifact getOneVersionAllowlist() {
     return oneVersionAllowlist;
   }
