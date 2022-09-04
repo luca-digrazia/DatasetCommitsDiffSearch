@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -37,13 +37,12 @@ import com.helger.jcodemodel.JInvocation;
 import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JVar;
 
-public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponentWithViewSupportHolder> implements HasPreferences {
+public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponentWithViewSupportHolder>implements HasPreferences {
 
 	protected JBlock addPreferencesFromResourceInjectionBlock;
 	protected JBlock addPreferencesFromResourceAfterInjectionBlock;
 
 	private boolean usingSupportV7Preference = false;
-	private boolean usingAndroidxPreference = false;
 	private AbstractJClass basePreferenceClass;
 
 	public PreferencesDelegate(EComponentWithViewSupportHolder holder) {
@@ -52,17 +51,12 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 		Types typeUtils = holder.getEnvironment().getProcessingEnvironment().getTypeUtils();
 
 		TypeElement supportV7PreferenceFragmentCompat = elementUtils.getTypeElement(CanonicalNameConstants.SUPPORT_V7_PREFERENCE_FRAGMENTCOMPAT);
-		TypeElement andoridxPreferenceFragmentCompat = elementUtils.getTypeElement(CanonicalNameConstants.ANDROIDX_PREFERENCE_FRAGMENTCOMPAT);
+
 		TypeElement supportV14PreferenceFragment = elementUtils.getTypeElement(CanonicalNameConstants.SUPPORT_V14_PREFERENCE_FRAGMENT);
-		TypeElement andoridxPreferenceFragment = elementUtils.getTypeElement(CanonicalNameConstants.ANDROIDX_PREFERENCE_FRAGMENT);
 
 		TypeMirror annotatedType = holder.getAnnotatedElement().asType();
 
-		if (andoridxPreferenceFragmentCompat != null && typeUtils.isSubtype(annotatedType, andoridxPreferenceFragmentCompat.asType())
-				|| andoridxPreferenceFragment != null && typeUtils.isSubtype(annotatedType, andoridxPreferenceFragment.asType())) {
-			usingAndroidxPreference = true;
-			basePreferenceClass = getClasses().ANDROIDX_PREFERENCE;
-		} else if (supportV7PreferenceFragmentCompat != null && typeUtils.isSubtype(annotatedType, supportV7PreferenceFragmentCompat.asType())
+		if (supportV7PreferenceFragmentCompat != null && typeUtils.isSubtype(annotatedType, supportV7PreferenceFragmentCompat.asType())
 				|| supportV14PreferenceFragment != null && typeUtils.isSubtype(annotatedType, supportV14PreferenceFragment.asType())) {
 			usingSupportV7Preference = true;
 			basePreferenceClass = getClasses().SUPPORT_V7_PREFERENCE;
@@ -121,11 +115,6 @@ public class PreferencesDelegate extends GeneratedClassHolderDelegate<EComponent
 	@Override
 	public boolean usingSupportV7Preference() {
 		return usingSupportV7Preference;
-	}
-
-	@Override
-	public boolean usingAndroidxPreference() {
-		return usingAndroidxPreference;
 	}
 
 	@Override
