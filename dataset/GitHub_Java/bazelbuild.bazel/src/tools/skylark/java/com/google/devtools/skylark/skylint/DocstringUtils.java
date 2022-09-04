@@ -328,7 +328,6 @@ public final class DocstringUtils {
       List<ParameterDoc> params = new ArrayList<>();
       String returns = "";
       String deprecated = "";
-      boolean descriptionBodyAfterSpecialSectionsReported = false;
       while (!eof()) {
         switch (line) {
           case "Args:":
@@ -353,9 +352,8 @@ public final class DocstringUtils {
             deprecated = parseSectionAfterHeading();
             break;
           default:
-            if (specialSectionsStarted && !descriptionBodyAfterSpecialSectionsReported) {
+            if (specialSectionsStarted) {
               error("description body should go before the special sections");
-              descriptionBodyAfterSpecialSectionsReported = true;
             }
             if (deprecated.isEmpty() && nonStandardDeprecation.isEmpty()) {
               nonStandardDeprecation = checkForNonStandardDeprecation(line);
