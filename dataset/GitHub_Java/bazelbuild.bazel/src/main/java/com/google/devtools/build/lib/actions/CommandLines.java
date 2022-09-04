@@ -164,8 +164,9 @@ public class CommandLines {
           ++paramFileNameSuffix;
 
           String paramArg =
-              SingleStringArgFormatter.format(
-                  paramFileInfo.getFlagFormatString(), paramFileExecPath.getPathString());
+              paramFileInfo
+                  .getFlagFormatString()
+                  .replaceFirst("%s", paramFileExecPath.getPathString());
           arguments.addElement(paramArg);
           cmdLineLength += paramArg.length() + 1;
           paramFiles.add(

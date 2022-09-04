@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.Spawns;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
@@ -77,22 +76,13 @@ public class LocalSpawnRunner implements SpawnRunner {
   private final LocalExecutionOptions localExecutionOptions;
 
   private final boolean useProcessWrapper;
-  private final Path processWrapper;
+  private final String processWrapper;
 
   private final LocalEnvProvider localEnvProvider;
-  private final BinTools binTools;
 
   // TODO(b/62588075): Move this logic to ProcessWrapperUtil?
-  private static Path getProcessWrapper(BinTools binTools, OS localOs) {
-    // We expect binTools to be null only under testing.
-    return binTools == null
-        ? null
-        : binTools.getEmbeddedPath("process-wrapper" + OsUtils.executableExtension(localOs));
-  }
-
-  private static boolean processWrapperExists(BinTools binTools) {
-    Path wrapper = getProcessWrapper(binTools, OS.getCurrent());
-    return wrapper != null && wrapper.exists();
+  protected static Path getProcessWrapper(Path execRoot, OS localOs) {
+    return execRoot.getRelative("_bin/process-wrapper" + OsUtils.executableExtension(localOs));
   }
 
   public LocalSpawnRunner(
@@ -101,32 +91,28 @@ public class LocalSpawnRunner implements SpawnRunner {
       ResourceManager resourceManager,
       boolean useProcessWrapper,
       OS localOs,
-      LocalEnvProvider localEnvProvider,
-      BinTools binTools) {
+      LocalEnvProvider localEnvProvider) {
     this.execRoot = execRoot;
-    this.processWrapper = getProcessWrapper(binTools, localOs);
+    this.processWrapper = getProcessWrapper(execRoot, localOs).getPathString();
     this.localExecutionOptions = Preconditions.checkNotNull(localExecutionOptions);
     this.hostName = NetUtil.getCachedShortHostName();
     this.resourceManager = resourceManager;
     this.useProcessWrapper = useProcessWrapper;
     this.localEnvProvider = localEnvProvider;
-    this.binTools = binTools;
   }
 
   public LocalSpawnRunner(
       Path execRoot,
       LocalExecutionOptions localExecutionOptions,
       ResourceManager resourceManager,
-      LocalEnvProvider localEnvProvider,
-      BinTools binTools) {
+      LocalEnvProvider localEnvProvider) {
     this(
         execRoot,
         localExecutionOptions,
         resourceManager,
-        OS.getCurrent() != OS.WINDOWS && processWrapperExists(binTools),
+        OS.getCurrent() != OS.WINDOWS && getProcessWrapper(execRoot, OS.getCurrent()).exists(),
         OS.getCurrent(),
-        localEnvProvider,
-        binTools);
+        localEnvProvider);
   }
 
   @Override
@@ -285,7 +271,7 @@ public class LocalSpawnRunner implements SpawnRunner {
         commandTmpDir.createDirectory();
         Map<String, String> environment =
             localEnvProvider.rewriteLocalEnv(
-                spawn.getEnvironment(), binTools, commandTmpDir.getPathString());
+                spawn.getEnvironment(), execRoot, commandTmpDir.getPathString());
         if (useProcessWrapper) {
           // If the process wrapper is enabled, we use its timeout feature, which first interrupts
           // the subprocess and only kills it after a grace period so that the subprocess can output
@@ -295,8 +281,7 @@ public class LocalSpawnRunner implements SpawnRunner {
           stdOut = ByteStreams.nullOutputStream();
           stdErr = ByteStreams.nullOutputStream();
           ProcessWrapperUtil.CommandLineBuilder commandLineBuilder =
-              ProcessWrapperUtil.commandLineBuilder(processWrapper.getPathString(),
-                  spawn.getArguments())
+              ProcessWrapperUtil.commandLineBuilder(processWrapper, spawn.getArguments())
                   .setStdoutPath(getPathOrDevNull(outErr.getOutputPath()))
                   .setStderrPath(getPathOrDevNull(outErr.getErrorPath()))
                   .setTimeout(context.getTimeout())
