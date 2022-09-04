@@ -114,9 +114,6 @@ public class ToolchainUtil {
       throws InterruptedException, ToolchainContextException {
     PlatformConfiguration platformConfiguration =
         configuration.getFragment(PlatformConfiguration.class);
-    if (platformConfiguration == null) {
-      return null;
-    }
     Label executionPlatformLabel = platformConfiguration.getExecutionPlatform();
     Label targetPlatformLabel = platformConfiguration.getTargetPlatforms().get(0);
 
@@ -223,12 +220,12 @@ public class ToolchainUtil {
       }
     }
 
-    if (!missingToolchains.isEmpty()) {
-      throw new ToolchainContextException(new UnresolvedToolchainsException(missingToolchains));
-    }
-
     if (valuesMissing) {
       return null;
+    }
+
+    if (!missingToolchains.isEmpty()) {
+      throw new ToolchainContextException(new UnresolvedToolchainsException(missingToolchains));
     }
 
     return builder.build();
