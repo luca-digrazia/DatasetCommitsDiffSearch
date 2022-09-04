@@ -4,6 +4,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.netty.handler.ssl.SslProvider;
 import io.quarkus.runtime.annotations.ConfigGroup;
@@ -67,16 +68,16 @@ public class NettyHttpClientConfig {
     /**
      * The maximum amount of time that a connection should be allowed to remain open while idle.
      * <p>
-     * Currently has no effect if `quarkus.dynamodb.async-client.use-idle-connection-reaper` is false.
+     * Currently has no effect if `quarkus.<amazon-service>.async-client.use-idle-connection-reaper` is false.
      */
-    @ConfigItem(defaultValue = "60S")
+    @ConfigItem(defaultValue = "5S")
     public Duration connectionMaxIdleTime;
 
     /**
      * Whether the idle connections in the connection pool should be closed.
      * <p>
-     * When enabled, connections left idling for longer than `quarkus.dynamodb.async-client.connection-max-idle-time` will be
-     * closed. This will not close connections currently in use.
+     * When enabled, connections left idling for longer than `quarkus.<amazon-service>.async-client.connection-max-idle-time`
+     * will be closed. This will not close connections currently in use.
      */
     @ConfigItem(defaultValue = "true")
     public boolean useIdleConnectionReaper;
@@ -108,10 +109,16 @@ public class NettyHttpClientConfig {
     public NettyProxyConfiguration proxy;
 
     /**
-     * TLS Managers provider configuration
+     * TLS Key Managers provider configuration
      */
     @ConfigItem
-    public TlsManagersProviderConfig tlsManagersProvider;
+    public TlsKeyManagersProviderConfig tlsKeyManagersProvider;
+
+    /**
+     * TLS Trust Managers provider configuration
+     */
+    @ConfigItem
+    public TlsTrustManagersProviderConfig tlsTrustManagersProvider;
 
     /**
      * Netty event loop configuration override
@@ -137,7 +144,17 @@ public class NettyHttpClientConfig {
          * <p>
          */
         @ConfigItem(defaultValueDocumentation = "1048576")
-        public Optional<Integer> initialWindowSize;
+        public OptionalInt initialWindowSize;
+
+        /**
+         * Sets the period that the Netty client will send {@code PING} frames to the remote endpoint to check the
+         * health of the connection. To disable this feature, set a duration of 0.
+         * <p>
+         * This setting is only respected when the HTTP/2 protocol is used.
+         * <p>
+         */
+        @ConfigItem(defaultValueDocumentation = "5")
+        public Optional<Duration> healthCheckPingPeriod;
     }
 
     @ConfigGroup
@@ -156,7 +173,7 @@ public class NettyHttpClientConfig {
          * `io.netty.eventLoopThreads` system property is set.
          */
         @ConfigItem
-        public Optional<Integer> numberOfThreads;
+        public OptionalInt numberOfThreads;
 
         /**
          * The thread name prefix for threads created by this thread factory used by event loop group.
