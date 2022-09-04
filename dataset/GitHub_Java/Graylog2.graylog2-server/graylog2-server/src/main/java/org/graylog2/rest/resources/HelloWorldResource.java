@@ -34,8 +34,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
-import java.net.URI;
-
 import static java.util.Objects.requireNonNull;
 
 @Api(value = "Hello World", description = "A friendly hello world message")
@@ -74,9 +72,8 @@ public class HelloWorldResource extends RestResource {
     @Produces({MediaType.TEXT_HTML, MediaType.APPLICATION_XHTML_XML})
     public Response redirectToWebConsole() {
         if (configuration.isRestAndWebOnSamePort()) {
-            final URI target = URI.create(configuration.getWebPrefix());
             return Response
-                .temporaryRedirect(target)
+                .temporaryRedirect(configuration.getWebListenUri())
                 .build();
         }
 
