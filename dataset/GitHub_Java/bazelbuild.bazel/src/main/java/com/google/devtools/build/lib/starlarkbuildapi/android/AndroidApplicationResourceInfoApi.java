@@ -17,7 +17,6 @@ import com.google.devtools.build.docgen.annot.StarlarkConstructor;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
-import javax.annotation.Nullable;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -44,7 +43,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getResourceApk();
 
   /** The jar containing the R java source files. */
@@ -54,7 +52,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getResourceJavaSrcJar();
 
   /** The jar containing the R java class files. */
@@ -64,7 +61,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getResourceJavaClassJar();
 
   /** The final proessed manifest. */
@@ -82,7 +78,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getResourceProguardConfig();
 
   /** The main dex proguard config file. */
@@ -92,7 +87,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getMainDexProguardConfig();
 
   /** The R.txt file. */
@@ -102,7 +96,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getRTxt();
 
   /** The merged resource files zip. */
@@ -112,7 +105,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getResourcesZip();
 
   /** The databinding layout info file */
@@ -122,27 +114,7 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
       documented = false,
       allowReturnNones = true,
       structField = true)
-  @Nullable
   FileT getDatabindingLayoutInfoZip();
-
-  /** The build stamp jar file */
-  @StarlarkMethod(
-      name = "build_stamp_jar",
-      doc = "The build stamp jar file.",
-      documented = false,
-      allowReturnNones = true,
-      structField = true)
-  @Nullable
-  FileT getBuildStampJar();
-
-  /** Whether to compile Java Srcs within the android_binary rule */
-  @StarlarkMethod(
-      name = "should_compile_java_srcs",
-      doc = "Whether to compile Java Srcs within the android_binary rule.",
-      documented = false,
-      allowReturnNones = false,
-      structField = true)
-  boolean shouldCompileJavaSrcs();
 
   /** Provider for {@link AndroidApplicationResourceInfoApi}. */
   @StarlarkBuiltin(
@@ -226,16 +198,6 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
               named = true,
               doc = "",
               defaultValue = "None"),
-          @Param(
-              name = "build_stamp_jar",
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              },
-              named = true,
-              doc = "",
-              defaultValue = "None"),
-          @Param(name = "should_compile_java_srcs", named = true, doc = "", defaultValue = "True"),
         },
         selfCall = true)
     @StarlarkConstructor
@@ -248,9 +210,7 @@ public interface AndroidApplicationResourceInfoApi<FileT extends FileApi> extend
         Object mainDexProguardConfig,
         Object rTxt,
         Object resourcesZip,
-        Object databindingLayoutInfoZip,
-        Object buildStampJar,
-        boolean shouldCompileJava)
+        Object databindingLayoutInfoZip)
         throws EvalException;
   }
 }

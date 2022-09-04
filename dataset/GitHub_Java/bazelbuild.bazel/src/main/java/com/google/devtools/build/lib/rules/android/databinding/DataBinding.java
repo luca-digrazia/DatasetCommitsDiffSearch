@@ -20,14 +20,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDataContext;
 import com.google.devtools.build.lib.rules.android.AndroidResources;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -69,10 +68,10 @@ public final class DataBinding {
   private static final String ENABLE_DATA_BINDING_ATTR = "enable_data_binding";
 
   /** The directory where the annotation processor looks for dep metadata. */
-  private static final String DEP_METADATA_INPUT_DIR = "dependent-lib-artifacts";
+  public static final String DEP_METADATA_INPUT_DIR = "dependent-lib-artifacts";
 
   /** The directory where the annotation processor writes metadata output for the current rule. */
-  private static final String METADATA_OUTPUT_DIR = "bin-files";
+  public static final String METADATA_OUTPUT_DIR = "bin-files";
 
   @VisibleForTesting
   public static final DataBindingContext DISABLED_V1_CONTEXT = new DisabledDataBindingV1Context();
@@ -92,9 +91,12 @@ public final class DataBinding {
 
     if (enabled) {
       if (androidConfig.useDataBindingV2()) {
-        return new DataBindingV2Context(context);
+        return new DataBindingV2Context(
+            context,
+            androidConfig.useDataBindingUpdatedArgs(),
+            androidConfig.useDataBindingAndroidX());
       } else {
-        return new DataBindingV1Context(context);
+        return new DataBindingV1Context(context, androidConfig.useDataBindingUpdatedArgs());
       }
     } else {
       if (androidConfig.useDataBindingV2()) {
@@ -127,6 +129,26 @@ public final class DataBinding {
     }
   }
 
+  /** Supplies a databinding context from an injected layout info zip file. */
+  public static DataBindingContext getInjectedDataBindingContext(
+      ActionConstructionContext context,
+      AndroidConfiguration androidConfig,
+      Artifact injectedLayoutInfoZip) {
+    if (androidConfig.useDataBindingV2()) {
+      if (injectedLayoutInfoZip == null) {
+        return DISABLED_V2_CONTEXT;
+      } else {
+        return new DataBindingV2Context(
+            context,
+            androidConfig.useDataBindingUpdatedArgs(),
+            androidConfig.useDataBindingAndroidX(),
+            injectedLayoutInfoZip);
+      }
+    } else {
+      return DISABLED_V1_CONTEXT;
+    }
+  }
+
   /** Returns this rule's data binding base output dir (as an execroot-relative path). */
   static PathFragment getDataBindingExecPath(RuleContext ruleContext) {
     return ruleContext
@@ -135,7 +157,8 @@ public final class DataBinding {
         .getRelative(ruleContext.getUniqueDirectory("databinding"));
   }
 
-  static Artifact getLayoutInfoFile(ActionConstructionContext actionConstructionContext) {
+  @VisibleForTesting
+  public static Artifact getLayoutInfoFile(ActionConstructionContext actionConstructionContext) {
     return actionConstructionContext.getUniqueDirectoryArtifact("databinding", "layout-info.zip");
   }
 
@@ -148,17 +171,7 @@ public final class DataBinding {
         binRelativeBasePath.getRelative(relativePath), ruleContext.getBinOrGenfilesDirectory());
   }
 
-  /** Turns a key/value pair into a javac annotation processor flag received by data binding. */
-  static String createProcessorFlag(String flag, String value) {
-    return String.format("-Aandroid.databinding.%s=%s", flag, value);
-  }
-
-  /** Turns a key/value pair into a javac annotation processor flag received by data binding. */
-  static String createProcessorFlag(String flag, Artifact value) {
-    return createProcessorFlag(flag, value.getExecPathString());
-  }
-
-  static ImmutableList<Artifact> getAnnotationFile(RuleContext ruleContext) {
+  static ImmutableList<Artifact> getAnnotationFile(RuleContext ruleContext, boolean useAndroidX) {
     // Add this rule's annotation processor input. If the rule doesn't have direct resources,
     // there's no direct data binding info, so there's strictly no need for annotation processing.
     // But it's still important to process the deps' .bin files so any Java class references get
@@ -170,7 +183,10 @@ public final class DataBinding {
     try {
       String contents =
           ResourceFileLoader.loadResource(
-              DataBinding.class, "databinding_annotation_template.txt");
+              DataBinding.class,
+              useAndroidX
+                  ? "databinding_annotation_template_androidx.txt"
+                  : "databinding_annotation_template_support_lib.txt");
       Artifact annotationFile = getDataBindingArtifact(ruleContext, "DataBindingInfo.java");
       ruleContext.registerAction(
           FileWriteAction.create(ruleContext, annotationFile, contents, false));
@@ -186,8 +202,7 @@ public final class DataBinding {
     ImmutableList.Builder<Artifact> dataBindingMetadataOutputs = ImmutableList.builder();
     if (ruleContext.attributes().has(attr, BuildType.LABEL_LIST)) {
       for (UsesDataBindingProvider provider :
-          ruleContext.getPrerequisites(
-              attr, RuleConfiguredTarget.Mode.TARGET, UsesDataBindingProvider.PROVIDER)) {
+          ruleContext.getPrerequisites(attr, UsesDataBindingProvider.PROVIDER)) {
         dataBindingMetadataOutputs.addAll(provider.getMetadataOutputs());
       }
     }
@@ -206,8 +221,7 @@ public final class DataBinding {
    * binary's compilation, enough information is available to only use the first version.
    */
   static ImmutableList<Artifact> getMetadataOutputs(
-      RuleContext ruleContext,
-      List<String> metadataOutputSuffixes) {
+      RuleContext ruleContext, boolean useUpdatedArgs, List<String> metadataOutputSuffixes) {
 
     if (!AndroidResources.definesAndroidResources(ruleContext.attributes())) {
       // If this rule doesn't define local resources, no resource processing was done, so it
@@ -219,18 +233,24 @@ public final class DataBinding {
     for (String suffix : metadataOutputSuffixes) {
       // The annotation processor automatically creates files with this naming pattern under the
       // {@code -Aandroid.databinding.generationalFileOutDir} base directory.
-      outputs.add(
-          getDataBindingArtifact(
-              ruleContext,
-              String.format("%s/%s-%s-%s", METADATA_OUTPUT_DIR, javaPackage, javaPackage, suffix)));
+      if (useUpdatedArgs) {
+        outputs.add(
+            getDataBindingArtifact(
+                ruleContext, String.format("%s/%s-%s", METADATA_OUTPUT_DIR, javaPackage, suffix)));
+      } else {
+        outputs.add(
+            getDataBindingArtifact(
+                ruleContext,
+                String.format(
+                    "%s/%s-%s-%s", METADATA_OUTPUT_DIR, javaPackage, javaPackage, suffix)));
+      }
     }
     return outputs.build();
   }
 
   @Nullable
   static Artifact getMetadataOutput(
-      RuleContext ruleContext,
-      String metadataOutputSuffix) {
+      RuleContext ruleContext, boolean useUpdatedArgs, String metadataOutputSuffix) {
 
     if (!AndroidResources.definesAndroidResources(ruleContext.attributes())) {
       // If this rule doesn't define local resources, no resource processing was done, so it
@@ -241,10 +261,16 @@ public final class DataBinding {
 
     // The annotation processor automatically creates files with this naming pattern under the
     // {@code -Aandroid.databinding.generationalFileOutDir} base directory.
-    return getDataBindingArtifact(
-            ruleContext,
-            String.format("%s/%s-%s-%s",
-                METADATA_OUTPUT_DIR, javaPackage, javaPackage, metadataOutputSuffix));
+    if (useUpdatedArgs) {
+      return getDataBindingArtifact(
+          ruleContext,
+          String.format("%s/%s-%s", METADATA_OUTPUT_DIR, javaPackage, metadataOutputSuffix));
+    } else {
+      return getDataBindingArtifact(
+          ruleContext,
+          String.format(
+              "%s/%s-%s-%s", METADATA_OUTPUT_DIR, javaPackage, javaPackage, metadataOutputSuffix));
+    }
   }
 
   /**

@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -304,7 +305,7 @@ class DataBindingV2Context implements DataBindingContext {
       commandLineBuilder.addExecPath("-dependencyClassInfoList", artifact);
     }
 
-    ruleContext.registerAction(
+    Action[] action =
         new SpawnAction.Builder()
             .setExecutable(exec)
             .setMnemonic("GenerateDataBindingBaseClasses")
@@ -313,7 +314,8 @@ class DataBindingV2Context implements DataBindingContext {
             .addOutput(classInfoFile)
             .addOutput(srcOutFile)
             .addCommandLine(commandLineBuilder.build())
-            .build(ruleContext));
+            .build(ruleContext);
+    ruleContext.registerAction(action);
 
     return ImmutableList.of(srcOutFile);
   }
