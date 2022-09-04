@@ -37,6 +37,7 @@ public class JaegerDeploymentTemplate {
 
     public void registerTracer(JaegerConfig jaeger) {
         if (!registered) {
+            System.out.println("JaegerDeploymentTemplate service name = " + jaeger.serviceName);
             if (isValidConfig(jaeger)) {
                 initTracerConfig(jaeger);
                 GlobalTracer.register(new ShamrockJaegerTracer());
