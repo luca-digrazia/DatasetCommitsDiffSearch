@@ -16,9 +16,9 @@
 package com.googlecode.androidannotations.helper;
 
 import static com.googlecode.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
-import static java.util.Arrays.asList;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.IncompleteAnnotationException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -45,12 +45,12 @@ import android.util.Log;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.EApplication;
 import com.googlecode.androidannotations.annotations.EBean;
-import com.googlecode.androidannotations.annotations.EFragment;
 import com.googlecode.androidannotations.annotations.EProvider;
 import com.googlecode.androidannotations.annotations.EReceiver;
 import com.googlecode.androidannotations.annotations.EService;
 import com.googlecode.androidannotations.annotations.EView;
 import com.googlecode.androidannotations.annotations.EViewGroup;
+import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.Trace;
 import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.annotations.rest.Delete;
@@ -76,13 +76,12 @@ public class ValidatorHelper {
 
 	private static final String SPRING_REST_TEMPLATE_QUALIFIED_NAME = "org.springframework.web.client.RestTemplate";
 	private static final String ANDROID_VIEW_QUALIFIED_NAME = "android.view.View";
-	private static final List<String> ANDROID_SHERLOCK_MENU_ITEM_QUALIFIED_NAMES = asList("android.view.MenuItem", "com.actionbarsherlock.view.MenuItem");
+	private static final String ANDROID_MENU_ITEM_QUALIFIED_NAME = "android.view.MenuItem";
 	private static final String ANDROID_TEXT_VIEW_QUALIFIED_NAME = "android.widget.TextView";
 	private static final String ANDROID_VIEWGROUP_QUALIFIED_NAME = "android.view.ViewGroup";
 	private static final String ANDROID_APPLICATION_QUALIFIED_NAME = "android.app.Application";
 	public static final String ANDROID_CONTEXT_QUALIFIED_NAME = "android.content.Context";
 	private static final String ANDROID_ACTIVITY_QUALIFIED_NAME = "android.app.Activity";
-	private static final List<String> ANDROID_FRAGMENT_QUALIFIED_NAMES = asList("android.app.Fragment", "android.support.v4.app.Fragment");
 	private static final String ANDROID_SERVICE_QUALIFIED_NAME = "android.app.Service";
 	private static final String ANDROID_RECEIVER_QUALIFIED_NAME = "android.content.BroadcastReceiver";
 	private static final String ANDROID_PROVIDER_QUALIFIED_NAME = "android.content.ContentProvider";
@@ -101,10 +100,10 @@ public class ValidatorHelper {
 	private static final Collection<Integer> VALID_LOG_LEVELS = Arrays.asList(Log.VERBOSE, Log.DEBUG, Log.INFO, Log.WARN, Log.ERROR);
 
 	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS = asList(EActivity.class, EViewGroup.class, EView.class, EBean.class, EFragment.class);
+	private static final List<Class<? extends Annotation>> VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS = Arrays.asList(EActivity.class, EViewGroup.class, EView.class, EBean.class);
 
 	@SuppressWarnings("unchecked")
-	private static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, EBean.class, EService.class, EReceiver.class, EProvider.class, EFragment.class);
+	private static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = Arrays.asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, EBean.class, EService.class, EReceiver.class, EProvider.class);
 
 	protected final TargetAnnotationHelper annotationHelper;
 
@@ -246,6 +245,22 @@ public class ValidatorHelper {
 		}
 
 		return sb.toString();
+	}
+
+	public void hasExtraValue(Element element, IsValid valid) {
+		boolean error = false;
+		try {
+			Extra extra = element.getAnnotation(Extra.class);
+			if (extra.value() == null) {
+				error = true;
+			}
+		} catch (IncompleteAnnotationException e) {
+			error = true;
+		}
+		if (error) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(element, "%s must have a value, which is the extra name used when sending the intent");
+		}
 	}
 
 	public void hasViewByIdAnnotation(Element element, AnnotationElements validatedElements, IsValid valid) {
@@ -488,14 +503,10 @@ public class ValidatorHelper {
 	}
 
 	public void zeroOrOneMenuItemParameters(ExecutableElement executableElement, IsValid valid) {
-		zeroOrOneSpecificParameter(executableElement, ANDROID_SHERLOCK_MENU_ITEM_QUALIFIED_NAMES, valid);
+		zeroOrOneSpecificParameter(executableElement, ANDROID_MENU_ITEM_QUALIFIED_NAME, valid);
 	}
 
 	public void zeroOrOneSpecificParameter(ExecutableElement executableElement, String parameterTypeQualifiedName, IsValid valid) {
-		zeroOrOneSpecificParameter(executableElement, Arrays.asList(parameterTypeQualifiedName), valid);
-	}
-
-	public void zeroOrOneSpecificParameter(ExecutableElement executableElement, List<String> parameterTypeQualifiedNames, IsValid valid) {
 
 		zeroOrOneParameter(executableElement, valid);
 
@@ -504,9 +515,9 @@ public class ValidatorHelper {
 		if (parameters.size() == 1) {
 			VariableElement parameter = parameters.get(0);
 			TypeMirror parameterType = parameter.asType();
-			if (!parameterTypeQualifiedNames.contains(parameterType.toString())) {
+			if (!parameterType.toString().equals(parameterTypeQualifiedName)) {
 				valid.invalidate();
-				annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with no parameter or a parameter of type " + parameterTypeQualifiedNames + ", not " + parameterType);
+				annotationHelper.printAnnotationError(executableElement, "%s can only be used on a method with no parameter or a parameter of type " + parameterTypeQualifiedName + ", not " + parameterType);
 			}
 		}
 	}
@@ -517,10 +528,6 @@ public class ValidatorHelper {
 
 	public void extendsActivity(Element element, IsValid valid) {
 		extendsType(element, ANDROID_ACTIVITY_QUALIFIED_NAME, valid);
-	}
-
-	public void extendsFragment(Element element, IsValid valid) {
-		extendsOneOfTypes(element, ANDROID_FRAGMENT_QUALIFIED_NAMES, valid);
 	}
 
 	public void extendsService(Element element, IsValid valid) {
@@ -636,32 +643,13 @@ public class ValidatorHelper {
 
 	}
 
-	public void extendsOneOfTypes(Element element, List<String> typeQualifiedNames, IsValid valid) {
-		TypeMirror elementType = element.asType();
-
-		for (String typeQualifiedName : typeQualifiedNames) {
-			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(typeQualifiedName);
-			if (typeElement != null) {
-				TypeMirror expectedType = typeElement.asType();
-				if (annotationHelper.isSubtype(elementType, expectedType)) {
-					return;
-				}
-			}
-		}
-		valid.invalidate();
-		annotationHelper.printAnnotationError(element, "%s can only be used on an element that extends one of the following classes: " + typeQualifiedNames);
-	}
-
 	public void extendsType(Element element, String typeQualifiedName, IsValid valid) {
 		TypeMirror elementType = element.asType();
 
-		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(typeQualifiedName);
-		if (typeElement != null) {
-			TypeMirror expectedType = typeElement.asType();
-			if (!annotationHelper.isSubtype(elementType, expectedType)) {
-				valid.invalidate();
-				annotationHelper.printAnnotationError(element, "%s can only be used on an element that extends " + typeQualifiedName);
-			}
+		TypeMirror expectedType = annotationHelper.typeElementFromQualifiedName(typeQualifiedName).asType();
+		if (!annotationHelper.isSubtype(elementType, expectedType)) {
+			valid.invalidate();
+			annotationHelper.printAnnotationError(element, "%s can only be used on an element that extends " + typeQualifiedName);
 		}
 	}
 
