@@ -41,10 +41,5 @@ public class ComposingPatchTransition implements PatchTransition {
   public BuildOptions apply(BuildOptions options) {
     return Iterables.getOnlyElement(delegate.split(options));
   }
-
-  @Override
-  public String getName() {
-    return delegate.getName();
-  }
 }
 

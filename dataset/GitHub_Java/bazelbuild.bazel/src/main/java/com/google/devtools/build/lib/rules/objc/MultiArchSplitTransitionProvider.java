@@ -189,8 +189,7 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
           actualMinimumOsVersion =
               minimumOsVersion.isPresent()
                   ? minimumOsVersion.get()
-                  : DottedVersion.maybeUnwrap(
-                      buildOptions.get(AppleCommandLineOptions.class).iosMinimumOs);
+                  : buildOptions.get(AppleCommandLineOptions.class).iosMinimumOs;
           cpus = buildOptions.get(AppleCommandLineOptions.class).iosMultiCpus;
           if (cpus.isEmpty()) {
             cpus =
@@ -218,8 +217,7 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
           }
           configurationDistinguisher = ConfigurationDistinguisher.APPLEBIN_WATCHOS;
           actualMinimumOsVersion = minimumOsVersion.isPresent() ? minimumOsVersion.get()
-              : DottedVersion.maybeUnwrap(
-                  buildOptions.get(AppleCommandLineOptions.class).watchosMinimumOs);
+              : buildOptions.get(AppleCommandLineOptions.class).watchosMinimumOs;
           break;
         case TVOS:
           cpus = buildOptions.get(AppleCommandLineOptions.class).tvosCpus;
@@ -228,8 +226,7 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
           }
           configurationDistinguisher = ConfigurationDistinguisher.APPLEBIN_TVOS;
           actualMinimumOsVersion = minimumOsVersion.isPresent() ? minimumOsVersion.get()
-              : DottedVersion.maybeUnwrap(
-                  buildOptions.get(AppleCommandLineOptions.class).tvosMinimumOs);
+              : buildOptions.get(AppleCommandLineOptions.class).tvosMinimumOs;
           break;
         case MACOS:
           cpus = buildOptions.get(AppleCommandLineOptions.class).macosCpus;
@@ -238,8 +235,7 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
           }
           configurationDistinguisher = ConfigurationDistinguisher.APPLEBIN_MACOS;
           actualMinimumOsVersion = minimumOsVersion.isPresent() ? minimumOsVersion.get()
-              : DottedVersion.maybeUnwrap(
-                  buildOptions.get(AppleCommandLineOptions.class).macosMinimumOs);
+              : buildOptions.get(AppleCommandLineOptions.class).macosMinimumOs;
           break;
         default:
           throw new IllegalArgumentException("Unsupported platform type " + platformType);
@@ -270,16 +266,16 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
         }
         switch (platformType) {
           case IOS:
-            appleCommandLineOptions.iosMinimumOs = DottedVersion.option(actualMinimumOsVersion);
+            appleCommandLineOptions.iosMinimumOs = actualMinimumOsVersion;
             break;
           case WATCHOS:
-            appleCommandLineOptions.watchosMinimumOs = DottedVersion.option(actualMinimumOsVersion);
+            appleCommandLineOptions.watchosMinimumOs = actualMinimumOsVersion;
             break;
           case TVOS:
-            appleCommandLineOptions.tvosMinimumOs = DottedVersion.option(actualMinimumOsVersion);
+            appleCommandLineOptions.tvosMinimumOs = actualMinimumOsVersion;
             break;
           case MACOS:
-            appleCommandLineOptions.macosMinimumOs = DottedVersion.option(actualMinimumOsVersion);
+            appleCommandLineOptions.macosMinimumOs = actualMinimumOsVersion;
             break;
         }
 
