@@ -38,11 +38,6 @@ public class LocalFilesArtifactUploader implements BuildEventArtifactUploader {
     // Intentionally left empty
   }
 
-  @Override
-  public boolean mayBeSlow() {
-    return false;
-  }
-
   private class PathConverterImpl implements PathConverter {
     private final Set<Path> paths;
 

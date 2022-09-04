@@ -79,12 +79,8 @@ public class JsonFormatFileTransportTest {
     when(buildEvent.asStreamProto(Matchers.<BuildEventContext>any())).thenReturn(started);
     JsonFormatFileTransport transport =
         new JsonFormatFileTransport(
-            output.getAbsolutePath(),
-            defaultOpts,
-            new LocalFilesArtifactUploader(),
-            (e) -> {},
-            artifactGroupNamer);
-    transport.sendBuildEvent(buildEvent);
+            output.getAbsolutePath(), defaultOpts, new LocalFilesArtifactUploader(), (e) -> {});
+    transport.sendBuildEvent(buildEvent, artifactGroupNamer);
 
     transport.close().get();
     try (Reader reader = new InputStreamReader(new FileInputStream(output))) {
@@ -152,14 +148,10 @@ public class JsonFormatFileTransportTest {
     when(buildEvent.asStreamProto(Matchers.<BuildEventContext>any())).thenReturn(started);
     JsonFormatFileTransport transport =
         new JsonFormatFileTransport(
-            output.getAbsolutePath(),
-            defaultOpts,
-            new LocalFilesArtifactUploader(),
-            (e) -> {},
-            artifactGroupNamer);
+            output.getAbsolutePath(), defaultOpts, new LocalFilesArtifactUploader(), (e) -> {});
     WrappedOutputStream out = new WrappedOutputStream(transport.writer.out);
     transport.writer.out = out;
-    transport.sendBuildEvent(buildEvent);
+    transport.sendBuildEvent(buildEvent, artifactGroupNamer);
     Thread.sleep(FileTransport.SequentialWriter.FLUSH_INTERVAL.toMillis() * 3);
 
     // Some users, e.g. Tulsi, use JSON build event output for interactive use and expect the stream
