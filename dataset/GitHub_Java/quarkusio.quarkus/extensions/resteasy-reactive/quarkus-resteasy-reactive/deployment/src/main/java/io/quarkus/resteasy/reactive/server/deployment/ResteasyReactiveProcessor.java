@@ -72,6 +72,7 @@ import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.ClientProxyUnwrapper;
 import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -80,9 +81,9 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
@@ -124,6 +125,7 @@ import io.quarkus.security.AuthenticationRedirectException;
 import io.quarkus.security.ForbiddenException;
 import io.quarkus.security.UnauthorizedException;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
+import io.quarkus.vertx.http.runtime.BasicRoute;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
@@ -139,6 +141,11 @@ public class ResteasyReactiveProcessor {
     @BuildStep
     public FeatureBuildItem buildSetup() {
         return new FeatureBuildItem(Feature.RESTEASY_REACTIVE);
+    }
+
+    @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.RESTEASY_REACTIVE);
     }
 
     // This is required to get rid of netty exceptions when allocating direct buffers in tests running
@@ -275,13 +282,17 @@ public class ResteasyReactiveProcessor {
             ParamConverterProvidersBuildItem paramConverterProvidersBuildItem,
             ContextResolversBuildItem contextResolversBuildItem,
             List<ApplicationClassPredicateBuildItem> applicationClassPredicateBuildItems,
-            List<MethodScannerBuildItem> methodScanners, ResteasyReactiveServerConfig serverConfig,
-            LaunchModeBuildItem launchModeBuildItem)
+            List<MethodScannerBuildItem> methodScanners, ResteasyReactiveServerConfig serverConfig)
             throws NoSuchMethodException {
 
         if (!resourceScanningResultBuildItem.isPresent()) {
             // no detected @Path, bail out
             return;
+        }
+
+        if (capabilities.isPresent(Capability.RESTEASY)) {
+            throw new IllegalStateException(
+                    "The 'quarkus-resteasy-reactive' and 'quarkus-resteasy' extensions cannot be used at the same time.");
         }
 
         recorderContext.registerNonDefaultConstructor(
@@ -395,7 +406,6 @@ public class ResteasyReactiveProcessor {
                         }
                     })
                     .setInitConverters(initConverters)
-                    .setResteasyReactiveRecorder(recorder)
                     .setApplicationClassPredicate(s -> {
                         for (ApplicationClassPredicateBuildItem i : applicationClassPredicateBuildItems) {
                             if (i.test(s)) {
@@ -551,7 +561,7 @@ public class ResteasyReactiveProcessor {
             RuntimeValue<Deployment> deployment = recorder.createDeployment(deploymentInfo,
                     beanContainerBuildItem.getValue(), shutdownContext, vertxConfig,
                     requestContextFactoryBuildItem.map(RequestContextFactoryBuildItem::getFactory).orElse(null),
-                    initClassFactory, launchModeBuildItem.getLaunchMode());
+                    initClassFactory);
 
             quarkusRestDeploymentBuildItemBuildProducer
                     .produce(new ResteasyReactiveDeploymentBuildItem(deployment, deploymentPath));
@@ -559,8 +569,8 @@ public class ResteasyReactiveProcessor {
                 Handler<RoutingContext> handler = recorder.handler(deployment);
 
                 // Exact match for resources matched to the root path
-                routes.produce(RouteBuildItem.builder()
-                        .orderedRoute(deploymentPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1).handler(handler).build());
+                routes.produce(new RouteBuildItem(
+                        new BasicRoute(deploymentPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1), handler));
                 String matchPath = deploymentPath;
                 if (matchPath.endsWith("/")) {
                     matchPath += "*";
@@ -569,8 +579,7 @@ public class ResteasyReactiveProcessor {
                 }
                 // Match paths that begin with the deployment path
                 routes.produce(
-                        RouteBuildItem.builder().orderedRoute(matchPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1)
-                                .handler(handler).build());
+                        new RouteBuildItem(new BasicRoute(matchPath, VertxHttpRecorder.DEFAULT_ROUTE_ORDER + 1), handler));
             }
         }
     }
@@ -633,8 +642,7 @@ public class ResteasyReactiveProcessor {
     MethodScannerBuildItem integrateSecurityOverrideSupport() {
         return new MethodScannerBuildItem(new MethodScanner() {
             @Override
-            public List<HandlerChainCustomizer> scan(MethodInfo method, ClassInfo actualEndpointClass,
-                    Map<String, Object> methodContext) {
+            public List<HandlerChainCustomizer> scan(MethodInfo method, Map<String, Object> methodContext) {
                 return Collections.singletonList(new SecurityContextOverrideHandler.Customizer());
             }
         });
