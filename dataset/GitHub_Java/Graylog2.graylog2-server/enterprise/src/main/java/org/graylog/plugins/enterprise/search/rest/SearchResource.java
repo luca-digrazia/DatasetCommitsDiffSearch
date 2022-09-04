@@ -1,6 +1,5 @@
 package org.graylog.plugins.enterprise.search.rest;
 
-import com.google.common.collect.ImmutableMap;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -96,9 +95,7 @@ public class SearchResource extends RestResource implements PluginRestResource {
         final CompletableFuture<QueryResult> futureResult = queryEngine.execute(queryJob);
         queryJob.setResultFuture(futureResult);
 
-        return Response.created(URI.create(BASE_PATH + "/status/" + queryJob.getId()))
-                .entity(ImmutableMap.of("job_id", queryJob.getId()))
-                .build();
+        return Response.created(URI.create(BASE_PATH + "/status/" + queryJob.getId())).build();
     }
 
     @GET
