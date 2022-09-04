@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 
 /**
  * Provider for a toolchain declaration, which associates a toolchain type, the execution and target
@@ -33,36 +32,23 @@ public abstract class DeclaredToolchainInfo implements TransitiveInfoProvider {
   /**
    * The type of the toolchain being declared. This will be a label of a toolchain_type() target.
    */
-  public abstract ToolchainTypeInfo toolchainType();
+  public abstract Label toolchainType();
 
   /** The constraints describing the execution environment. */
-  public abstract ConstraintCollection execConstraints();
+  public abstract ImmutableList<ConstraintValueInfo> execConstraints();
 
   /** The constraints describing the target environment. */
-  public abstract ConstraintCollection targetConstraints();
+  public abstract ImmutableList<ConstraintValueInfo> targetConstraints();
 
   /** The label of the toolchain to resolve for use in toolchain-aware rules. */
   public abstract Label toolchainLabel();
 
   /** Returns a new {@link DeclaredToolchainInfo} with the given data. */
+  @AutoCodec.Instantiator
   public static DeclaredToolchainInfo create(
-      ToolchainTypeInfo toolchainType,
+      Label toolchainType,
       ImmutableList<ConstraintValueInfo> execConstraints,
       ImmutableList<ConstraintValueInfo> targetConstraints,
-      Label toolchainLabel) {
-    return create(
-        toolchainType,
-        ConstraintCollection.builder().addConstraints(execConstraints).build(),
-        ConstraintCollection.builder().addConstraints(targetConstraints).build(),
-        toolchainLabel);
-  }
-
-  @AutoCodec.Instantiator
-  @VisibleForSerialization
-  static DeclaredToolchainInfo create(
-      ToolchainTypeInfo toolchainType,
-      ConstraintCollection execConstraints,
-      ConstraintCollection targetConstraints,
       Label toolchainLabel) {
     return new AutoValue_DeclaredToolchainInfo(
         toolchainType, execConstraints, targetConstraints, toolchainLabel);

@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import java.util.Map;
@@ -148,7 +147,7 @@ public class PlatformInfoTest extends BuildViewTestCase {
   }
 
   @Test
-  public void templateVariableInfo() throws Exception {
+  public void makeVariableInfo() throws Exception {
     scratch.file(
         "a/rule.bzl",
         "def _impl(ctx):",
@@ -165,34 +164,5 @@ public class PlatformInfoTest extends BuildViewTestCase {
     @SuppressWarnings("unchecked")
     Map<String, String> makeVariables = (Map<String, String>) ct.get("variables");
     assertThat(makeVariables).containsKey("CC_FLAGS");
-  }
-
-  @Test
-  public void templateVariableInfoConstructor() throws Exception {
-    scratch.file(
-        "a/rule.bzl",
-        "def _consumer_impl(ctx):",
-        "  return struct(",
-        "      var = ctx.attr.supplier[platform_common.TemplateVariableInfo]",
-        "          .variables[ctx.attr.var])",
-        "def _supplier_impl(ctx):",
-        "  return [platform_common.TemplateVariableInfo({ctx.attr.var: ctx.attr.value})]",
-        "consumer = rule(_consumer_impl,",
-        "    attrs = { 'var': attr.string(), 'supplier': attr.label() })",
-        "supplier = rule(_supplier_impl,",
-        "    attrs = { 'var': attr.string(), 'value': attr.string() })");
-
-    scratch.file("a/BUILD",
-        "load(':rule.bzl', 'consumer', 'supplier')",
-        "consumer(name='consumer', supplier=':supplier', var='cherry')",
-        "supplier(name='supplier', var='cherry', value='ontop')");
-
-    ConfiguredTarget consumer = getConfiguredTarget("//a:consumer");
-    @SuppressWarnings("unchecked") String value = (String) consumer.get("var");
-    assertThat(value).isEqualTo("ontop");
-
-    ConfiguredTarget supplier = getConfiguredTarget("//a:supplier");
-    assertThat(supplier.get(TemplateVariableInfo.PROVIDER).getVariables())
-        .containsExactly("cherry", "ontop");
   }
 }

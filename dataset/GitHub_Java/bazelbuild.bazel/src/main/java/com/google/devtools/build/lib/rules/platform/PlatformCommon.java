@@ -15,38 +15,42 @@
 package com.google.devtools.build.lib.rules.platform;
 
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
-import com.google.devtools.build.lib.analysis.platform.ConstraintSettingInfo;
-import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformCommonApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 
 /** Skylark namespace used to interact with the platform APIs. */
-public class PlatformCommon implements PlatformCommonApi {
+@SkylarkModule(
+  name = "platform_common",
+  doc = "Functions for Skylark to interact with the platform APIs."
+)
+public class PlatformCommon {
 
-  @Override
-  public Provider getPlatformInfoConstructor() {
-    return PlatformInfo.PROVIDER;
-  }
-
-  @Override
-  public Provider getConstraintSettingInfoConstructor() {
-    return ConstraintSettingInfo.PROVIDER;
-  }
-
-  @Override
-  public Provider getConstraintValueInfoConstructor() {
-    return ConstraintValueInfo.PROVIDER;
-  }
-
-  @Override
+  @SkylarkCallable(
+      name = TemplateVariableInfo.SKYLARK_NAME,
+      doc = "The provider used to retrieve the provider that contains the template variables "
+          + "defined by a particular toolchain, for example by calling "
+          + "ctx.attr._cc_toolchain[platform_common.TemplateVariableInfo].make_variables[<name>]",
+      structField = true
+  )
   public Provider getMakeVariableProvider() {
     return TemplateVariableInfo.PROVIDER;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = ToolchainInfo.SKYLARK_NAME,
+    doc =
+        "The provider constructor for ToolchainInfo. The constructor takes the type of the "
+            + "toolchain, and a map of the toolchain's data.",
+    structField = true
+  )
   public Provider getToolchainInfoConstructor() {
     return ToolchainInfo.PROVIDER;
+  }
+
+  static {
+    SkylarkSignatureProcessor.configureSkylarkFunctions(PlatformCommon.class);
   }
 }

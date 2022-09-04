@@ -21,18 +21,25 @@ import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.util.Fingerprint;
 
 /** Provider for a platform constraint value that fulfills a {@link ConstraintSettingInfo}. */
+@SkylarkModule(
+  name = "ConstraintValueInfo",
+  doc = "A value for a constraint setting that can be used to define a platform.",
+  category = SkylarkModuleCategory.PROVIDER
+)
 @Immutable
 @AutoCodec
-public class ConstraintValueInfo extends NativeInfo implements ConstraintValueInfoApi {
+public class ConstraintValueInfo extends NativeInfo {
   /** Name used in Skylark for accessing this provider. */
   public static final String SKYLARK_NAME = "ConstraintValueInfo";
 
   /** Skylark constructor and identifier for this provider. */
-  public static final NativeProvider<ConstraintValueInfo> PROVIDER =
+  public static final NativeProvider<ConstraintValueInfo> SKYLARK_CONSTRUCTOR =
       new NativeProvider<ConstraintValueInfo>(ConstraintValueInfo.class, SKYLARK_NAME) {};
 
   private final ConstraintSettingInfo constraint;
@@ -40,18 +47,30 @@ public class ConstraintValueInfo extends NativeInfo implements ConstraintValueIn
 
   @VisibleForSerialization
   ConstraintValueInfo(ConstraintSettingInfo constraint, Label label, Location location) {
-    super(PROVIDER, location);
+    super(
+        SKYLARK_CONSTRUCTOR,
+        location);
 
     this.constraint = constraint;
     this.label = label;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "constraint",
+    doc =
+        "The <a href=\"ConstraintSettingInfo.html\">ConstraintSettingInfo</a> this value can be "
+            + "applied to.",
+    structField = true
+  )
   public ConstraintSettingInfo constraint() {
     return constraint;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "label",
+    doc = "The label of the target that created this constraint value.",
+    structField = true
+  )
   public Label label() {
     return label;
   }
