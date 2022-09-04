@@ -195,7 +195,6 @@ public class ListNormalAdapter extends BaseAdapter {
             public void onEnterFullscreen(String url, Object... objects) {
                 super.onEnterFullscreen(url, objects);
                 GSYVideoManager.instance().setNeedMute(false);
-                holder.gsyVideoPlayer.getCurrentPlayer().getTitleTextView().setText((String)objects[0]);
             }
 
             @Override

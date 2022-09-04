@@ -13,11 +13,13 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.widget.FrameLayout;
 
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.view.SmallVideoTouch;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
+import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import com.transitionseverywhere.TransitionManager;
 
 import java.lang.reflect.Constructor;
@@ -129,7 +131,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
                 @Override
                 public void onClick(View v) {
                     hideSmallVideo();
-                   releaseVideos();
+                    releaseAllVideos();
                 }
             });
         }
@@ -216,7 +218,6 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         to.mGSYVideoProgressListener = from.mGSYVideoProgressListener;
         if(from.mSetUpLazy) {
             to.setUpLazy(from.mOriginUrl, from.mCache, from.mCachePath, from.mMapHeadData, from.mTitle);
-            to.mUrl = from.mUrl;
         } else {
             to.setUp(from.mOriginUrl, from.mCache, from.mCachePath, from.mMapHeadData, from.mTitle);
         }
@@ -315,12 +316,12 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             ViewGroup viewGroup = (ViewGroup) oldF.getParent();
             vp.removeView(viewGroup);
         }
-        mCurrentState = getGSYVideoManager().getLastState();
+        mCurrentState = GSYVideoManager.instance().getLastState();
         if (gsyVideoPlayer != null) {
             cloneParams(gsyVideoPlayer, this);
         }
-        getGSYVideoManager().setListener(getGSYVideoManager().lastListener());
-        getGSYVideoManager().setLastListener(null);
+        GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
+        GSYVideoManager.instance().setLastListener(null);
         setStateAndUi(mCurrentState);
         addTextureView();
         mSaveChangeViewTIme = System.currentTimeMillis();
@@ -452,7 +453,7 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         } else {
             //新版本isIfCurrentIsFullscreen的标志位内部提前设置了，所以不会和手动点击冲突
             if (isIfCurrentIsFullscreen()) {
-                backFromFull(activity);
+                StandardGSYVideoPlayer.backFromWindowFull(activity);
             }
             if (orientationUtils != null) {
                 orientationUtils.setEnable(true);
@@ -583,8 +584,8 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
 
             gsyVideoPlayer.addTextureView();
 
-            getGSYVideoManager().setLastListener(this);
-            getGSYVideoManager().setListener(gsyVideoPlayer);
+            GSYVideoManager.instance().setLastListener(this);
+            GSYVideoManager.instance().setListener(gsyVideoPlayer);
 
             checkoutState();
             return gsyVideoPlayer;
@@ -644,8 +645,8 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
             gsyVideoPlayer.setVideoAllCallBack(mVideoAllCallBack);
             gsyVideoPlayer.setSmallVideoTextureView(new SmallVideoTouch(gsyVideoPlayer, marginLeft, marginTop));
 
-            getGSYVideoManager().setLastListener(this);
-            getGSYVideoManager().setListener(gsyVideoPlayer);
+            GSYVideoManager.instance().setLastListener(this);
+            GSYVideoManager.instance().setListener(gsyVideoPlayer);
             if (mVideoAllCallBack != null) {
                 Debuger.printfError("onEnterSmallWidget");
                 mVideoAllCallBack.onEnterSmallWidget(mOriginUrl, mTitle, gsyVideoPlayer);
@@ -666,12 +667,12 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
         final ViewGroup vp = getViewGroup();
         GSYVideoPlayer gsyVideoPlayer = (GSYVideoPlayer) vp.findViewById(SMALL_ID);
         removeVideo(vp, SMALL_ID);
-        mCurrentState = getGSYVideoManager().getLastState();
+        mCurrentState = GSYVideoManager.instance().getLastState();
         if (gsyVideoPlayer != null) {
             cloneParams(gsyVideoPlayer, this);
         }
-        getGSYVideoManager().setListener(getGSYVideoManager().lastListener());
-        getGSYVideoManager().setLastListener(null);
+        GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
+        GSYVideoManager.instance().setLastListener(null);
         setStateAndUi(mCurrentState);
         addTextureView();
         mSaveChangeViewTIme = System.currentTimeMillis();
@@ -765,5 +766,25 @@ public abstract class GSYBaseVideoPlayer extends GSYVideoControlView {
      */
     public void setBackFromFullScreenListener(OnClickListener backFromFullScreenListener) {
         this.mBackFromFullScreenListener = backFromFullScreenListener;
+    }
+
+    /**
+     * 退出全屏，主要用于返回键
+     *
+     * @return 返回是否全屏
+     */
+    @SuppressWarnings("ResourceType")
+    public static boolean backFromWindowFull(Context context) {
+        boolean backFrom = false;
+        ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(context)).findViewById(Window.ID_ANDROID_CONTENT);
+        View oldF = vp.findViewById(FULLSCREEN_ID);
+        if (oldF != null) {
+            backFrom = true;
+            hideNavKey(context);
+            if (GSYVideoManager.instance().lastListener() != null) {
+                GSYVideoManager.instance().lastListener().onBackFullscreen();
+            }
+        }
+        return backFrom;
     }
 }

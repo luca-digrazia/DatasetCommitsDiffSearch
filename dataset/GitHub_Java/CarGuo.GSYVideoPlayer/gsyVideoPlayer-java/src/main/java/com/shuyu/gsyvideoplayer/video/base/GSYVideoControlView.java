@@ -19,6 +19,9 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
@@ -309,7 +312,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             case CURRENT_STATE_NORMAL:
                 if (isCurrentMediaListener()) {
                     cancelProgressTimer();
-                    getGSYVideoManager().releaseMediaPlayer();
+                    GSYVideoManager.instance().releaseMediaPlayer();
                     releasePauseCover();
                     mBuffterPoint = 0;
                     mSaveChangeViewTIme = 0;
@@ -330,7 +333,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                 break;
             case CURRENT_STATE_ERROR:
                 if (isCurrentMediaListener()) {
-                    getGSYVideoManager().releaseMediaPlayer();
+                    GSYVideoManager.instance().releaseMediaPlayer();
                 }
                 break;
             case CURRENT_STATE_AUTO_COMPLETE:
@@ -562,10 +565,10 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                 mVideoAllCallBack.onClickSeekbar(mOriginUrl, mTitle, this);
             }
         }
-        if (getGSYVideoManager().getMediaPlayer() != null && mHadPlay) {
+        if (GSYVideoManager.instance().getMediaPlayer() != null && mHadPlay) {
             try {
                 int time = seekBar.getProgress() * getDuration() / 100;
-                getGSYVideoManager().getMediaPlayer().seekTo(time);
+                GSYVideoManager.instance().getMediaPlayer().seekTo(time);
             } catch (Exception e) {
                 Debuger.printfWarning(e.toString());
             }
@@ -703,9 +706,9 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         dismissProgressDialog();
         dismissVolumeDialog();
         dismissBrightnessDialog();
-        if (mChangePosition && getGSYVideoManager().getMediaPlayer() != null && (mCurrentState == CURRENT_STATE_PLAYING || mCurrentState == CURRENT_STATE_PAUSE)) {
+        if (mChangePosition && GSYVideoManager.instance().getMediaPlayer() != null && (mCurrentState == CURRENT_STATE_PLAYING || mCurrentState == CURRENT_STATE_PAUSE)) {
             try {
-                getGSYVideoManager().getMediaPlayer().seekTo(mSeekTimePosition);
+                GSYVideoManager.instance().getMediaPlayer().seekTo(mSeekTimePosition);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -797,7 +800,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             startButtonLogic();
         } else if (mCurrentState == CURRENT_STATE_PLAYING) {
             try {
-                getGSYVideoManager().getMediaPlayer().pause();
+                GSYVideoManager.instance().getMediaPlayer().pause();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -822,7 +825,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                 }
             }
             try {
-                getGSYVideoManager().getMediaPlayer().start();
+                GSYVideoManager.instance().getMediaPlayer().start();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -1077,11 +1080,11 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         mCachePath = cachePath;
         mSetUpLazy = true;
         mTitle = title;
-        mMapHeadData = mapHeadData;
         if (isCurrentMediaListener() &&
                 (System.currentTimeMillis() - mSaveChangeViewTIme) < CHANGE_DELAY_TIME)
             return false;
         mUrl = "waiting";
+        mMapHeadData = mapHeadData;
         mCurrentState = CURRENT_STATE_NORMAL;
         return true;
     }
