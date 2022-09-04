@@ -525,7 +525,6 @@ public final class Printer {
               print(buffer, argument);
               continue;
           }
-          // fall through
         default:
           throw new MissingFormatWidthException(
               "unsupported format character " + repr(String.valueOf(directive))

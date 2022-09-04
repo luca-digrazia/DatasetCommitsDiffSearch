@@ -152,7 +152,7 @@ public final class EvalUtils {
         || SkylarkInterfaceUtils.getSkylarkModule(c) != null
         || ImmutableMap.class.isAssignableFrom(c) // will be converted to SkylarkDict
         || NestedSet.class.isAssignableFrom(c) // will be converted to SkylarkNestedSet
-        || PathFragment.class.isAssignableFrom(c); // other known class
+        || c.equals(PathFragment.class); // other known class
   }
 
   // TODO(bazel-team): move the following few type-related functions to SkylarkType
