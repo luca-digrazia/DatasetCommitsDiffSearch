@@ -23,25 +23,17 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CommandLines;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
-import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import javax.annotation.Nullable;
 
 /** A Starlark specific SpawnAction. */
 public final class StarlarkAction extends SpawnAction {
@@ -141,25 +133,8 @@ public final class StarlarkAction extends SpawnAction {
     return allInputs;
   }
 
-  private InputStream getUnusedInputListInputStream(
-      ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException {
-
-    // Check if the file is in-memory.
-    // Note: SpawnActionContext guarantees that the first list entry exists and corresponds to the
-    // executed spawn.
-    InputStream inputStream = spawnResults.get(0).getInMemoryOutput(unusedInputsList.get());
-    if (inputStream != null) {
-      return inputStream;
-    }
-    // Fallback to reading from disk.
-    return actionExecutionContext.getPathResolver().toPath(unusedInputsList.get()).getInputStream();
-  }
-
   @Override
-  protected void afterExecute(
-      ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException {
+  protected void afterExecute(ActionExecutionContext actionExecutionContext) throws IOException {
     if (!unusedInputsList.isPresent()) {
       return;
     }
@@ -170,7 +145,11 @@ public final class StarlarkAction extends SpawnAction {
     try (BufferedReader br =
         new BufferedReader(
             new InputStreamReader(
-                getUnusedInputListInputStream(actionExecutionContext, spawnResults), UTF_8))) {
+                actionExecutionContext
+                    .getPathResolver()
+                    .toPath(unusedInputsList.get())
+                    .getInputStream(),
+                UTF_8))) {
       String line;
       while ((line = br.readLine()) != null) {
         line = line.trim();
@@ -183,18 +162,6 @@ public final class StarlarkAction extends SpawnAction {
     updateInputs(usedInputs.values());
   }
 
-  @Override
-  Spawn getSpawnForExtraAction() throws CommandLineExpansionException {
-    return getSpawn(allInputs);
-  }
-
-  @Override
-  public Iterable<Artifact> getInputFilesForExtraAction(
-      ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException {
-    return allInputs;
-  }
-
   /** Builder class to construct {@link StarlarkAction} instances. */
   public static class Builder extends SpawnAction.Builder {
 
@@ -203,11 +170,6 @@ public final class StarlarkAction extends SpawnAction {
     public Builder setUnusedInputsList(Optional<Artifact> unusedInputsList) {
       this.unusedInputsList = unusedInputsList;
       return this;
-    }
-
-    private static boolean getInMemoryUnusedInputsListFileFlag(
-        @Nullable BuildConfiguration configuration) {
-      return configuration == null ? false : configuration.inmemoryUnusedInputsList();
     }
 
     /** Creates a SpawnAction. */
@@ -223,20 +185,10 @@ public final class StarlarkAction extends SpawnAction {
         CommandLineLimits commandLineLimits,
         boolean isShellCommand,
         ActionEnvironment env,
-        @Nullable BuildConfiguration configuration,
         ImmutableMap<String, String> executionInfo,
         CharSequence progressMessage,
         RunfilesSupplier runfilesSupplier,
         String mnemonic) {
-      if (unusedInputsList.isPresent() && getInMemoryUnusedInputsListFileFlag(configuration)) {
-        executionInfo =
-            ImmutableMap.<String, String>builderWithExpectedSize(executionInfo.size() + 1)
-                .putAll(executionInfo)
-                .put(
-                    ExecutionRequirements.REMOTE_EXECUTION_INLINE_OUTPUTS,
-                    unusedInputsList.get().getExecPathString())
-                .build();
-      }
       return new StarlarkAction(
           owner,
           tools,
