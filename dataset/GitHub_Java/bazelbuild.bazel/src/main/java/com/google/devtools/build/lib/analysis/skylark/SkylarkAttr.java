@@ -100,8 +100,8 @@ public final class SkylarkAttr implements SkylarkValue {
 
   private static final String CONFIGURATION_ARG = "cfg";
   private static final String CONFIGURATION_DOC =
-      "<a href=\"../rules.$DOC_EXT#configurations\">Configuration</a> of the attribute. It can be "
-          + "either <code>\"data\"</code>, <code>\"host\"</code>, or <code>\"target\"</code>.";
+      "Configuration of the attribute. It can be either \"data\", \"host\", or \"target\". "
+          + "This parameter is required if <code>executable</code> is True.";
 
   private static final String DEFAULT_ARG = "default";
   // A trailing space is required because it's often prepended to other sentences
@@ -314,7 +314,12 @@ public final class SkylarkAttr implements SkylarkValue {
       List<SkylarkAspect> aspects =
           ((SkylarkList<?>) obj).getContents(SkylarkAspect.class, "aspects");
       for (SkylarkAspect aspect : aspects) {
-        aspect.attachToAttribute(builder, ast.getLocation());
+        if (!aspect.isExported()) {
+          throw new EvalException(
+              ast.getLocation(),
+              "Aspects should be top-level values in extension files that define them.");
+        }
+        builder.aspect(aspect, ast.getLocation());
       }
     }
 
@@ -733,7 +738,7 @@ public final class SkylarkAttr implements SkylarkValue {
         defaultValue = "None",
         named = true,
         positional = false,
-        doc = CONFIGURATION_DOC + " This parameter is required if <code>executable</code> is True."
+        doc = CONFIGURATION_DOC
       ),
       @Param(
         name = ASPECTS_ARG,
@@ -743,7 +748,7 @@ public final class SkylarkAttr implements SkylarkValue {
         named = true,
         positional = false,
         doc = ASPECTS_ARG_DOC
-      ),
+      )
     },
     useAst = true,
     useEnvironment = true
@@ -1054,7 +1059,7 @@ public final class SkylarkAttr implements SkylarkValue {
         named = true,
         positional = false,
         doc = ASPECTS_ARG_DOC
-      ),
+      )
     },
     useAst = true,
     useEnvironment = true
