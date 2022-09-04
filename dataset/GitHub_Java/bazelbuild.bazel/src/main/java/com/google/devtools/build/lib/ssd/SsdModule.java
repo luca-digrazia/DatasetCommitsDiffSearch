@@ -16,9 +16,8 @@ package com.google.devtools.build.lib.ssd;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.runtime.BlazeModule;
-import com.google.devtools.build.lib.runtime.Command;
+import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsProvider;
 
 /**
  * BlazeModule that applies optimizations to Bazel's internals in order to improve performance when
@@ -26,13 +25,13 @@ import com.google.devtools.common.options.OptionsProvider;
  */
 public final class SsdModule extends BlazeModule {
   @Override
-  public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
+  public Iterable<Class<? extends OptionsBase>> getCommonCommandOptions() {
     return ImmutableList.<Class<? extends OptionsBase>>of(SsdOptions.class);
   }
 
   @Override
-  public void handleOptions(OptionsProvider optionsProvider) {
-    SsdOptions options = optionsProvider.getOptions(SsdOptions.class);
+  public void beforeCommand(CommandEnvironment env) {
+    SsdOptions options = env.getOptions().getOptions(SsdOptions.class);
     if (options.experimentalMultiThreadedDigest) {
       DigestUtils.setMultiThreadedDigest(options.experimentalMultiThreadedDigest);
     }

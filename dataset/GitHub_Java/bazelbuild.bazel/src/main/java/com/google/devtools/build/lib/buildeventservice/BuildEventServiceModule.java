@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
 import com.google.devtools.build.lib.buildeventstream.transports.BuildEventTransportFactory;
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
@@ -38,11 +37,11 @@ import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.SynchronizedOutputStream;
 import com.google.devtools.build.lib.util.AbruptExitException;
+import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
-import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -61,8 +60,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   private static final Logger logger = Logger.getLogger(BuildEventServiceModule.class.getName());
 
   private OutErr outErr;
-
-  private Set<BuildEventTransport> transports = ImmutableSet.of();
 
   @Override
   public Iterable<Class<? extends OptionsBase>> getCommandOptions(Command command) {
@@ -87,8 +84,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
             commandEnvironment.getRuntime().getPathToUriConverter(),
             commandEnvironment.getReporter(),
             commandEnvironment.getClientEnv().get("BAZEL_INTERNAL_BUILD_REQUEST_ID"),
-            commandEnvironment.getCommandId().toString(),
-            commandEnvironment.getCommandName());
+            commandEnvironment.getCommandId().toString());
     if (streamer != null) {
       commandEnvironment.getReporter().addHandler(streamer);
       commandEnvironment.getEventBus().register(streamer);
@@ -127,7 +123,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   /**
    * Returns {@code null} if no stream could be created.
    *
-   * @param buildRequestId if {@code null} or {@code ""} a random UUID is used instead.
+   * @param buildRequestId  if {@code null} or {@code ""} a random UUID is used instead.
    */
   @Nullable
   @VisibleForTesting
@@ -139,8 +135,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       PathConverter pathConverter,
       Reporter reporter,
       String buildRequestId,
-      String invocationId,
-      String commandName) {
+      String invocationId) {
     try {
       T besOptions =
           checkNotNull(
@@ -155,17 +150,8 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
       BuildEventTransport besTransport = null;
       try {
-        besTransport =
-            tryCreateBesTransport(
-                besOptions,
-                authTlsOptions,
-                buildRequestId,
-                invocationId,
-                commandName,
-                moduleEnvironment,
-                clock,
-                pathConverter,
-                commandLineReporter);
+        besTransport = tryCreateBesTransport(besOptions, authTlsOptions, buildRequestId,
+            invocationId, moduleEnvironment, clock, pathConverter, commandLineReporter);
       } catch (Exception e) {
         if (besOptions.besBestEffort) {
           commandLineReporter.handle(Event.warn(format(UPLOAD_FAILED_MESSAGE, e.getMessage())));
@@ -185,7 +171,7 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
         transportsBuilder.add(besTransport);
       }
 
-      transports = transportsBuilder.build();
+      ImmutableSet<BuildEventTransport> transports = transportsBuilder.build();
       if (!transports.isEmpty()) {
         return new BuildEventStreamer(transports, reporter);
       }
@@ -196,16 +182,9 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
   }
 
   @Nullable
-  private BuildEventTransport tryCreateBesTransport(
-      T besOptions,
-      AuthAndTLSOptions authTlsOptions,
-      String buildRequestId,
-      String invocationId,
-      String commandName,
-      ModuleEnvironment moduleEnvironment,
-      Clock clock,
-      PathConverter pathConverter,
-      EventHandler commandLineReporter) throws IOException {
+  private BuildEventTransport tryCreateBesTransport(T besOptions, AuthAndTLSOptions authTlsOptions,
+      String buildRequestId, String invocationId, ModuleEnvironment moduleEnvironment, Clock clock,
+      PathConverter pathConverter, EventHandler commandLineReporter) {
     if (isNullOrEmpty(besOptions.besBackend)) {
       logger.fine("BuildEventServiceTransport is disabled.");
       return null;
@@ -230,7 +209,6 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
               besOptions.besLifecycleEvents,
               buildRequestId,
               invocationId,
-              commandName,
               moduleEnvironment,
               clock,
               pathConverter,
@@ -241,17 +219,10 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
     }
   }
 
-  @Override
-  public void blazeShutdown() {
-    for (BuildEventTransport transport : transports) {
-      transport.closeNow();
-    }
-  }
-
   protected abstract Class<T> optionsClass();
 
   protected abstract BuildEventServiceClient createBesClient(T besOptions,
-      AuthAndTLSOptions authAndTLSOptions) throws IOException;
+      AuthAndTLSOptions authAndTLSOptions);
 
   protected abstract Set<String> whitelistedCommands();
 }
