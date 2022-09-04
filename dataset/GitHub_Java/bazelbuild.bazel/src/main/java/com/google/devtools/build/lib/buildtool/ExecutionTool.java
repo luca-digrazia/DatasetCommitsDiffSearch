@@ -21,7 +21,7 @@ import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.SetMultimap;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionGraph;
@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionPhaseCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionStartingEvent;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -75,12 +74,12 @@ import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
+import com.google.devtools.build.lib.skyframe.OutputService;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
-import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -129,15 +128,11 @@ public class ExecutionTool {
 
     // Create tools before getting the strategies from the modules as some of them need tools to
     // determine whether the host actually supports certain strategies (e.g. sandboxing).
-    try (SilentCloseable closeable = Profiler.instance().profile("createToolsSymlinks")) {
-      createToolsSymlinks();
-    }
+    createToolsSymlinks();
 
     ExecutorBuilder builder = new ExecutorBuilder();
     for (BlazeModule module : runtime.getBlazeModules()) {
-      try (SilentCloseable closeable = Profiler.instance().profile(module + ".executorInit")) {
-        module.executorInit(env, request, builder);
-      }
+      module.executorInit(env, request, builder);
     }
     builder.addActionContext(new SymlinkTreeStrategy(
                 env.getOutputService(), env.getBlazeWorkspace().getBinTools()));
@@ -156,9 +151,7 @@ public class ExecutionTool {
 
     this.actionContextProviders = builder.getActionContextProviders();
     for (ActionContextProvider provider : actionContextProviders) {
-      try (SilentCloseable closeable = Profiler.instance().profile(provider + ".init")) {
-        provider.init(fileCache);
-      }
+      provider.init(fileCache);
     }
 
     // There are many different SpawnActions, and we want to control the action context they use
@@ -227,20 +220,18 @@ public class ExecutionTool {
 
     ActionGraph actionGraph = analysisResult.getActionGraph();
 
+    // Get top-level artifacts.
+    ImmutableSet<Artifact> additionalArtifacts = analysisResult.getAdditionalArtifactsToBuild();
 
     OutputService outputService = env.getOutputService();
     ModifiedFileSet modifiedOutputFiles = ModifiedFileSet.EVERYTHING_MODIFIED;
     if (outputService != null) {
-      try (SilentCloseable c = Profiler.instance().profile("outputService.startBuild")) {
-        modifiedOutputFiles =
-            outputService.startBuild(
-                env.getReporter(), buildId, request.getBuildOptions().finalizeActions);
-      }
+      modifiedOutputFiles =
+          outputService.startBuild(
+              env.getReporter(), buildId, request.getBuildOptions().finalizeActions);
     } else {
       // TODO(bazel-team): this could be just another OutputService
-      try (SilentCloseable c = Profiler.instance().profile("startLocalOutputBuild")) {
-        startLocalOutputBuild();
-      }
+      startLocalOutputBuild();
     }
 
     // Must be created after the output path is created above.
@@ -264,22 +255,16 @@ public class ExecutionTool {
                 analysisResult.getConfigurationCollection().getTargetConfigurations());
     String productName = runtime.getProductName();
     String workspaceName = env.getWorkspaceName();
-    try (SilentCloseable c =
-        Profiler.instance().profile("OutputDirectoryLinksUtils.createOutputDirectoryLinks")) {
-      OutputDirectoryLinksUtils.createOutputDirectoryLinks(
-          workspaceName, env.getWorkspace(), env.getDirectories().getExecRoot(workspaceName),
-          env.getDirectories().getOutputPath(workspaceName), getReporter(), targetConfigurations,
-          request.getBuildOptions().getSymlinkPrefix(productName), productName);
-    }
+    OutputDirectoryLinksUtils.createOutputDirectoryLinks(
+        workspaceName, env.getWorkspace(), env.getDirectories().getExecRoot(workspaceName),
+        env.getDirectories().getOutputPath(workspaceName), getReporter(), targetConfigurations,
+        request.getBuildOptions().getSymlinkPrefix(productName), productName);
 
     ActionCache actionCache = getActionCache();
     actionCache.resetStatistics();
     SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
-    Builder builder;
-    try (SilentCloseable c = Profiler.instance().profile("createBuilder")) {
-      builder = createBuilder(
-          request, actionCache, skyframeExecutor, modifiedOutputFiles);
-    }
+    Builder builder = createBuilder(
+        request, actionCache, skyframeExecutor, modifiedOutputFiles);
 
     //
     // Execution proper.  All statements below are logically nested in
@@ -287,9 +272,7 @@ public class ExecutionTool {
     //
 
     Collection<ConfiguredTarget> configuredTargets = buildResult.getActualTargets();
-    try (SilentCloseable c = Profiler.instance().profile("ExecutionStartingEvent")) {
-      env.getEventBus().post(new ExecutionStartingEvent(configuredTargets));
-    }
+    env.getEventBus().post(new ExecutionStartingEvent(configuredTargets));
 
     getReporter().handle(Event.progress("Building..."));
 
@@ -302,8 +285,18 @@ public class ExecutionTool {
     Set<AspectKey> builtAspects = new HashSet<>();
     Collection<AspectValue> aspects = analysisResult.getAspects();
 
-    SetMultimap<Artifact, Label> topLevelArtifactsToOwnerLabels =
-        TopLevelArtifactHelper.makeTopLevelArtifactsToOwnerLabels(analysisResult, aspects);
+    Iterable<Artifact> allArtifactsForProviders =
+        Iterables.concat(
+            additionalArtifacts,
+            TopLevelArtifactHelper.getAllArtifactsToBuild(
+                    analysisResult.getTargetsToBuild(), analysisResult.getTopLevelContext())
+                .getAllArtifacts(),
+            TopLevelArtifactHelper.getAllArtifactsToBuildFromAspects(
+                    aspects, analysisResult.getTopLevelContext())
+                .getAllArtifacts(),
+            //TODO(dslomov): Artifacts to test from aspects?
+            TopLevelArtifactHelper.getAllArtifactsToTest(analysisResult.getTargetsToTest()));
+
     if (request.isRunningInEmacs()) {
       // The syntax of this message is tightly constrained by lisp/progmodes/compile.el in emacs
       request
@@ -314,10 +307,7 @@ public class ExecutionTool {
     boolean buildCompleted = false;
     try {
       for (ActionContextProvider actionContextProvider : actionContextProviders) {
-        try (SilentCloseable c =
-            Profiler.instance().profile(actionContextProvider + ".executionPhaseStarting")) {
-          actionContextProvider.executionPhaseStarting(actionGraph, topLevelArtifactsToOwnerLabels);
-        }
+        actionContextProvider.executionPhaseStarting(actionGraph, allArtifactsForProviders);
       }
       executor.executionPhaseStarting();
       skyframeExecutor.drainChangedFiles();
@@ -325,21 +315,17 @@ public class ExecutionTool {
       if (request.getViewOptions().discardAnalysisCache
           || !skyframeExecutor.tracksStateForIncrementality()) {
         // Free memory by removing cache entries that aren't going to be needed.
-        try (SilentCloseable c = Profiler.instance().profile("clearAnalysisCache")) {
-          env.getSkyframeBuildView()
-              .clearAnalysisCache(analysisResult.getTargetsToBuild(), analysisResult.getAspects());
-        }
+        env.getSkyframeBuildView()
+            .clearAnalysisCache(analysisResult.getTargetsToBuild(), analysisResult.getAspects());
       }
 
-      try (SilentCloseable c = Profiler.instance().profile("configureResourceManager")) {
-        configureResourceManager(request);
-      }
+      configureResourceManager(request);
 
       Profiler.instance().markPhase(ProfilePhase.EXECUTE);
 
       builder.buildArtifacts(
           env.getReporter(),
-          analysisResult.getTopLevelArtifactsToOwnerLabels().keySet(),
+          additionalArtifacts,
           analysisResult.getParallelTests(),
           analysisResult.getExclusiveTests(),
           analysisResult.getTargetsToBuild(),
@@ -425,7 +411,7 @@ public class ExecutionTool {
     Profiler.instance().markPhase(ProfilePhase.PREPARE);
 
     // Plant the symlink forest.
-    try (SilentCloseable c = Profiler.instance().profile("plantSymlinkForest")) {
+    try {
       new SymlinkForest(
               packageRootMap.get(), getExecRoot(), runtime.getProductName(), env.getWorkspaceName())
           .plantSymlinkForest();
@@ -576,10 +562,8 @@ public class ExecutionTool {
       // caches.
       LoggingUtil.logToRemote(Level.WARNING, "Failed to initialize action cache: "
           + e.getMessage(), e);
-      throw new LocalEnvironmentException(
-          "couldn't create action cache: "
-              + e.getMessage()
-              + ". If error persists, use 'bazel clean'");
+      throw new LocalEnvironmentException("couldn't create action cache: " + e.getMessage()
+          + ". If error persists, use 'blaze clean'");
     }
   }
 
