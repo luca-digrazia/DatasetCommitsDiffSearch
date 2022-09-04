@@ -62,11 +62,9 @@ public class JsonExtractorTest {
         assertThat(results).contains(
                 new Extractor.Result("foobar", "text", -1, -1),
                 new Extractor.Result(1234.5678, "number", -1, -1),
-                new Extractor.Result(true, "bool", -1, -1)
+                new Extractor.Result(true, "bool", -1, -1),
+                new Extractor.Result(null, "null", -1, -1)
         );
-
-        // Null values should be ignored!
-        assertThat(results).doesNotContain(new Extractor.Result(null, "null", -1, -1));
     }
 
     @Test
