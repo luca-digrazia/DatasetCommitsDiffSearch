@@ -257,7 +257,7 @@ public class RemoteSpawnRunner implements SpawnRunner {
 
     RequestMetadata metadata =
         TracingMetadataUtils.buildMetadata(
-            buildRequestId, commandId, actionKey.getDigest().getHash(), spawn.getResourceOwner());
+            buildRequestId, commandId, actionKey.getDigest().getHash());
     RemoteActionExecutionContext remoteActionExecutionContext =
         RemoteActionExecutionContext.create(metadata);
     Profiler prof = Profiler.instance();
