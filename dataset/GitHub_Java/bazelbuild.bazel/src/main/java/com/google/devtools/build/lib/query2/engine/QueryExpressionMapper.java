@@ -105,15 +105,14 @@ public abstract class QueryExpressionMapper<C>
    * Returns a {@link QueryExpressionMapper} which applies all the mappings provided by {@code
    * mappers}, in the reverse order of mapper array.
    */
-  public static <C> QueryExpressionMapper<C> compose(
-      ImmutableList<QueryExpressionMapper<C>> mappers) {
-    return new ComposedQueryExpressionMapper<>(mappers);
+  public static <C> QueryExpressionMapper<C> compose(QueryExpressionMapper<C>... mappers) {
+    return new ComposedQueryExpressionMapper(mappers);
   }
 
   private static class ComposedQueryExpressionMapper<C> extends QueryExpressionMapper<C> {
-    private final ImmutableList<QueryExpressionMapper<C>> mappers;
+    private final QueryExpressionMapper<C>[] mappers;
 
-    private ComposedQueryExpressionMapper(ImmutableList<QueryExpressionMapper<C>> mappers) {
+    private ComposedQueryExpressionMapper(QueryExpressionMapper... mappers) {
       this.mappers = mappers;
     }
 
@@ -143,10 +142,12 @@ public abstract class QueryExpressionMapper<C>
     }
 
     private static <C> QueryExpression mapAll(
-        QueryExpression expression, ImmutableList<QueryExpressionMapper<C>> mappers, C context) {
+        QueryExpression expression,
+        QueryExpressionMapper<C>[] mappers,
+        C context) {
       QueryExpression expr = expression;
-      for (int i = mappers.size() - 1; i >= 0; i--) {
-        expr = expr.accept(mappers.get(i), context);
+      for (int i = mappers.length - 1; i >= 0; i--) {
+        expr = expr.accept(mappers[i], context);
       }
 
       return expr;
