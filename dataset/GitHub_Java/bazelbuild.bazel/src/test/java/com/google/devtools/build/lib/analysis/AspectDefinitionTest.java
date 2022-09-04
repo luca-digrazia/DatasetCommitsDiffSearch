@@ -15,12 +15,12 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareAspectBuilder;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.Missin
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -252,9 +251,8 @@ public class AspectDefinitionTest {
             .containsExactly(Integer.class, String.class);
   }
 
-  private static class FooFragment extends Fragment {}
-
-  private static class BarFragment extends Fragment {}
+  private static class FooFragment extends BuildConfiguration.Fragment {}
+  private static class BarFragment extends BuildConfiguration.Fragment {}
 
   @Test
   public void testRequiresHostConfigurationFragments_PropagatedToConfigurationFragmentPolicy()
@@ -311,5 +309,5 @@ public class AspectDefinitionTest {
   }
 
   @SkylarkModule(name = "test_fragment", doc = "test fragment")
-  private static final class TestFragment implements StarlarkValue {}
+  private static final class TestFragment {}
 }

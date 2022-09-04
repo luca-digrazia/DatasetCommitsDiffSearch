@@ -536,7 +536,7 @@ public class AspectTest extends AnalysisTestCase {
     update();
 
     ConfiguredTarget a = getConfiguredTarget("//a:a");
-    NestedSet<Artifact.DerivedArtifact> extraActionArtifacts =
+    NestedSet<Artifact> extraActionArtifacts =
         a.getProvider(ExtraActionArtifactsProvider.class).getTransitiveExtraActionArtifacts();
     for (Artifact artifact : extraActionArtifacts) {
       assertThat(artifact.getOwnerLabel()).isEqualTo(Label.create("@//a", "b"));

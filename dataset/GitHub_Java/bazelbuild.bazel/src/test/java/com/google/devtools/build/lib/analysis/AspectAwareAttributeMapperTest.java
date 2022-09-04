@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
@@ -59,9 +59,7 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
     aspectAttributes = ImmutableMap.<String, Attribute>of(aspectAttr.getName(), aspectAttr);
     mapper =
         new AspectAwareAttributeMapper(
-            ConfiguredAttributeMapper.of(
-                rule, ct.getConfigConditions(), ct.getConfigurationChecksum()),
-            aspectAttributes);
+            ConfiguredAttributeMapper.of(rule, ct.getConfigConditions()), aspectAttributes);
   }
 
   @Test

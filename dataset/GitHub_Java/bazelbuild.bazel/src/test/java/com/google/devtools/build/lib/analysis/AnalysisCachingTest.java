@@ -84,7 +84,7 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     ConfiguredTarget old = getConfiguredTarget("//java/a:A");
     update("//java/a:A");
     ConfiguredTarget current = getConfiguredTarget("//java/a:A");
-    assertThat(current).isSameInstanceAs(old);
+    assertThat(current).isSameAs(old);
   }
 
   @Test
@@ -99,7 +99,7 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     ConfiguredTarget old = getConfiguredTarget("//java/a:A");
     update("//java/a:A");
     ConfiguredTarget current = getConfiguredTarget("//java/a:A");
-    assertThat(current).isSameInstanceAs(old);
+    assertThat(current).isSameAs(old);
   }
 
   @Test
@@ -469,7 +469,7 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
 
     update(aTarget);
     ConfiguredTarget updated2CT = getConfiguredTarget(aTarget);
-    assertThat(updated2CT).isSameInstanceAs(updatedCT);
+    assertThat(updated2CT).isSameAs(updatedCT);
   }
 
   @Test
@@ -492,7 +492,7 @@ public class AnalysisCachingTest extends AnalysisCachingTestBase {
     ConfiguredTarget newAConfTarget = getConfiguredTarget(aTarget);
     ConfiguredTarget newBConfTarget = getConfiguredTarget(bTarget);
 
-    assertThat(newAConfTarget).isSameInstanceAs(oldAConfTarget);
+    assertThat(newAConfTarget).isSameAs(oldAConfTarget);
     assertThat(newBConfTarget).isNotSameInstanceAs(oldBConfTarget);
   }
 

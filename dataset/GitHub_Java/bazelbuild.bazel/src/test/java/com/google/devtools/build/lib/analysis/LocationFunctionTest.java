@@ -15,13 +15,12 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.LocationExpander.LocationFunction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -191,11 +190,12 @@ final class LocationFunctionBuilder {
   private static Artifact makeArtifact(String path) {
     FileSystem fs = new InMemoryFileSystem();
     if (path.startsWith("/exec/out")) {
-      return ActionsTestUtil.createArtifact(
-          ArtifactRoot.asDerivedRoot(fs.getPath("/exec"), "out"), fs.getPath(path));
+      return new Artifact(
+          fs.getPath(path),
+          ArtifactRoot.asDerivedRoot(fs.getPath("/exec"), fs.getPath("/exec/out")));
     } else {
-      return ActionsTestUtil.createArtifact(
-          ArtifactRoot.asSourceRoot(Root.fromPath(fs.getPath("/exec"))), fs.getPath(path));
+      return new Artifact(
+          fs.getPath(path), ArtifactRoot.asSourceRoot(Root.fromPath(fs.getPath("/exec"))));
     }
   }
 }
