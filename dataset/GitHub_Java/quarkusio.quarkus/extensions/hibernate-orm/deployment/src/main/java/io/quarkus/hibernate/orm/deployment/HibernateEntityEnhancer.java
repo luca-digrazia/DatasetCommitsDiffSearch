@@ -9,9 +9,9 @@ import org.hibernate.bytecode.spi.BytecodeProvider;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
 
 import io.quarkus.deployment.QuarkusClassWriter;
-import net.bytebuddy.utility.OpenedClassReader;
 
 /**
  * Used to transform bytecode by registering to
@@ -27,21 +27,21 @@ import net.bytebuddy.utility.OpenedClassReader;
  */
 public final class HibernateEntityEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
 
-    private static final BytecodeProvider PROVIDER = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();
+    private final BytecodeProvider provider = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();
 
     @Override
     public ClassVisitor apply(String className, ClassVisitor outputClassVisitor) {
         return new HibernateEnhancingClassVisitor(className, outputClassVisitor);
     }
 
-    private static class HibernateEnhancingClassVisitor extends ClassVisitor {
+    private class HibernateEnhancingClassVisitor extends ClassVisitor {
 
         private final String className;
         private final ClassVisitor outputClassVisitor;
         private final Enhancer enhancer;
 
         public HibernateEnhancingClassVisitor(String className, ClassVisitor outputClassVisitor) {
-            super(OpenedClassReader.ASM_API, new QuarkusClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS));
+            super(Opcodes.ASM7, new QuarkusClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS));
             this.className = className;
             this.outputClassVisitor = outputClassVisitor;
             //note that as getLoadingClassLoader is resolved immediately this can't be created until transform time
@@ -61,7 +61,7 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
                     return Thread.currentThread().getContextClassLoader();
                 }
             };
-            this.enhancer = PROVIDER.getEnhancer(enhancementContext);
+            this.enhancer = provider.getEnhancer(enhancementContext);
         }
 
         @Override
@@ -92,7 +92,7 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
             }
 
         };
-        Enhancer enhancer = PROVIDER.getEnhancer(enhancementContext);
+        Enhancer enhancer = provider.getEnhancer(enhancementContext);
         return enhancer.enhance(className, bytes);
     }
 }
