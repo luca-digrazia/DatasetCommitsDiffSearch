@@ -17,7 +17,6 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.MapMaker;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
@@ -35,8 +34,8 @@ import java.util.concurrent.ConcurrentMap;
 public final class NestedSetBuilder<E> {
 
   private final Order order;
-  private CompactHashSet<E> items;
-  private CompactHashSet<NestedSet<? extends E>> transitiveSets;
+  private final CompactHashSet<E> items = CompactHashSet.create();
+  private final CompactHashSet<NestedSet<? extends E>> transitiveSets = CompactHashSet.create();
 
   public NestedSetBuilder(Order order) {
     this.order = order;
@@ -54,7 +53,7 @@ public final class NestedSetBuilder<E> {
 
   /** Returns whether the set to be built is empty. */
   public boolean isEmpty() {
-    return items == null && transitiveSets == null;
+    return items.isEmpty() && transitiveSets.isEmpty();
   }
 
   /**
@@ -70,9 +69,6 @@ public final class NestedSetBuilder<E> {
    */
   public NestedSetBuilder<E> add(E element) {
     Preconditions.checkNotNull(element);
-    if (items == null) {
-      items = CompactHashSet.create();
-    }
     items.add(element);
     return this;
   }
@@ -91,9 +87,6 @@ public final class NestedSetBuilder<E> {
    */
   public NestedSetBuilder<E> addAll(Iterable<? extends E> elements) {
     Preconditions.checkNotNull(elements);
-    if (items == null) {
-      items = CompactHashSet.createWithExpectedSize(Iterables.size(elements));
-    }
     Iterables.addAll(items, elements);
     return this;
   }
@@ -135,9 +128,6 @@ public final class NestedSetBuilder<E> {
         order.isCompatible(subset.getOrder()),
         "Order mismatch: %s != %s", subset.getOrder().getSkylarkName(), order.getSkylarkName());
     if (!subset.isEmpty()) {
-      if (transitiveSets == null) {
-        transitiveSets = CompactHashSet.create();
-      }
       transitiveSets.add(subset);
     }
     return this;
@@ -162,16 +152,13 @@ public final class NestedSetBuilder<E> {
     // is safe.
     CompactHashSet<NestedSet<E>> transitiveSetsCast =
         (CompactHashSet<NestedSet<E>>) (CompactHashSet<?>) transitiveSets;
-    if (items == null && transitiveSetsCast != null && transitiveSetsCast.size() == 1) {
+    if (items.isEmpty() && (transitiveSetsCast.size() == 1)) {
       NestedSet<E> candidate = getOnlyElement(transitiveSetsCast);
       if (candidate.getOrder().equals(order)) {
         return candidate;
       }
     }
-    return new NestedSet<>(
-        order,
-        items == null ? ImmutableSet.of() : items,
-        transitiveSetsCast == null ? ImmutableSet.of() : transitiveSetsCast);
+    return new NestedSet<>(order, items, transitiveSetsCast);
   }
 
   private static final ConcurrentMap<ImmutableList<?>, NestedSet<?>> immutableListCache =
