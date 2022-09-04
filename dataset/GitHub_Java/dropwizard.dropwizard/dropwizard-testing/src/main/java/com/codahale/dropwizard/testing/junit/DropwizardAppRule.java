@@ -13,16 +13,10 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
-
 import java.util.Enumeration;
 
 /**
  * A JUnit rule for starting and stopping your application at the start and end of a test class.
- * <p/>
- * By default, the {@link Application} will be constructed using reflection to invoke the nullary
- * constructor. If your application does not provide a public nullary constructor, you will need to
- * override the {@link #newApplication()} method to provide your application instance(s).
- *
  * @param <C> the configuration type
  */
 public class DropwizardAppRule<C extends Configuration> implements TestRule {
@@ -76,7 +70,7 @@ public class DropwizardAppRule<C extends Configuration> implements TestRule {
         }
 
         try {
-            application = newApplication();
+            application = applicationClass.newInstance();
 
             final Bootstrap<C> bootstrap = new Bootstrap<C>(application) {
                 @Override
@@ -110,17 +104,9 @@ public class DropwizardAppRule<C extends Configuration> implements TestRule {
         return ((ServerConnector) jettyServer.getConnectors()[0]).getLocalPort();
     }
 
-    public Application<C> newApplication() {
-        try {
-            return applicationClass.newInstance();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     @SuppressWarnings("unchecked")
-    public <A extends Application<C>> A getApplication() {
-        return (A) application;
+    public <S extends Application<C>> S getApplication() {
+        return (S) application;
     }
 
     public Environment getEnvironment() {

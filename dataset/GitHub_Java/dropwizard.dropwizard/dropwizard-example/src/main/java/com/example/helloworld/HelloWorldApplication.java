@@ -1,22 +1,21 @@
 package com.example.helloworld;
 
+import com.codahale.dropwizard.Application;
+import com.codahale.dropwizard.assets.AssetsBundle;
+import com.codahale.dropwizard.auth.basic.BasicAuthProvider;
+import com.codahale.dropwizard.db.DataSourceFactory;
+import com.codahale.dropwizard.hibernate.HibernateBundle;
+import com.codahale.dropwizard.migrations.MigrationsBundle;
+import com.codahale.dropwizard.setup.Bootstrap;
+import com.codahale.dropwizard.setup.Environment;
+import com.codahale.dropwizard.views.ViewBundle;
 import com.example.helloworld.auth.ExampleAuthenticator;
 import com.example.helloworld.cli.RenderCommand;
 import com.example.helloworld.core.Person;
 import com.example.helloworld.core.Template;
 import com.example.helloworld.db.PersonDAO;
-import com.example.helloworld.filter.DateNotSpecifiedFilterFactory;
 import com.example.helloworld.health.TemplateHealthCheck;
 import com.example.helloworld.resources.*;
-import io.dropwizard.Application;
-import io.dropwizard.assets.AssetsBundle;
-import io.dropwizard.auth.basic.BasicAuthProvider;
-import io.dropwizard.db.DataSourceFactory;
-import io.dropwizard.hibernate.HibernateBundle;
-import io.dropwizard.migrations.MigrationsBundle;
-import io.dropwizard.setup.Bootstrap;
-import io.dropwizard.setup.Environment;
-import io.dropwizard.views.ViewBundle;
 
 public class HelloWorldApplication extends Application<HelloWorldConfiguration> {
     public static void main(String[] args) throws Exception {
@@ -57,7 +56,6 @@ public class HelloWorldApplication extends Application<HelloWorldConfiguration> 
         final Template template = configuration.buildTemplate();
 
         environment.healthChecks().register("template", new TemplateHealthCheck(template));
-        environment.jersey().getResourceConfig().getResourceFilterFactories().add(new DateNotSpecifiedFilterFactory());
 
         environment.jersey().register(new BasicAuthProvider<>(new ExampleAuthenticator(),
                                                               "SUPER SECRET STUFF"));
@@ -66,6 +64,5 @@ public class HelloWorldApplication extends Application<HelloWorldConfiguration> 
         environment.jersey().register(new ProtectedResource());
         environment.jersey().register(new PeopleResource(dao));
         environment.jersey().register(new PersonResource(dao));
-        environment.jersey().register(new FilteredResource());
     }
 }
