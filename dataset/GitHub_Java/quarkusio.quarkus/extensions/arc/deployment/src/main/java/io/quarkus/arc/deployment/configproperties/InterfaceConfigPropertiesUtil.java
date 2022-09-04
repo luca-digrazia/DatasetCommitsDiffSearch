@@ -3,17 +3,13 @@ package io.quarkus.arc.deployment.configproperties;
 import static io.quarkus.arc.deployment.configproperties.ConfigPropertiesUtil.createReadMandatoryValueAndConvertIfNeeded;
 import static io.quarkus.arc.deployment.configproperties.ConfigPropertiesUtil.createReadOptionalValueAndConvertIfNeeded;
 import static io.quarkus.arc.deployment.configproperties.ConfigPropertiesUtil.determineSingleGenericType;
-import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import javax.enterprise.inject.Default;
 import javax.enterprise.inject.Produces;
 
 import org.eclipse.microprofile.config.Config;
@@ -26,10 +22,6 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
-import io.quarkus.arc.InstanceHandle;
-import io.quarkus.arc.Unremovable;
 import io.quarkus.arc.config.ConfigProperties;
 import io.quarkus.arc.deployment.ConfigPropertyBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -58,60 +50,29 @@ final class InterfaceConfigPropertiesUtil {
      *  }
      * </pre>
      */
-    static void addProducerMethodForInterfaceConfigProperties(DotName interfaceName, String prefix, boolean needsQualifier,
-            ClassCreator classCreator,
-            GeneratedClass generatedClass) {
-        String methodName = "produce" + interfaceName.withoutPackagePrefix();
-        if (needsQualifier) {
-            // we need to differentiate the different producers of the same class
-            methodName = methodName + "WithPrefix" + HashUtil.sha1(prefix);
-        }
-        try (MethodCreator method = classCreator.getMethodCreator(methodName, interfaceName.toString(),
-                Config.class.getName())) {
+    static void addProducerMethodForInterfaceConfigProperties(ClassCreator classCreator, DotName interfaceName,
+            String generatedClassName) {
+        try (MethodCreator method = classCreator.getMethodCreator(
+                "produce" + interfaceName.withoutPackagePrefix(),
+                interfaceName.toString(), Config.class.getName())) {
 
             method.addAnnotation(Produces.class);
-            if (needsQualifier) {
-                method.addAnnotation(AnnotationInstance.create(DotNames.CONFIG_PREFIX, null,
-                        new AnnotationValue[] { AnnotationValue.createStringValue("value", prefix) }));
-            } else {
-                method.addAnnotation(Default.class);
-            }
-            if (generatedClass.isUnremovable()) {
-                method.addAnnotation(Unremovable.class);
-            }
-            method.returnValue(method.newInstance(MethodDescriptor.ofConstructor(generatedClass.getName(), Config.class),
+            method.returnValue(method.newInstance(MethodDescriptor.ofConstructor(generatedClassName, Config.class),
                     method.getMethodParam(0)));
         }
     }
 
-    static void generateImplementationForInterfaceConfigProperties(ClassInfo originalInterface, ClassOutput classOutput,
+    static String generateImplementationForInterfaceConfigProperties(ClassInfo originalInterface, ClassOutput classOutput,
             IndexView index, String prefixStr, ConfigProperties.NamingStrategy namingStrategy,
             BuildProducer<RunTimeConfigurationDefaultBuildItem> defaultConfigValues,
-            BuildProducer<ConfigPropertyBuildItem> configProperties,
-            Map<DotName, GeneratedClass> interfaceToGeneratedClass) {
-
-        generateImplementationForInterfaceConfigPropertiesRec(originalInterface, originalInterface, classOutput, index,
-                prefixStr, namingStrategy, defaultConfigValues, configProperties, interfaceToGeneratedClass);
-    }
-
-    private static void generateImplementationForInterfaceConfigPropertiesRec(ClassInfo originalInterface,
-            ClassInfo currentInterface, ClassOutput classOutput,
-            IndexView index, String prefixStr, ConfigProperties.NamingStrategy namingStrategy,
-            BuildProducer<RunTimeConfigurationDefaultBuildItem> defaultConfigValues,
-            BuildProducer<ConfigPropertyBuildItem> configProperties,
-            Map<DotName, GeneratedClass> interfaceToGeneratedClass) {
-
+            BuildProducer<ConfigPropertyBuildItem> configProperties) {
         Set<DotName> allInterfaces = new HashSet<>();
-        allInterfaces.add(currentInterface.name());
-        collectInterfacesRec(currentInterface, index, allInterfaces);
+        allInterfaces.add(originalInterface.name());
+        collectInterfacesRec(originalInterface, index, allInterfaces);
 
-        String generatedClassName = createName(currentInterface.name(), prefixStr);
-        // the generated class needs to be unremovable if it's not top-level interface since it will only be obtains via Arc.container().instance() in generated code
-        interfaceToGeneratedClass.put(currentInterface.name(),
-                new GeneratedClass(generatedClassName, !originalInterface.name().equals(currentInterface.name())));
-
+        String generatedClassName = createName(originalInterface.name());
         try (ClassCreator interfaceImplClassCreator = ClassCreator.builder().classOutput(classOutput)
-                .interfaces(currentInterface.name().toString()).className(generatedClassName)
+                .interfaces(originalInterface.name().toString()).className(generatedClassName)
                 .build()) {
 
             FieldDescriptor configField = interfaceImplClassCreator.getFieldCreator("config", Config.class)
@@ -145,36 +106,16 @@ final class InterfaceConfigPropertiesUtil {
                                 + " is not a getter method since it returns void");
                     }
 
+                    /*
+                     * TODO examine if returning objects can be supported - currently it isn't supported because we don't try to
+                     * create the return object
+                     * and instead just rely on what MP Config gives us back
+                     */
+
                     NameAndDefaultValue nameAndDefaultValue = determinePropertyNameAndDefaultValue(method, namingStrategy);
                     String fullConfigName = prefixStr + "." + nameAndDefaultValue.getName();
                     try (MethodCreator methodCreator = interfaceImplClassCreator.getMethodCreator(method.name(),
                             method.returnType().name().toString())) {
-
-                        if ((returnType.kind() == Type.Kind.CLASS)) {
-                            ClassInfo returnTypeClassInfo = index.getClassByName(returnType.name());
-                            if ((returnTypeClassInfo != null) && Modifier.isInterface(returnTypeClassInfo.flags())) {
-                                // when the return type is an interface,
-                                // 1) we generate an implementation
-                                // 2) retrieve the implementation from Arc
-
-                                generateImplementationForInterfaceConfigPropertiesRec(originalInterface, returnTypeClassInfo,
-                                        classOutput,
-                                        index, fullConfigName, namingStrategy, defaultConfigValues, configProperties,
-                                        interfaceToGeneratedClass);
-
-                                ResultHandle arcContainer = methodCreator
-                                        .invokeStaticMethod(
-                                                MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
-                                ResultHandle instanceHandle = methodCreator.invokeInterfaceMethod(
-                                        ofMethod(ArcContainer.class, "instance", InstanceHandle.class, Class.class,
-                                                Annotation[].class),
-                                        arcContainer, methodCreator.loadClass(returnTypeClassInfo.name().toString()),
-                                        methodCreator.newArray(Annotation.class, 0));
-                                methodCreator.returnValue(methodCreator.invokeInterfaceMethod(
-                                        MethodDescriptor.ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle));
-                                continue;
-                            }
-                        }
 
                         ResultHandle config = methodCreator.readInstanceField(configField, methodCreator.getThis());
                         String defaultValueStr = nameAndDefaultValue.getDefaultValue();
@@ -244,6 +185,8 @@ final class InterfaceConfigPropertiesUtil {
                 }
             }
         }
+
+        return generatedClassName;
     }
 
     private static void collectInterfacesRec(ClassInfo current, IndexView index, Set<DotName> result) {
@@ -267,9 +210,9 @@ final class InterfaceConfigPropertiesUtil {
      * The name also needs to be unique so there are no clashes if there are multiple interfaces
      * annotated with @ConfigProperties
      */
-    private static String createName(DotName ifaceName, String prefixStr) {
+    private static String createName(DotName ifaceName) {
         return ConfigPropertiesUtil.PACKAGE_TO_PLACE_GENERATED_CLASSES + "." + ifaceName.withoutPackagePrefix() + "_"
-                + HashUtil.sha1(ifaceName.toString()) + "_" + HashUtil.sha1(prefixStr);
+                + HashUtil.sha1(ifaceName.toString());
     }
 
     private static boolean isDefault(short flags) {
@@ -320,24 +263,6 @@ final class InterfaceConfigPropertiesUtil {
 
         public String getDefaultValue() {
             return defaultValue;
-        }
-    }
-
-    static class GeneratedClass {
-        private final String name;
-        private final boolean unremovable;
-
-        public GeneratedClass(String name, boolean unremovable) {
-            this.name = name;
-            this.unremovable = unremovable;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public boolean isUnremovable() {
-            return unremovable;
         }
     }
 }
