@@ -32,7 +32,7 @@ import com.mongodb.MongoException;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class MongoConnection {
-    private static MongoConnection instance;
+    private static MongoConnection INSTANCE;
 
     private static Mongo m = null;
     private static DB db = null;
@@ -44,10 +44,10 @@ public final class MongoConnection {
      * @return MongoConnection instance
      */
     public synchronized static MongoConnection getInstance() {
-        if (instance == null) {
-            instance = new MongoConnection();
+        if (INSTANCE == null) {
+            INSTANCE = new MongoConnection();
         }
-        return instance;
+        return INSTANCE;
     }
 
     /**

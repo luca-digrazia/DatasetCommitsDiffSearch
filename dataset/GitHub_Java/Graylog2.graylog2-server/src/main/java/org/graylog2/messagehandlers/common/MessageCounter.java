@@ -28,7 +28,7 @@ package org.graylog2.messagehandlers.common;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class MessageCounter {
-    private static MessageCounter instance;
+    private static MessageCounter INSTANCE;
 
     /**
      * The API methods in this class require a hostname as String. This constant
@@ -44,10 +44,10 @@ public final class MessageCounter {
      * @return MessageCounter singleton instance
      */
     public synchronized static MessageCounter getInstance() {
-        if (instance == null) {
-            instance = new MessageCounter();
+        if (INSTANCE == null) {
+            INSTANCE = new MessageCounter();
         }
-        return instance;
+        return INSTANCE;
     }
 
     /**
