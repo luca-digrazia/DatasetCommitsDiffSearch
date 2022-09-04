@@ -332,8 +332,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
     PathFragment fdoZip = null;
     FdoInputFile prefetchHints = null;
-    Artifact protoProfileArtifact = null;
-    boolean allowInference = true;
     if (configuration.getCompilationMode() == CompilationMode.OPT) {
       if (cppConfiguration.getFdoPrefetchHintsLabel() != null) {
         FdoPrefetchHintsProvider provider =
@@ -344,50 +342,32 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       if (cppConfiguration.getFdoPath() != null) {
         fdoZip = cppConfiguration.getFdoPath();
       } else if (cppConfiguration.getFdoOptimizeLabel() != null) {
-        // If fdo_profile rule is used, do not allow inferring proto.profile from AFDO profile.
-        allowInference = false;
-
-        FdoProfileProvider fdoProfileProvider =
-            ruleContext.getPrerequisite(
-                CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET, FdoProfileProvider.PROVIDER);
-        if (fdoProfileProvider != null) {
-          fdoZip = fdoProfileProvider.getProfilePathFragment();
-          protoProfileArtifact = fdoProfileProvider.getProtoProfileArtifact();
-        } else {
-          ImmutableList<Artifact> fdoArtifacts =
-              ruleContext
-                  .getPrerequisiteArtifacts(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET)
-                  .list();
-          if (fdoArtifacts.size() != 1) {
-            ruleContext.ruleError("--fdo_optimize does not point to a single target");
-            return null;
-          }
-
-          Artifact fdoArtifact = fdoArtifacts.get(0);
-          if (!fdoArtifact.isSourceArtifact()) {
-            ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
-            return null;
-          }
-          Label fdoLabel =
-              ruleContext
-                  .getPrerequisite(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET)
-                  .getLabel();
-          if (!fdoLabel
-              .getPackageIdentifier()
-              .getPathUnderExecRoot()
-              .getRelative(fdoLabel.getName())
-              .equals(fdoArtifact.getExecPath())) {
-            ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
-            return null;
-          }
-          fdoZip = fdoArtifact.getPath().asFragment();
+        Artifact fdoArtifact =
+            ruleContext.getPrerequisiteArtifact(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET);
+        if (!fdoArtifact.isSourceArtifact()) {
+          ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
+          return null;
         }
+        Label fdoLabel =
+            ruleContext.getPrerequisite(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET).getLabel();
+        if (!fdoLabel
+            .getPackageIdentifier()
+            .getPathUnderExecRoot()
+            .getRelative(fdoLabel.getName())
+            .equals(fdoArtifact.getExecPath())) {
+          ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
+          return null;
+        }
+        fdoZip = fdoArtifact.getPath().asFragment();
       } else if (cppConfiguration.getFdoProfileLabel() != null) {
         FdoProfileProvider fdoProvider =
             ruleContext.getPrerequisite(
                 CcToolchainRule.FDO_PROFILE_ATTR, Mode.TARGET, FdoProfileProvider.PROVIDER);
-        fdoZip = fdoProvider.getProfilePathFragment();
-        protoProfileArtifact = fdoProvider.getProtoProfileArtifact();
+        FdoInputFile inputFile = fdoProvider.getInputFile();
+        fdoZip =
+            inputFile.getAbsolutePath() != null
+                ? inputFile.getAbsolutePath()
+                : inputFile.getArtifact().getPath().asFragment();
       }
     }
 
@@ -614,9 +594,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
                 fdoMode,
                 cppConfiguration.getFdoInstrument(),
                 profileArtifact,
-                prefetchHintsArtifact,
-                protoProfileArtifact,
-                allowInference),
+                prefetchHintsArtifact),
             cppConfiguration.useLLVMCoverageMapFormat(),
             configuration.isCodeCoverageEnabled(),
             configuration.isHostConfiguration());
