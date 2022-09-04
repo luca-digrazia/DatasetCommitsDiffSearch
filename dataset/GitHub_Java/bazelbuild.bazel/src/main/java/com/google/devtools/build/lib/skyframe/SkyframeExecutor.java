@@ -3005,8 +3005,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     return prepareAnalysisPhaseValue;
   }
 
-  /** A progress receiver to track analysis invalidation and update progress messages. */
-  protected class SkyframeProgressReceiver implements EvaluationProgressReceiver {
+  /** A progress received to track analysis invalidation and update progress messages. */
+  protected class SkyframeProgressReceiver
+      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
     /**
      * This flag is needed in order to avoid invalidating legacy data when we clear the analysis
      * cache because of --discard_analysis_cache flag. For that case we want to keep the legacy data

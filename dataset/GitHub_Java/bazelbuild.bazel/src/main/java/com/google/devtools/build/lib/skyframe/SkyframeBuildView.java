@@ -1058,7 +1058,8 @@ public final class SkyframeBuildView {
     return skyframeExecutor.getActionKeyContext();
   }
 
-  private final class ActionLookupValueProgressReceiver implements EvaluationProgressReceiver {
+  private final class ActionLookupValueProgressReceiver
+      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
     private final AtomicInteger actionLookupValueCount = new AtomicInteger();
     private final AtomicInteger actionCount = new AtomicInteger();
     private final AtomicInteger configuredTargetCount = new AtomicInteger();

@@ -20,11 +20,9 @@ import javax.annotation.Nullable;
 /** Receiver for various stages of the lifetime of a skyframe node evaluation. */
 @ThreadSafety.ThreadSafe
 public interface EvaluationProgressReceiver {
-
-  /** A no-op {@link EvaluationProgressReceiver}. */
-  EvaluationProgressReceiver NULL = new EvaluationProgressReceiver() {};
-
-  /** New state of the value entry after evaluation. */
+  /**
+   * New state of the value entry after evaluation.
+   */
   enum EvaluationState {
     /** The value was successfully re-evaluated. */
     BUILT,
@@ -52,7 +50,9 @@ public interface EvaluationProgressReceiver {
     }
   }
 
-  /** New state of the value entry after invalidation. */
+  /**
+   * New state of the value entry after invalidation.
+   */
   enum InvalidationState {
     /** The value is dirty, although it might get re-validated again. */
     DIRTY,
@@ -60,7 +60,9 @@ public interface EvaluationProgressReceiver {
     DELETED,
   }
 
-  /** Overall state of the node while it is being evaluated. */
+  /**
+   * Overall state of the node while it is being evaluated.
+   */
   enum NodeState {
     /** The node is undergoing a dirtiness check and may be re-validated. */
     CHECK_DIRTY,
@@ -82,17 +84,17 @@ public interface EvaluationProgressReceiver {
    * <p>If {@code state} is {@link InvalidationState#DIRTY}, should only be called after a
    * successful {@link ThinNodeEntry#markDirty} call: a call that returns a non-null value.
    */
-  default void invalidated(SkyKey skyKey, InvalidationState state) {}
+  void invalidated(SkyKey skyKey, InvalidationState state);
 
   /**
    * Notifies that {@code skyKey} is about to get queued for evaluation.
    *
-   * <p>Note that we don't guarantee that it actually got enqueued or will, only that if everything
-   * "goes well" (e.g. no interrupts happen) it will.
+   * <p>Note that we don't guarantee that it actually got enqueued or will, only that if
+   * everything "goes well" (e.g. no interrupts happen) it will.
    *
    * <p>This guarantee is intentionally vague to encourage writing robust implementations.
    */
-  default void enqueueing(SkyKey skyKey) {}
+  void enqueueing(SkyKey skyKey);
 
   /**
    * Notifies that the node for {@code skyKey} is about to enter the given {@code nodeState}.
@@ -100,7 +102,7 @@ public interface EvaluationProgressReceiver {
    * <p>Notably, this includes {@link SkyFunction#compute} calls due to Skyframe restarts, but also
    * dirtiness checking and node completion.
    */
-  default void stateStarting(SkyKey skyKey, NodeState nodeState) {}
+  void stateStarting(SkyKey skyKey, NodeState nodeState);
 
   /**
    * Notifies that the node for {@code skyKey} is about to complete the given {@code nodeState}.
@@ -110,7 +112,7 @@ public interface EvaluationProgressReceiver {
    * <p>{@code elapsedTimeNanos} is either the elapsed time in the {@code nodeState} or -1 if the
    * timing was not recorded.
    */
-  default void stateEnding(SkyKey skyKey, NodeState nodeState, long elapsedTimeNanos) {}
+  void stateEnding(SkyKey skyKey, NodeState nodeState, long elapsedTimeNanos);
 
   /**
    * Notifies that the node for {@code skyKey} has been evaluated, or found to not need
@@ -126,10 +128,37 @@ public interface EvaluationProgressReceiver {
    *     value or error (i.e., {@code EvaluationState.BUILT} if and only if at least one of newValue
    *     and newError is non-null)
    */
-  default void evaluated(
+  void evaluated(
       SkyKey skyKey,
       @Nullable SkyValue newValue,
       @Nullable ErrorInfo newError,
       Supplier<EvaluationSuccessState> evaluationSuccessState,
-      EvaluationState state) {}
+      EvaluationState state);
+
+  /** An {@link EvaluationProgressReceiver} that does nothing. */
+  class NullEvaluationProgressReceiver implements EvaluationProgressReceiver {
+    @Override
+    public void invalidated(SkyKey skyKey, InvalidationState state) {
+    }
+
+    @Override
+    public void enqueueing(SkyKey skyKey) {
+    }
+
+    @Override
+    public void stateStarting(SkyKey skyKey, NodeState nodeState) {
+    }
+
+    @Override
+    public void stateEnding(SkyKey skyKey, NodeState nodeState, long elapsedTimeNanos) {
+    }
+
+    @Override
+    public void evaluated(
+        SkyKey skyKey,
+        @Nullable SkyValue newValue,
+        @Nullable ErrorInfo newError,
+        Supplier<EvaluationSuccessState> evaluationSuccessState,
+        EvaluationState state) {}
+  }
 }

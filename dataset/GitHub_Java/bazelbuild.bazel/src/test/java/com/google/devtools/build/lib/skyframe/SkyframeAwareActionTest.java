@@ -89,7 +89,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
   }
 
   private static final class TrackingEvaluationProgressReceiver
-      implements EvaluationProgressReceiver {
+      extends EvaluationProgressReceiver.NullEvaluationProgressReceiver {
 
     public static final class InvalidatedKey {
       public final SkyKey skyKey;
