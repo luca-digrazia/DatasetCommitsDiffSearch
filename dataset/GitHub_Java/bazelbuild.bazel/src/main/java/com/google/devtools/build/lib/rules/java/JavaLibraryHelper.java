@@ -56,7 +56,6 @@ public final class JavaLibraryHelper {
   private JavaPluginInfoProvider plugins = JavaPluginInfoProvider.empty();
   private ImmutableList<String> javacOpts = ImmutableList.of();
   private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
-  private final List<Artifact> additionalOutputs = new ArrayList<>();
 
   /** @see {@link #setCompilationStrictDepsMode}. */
   private StrictDepsMode strictDepsMode = StrictDepsMode.ERROR;
@@ -119,11 +118,6 @@ public final class JavaLibraryHelper {
     return this;
   }
 
-  public JavaLibraryHelper addAdditionalOutputs(Iterable<Artifact> outputs) {
-    Iterables.addAll(additionalOutputs, outputs);
-    return this;
-  }
-
   public JavaLibraryHelper setPlugins(JavaPluginInfoProvider plugins) {
     checkNotNull(plugins, "plugins must not be null");
     checkState(this.plugins.isEmpty());
@@ -182,8 +176,7 @@ public final class JavaLibraryHelper {
       JavaRuntimeInfo hostJavabase,
       JavaRuleOutputJarsProvider.Builder outputJarsBuilder,
       boolean createOutputSourceJar,
-      @Nullable Artifact outputSourceJar)
-      throws InterruptedException {
+      @Nullable Artifact outputSourceJar) {
     return build(
         semantics,
         javaToolchainProvider,
@@ -192,8 +185,7 @@ public final class JavaLibraryHelper {
         createOutputSourceJar,
         outputSourceJar,
         /* javaInfoBuilder= */ null,
-        ImmutableList.of(), // ignored when javaInfoBuilder is null
-        ImmutableList.of());
+        ImmutableList.of()); // ignored when javaInfoBuilder is null
   }
 
   public JavaCompilationArtifacts build(
@@ -204,15 +196,11 @@ public final class JavaLibraryHelper {
       boolean createOutputSourceJar,
       @Nullable Artifact outputSourceJar,
       @Nullable JavaInfo.Builder javaInfoBuilder,
-      Iterable<JavaGenJarsProvider> transitiveJavaGenJars,
-      ImmutableList<Artifact> additionalJavaBaseInputs)
-      throws InterruptedException {
-
+      Iterable<JavaGenJarsProvider> transitiveJavaGenJars) {
     Preconditions.checkState(output != null, "must have an output file; use setOutput()");
     Preconditions.checkState(
         !createOutputSourceJar || outputSourceJar != null,
         "outputSourceJar cannot be null when createOutputSourceJar is true");
-
     JavaTargetAttributes.Builder attributes = new JavaTargetAttributes.Builder(semantics);
     attributes.addSourceJars(sourceJars);
     attributes.addSourceFiles(sourceFiles);
@@ -222,7 +210,6 @@ public final class JavaLibraryHelper {
     attributes.setInjectingRuleKind(injectingRuleKind);
     attributes.setSourcePath(sourcePathEntries);
     JavaCommon.addPlugins(attributes, plugins);
-    attributes.addAdditionalOutputs(additionalOutputs);
 
     for (Artifact resource : resources) {
       attributes.addResource(
@@ -236,13 +223,7 @@ public final class JavaLibraryHelper {
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     JavaCompilationHelper helper =
         new JavaCompilationHelper(
-            ruleContext,
-            semantics,
-            javacOpts,
-            attributes,
-            javaToolchainProvider,
-            hostJavabase,
-            additionalJavaBaseInputs);
+            ruleContext, semantics, javacOpts, attributes, javaToolchainProvider, hostJavabase);
     Artifact manifestProtoOutput = helper.createManifestProtoOutput(output);
 
     Artifact genSourceJar = null;
@@ -250,13 +231,17 @@ public final class JavaLibraryHelper {
     if (helper.usesAnnotationProcessing()) {
       genClassJar = helper.createGenJar(output);
       genSourceJar = helper.createGensrcJar(output);
+      helper.createGenJarAction(output, manifestProtoOutput, genClassJar, hostJavabase);
     }
 
     Artifact nativeHeaderOutput = helper.createNativeHeaderJar(output);
 
     JavaCompileAction javaCompileAction =
         helper.createCompileAction(
-            output, manifestProtoOutput, genSourceJar, genClassJar, nativeHeaderOutput);
+            output,
+            manifestProtoOutput,
+            genSourceJar,
+            nativeHeaderOutput);
 
     Artifact iJar = null;
     if (!sourceJars.isEmpty() || !sourceFiles.isEmpty()) {

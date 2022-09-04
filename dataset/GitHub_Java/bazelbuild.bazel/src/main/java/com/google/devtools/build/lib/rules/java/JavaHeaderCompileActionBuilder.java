@@ -369,7 +369,7 @@ public class JavaHeaderCompileActionBuilder {
           fileCount,
           processorClasses.isEmpty()
               ? ""
-              : processorClasses.toList().stream()
+              : processorClasses.toCollection().stream()
                   .map(name -> name.substring(name.lastIndexOf('.') + 1))
                   .collect(joining(", ", " and running annotation processors (", ")")));
     }

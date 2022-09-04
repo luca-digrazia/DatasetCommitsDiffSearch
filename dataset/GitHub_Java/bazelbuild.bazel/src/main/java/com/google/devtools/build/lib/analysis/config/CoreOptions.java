@@ -670,10 +670,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     // === Pass on C++ compiler features.
     host.defaultFeatures = ImmutableList.copyOf(defaultFeatures);
 
-    // Save host options in case of a further exec->host transition.
-    host.hostCpu = hostCpu;
-    host.hostCompilationMode = hostCompilationMode;
-
     return host;
   }
 

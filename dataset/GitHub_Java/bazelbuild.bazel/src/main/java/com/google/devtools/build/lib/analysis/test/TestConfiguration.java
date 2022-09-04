@@ -178,16 +178,6 @@ public class TestConfiguration extends Fragment {
     public List<PerLabelOptions> runsPerTest;
 
     @Option(
-        name = "runs_per_test_detects_flakes",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "If true, any shard in which at least one run/attempt passes and at least one "
-                + "run/attempt fails gets a FLAKY status.")
-    public boolean runsPerTestDetectsFlakes;
-
-    @Option(
         name = "coverage_support",
         converter = LabelConverter.class,
         defaultValue = "@bazel_tools//tools/test:coverage_support",
@@ -235,11 +225,12 @@ public class TestConfiguration extends Fragment {
           OptionMetadataTag.INCOMPATIBLE_CHANGE,
           OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
         },
-        defaultValue = "true",
+        defaultValue = "false",
         help =
             "On Windows: if true, uses the C++ test wrapper to run tests, otherwise uses "
                 + "tools/test/test-setup.sh as on other platforms. On other platforms: no-op.")
     public boolean windowsNativeTestWrapper;
+
 
     @Override
     public FragmentOptions getHost() {
@@ -326,10 +317,6 @@ public class TestConfiguration extends Fragment {
       }
     }
     return 1;
-  }
-
-  public boolean runsPerTestDetectsFlakes() {
-    return options.runsPerTestDetectsFlakes;
   }
 
   /**

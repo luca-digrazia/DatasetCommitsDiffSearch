@@ -41,30 +41,6 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
   /** Command line options. */
   public static class Options extends FragmentOptions {
     @Option(
-        name = "incompatible_do_not_emit_buggy_external_repo_import",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        metadataTags = {
-          OptionMetadataTag.INCOMPATIBLE_CHANGE,
-          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-        },
-        help =
-            "If true, Bazel will not emit import paths for external repos that used to be emitted"
-                + " because of https://github.com/bazelbuild/bazel/issues/8030. This is now fixed"
-                + " and those imports are only emitted for backwards compatibility. See"
-                + " https://github.com/bazelbuild/bazel/issues/8711 for details.")
-    public boolean doNotUseBuggyImportPath;
-
-    @Option(
-        name = "experimental_generated_protos_in_virtual_imports",
-        defaultValue = "true",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        help = "If set, generated .proto files are put into a virtual import directory.")
-    public boolean generatedProtosInVirtualImports;
-
-    @Option(
       name = "protocopt",
       allowMultiple = true,
       defaultValue = "",
@@ -217,8 +193,6 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
       host.ccProtoLibrarySourceSuffixes = ccProtoLibrarySourceSuffixes;
       host.experimentalJavaProtoAddAllowedPublicImports =
           experimentalJavaProtoAddAllowedPublicImports;
-      host.generatedProtosInVirtualImports = generatedProtosInVirtualImports;
-      host.doNotUseBuggyImportPath = doNotUseBuggyImportPath;
       return host;
     }
   }
@@ -311,13 +285,5 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
 
   public boolean strictPublicImports() {
     return options.experimentalJavaProtoAddAllowedPublicImports;
-  }
-
-  public boolean doNotUseBuggyImportPath() {
-    return options.doNotUseBuggyImportPath;
-  }
-
-  public boolean generatedProtosInVirtualImports() {
-    return options.generatedProtosInVirtualImports;
   }
 }

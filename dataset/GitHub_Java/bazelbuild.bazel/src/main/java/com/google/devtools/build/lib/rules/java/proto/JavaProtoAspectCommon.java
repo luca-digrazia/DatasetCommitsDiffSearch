@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -25,6 +26,7 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaLibraryHelper;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
+import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
@@ -106,8 +108,7 @@ public class JavaProtoAspectCommon {
       String injectingRuleKind,
       Artifact sourceJar,
       Artifact outputJar,
-      JavaCompilationArgsProvider dep)
-      throws InterruptedException {
+      JavaCompilationArgsProvider dep) {
     JavaLibraryHelper helper =
         new JavaLibraryHelper(ruleContext)
             .setInjectingRuleKind(injectingRuleKind)
@@ -128,6 +129,7 @@ public class JavaProtoAspectCommon {
         helper.build(
             javaSemantics,
             JavaToolchainProvider.from(ruleContext),
+            JavaRuntimeInfo.forHost(ruleContext),
             JavaRuleOutputJarsProvider.builder(),
             /*createOutputSourceJar*/ false,
             /*outputSourceJar=*/ null);
@@ -154,14 +156,15 @@ public class JavaProtoAspectCommon {
   /** Returns the toolchain that specifies how to generate code from {@code .proto} files. */
   public ProtoLangToolchainProvider getProtoToolchainProvider() {
     return checkNotNull(
-        ruleContext.getPrerequisite(protoToolchainAttr, ProtoLangToolchainProvider.class));
+        ruleContext.getPrerequisite(protoToolchainAttr, TARGET, ProtoLangToolchainProvider.class));
   }
 
   /**
    * Returns the toolchain that specifies how to generate Java-lite code from {@code .proto} files.
    */
   static ProtoLangToolchainProvider getLiteProtoToolchainProvider(RuleContext ruleContext) {
-    return ruleContext.getPrerequisite(LITE_PROTO_TOOLCHAIN_ATTR, ProtoLangToolchainProvider.class);
+    return ruleContext.getPrerequisite(
+        LITE_PROTO_TOOLCHAIN_ATTR, TARGET, ProtoLangToolchainProvider.class);
   }
 
   /**

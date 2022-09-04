@@ -743,7 +743,7 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     SpawnAction sourceJarAction = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(outputGroup), "libidl-idl.srcjar");
 
-    assertThat(sourceJarAction).isSameInstanceAs(classJarAction);
+    assertThat(sourceJarAction).isSameAs(classJarAction);
 
     PathFragment genfilesPath =
         getTargetConfiguration()

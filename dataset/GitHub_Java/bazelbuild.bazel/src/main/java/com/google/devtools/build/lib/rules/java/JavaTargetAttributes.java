@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.Strict
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -63,7 +62,7 @@ public class JavaTargetAttributes {
     private final NestedSetBuilder<Artifact> compileTimeClassPath =
         NestedSetBuilder.naiveLinkOrder();
 
-    private NestedSet<Artifact> bootClassPath = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
+    private final List<Artifact> bootClassPath = new ArrayList<>();
     private final List<Artifact> sourcePath = new ArrayList<>();
     private final List<Artifact> nativeLibraries = new ArrayList<>();
 
@@ -159,12 +158,6 @@ public class JavaTargetAttributes {
       return this;
     }
 
-    public Builder addCompileTimeClassPathEntry(Artifact entry) {
-      Preconditions.checkArgument(!built);
-      compileTimeClassPath.add(entry);
-      return this;
-    }
-
     public Builder addCompileTimeClassPathEntries(NestedSet<Artifact> entries) {
       Preconditions.checkArgument(!built);
       compileTimeClassPath.addTransitive(entries);
@@ -189,11 +182,11 @@ public class JavaTargetAttributes {
      * <p>If this method is called, then the bootclasspath specified in this JavaTargetAttributes
      * instance overrides the default bootclasspath.
      */
-    public Builder setBootClassPath(NestedSet<Artifact> jars) {
+    public Builder setBootClassPath(List<Artifact> jars) {
       Preconditions.checkArgument(!built);
       Preconditions.checkArgument(!jars.isEmpty());
       Preconditions.checkState(bootClassPath.isEmpty());
-      bootClassPath = jars;
+      bootClassPath.addAll(jars);
       return this;
     }
 
@@ -237,12 +230,6 @@ public class JavaTargetAttributes {
     public Builder addDirectJars(NestedSet<Artifact> directJars) {
       Preconditions.checkArgument(!built);
       this.directJars.addTransitive(directJars);
-      return this;
-    }
-
-    public Builder addDirectJar(Artifact directJar) {
-      Preconditions.checkArgument(!built);
-      this.directJars.add(directJar);
       return this;
     }
 
@@ -390,7 +377,7 @@ public class JavaTargetAttributes {
   private final NestedSet<Artifact> runtimeClassPath;
   private final NestedSet<Artifact> compileTimeClassPath;
 
-  private final NestedSet<Artifact> bootClassPath;
+  private final ImmutableList<Artifact> bootClassPath;
   private final ImmutableList<Artifact> sourcePath;
   private final ImmutableList<Artifact> nativeLibraries;
 
@@ -419,7 +406,7 @@ public class JavaTargetAttributes {
       Set<Artifact> sourceFiles,
       NestedSetBuilder<Artifact> runtimeClassPath,
       NestedSetBuilder<Artifact> compileTimeClassPath,
-      NestedSet<Artifact> bootClassPath,
+      List<Artifact> bootClassPath,
       List<Artifact> sourcePath,
       List<Artifact> nativeLibraries,
       JavaPluginInfoProvider plugins,
@@ -443,7 +430,7 @@ public class JavaTargetAttributes {
             .addTransitive(directJars)
             .addTransitive(compileTimeClassPath.build())
             .build();
-    this.bootClassPath = bootClassPath;
+    this.bootClassPath = ImmutableList.copyOf(bootClassPath);
     this.sourcePath = ImmutableList.copyOf(sourcePath);
     this.nativeLibraries = ImmutableList.copyOf(nativeLibraries);
     this.plugins = plugins;
@@ -525,7 +512,7 @@ public class JavaTargetAttributes {
     return compileTimeClassPath;
   }
 
-  public NestedSet<Artifact> getBootClassPath() {
+  public ImmutableList<Artifact> getBootClassPath() {
     return bootClassPath;
   }
 
