@@ -340,9 +340,9 @@ public final class EvalUtils {
           if (yi < 0) {
             throw Starlark.errorf("negative shift count: %d", yi);
           }
-          int z = xi << yi; // only uses low 5 bits of yi
-          if ((z >> yi) != xi || yi >= 32) {
-            throw Starlark.errorf("integer overflow in left shift");
+          int z = xi << yi;
+          if (z >> yi != xi) {
+            throw Starlark.errorf("integer overflow");
           }
           return z;
         }
@@ -419,9 +419,6 @@ public final class EvalUtils {
           if ((xi < 0) != (yi < 0) && rem != 0) {
             quo--;
           }
-          if (xi == Integer.MIN_VALUE && yi == -1) { // HD 2-13
-            throw Starlark.errorf("integer overflow in division");
-          }
           return quo;
         }
         break;
@@ -477,8 +474,8 @@ public final class EvalUtils {
         return compare(x, y) >= 0;
 
       case IN:
-        if (y instanceof StarlarkIndexable) {
-          return ((StarlarkIndexable) y).containsKey(semantics, x);
+        if (y instanceof StarlarkQueryable) {
+          return ((StarlarkQueryable) y).containsKey(semantics, x);
         } else if (y instanceof String) {
           if (!(x instanceof String)) {
             throw Starlark.errorf(
@@ -644,12 +641,11 @@ public final class EvalUtils {
   public static Object exec(StarlarkFile file, Module module, StarlarkThread thread)
       throws EvalException, InterruptedException {
     Preconditions.checkNotNull(
-        file.getResolvedFunction(),
+        file.resolved,
         "cannot evaluate unresolved syntax (use other exec method, or parseAndValidate)");
 
     Tuple<Object> defaultValues = Tuple.empty();
-    StarlarkFunction toplevel =
-        new StarlarkFunction(file.getResolvedFunction(), defaultValues, module);
+    StarlarkFunction toplevel = new StarlarkFunction(file.resolved, defaultValues, module);
 
     return Starlark.fastcall(thread, toplevel, NOARGS, NOARGS);
   }

@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.query2.query.output;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.hash.HashFunction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -64,7 +63,6 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
   private AspectResolver aspectResolver;
   private DependencyFilter dependencyFilter;
   private boolean relativeLocations;
-  private boolean displaySourceFileLocation;
   private QueryOptions queryOptions;
 
   @Override
@@ -80,13 +78,11 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   @Override
-  public void setOptions(
-      CommonQueryOptions options, AspectResolver aspectResolver, HashFunction hashFunction) {
-    super.setOptions(options, aspectResolver, hashFunction);
+  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
+    super.setOptions(options, aspectResolver);
     this.aspectResolver = aspectResolver;
     this.dependencyFilter = FormatUtils.getDependencyFilter(options);
     this.relativeLocations = options.relativeLocations;
-    this.displaySourceFileLocation = options.displaySourceFileLocation;
 
     Preconditions.checkArgument(options instanceof QueryOptions);
     this.queryOptions = (QueryOptions) options;
@@ -159,11 +155,8 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
       elem = doc.createElement("rule");
       elem.setAttribute("class", rule.getRuleClass());
       for (Attribute attr : rule.getAttributes()) {
-        AttributeValueSource attributeValueSource =
-            AttributeValueSource.forRuleAndAttribute(rule, attr);
-        if (attributeValueSource == AttributeValueSource.RULE
-            || queryOptions.xmlShowDefaultValues) {
-          Iterable<Object> values = PossibleAttributeValues.forRuleAndAttribute(rule, attr);
+        PossibleAttributeValues values = PossibleAttributeValues.forRuleAndAttribute(rule, attr);
+        if (values.getSource() == AttributeValueSource.RULE || queryOptions.xmlShowDefaultValues) {
           Element attrElem = createValueElement(doc, attr.getType(), values);
           attrElem.setAttribute("name", attr.getName());
           elem.appendChild(attrElem);
@@ -245,7 +238,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
     }
 
     elem.setAttribute("name", target.getLabel().toString());
-    String location = FormatUtils.getLocation(target, relativeLocations, displaySourceFileLocation);
+    String location = FormatUtils.getLocation(target, relativeLocations);
     if (!queryOptions.xmlLineNumbers) {
       int firstColon = location.indexOf(':');
       if (firstColon != -1) {

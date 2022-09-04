@@ -27,19 +27,15 @@ import com.google.devtools.build.lib.analysis.RequiredConfigFragmentsProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
-import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Provider.Key;
-import com.google.devtools.build.lib.starlarkbuildapi.ActionApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
+import com.google.devtools.build.lib.syntax.Printer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.Printer;
 
 /**
  * A single dependency with its configured target and aspects merged together.
@@ -108,7 +104,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   protected Object rawGetStarlarkProvider(String providerKey) {
     if (providerKey.equals(AbstractConfiguredTarget.ACTIONS_FIELD_NAME)) {
       ImmutableList.Builder<ActionAnalysisMetadata> actions = ImmutableList.builder();
-      // Only expose actions which are StarlarkValues.
+      // Only expose actions which are SkylarkValues.
       // TODO(cparsons): Expose all actions to Starlark.
       for (ConfiguredAspect aspect : aspects) {
         actions.addAll(
@@ -145,12 +141,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       nonBaseProviders.put(mergedOutputGroupInfo);
     }
 
-    // Merge analysis failures.
-    List<NestedSet<AnalysisFailure>> analysisFailures = getAnalysisFailures(base, aspects);
-    if (!analysisFailures.isEmpty()) {
-      nonBaseProviders.put(AnalysisFailureInfo.forAnalysisFailureSets(analysisFailures));
-    }
-
     // Merge extra-actions provider.
     ExtraActionArtifactsProvider mergedExtraActionProviders = ExtraActionArtifactsProvider.merge(
         getAllProviders(base, aspects, ExtraActionArtifactsProvider.class));
@@ -170,7 +160,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
       for (int i = 0; i < providers.getProviderCount(); ++i) {
         Object providerKey = providers.getProviderKeyAt(i);
         if (OutputGroupInfo.STARLARK_CONSTRUCTOR.getKey().equals(providerKey)
-            || AnalysisFailureInfo.STARLARK_CONSTRUCTOR.getKey().equals(providerKey)
             || ExtraActionArtifactsProvider.class.equals(providerKey)
             || RequiredConfigFragmentsProvider.class.equals(providerKey)) {
           continue;
@@ -221,23 +210,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
     return providers.build();
   }
 
-  private static ImmutableList<NestedSet<AnalysisFailure>> getAnalysisFailures(
-      ConfiguredTarget base, Iterable<ConfiguredAspect> aspects) {
-    ImmutableList.Builder<NestedSet<AnalysisFailure>> analysisFailures = ImmutableList.builder();
-    AnalysisFailureInfo baseFailureInfo = base.get(AnalysisFailureInfo.STARLARK_CONSTRUCTOR);
-    if (baseFailureInfo != null) {
-      analysisFailures.add(baseFailureInfo.getCausesNestedSet());
-    }
-    for (ConfiguredAspect configuredAspect : aspects) {
-      AnalysisFailureInfo aspectFailureInfo =
-          configuredAspect.get(AnalysisFailureInfo.STARLARK_CONSTRUCTOR);
-      if (aspectFailureInfo != null) {
-        analysisFailures.add(aspectFailureInfo.getCausesNestedSet());
-      }
-    }
-    return analysisFailures.build();
-  }
-
   private static <T extends TransitiveInfoProvider> List<T> getAllProviders(
       ConfiguredTarget base, Iterable<ConfiguredAspect> aspects, Class<T> providerClass) {
     T baseProvider = base.getProvider(providerClass);
@@ -259,11 +231,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   @Override
   public void repr(Printer printer) {
     printer.append("<merged target " + getLabel() + ">");
-  }
-
-  @Override
-  public Dict<String, Object> getProvidersDict() {
-    return ConfiguredTargetsUtil.getProvidersDict(this, nonBaseProviders);
   }
 
   @VisibleForTesting

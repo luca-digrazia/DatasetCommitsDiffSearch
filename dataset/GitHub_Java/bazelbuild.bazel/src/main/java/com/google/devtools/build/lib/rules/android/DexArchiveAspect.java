@@ -268,10 +268,14 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       ImmutableSet.Builder<Artifact> jars = ImmutableSet.builder();
       jars.addAll(javaInfo.getDirectRuntimeJars());
 
-      Artifact rJar = getAndroidLibraryRJar(base);
-      if (rJar != null) {
-        // TODO(b/124540821): Disable R.jar desugaring (with a flag).
-        jars.add(rJar);
+      // If the target is an android_library, it may be a Starlark android_library in which case
+      // get the R.jar from the AndroidIdeInfoProvider.
+      if (isAndroidLibrary(ruleContext)) {
+        Artifact rJar = getAndroidLibraryRJar(base);
+        if (rJar != null) {
+          // TODO(b/124540821): Disable R.jar desugaring (with a flag).
+          jars.add(rJar);
+        }
       }
 
       // For android_* targets we need to honor their bootclasspath (nicer in general to do so)
@@ -317,9 +321,13 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
         jars.addAll(javaInfo.getDirectRuntimeJars());
       }
 
-      Artifact rJar = getAndroidLibraryRJar(base);
-      if (rJar != null) {
+      // The Starlark android_library does not put the R.jar file in the direct runtime deps of the
+      // JavaInfo, it can only be retrieved from the AndroidIdeInfoProvider.
+      if (isAndroidLibrary(ruleContext)) {
+        Artifact rJar = getAndroidLibraryRJar(base);
+        if (rJar != null) {
           jars.add(rJar);
+        }
       }
 
       return jars.build();
@@ -335,6 +343,10 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       return provider;
     }
     return isProtoLibrary(ruleContext) ? base.getProvider(JavaCompilationArgsProvider.class) : null;
+  }
+
+  private static boolean isAndroidLibrary(RuleContext ruleContext) {
+    return "android_library".equals(ruleContext.getRule().getRuleClass());
   }
 
   private static boolean isProtoLibrary(RuleContext ruleContext) {

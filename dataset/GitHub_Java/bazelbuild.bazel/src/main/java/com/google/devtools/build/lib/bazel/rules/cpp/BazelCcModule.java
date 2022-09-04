@@ -17,8 +17,8 @@ package com.google.devtools.build.lib.bazel.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkActionFactory;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkActionFactory;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
@@ -31,7 +31,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FeatureConfigurationForStarlark;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.BazelCcModuleApi;
+import com.google.devtools.build.lib.skylarkbuildapi.cpp.BazelCcModuleApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkList;
@@ -80,8 +80,6 @@ public class BazelCcModule extends CcModule
       Sequence<?> frameworkIncludes, // <String> expected
       Sequence<?> defines, // <String> expected
       Sequence<?> localDefines, // <String> expected
-      String includePrefix,
-      String stripIncludePrefix,
       Sequence<?> userCompileFlags, // <String> expected
       Sequence<?> ccCompilationContexts, // <CcCompilationContext> expected
       String name,
@@ -103,8 +101,6 @@ public class BazelCcModule extends CcModule
         frameworkIncludes,
         defines,
         localDefines,
-        includePrefix,
-        stripIncludePrefix,
         userCompileFlags,
         ccCompilationContexts,
         name,

@@ -238,7 +238,8 @@ public final class Starlark {
 
     StarlarkBuiltin module = StarlarkInterfaceUtils.getStarlarkBuiltin(c);
     if (module != null) {
-      return module.name();
+      String name = module.name();
+      return module.namespace() ? name + " (a language module)" : name;
 
     } else if (StarlarkCallable.class.isAssignableFrom(c)) {
       // All callable values have historically been lumped together as "function".

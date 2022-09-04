@@ -14,8 +14,12 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
+import static java.util.stream.Collectors.toCollection;
+
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -182,6 +186,10 @@ public final class CcCompilationHelper {
       return sourceTypeSet;
     }
   }
+
+  /** Function for extracting module maps from CppCompilationDependencies. */
+  private static final Function<CcCompilationContext, CppModuleMap> CPP_DEPS_TO_MODULES =
+      ccCompilationContext -> ccCompilationContext.getCppModuleMap();
 
   /**
    * Contains the providers as well as the {@code CcCompilationOutputs} and the {@code
@@ -1145,30 +1153,26 @@ public final class CcCompilationHelper {
   }
 
   private List<CppModuleMap> collectModuleMaps() {
-    ImmutableList.Builder<CppModuleMap> builder = ImmutableList.<CppModuleMap>builder();
-    for (CcCompilationContext ccCompilationContext : ccCompilationContexts) {
-      CppModuleMap moduleMap = ccCompilationContext.getCppModuleMap();
-      // Cpp module maps may be null for some rules.
-      if (moduleMap != null) {
-        builder.add(moduleMap);
-      }
-      // These can't be null which is enforced before adding to exportingModuleMaps.
-      builder.addAll(ccCompilationContext.getExportingModuleMaps());
-    }
+    // Cpp module maps may be null for some rules.
+    List<CppModuleMap> result =
+        ccCompilationContexts.stream()
+            .map(CPP_DEPS_TO_MODULES)
+            .filter(Predicates.notNull())
+            .collect(toCollection(ArrayList::new));
 
     if (ccToolchain != null) {
       CppModuleMap toolchainModuleMap =
           ccToolchain.getCcInfo().getCcCompilationContext().getCppModuleMap();
       if (toolchainModuleMap != null) {
-        builder.add(toolchainModuleMap);
+        result.add(toolchainModuleMap);
       }
     }
     for (CppModuleMap additionalCppModuleMap : additionalCppModuleMaps) {
       // These can't be null which is enforced before adding to additionalCppModuleMaps.
-      builder.add(additionalCppModuleMap);
+      result.add(additionalCppModuleMap);
     }
 
-    return builder.build();
+    return result;
   }
 
   /** @return whether this target needs to generate a pic header module. */

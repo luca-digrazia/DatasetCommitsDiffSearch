@@ -17,7 +17,10 @@ package com.google.devtools.build.lib.syntax;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
+import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkBuiltin;
 import org.junit.Test;
@@ -29,7 +32,7 @@ import org.junit.runners.JUnit4;
  * parse trees.
  */
 @RunWith(JUnit4.class)
-public final class EvalUtilsTest {
+public final class EvalUtilsTest extends EvaluationTestCase {
 
   private static StarlarkList<Object> makeList(@Nullable Mutability mu) {
     return StarlarkList.of(mu, 1, 2, 3);
@@ -87,9 +90,6 @@ public final class EvalUtilsTest {
   @Test
   public void testComparatorWithDifferentTypes() throws Exception {
     Mutability mu = Mutability.create("test");
-
-    StarlarkValue myValue = new StarlarkValue() {};
-
     Object[] objects = {
       "1",
       2,
@@ -101,7 +101,7 @@ public final class EvalUtilsTest {
       StarlarkList.of(mu, "1", "2", "3"),
       Dict.of(mu, "key", 123),
       Dict.of(mu, 123, "value"),
-      myValue,
+      StructProvider.STRUCT.create(ImmutableMap.of("key", (Object) "value"), "no field %s"),
     };
 
     for (int i = 0; i < objects.length; ++i) {

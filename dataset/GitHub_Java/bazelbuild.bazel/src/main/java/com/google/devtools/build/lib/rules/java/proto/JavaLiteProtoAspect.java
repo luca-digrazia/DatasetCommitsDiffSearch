@@ -113,7 +113,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
             .advertiseProvider(JavaProtoLibraryAspectProvider.class)
             .advertiseProvider(
                 ImmutableList.of(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey())))
-            .advertiseProvider(ImmutableList.of(JavaStarlarkApiProvider.STARLARK_NAME))
+            .advertiseProvider(ImmutableList.of(JavaStarlarkApiProvider.SKYLARK_NAME))
             .add(
                 attr(JavaProtoAspectCommon.LITE_PROTO_TOOLCHAIN_ATTR, LABEL)
                     .mandatoryNativeProviders(
@@ -230,9 +230,9 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
       aspect.addNativeDeclaredProvider(
           createCcLinkingInfo(ruleContext, aspectCommon.getProtoRuntimeDeps()));
 
-      JavaStarlarkApiProvider starlarkApiProvider = JavaStarlarkApiProvider.fromRuleContext();
+      JavaStarlarkApiProvider skylarkApiProvider = JavaStarlarkApiProvider.fromRuleContext();
       aspect
-          .addStarlarkTransitiveInfo(JavaStarlarkApiProvider.NAME, starlarkApiProvider)
+          .addStarlarkTransitiveInfo(JavaStarlarkApiProvider.NAME, skylarkApiProvider)
           .addNativeDeclaredProvider(javaInfo.build())
           .addProvider(
               new JavaProtoLibraryAspectProvider(

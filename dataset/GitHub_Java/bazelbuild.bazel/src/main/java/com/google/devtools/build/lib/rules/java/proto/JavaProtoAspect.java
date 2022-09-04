@@ -122,7 +122,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
             .advertiseProvider(JavaProtoLibraryAspectProvider.class)
             .advertiseProvider(
                 ImmutableList.of(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey())))
-            .advertiseProvider(ImmutableList.of(JavaStarlarkApiProvider.STARLARK_NAME))
+            .advertiseProvider(ImmutableList.of(JavaStarlarkApiProvider.SKYLARK_NAME))
             .add(
                 attr(JavaProtoAspectCommon.SPEED_PROTO_TOOLCHAIN_ATTR, LABEL)
                     // TODO(carmi): reinstate mandatoryNativeProviders(ProtoLangToolchainProvider)
@@ -247,9 +247,9 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       javaInfo.addProvider(JavaCompilationArgsProvider.class, generatedCompilationArgsProvider);
       aspect.addNativeDeclaredProvider(
           createCcLinkingInfo(ruleContext, aspectCommon.getProtoRuntimeDeps()));
-      JavaStarlarkApiProvider javaStarlarkApiProvider = JavaStarlarkApiProvider.fromRuleContext();
+      JavaStarlarkApiProvider javaSkylarkApiProvider = JavaStarlarkApiProvider.fromRuleContext();
       aspect
-          .addStarlarkTransitiveInfo(JavaStarlarkApiProvider.NAME, javaStarlarkApiProvider)
+          .addStarlarkTransitiveInfo(JavaStarlarkApiProvider.NAME, javaSkylarkApiProvider)
           .addNativeDeclaredProvider(javaInfo.build())
           .addProvider(
               new JavaProtoLibraryAspectProvider(
@@ -265,7 +265,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
      * proto_library.
      */
     private boolean shouldGenerateCode() {
-      if (protoInfo.getOriginalDirectProtoSources().isEmpty()) {
+      if (protoInfo.getDirectProtoSources().isEmpty()) {
         return false;
       }
 
@@ -276,8 +276,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
       protoBlackList = new ProtoSourceFileBlacklist(ruleContext, blacklistedProtos.build());
 
-      return protoBlackList.checkSrcs(
-          protoInfo.getOriginalDirectProtoSources(), "java_proto_library");
+      return protoBlackList.checkSrcs(protoInfo.getDirectProtoSources(), "java_proto_library");
     }
 
     private void createProtoCompileAction(Artifact sourceJar) throws InterruptedException {

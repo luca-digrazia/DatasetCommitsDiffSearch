@@ -704,30 +704,17 @@ public interface CcModuleApi<
 
   @StarlarkMethod(
       name = "merge_cc_infos",
-      doc = "Merges multiple <code>CcInfo</code>s into one.",
+      doc = "Merges a list of <code>CcInfo</code>s into one.",
       parameters = {
         @Param(
-            name = "direct_cc_infos",
-            doc =
-                "List of <code>CcInfo</code>s to be merged, whose headers will be exported by "
-                    + "the direct fields in the returned provider.",
-            positional = false,
-            named = true,
-            defaultValue = "[]",
-            type = Sequence.class),
-        @Param(
             name = "cc_infos",
-            doc =
-                "List of <code>CcInfo</code>s to be merged, whose headers will not be exported "
-                    + "by the direct fields in the returned provider.",
+            doc = "List of <code>CcInfo</code>s to be merged.",
             positional = false,
             named = true,
             defaultValue = "[]",
             type = Sequence.class)
       })
-  CcInfoApi<FileT> mergeCcInfos(
-      Sequence<?> directCcInfos, // <CcInfoApi> expected
-      Sequence<?> ccInfos) // <CcInfoApi> expected
+  CcInfoApi<FileT> mergeCcInfos(Sequence<?> ccInfos) // <CcInfoApi> expected
       throws EvalException;
 
   @StarlarkMethod(

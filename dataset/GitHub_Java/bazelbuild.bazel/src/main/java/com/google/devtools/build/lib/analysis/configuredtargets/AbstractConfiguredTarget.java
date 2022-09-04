@@ -33,16 +33,14 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /**
  * An abstract implementation of ConfiguredTarget in which all properties are assigned trivial
@@ -74,7 +72,6 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
   private static final ImmutableSet<String> SPECIAL_FIELD_NAMES =
       ImmutableSet.of(
           LABEL_FIELD,
-          KIND_FIELD,
           FILES_FIELD,
           DEFAULT_RUNFILES_FIELD,
           DATA_RUNFILES_FIELD,
@@ -132,7 +129,7 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
 
   @Override
   public Object getValue(StarlarkSemantics semantics, String name) throws EvalException {
-    if (semantics.getBool(BuildLanguageOptions.INCOMPATIBLE_DISABLE_TARGET_PROVIDER_FIELDS)
+    if (semantics.incompatibleDisableTargetProviderFields()
         && !SPECIAL_FIELD_NAMES.contains(name)) {
       throw Starlark.errorf(
           "Accessing providers via the field syntax on structs is "
@@ -148,8 +145,6 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
     switch (name) {
       case LABEL_FIELD:
         return getLabel();
-      case KIND_FIELD:
-        return getRuleClassString();
       case ACTIONS_FIELD_NAME:
         // Depending on subclass, the 'actions' field will either be unsupported or of type
         // java.util.List, which needs to be converted to Sequence before being returned.
@@ -202,7 +197,6 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
             DATA_RUNFILES_FIELD,
             DEFAULT_RUNFILES_FIELD,
             LABEL_FIELD,
-            KIND_FIELD,
             FILES_FIELD,
             FilesToRunProvider.STARLARK_NAME));
     if (get(OutputGroupInfo.STARLARK_CONSTRUCTOR) != null) {
@@ -271,13 +265,5 @@ public abstract class AbstractConfiguredTarget implements ConfiguredTarget, Visi
   @Override
   public void repr(Printer printer) {
     printer.append("<unknown target " + getLabel() + ">");
-  }
-
-  /**
-   * Returns a map of provider names to their values. This is only intended to be called from the
-   * query dialects of Starlark. Implement in subclasses which can have providers.
-   */
-  public Dict<String, Object> getProvidersDict() {
-    return null;
   }
 }

@@ -14,91 +14,92 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.java;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.SkylarkRuleContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.TransitiveInfoCollectionApi;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.TransitiveInfoCollectionApi;
+import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
+import net.starlark.java.annot.Param;
+import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkMethod;
 
-/**
- * Helper class for Java proto compilation.
- */
-@SkylarkModule(name = "java_proto_common", doc = "Helper class for Java proto compilation.")
-public interface JavaProtoCommonApi<FileT extends FileApi,
-    SkylarkRuleContextT extends SkylarkRuleContextApi,
-    TransitiveInfoCollectionT extends TransitiveInfoCollectionApi> {
+/** Helper class for Java proto compilation. */
+@StarlarkBuiltin(name = "java_proto_common", doc = "Helper class for Java proto compilation.")
+public interface JavaProtoCommonApi<
+        FileT extends FileApi,
+        ConstraintValueT extends ConstraintValueInfoApi,
+        StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
+        TransitiveInfoCollectionT extends TransitiveInfoCollectionApi>
+    extends StarlarkValue {
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "create_java_lite_proto_compile_action",
       // This function is experimental for now.
       documented = false,
-      // There's 2 mandatory positional arguments, the Skylark context and the ConfiguredTarget.
-      mandatoryPositionals = 2,
       parameters = {
-          @Param(
-              name = "src_jar",
-              positional = false,
-              named = true,
-              type = FileApi.class
-          ),
-          @Param(
-              name = "proto_toolchain_attr",
-              positional = false,
-              named = true,
-              type = String.class
-          ),
-          @Param(
-              name = "flavour",
-              positional = false,
-              named = true,
-              type = String.class,
-              defaultValue = "java"
-          )
-      }
-  )
-  public void createProtoCompileAction(
-      SkylarkRuleContextT skylarkRuleContext,
+        @Param(
+            name = "ctx",
+            positional = true,
+            named = false,
+            type = StarlarkRuleContextApi.class,
+            doc = "The rule context."),
+        @Param(
+            name = "target",
+            positional = true,
+            named = false,
+            type = TransitiveInfoCollectionApi.class,
+            doc = "The target."),
+        @Param(name = "src_jar", positional = false, named = true, type = FileApi.class),
+        @Param(
+            name = "proto_toolchain_attr",
+            positional = false,
+            named = true,
+            type = String.class),
+        @Param(
+            name = "flavour",
+            positional = false,
+            named = true,
+            type = String.class,
+            defaultValue = "'java'")
+      })
+  void createProtoCompileAction(
+      StarlarkRuleContextT starlarkRuleContext,
       TransitiveInfoCollectionT target,
       FileT sourceJar,
       String protoToolchainAttr,
-      String flavour) throws EvalException;
+      String flavour)
+      throws EvalException, InterruptedException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "has_proto_sources",
-      doc = "Returns whether the given proto_library target contains proto sources. If there are no"
-          + " sources it means that the proto_library is an alias library, which exports its"
-          + " dependencies."
-  )
-  public boolean hasProtoSources(TransitiveInfoCollectionT target);
+      doc =
+          "Returns whether the given proto_library target contains proto sources. If there are no"
+              + " sources it means that the proto_library is an alias library, which exports its"
+              + " dependencies.",
+      parameters = {
+        @Param(
+            name = "target",
+            positional = true,
+            named = false,
+            type = TransitiveInfoCollectionApi.class,
+            doc = "The proto_library target."),
+      })
+  boolean hasProtoSources(TransitiveInfoCollectionT target);
 
-  @SkylarkCallable(
-    name = "toolchain_deps",
-    // This function is experimental for now.
-    documented = false,
-    // There's only one mandatory positional,the Skylark context
-    mandatoryPositionals = 1,
-    parameters = {
-      @Param(name = "proto_toolchain_attr", positional = false, named = true, type = String.class)
-    }
-  )
-  public JavaInfoApi<FileT> getRuntimeToolchainProvider(
-      SkylarkRuleContextT skylarkRuleContext, String protoToolchainAttr) throws EvalException;
-
-  @SkylarkCallable(
-    name = "javac_opts",
-    // This function is experimental for now.
-    documented = false,
-    // There's only one mandatory positional,the Skylark context
-    mandatoryPositionals = 1,
-    parameters = {
-      @Param(name = "java_toolchain_attr", positional = false, named = true, type = String.class)
-    }
-  )
-  // TODO(b/78512644): migrate callers to passing explicit proto javacopts or using custom
-  // toolchains, and delete
-  public ImmutableList<String> getJavacOpts(
-      SkylarkRuleContextT skylarkRuleContext, String javaToolchainAttr) throws EvalException;
+  @StarlarkMethod(
+      name = "toolchain_deps",
+      // This function is experimental for now.
+      documented = false,
+      parameters = {
+        @Param(
+            name = "ctx",
+            positional = true,
+            named = false,
+            type = StarlarkRuleContextApi.class,
+            doc = "The rule context."),
+        @Param(name = "proto_toolchain_attr", positional = false, named = true, type = String.class)
+      })
+  JavaInfoApi<FileT> getRuntimeToolchainProvider(
+      StarlarkRuleContextT starlarkRuleContext, String protoToolchainAttr) throws EvalException;
 }

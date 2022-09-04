@@ -22,7 +22,6 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -54,9 +53,8 @@ public final class TargetUtils {
         || tag.startsWith("no-")
         || tag.startsWith("supports-")
         || tag.startsWith("disable-")
-        || tag.startsWith("cpu:")
-        || tag.equals(ExecutionRequirements.LOCAL)
-        || tag.equals(ExecutionRequirements.WORKER_KEY_MNEMONIC);
+        || tag.equals("local")
+        || tag.startsWith("cpu:");
   }
 
   private TargetUtils() {} // Uninstantiable.
@@ -212,7 +210,7 @@ public final class TargetUtils {
       return null;
     }
     Rule rule = (Rule) target;
-    return rule.isAttrDefined("deprecation", Type.STRING)
+    return (rule.isAttrDefined("deprecation", Type.STRING))
         ? NonconfigurableAttributeMapper.of(rule).get("deprecation", Type.STRING)
         : null;
   }
