@@ -39,6 +39,7 @@ import java.util.zip.GZIPOutputStream;
 import static org.junit.Assert.*;
 
 /**
+ *
  * @author lennart
  */
 public class ToolsTest {
