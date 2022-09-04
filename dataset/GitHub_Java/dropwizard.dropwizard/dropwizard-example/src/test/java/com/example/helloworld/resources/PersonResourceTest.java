@@ -2,57 +2,56 @@ package com.example.helloworld.resources;
 
 import com.example.helloworld.core.Person;
 import com.example.helloworld.db.PersonDAO;
-import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
-import io.dropwizard.testing.junit5.ResourceExtension;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import com.google.common.base.Optional;
+import com.sun.jersey.api.client.UniformInterfaceException;
+import io.dropwizard.testing.junit.ResourceTestRule;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.ClassRule;
+import org.junit.Test;
 
-import javax.ws.rs.core.Response;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link PersonResource}.
+ * Unit tests for {@link PersonResource}
  */
-@ExtendWith(DropwizardExtensionsSupport.class)
 public class PersonResourceTest {
-    private static final PersonDAO DAO = mock(PersonDAO.class);
-    public static final ResourceExtension RULE = ResourceExtension.builder()
-            .addResource(new PersonResource(DAO))
+    private static final PersonDAO dao = mock(PersonDAO.class);
+
+    @ClassRule
+    public static final ResourceTestRule resources = ResourceTestRule.builder()
+            .addResource(new PersonResource(dao))
             .build();
+
     private Person person;
 
-    @BeforeEach
-    void setup() {
+    @Before
+    public void setup() {
         person = new Person();
         person.setId(1L);
     }
 
-    @AfterEach
-    void tearDown() {
-        reset(DAO);
+    @After
+    public void tearDown() {
+        reset(dao);
     }
 
     @Test
-    void getPersonSuccess() {
-        when(DAO.findById(1L)).thenReturn(Optional.of(person));
+    public void getPerson_success() {
+        when(dao.findById(1L)).thenReturn(Optional.of(person));
 
-        Person found = RULE.target("/people/1").request().get(Person.class);
-
+        Person found = resources.client().resource("/people/1").get(Person.class);
         assertThat(found.getId()).isEqualTo(person.getId());
-        verify(DAO).findById(1L);
+
+        verify(dao).findById(1L);
     }
 
-    @Test
-    void getPersonNotFound() {
-        when(DAO.findById(2L)).thenReturn(Optional.empty());
-        final Response response = RULE.target("/people/2").request().get();
+    @Test(expected = UniformInterfaceException.class)
+    public void getPerson_404() {
+        when(dao.findById(2L)).thenReturn(Optional.<Person>absent());
+        resources.client().resource("/people/2").get(Person.class);
 
-        assertThat(response.getStatusInfo().getStatusCode()).isEqualTo(Response.Status.NOT_FOUND.getStatusCode());
-        verify(DAO).findById(2L);
+        verify(dao).findById(2L);
     }
 }
