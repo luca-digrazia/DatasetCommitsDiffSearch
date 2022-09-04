@@ -43,18 +43,15 @@ public class ProduceValidator implements ElementValidator {
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
 
-		if (!annotationHelper.enclosingElementHasEnhancedComponentAnnotation(element)) {
+		if (annotationHelper.enclosingElementIsGenerated(element)) {
 			return false;
 		}
 
 		IsValid valid = new IsValid();
 
-		ExecutableElement executableElement = (ExecutableElement) element;
+		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validatedElements, valid);
 
-		/*
-		 * We check that twice to skip invalid annotated elements
-		 */
-		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(executableElement, validatedElements, valid);
+		ExecutableElement executableElement = (ExecutableElement) element;
 
 		validatorHelper.returnTypeIsNotVoid(executableElement, valid);
 
