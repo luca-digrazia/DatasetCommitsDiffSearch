@@ -73,13 +73,8 @@ public class WorkerMultiplexer extends Thread {
   private boolean isWorkerStreamClosed;
   /** True if the multiplexer thread has been interrupted. */
   private boolean isInterrupted;
-  /**
-   * The log file of the actual running worker process. It is shared between all WorkerProxy
-   * instances for this multiplexer.
-   */
-  private final Path logFile;
 
-  WorkerMultiplexer(Path logFile) {
+  WorkerMultiplexer() {
     semWorkerProcessResponse = new Semaphore(1);
     semResponseChecker = new Semaphore(1);
     responseChecker = new HashMap<>();
@@ -87,18 +82,14 @@ public class WorkerMultiplexer extends Thread {
     isUnparseable = false;
     isWorkerStreamClosed = false;
     isInterrupted = false;
-    this.logFile = logFile;
   }
 
   /**
    * Creates a worker process corresponding to this {@code WorkerMultiplexer}, if it doesn't already
    * exist. Also makes sure this {@code WorkerMultiplexer} runs as a separate thread.
    */
-  public synchronized void createProcess(WorkerKey workerKey, Path workDir) throws IOException {
-    // The process may have died in the meanwhile (e.g. between builds).
-    if (this.process != null && !this.process.isAlive()) {
-      this.process = null;
-    }
+  public synchronized void createProcess(WorkerKey workerKey, Path workDir, Path logFile)
+      throws IOException {
     if (this.process == null) {
       ImmutableList<String> args = workerKey.getArgs();
       File executable = new File(args.get(0));
@@ -120,21 +111,12 @@ public class WorkerMultiplexer extends Thread {
   }
 
   /**
-   * Returns the path of the log file shared by all multiplex workers using this process. May be
-   * null if the process has not started yet.
-   */
-  public Path getLogFile() {
-    return logFile;
-  }
-
-  /**
    * Signals this object to destroy itself, including the worker process. The object might not be
    * fully destroyed at the end of this call, but will terminate soon.
    */
   public synchronized void destroyMultiplexer() {
     if (this.process != null) {
       destroyProcess(this.process);
-      this.process = null;
     }
     isInterrupted = true;
   }

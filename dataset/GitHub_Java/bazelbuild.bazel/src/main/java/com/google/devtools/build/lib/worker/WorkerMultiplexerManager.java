@@ -14,13 +14,10 @@
 
 package com.google.devtools.build.lib.worker;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.actions.UserExecException;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Worker.Code;
-import com.google.devtools.build.lib.vfs.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -35,25 +32,31 @@ public class WorkerMultiplexerManager {
    * A map from the hash of {@code WorkerKey} objects to the corresponding information about the
    * multiplexer instance.
    */
-  private static final Map<WorkerKey, InstanceInfo> multiplexerInstance = new HashMap<>();
+  private static Map<Integer, InstanceInfo> multiplexerInstance;
 
   /** A semaphore to protect {@code multiplexerInstance} and {@code multiplexerRefCount} objects. */
-  private static final Semaphore semMultiplexer = new Semaphore(1);
+  private static Semaphore semMultiplexer;
+
+  static {
+    multiplexerInstance = new HashMap<>();
+    semMultiplexer = new Semaphore(1);
+  }
 
   private WorkerMultiplexerManager() {}
 
   /**
    * Returns a {@code WorkerMultiplexer} instance to {@code WorkerProxy}. {@code WorkerProxy}
-   * objects with the same {@code WorkerKey} talk to the same {@code WorkerMultiplexer}. Also,
-   * record how many {@code WorkerProxy} objects are talking to this {@code WorkerMultiplexer}.
+   * objects with the same workerHash talk to the same {@code WorkerMultiplexer}. Also, record how
+   * many {@code WorkerProxy} objects are talking to this {@code WorkerMultiplexer}.
    */
-  public static WorkerMultiplexer getInstance(WorkerKey key, Path logFile, Reporter reporter)
-      throws InterruptedException {
+  public static WorkerMultiplexer getInstance(Integer workerHash) throws InterruptedException {
     semMultiplexer.acquire();
-    multiplexerInstance.putIfAbsent(key, new InstanceInfo(logFile));
-    multiplexerInstance.get(key).increaseRefCount();
-    WorkerMultiplexer workerMultiplexer = multiplexerInstance.get(key).getWorkerMultiplexer();
-    workerMultiplexer.setReporter(reporter);
+    if (!multiplexerInstance.containsKey(workerHash)) {
+      multiplexerInstance.put(workerHash, new InstanceInfo());
+    }
+    multiplexerInstance.get(workerHash).increaseRefCount();
+    WorkerMultiplexer workerMultiplexer =
+        multiplexerInstance.get(workerHash).getWorkerMultiplexer();
     semMultiplexer.release();
     return workerMultiplexer;
   }
@@ -62,14 +65,15 @@ public class WorkerMultiplexerManager {
    * Removes the {@code WorkerMultiplexer} instance and reference count since it is no longer in
    * use.
    */
-  public static void removeInstance(WorkerKey key) throws InterruptedException, UserExecException {
+  public static void removeInstance(Integer workerHash)
+      throws InterruptedException, UserExecException {
     semMultiplexer.acquire();
     try {
-      multiplexerInstance.get(key).decreaseRefCount();
-      if (multiplexerInstance.get(key).getRefCount() == 0) {
-        multiplexerInstance.get(key).getWorkerMultiplexer().interrupt();
-        multiplexerInstance.get(key).getWorkerMultiplexer().destroyMultiplexer();
-        multiplexerInstance.remove(key);
+      multiplexerInstance.get(workerHash).decreaseRefCount();
+      if (multiplexerInstance.get(workerHash).getRefCount() == 0) {
+        multiplexerInstance.get(workerHash).getWorkerMultiplexer().interrupt();
+        multiplexerInstance.get(workerHash).getWorkerMultiplexer().destroyMultiplexer();
+        multiplexerInstance.remove(workerHash);
       }
     } catch (Exception e) {
       String message = "NullPointerException while accessing non-existent multiplexer instance.";
@@ -79,41 +83,25 @@ public class WorkerMultiplexerManager {
     }
   }
 
-  /** Is called when a build is done, to do per-build cleanup. */
-  static void afterCommandCleanup() {
+  public static WorkerMultiplexer getMultiplexer(Integer workerHash) throws UserExecException {
     try {
-      semMultiplexer.acquire();
-      for (InstanceInfo i : multiplexerInstance.values()) {
-        i.getWorkerMultiplexer().setReporter(null);
-      }
-      semMultiplexer.release();
-    } catch (InterruptedException e) {
-      // Interrupted during cleanup, not much we can do.
-    }
-  }
-
-  @VisibleForTesting
-  static WorkerMultiplexer getMultiplexer(WorkerKey key) throws UserExecException {
-    try {
-      return multiplexerInstance.get(key).getWorkerMultiplexer();
+      return multiplexerInstance.get(workerHash).getWorkerMultiplexer();
     } catch (NullPointerException e) {
       String message = "NullPointerException while accessing non-existent multiplexer instance.";
       throw createUserExecException(e, message, Code.MULTIPLEXER_DOES_NOT_EXIST);
     }
   }
 
-  @VisibleForTesting
-  static Integer getRefCount(WorkerKey key) throws UserExecException {
+  public static Integer getRefCount(Integer workerHash) throws UserExecException {
     try {
-      return multiplexerInstance.get(key).getRefCount();
+      return multiplexerInstance.get(workerHash).getRefCount();
     } catch (NullPointerException e) {
       String message = "NullPointerException while accessing non-existent multiplexer instance.";
       throw createUserExecException(e, message, Code.MULTIPLEXER_DOES_NOT_EXIST);
     }
   }
 
-  @VisibleForTesting
-  static Integer getInstanceCount() {
+  public static Integer getInstanceCount() {
     return multiplexerInstance.keySet().size();
   }
 
@@ -131,8 +119,8 @@ public class WorkerMultiplexerManager {
     private WorkerMultiplexer workerMultiplexer;
     private Integer refCount;
 
-    public InstanceInfo(Path logFile) {
-      this.workerMultiplexer = new WorkerMultiplexer(logFile);
+    public InstanceInfo() {
+      this.workerMultiplexer = new WorkerMultiplexer();
       this.refCount = 0;
     }
 
@@ -151,11 +139,5 @@ public class WorkerMultiplexerManager {
     public Integer getRefCount() {
       return refCount;
     }
-  }
-
-  /** Resets the instances. For testing only. */
-  @VisibleForTesting
-  static void reset() {
-    multiplexerInstance.clear();
   }
 }
