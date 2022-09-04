@@ -21,7 +21,8 @@ import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.inject.assistedinject.Assisted;
-import io.searchbox.cluster.Health;
+import org.elasticsearch.cluster.health.ClusterHealthStatus;
+import org.elasticsearch.indices.InvalidAliasNameException;
 import org.graylog2.audit.AuditActor;
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.indexer.indexset.IndexSetConfig;
@@ -151,7 +152,7 @@ public class MongoIndexSet implements IndexSet {
         final Set<String> indexNames = indices.getIndexNamesAndAliases(getIndexWildcard()).keySet();
 
         if (indexNames.isEmpty()) {
-            throw new NoTargetIndexException("Couldn't find any indices for wildcard " + getIndexWildcard());
+            throw new NoTargetIndexException();
         }
 
         int highestIndexNumber = -1;
@@ -167,7 +168,7 @@ public class MongoIndexSet implements IndexSet {
         }
 
         if (highestIndexNumber == -1) {
-            throw new NoTargetIndexException("Couldn't get newest index number for indices " + indexNames);
+            throw new NoTargetIndexException();
         }
 
         return highestIndexNumber;
@@ -201,7 +202,7 @@ public class MongoIndexSet implements IndexSet {
     @Override
     @Nullable
     public String getActiveWriteIndex() throws TooManyAliasesException {
-        return indices.aliasTarget(getWriteIndexAlias()).orElse(null);
+        return indices.aliasTarget(getWriteIndexAlias());
     }
 
     @Override
@@ -245,7 +246,7 @@ public class MongoIndexSet implements IndexSet {
         if (isUp()) {
             LOG.info("Found deflector alias <{}>. Using it.", getWriteIndexAlias());
         } else {
-            LOG.info("Did not find a deflector alias. Setting one up now.");
+            LOG.info("Did not find an deflector alias. Setting one up now.");
 
             // Do we have a target index to point to?
             try {
@@ -259,6 +260,8 @@ public class MongoIndexSet implements IndexSet {
                 activityWriter.write(new Activity(msg, IndexSet.class));
 
                 cycle(); // No index, so automatically cycling to a new one.
+            } catch (InvalidAliasNameException e) {
+                LOG.error("Seems like there already is an index called <{}>", getWriteIndexAlias());
             }
         }
     }
@@ -295,7 +298,7 @@ public class MongoIndexSet implements IndexSet {
         }
 
         LOG.info("Waiting for allocation of index <{}>.", newTarget);
-        Health.Status healthStatus = indices.waitForRecovery(newTarget);
+        ClusterHealthStatus healthStatus = indices.waitForRecovery(newTarget);
         LOG.debug("Health status of index <{}>: {}", newTarget, healthStatus);
 
         addDeflectorIndexRange(newTarget);
