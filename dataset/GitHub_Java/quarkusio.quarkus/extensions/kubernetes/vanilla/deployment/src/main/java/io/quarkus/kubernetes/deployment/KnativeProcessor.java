@@ -1,7 +1,7 @@
 package io.quarkus.kubernetes.deployment;
 
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT;
 import static io.quarkus.kubernetes.deployment.Constants.KNATIVE;
-import static io.quarkus.kubernetes.deployment.Constants.SERVICE;
 import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.DEFAULT_PRIORITY;
 
 import java.util.ArrayList;
@@ -57,7 +57,7 @@ public class KnativeProcessor {
     public void checkKnative(BuildProducer<KubernetesDeploymentTargetBuildItem> deploymentTargets) {
         List<String> targets = KubernetesConfigUtil.getUserSpecifiedDeploymentTargets();
         deploymentTargets.produce(
-                new KubernetesDeploymentTargetBuildItem(KNATIVE, SERVICE, KNATIVE_PRIORITY, targets.contains(KNATIVE)));
+                new KubernetesDeploymentTargetBuildItem(KNATIVE, DEPLOYMENT, KNATIVE_PRIORITY, targets.contains(KNATIVE)));
     }
 
     @BuildStep
@@ -106,7 +106,7 @@ public class KnativeProcessor {
         List<DecoratorBuildItem> result = new ArrayList<>();
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
-        Project project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
+        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
         result.addAll(KubernetesCommonHelper.createDecorators(project, KNATIVE, name, config, metricsConfiguration, annotations,
                 labels, command,
                 ports, livenessPath, readinessPath, roles, roleBindings));

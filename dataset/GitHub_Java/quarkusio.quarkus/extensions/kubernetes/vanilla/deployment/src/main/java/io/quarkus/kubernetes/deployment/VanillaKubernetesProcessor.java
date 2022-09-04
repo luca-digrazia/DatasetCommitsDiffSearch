@@ -100,8 +100,7 @@ public class VanillaKubernetesProcessor {
         final String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
         Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
-        result.addAll(KubernetesCommonHelper.createDecorators(project, KUBERNETES, name, config,
-                metricsConfiguration,
+        result.addAll(KubernetesCommonHelper.createDecorators(project, KUBERNETES, name, config, metricsConfiguration,
                 annotations, labels, command, ports, livenessPath, readinessPath, roles, roleBindings));
 
         if (config.getReplicas() != 1) {
@@ -139,7 +138,7 @@ public class VanillaKubernetesProcessor {
         // Probe port handling
         Integer port = ports.stream().filter(p -> HTTP_PORT.equals(p.getName())).map(KubernetesPortBuildItem::getPort)
                 .findFirst().orElse(DEFAULT_HTTP_PORT);
-        result.add(new DecoratorBuildItem(KUBERNETES, new ApplyHttpGetActionPortDecorator(name, name, port)));
+        result.add(new DecoratorBuildItem(KUBERNETES, new ApplyHttpGetActionPortDecorator(port)));
 
         return result;
     }

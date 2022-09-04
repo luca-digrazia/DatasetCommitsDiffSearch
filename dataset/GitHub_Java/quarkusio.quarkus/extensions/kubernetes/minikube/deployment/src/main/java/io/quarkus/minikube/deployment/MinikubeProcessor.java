@@ -112,8 +112,7 @@ public class MinikubeProcessor {
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
         Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
-        result.addAll(KubernetesCommonHelper.createDecorators(project, MINIKUBE, name, config,
-                metricsConfiguration,
+        result.addAll(KubernetesCommonHelper.createDecorators(project, MINIKUBE, name, config, metricsConfiguration,
                 annotations, labels, command,
                 ports, livenessPath, readinessPath, roles, roleBindings));
 
@@ -143,7 +142,7 @@ public class MinikubeProcessor {
         //Probe port handling
         Integer port = ports.stream().filter(p -> HTTP_PORT.equals(p.getName())).map(KubernetesPortBuildItem::getPort)
                 .findFirst().orElse(DEFAULT_HTTP_PORT);
-        result.add(new DecoratorBuildItem(MINIKUBE, new ApplyHttpGetActionPortDecorator(name, name, port)));
+        result.add(new DecoratorBuildItem(MINIKUBE, new ApplyHttpGetActionPortDecorator(port)));
 
         return result;
     }
