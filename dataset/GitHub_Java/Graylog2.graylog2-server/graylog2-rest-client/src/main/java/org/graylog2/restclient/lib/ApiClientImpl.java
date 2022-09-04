@@ -608,11 +608,7 @@ class ApiClientImpl implements ApiClient {
                     LOG.error("API call Interrupted", e);
                     node.markFailure();
                 } catch (ExecutionException e) {
-                    if (e.getCause() instanceof ConnectException) {
-                        LOG.error("{}", e.getCause().getMessage());
-                    } else {
-                        LOG.error("API call failed to execute.", e);
-                    }
+                    LOG.error("API call failed to execute.", e);
                     node.markFailure();
                 } catch (IOException e) {
                     LOG.error("API failed due to IO error", e);
