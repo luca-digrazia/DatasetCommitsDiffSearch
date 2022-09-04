@@ -25,8 +25,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.StripMode;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -44,10 +42,10 @@ import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
 
-/** Command-line options for C++. */
-@AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
+/**
+ * Command-line options for C++.
+ */
 public class CppOptions extends FragmentOptions {
-  public static final ObjectCodec<CppOptions> CODEC = new CppOptions_AutoCodec();
 
   /**
    * Converts a comma-separated list of compilation mode settings to a properly typed List.
@@ -720,28 +718,6 @@ public class CppOptions extends FragmentOptions {
   public List<String> hostCxxoptList;
 
   @Option(
-      name = "host_conlyopt",
-      allowMultiple = true,
-      defaultValue = "",
-      category = "flags",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "Additional option to pass to gcc when compiling C source files for host tools."
-  )
-  public List<String> hostConlyoptList;
-
-  @Option(
-      name = "host_linkopt",
-      defaultValue = "",
-      category = "flags",
-      allowMultiple = true,
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
-      help = "Additional option to pass to gcc when linking host tools."
-  )
-  public List<String> hostLinkoptList;
-
-  @Option(
     name = "grte_top",
     defaultValue = "null", // The default value is chosen by the toolchain.
     category = "version",
@@ -904,8 +880,6 @@ public class CppOptions extends FragmentOptions {
     }
     host.coptList = coptListBuilder.addAll(hostCoptList).build();
     host.cxxoptList = cxxoptListBuilder.addAll(hostCxxoptList).build();
-    host.conlyoptList = ImmutableList.copyOf(hostConlyoptList);
-    host.linkoptList = ImmutableList.copyOf(hostLinkoptList);
 
     host.useStartEndLib = useStartEndLib;
     host.stripBinaries = StripMode.ALWAYS;

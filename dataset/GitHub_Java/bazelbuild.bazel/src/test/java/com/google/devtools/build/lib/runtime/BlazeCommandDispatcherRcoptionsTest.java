@@ -27,6 +27,8 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownBlazeServerException;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -79,10 +81,11 @@ public class BlazeCommandDispatcherRcoptionsTest {
   private static class ReportNumCommand implements BlazeCommand {
 
     @Override
-    public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+    public ExitCode exec(CommandEnvironment env, OptionsProvider options)
+        throws ShutdownBlazeServerException {
       FooOptions fooOptions = options.getOptions(FooOptions.class);
       env.getReporter().getOutErr().printOut("" + fooOptions.numOption);
-      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+      return ExitCode.SUCCESS;
     }
 
     @Override
@@ -98,12 +101,13 @@ public class BlazeCommandDispatcherRcoptionsTest {
   private static class ReportAllCommand implements BlazeCommand {
 
     @Override
-    public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+    public ExitCode exec(CommandEnvironment env, OptionsProvider options)
+        throws ShutdownBlazeServerException {
       FooOptions fooOptions = options.getOptions(FooOptions.class);
       env.getReporter()
           .getOutErr()
           .printOut("" + fooOptions.numOption + " " + fooOptions.stringOption);
-      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+      return ExitCode.SUCCESS;
     }
 
     @Override
@@ -169,7 +173,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     List<String> cmdLine = Lists.newArrayList("reportnum");
     cmdLine.addAll(blazercOpts);
 
-    dispatch.exec(cmdLine, "test", outErr);
+    dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
     assertWithMessage("Common options should be used").that(out).isEqualTo("99");
   }
@@ -186,7 +190,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     List<String> cmdLine = Lists.newArrayList("reportnum");
     cmdLine.addAll(blazercOpts);
 
-    dispatch.exec(cmdLine, "test", outErr);
+    dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
     assertWithMessage("Specific options should dominate common options").that(out).isEqualTo("42");
   }
@@ -203,7 +207,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     List<String> cmdLine = Lists.newArrayList("reportnum");
     cmdLine.addAll(blazercOpts);
 
-    dispatch.exec(cmdLine, "test", outErr);
+    dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
     assertWithMessage("Specific options should dominate common options").that(out).isEqualTo("42");
   }
@@ -221,7 +225,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     List<String> cmdLine = Lists.newArrayList("reportall");
     cmdLine.addAll(blazercOpts);
 
-    dispatch.exec(cmdLine, "test", outErr);
+    dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
     assertWithMessage("Options should get accumulated over different rc files")
         .that(out)
@@ -242,7 +246,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     List<String> cmdLine = Lists.newArrayList("reportall");
     cmdLine.addAll(blazercOpts);
 
-    dispatch.exec(cmdLine, "test", outErr);
+    dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
     assertWithMessage("The more specific rc-file should override").that(out).isEqualTo("99 foo");
   }
@@ -261,7 +265,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
     List<String> cmdLine = Lists.newArrayList("reportall");
     cmdLine.addAll(blazercOpts);
 
-    dispatch.exec(cmdLine, "test", outErr);
+    dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
     String out = outErr.outAsLatin1();
     assertWithMessage("The more specific rc-file should override irrespective of name")
         .that(out)
@@ -291,7 +295,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
       List<String> orderedOpts = ImmutableList.copyOf(Iterables.concat(e));
       cmdLine.addAll(orderedOpts);
 
-      dispatch.exec(cmdLine, "test", outErr);
+      dispatch.exec(cmdLine, LockingMode.ERROR_OUT, "test", outErr);
       String out = outErr.outAsLatin1();
       assertWithMessage(String.format(
               "The more specific option should override, irrespective of source file or order. %s",

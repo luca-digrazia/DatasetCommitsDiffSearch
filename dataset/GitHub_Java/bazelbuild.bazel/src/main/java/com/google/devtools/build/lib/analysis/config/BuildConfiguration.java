@@ -26,7 +26,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import com.google.common.collect.Iterables;
@@ -47,13 +46,10 @@ import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -110,16 +106,6 @@ import javax.annotation.Nullable;
     doc = "Data required for the analysis of a target that comes from targets that "
         + "depend on it and not targets that it depends on.")
 public class BuildConfiguration implements BuildEvent {
-  /**
-   * Sorts fragments by class name. This produces a stable order which, e.g., facilitates consistent
-   * output from buildMnemonic.
-   */
-  public static final Comparator<Class<? extends Fragment>> lexicalFragmentSorter =
-      Comparator.comparing(Class::getName);
-
-  private static final Interner<ImmutableSortedMap<Class<? extends Fragment>, Fragment>>
-      fragmentsInterner = BlazeInterners.newWeakInterner();
-
   /**
    * An interface for language-specific configurations.
    *
@@ -444,21 +430,18 @@ public class BuildConfiguration implements BuildEvent {
   /**
    * Options that affect the value of a BuildConfiguration instance.
    *
-   * <p>(Note: any client that creates a view will also need to declare BuildView.Options, which
-   * affect the <i>mechanism</i> of view construction, even if they don't affect the value of the
-   * BuildConfiguration instances.)
+   * <p>(Note: any client that creates a view will also need to declare
+   * BuildView.Options, which affect the <i>mechanism</i> of view construction,
+   * even if they don't affect the value of the BuildConfiguration instances.)
    *
-   * <p>IMPORTANT: when adding new options, be sure to consider whether those values should be
-   * propagated to the host configuration or not.
+   * <p>IMPORTANT: when adding new options, be sure to consider whether those
+   * values should be propagated to the host configuration or not.
    *
-   * <p>ALSO IMPORTANT: all option types MUST define a toString method that gives identical results
-   * for semantically identical option values. The simplest way to ensure that is to return the
-   * input string.
+   * <p>ALSO IMPORTANT: all option types MUST define a toString method that
+   * gives identical results for semantically identical option values. The
+   * simplest way to ensure that is to return the input string.
    */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
   public static class Options extends FragmentOptions implements Cloneable {
-    public static final ObjectCodec<Options> CODEC = new BuildConfiguration_Options_AutoCodec();
-
     @Option(
       name = "experimental_separate_genfiles_directory",
       defaultValue = "true",
@@ -1096,8 +1079,7 @@ public class BuildConfiguration implements BuildEvent {
 
   private final String checksum;
 
-  private final ImmutableSortedMap<Class<? extends Fragment>, Fragment> fragments;
-
+  private final ImmutableMap<Class<? extends Fragment>, Fragment> fragments;
   private final ImmutableMap<String, Class<? extends Fragment>> skylarkVisibleFragments;
   private final RepositoryName mainRepositoryName;
   private final ImmutableSet<String> reservedActionMnemonics;
@@ -1272,7 +1254,7 @@ public class BuildConfiguration implements BuildEvent {
     BuildConfiguration otherConfig = (BuildConfiguration) other;
     return actionsEnabled == otherConfig.actionsEnabled
         && fragments.values().equals(otherConfig.fragments.values())
-        && buildOptions.equals(otherConfig.buildOptions);
+        && buildOptions.getOptions().equals(otherConfig.buildOptions.getOptions());
   }
 
   private int computeHashCode() {
@@ -1360,10 +1342,17 @@ public class BuildConfiguration implements BuildEvent {
     return ActionEnvironment.split(testEnv);
   }
 
-  private static ImmutableSortedMap<Class<? extends Fragment>, Fragment> makeFragmentsMap(
-      Map<Class<? extends Fragment>, Fragment> fragmentsMap) {
-    return fragmentsInterner.intern(ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter));
-  }
+  /**
+   * Sorts fragments by class name. This produces a stable order which, e.g., facilitates
+   * consistent output from buildMneumonic.
+   */
+  private static final Comparator lexicalFragmentSorter =
+      new Comparator<Class<? extends Fragment>>() {
+        @Override
+        public int compare(Class<? extends Fragment> o1, Class<? extends Fragment> o2) {
+          return o1.getName().compareTo(o2.getName());
+        }
+      };
 
   /**
    * Constructs a new BuildConfiguration instance.
@@ -1373,7 +1362,7 @@ public class BuildConfiguration implements BuildEvent {
       BuildOptions buildOptions,
       String repositoryName) {
     this.directories = directories;
-    this.fragments = makeFragmentsMap(fragmentsMap);
+    this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
 
     this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
 
@@ -1842,8 +1831,10 @@ public class BuildConfiguration implements BuildEvent {
     return true;
   }
 
-  /** Which fragments does this configuration contain? */
-  public ImmutableSortedSet<Class<? extends Fragment>> fragmentClasses() {
+  /**
+   * Which fragments does this configuration contain?
+   */
+  public Set<Class<? extends Fragment>> fragmentClasses() {
     return fragments.keySet();
   }
 

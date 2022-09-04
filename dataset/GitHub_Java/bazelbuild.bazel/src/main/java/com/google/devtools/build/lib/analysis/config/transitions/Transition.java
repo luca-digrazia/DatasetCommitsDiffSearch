@@ -14,19 +14,14 @@
 
 package com.google.devtools.build.lib.analysis.config.transitions;
 
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import java.util.List;
-
 /**
- * A configuration split transition; this should be used to transition to multiple configurations
- * simultaneously. Note that the corresponding rule implementations must have special support to
- * handle this.
+ * A configuration transition.
  */
-@ThreadSafety.Immutable
-public interface SplitTransition extends Transition {
+public interface Transition {
   /**
-   * Return the list of {@code BuildOptions} after splitting; empty if not applicable.
+   * Does this transition switch to a "host" configuration?
    */
-  List<BuildOptions> split(BuildOptions buildOptions);
+  default boolean isHostTransition() {
+    return false;
+  }
 }

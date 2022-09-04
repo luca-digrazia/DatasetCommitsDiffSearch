@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.common.options.Options;
@@ -22,8 +23,11 @@ import java.io.Serializable;
 import java.util.Map;
 import java.util.Set;
 
-/** Command-line build options for a Blaze module. */
+/**
+ * Command-line build options for a Blaze module.
+ */
 public abstract class FragmentOptions extends OptionsBase implements Cloneable, Serializable {
+
   /**
    * Returns the labels contributed to the defaults package by this fragment.
    *
@@ -33,6 +37,31 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
   @SuppressWarnings("unused")
   public Map<String, Set<Label>> getDefaultsLabels() {
     return ImmutableMap.of();
+  }
+
+  /**
+   * Returns the extra rules contributed to the default package by this fragment.
+   *
+   * <p>The return value should be a list of strings, which are merged into the BUILD files of the
+   * defaults package.
+   *
+   * <p><strong>WARNING;</strong> this method should only be used when absolutely necessary. Always
+   * prefer {@code getDefaultsLabels()} to this.
+   */
+  public ImmutableList<String> getDefaultsRules() {
+    return ImmutableList.of();
+  }
+
+  /**
+   * Returns true if actions should be enabled for this configuration. If <b>any</b> fragment
+   * sets this to false, <i>all</i> actions are disabled for the configuration.
+   *
+   * <p>Disabling actions is unusual behavior that should only be triggered under exceptionally
+   * special circumstances. In practice this only exists to support LIPO in C++. Don't override
+   * this method for any other purpose.
+   */
+  public boolean enableActions() {
+    return true;
   }
 
   @Override
