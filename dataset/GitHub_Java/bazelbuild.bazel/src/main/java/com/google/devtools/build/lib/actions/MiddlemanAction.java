@@ -51,7 +51,8 @@ public final class MiddlemanAction extends AbstractAction {
   }
 
   @Override
-  public final ActionResult execute(ActionExecutionContext actionExecutionContext) {
+  public final void execute(
+      ActionExecutionContext actionExecutionContext) {
     throw new IllegalStateException("MiddlemanAction should never be executed");
   }
 
@@ -69,13 +70,6 @@ public final class MiddlemanAction extends AbstractAction {
   @Override
   public MiddlemanType getActionType() {
     return middlemanType;
-  }
-
-  @Override
-  public boolean canRemoveAfterExecution() {
-    // Aggregating middleman actions' inputs are needed by their output artifacts, and the type of
-    // the middleman isn't known without having the action, so we just make sure it stays.
-    return false;
   }
 
   @Override

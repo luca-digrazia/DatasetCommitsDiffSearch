@@ -147,7 +147,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public List<ActionAnalysisMetadata> getRegisteredActions() {
+    public Iterable<ActionAnalysisMetadata> getRegisteredActions() {
       return original.getRegisteredActions();
     }
 
@@ -277,10 +277,10 @@ public final class AnalysisTestUtil {
         ArtifactFactory artifactFactory, ArtifactOwner artifactOwner, Supplier<UUID> buildId,
         String workspaceName) {
       Artifact stableStatus = artifactFactory.getDerivedArtifact(
-          PathFragment.create("build-info.txt"),
+          new PathFragment("build-info.txt"),
           directories.getBuildDataDirectory(workspaceName), artifactOwner);
       Artifact volatileStatus = artifactFactory.getConstantMetadataArtifact(
-          PathFragment.create("build-changelist.txt"),
+          new PathFragment("build-changelist.txt"),
           directories.getBuildDataDirectory(workspaceName), artifactOwner);
       return new DummyWorkspaceStatusAction(key, stableStatus, volatileStatus);
     }
@@ -329,7 +329,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public List<ActionAnalysisMetadata> getRegisteredActions() {
+    public Iterable<ActionAnalysisMetadata> getRegisteredActions() {
       return ImmutableList.of();
     }
 

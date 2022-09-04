@@ -62,16 +62,15 @@ public class PseudoAction<InfoType extends MessageLite> extends AbstractAction {
 
   @Override
   protected String computeKey() {
-    return new Fingerprint().addUUID(uuid).addBytes(getInfo().toByteArray()).hexDigestAndReset();
-  }
-
-  protected InfoType getInfo() {
-    return this.info;
+    return new Fingerprint()
+        .addUUID(uuid)
+        .addBytes(info.toByteArray())
+        .hexDigestAndReset();
   }
 
   @Override
   public ExtraActionInfo.Builder getExtraActionInfo() {
-    return super.getExtraActionInfo().setExtension(infoExtension, getInfo());
+    return super.getExtraActionInfo().setExtension(infoExtension, info);
   }
 
   public static Artifact getDummyOutput(RuleContext ruleContext) {

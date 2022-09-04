@@ -193,9 +193,6 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       execLocally(spawn, actionExecutionContext, actionCache, actionKey);
       return;
     }
-    if (executor.reportsSubcommands()) {
-      executor.reportSubcommand(spawn);
-    }
     executor.getEventBus().post(
         ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "remote"));
 

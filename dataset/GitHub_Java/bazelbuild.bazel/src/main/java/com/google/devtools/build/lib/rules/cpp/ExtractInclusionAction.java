@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import java.io.IOException;
 
@@ -66,8 +67,8 @@ final class ExtractInclusionAction extends AbstractAction {
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    IncludeScanningContext context =
-        actionExecutionContext.getContext(IncludeScanningContext.class);
+    Executor executor = actionExecutionContext.getExecutor();
+    IncludeScanningContext context = executor.getContext(IncludeScanningContext.class);
     try {
       context.extractIncludes(actionExecutionContext, this, getPrimaryInput(),
           getPrimaryOutput());

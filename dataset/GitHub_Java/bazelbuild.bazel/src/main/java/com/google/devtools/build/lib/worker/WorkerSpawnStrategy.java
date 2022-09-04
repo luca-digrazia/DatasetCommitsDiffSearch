@@ -53,11 +53,14 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.protobuf.ByteString;
-import com.google.protobuf.InvalidProtocolBufferException;
+import java.io.ByteArrayOutputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -74,16 +77,100 @@ import java.util.regex.Pattern;
 )
 public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
 
+  /**
+   * An input stream filter that records the first X bytes read from its wrapped stream.
+   *
+   * <p>The number bytes to record can be set via {@link #startRecording(int)}}, which also discards
+   * any already recorded data. The recorded data can be retrieved via {@link
+   * #getRecordedDataAsString(Charset)}.
+   */
+  private static final class RecordingInputStream extends FilterInputStream {
+    private static final Pattern NON_PRINTABLE_CHARS =
+        Pattern.compile("[^\\p{Print}\\t\\r\\n]", Pattern.UNICODE_CHARACTER_CLASS);
+
+    private ByteArrayOutputStream recordedData;
+    private int maxRecordedSize;
+
+    protected RecordingInputStream(InputStream in) {
+      super(in);
+    }
+
+    /**
+     * Returns the maximum number of bytes that can still be recorded in our buffer (but not more
+     * than {@code size}).
+     */
+    private int getRecordableBytes(int size) {
+      if (recordedData == null) {
+        return 0;
+      }
+      return Math.min(maxRecordedSize - recordedData.size(), size);
+    }
+
+    @Override
+    public int read() throws IOException {
+      int bytesRead = super.read();
+      if (getRecordableBytes(bytesRead) > 0) {
+        recordedData.write(bytesRead);
+      }
+      return bytesRead;
+    }
+
+    @Override
+    public int read(byte[] b) throws IOException {
+      int bytesRead = super.read(b);
+      int recordableBytes = getRecordableBytes(bytesRead);
+      if (recordableBytes > 0) {
+        recordedData.write(b, 0, recordableBytes);
+      }
+      return bytesRead;
+    }
+
+    @Override
+    public int read(byte[] b, int off, int len) throws IOException {
+      int bytesRead = super.read(b, off, len);
+      int recordableBytes = getRecordableBytes(bytesRead);
+      if (recordableBytes > 0) {
+        recordedData.write(b, off, recordableBytes);
+      }
+      return bytesRead;
+    }
+
+    public void startRecording(int maxSize) {
+      recordedData = new ByteArrayOutputStream(maxSize);
+      maxRecordedSize = maxSize;
+    }
+
+    /**
+     * Reads whatever remaining data is available on the input stream if we still have space left in
+     * the recording buffer, in order to maximize the usefulness of the recorded data for the
+     * caller.
+     */
+    public void readRemaining() {
+      try {
+        byte[] dummy = new byte[getRecordableBytes(available())];
+        read(dummy);
+      } catch (IOException e) {
+        // Ignore.
+      }
+    }
+
+    /**
+     * Returns the recorded data as a string, where non-printable characters are replaced with a '?'
+     * symbol.
+     */
+    public String getRecordedDataAsString(Charset charsetName) throws UnsupportedEncodingException {
+      String recordedString = recordedData.toString(charsetName.name());
+      return NON_PRINTABLE_CHARS.matcher(recordedString).replaceAll("?").trim();
+    }
+  }
+
   public static final String ERROR_MESSAGE_PREFIX =
       "Worker strategy cannot execute this %s action, ";
   public static final String REASON_NO_FLAGFILE =
-      "because the command-line arguments do not contain at least one @flagfile or --flagfile=";
+      "because the last argument does not contain a @flagfile";
   public static final String REASON_NO_TOOLS = "because the action has no tools";
   public static final String REASON_NO_EXECUTION_INFO =
       "because the action's execution info does not contain 'supports-workers=1'";
-
-  /** Pattern for @flagfile.txt and --flagfile=flagfile.txt */
-  private static final Pattern FLAG_FILE_PATTERN = Pattern.compile("(?:@|--?flagfile=)(.+)");
 
   private final WorkerPool workers;
   private final Path execRoot;
@@ -154,22 +241,11 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       executor.reportSubcommand(spawn);
     }
 
-    // We assume that the spawn to be executed always gets at least one @flagfile.txt or
-    // --flagfile=flagfile.txt argument, which contains the flags related to the work itself (as
-    // opposed to start-up options for the executed tool). Thus, we can extract those elements from
-    // its args and put them into the WorkRequest instead.
-    List<String> flagfiles = new ArrayList<>();
-    List<String> startupArgs = new ArrayList<>();
-
-    for (String arg : spawn.getArguments()) {
-      if (FLAG_FILE_PATTERN.matcher(arg).matches()) {
-        flagfiles.add(arg);
-      } else {
-        startupArgs.add(arg);
-      }
-    }
-
-    if (flagfiles.isEmpty()) {
+    // We assume that the spawn to be executed always gets a @flagfile argument, which contains the
+    // flags related to the work itself (as opposed to start-up options for the executed tool).
+    // Thus, we can extract the last element from its args (which will be the @flagfile), expand it
+    // and put that into the WorkRequest instead.
+    if (!Iterables.getLast(spawn.getArguments()).startsWith("@")) {
       throw new UserExecException(
           String.format(ERROR_MESSAGE_PREFIX + REASON_NO_FLAGFILE, spawn.getMnemonic()));
     }
@@ -183,7 +259,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
 
     ImmutableList<String> args =
         ImmutableList.<String>builder()
-            .addAll(startupArgs)
+            .addAll(spawn.getArguments().subList(0, spawn.getArguments().size() - 1))
             .add("--persistent_worker")
             .addAll(
                 MoreObjects.firstNonNull(
@@ -211,9 +287,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
               writeOutputFiles != null);
 
       WorkRequest.Builder requestBuilder = WorkRequest.newBuilder();
-      for (String flagfile : flagfiles) {
-        expandArgument(requestBuilder, flagfile);
-      }
+      expandArgument(requestBuilder, Iterables.getLast(spawn.getArguments()));
 
       List<ActionInput> inputs =
           ActionInputHelper.expandArtifacts(
@@ -255,8 +329,7 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
 
   /**
    * Recursively expands arguments by replacing @filename args with the contents of the referenced
-   * files. The @ itself can be escaped with @@. This deliberately does not expand --flagfile= style
-   * arguments, because we want to get rid of the expansion entirely at some point in time.
+   * files. The @ itself can be escaped with @@.
    *
    * @param requestBuilder the WorkRequest.Builder that the arguments should be added to.
    * @param arg the argument to expand.
@@ -295,21 +368,16 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       RecordingInputStream recordingStream = new RecordingInputStream(worker.getInputStream());
       recordingStream.startRecording(4096);
       try {
-        // response can be null when the worker has already closed stdout at this point and thus the
-        // InputStream is at EOF.
         response = WorkResponse.parseDelimitedFrom(recordingStream);
-      } catch (InvalidProtocolBufferException e) {
+      } catch (IOException e2) {
         // If protobuf couldn't parse the response, try to print whatever the failing worker wrote
         // to stdout - it's probably a stack trace or some kind of error message that will help the
         // user figure out why the compiler is failing.
         recordingStream.readRemaining();
-        ErrorMessage errorMessage =
-            ErrorMessage.builder()
-                .message("Worker process returned an unparseable WorkResponse:")
-                .logText(recordingStream.getRecordedDataAsString(Charsets.UTF_8))
-                .build();
-        eventHandler.handle(Event.warn(errorMessage.toString()));
-        throw e;
+        String data = recordingStream.getRecordedDataAsString(Charsets.UTF_8);
+        eventHandler.handle(
+            Event.warn("Worker process returned an unparseable WorkResponse:\n" + data));
+        throw e2;
       }
 
       if (writeOutputFiles != null
@@ -320,15 +388,9 @@ public final class WorkerSpawnStrategy implements SandboxedSpawnActionContext {
       worker.finishExecution(key);
 
       if (response == null) {
-        ErrorMessage errorMessage =
-            ErrorMessage.builder()
-                .message(
-                    "Worker process did not return a WorkResponse. This is usually caused by a bug"
-                        + " in the worker, thus dumping its log file for debugging purposes:")
-                .logFile(worker.getLogFile())
-                .logSizeLimit(4096)
-                .build();
-        throw new UserExecException(errorMessage.toString());
+        throw new UserExecException(
+            "Worker process did not return a WorkResponse. This is probably caused by a "
+                + "bug in the worker, writing unexpected other data to stdout.");
       }
     } catch (IOException e) {
       if (worker != null) {

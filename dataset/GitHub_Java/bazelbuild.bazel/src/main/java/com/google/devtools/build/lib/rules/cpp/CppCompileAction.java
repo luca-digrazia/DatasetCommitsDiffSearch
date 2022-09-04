@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
-import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
@@ -168,6 +167,7 @@ public class CppCompileAction extends AbstractAction
   public static final String CLIF_MATCH = "clif-match";
 
   private final ImmutableMap<String, String> localShellEnvironment;
+  private final boolean isCodeCoverageEnabled;
   protected final Artifact outputFile;
   private final Artifact sourceFile;
   private final Label sourceLabel;
@@ -294,6 +294,7 @@ public class CppCompileAction extends AbstractAction
       @Nullable Artifact dwoFile,
       Artifact optionalSourceFile,
       ImmutableMap<String, String> localShellEnvironment,
+      boolean isCodeCoverageEnabled,
       CppConfiguration cppConfiguration,
       CppCompilationContext context,
       Class<? extends CppCompileActionContext> actionContext,
@@ -314,6 +315,7 @@ public class CppCompileAction extends AbstractAction
         CollectionUtils.asListWithoutNulls(
             outputFile, (dotdFile == null ? null : dotdFile.artifact()), gcnoFile, dwoFile));
     this.localShellEnvironment = localShellEnvironment;
+    this.isCodeCoverageEnabled = isCodeCoverageEnabled;
     this.sourceLabel = sourceLabel;
     this.sourceFile = sourceFile;
     this.outputFile = Preconditions.checkNotNull(outputFile);
@@ -695,9 +697,7 @@ public class CppCompileAction extends AbstractAction
   @Override
   public ImmutableMap<String, String> getEnvironment() {
     Map<String, String> environment = new LinkedHashMap<>(localShellEnvironment);
-    if (!getExecutionInfo().containsKey(ExecutionRequirements.REQUIRES_DARWIN)) {
-      // Linux: this prevents gcc/clang from writing the unpredictable (and often irrelevant) value
-      // of getcwd() into the debug info. Not applicable to Darwin or Windows, which have no /proc.
+    if (isCodeCoverageEnabled) {
       environment.put("PWD", "/proc/self/cwd");
     }
 

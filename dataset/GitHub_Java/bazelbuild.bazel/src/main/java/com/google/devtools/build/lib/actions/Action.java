@@ -89,31 +89,32 @@ public interface Action extends ActionExecutionMetadata, Describable {
   void prepare(Path execRoot) throws IOException;
 
   /**
-   * Executes this action; called by the Builder when all of this Action's inputs have been
-   * successfully created. (Behaviour is undefined if the prerequisites are not up to date.) This
-   * method <i>actually does the work of the Action, unconditionally</i>; in other words, it is
-   * invoked by the Builder only when dependency analysis has deemed it necessary.
+   * Executes this action; called by the Builder when all of this Action's
+   * inputs have been successfully created.  (Behaviour is undefined if the
+   * prerequisites are not up to date.)  This method <i>actually does the work
+   * of the Action, unconditionally</i>; in other words, it is invoked by the
+   * Builder only when dependency analysis has deemed it necessary.</p>
    *
-   * <p>The framework guarantees that the output directory for each file in <code>getOutputs()
-   * </code> has already been created, and will check to ensure that each of those files is indeed
-   * created.
+   * <p>The framework guarantees that the output directory for each file in
+   * <code>getOutputs()</code> has already been created, and will check to
+   * ensure that each of those files is indeed created.</p>
    *
-   * <p>Implementations of this method should try to honour the {@link java.lang.Thread#interrupted}
-   * contract: if an interrupt is delivered to the thread in which execution occurs, the action
-   * should detect this on a best-effort basis and terminate as quickly as possible by throwing an
+   * <p>Implementations of this method should try to honour the {@link
+   * java.lang.Thread#interrupted} contract: if an interrupt is delivered to
+   * the thread in which execution occurs, the action should detect this on a
+   * best-effort basis and terminate as quickly as possible by throwing an
    * ActionExecutionException.
    *
-   * <p>Action execution must be ThreadCompatible in order to be safely used with a concurrent
-   * Builder implementation such as ParallelBuilder.
+   * <p>Action execution must be ThreadCompatible in order to be safely used
+   * with a concurrent Builder implementation such as ParallelBuilder.
    *
-   * @param actionExecutionContext services in the scope of the action, like the output and error
-   *     streams to use for messages arising during action execution
-   * @return returns an ActionResult containing action execution metadata
-   * @throws ActionExecutionException if execution fails for any reason
+   * @param actionExecutionContext Services in the scope of the action, like the output and error
+   *   streams to use for messages arising during action execution.
+   * @throws ActionExecutionException if execution fails for any reason.
    * @throws InterruptedException
    */
   @ConditionallyThreadCompatible
-  ActionResult execute(ActionExecutionContext actionExecutionContext)
+  void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException;
 
   /**
@@ -184,20 +185,18 @@ public interface Action extends ActionExecutionMetadata, Describable {
    */
   boolean showsOutputUnconditionally();
 
-  boolean canRemoveAfterExecution();
-
   /**
-   * Returns true if an {@link com.google.devtools.build.lib.analysis.extra.ExtraAction} action can
-   * be attached to this action. If not, extra actions should not be attached to this action.
+   * Returns true if an {@link com.google.devtools.build.lib.rules.extra.ExtraAction} action can be
+   * attached to this action. If not, extra actions should not be attached to this action.
    */
   boolean extraActionCanAttach();
 
   /**
-   * Called by {@link com.google.devtools.build.lib.analysis.extra.ExtraAction} at execution time to
+   * Called by {@link com.google.devtools.build.lib.rules.extra.ExtraAction} at execution time to
    * extract information from this action into a protocol buffer to be used by extra_action rules.
    *
-   * <p>As this method is called from the ExtraAction, make sure it is ok to call this method from a
-   * different thread than the one this action is executed on.
+   * <p>As this method is called from the ExtraAction, make sure it is ok to call this method from
+   * a different thread than the one this action is executed on.
    */
-  ExtraActionInfo.Builder getExtraActionInfo() throws CommandLineExpansionException;
+  ExtraActionInfo.Builder getExtraActionInfo();
 }
