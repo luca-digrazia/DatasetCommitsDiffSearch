@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 public final class BazelAnalysisMock extends AnalysisMock {
@@ -94,8 +95,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         ")",
         "java_runtime(name = 'jdk', srcs = [])",
         "java_runtime(name = 'host_jdk', srcs = [])",
-        "java_runtime(name = 'remote_jdk', srcs = [])",
-        "java_runtime(name = 'remote_jdk10', srcs = [])",
         "java_runtime_alias(name = 'current_java_runtime')",
         // This isn't actually the host runtime, but will do. This way, we don't need to pull in the
         // Skylark implementation of the java_host_runtime_alias rule.
@@ -139,7 +138,7 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "filegroup(name = 'coverage_report_generator', srcs = ['coverage_report_generator.sh'])");
 
     config.create(
-        "/bazel_tools_workspace/tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator/BUILD",
+        "/bazel_tools_workspace/tools/test/LcovMerger/java/com/google/devtools/lcovmerger/BUILD",
         "filegroup(name='srcs', srcs = glob(['**']))",
         "filegroup(name='Main', srcs = ['Main.java'])");
 
@@ -232,7 +231,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "    proguard = ':ProGuard',",
         "    shrinked_android_jar = ':shrinkedAndroid.jar',",
         "    zipalign = ':zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
         ")",
         "filegroup(name = 'android_runtime_jar', srcs = ['android.jar'])",
         "filegroup(name = 'dx_binary', srcs = ['dx_binary.jar'])");
@@ -322,7 +320,12 @@ public final class BazelAnalysisMock extends AnalysisMock {
 
   @Override
   public ConfiguredRuleClassProvider createRuleClassProvider() {
-    return TestRuleClassProvider.getRuleClassProvider(true);
+    return TestRuleClassProvider.getRuleClassProvider();
+  }
+
+  @Override
+  public Collection<String> getOptionOverrides() {
+    return ImmutableList.of();
   }
 
   @Override

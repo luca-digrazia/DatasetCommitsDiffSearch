@@ -26,8 +26,8 @@ import com.google.devtools.build.lib.packages.util.LoadingMock;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.packages.util.MockPythonSupport;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
-import com.google.devtools.build.lib.rules.cpp.CcSkyframeSupportFunction;
 import com.google.devtools.build.lib.rules.cpp.CcSkyframeSupportValue;
+import com.google.devtools.build.lib.rules.cpp.CcSupportFunction;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -42,6 +42,7 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -108,6 +109,8 @@ public abstract class AnalysisMock extends LoadingMock {
   @Override
   public abstract ConfiguredRuleClassProvider createRuleClassProvider();
 
+  public abstract Collection<String> getOptionOverrides();
+
   public abstract boolean isThisBazel();
 
   public abstract MockCcSupport ccSupport();
@@ -133,7 +136,7 @@ public abstract class AnalysisMock extends LoadingMock {
         SkyFunctions.REPOSITORY,
         new RepositoryLoaderFunction(),
         CcSkyframeSupportValue.SKYFUNCTION,
-        new CcSkyframeSupportFunction(directories));
+        new CcSupportFunction(directories));
   }
 
   public static class Delegate extends AnalysisMock {
@@ -186,6 +189,11 @@ public abstract class AnalysisMock extends LoadingMock {
     @Override
     public MockPythonSupport pySupport() {
       return delegate.pySupport();
+    }
+
+    @Override
+    public Collection<String> getOptionOverrides() {
+      return delegate.getOptionOverrides();
     }
 
     @Override
