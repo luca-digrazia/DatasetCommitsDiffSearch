@@ -33,6 +33,7 @@ import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.remoteexecution.v1test.Digest;
+import com.google.protobuf.ByteString;
 import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
 import io.grpc.Channel;
@@ -49,8 +50,6 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -60,8 +59,6 @@ import javax.annotation.concurrent.GuardedBy;
  * <p>Users must call {@link #shutdown()} before exiting.
  */
 final class ByteStreamUploader {
-
-  private static final Logger logger = Logger.getLogger(ByteStreamUploader.class.getName());
 
   private final String instanceName;
   private final Channel channel;
@@ -111,7 +108,7 @@ final class ByteStreamUploader {
   }
 
   /**
-   * Uploads a BLOB, as provided by the {@link Chunker}, to the remote {@code
+   * Uploads a BLOB, as provided by the {@link Chunker.SingleSourceBuilder}, to the remote {@code
    * ByteStream} service. The call blocks until the upload is complete, or throws an {@link
    * Exception} in case of error.
    *
@@ -124,9 +121,9 @@ final class ByteStreamUploader {
    * @throws IOException when reading of the {@link Chunker}s input source fails
    * @throws RetryException when the upload failed after a retry
    */
-  public void uploadBlob(Chunker chunker)
+  public void uploadBlob(Chunker.SingleSourceBuilder chunkerBuilder)
       throws IOException, InterruptedException {
-    uploadBlobs(singletonList(chunker));
+    uploadBlobs(singletonList(chunkerBuilder));
   }
 
   /**
@@ -144,12 +141,12 @@ final class ByteStreamUploader {
    * @throws IOException when reading of the {@link Chunker}s input source fails
    * @throws RetryException when the upload failed after a retry
    */
-  public void uploadBlobs(Iterable<Chunker> chunkers)
+  public void uploadBlobs(Iterable<Chunker.SingleSourceBuilder> chunkerBuilders)
       throws IOException, InterruptedException {
     List<ListenableFuture<Void>> uploads = new ArrayList<>();
 
-    for (Chunker chunker : chunkers) {
-      uploads.add(uploadBlobAsync(chunker));
+    for (Chunker.SingleSourceBuilder chunkerBuilder : chunkerBuilders) {
+      uploads.add(uploadBlobAsync(chunkerBuilder));
     }
 
     try {
@@ -192,9 +189,9 @@ final class ByteStreamUploader {
   }
 
   @VisibleForTesting
-  ListenableFuture<Void> uploadBlobAsync(Chunker chunker)
+  ListenableFuture<Void> uploadBlobAsync(Chunker.SingleSourceBuilder chunkerBuilder)
       throws IOException {
-    Digest digest = checkNotNull(chunker.digest());
+    Digest digest = checkNotNull(chunkerBuilder.getDigest());
 
     synchronized (lock) {
       checkState(!isShutdown, "Must not call uploadBlobs after shutdown.");
@@ -210,7 +207,7 @@ final class ByteStreamUploader {
             },
             MoreExecutors.directExecutor());
         startAsyncUploadWithRetry(
-            chunker, retrier.newBackoff(), (SettableFuture<Void>) uploadResult);
+            chunkerBuilder, retrier.newBackoff(), (SettableFuture<Void>) uploadResult);
         uploadsInProgress.put(digest, uploadResult);
       }
       return uploadResult;
@@ -225,7 +222,7 @@ final class ByteStreamUploader {
   }
 
   private void startAsyncUploadWithRetry(
-      Chunker chunker,
+      Chunker.SingleSourceBuilder chunkerBuilder,
       Retrier.Backoff backoffTimes,
       SettableFuture<Void> overallUploadResult) {
 
@@ -245,13 +242,13 @@ final class ByteStreamUploader {
               RetryException error = new RetryException(cause, backoffTimes.getRetryAttempts());
               overallUploadResult.setException(error);
             } else {
-              retryAsyncUpload(nextDelayMillis, chunker, backoffTimes, overallUploadResult);
+              retryAsyncUpload(nextDelayMillis, chunkerBuilder, backoffTimes, overallUploadResult);
             }
           }
 
           private void retryAsyncUpload(
               long nextDelayMillis,
-              Chunker chunker,
+              Chunker.SingleSourceBuilder chunkerBuilder,
               Retrier.Backoff backoffTimes,
               SettableFuture<Void> overallUploadResult) {
             try {
@@ -259,7 +256,7 @@ final class ByteStreamUploader {
                   retryService.schedule(
                       () ->
                           startAsyncUploadWithRetry(
-                              chunker, backoffTimes, overallUploadResult),
+                              chunkerBuilder, backoffTimes, overallUploadResult),
                       nextDelayMillis,
                       MILLISECONDS);
               // In case the scheduled execution errors, we need to notify the overallUploadResult.
@@ -281,8 +278,9 @@ final class ByteStreamUploader {
           }
         };
 
+    Chunker chunker;
     try {
-      chunker.reset();
+      chunker = chunkerBuilder.build();
     } catch (IOException e) {
       overallUploadResult.setException(e);
       return;
@@ -386,23 +384,14 @@ final class ByteStreamUploader {
                   boolean isLastChunk = !chunker.hasNext();
                   WriteRequest request =
                       requestBuilder
-                          .setData(chunk.getData())
+                          .setData(ByteString.copyFrom(chunk.getData()))
                           .setWriteOffset(chunk.getOffset())
                           .setFinishWrite(isLastChunk)
                           .build();
 
                   call.sendMessage(request);
                 } catch (IOException e) {
-                  try {
-                    chunker.reset();
-                  } catch (IOException e1) {
-                    // This exception indicates that closing the underlying input stream failed.
-                    // We don't expect this to ever happen, but don't want to swallow the exception
-                    // completely.
-                    logger.log(Level.WARNING, "Chunker failed closing data source.", e1);
-                  } finally {
-                    call.cancel("Failed to read next chunk.", e);
-                  }
+                  call.cancel("Failed to read next chunk.", e);
                 }
               }
             }
