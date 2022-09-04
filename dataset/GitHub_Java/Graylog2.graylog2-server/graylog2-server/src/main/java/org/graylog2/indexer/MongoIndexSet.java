@@ -1,18 +1,18 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.indexer;
 
@@ -21,11 +21,10 @@ import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.inject.assistedinject.Assisted;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
-import org.elasticsearch.indices.InvalidAliasNameException;
 import org.graylog2.audit.AuditActor;
 import org.graylog2.audit.AuditEventSender;
 import org.graylog2.indexer.indexset.IndexSetConfig;
+import org.graylog2.indexer.indices.HealthStatus;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.indices.TooManyAliasesException;
 import org.graylog2.indexer.indices.jobs.SetIndexReadOnlyAndCalculateRangeJob;
@@ -55,6 +54,7 @@ import java.util.stream.Collectors;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Objects.requireNonNull;
 import static org.graylog2.audit.AuditEventTypes.ES_WRITE_INDEX_UPDATE;
+import static org.graylog2.indexer.indices.Indices.checkIfHealthy;
 
 public class MongoIndexSet implements IndexSet {
     private static final Logger LOG = LoggerFactory.getLogger(MongoIndexSet.class);
@@ -63,6 +63,7 @@ public class MongoIndexSet implements IndexSet {
     public static final String DEFLECTOR_SUFFIX = "deflector";
 
     // TODO: Hardcoded archive suffix. See: https://github.com/Graylog2/graylog2-server/issues/2058
+    // TODO 3.0: Remove this in 3.0, only used for pre 2.2 backwards compatibility.
     public static final String RESTORED_ARCHIVE_SUFFIX = "_restored_archive";
 
     public interface Factory {
@@ -101,14 +102,12 @@ public class MongoIndexSet implements IndexSet {
         this.activityWriter = requireNonNull(activityWriter);
 
         // Part of the pattern can be configured in IndexSetConfig. If set we use the indexMatchPattern from the config.
-        if (isNullOrEmpty(config.indexMatchPattern())) {
-            // TODO 2.2: Is this strict enough? What happens if an index set with a prefix of "foo_0" is created?
-            this.indexPattern = Pattern.compile("^" + config.indexPrefix() + SEPARATOR + "\\d+(?:" + RESTORED_ARCHIVE_SUFFIX + ")?");
-            this.deflectorIndexPattern = Pattern.compile("^" + config.indexPrefix() + SEPARATOR + "\\d+");
-        } else {
-            this.indexPattern = Pattern.compile("^" + config.indexMatchPattern() + SEPARATOR + "\\d+(?:" + RESTORED_ARCHIVE_SUFFIX + ")?");
-            this.deflectorIndexPattern = Pattern.compile("^" + config.indexMatchPattern() + SEPARATOR + "\\d+");
-        }
+        final String indexPattern = isNullOrEmpty(config.indexMatchPattern())
+                ? Pattern.quote(config.indexPrefix())
+                : config.indexMatchPattern();
+
+        this.indexPattern = Pattern.compile("^" + indexPattern + SEPARATOR + "\\d+(?:" + RESTORED_ARCHIVE_SUFFIX + ")?");
+        this.deflectorIndexPattern = Pattern.compile("^" + indexPattern + SEPARATOR + "\\d+");
 
         // The index wildcard can be configured in IndexSetConfig. If not set we use a default one based on the index
         // prefix.
@@ -120,8 +119,8 @@ public class MongoIndexSet implements IndexSet {
     }
 
     @Override
-    public String[] getManagedIndicesNames() {
-        final Set<String> indexNames = indices.getIndexNamesAndAliases(getWriteIndexWildcard()).keySet();
+    public String[] getManagedIndices() {
+        final Set<String> indexNames = indices.getIndexNamesAndAliases(getIndexWildcard()).keySet();
         // also allow restore archives to be returned
         final List<String> result = indexNames.stream()
                 .filter(this::isManagedIndex)
@@ -136,21 +135,21 @@ public class MongoIndexSet implements IndexSet {
     }
 
     @Override
-    public String getWriteIndexWildcard() {
+    public String getIndexWildcard() {
         return indexWildcard;
     }
 
     @Override
-    public String getNewestTargetName() throws NoTargetIndexException {
-        return buildIndexName(getNewestTargetNumber());
+    public String getNewestIndex() throws NoTargetIndexException {
+        return buildIndexName(getNewestIndexNumber());
     }
 
     @VisibleForTesting
-    int getNewestTargetNumber() throws NoTargetIndexException {
-        final Set<String> indexNames = indices.getIndexNamesAndAliases(getWriteIndexWildcard()).keySet();
+    int getNewestIndexNumber() throws NoTargetIndexException {
+        final Set<String> indexNames = indices.getIndexNamesAndAliases(getIndexWildcard()).keySet();
 
         if (indexNames.isEmpty()) {
-            throw new NoTargetIndexException();
+            throw new NoTargetIndexException("Couldn't find any indices for wildcard " + getIndexWildcard());
         }
 
         int highestIndexNumber = -1;
@@ -166,7 +165,7 @@ public class MongoIndexSet implements IndexSet {
         }
 
         if (highestIndexNumber == -1) {
-            throw new NoTargetIndexException();
+            throw new NoTargetIndexException("Couldn't get newest index number for indices " + indexNames);
         }
 
         return highestIndexNumber;
@@ -194,18 +193,18 @@ public class MongoIndexSet implements IndexSet {
 
     @VisibleForTesting
     boolean isGraylogDeflectorIndex(final String indexName) {
-        return !isNullOrEmpty(indexName) && !isDeflectorAlias(indexName) && deflectorIndexPattern.matcher(indexName).matches();
+        return !isNullOrEmpty(indexName) && !isWriteIndexAlias(indexName) && deflectorIndexPattern.matcher(indexName).matches();
     }
 
     @Override
     @Nullable
-    public String getCurrentActualTargetIndex() throws TooManyAliasesException {
-        return indices.aliasTarget(getWriteIndexAlias());
+    public String getActiveWriteIndex() throws TooManyAliasesException {
+        return indices.aliasTarget(getWriteIndexAlias()).orElse(null);
     }
 
     @Override
-    public Map<String, Set<String>> getAllDeflectorAliases() {
-        final Map<String, Set<String>> indexNamesAndAliases = indices.getIndexNamesAndAliases(getWriteIndexWildcard());
+    public Map<String, Set<String>> getAllIndexAliases() {
+        final Map<String, Set<String>> indexNamesAndAliases = indices.getIndexNamesAndAliases(getIndexWildcard());
 
         // filter out the restored archives from the result set
         return indexNamesAndAliases.entrySet().stream()
@@ -224,13 +223,13 @@ public class MongoIndexSet implements IndexSet {
     }
 
     @Override
-    public boolean isDeflectorAlias(String index) {
+    public boolean isWriteIndexAlias(String index) {
         return getWriteIndexAlias().equals(index);
     }
 
     @Override
     public boolean isManagedIndex(String index) {
-        return !isNullOrEmpty(index) && !isDeflectorAlias(index) && indexPattern.matcher(index).matches();
+        return !isNullOrEmpty(index) && !isWriteIndexAlias(index) && indexPattern.matcher(index).matches();
     }
 
     @Override
@@ -244,11 +243,11 @@ public class MongoIndexSet implements IndexSet {
         if (isUp()) {
             LOG.info("Found deflector alias <{}>. Using it.", getWriteIndexAlias());
         } else {
-            LOG.info("Did not find an deflector alias. Setting one up now.");
+            LOG.info("Did not find a deflector alias. Setting one up now.");
 
             // Do we have a target index to point to?
             try {
-                final String currentTarget = getNewestTargetName();
+                final String currentTarget = getNewestIndex();
                 LOG.info("Pointing to already existing index target <{}>", currentTarget);
 
                 pointTo(currentTarget);
@@ -258,8 +257,6 @@ public class MongoIndexSet implements IndexSet {
                 activityWriter.write(new Activity(msg, IndexSet.class));
 
                 cycle(); // No index, so automatically cycling to a new one.
-            } catch (InvalidAliasNameException e) {
-                LOG.error("Seems like there already is an index called <{}>", getWriteIndexAlias());
             }
         }
     }
@@ -274,7 +271,7 @@ public class MongoIndexSet implements IndexSet {
         int oldTargetNumber;
 
         try {
-            oldTargetNumber = getNewestTargetNumber();
+            oldTargetNumber = getNewestIndexNumber();
         } catch (NoTargetIndexException ex) {
             oldTargetNumber = -1;
         }
@@ -295,8 +292,9 @@ public class MongoIndexSet implements IndexSet {
             throw new RuntimeException("Could not create new target index <" + newTarget + ">.");
         }
 
-        LOG.info("Waiting for allocation of  index <{}>.", newTarget);
-        ClusterHealthStatus healthStatus = indices.waitForRecovery(newTarget);
+        LOG.info("Waiting for allocation of index <{}>.", newTarget);
+        final HealthStatus healthStatus = indices.waitForRecovery(newTarget);
+        checkIfHealthy(healthStatus, (status) -> new RuntimeException("New target index did not become healthy (target index: <" + newTarget + ">)"));
         LOG.debug("Health status of index <{}>: {}", newTarget, healthStatus);
 
         addDeflectorIndexRange(newTarget);
