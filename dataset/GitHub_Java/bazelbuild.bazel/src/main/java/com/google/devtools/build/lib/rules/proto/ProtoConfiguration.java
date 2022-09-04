@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -100,17 +101,6 @@ public class ProtoConfiguration extends Fragment {
     public Label protoToolchainForJava;
 
     @Option(
-      name = "proto_toolchain_for_j2objc",
-      defaultValue = "@bazel_tools//tools/j2objc:j2objc_proto_toolchain",
-      category = "flags",
-      converter = BuildConfiguration.EmptyToNullLabelConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      help = "Label of proto_lang_toolchain() which describes how to compile j2objc protos"
-    )
-    public Label protoToolchainForJ2objc;
-
-    @Option(
       name = "proto_toolchain_for_cc",
       defaultValue = "@com_google_protobuf//:cc_toolchain",
       converter = BuildConfiguration.EmptyToNullLabelConverter.class,
@@ -161,7 +151,6 @@ public class ProtoConfiguration extends Fragment {
       host.experimentalProtoExtraActions = experimentalProtoExtraActions;
       host.protoCompiler = protoCompiler;
       host.protoToolchainForJava = protoToolchainForJava;
-      host.protoToolchainForJ2objc = protoToolchainForJ2objc;
       host.protoToolchainForJavaLite = protoToolchainForJavaLite;
       host.protoToolchainForCc = protoToolchainForCc;
       host.strictProtoDeps = strictProtoDeps;
@@ -176,7 +165,7 @@ public class ProtoConfiguration extends Fragment {
    */
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
-    public Fragment create(BuildOptions buildOptions)
+    public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
         throws InvalidConfigurationException {
       return new ProtoConfiguration(buildOptions.get(Options.class));
     }
@@ -224,10 +213,6 @@ public class ProtoConfiguration extends Fragment {
 
   public Label protoToolchainForJava() {
     return options.protoToolchainForJava;
-  }
-
-  public Label protoToolchainForJ2objc() {
-    return options.protoToolchainForJ2objc;
   }
 
   public Label protoToolchainForJavaLite() {
