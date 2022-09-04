@@ -52,10 +52,7 @@ import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -141,7 +138,6 @@ public class ActionExecutionFunction implements SkyFunction {
       // the value of the flag changes. We are doing this conditionally only in Bazel if remote
       // execution is available in order to not introduce additional skyframe edges in Blaze.
       PrecomputedValue.REMOTE_OUTPUTS_MODE.get(env);
-      PrecomputedValue.REMOTE_DEFAULT_PLATFORM_PROPERTIES.get(env);
     }
 
     // Look up the parts of the environment that influence the action.
@@ -217,21 +213,15 @@ public class ActionExecutionFunction implements SkyFunction {
       Preconditions.checkState(!env.valuesMissing(), "%s %s", action, state);
     }
     CheckInputResults checkedInputs = null;
+    Iterable<Artifact> allInputs = state.allInputs.getAllInputs();
     @Nullable
     ImmutableSet<Artifact> mandatoryInputs =
         action.discoversInputs() ? ImmutableSet.copyOf(action.getMandatoryInputs()) : null;
-
-    int nestedSetSizeThreshold = skyframeActionExecutor.getNestedSetAsSkyKeyThreshold();
-    Iterable<Artifact> allInputs =
-        state.allInputs.getAllInputs(/* maybeAsNestedSet= */ nestedSetSizeThreshold > 0);
-
+    Iterable<? extends SkyKey> inputDepKeys = Artifact.keys(allInputs);
+    // Declare deps on known inputs to action. We do this unconditionally to maintain our
+    // invariant of asking for the same deps each build.
     Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>> inputDeps =
-        getInputDeps(env, nestedSetSizeThreshold, allInputs);
-    // If there's a missing value.
-    if (inputDeps == null) {
-      return null;
-    }
-
+        env.getValuesOrThrow(inputDepKeys, IOException.class, ActionExecutionException.class);
     try {
       if (previousExecution == null && !state.hasArtifactData()) {
         // Do we actually need to find our metadata?
@@ -268,8 +258,7 @@ public class ActionExecutionFunction implements SkyFunction {
       Preconditions.checkState(!state.hasArtifactData(), "%s %s", state, action);
       state.inputArtifactData = checkedInputs.actionInputMap;
       state.expandedArtifacts = checkedInputs.expandedArtifacts;
-      state.filesetsInsideRunfiles = checkedInputs.filesetsInsideRunfiles;
-      state.topLevelFilesets = checkedInputs.topLevelFilesets;
+      state.expandedFilesets = checkedInputs.expandedFilesets;
       if (skyframeActionExecutor.actionFileSystemType().isEnabled()) {
         state.actionFileSystem =
             skyframeActionExecutor.createActionFileSystem(
@@ -319,43 +308,6 @@ public class ActionExecutionFunction implements SkyFunction {
       topDownActionCache.put(sketch, result);
     }
     return result;
-  }
-
-  /**
-   * Evaluate the supplied input deps. Declare deps on known inputs to action. We do this
-   * unconditionally to maintain our invariant of asking for the same deps each build.
-   *
-   * <p>TODO(b/142300168): Address potential dependency inconsistency if the threshold is changed
-   * between runs.
-   */
-  private static Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>> getInputDeps(
-      Environment env, int nestedSetSizeThreshold, Iterable<Artifact> allInputs)
-      throws InterruptedException {
-    if (evalInputsAsNestedSet(nestedSetSizeThreshold, allInputs)) {
-      SkyValue artifactNestedSetValue =
-          env.getValue(
-              new ArtifactNestedSetKey(
-                  NestedSetView.getRawChildren((NestedSet<Artifact>) allInputs)));
-      if (env.valuesMissing()) {
-        return null;
-      }
-      return ((ArtifactNestedSetValue) artifactNestedSetValue).getArtifactToSkyValueMap();
-    }
-
-    return env.getValuesOrThrow(
-        Artifact.keys(allInputs), IOException.class, ActionExecutionException.class);
-  }
-
-  /**
-   * Do one traversal of the set to get the size. The traversal costs CPU time so only do it when
-   * necessary. The default case (without --experimental_nestedset_as_skykey_threshold) will ignore
-   * this path.
-   */
-  private static boolean evalInputsAsNestedSet(
-      int nestedSetSizeThreshold, Iterable<Artifact> inputs) {
-    return inputs instanceof NestedSet
-        && nestedSetSizeThreshold > 0
-        && (((NestedSet<Artifact>) inputs).memoizedFlattenAndGetSize() >= nestedSetSizeThreshold);
   }
 
   private Environment getProgressEventSuppressingEnvironmentIfPreviouslyCompleted(
@@ -557,27 +509,10 @@ public class ActionExecutionFunction implements SkyFunction {
       this.keysRequested = keysRequested;
     }
 
-    Iterable<Artifact> getAllInputs(boolean maybeAsNestedSet) {
-      if (maybeAsNestedSet && defaultInputs instanceof NestedSet) {
-        return getAllInputsAsNestedSet();
-      }
+    Iterable<Artifact> getAllInputs() {
       return actionCacheInputs == null
           ? defaultInputs
           : Iterables.concat(defaultInputs, actionCacheInputs);
-    }
-
-    private NestedSet<Artifact> getAllInputsAsNestedSet() {
-      Preconditions.checkState(defaultInputs instanceof NestedSet);
-      if (actionCacheInputs == null) {
-        return (NestedSet<Artifact>) defaultInputs;
-      }
-
-      NestedSetBuilder<Artifact> builder = new NestedSetBuilder<>(Order.STABLE_ORDER);
-      // actionCacheInputs is never a NestedSet.
-      builder.addAll(actionCacheInputs);
-      builder.addTransitive((NestedSet<Artifact>) defaultInputs);
-
-      return builder.build();
     }
   }
 
@@ -676,17 +611,6 @@ public class ActionExecutionFunction implements SkyFunction {
           skyframeActionExecutor.getSharedActionCallback(
               env.getListener(), state.discoveredInputs != null, action, actionLookupData));
     }
-
-    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets;
-    if (state.topLevelFilesets == null || state.topLevelFilesets.isEmpty()) {
-      expandedFilesets = ImmutableMap.copyOf(state.filesetsInsideRunfiles);
-    } else {
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsMap =
-          new HashMap<>(state.filesetsInsideRunfiles);
-      filesetsMap.putAll(state.topLevelFilesets);
-      expandedFilesets = ImmutableMap.copyOf(filesetsMap);
-    }
-
     // The metadataHandler may be recreated if we discover inputs.
     ArtifactPathResolver pathResolver =
         ArtifactPathResolver.createPathResolver(
@@ -694,13 +618,11 @@ public class ActionExecutionFunction implements SkyFunction {
     ActionMetadataHandler metadataHandler =
         new ActionMetadataHandler(
             state.inputArtifactData,
-            expandedFilesets,
             /* missingArtifactsAllowed= */ action.discoversInputs(),
             action.getOutputs(),
             tsgm.get(),
             pathResolver,
-            newOutputStore(state),
-            skyframeActionExecutor.getExecRoot());
+            newOutputStore(state));
     // We only need to check the action cache if we haven't done it on a previous run.
     if (!state.hasCheckedActionCache()) {
       state.token =
@@ -787,18 +709,40 @@ public class ActionExecutionFunction implements SkyFunction {
           metadataHandler =
               new ActionMetadataHandler(
                   state.inputArtifactData,
-                  expandedFilesets,
                   /*missingArtifactsAllowed=*/ false,
                   action.getOutputs(),
                   tsgm.get(),
                   pathResolver,
-                  newOutputStore(state),
-                  skyframeActionExecutor.getExecRoot());
+                  newOutputStore(state));
           // Set the MetadataHandler to accept output information.
           metadataHandler.discardOutputMetadata();
       }
     }
 
+    // Make sure this is a regular HashMap rather than ImmutableMapBuilder so that we are safe
+    // in case of collisions.
+    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings = new HashMap<>();
+    for (Artifact actionInput : action.getInputs()) {
+      if (!actionInput.isFileset()) {
+        continue;
+      }
+
+      ImmutableList<FilesetOutputSymlink> mapping =
+          ActionInputMapHelper.getFilesets(env, (Artifact.SpecialArtifact) actionInput);
+      if (mapping == null) {
+        return null;
+      }
+      filesetMappings.put(actionInput, mapping);
+    }
+
+    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets =
+        ImmutableMap.copyOf(filesetMappings);
+
+    // Aggregate top-level Filesets with Filesets nested in Runfiles. Both should be used to update
+    // the FileSystem context.
+    state.expandedFilesets.forEach(filesetMappings::put);
+    ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets =
+        ImmutableMap.copyOf(filesetMappings);
     try {
       state.updateFileSystemContext(skyframeActionExecutor, env, metadataHandler, expandedFilesets);
     } catch (IOException e) {
@@ -818,7 +762,7 @@ public class ActionExecutionFunction implements SkyFunction {
                 : SkyframeActionExecutor.ProgressEventBehavior.EMIT,
             Collections.unmodifiableMap(state.expandedArtifacts),
             expandedFilesets,
-            ImmutableMap.copyOf(state.topLevelFilesets),
+            topLevelFilesets,
             state.actionFileSystem,
             skyframeDepsResult)) {
       return skyframeActionExecutor.executeAction(
@@ -861,7 +805,7 @@ public class ActionExecutionFunction implements SkyFunction {
         Action action,
         ActionMetadataHandler metadataHandler,
         Map<String, String> clientEnv)
-        throws InterruptedException, ActionExecutionException {
+        throws InterruptedException {
       if (action.discoversInputs()) {
         Iterable<Artifact> newInputs =
             filterKnownInputs(action.getInputs(), state.inputArtifactData);
@@ -876,19 +820,14 @@ public class ActionExecutionFunction implements SkyFunction {
             // We are in the interesting case of an action that discovered its inputs during
             // execution, and found some new ones, but the new ones were already present in the
             // graph. We must therefore cache the metadata for those new ones.
-            Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets =
-                new HashMap<>(state.filesetsInsideRunfiles);
-            expandedFilesets.putAll(state.topLevelFilesets);
             metadataHandler =
                 new ActionMetadataHandler(
                     state.inputArtifactData,
-                    expandedFilesets,
                     /*missingArtifactsAllowed=*/ false,
                     action.getOutputs(),
                     tsgm.get(),
                     metadataHandler.getArtifactPathResolver(),
-                    metadataHandler.getOutputStore(),
-                    skyframeActionExecutor.getExecRoot());
+                    metadataHandler.getOutputStore());
         }
       }
       Preconditions.checkState(!env.valuesMissing(), action);
@@ -987,19 +926,15 @@ public class ActionExecutionFunction implements SkyFunction {
     /** Artifact expansion mapping for Runfiles tree and tree artifacts. */
     private final Map<Artifact, Collection<Artifact>> expandedArtifacts;
     /** Artifact expansion mapping for Filesets embedded in Runfiles. */
-    private final Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles;
-    /** Artifact expansion mapping for top level filesets. */
-    private final Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets;
+    private final Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets;
 
     public CheckInputResults(
         ActionInputMap actionInputMap,
         Map<Artifact, Collection<Artifact>> expandedArtifacts,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets) {
+        Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets) {
       this.actionInputMap = actionInputMap;
       this.expandedArtifacts = expandedArtifacts;
-      this.filesetsInsideRunfiles = filesetsInsideRunfiles;
-      this.topLevelFilesets = topLevelFilesets;
+      this.expandedFilesets = expandedFilesets;
     }
   }
 
@@ -1007,8 +942,7 @@ public class ActionExecutionFunction implements SkyFunction {
     R create(
         S actionInputMapSink,
         Map<Artifact, Collection<Artifact>> expandedArtifacts,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles,
-        Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets);
+        Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets);
   }
 
   /**
@@ -1050,8 +984,7 @@ public class ActionExecutionFunction implements SkyFunction {
         allInputs,
         mandatoryInputs,
         ignoredInputDepsSize -> new ActionInputDepOwnerMap(lostInputs),
-        (actionInputMapSink, expandedArtifacts, filesetsInsideRunfiles, topLevelFilesets) ->
-            actionInputMapSink);
+        (actionInputMapSink, expandedArtifacts, expandedFilesets) -> actionInputMapSink);
   }
 
   private static <S extends ActionInputMapSink, R> R accumulateInputs(
@@ -1074,8 +1007,7 @@ public class ActionExecutionFunction implements SkyFunction {
     S inputArtifactData = actionInputMapSinkFactory.apply(populateInputData ? inputDeps.size() : 0);
     Map<Artifact, Collection<Artifact>> expandedArtifacts =
         new HashMap<>(populateInputData ? 128 : 0);
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles = new HashMap<>();
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets = new HashMap<>();
+    Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets = new HashMap<>();
 
     ActionExecutionException firstActionExecutionException = null;
     for (Artifact input : allInputs) {
@@ -1144,13 +1076,7 @@ public class ActionExecutionFunction implements SkyFunction {
 
       if (populateInputData) {
         ActionInputMapHelper.addToMap(
-            inputArtifactData,
-            expandedArtifacts,
-            filesetsInsideRunfiles,
-            topLevelFilesets,
-            input,
-            value,
-            env);
+            inputArtifactData, expandedArtifacts, expandedFilesets, input, value, env);
       }
     }
 
@@ -1187,7 +1113,7 @@ public class ActionExecutionFunction implements SkyFunction {
           /*catastrophe=*/ false);
     }
     return accumulateInputResultsFactory.create(
-        inputArtifactData, expandedArtifacts, filesetsInsideRunfiles, topLevelFilesets);
+        inputArtifactData, expandedArtifacts, expandedFilesets);
   }
 
   private static Iterable<Artifact> filterKnownInputs(
@@ -1253,8 +1179,7 @@ public class ActionExecutionFunction implements SkyFunction {
     ActionInputMap inputArtifactData = null;
 
     Map<Artifact, Collection<Artifact>> expandedArtifacts = null;
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles = null;
-    Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets = null;
+    Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets = null;
     Token token = null;
     Iterable<Artifact> discoveredInputs = null;
     FileSystem actionFileSystem = null;
