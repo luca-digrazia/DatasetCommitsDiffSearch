@@ -25,28 +25,21 @@ import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
 import lib.ApiClient;
 import lib.ExclusiveInputException;
-import lib.metrics.Metric;
 import models.api.requests.InputLaunchRequest;
 import models.api.responses.BuffersResponse;
 import models.api.responses.NodeSummaryResponse;
 import models.api.responses.SystemOverviewResponse;
-import models.api.responses.metrics.MetricsListResponse;
 import models.api.responses.system.*;
 import models.api.responses.system.loggers.LoggerSummary;
 import models.api.responses.system.loggers.LoggersResponse;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.LoggerFactory;
 import play.Logger;
 import play.mvc.Http;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -55,25 +48,19 @@ public class Node {
 
     public interface Factory {
         Node fromSummaryResponse(NodeSummaryResponse r);
-        Node fromTransportAddress(URI transportAddress);
     }
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(Node.class);
+
     private final ApiClient api;
 
     private final Input.Factory inputFactory;
+    private final String transportAddress;
+    private final DateTime lastSeen;
+    private final String nodeId;
+    private final String shortNodeId;
 
-    private final URI transportAddress;
-    private DateTime lastSeen;
-    private DateTime lastContact;
-    private String nodeId;
-    private boolean isMaster;
-    private String shortNodeId;
-    private AtomicBoolean active = new AtomicBoolean();
-
-    private final boolean fromConfiguration;
+    private final boolean isMaster;
     private SystemOverviewResponse systemInfo;
-
-    private AtomicInteger failureCount = new AtomicInteger(0);
 
     /* for initial set up in test */
     public Node(NodeSummaryResponse r) {
@@ -85,46 +72,11 @@ public class Node {
         this.api = api;
         this.inputFactory = inputFactory;
 
-        transportAddress = normalizeUriPath(r.transportAddress);
+        transportAddress = r.transportAddress;
         lastSeen = new DateTime(r.lastSeen);
         nodeId = r.nodeId;
         shortNodeId = r.shortNodeId;
         isMaster = r.isMaster;
-        fromConfiguration = false;
-    }
-
-    @AssistedInject
-    public Node(ApiClient api, Input.Factory inputFactory, @Assisted URI transportAddress) {
-        this.api = api;
-        this.inputFactory = inputFactory;
-
-        this.transportAddress = normalizeUriPath(transportAddress);
-        lastSeen = null;
-        nodeId = null;
-        shortNodeId = "unresolved";
-        isMaster = false;
-        fromConfiguration = true;
-    }
-
-    private URI normalizeUriPath(String address) {
-        final URI uri = URI.create(address);
-        return normalizeUriPath(uri);
-    }
-
-    private URI normalizeUriPath(URI uri) {
-        if (uri.getPath() == null || uri.getPath().isEmpty()) {
-            return uri;
-        }
-        if (uri.getPath().equals("/")) {
-            try {
-                return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(), "", uri.getQuery(), uri.getFragment());
-            } catch (URISyntaxException e) { // sigh exception.
-                log.error("Could not process transportAddress {}, invalid URI syntax", uri.toASCIIString());
-                return uri;
-            }
-        }
-        log.info("Could not normalize path on node transport address, it contained some unrecognized path: {}", uri.toASCIIString());
-        return uri;
     }
 
     public BufferInfo getBufferInfo() {
@@ -169,7 +121,7 @@ public class Node {
         List<Input> inputs = Lists.newArrayList();
 
         for (InputSummaryResponse input : inputs().inputs) {
-            inputs.add(inputFactory.fromSummaryResponse(input, this));
+            inputs.add(inputFactory.fromSummaryResponse(input));
         }
 
         return inputs;
@@ -177,7 +129,7 @@ public class Node {
 
     public Input getInput(String inputId) throws IOException, APIException {
         final InputSummaryResponse inputSummaryResponse = api.get(InputSummaryResponse.class).node(this).path("/system/inputs/{0}", inputId).execute();
-        return inputFactory.fromSummaryResponse(inputSummaryResponse, this);
+        return inputFactory.fromSummaryResponse(inputSummaryResponse);
     }
 
     public int numberOfInputs() {
@@ -249,7 +201,6 @@ public class Node {
         return types;
     }
 
-    // TODO nodes should not have state beyond their activity status
     public synchronized void loadSystemInformation() {
         try {
             systemInfo = api.get(SystemOverviewResponse.class).path("/system").node(this).execute();
@@ -261,10 +212,6 @@ public class Node {
     }
 
     public String getTransportAddress() {
-        return transportAddress.toASCIIString();
-    }
-
-    public URI getTransportAddressUri() {
         return transportAddress;
     }
 
@@ -296,16 +243,6 @@ public class Node {
             loadSystemInformation();
         }
         return systemInfo.isProcessing;
-    }
-
-    public List<Metric> getMetrics(String namespace) throws APIException, IOException {
-        MetricsListResponse response = api.get(MetricsListResponse.class)
-                .path("/system/metrics/namespace/{0}", namespace)
-                .expect(200, 404)
-                .execute();
-
-
-        return response.getMetrics();
     }
 
     public void pause() throws IOException, APIException {
@@ -346,97 +283,13 @@ public class Node {
             throw new RuntimeException("Could not get inputs.", e);
         }
     }
-    public boolean isFromConfiguration() {
-        return fromConfiguration;
-    }
-
-    public void markFailure() {
-        failureCount.incrementAndGet();
-        setActive(false);
-        log.info("{} failed, marking as inactive.", this);
-    }
-
-    public int getFailureCount() {
-        return failureCount.get();
-    }
-
-    public DateTime getLastContact() {
-        return lastContact;
-    }
-
-    public void merge(Node updatedNode) {
-        log.debug("Merging node {} in this node {}", updatedNode, this);
-        this.lastSeen = updatedNode.lastSeen;
-        this.isMaster = updatedNode.isMaster;
-        this.nodeId = updatedNode.nodeId;
-        this.shortNodeId = updatedNode.shortNodeId;
-        this.setActive(updatedNode.isActive());
-    }
-
-    public void touch() {
-        this.lastContact = DateTime.now(DateTimeZone.UTC);
-        setActive(true);
-    }
-
-    public boolean isActive() {
-        return active.get();
-    }
-
-    public void setActive(boolean active) {
-        this.active.set(active);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        Node node = (Node) o;
-
-        // if both have a node id, and they are the same, the nodes are the same.
-        if (nodeId != null && node.nodeId != null) {
-            if (nodeId.equals(node.nodeId)) {
-                return true;
-            }
-        }
-        // otherwise if the transport addresses are the same, we consider the nodes to be the same.
-        if (transportAddress.equals(node.transportAddress)) return true;
-
-        // otherwise the nodes aren't the same
-        return false;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = transportAddress.hashCode();
-        result = 31 * result + (nodeId != null ? nodeId.hashCode() : 0);
-        return result;
-    }
 
     @Override
     public String toString() {
-        final StringBuilder b = new StringBuilder();
-        if (nodeId == null) {
-            b.append("UnresolvedNode {'").append(transportAddress).append("'}");
-            return b.toString();
-        }
-
-        b.append("Node {");
-        b.append("'").append(nodeId).append("'");
-        b.append(", ").append(transportAddress);
-        if (isMaster) {
-            b.append(", master");
-        }
-        if (isActive()) {
-            b.append(", active");
-        } else {
-            b.append(", inactive");
-        }
-        final int failures = getFailureCount();
-        if (failures > 0) {
-            b.append(", failed: ").append(failures).append(" times");
-        }
-        b.append("}");
-        return b.toString();
+        return "Node{" +
+                "nodeId='" + nodeId + '\'' +
+                ", transportAddress='" + transportAddress + '\'' +
+                ", isMaster=" + isMaster +
+                '}';
     }
 }
