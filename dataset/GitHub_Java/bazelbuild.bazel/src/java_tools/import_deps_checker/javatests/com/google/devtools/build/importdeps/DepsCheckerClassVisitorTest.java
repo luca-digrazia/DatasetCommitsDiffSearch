@@ -16,7 +16,8 @@ package com.google.devtools.build.importdeps;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.importdeps.ClassInfo.MemberInfo;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.importdeps.ResultCollector.MissingMember;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -71,6 +72,7 @@ public class DepsCheckerClassVisitorTest extends AbstractClassCacheTest {
   public void testMissingMembersInClient() throws IOException {
     ResultCollector collector =
         getResultCollector(
+            /*checkMissingMembers=*/ true,
             bootclasspath,
             libraryAnnotationsJar,
             libraryInterfaceJar,
@@ -78,21 +80,26 @@ public class DepsCheckerClassVisitorTest extends AbstractClassCacheTest {
             libraryExceptionJar,
             clientJar);
     assertThat(collector.getSortedMissingClassInternalNames()).isEmpty();
-    assertThat(collector.getSortedMissingMembers())
+    assertThat(
+            collector
+                .getSortedMissingMembers()
+                .stream()
+                .map(DepsCheckerClassVisitorTest::constructFullQualifiedMemberName)
+                .collect(ImmutableList.toImmutableList()))
         .containsExactly(
-            MemberInfo.create(
+            constructFullyQualifiedMemberName(
                 "com/google/devtools/build/importdeps/testdata/Library$Class1",
                 "I",
                 "Lcom/google/devtools/build/importdeps/testdata/Library$Class1;"),
-            MemberInfo.create(
+            constructFullyQualifiedMemberName(
                 "com/google/devtools/build/importdeps/testdata/Library$Class3",
                 "field",
                 "Lcom/google/devtools/build/importdeps/testdata/Library$Class4;"),
-            MemberInfo.create(
+            constructFullyQualifiedMemberName(
                 "com/google/devtools/build/importdeps/testdata/Library$Class4",
                 "createClass5",
                 "()Lcom/google/devtools/build/importdeps/testdata/Library$Class5;"),
-            MemberInfo.create(
+            constructFullyQualifiedMemberName(
                 "com/google/devtools/build/importdeps/testdata/Library$Class5",
                 "create",
                 "(Lcom/google/devtools/build/importdeps/testdata/Library$Class7;)"
@@ -100,20 +107,55 @@ public class DepsCheckerClassVisitorTest extends AbstractClassCacheTest {
         .inOrder();
   }
 
+  @Test
+  public void testMissingMembersIgnoredWhenUnchecked() throws IOException {
+    ResultCollector collector =
+        getResultCollector(
+            /*checkMissingMembers=*/ false,
+            bootclasspath,
+            libraryAnnotationsJar,
+            libraryInterfaceJar,
+            libraryWoMembersJar,
+            libraryExceptionJar,
+            clientJar);
+    assertThat(collector.isEmpty()).isTrue();
+  }
+
+  private static String constructFullQualifiedMemberName(MissingMember member) {
+    return constructFullyQualifiedMemberName(
+        member.owner().internalName(), member.memberName(), member.descriptor());
+  }
+
+  private static String constructFullyQualifiedMemberName(
+      String owner, String memberName, String descriptor) {
+    return owner + memberName + descriptor;
+  }
+
   private ImmutableList<String> getMissingClassesInClient(Path... classpath) throws IOException {
-    ResultCollector resultCollector = getResultCollector(classpath);
+    ResultCollector resultCollector = getResultCollector(/*checkMissingMembers=*/ false, classpath);
     return resultCollector.getSortedMissingClassInternalNames();
   }
 
-  private ResultCollector getResultCollector(Path... classpath) throws IOException {
+  private ResultCollector getResultCollector(boolean checkMissingMembers, Path... classpath)
+      throws IOException {
     ImmutableList<String> clientClasses =
-        ImmutableList.of(PACKAGE_NAME + "Client", PACKAGE_NAME + "Client$NestedAnnotation");
-    ResultCollector resultCollector = new ResultCollector();
-    try (ClassCache cache = new ClassCache(ImmutableList.copyOf(classpath));
+        ImmutableList.of(
+            PACKAGE_NAME + "Client",
+            PACKAGE_NAME + "Client$NestedAnnotation",
+            PACKAGE_NAME + "Client$InnerClassWithSyntheticConstructorParam");
+    ResultCollector resultCollector = new ResultCollector(checkMissingMembers);
+    try (ClassCache cache =
+            new ClassCache(
+                ImmutableSet.copyOf(classpath),
+                ImmutableSet.of(),
+                ImmutableSet.of(),
+                ImmutableSet.of(),
+                checkMissingMembers);
         ZipFile zipFile = new ZipFile(clientJar.toFile())) {
-
-      AbstractClassEntryState state = cache.getClassState("java/lang/invoke/LambdaMetafactory");
-      System.out.println(state);
+      assertThat(cache.getClassState("java/lang/invoke/LambdaMetafactory").isExistingState())
+          .isTrue();
+      AbstractClassEntryState state = cache.getClassState("java/lang/Enum");
+      assertThat(state.isExistingState()).isTrue();
       for (String clientClass : clientClasses) {
         ZipEntry entry = zipFile.getEntry(clientClass + ".class");
         try (InputStream classStream = zipFile.getInputStream(entry)) {
