@@ -100,8 +100,8 @@ public class Options<O extends OptionsBase> {
     return usage.toString();
   }
 
-  private final O options;
-  private final String[] remainingArgs;
+  private O options;
+  private String[] remainingArgs;
 
   private Options(O options, String[] remainingArgs) {
     this.options = options;
