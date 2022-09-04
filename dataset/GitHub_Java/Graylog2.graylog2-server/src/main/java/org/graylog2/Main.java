@@ -35,7 +35,6 @@ import org.graylog2.filters.BlacklistFilter;
 import org.graylog2.filters.CounterUpdateFilter;
 import org.graylog2.filters.RewriteFilter;
 import org.graylog2.filters.StreamMatcherFilter;
-import org.graylog2.filters.TokenizerFilter;
 import org.graylog2.initializers.*;
 import org.graylog2.inputs.gelf.GELFUDPInput;
 import org.graylog2.inputs.syslog.SyslogUDPInput;
@@ -126,7 +125,6 @@ public final class Main {
         server.registerInitializer(new MessageCounterInitializer(server));
         server.registerInitializer(new SyslogServerInitializer(server, configuration));
         server.registerInitializer(new MessageRetentionInitializer(server));
-        server.registerInitializer(new GraphiteInitializer(server));
         
         // Register inputs.
         if (configuration.isUseGELF()) { server.registerInput(new GELFUDPInput()); }
@@ -137,7 +135,6 @@ public final class Main {
         // Register message filters. - Passing classes here instead of objects, because we need to create a new instance in every filter. (they are stateful)
         server.registerFilter(RewriteFilter.class);
         server.registerFilter(BlacklistFilter.class);
-        if (configuration.isEnableTokenizerFilter()) { server.registerFilter(TokenizerFilter.class); }
         server.registerFilter(StreamMatcherFilter.class);
         server.registerFilter(CounterUpdateFilter.class);
 
