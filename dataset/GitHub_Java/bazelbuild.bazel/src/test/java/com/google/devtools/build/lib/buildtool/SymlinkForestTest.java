@@ -14,8 +14,11 @@
 package com.google.devtools.build.lib.buildtool;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.vfs.FileSystemUtils.createDirectoryAndParents;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -25,12 +28,10 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.TestConstants;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import java.io.IOException;
@@ -57,7 +58,7 @@ public class SymlinkForestTest {
   @Before
   public final void initializeFileSystem() throws Exception {
     ManualClock clock = new ManualClock();
-    fileSystem = new InMemoryFileSystem(clock, DigestHashFunction.MD5);
+    fileSystem = new InMemoryFileSystem(clock);
     linkRoot = fileSystem.getPath("/linkRoot");
     createDirectoryAndParents(linkRoot);
   }
@@ -113,27 +114,25 @@ public class SymlinkForestTest {
   @Test
   public void testLongestPathPrefix() {
     PathFragment a = PathFragment.create("A");
-    assertThat(longestPathPrefix("A/b", "A", "B")).isEqualTo(a); // simple parent
-    assertThat(longestPathPrefix("A", "A", "B")).isEqualTo(a); // self
-    assertThat(longestPathPrefix("A/B/c", "A", "A/B"))
-        .isEqualTo(a.getRelative("B")); // want longest
-    assertThat(longestPathPrefix("C/b", "A", "B")).isNull(); // not found in other parents
-    assertThat(longestPathPrefix("A", "A/B", "B")).isNull(); // not found in child
-    assertThat(longestPathPrefix("A/B/C/d/e/f.h", "A/B/C", "B/C/d"))
-        .isEqualTo(a.getRelative("B/C"));
-    assertThat(longestPathPrefix("A/f.h", "", "B/C/d")).isEqualTo(PathFragment.EMPTY_FRAGMENT);
+    assertEquals(a, longestPathPrefix("A/b", "A", "B")); // simple parent
+    assertEquals(a, longestPathPrefix("A", "A", "B")); // self
+    assertEquals(a.getRelative("B"), longestPathPrefix("A/B/c", "A", "A/B"));  // want longest
+    assertNull(longestPathPrefix("C/b", "A", "B"));  // not found in other parents
+    assertNull(longestPathPrefix("A", "A/B", "B"));  // not found in child
+    assertEquals(a.getRelative("B/C"), longestPathPrefix("A/B/C/d/e/f.h", "A/B/C", "B/C/d"));
+    assertEquals(PathFragment.EMPTY_FRAGMENT, longestPathPrefix("A/f.h", "", "B/C/d"));
   }
 
   @Test
   public void testDeleteTreesBelowNotPrefixed() throws IOException {
     createTestDirectoryTree();
     SymlinkForest.deleteTreesBelowNotPrefixed(topDir, new String[]{"file-"});
-    assertThat(file1.exists()).isTrue();
-    assertThat(file2.exists()).isTrue();
-    assertThat(aDir.exists()).isFalse();
+    assertTrue(file1.exists());
+    assertTrue(file2.exists());
+    assertFalse(aDir.exists());
   }
 
-  private PackageIdentifier createPkg(Root rootA, Root rootB, String pkg) throws IOException {
+  private PackageIdentifier createPkg(Path rootA, Path rootB, String pkg) throws IOException {
     if (rootA != null) {
       createDirectoryAndParents(rootA.getRelative(pkg));
       FileSystemUtils.createEmptyFile(rootA.getRelative(pkg).getChild("file"));
@@ -145,7 +144,7 @@ public class SymlinkForestTest {
     return PackageIdentifier.createInMainRepo(pkg);
   }
 
-  private PackageIdentifier createPkg(Root root, String repo, String pkg)
+  private PackageIdentifier createPkg(Path root, String repo, String pkg)
       throws IOException, LabelSyntaxException {
     if (root != null) {
       Path repoRoot = root.getRelative(Label.EXTERNAL_PACKAGE_NAME).getRelative(repo);
@@ -155,26 +154,26 @@ public class SymlinkForestTest {
     return PackageIdentifier.create(RepositoryName.create("@" + repo), PathFragment.create(pkg));
   }
 
-  private void assertLinksTo(Path fromRoot, Root toRoot, String relpart) throws IOException {
+  private void assertLinksTo(Path fromRoot, Path toRoot, String relpart) throws IOException {
     assertLinksTo(fromRoot.getRelative(relpart), toRoot.getRelative(relpart));
   }
 
   private void assertLinksTo(Path fromRoot, Path toRoot) throws IOException {
-    assertWithMessage("stat: " + fromRoot.stat()).that(fromRoot.isSymbolicLink()).isTrue();
-    assertThat(fromRoot.readSymbolicLink()).isEqualTo(toRoot.asFragment());
+    assertTrue("stat: " + fromRoot.stat(), fromRoot.isSymbolicLink());
+    assertEquals(toRoot.asFragment(), fromRoot.readSymbolicLink());
   }
 
   private void assertIsDir(Path root, String relpart) {
-    assertThat(root.getRelative(relpart).isDirectory(Symlinks.NOFOLLOW)).isTrue();
+    assertTrue(root.getRelative(relpart).isDirectory(Symlinks.NOFOLLOW));
   }
 
   @Test
   public void testPlantLinkForest() throws IOException {
-    Root rootA = Root.fromPath(fileSystem.getPath("/A"));
-    Root rootB = Root.fromPath(fileSystem.getPath("/B"));
+    Path rootA = fileSystem.getPath("/A");
+    Path rootB = fileSystem.getPath("/B");
 
-    ImmutableMap<PackageIdentifier, Root> packageRootMap =
-        ImmutableMap.<PackageIdentifier, Root>builder()
+    ImmutableMap<PackageIdentifier, Path> packageRootMap =
+        ImmutableMap.<PackageIdentifier, Path>builder()
             .put(createPkg(rootA, rootB, "pkgA"), rootA)
             .put(createPkg(rootA, rootB, "dir1/pkgA"), rootA)
             .put(createPkg(rootA, rootB, "dir1/pkgB"), rootB)
@@ -209,10 +208,10 @@ public class SymlinkForestTest {
 
   @Test
   public void testTopLevelPackage() throws Exception {
-    Root rootX = Root.fromPath(fileSystem.getPath("/X"));
-    Root rootY = Root.fromPath(fileSystem.getPath("/Y"));
-    ImmutableMap<PackageIdentifier, Root> packageRootMap =
-        ImmutableMap.<PackageIdentifier, Root>builder()
+    Path rootX = fileSystem.getPath("/X");
+    Path rootY = fileSystem.getPath("/Y");
+    ImmutableMap<PackageIdentifier, Path> packageRootMap =
+        ImmutableMap.<PackageIdentifier, Path>builder()
             .put(createPkg(rootX, rootY, ""), rootX)
             .put(createPkg(rootX, rootY, "foo"), rootX)
             .build();
@@ -224,15 +223,15 @@ public class SymlinkForestTest {
 
   @Test
   public void testRemotePackage() throws Exception {
-    Root outputBase = Root.fromPath(fileSystem.getPath("/ob"));
-    Root rootY = Root.fromPath(outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("y"));
-    Root rootZ = Root.fromPath(outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("z"));
-    Root rootW = Root.fromPath(outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("w"));
-    createDirectoryAndParents(rootY.asPath());
+    Path outputBase = fileSystem.getPath("/ob");
+    Path rootY = outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("y");
+    Path rootZ = outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("z");
+    Path rootW = outputBase.getRelative(Label.EXTERNAL_PATH_PREFIX).getRelative("w");
+    createDirectoryAndParents(rootY);
     FileSystemUtils.createEmptyFile(rootY.getRelative("file"));
 
-    ImmutableMap<PackageIdentifier, Root> packageRootMap =
-        ImmutableMap.<PackageIdentifier, Root>builder()
+    ImmutableMap<PackageIdentifier, Path> packageRootMap =
+        ImmutableMap.<PackageIdentifier, Path>builder()
             // Remote repo without top-level package.
             .put(createPkg(outputBase, "y", "w"), outputBase)
             // Remote repo with and without top-level package.
@@ -244,7 +243,7 @@ public class SymlinkForestTest {
 
     new SymlinkForest(packageRootMap, linkRoot, TestConstants.PRODUCT_NAME, "wsname")
         .plantSymlinkForest();
-    assertThat(linkRoot.getRelative(Label.EXTERNAL_PATH_PREFIX + "/y/file").exists()).isFalse();
+    assertFalse(linkRoot.getRelative(Label.EXTERNAL_PATH_PREFIX + "/y/file").exists());
     assertLinksTo(
         linkRoot.getRelative(Label.EXTERNAL_PATH_PREFIX + "/y/w"), rootY.getRelative("w"));
     assertLinksTo(
@@ -258,9 +257,9 @@ public class SymlinkForestTest {
 
   @Test
   public void testExternalPackage() throws Exception {
-    Root root = Root.fromPath(fileSystem.getPath("/src"));
-    ImmutableMap<PackageIdentifier, Root> packageRootMap =
-        ImmutableMap.<PackageIdentifier, Root>builder()
+    Path root = fileSystem.getPath("/src");
+    ImmutableMap<PackageIdentifier, Path> packageRootMap =
+        ImmutableMap.<PackageIdentifier, Path>builder()
             // Virtual root, shouldn't actually be linked in.
             .put(Label.EXTERNAL_PACKAGE_IDENTIFIER, root)
             .build();
@@ -272,9 +271,9 @@ public class SymlinkForestTest {
 
   @Test
   public void testWorkspaceName() throws Exception {
-    Root root = Root.fromPath(fileSystem.getPath("/src"));
-    ImmutableMap<PackageIdentifier, Root> packageRootMap =
-        ImmutableMap.<PackageIdentifier, Root>builder()
+    Path root = fileSystem.getPath("/src");
+    ImmutableMap<PackageIdentifier, Path> packageRootMap =
+        ImmutableMap.<PackageIdentifier, Path>builder()
             // Remote repo without top-level package.
             .put(createPkg(root, "y", "w"), root)
             .build();
@@ -286,7 +285,7 @@ public class SymlinkForestTest {
 
   @Test
   public void testExecrootVersionChanges() throws Exception {
-    ImmutableMap<PackageIdentifier, Root> packageRootMap = ImmutableMap.of();
+    ImmutableMap<PackageIdentifier, Path> packageRootMap = ImmutableMap.of();
     linkRoot.getRelative("wsname").createDirectory();
     new SymlinkForest(packageRootMap, linkRoot, TestConstants.PRODUCT_NAME, "wsname")
         .plantSymlinkForest();

@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
@@ -122,7 +123,11 @@ class SymlinkForest {
           continue;
         }
         PackageIdentifier dir = createInRepo(pkgId, pkgId.getPackageFragment().subFragment(0, i));
-        Set<Path> roots = dirRootsMap.computeIfAbsent(dir, k -> Sets.newHashSet());
+        Set<Path> roots = dirRootsMap.get(dir);
+        if (roots == null) {
+          roots = Sets.newHashSet();
+          dirRootsMap.put(dir, roots);
+        }
         roots.add(pkgRoot);
       }
     }
