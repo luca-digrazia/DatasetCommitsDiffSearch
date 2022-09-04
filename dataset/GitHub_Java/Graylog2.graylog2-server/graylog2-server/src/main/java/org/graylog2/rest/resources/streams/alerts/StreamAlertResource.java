@@ -123,7 +123,7 @@ public class StreamAlertResource extends RestResource {
             conditions.add(alert.toMap());
         }
 
-        long total = alertService.totalCountForStream(streamid);
+        long total = alertService.totalCount();
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("alerts", conditions);

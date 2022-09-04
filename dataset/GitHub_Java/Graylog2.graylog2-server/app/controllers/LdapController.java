@@ -1,27 +1,27 @@
 /*
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 TORCH UG
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package controllers;
 
-import com.google.common.net.MediaType;
-import lib.BreadcrumbList;
-import lib.json.Json;
+import com.google.gson.Gson;
+import com.google.inject.Inject;
 import org.graylog2.restclient.lib.APIException;
+import lib.BreadcrumbList;
 import org.graylog2.restclient.models.accounts.LdapSettings;
 import org.graylog2.restclient.models.accounts.LdapSettingsService;
 import org.graylog2.restclient.models.api.requests.accounts.LdapSettingsRequest;
@@ -33,23 +33,19 @@ import play.data.DynamicForm;
 import play.data.Form;
 import play.mvc.Result;
 
-import javax.inject.Inject;
+import javax.ws.rs.core.MediaType;
 import java.io.IOException;
 import java.util.Map;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.base.Objects.firstNonNull;
 import static play.data.Form.form;
 
 public class LdapController extends AuthenticatedController {
     private static final Logger log = LoggerFactory.getLogger(LdapController.class);
     private final Form<LdapSettingsRequest> settingsForm = form(LdapSettingsRequest.class);
 
-    private final LdapSettingsService ldapSettingsService;
-
     @Inject
-    public LdapController(final LdapSettingsService ldapSettingsService) {
-        this.ldapSettingsService = ldapSettingsService;
-    }
+    private LdapSettingsService ldapSettingsService;
 
     public Result index() {
         final LdapSettings ldapSettings = ldapSettingsService.load();
@@ -83,7 +79,7 @@ public class LdapController extends AuthenticatedController {
             log.error("Unable to connect", e);
             return internalServerError();
         }
-        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+        return ok(new Gson().toJson(result)).as(MediaType.APPLICATION_JSON);
     }
 
     public Result apiTestLdapLogin() {
@@ -110,7 +106,7 @@ public class LdapController extends AuthenticatedController {
             log.error("Unable to connect", e);
             return internalServerError();
         }
-        return ok(Json.toJsonString(result)).as(MediaType.JSON_UTF_8.toString());
+        return ok(new Gson().toJson(result)).as(MediaType.APPLICATION_JSON);
     }
 
     private LdapTestConnectionRequest getLdapTestConnectionRequest(Map<String, String> formData) {
