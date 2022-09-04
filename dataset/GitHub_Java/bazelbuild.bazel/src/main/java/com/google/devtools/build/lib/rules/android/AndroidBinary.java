@@ -296,14 +296,15 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     boolean shrinkResources = shouldShrinkResources(ruleContext);
 
-    // Remove the library resource JARs from the binary's runtime classpath.
-    // Resource classes from android_library dependencies are replaced by the binary's resource
-    // class. We remove them only at the top level so that resources included by a library that is
-    // a dependency of a java_library are still included, since these resources are propagated via
-    // android-specific providers and won't show up when we collect the library resource JARs.
-    // TODO(b/69552500): Instead, handle this properly so R JARs aren't put on the classpath for
-    // both binaries and libraries.
-    NestedSet<Artifact> excludedRuntimeArtifacts = getLibraryResourceJars(ruleContext);
+    NestedSet<Artifact> excludedRuntimeArtifacts = null;
+    if (!androidConfig.includeLibraryResourceJars()) {
+      // Remove the library resource JARs from the binary's runtime classpath.
+      // Resource classes from android_library dependencies are replaced by the binary's resource
+      // class. We remove them only at the top level so that resources included by a library that is
+      // a dependency of a java_library are still included, since these resources are propagated via
+      // android-specific providers and won't show up when we collect the library resource JARs.
+      excludedRuntimeArtifacts = getLibraryResourceJars(ruleContext);
+    }
 
     JavaTargetAttributes resourceClasses = androidCommon.init(
         javaSemantics,
@@ -338,7 +339,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               .withEnforcementLevel(oneVersionEnforcementLevel)
               .outputArtifact(
                   ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_ONE_VERSION_ARTIFACT))
-              .useToolchain(JavaToolchainProvider.from(ruleContext))
+              .useToolchain(JavaToolchainProvider.fromRuleContext(ruleContext))
               .checkJars(transitiveDependencies)
               .build(ruleContext);
     }
@@ -1500,14 +1501,14 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
   // Adds the appropriate SpawnAction options depending on if SingleJar is a jar or not.
   private static SpawnAction.Builder singleJarSpawnActionBuilder(RuleContext ruleContext) {
-    Artifact singleJar = JavaToolchainProvider.from(ruleContext).getSingleJar();
+    Artifact singleJar = JavaToolchainProvider.fromRuleContext(ruleContext).getSingleJar();
     SpawnAction.Builder builder = new SpawnAction.Builder().useDefaultShellEnvironment();
     if (singleJar.getFilename().endsWith(".jar")) {
       builder
           .setJarExecutable(
               JavaCommon.getHostJavaExecutable(ruleContext),
               singleJar,
-              JavaToolchainProvider.from(ruleContext).getJvmOptions())
+              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
           .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
     } else {
       builder.setExecutable(singleJar);
