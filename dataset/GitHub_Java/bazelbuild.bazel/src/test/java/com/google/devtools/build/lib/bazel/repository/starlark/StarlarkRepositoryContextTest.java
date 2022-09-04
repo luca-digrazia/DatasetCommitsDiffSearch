@@ -35,12 +35,23 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.WorkspaceFactoryHelper;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor.ExecutionResult;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FileOptions;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
+import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -54,19 +65,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Module;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkInt;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.syntax.FileOptions;
-import net.starlark.java.syntax.Location;
-import net.starlark.java.syntax.ParserInput;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -304,7 +302,7 @@ public final class StarlarkRepositoryContextTest {
     StarlarkPath patchFile = context.path("my.patch");
     context.createFile(
         context.path("my.patch"), "--- foo\n+++ foo\n" + ONE_LINE_PATCH, false, true, thread);
-    context.patch(patchFile, StarlarkInt.of(0), thread);
+    context.patch(patchFile, 0, thread);
     testOutputFile(foo.getPath(), String.format("line one%nline two%n"));
   }
 
@@ -315,7 +313,7 @@ public final class StarlarkRepositoryContextTest {
     context.createFile(
         context.path("my.patch"), "--- foo\n+++ foo\n" + ONE_LINE_PATCH, false, true, thread);
     try {
-      context.patch(patchFile, StarlarkInt.of(0), thread);
+      context.patch(patchFile, 0, thread);
       fail("Expected RepositoryFunctionException");
     } catch (RepositoryFunctionException ex) {
       assertThat(ex)
@@ -338,7 +336,7 @@ public final class StarlarkRepositoryContextTest {
         true,
         thread);
     try {
-      context.patch(patchFile, StarlarkInt.of(0), thread);
+      context.patch(patchFile, 0, thread);
       fail("Expected RepositoryFunctionException");
     } catch (RepositoryFunctionException ex) {
       assertThat(ex)
@@ -359,7 +357,7 @@ public final class StarlarkRepositoryContextTest {
     context.createFile(
         context.path("my.patch"), "--- foo\n+++ foo\n" + ONE_LINE_PATCH, false, true, thread);
     try {
-      context.patch(patchFile, StarlarkInt.of(0), thread);
+      context.patch(patchFile, 0, thread);
       fail("Expected RepositoryFunctionException");
     } catch (RepositoryFunctionException ex) {
       assertThat(ex)
@@ -406,9 +404,7 @@ public final class StarlarkRepositoryContextTest {
     setUpContextForRule(
         attrValues,
         ImmutableSet.of(),
-        StarlarkSemantics.builder()
-            .setBool(BuildLanguageOptions.EXPERIMENTAL_REPO_REMOTE_EXEC, true)
-            .build(),
+        StarlarkSemantics.builderWithDefaults().experimentalRepoRemoteExec(true).build(),
         repoRemoteExecutor,
         Attribute.attr("$remotable", Type.BOOLEAN).build(),
         Attribute.attr("exec_properties", Type.STRING_DICT).build());
@@ -417,7 +413,7 @@ public final class StarlarkRepositoryContextTest {
     StarlarkExecutionResult starlarkExecutionResult =
         context.execute(
             StarlarkList.of(/*mutability=*/ null, "/bin/cmd", "arg1"),
-            /* timeoutI= */ StarlarkInt.of(10),
+            /*timeout=*/ 10,
             /*uncheckedEnvironment=*/ Dict.empty(),
             /*quiet=*/ true,
             /*workingDirectory=*/ "",

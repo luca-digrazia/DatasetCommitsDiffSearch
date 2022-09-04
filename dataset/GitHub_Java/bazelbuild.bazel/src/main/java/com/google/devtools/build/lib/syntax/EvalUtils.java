@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,593 +13,528 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.vfs.PathFragment;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Formattable;
-import java.util.Formatter;
+import com.google.common.base.Strings;
+import com.google.common.collect.Ordering;
 import java.util.IllegalFormatException;
-import java.util.List;
-import java.util.Map;
-import java.util.MissingFormatWidthException;
-import java.util.Set;
 
-/**
- * Utilities used by the evaluator.
- */
-public abstract class EvalUtils {
+/** Internal declarations used by the evaluator. */
+final class EvalUtils {
 
-  // TODO(bazel-team): Yet an other hack committed in the name of Skylark. One problem is that the
-  // syntax package cannot depend on actions so we have to have this until Actions are immutable.
-  // The other is that BuildConfigurations are technically not immutable but they cannot be modified
-  // from Skylark.
-  private static final ImmutableSet<Class<?>> quasiImmutableClasses;
-  static {
-    try {
-      ImmutableSet.Builder<Class<?>> builder = ImmutableSet.builder();
-      builder.add(Class.forName("com.google.devtools.build.lib.actions.Action"));
-      builder.add(Class.forName("com.google.devtools.build.lib.analysis.config.BuildConfiguration"));
-      builder.add(Class.forName("com.google.devtools.build.lib.actions.Root"));
-      quasiImmutableClasses = builder.build();
-    } catch (ClassNotFoundException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private EvalUtils() {
-  }
+  private EvalUtils() {}
 
   /**
-   * @return true if the specified sequence is a tuple; false if it's a modifiable list.
+   * The exception that STARLARK_COMPARATOR might throw. This is an unchecked exception because
+   * Comparator doesn't let us declare exceptions. It should normally be caught and wrapped in an
+   * EvalException.
    */
-  public static boolean isTuple(List<?> l) {
-    return isTuple(l.getClass());
-  }
-
-  public static boolean isTuple(Class<?> c) {
-    Preconditions.checkState(List.class.isAssignableFrom(c));
-    if (ImmutableList.class.isAssignableFrom(c)) {
-      return true;
-    } else {
-      return false;
+  static class ComparisonException extends RuntimeException {
+    ComparisonException(String msg) {
+      super(msg);
     }
   }
 
   /**
-   * @return true if the specified value is immutable (suitable for use as a
-   *         dictionary key) according to the rules of the Build language.
+   * Compare two Starlark values.
+   *
+   * <p>It may throw an unchecked exception ComparisonException that should be wrapped in an
+   * EvalException.
    */
-  public static boolean isImmutable(Object o) {
-    if (o instanceof Map<?, ?> || o instanceof Function
-        || o instanceof FilesetEntry || o instanceof GlobList<?>) {
-      return false;
-    } else if (o instanceof List<?>) {
-      return isTuple((List<?>) o); // tuples are immutable, lists are not.
-    } else {
-      return true; // string/int
-    }
-  }
-
-  /**
-   * Returns true if the type is immutable in the skylark language.
-   */
-  public static boolean isSkylarkImmutable(Class<?> c) {
-    if (c.isAnnotationPresent(Immutable.class)) {
-      return true;
-    } else if (c.equals(String.class) || c.equals(Integer.class) || c.equals(Boolean.class)
-        || SkylarkList.class.isAssignableFrom(c) || ImmutableMap.class.isAssignableFrom(c)
-        || NestedSet.class.isAssignableFrom(c)) {
-      return true;
-    } else {
-      for (Class<?> classObject : quasiImmutableClasses) {
-        if (classObject.isAssignableFrom(c)) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Returns a transitive superclass or interface implemented by c which is annotated
-   * with SkylarkModule. Returns null if no such class or interface exists.
-   */
-  @VisibleForTesting
-  static Class<?> getParentWithSkylarkModule(Class<?> c) {
-    if (c == null) {
-      return null;
-    }
-    if (c.isAnnotationPresent(SkylarkModule.class)) {
-      return c;
-    }
-    Class<?> parent = getParentWithSkylarkModule(c.getSuperclass());
-    if (parent != null) {
-      return parent;
-    }
-    for (Class<?> ifparent : c.getInterfaces()) {
-      ifparent = getParentWithSkylarkModule(ifparent);
-      if (ifparent != null) {
-        return ifparent;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Returns the Skylark equivalent type of the parameter. Note that the Skylark
-   * language doesn't have inheritance.
-   */
-  public static Class<?> getSkylarkType(Class<?> c) {
-    if (ImmutableList.class.isAssignableFrom(c)) {
-      return ImmutableList.class;
-    } else if (List.class.isAssignableFrom(c)) {
-      return List.class;
-    } else if (SkylarkList.class.isAssignableFrom(c)) {
-      return SkylarkList.class;
-    } else if (Map.class.isAssignableFrom(c)) {
-      return Map.class;
-    } else if (NestedSet.class.isAssignableFrom(c)) {
-      // This could be removed probably
-      return NestedSet.class;
-    } else if (Set.class.isAssignableFrom(c)) {
-      return Set.class;
-    } else {
-      // Check if one of the superclasses or implemented interfaces has the SkylarkModule
-      // annotation. If yes return that class.
-      Class<?> parent = getParentWithSkylarkModule(c);
-      if (parent != null) {
-        return parent;
-      }
-    }
-    return c;
-  }
-
-  // TODO(bazel-team): shouldn't we agree on Datatype vs DataType in the two methods below???
-  /**
-   * Returns a pretty name for the datatype of object 'o' in the Build language.
-   */
-  public static String getDataTypeName(Object o) {
-    Preconditions.checkNotNull(o);
-    if (o instanceof SkylarkList) {
-      return ((SkylarkList) o).isTuple() ? "tuple" : "list";
-    }
-    return getDataTypeNameFromClass(o.getClass());
-  }
-
-  /**
-   * Returns a pretty name for the datatype equivalent of class 'c' in the Build language.
-   */
-  public static String getDataTypeNameFromClass(Class<?> c) {
-    if (c.equals(Object.class)) {
-      return "unknown";
-    } else if (c.equals(String.class)) {
-      return "string";
-    } else if (c.equals(Integer.class)) {
-      return "int";
-    } else if (c.equals(Boolean.class)) {
-      return "bool";
-    } else if (c.equals(Void.TYPE) || c.equals(Environment.NoneType.class)) {
-      return "None";
-    } else if (List.class.isAssignableFrom(c)) {
-      // TODO(bazel-team): for better debugging, we should distinguish "java tuple" and "java list"
-      // from "tuple" and "list" -- or better yet, only use one set of pure data structures
-      // everywhere and eliminate all calls to .append and .extend from the code base.
-      return isTuple(c) ? "tuple" : "list";
-    } else if (GlobList.class.isAssignableFrom(c)) {
-      return "glob list";
-    } else if (Map.class.isAssignableFrom(c)) {
-      return "dict";
-    } else if (Function.class.isAssignableFrom(c)) {
-      return "function";
-    } else if (c.equals(FilesetEntry.class)) {
-      return "FilesetEntry";
-    } else if (NestedSet.class.isAssignableFrom(c) || SkylarkNestedSet.class.isAssignableFrom(c)) {
-      return "set";
-    } else if (ClassObject.class.isAssignableFrom(c)) {
-      return "struct";
-    } else if (SkylarkList.class.isAssignableFrom(c)) {
-      // TODO(bazel-team): Refactor the class hierarchy so we can distinguish list and tuple types.
-      return "list";
-    } else if (c.isAnnotationPresent(SkylarkModule.class)) {
-      SkylarkModule module = c.getAnnotation(SkylarkModule.class);
-      return c.getAnnotation(SkylarkModule.class).name()
-          + (module.namespace() ? " (a language module)" : "");
-    } else {
-      if (c.getSimpleName().isEmpty()) {
-        return c.getName();
-      } else {
-        return c.getSimpleName();
-      }
-    }
-  }
-
-  /**
-   * Returns a sequence of the appropriate list/tuple datatype for 'seq', based on 'isTuple'.
-   */
-  public static List<?> makeSequence(List<?> seq, boolean isTuple) {
-    return isTuple ? ImmutableList.copyOf(seq) : seq;
-  }
-
-  /**
-   * Print build-language value 'o' in display format into the specified buffer.
-   */
-  public static void printValue(Object o, Appendable buffer) {
-    // Exception-swallowing wrapper due to annoying Appendable interface.
-    try {
-      printValueX(o, buffer);
-    } catch (IOException e) {
-      throw new AssertionError(e); // can't happen
-    }
-  }
-
-  private static void printValueX(Object o, Appendable buffer)
-      throws IOException {
-    if (o == null) {
-      throw new NullPointerException(); // None is not a build language value.
-    } else if (o instanceof String || o instanceof Integer || o instanceof Double) {
-      buffer.append(o.toString());
-
-    } else if (o == Environment.NONE) {
-      buffer.append("None");
-
-    } else if (o == Boolean.TRUE) {
-      buffer.append("True");
-
-    } else if (o == Boolean.FALSE) {
-      buffer.append("False");
-
-    } else if (o instanceof List<?>) {
-      List<?> seq = (List<?>) o;
-      printList(seq, isImmutable(seq), buffer);
-
-    } else if (o instanceof SkylarkList) {
-      SkylarkList list = (SkylarkList) o;
-      printList(list.toList(), list.isTuple(), buffer);
-
-    } else if (o instanceof Map<?, ?>) {
-      Map<?, ?> dict = (Map<?, ?>) o;
-      printList(dict.entrySet(), "{", ", ", "}", buffer);
-
-    } else if (o instanceof Map.Entry<?, ?>) {
-      Map.Entry<?, ?> entry = (Map.Entry<?, ?>) o;
-      prettyPrintValue(entry.getKey(), buffer);
-      buffer.append(": ");
-      prettyPrintValue(entry.getValue(), buffer);
-
-    } else if (o instanceof Function) {
-      Function func = (Function) o;
-      buffer.append("<function " + func.getName() + ">");
-
-    } else if (o instanceof FilesetEntry) {
-      FilesetEntry entry = (FilesetEntry) o;
-      buffer.append("FilesetEntry(srcdir = ");
-      prettyPrintValue(entry.getSrcLabel().toString(), buffer);
-      buffer.append(", files = ");
-      prettyPrintValue(makeStringList(entry.getFiles()), buffer);
-      buffer.append(", excludes = ");
-      prettyPrintValue(makeList(entry.getExcludes()), buffer);
-      buffer.append(", destdir = ");
-      prettyPrintValue(entry.getDestDir().getPathString(), buffer);
-      buffer.append(", strip_prefix = ");
-      prettyPrintValue(entry.getStripPrefix(), buffer);
-      buffer.append(", symlinks = \"");
-      buffer.append(entry.getSymlinkBehavior().toString());
-      buffer.append("\")");
-    } else if (o instanceof PathFragment) {
-      buffer.append(((PathFragment) o).getPathString());
-    } else {
-      buffer.append(o.toString());
-    }
-  }
-
-  private static void printList(Iterable<?> list,
-      String before, String separator, String after, Appendable buffer) throws IOException {
-    String sep = "";
-    buffer.append(before);
-    for (Object o : list) {
-      buffer.append(sep);
-      prettyPrintValue(o, buffer);
-      sep = separator;
-    }
-    buffer.append(after);
-  }
-
-  private static void printList(Iterable<?> list, boolean isTuple, Appendable buffer)
-      throws IOException {
-    if (isTuple) {
-      printList(list, "(", ", ", ")", buffer);
-    } else {
-      printList(list, "[", ", ", "]", buffer);
-    }
-  }
-
-  private static List<?> makeList(Collection<?> list) {
-    return list == null ? Lists.newArrayList() : Lists.newArrayList(list);
-  }
-
-  private static List<String> makeStringList(List<Label> labels) {
-    if (labels == null) { return Collections.emptyList(); }
-    List<String> strings = Lists.newArrayListWithCapacity(labels.size());
-    for (Label label : labels) {
-      strings.add(label.toString());
-    }
-    return strings;
-  }
-
-  /**
-   * Print build-language value 'o' in parseable format into the specified
-   * buffer. (Only differs from printValueX in treatment of strings at toplevel,
-   * i.e. not within a sequence or dict)
-   */
-  public static void prettyPrintValue(Object o, Appendable buffer) {
-    // Exception-swallowing wrapper due to annoying Appendable interface.
-    try {
-      prettyPrintValueX(o, buffer);
-    } catch (IOException e) {
-      throw new AssertionError(e); // can't happen
-    }
-  }
-
-  private static void prettyPrintValueX(Object o, Appendable buffer)
-      throws IOException {
-    if (o instanceof Label) {
-      o = o.toString();  // Pretty-print a label like a string
-    }
-    if (o instanceof String) {
-      String s = (String) o;
-      buffer.append('"');
-      for (int ii = 0, len = s.length(); ii < len; ++ii) {
-        char c = s.charAt(ii);
-        switch (c) {
-        case '\r':
-          buffer.append('\\').append('r');
-          break;
-        case '\n':
-          buffer.append('\\').append('n');
-          break;
-        case '\t':
-          buffer.append('\\').append('t');
-          break;
-        case '\"':
-          buffer.append('\\').append('"');
-          break;
-        default:
-          if (c < 32) {
-            buffer.append(String.format("\\x%02x", (int) c));
-          } else {
-            buffer.append(c); // no need to support UTF-8
+  // TODO(adonovan): consider what API to expose around comparison and ordering. Java's three-valued
+  // comparator cannot properly handle weakly or partially ordered values such as IEEE754 floats.
+  static final Ordering<Object> STARLARK_COMPARATOR =
+      new Ordering<Object>() {
+        private int compareLists(Sequence<?> o1, Sequence<?> o2) {
+          if (o1 instanceof RangeList || o2 instanceof RangeList) {
+            throw new ComparisonException("Cannot compare range objects");
           }
-        } // endswitch
-      }
-      buffer.append('\"');
-    } else {
-      printValueX(o, buffer);
-    }
-  }
 
-  /**
-   * Pretty-print value 'o' to a string. Convenience overloading of
-   * prettyPrintValue(Object, Appendable).
-   */
-  public static String prettyPrintValue(Object o) {
-    StringBuffer buffer = new StringBuffer();
-    prettyPrintValue(o, buffer);
-    return buffer.toString();
-  }
-
-  /**
-   * Pretty-print values of 'o' separated by the separator.
-   */
-  public static String prettyPrintValues(String separator, Iterable<Object> o) {
-    return Joiner.on(separator).join(Iterables.transform(o,
-        new com.google.common.base.Function<Object, String>() {
-      @Override
-      public String apply(Object input) {
-        return prettyPrintValue(input);
-      }
-    }));
-  }
-
-  /**
-   * Print value 'o' to a string. Convenience overloading of printValue(Object, Appendable).
-   */
-  public static String printValue(Object o) {
-    StringBuffer buffer = new StringBuffer();
-    printValue(o, buffer);
-    return buffer.toString();
-  }
-
-  public static Object checkNotNull(Expression expr, Object obj) throws EvalException {
-    if (obj == null) {
-      throw new EvalException(expr.getLocation(),
-          "Unexpected null value, please send a bug report. "
-          + "This was generated by '" + expr + "'");
-    }
-    return obj;
-  }
-
-  /**
-   * Convert BUILD language objects to Formattable so JDK can render them correctly.
-   * Don't do this for numeric or string types because we want %d, %x, %s to work.
-   */
-  private static Object makeFormattable(final Object o) {
-    if (o instanceof Integer || o instanceof Double || o instanceof String) {
-      return o;
-    } else {
-      return new Formattable() {
-        @Override
-        public String toString() {
-          return "Formattable[" + o + "]";
+          for (int i = 0; i < Math.min(o1.size(), o2.size()); i++) {
+            int cmp = compare(o1.get(i), o2.get(i));
+            if (cmp != 0) {
+              return cmp;
+            }
+          }
+          return Integer.compare(o1.size(), o2.size());
         }
 
         @Override
-        public void formatTo(Formatter formatter, int flags, int width,
-            int precision) {
-          printValue(o, formatter.out());
+        @SuppressWarnings("unchecked")
+        public int compare(Object o1, Object o2) {
+
+          // optimize the most common cases
+
+          if (o1 instanceof String && o2 instanceof String) {
+            return ((String) o1).compareTo((String) o2);
+          }
+          if (o1 instanceof Integer && o2 instanceof Integer) {
+            return Integer.compare((Integer) o1, (Integer) o2);
+          }
+
+          o1 = Starlark.fromJava(o1, null);
+          o2 = Starlark.fromJava(o2, null);
+
+          if (o1 instanceof Sequence
+              && o2 instanceof Sequence
+              && o1 instanceof Tuple == o2 instanceof Tuple) {
+            return compareLists((Sequence) o1, (Sequence) o2);
+          }
+
+          if (o1 instanceof ClassObject) {
+            throw new ComparisonException("Cannot compare structs");
+          }
+          try {
+            return ((Comparable<Object>) o1).compareTo(o2);
+          } catch (ClassCastException e) {
+            throw new ComparisonException(
+                "Cannot compare " + Starlark.type(o1) + " with " + Starlark.type(o2));
+          }
         }
       };
+
+  /** Throws EvalException if x is not hashable. */
+  static void checkHashable(Object x) throws EvalException {
+    if (!isHashable(x)) {
+      // This results in confusing errors such as "unhashable type: tuple".
+      // TODO(adonovan): ideally the error message would explain which
+      // element of, say, a tuple is unhashable. The only practical way
+      // to implement this is by implementing isHashable as a call to
+      // Object.hashCode within a try/catch, and requiring all
+      // unhashable Starlark values to throw a particular unchecked exception
+      // with a helpful error message.
+      throw Starlark.errorf("unhashable type: '%s'", Starlark.type(x));
     }
   }
-
-  private static final Object[] EMPTY = new Object[0];
-
-  /*
-   * N.B. MissingFormatWidthException is the only kind of IllegalFormatException
-   * whose constructor can take and display arbitrary error message, hence its use below.
-   */
 
   /**
-   * Perform Python-style string formatting. Implemented by delegation to Java's
-   * own string formatting routine to avoid reinventing the wheel. In more
-   * obscure cases, semantics follow JDK (not Python) rules.
-   *
-   * @param pattern a format string.
-   * @param tuple a tuple containing positional arguments
+   * Reports whether a legal Starlark value is considered hashable to Starlark, and thus suitable as
+   * a key in a dict.
    */
-  public static String formatString(String pattern, List<?> tuple)
-      throws IllegalFormatException {
-    int count = countPlaceholders(pattern);
-    if (count < tuple.size()) {
-      throw new MissingFormatWidthException(
-          "not all arguments converted during string formatting");
+  static boolean isHashable(Object o) {
+    // Bazel makes widespread assumptions that all Starlark values can be hashed
+    // by Java code, so we cannot implement isHashable by having
+    // StarlarkValue.hashCode throw an unchecked exception, which would be more
+    // efficient. Instead, before inserting a value in a dict, we must first ask
+    // it whether it isHashable, and then call its hashCode method only if so.
+    // For structs and tuples, this unfortunately visits the object graph twice.
+    //
+    // One subtlety: the struct.isHashable recursively asks whether its
+    // elements are immutable, not hashable. Consequently, even though a list
+    // may not be used as a dict key (even if frozen), a struct containing
+    // a list is hashable. TODO(adonovan): fix this inconsistency.
+    // Requires an incompatible change flag.
+    if (o instanceof StarlarkValue) {
+      return ((StarlarkValue) o).isHashable();
     }
+    return Starlark.isImmutable(o);
+  }
 
-    List<Object> args = new ArrayList<>();
-
-    for (Object o : tuple) {
-      args.add(makeFormattable(o));
-    }
-
-    try {
-      return String.format(pattern, args.toArray(EMPTY));
-    } catch (IllegalFormatException e) {
-      throw new MissingFormatWidthException(
-          "invalid arguments for format string");
+  static void addIterator(Object x) {
+    if (x instanceof Mutability.Freezable) {
+      ((Mutability.Freezable) x).updateIteratorCount(+1);
     }
   }
 
-  private static int countPlaceholders(String pattern) {
-    int length = pattern.length();
-    boolean afterPercent = false;
-    int i = 0;
-    int count = 0;
-    while (i < length) {
-      switch (pattern.charAt(i)) {
-        case 's':
-        case 'd':
-          if (afterPercent) {
-            count++;
-            afterPercent = false;
-          }
-          break;
+  static void removeIterator(Object x) {
+    if (x instanceof Mutability.Freezable) {
+      ((Mutability.Freezable) x).updateIteratorCount(-1);
+    }
+  }
 
-        case '%':
-          afterPercent = !afterPercent;
-          break;
+  // The following functions for indexing and slicing match the behavior of Python.
 
-        default:
-          if (afterPercent) {
-            throw new MissingFormatWidthException("invalid arguments for format string");
+  /**
+   * Resolves a positive or negative index to an index in the range [0, length), or throws
+   * EvalException if it is out of range. If the index is negative, it counts backward from length.
+   */
+  static int getSequenceIndex(int index, int length) throws EvalException {
+    int actualIndex = index;
+    if (actualIndex < 0) {
+      actualIndex += length;
+    }
+    if (actualIndex < 0 || actualIndex >= length) {
+      throw Starlark.errorf(
+          "index out of range (index is %d, but sequence has %d elements)", index, length);
+    }
+    return actualIndex;
+  }
+
+  /**
+   * Returns the effective index denoted by a user-supplied integer. First, if the integer is
+   * negative, the length of the sequence is added to it, so an index of -1 represents the last
+   * element of the sequence. Then, the integer is "clamped" into the inclusive interval [0,
+   * length].
+   */
+  static int toIndex(int index, int length) {
+    if (index < 0) {
+      index += length;
+    }
+
+    if (index < 0) {
+      return 0;
+    } else if (index > length) {
+      return length;
+    } else {
+      return index;
+    }
+  }
+
+  /** Evaluates an eager binary operation, {@code x op y}. (Excludes AND and OR.) */
+  static Object binaryOp(
+      TokenKind op, Object x, Object y, StarlarkSemantics semantics, Mutability mu)
+      throws EvalException {
+    switch (op) {
+      case PLUS:
+        if (x instanceof Integer) {
+          if (y instanceof Integer) {
+            // int + int
+            int xi = (Integer) x;
+            int yi = (Integer) y;
+            int z = xi + yi;
+            // Overflow Detection, §2-13 Hacker's Delight:
+            // "operands have the same sign and the sum
+            // has a sign opposite to that of the operands."
+            if (((xi ^ z) & (yi ^ z)) < 0) {
+              throw Starlark.errorf("integer overflow in addition");
+            }
+            return z;
           }
-          afterPercent = false;
-          break;
+
+        } else if (x instanceof String) {
+          if (y instanceof String) {
+            // string + string
+            return (String) x + (String) y;
+          }
+
+        } else if (x instanceof Tuple) {
+          if (y instanceof Tuple) {
+            // tuple + tuple
+            return Tuple.concat((Tuple<?>) x, (Tuple<?>) y);
+          }
+
+        } else if (x instanceof StarlarkList) {
+          if (y instanceof StarlarkList) {
+            // list + list
+            return StarlarkList.concat((StarlarkList<?>) x, (StarlarkList<?>) y, mu);
+          }
+
+        }
+        break;
+
+      case PIPE:
+        if (x instanceof Integer) {
+          if (y instanceof Integer) {
+            // int | int
+            return ((Integer) x) | (Integer) y;
+          }
+        }
+        break;
+
+      case AMPERSAND:
+        if (x instanceof Integer && y instanceof Integer) {
+          // int & int
+          return (Integer) x & (Integer) y;
+        }
+        break;
+
+      case CARET:
+        if (x instanceof Integer && y instanceof Integer) {
+          // int ^ int
+          return (Integer) x ^ (Integer) y;
+        }
+        break;
+
+      case GREATER_GREATER:
+        if (x instanceof Integer && y instanceof Integer) {
+          // int >> int
+          int xi = (Integer) x;
+          int yi = (Integer) y;
+          if (yi < 0) {
+            throw Starlark.errorf("negative shift count: %d", yi);
+          } else if (yi >= Integer.SIZE) {
+            return xi < 0 ? -1 : 0;
+          }
+          return xi >> yi;
+        }
+        break;
+
+      case LESS_LESS:
+        if (x instanceof Integer && y instanceof Integer) {
+          // int << int
+          int xi = (Integer) x;
+          int yi = (Integer) y;
+          if (yi < 0) {
+            throw Starlark.errorf("negative shift count: %d", yi);
+          }
+          int z = xi << yi; // only uses low 5 bits of yi
+          if ((z >> yi) != xi || yi >= 32) {
+            throw Starlark.errorf("integer overflow in left shift");
+          }
+          return z;
+        }
+        break;
+
+      case MINUS:
+        if (x instanceof Integer && y instanceof Integer) {
+          // int - int
+          int xi = (Integer) x;
+          int yi = (Integer) y;
+          int z = xi - yi;
+          if (((xi ^ yi) & (xi ^ z)) < 0) {
+            throw Starlark.errorf("integer overflow in subtraction");
+          }
+          return z;
+        }
+        break;
+
+      case STAR:
+        if (x instanceof Integer) {
+          int xi = (Integer) x;
+          if (y instanceof Integer) {
+            // int * int
+            long z = (long) xi * (long) (Integer) y;
+            if ((int) z != z) {
+              throw Starlark.errorf("integer overflow in multiplication");
+            }
+            return (int) z;
+          } else if (y instanceof String) {
+            // int * string
+            return repeatString((String) y, xi);
+          } else if (y instanceof Tuple) {
+            //  int * tuple
+            return ((Tuple<?>) y).repeat(xi);
+          } else if (y instanceof StarlarkList) {
+            // int * list
+            return ((StarlarkList<?>) y).repeat(xi, mu);
+          }
+
+        } else if (x instanceof String) {
+          if (y instanceof Integer) {
+            // string * int
+            return repeatString((String) x, (Integer) y);
+          }
+
+        } else if (x instanceof Tuple) {
+          if (y instanceof Integer) {
+            // tuple * int
+            return ((Tuple<?>) x).repeat((Integer) y);
+          }
+
+        } else if (x instanceof StarlarkList) {
+          if (y instanceof Integer) {
+            // list * int
+            return ((StarlarkList<?>) x).repeat((Integer) y, mu);
+          }
+        }
+        break;
+
+      case SLASH:
+        throw Starlark.errorf("The `/` operator is not allowed. For integer division, use `//`.");
+
+      case SLASH_SLASH:
+        if (x instanceof Integer && y instanceof Integer) {
+          // int // int
+          int xi = (Integer) x;
+          int yi = (Integer) y;
+          if (yi == 0) {
+            throw Starlark.errorf("integer division by zero");
+          }
+          // http://python-history.blogspot.com/2010/08/why-pythons-integer-division-floors.html
+          int quo = xi / yi;
+          int rem = xi % yi;
+          if ((xi < 0) != (yi < 0) && rem != 0) {
+            quo--;
+          }
+          if (xi == Integer.MIN_VALUE && yi == -1) { // HD 2-13
+            throw Starlark.errorf("integer overflow in division");
+          }
+          return quo;
+        }
+        break;
+
+      case PERCENT:
+        if (x instanceof Integer) {
+          if (y instanceof Integer) {
+            // int % int
+            int xi = (Integer) x;
+            int yi = (Integer) y;
+            if (yi == 0) {
+              throw Starlark.errorf("integer modulo by zero");
+            }
+            // In Starlark, the sign of the result is the sign of the divisor.
+            int z = xi % yi;
+            if ((xi < 0) != (yi < 0) && z != 0) {
+              z += yi;
+            }
+            return z;
+          }
+
+        } else if (x instanceof String) {
+          // string % any
+          String xs = (String) x;
+          try {
+            if (y instanceof Tuple) {
+              return Starlark.formatWithList(xs, (Tuple) y);
+            } else {
+              return Starlark.format(xs, y);
+            }
+          } catch (IllegalFormatException ex) {
+            throw new EvalException(ex);
+          }
+        }
+        break;
+
+      case EQUALS_EQUALS:
+        return x.equals(y);
+
+      case NOT_EQUALS:
+        return !x.equals(y);
+
+      case LESS:
+        return compare(x, y) < 0;
+
+      case LESS_EQUALS:
+        return compare(x, y) <= 0;
+
+      case GREATER:
+        return compare(x, y) > 0;
+
+      case GREATER_EQUALS:
+        return compare(x, y) >= 0;
+
+      case IN:
+        if (y instanceof StarlarkIndexable) {
+          return ((StarlarkIndexable) y).containsKey(semantics, x);
+        } else if (y instanceof String) {
+          if (!(x instanceof String)) {
+            throw Starlark.errorf(
+                "'in <string>' requires string as left operand, not '%s'", Starlark.type(x));
+          }
+          return ((String) y).contains((String) x);
+        }
+        break;
+
+      case NOT_IN:
+        Object z = binaryOp(TokenKind.IN, x, y, semantics, mu);
+        if (z != null) {
+          return !Starlark.truth(z);
+        }
+        break;
+
+      default:
+        throw new AssertionError("not a binary operator: " + op);
+    }
+
+    // custom binary operator?
+    if (x instanceof HasBinary) {
+      Object z = ((HasBinary) x).binaryOp(op, y, true);
+      if (z != null) {
+        return z;
       }
-      i++;
+    }
+    if (y instanceof HasBinary) {
+      Object z = ((HasBinary) y).binaryOp(op, x, false);
+      if (z != null) {
+        return z;
+      }
     }
 
-    return count;
+    throw Starlark.errorf(
+        "unsupported binary operation: %s %s %s", Starlark.type(x), op, Starlark.type(y));
+  }
+
+  /** Implements comparison operators. */
+  private static int compare(Object x, Object y) throws EvalException {
+    try {
+      return STARLARK_COMPARATOR.compare(x, y);
+    } catch (ComparisonException e) {
+      throw new EvalException(e);
+    }
+  }
+
+  private static String repeatString(String s, int n) {
+    return n <= 0 ? "" : Strings.repeat(s, n);
+  }
+
+  /** Evaluates a unary operation. */
+  static Object unaryOp(TokenKind op, Object x) throws EvalException {
+    switch (op) {
+      case NOT:
+        return !Starlark.truth(x);
+
+      case MINUS:
+        if (x instanceof Integer) {
+          int xi = (Integer) x;
+          if (xi == Integer.MIN_VALUE) {
+            throw Starlark.errorf("integer overflow in negation");
+          }
+          return -xi;
+        }
+        break;
+
+      case PLUS:
+        if (x instanceof Integer) {
+          return x;
+        }
+        break;
+
+      case TILDE:
+        if (x instanceof Integer) {
+          return ~((Integer) x);
+        }
+        break;
+
+      default:
+        /* fall through */
+    }
+    throw Starlark.errorf("unsupported unary operation: %s%s", op, Starlark.type(x));
   }
 
   /**
-   * @return the truth value of an object, according to Python rules.
-   * http://docs.python.org/2/library/stdtypes.html#truth-value-testing
+   * Returns the element of sequence or mapping {@code object} indexed by {@code key}.
+   *
+   * @throws EvalException if {@code object} is not a sequence or mapping.
    */
-  public static boolean toBoolean(Object o) {
-    if (o == null || o == Environment.NONE) {
-      return false;
-    } else if (o instanceof Boolean) {
-      return (Boolean) o;
-    } else if (o instanceof String) {
-      return !((String) o).isEmpty();
-    } else if (o instanceof Integer) {
-      return (Integer) o != 0;
-    } else if (o instanceof Collection<?>) {
-      return !((Collection<?>) o).isEmpty();
-    } else if (o instanceof Map<?, ?>) {
-      return !((Map<?, ?>) o).isEmpty();
-    } else if (o instanceof NestedSet<?>) {
-      return !((NestedSet<?>) o).isEmpty();
-    } else if (o instanceof SkylarkNestedSet) {
-      return !((SkylarkNestedSet) o).isEmpty();
-    } else if (o instanceof Iterable<?>) {
-      return !(Iterables.isEmpty((Iterable<?>) o));
+  static Object index(Mutability mu, StarlarkSemantics semantics, Object object, Object key)
+      throws EvalException {
+    if (object instanceof StarlarkIndexable) {
+      Object result = ((StarlarkIndexable) object).getIndex(semantics, key);
+      // TODO(bazel-team): We shouldn't have this fromJava call here. If it's needed at all,
+      // it should go in the implementations of StarlarkIndexable#getIndex that produce non-Starlark
+      // values.
+      return result == null ? null : Starlark.fromJava(result, mu);
+    } else if (object instanceof String) {
+      String string = (String) object;
+      int index = Starlark.toInt(key, "string index");
+      index = getSequenceIndex(index, string.length());
+      return string.substring(index, index + 1);
     } else {
-      return true;
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  public static Collection<Object> toCollection(Object o, Location loc) throws EvalException {
-    if (o instanceof Collection) {
-      return (Collection<Object>) o;
-    } else if (o instanceof Map<?, ?>) {
-      // For dictionaries we iterate through the keys only
-      return ((Map<Object, Object>) o).keySet();
-    } else if (o instanceof SkylarkNestedSet) {
-      return ((SkylarkNestedSet) o).toCollection();
-    } else {
-      throw new EvalException(loc,
-          "type '" + getDataTypeName(o) + "' is not a collection");
-    }
-  }
-
-  @SuppressWarnings("unchecked")
-  public static Iterable<Object> toIterable(Object o, Location loc) throws EvalException {
-    if (o instanceof String) {
-      // This is not as efficient as special casing String in for and dict and list comprehension
-      // statements. However this is a more unified way.
-      // The regex matches every character in the string until the end of the string,
-      // so "abc" will be split into ["a", "b", "c"].
-      return ImmutableList.<Object>copyOf(((String) o).split("(?!^)"));
-    } else if (o instanceof Iterable) {
-      return (Iterable<Object>) o;
-    } else if (o instanceof Map<?, ?>) {
-      // For dictionaries we iterate through the keys only
-      return ((Map<Object, Object>) o).keySet();
-    } else {
-      throw new EvalException(loc,
-          "type '" + getDataTypeName(o) + "' is not an iterable");
+      throw Starlark.errorf(
+          "type '%s' has no operator [](%s)", Starlark.type(object), Starlark.type(key));
     }
   }
 
   /**
-   * Returns the size of the Skylark object or -1 in case the object doesn't have a size.
+   * Updates an object as if by the Starlark statement {@code object[key] = value}.
+   *
+   * @throws EvalException if the object is not a list or dict.
    */
-  public static int size(Object arg) {
-    if (arg instanceof String) {
-      return ((String) arg).length();
-    } else if (arg instanceof Map) {
-      return ((Map<?, ?>) arg).size();
-    } else if (arg instanceof SkylarkList) {
-      return ((SkylarkList) arg).size();
-    } else if (arg instanceof Iterable) {
-      // Iterables.size() checks if arg is a Collection so it's efficient in that sense.
-      return Iterables.size((Iterable<?>) arg);
+  static void setIndex(Object object, Object key, Object value) throws EvalException {
+    if (object instanceof Dict) {
+      @SuppressWarnings("unchecked")
+      Dict<Object, Object> dict = (Dict<Object, Object>) object;
+      dict.put(key, value, (Location) null);
+
+    } else if (object instanceof StarlarkList) {
+      @SuppressWarnings("unchecked")
+      StarlarkList<Object> list = (StarlarkList<Object>) object;
+      int index = Starlark.toInt(key, "list index");
+      index = EvalUtils.getSequenceIndex(index, list.size());
+      list.set(index, value, (Location) null);
+
+    } else {
+      throw Starlark.errorf(
+          "can only assign an element in a dictionary or a list, not in a '%s'",
+          Starlark.type(object));
     }
-    return -1;
   }
 }

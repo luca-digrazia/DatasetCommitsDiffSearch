@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.flogger.GoogleLogger;
-import com.google.common.hash.HashFunction;
 import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
@@ -40,7 +39,6 @@ import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.StarlarkExportable;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.skyframe.ASTFileLookupFunction.ASTLookupFailedException;
 import com.google.devtools.build.lib.skyframe.StarlarkBuiltinsFunction.BuiltinsFailedException;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -55,6 +53,7 @@ import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.RecordingSkyFunctionEnvironment;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -116,7 +115,7 @@ public class BzlLoadFunction implements SkyFunction {
 
   public static BzlLoadFunction create(
       PackageFactory packageFactory,
-      HashFunction hashFunction,
+      DigestHashFunction digestHashFunction,
       Cache<ASTFileLookupValue.Key, ASTFileLookupValue> astFileLookupValueCache) {
     return new BzlLoadFunction(
         packageFactory,
@@ -143,7 +142,8 @@ public class BzlLoadFunction implements SkyFunction {
         // just a temporary thing for bzl execution. Retaining it forever is pure waste.
         // (b) The memory overhead of the extra Skyframe node and edge per bzl file is pure
         // waste.
-        new InliningAndCachingASTManager(packageFactory, hashFunction, astFileLookupValueCache),
+        new InliningAndCachingASTManager(
+            packageFactory, digestHashFunction, astFileLookupValueCache),
         /*cachedBzlLoadDataManager=*/ null);
   }
 
@@ -851,7 +851,7 @@ public class BzlLoadFunction implements SkyFunction {
       throws BzlLoadFailedException, InterruptedException {
     if (key instanceof BzlLoadValue.KeyForBuild) {
       // TODO(#11437): Remove ability to disable injection by setting flag to empty string.
-      if (starlarkSemantics.get(BuildLanguageOptions.EXPERIMENTAL_BUILTINS_BZL_PATH).isEmpty()) {
+      if (starlarkSemantics.experimentalBuiltinsBzlPath().isEmpty()) {
         return packageFactory.getUninjectedBuildBzlEnv();
       }
       StarlarkBuiltinsValue starlarkBuiltinsValue;
@@ -985,7 +985,7 @@ public class BzlLoadFunction implements SkyFunction {
    */
   private static class InliningAndCachingASTManager implements ASTManager {
     private final PackageFactory packageFactory;
-    private final HashFunction hashFunction;
+    private final DigestHashFunction digestHashFunction;
     // We keep a cache of ASTFileLookupValues that have been computed but whose corresponding
     // BzlLoadValue has not yet completed. This avoids repeating the ASTFileLookupValue work in case
     // of Skyframe restarts. (If we weren't inlining, Skyframe would cache this for us.)
@@ -993,10 +993,10 @@ public class BzlLoadFunction implements SkyFunction {
 
     private InliningAndCachingASTManager(
         PackageFactory packageFactory,
-        HashFunction hashFunction,
+        DigestHashFunction digestHashFunction,
         Cache<ASTFileLookupValue.Key, ASTFileLookupValue> astFileLookupValueCache) {
       this.packageFactory = packageFactory;
-      this.hashFunction = hashFunction;
+      this.digestHashFunction = digestHashFunction;
       this.astFileLookupValueCache = astFileLookupValueCache;
     }
 
@@ -1006,7 +1006,7 @@ public class BzlLoadFunction implements SkyFunction {
         throws ASTLookupFailedException, InterruptedException {
       ASTFileLookupValue value = astFileLookupValueCache.getIfPresent(key);
       if (value == null) {
-        value = ASTFileLookupFunction.computeInline(key, env, packageFactory, hashFunction);
+        value = ASTFileLookupFunction.computeInline(key, env, packageFactory, digestHashFunction);
         if (value != null) {
           astFileLookupValueCache.put(key, value);
         }

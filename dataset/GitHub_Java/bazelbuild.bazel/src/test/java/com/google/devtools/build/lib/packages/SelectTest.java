@@ -14,14 +14,16 @@
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import java.util.List;
@@ -33,14 +35,15 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class SelectTest {
 
-  private static Object eval(String expr) throws SyntaxError, EvalException, InterruptedException {
+  private static Object eval(String expr)
+      throws SyntaxError.Exception, EvalException, InterruptedException {
     ParserInput input = ParserInput.fromLines(expr);
-    StarlarkThread thread =
-        StarlarkThread.builder(Mutability.create("test"))
-            .setGlobals(Module.createForBuiltins(StarlarkLibrary.COMMON)) // select et al
-            .useDefaultSemantics()
-            .build();
-    return EvalUtils.eval(input, thread);
+    Module module =
+        Module.withPredeclared(StarlarkSemantics.DEFAULT, /*predeclared=*/ StarlarkLibrary.COMMON);
+    try (Mutability mu = Mutability.create()) {
+      StarlarkThread thread = new StarlarkThread(mu, StarlarkSemantics.DEFAULT);
+      return Starlark.eval(input, FileOptions.DEFAULT, module, thread);
+    }
   }
 
   private static void assertFails(String expr, String wantError) {

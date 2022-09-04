@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.packages.PackageValidator.InvalidPackageExc
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
@@ -58,10 +57,17 @@ import com.google.devtools.build.lib.repository.ExternalPackageHelper;
 import com.google.devtools.build.lib.rules.repository.WorkspaceFileHelper;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading.Code;
 import com.google.devtools.build.lib.skyframe.BzlLoadFunction.BzlLoadFailedException;
 import com.google.devtools.build.lib.skyframe.GlobValue.InvalidGlobPatternException;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FileOptions;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.StarlarkFile;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -90,13 +96,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Module;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.syntax.FileOptions;
-import net.starlark.java.syntax.Location;
-import net.starlark.java.syntax.ParserInput;
-import net.starlark.java.syntax.StarlarkFile;
 
 /** A SkyFunction for {@link PackageValue}s. */
 public class PackageFunction implements SkyFunction {
@@ -854,7 +853,7 @@ public class PackageFunction implements SkyFunction {
     String message =
         ContainingPackageLookupValue.getErrorMessageForLabelCrossingPackageBoundary(
             pkgRoot, label, containingPkgLookupValue);
-    pkgBuilder.addEvent(Package.error(location, message, Code.LABEL_CROSSES_PACKAGE_BOUNDARY));
+    pkgBuilder.addEvent(Event.error(location, message));
     return true;
   }
 
@@ -1219,9 +1218,7 @@ public class PackageFunction implements SkyFunction {
                 .recordScope(false) // don't mutate BUILD syntax
                 .requireLoadStatementsFirst(false)
                 .allowToplevelRebinding(true)
-                .restrictStringEscapes(
-                    starlarkSemantics.getBool(
-                        BuildLanguageOptions.INCOMPATIBLE_RESTRICT_STRING_ESCAPES))
+                .restrictStringEscapes(starlarkSemantics.incompatibleRestrictStringEscapes())
                 .build();
         file = StarlarkFile.parse(input, options);
         fileSyntaxCache.put(packageId, file);
@@ -1461,6 +1458,7 @@ public class PackageFunction implements SkyFunction {
       private static DetailedExitCode createDetailedExitCode(
           String message, PackageLoading.Code packageLoadingCode) {
         return DetailedExitCode.of(
+            ExitCode.BUILD_FAILURE,
             FailureDetail.newBuilder()
                 .setMessage(message)
                 .setPackageLoading(PackageLoading.newBuilder().setCode(packageLoadingCode).build())
