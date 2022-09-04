@@ -54,7 +54,7 @@ public final class AndroidSdkProvider extends NativeInfo
   private final TransitiveInfoCollection aidlLib;
   private final Artifact androidJar;
   private final Artifact sourceProperties;
-  @Nullable private final Artifact shrinkedAndroidJar;
+  private final Artifact shrinkedAndroidJar;
   private final Artifact mainDexClasses;
   private final FilesToRunProvider adb;
   private final FilesToRunProvider dx;
@@ -75,7 +75,7 @@ public final class AndroidSdkProvider extends NativeInfo
       @Nullable TransitiveInfoCollection aidlLib,
       Artifact androidJar,
       @Nullable Artifact sourceProperties,
-      @Nullable Artifact shrinkedAndroidJar,
+      Artifact shrinkedAndroidJar,
       Artifact mainDexClasses,
       FilesToRunProvider adb,
       FilesToRunProvider dx,
@@ -234,7 +234,6 @@ public final class AndroidSdkProvider extends NativeInfo
   }
 
   @Override
-  @Nullable
   public Artifact getShrinkedAndroidJar() {
     return shrinkedAndroidJar;
   }
@@ -321,7 +320,7 @@ public final class AndroidSdkProvider extends NativeInfo
         Object aidlLib,
         Artifact androidJar,
         Object sourceProperties,
-        Object shrinkedAndroidJar,
+        Artifact shrinkedAndroidJar,
         Artifact mainDexClasses,
         FilesToRunProvider adb,
         FilesToRunProvider dx,
@@ -342,7 +341,7 @@ public final class AndroidSdkProvider extends NativeInfo
           fromNoneable(aidlLib, TransitiveInfoCollection.class),
           androidJar,
           fromNoneable(sourceProperties, Artifact.class),
-          fromNoneable(shrinkedAndroidJar, Artifact.class),
+          shrinkedAndroidJar,
           mainDexClasses,
           adb,
           dx,

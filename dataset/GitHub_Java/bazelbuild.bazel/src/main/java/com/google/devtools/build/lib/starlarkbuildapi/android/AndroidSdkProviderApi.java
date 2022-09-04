@@ -80,13 +80,7 @@ public interface AndroidSdkProviderApi<
   @Nullable
   FileT getSourceProperties();
 
-  @StarlarkMethod(
-      name = "shrinked_android_jar",
-      structField = true,
-      doc = "",
-      documented = false,
-      allowReturnNones = true)
-  @Nullable
+  @StarlarkMethod(name = "shrinked_android_jar", structField = true, doc = "", documented = false)
   FileT getShrinkedAndroidJar();
 
   @StarlarkMethod(name = "main_dex_classes", structField = true, doc = "", documented = false)
@@ -192,11 +186,7 @@ public interface AndroidSdkProviderApi<
               name = "shrinked_android_jar",
               doc = "An artifact of the shrunk Android Jar.",
               positional = true,
-              named = false,
-              allowedTypes = {
-                @ParamType(type = FileApi.class),
-                @ParamType(type = NoneType.class),
-              }),
+              named = false),
           @Param(
               name = "main_dex_classes",
               doc = "An artifact of the main dex classes.",
@@ -280,7 +270,7 @@ public interface AndroidSdkProviderApi<
         Object aidlLib,
         FileT androidJar,
         Object sourceProperties,
-        Object shrinkedAndroidJar,
+        FileT shrinkedAndroidJar,
         FileT mainDexClasses,
         FilesToRunProviderT adb,
         FilesToRunProviderT dx,
