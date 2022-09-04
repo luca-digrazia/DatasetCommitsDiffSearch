@@ -15,15 +15,22 @@
  */
 package org.jboss.shamrock.jaxrs;
 
-import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -35,6 +42,7 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.container.DynamicFeature;
+import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.ContextResolver;
@@ -43,6 +51,7 @@ import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
 import javax.ws.rs.ext.Providers;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -60,11 +69,11 @@ import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
 import org.jboss.resteasy.plugins.interceptors.GZIPEncodingInterceptor;
 import org.jboss.resteasy.plugins.server.servlet.HttpServlet30Dispatcher;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
+import org.jboss.shamrock.annotations.BuildProducer;
+import org.jboss.shamrock.annotations.BuildStep;
+import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.arc.deployment.BeanContainerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanDefiningAnnotationBuildItem;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
-import org.jboss.shamrock.deployment.annotations.BuildStep;
-import org.jboss.shamrock.deployment.annotations.Record;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.ProxyUnwrapperBuildItem;
@@ -74,13 +83,10 @@ import org.jboss.shamrock.deployment.builditem.substrate.RuntimeInitializedClass
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import org.jboss.shamrock.deployment.util.ServiceUtil;
 import org.jboss.shamrock.jaxrs.runtime.ResteasyFilter;
 import org.jboss.shamrock.jaxrs.runtime.RolesFilterRegistrar;
 import org.jboss.shamrock.jaxrs.runtime.graal.JaxrsTemplate;
 import org.jboss.shamrock.jaxrs.runtime.graal.ShamrockInjectorFactory;
-import org.jboss.shamrock.runtime.annotations.ConfigItem;
-import org.jboss.shamrock.runtime.annotations.ConfigRoot;
 import org.jboss.shamrock.undertow.FilterBuildItem;
 import org.jboss.shamrock.undertow.ServletBuildItem;
 import org.jboss.shamrock.undertow.ServletInitParamBuildItem;
@@ -161,50 +167,42 @@ public class JaxrsScanningProcessor {
     private static final DotName SINGLETON_SCOPE = DotName.createSimple(Singleton.class.getName());
 
     /**
-     * JAX-RS configuration.
+     * If this is true then JAX-RS will use only a single instance of a resource
+     * class to service all requests.
+     * <p>
+     * If this is false then it will create a new instance of the resource per
+     * request.
+     * <p>
+     * If the resource class has an explicit CDI scope annotation then the value of
+     * this annotation will always be used to control the lifecycle of the resource
+     * class.
+     * <p>
+     * IMPLEMENTATION NOTE: {@code javax.ws.rs.Path} turns into a CDI stereotype
+     * with singleton scope. As a result, if a user annotates a JAX-RS resource with
+     * a stereotype which has a different default scope the deployment fails with
+     * IllegalStateException.
      */
-    JaxrsConfig jaxrs;
+    @ConfigProperty(name = "shamrock.jaxrs.singleton-resources", defaultValue = "true")
+    boolean singletonResources;
 
-    @ConfigRoot
-    static final class JaxrsConfig {
-        /**
-         * If this is true then JAX-RS will use only a single instance of a resource
-         * class to service all requests.
-         * <p>
-         * If this is false then it will create a new instance of the resource per
-         * request.
-         * <p>
-         * If the resource class has an explicit CDI scope annotation then the value of
-         * this annotation will always be used to control the lifecycle of the resource
-         * class.
-         * <p>
-         * IMPLEMENTATION NOTE: {@code javax.ws.rs.Path} turns into a CDI stereotype
-         * with singleton scope. As a result, if a user annotates a JAX-RS resource with
-         * a stereotype which has a different default scope the deployment fails with
-         * IllegalStateException.
-         */
-        @ConfigItem(defaultValue = "true")
-        boolean singletonResources;
+    /**
+     * Enable gzip support for JAX-RS services.
+     */
+    @ConfigProperty(name = "shamrock.jaxrs.enable-gzip")
+    Optional<Boolean> isGzipSupportEnabled;
 
-        /**
-         * Enable gzip support for JAX-RS services.
-         */
-        @ConfigItem
-        boolean enableGzip;
-
-        /**
-         * Set this to override the default path for JAX-RS resources if there are no
-         * annotated application classes.
-         */
-        @ConfigItem(defaultValue = "/")
-        String path;
-    }
+    /**
+     * Set this to override the default path for JAX-RS resources if there are no
+     * annotated application classes. The default value is `/`.
+     */
+    @ConfigProperty(name = "shamrock.jaxrs.path", defaultValue = "/")
+    String defaultPath;
 
     private static final Logger log = Logger.getLogger("org.jboss.shamrock.jaxrs");
 
     @BuildStep
-    org.jboss.shamrock.jaxrs.JaxrsConfig exportConfig() {
-        return new org.jboss.shamrock.jaxrs.JaxrsConfig(jaxrs.path);
+    JaxrsConfig exportConfig() {
+        return new JaxrsConfig(defaultPath);
     }
 
     @BuildStep
@@ -309,7 +307,7 @@ public class JaxrsScanningProcessor {
             path = appPath.value().asString();
             appClass = appPath.target().asClass().name().toString();
         } else {
-            path = jaxrs.path;
+            path = defaultPath;
         }
         if (path.endsWith("/")) {
             mappingPath = path + "*";
@@ -394,7 +392,7 @@ public class JaxrsScanningProcessor {
             contributedProviders.add(contributedProviderBuildItem.getName());
         }
 
-        Set<String> availableProviders = ServiceUtil.classNamesNamedIn(getClass().getClassLoader(), "META-INF/services/" + Providers.class.getName());
+        Set<String> availableProviders = getAvailableProviders();
 
         MediaTypeMap<String> categorizedReaders = new MediaTypeMap<>();
         MediaTypeMap<String> categorizedWriters = new MediaTypeMap<>();
@@ -412,7 +410,7 @@ public class JaxrsScanningProcessor {
         boolean useBuiltinProviders = collectDeclaredProviders(providersToRegister, categorizedReaders, categorizedWriters, categorizedContextResolvers, index);
 
         // If GZIP support is enabled, enable it
-        if (jaxrs.enableGzip) {
+        if (Boolean.TRUE.equals(isGzipSupportEnabled.orElse(Boolean.FALSE))) {
             providersToRegister.add(AcceptEncodingGZIPFilter.class.getName());
             providersToRegister.add(GZIPDecodingInterceptor.class.getName());
             providersToRegister.add(GZIPEncodingInterceptor.class.getName());
@@ -439,7 +437,7 @@ public class JaxrsScanningProcessor {
         }
 
 
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.JAXRS));
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.JAX_RS));
         List<Function<Object, Object>> unwrappers = new ArrayList<>();
         for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
             unwrappers.add(i.getUnwrapper());
@@ -449,10 +447,10 @@ public class JaxrsScanningProcessor {
         servletContextParams.produce(new ServletInitParamBuildItem("resteasy.injector.factory", ShamrockInjectorFactory.class.getName()));
     }
 
-
+    
     @BuildStep
     List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
-        return Collections.singletonList(new BeanDefiningAnnotationBuildItem(PATH, jaxrs.singletonResources ? SINGLETON_SCOPE : null));
+        return Collections.singletonList(new BeanDefiningAnnotationBuildItem(PATH, singletonResources ? SINGLETON_SCOPE : null));
     }
 
     /**
@@ -506,6 +504,31 @@ public class JaxrsScanningProcessor {
         // In the case of a constraint violation, these elements might be returned as entities and will be serialized
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ViolationReport.class.getName()));
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, ResteasyConstraintViolation.class.getName()));
+    }
+
+    private Set<String> getAvailableProviders() throws Exception {
+        Set<String> availableProviders = new HashSet<>();
+        Enumeration<URL> resources = getClass().getClassLoader()
+                .getResources("META-INF/services/" + Providers.class.getName());
+        while (resources.hasMoreElements()) {
+            URL url = resources.nextElement();
+            try (InputStream in = url.openStream()) {
+                BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains("#")) {
+                        line = line.substring(line.indexOf("#"));
+                    }
+                    line = line.trim();
+                    if (line.equals("")) {
+                        continue;
+                    }
+
+                    availableProviders.add(line);
+                }
+            }
+        }
+        return availableProviders;
     }
 
     private static void categorizeProviders(Set<String> availableProviders, MediaTypeMap<String> categorizedReaders,
