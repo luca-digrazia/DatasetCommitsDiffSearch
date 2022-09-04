@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 public class MessageCountAlertCondition extends AbstractAlertCondition {
@@ -65,14 +64,14 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
 
         this.searches = searches;
         this.time = (Integer) parameters.get("time");
-        this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase(Locale.ENGLISH));
+        this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase());
         this.threshold = (Integer) parameters.get("threshold");
     }
 
     @Override
     public String getDescription() {
         return "time: " + time
-                + ", threshold_type: " + thresholdType.toString().toLowerCase(Locale.ENGLISH)
+                + ", threshold_type: " + thresholdType.toString().toLowerCase()
                 + ", threshold: " + threshold
                 + ", grace: " + grace;
     }
@@ -109,7 +108,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
                 }
 
                 final String resultDescription = "Stream had " + count + " messages in the last " + time
-                        + " minutes with trigger condition " + thresholdType.toString().toLowerCase(Locale.ENGLISH)
+                        + " minutes with trigger condition " + thresholdType.toString().toLowerCase()
                         + " than " + threshold + " messages. " + "(Current grace time: " + grace + " minutes)";
                 return new CheckResult(true, this, resultDescription, Tools.iso8601(), summaries);
             } else {

@@ -16,12 +16,14 @@
  */
 package org.graylog2.alerts;
 
+import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertFalse;
@@ -63,7 +65,7 @@ public class AbstractAlertConditionTest extends AlertConditionTest {
     }
 
     protected AlertCondition getDummyAlertCondition(Map<String, Object> parameters) {
-        return new AbstractAlertCondition(stream, CONDITION_ID, null, Tools.nowUTC(), STREAM_CREATOR, parameters) {
+        return new AbstractAlertCondition(stream, CONDITION_ID, null, Tools.iso8601(), STREAM_CREATOR, parameters) {
             @Override
             public String getDescription() {
                 return null;
@@ -71,6 +73,11 @@ public class AbstractAlertConditionTest extends AlertConditionTest {
 
             @Override
             protected AlertCondition.CheckResult runCheck() {
+                return null;
+            }
+
+            @Override
+            public List<Message> getSearchHits() {
                 return null;
             }
         };
