@@ -35,24 +35,21 @@ public final class DataValueFileTest {
         DataValueFile.of(
             Visibility.UNKNOWN,
             DataSource.of(DependencyInfo.UNKNOWN, fs.getPath("val1")),
-            /*fingerprint=*/ null,
-            /*rootXmlNode=*/ null);
+            /*fingerprint=*/ null);
     DataValueFile val2a =
         DataValueFile.of(
             Visibility.UNKNOWN,
             DataSource.of(
                 DependencyInfo.create("lib2a", DependencyInfo.DependencyType.UNKNOWN),
                 fs.getPath("val2")),
-            /*fingerprint=*/ null,
-            /*rootXmlNode=*/ null);
+            /*fingerprint=*/ null);
     DataValueFile val2b =
         DataValueFile.of(
             Visibility.UNKNOWN,
             DataSource.of(
                 DependencyInfo.create("lib2b", DependencyInfo.DependencyType.UNKNOWN),
                 fs.getPath("val2")),
-            /*fingerprint=*/ null,
-            /*rootXmlNode=*/ null);
+            /*fingerprint=*/ null);
 
     assertThat(val1.valueEquals(val2a)).isFalse();
     assertThat(val2a.valueEquals(val2b)).isTrue();
@@ -64,20 +61,17 @@ public final class DataValueFileTest {
         DataValueFile.of(
             Visibility.UNKNOWN,
             DataSource.of(DependencyInfo.UNKNOWN, fs.getPath("asdf")),
-            HashCode.fromInt(1),
-            /*rootXmlNode=*/ null);
+            HashCode.fromInt(1));
     DataValueFile val2a =
         DataValueFile.of(
             Visibility.UNKNOWN,
             DataSource.of(DependencyInfo.UNKNOWN, fs.getPath("qwerty")),
-            HashCode.fromInt(2),
-            /*rootXmlNode=*/ null);
+            HashCode.fromInt(2));
     DataValueFile val2b =
         DataValueFile.of(
             Visibility.UNKNOWN,
             DataSource.of(DependencyInfo.UNKNOWN, fs.getPath("hunter2")),
-            HashCode.fromInt(2),
-            /*rootXmlNode=*/ null);
+            HashCode.fromInt(2));
 
     assertThat(val1.valueEquals(val2a)).isFalse();
     assertThat(val2a.valueEquals(val2b)).isTrue();
@@ -86,15 +80,9 @@ public final class DataValueFileTest {
   @Test
   public void valueEquals_checkVisibility() throws Exception {
     DataSource dataSource = DataSource.of(DependencyInfo.UNKNOWN, fs.getPath("x"));
-    DataValueFile val1 =
-        DataValueFile.of(
-            Visibility.PRIVATE, dataSource, /*fingerprint=*/ null, /*rootXmlNode=*/ null);
-    DataValueFile val2a =
-        DataValueFile.of(
-            Visibility.PUBLIC, dataSource, /*fingerprint=*/ null, /*rootXmlNode=*/ null);
-    DataValueFile val2b =
-        DataValueFile.of(
-            Visibility.PUBLIC, dataSource, /*fingerprint=*/ null, /*rootXmlNode=*/ null);
+    DataValueFile val1 = DataValueFile.of(Visibility.PRIVATE, dataSource, /*fingerprint=*/ null);
+    DataValueFile val2a = DataValueFile.of(Visibility.PUBLIC, dataSource, /*fingerprint=*/ null);
+    DataValueFile val2b = DataValueFile.of(Visibility.PUBLIC, dataSource, /*fingerprint=*/ null);
 
     assertThat(val1.valueEquals(val2a)).isFalse();
     assertThat(val2a.valueEquals(val2b)).isTrue();
