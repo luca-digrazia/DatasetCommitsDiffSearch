@@ -1,18 +1,12 @@
 package io.quarkus.rest.runtime.jaxrs;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import javax.ws.rs.ServiceUnavailableException;
 import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.CompletionCallback;
-import javax.ws.rs.container.ConnectionCallback;
 import javax.ws.rs.container.TimeoutHandler;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Response;
@@ -30,8 +24,6 @@ public class QuarkusRestAsyncResponse implements AsyncResponse, Handler<Long> {
     private volatile TimeoutHandler timeoutHandler;
     // only used with lock, no need for volatile
     private long timerId = -1;
-    private List<ConnectionCallback> connectionCallbacks = new ArrayList<>();
-    private List<CompletionCallback> completionCallbacks = new ArrayList<>();
 
     public QuarkusRestAsyncResponse(QuarkusRestRequestContext context) {
         this.context = context;
@@ -59,7 +51,7 @@ public class QuarkusRestAsyncResponse implements AsyncResponse, Handler<Long> {
             suspended = false;
         }
         cancelTimer();
-        context.handleException(response);
+        context.setThrowable(response);
         context.resume();
         return true;
     }
@@ -97,13 +89,6 @@ public class QuarkusRestAsyncResponse implements AsyncResponse, Handler<Long> {
     @Override
     public boolean cancel(Date retryAfter) {
         return internalCancel(retryAfter);
-    }
-
-    // CALL WITH LOCK
-    public synchronized void onComplete(Throwable throwable) {
-        for (CompletionCallback callback : completionCallbacks) {
-            callback.onComplete(throwable);
-        }
     }
 
     // CALL WITH LOCK
@@ -149,52 +134,22 @@ public class QuarkusRestAsyncResponse implements AsyncResponse, Handler<Long> {
 
     @Override
     public Collection<Class<?>> register(Class<?> callback) {
-        Objects.requireNonNull(callback);
-        // FIXME: does this mean we should use CDI to look it up?
-        try {
-            return register(callback.newInstance());
-        } catch (InstantiationException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+        return null;
     }
 
     @Override
     public Map<Class<?>, Collection<Class<?>>> register(Class<?> callback, Class<?>... callbacks) {
-        Objects.requireNonNull(callback);
-        Objects.requireNonNull(callbacks);
-        Map<Class<?>, Collection<Class<?>>> ret = new HashMap<>();
-        ret.put(callback.getClass(), register(callback));
-        for (Class<?> cb : callbacks) {
-            ret.put(cb, register(cb));
-        }
-        return ret;
+        return null;
     }
 
     @Override
-    public synchronized Collection<Class<?>> register(Object callback) {
-        Objects.requireNonNull(callback);
-        List<Class<?>> ret = new ArrayList<>(2);
-        if (callback instanceof ConnectionCallback) {
-            connectionCallbacks.add((ConnectionCallback) callback);
-            ret.add(ConnectionCallback.class);
-        }
-        if (callback instanceof CompletionCallback) {
-            completionCallbacks.add((CompletionCallback) callback);
-            ret.add(CompletionCallback.class);
-        }
-        return ret;
+    public Collection<Class<?>> register(Object callback) {
+        return null;
     }
 
     @Override
     public Map<Class<?>, Collection<Class<?>>> register(Object callback, Object... callbacks) {
-        Objects.requireNonNull(callback);
-        Objects.requireNonNull(callbacks);
-        Map<Class<?>, Collection<Class<?>>> ret = new HashMap<>();
-        ret.put(callback.getClass(), register(callback));
-        for (Object cb : callbacks) {
-            ret.put(cb.getClass(), register(cb));
-        }
-        return ret;
+        return null;
     }
 
     @Override
