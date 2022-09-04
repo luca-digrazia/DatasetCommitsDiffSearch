@@ -16,7 +16,7 @@
  */
 package org.graylog2.indexer.cluster.jest;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.google.gson.JsonObject;
 import io.searchbox.action.Action;
 import io.searchbox.client.JestClient;
 import io.searchbox.client.JestResult;
@@ -26,13 +26,21 @@ import org.graylog2.indexer.ElasticsearchException;
 import org.graylog2.indexer.FieldTypeException;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.QueryParsingException;
+import org.graylog2.indexer.gson.GsonUtils;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
+import static org.graylog2.indexer.gson.GsonUtils.asInteger;
+import static org.graylog2.indexer.gson.GsonUtils.asJsonArray;
+import static org.graylog2.indexer.gson.GsonUtils.asJsonObject;
+import static org.graylog2.indexer.gson.GsonUtils.asString;
 
 public class JestUtils {
     private JestUtils() {
@@ -54,7 +62,7 @@ public class JestUtils {
         if (result.isSucceeded()) {
             return result;
         } else {
-            throw specificException(errorMessage, result.getJsonObject().path("error"));
+            throw specificException(errorMessage, result.getJsonObject());
         }
     }
 
@@ -62,37 +70,32 @@ public class JestUtils {
         return execute(client, null, request, errorMessage);
     }
 
-    public static ElasticsearchException specificException(Supplier<String> errorMessage, JsonNode errorNode) {
-        final JsonNode rootCauses = errorNode.path("root_cause");
-        final List<String> reasons = new ArrayList<>(rootCauses.size());
+    private static ElasticsearchException specificException(Supplier<String> errorMessage, JsonObject jsonObject) {
+        final List<JsonObject> rootCauses = extractRootCauses(jsonObject);
+        final List<String> reasons = extractReasons(rootCauses);
 
-        for (JsonNode rootCause : rootCauses) {
-            final JsonNode reason = rootCause.path("reason");
-            if (reason.isTextual()) {
-                reasons.add(reason.asText());
-            }
-
-            final JsonNode type = rootCause.path("type");
-            if (!type.isTextual()) {
+        for (JsonObject rootCause : rootCauses) {
+            final String type = asString(rootCause.get("type"));
+            if (type == null) {
                 continue;
             }
-            switch(type.asText()) {
+            switch(type) {
                 case "query_parsing_exception":
                     return buildQueryParsingException(errorMessage, rootCause, reasons);
                 case "index_not_found_exception":
-                    final String indexName = rootCause.path("resource.id").asText();
+                    final String indexName = asString(rootCause.get("resource.id"));
                     return buildIndexNotFoundException(errorMessage, indexName);
                 case "illegal_argument_exception":
-                    final String reasonText = reason.asText();
-                    if (reasonText.startsWith("Expected numeric type on field")) {
-                        return buildFieldTypeException(errorMessage, reasonText);
+                    final String reason = asString(rootCause.get("reason"));
+                    if (reason != null && reason.startsWith("Expected numeric type on field")) {
+                        return buildFieldTypeException(errorMessage, reason);
                     }
                     break;
             }
         }
 
         if (reasons.isEmpty()) {
-            return new ElasticsearchException(errorMessage.get(), Collections.singletonList(errorNode.toString()));
+            return new ElasticsearchException(errorMessage.get(), Collections.singletonList(jsonObject.toString()));
         }
 
         return new ElasticsearchException(errorMessage.get(), reasons);
@@ -102,14 +105,29 @@ public class JestUtils {
         return new FieldTypeException(errorMessage.get(), reason);
     }
 
+    private static List<String> extractReasons(List<JsonObject> rootCauses) {
+        return rootCauses.stream()
+                .map(rootCause -> asString(rootCause.get("reason")))
+                .collect(Collectors.toList());
+    }
+
+    private static List<JsonObject> extractRootCauses(JsonObject jsonObject) {
+        return Optional.of(jsonObject)
+                .map(json -> asJsonObject(json.get("error")))
+                .map(error -> asJsonArray(error.get("root_cause")))
+                .map(Iterable::spliterator)
+                .map(x -> StreamSupport.stream(x, false))
+                .orElse(Stream.empty())
+                .map(GsonUtils::asJsonObject)
+                .collect(Collectors.toList());
+    }
+
     private static QueryParsingException buildQueryParsingException(Supplier<String> errorMessage,
-                                                                    JsonNode rootCause,
+                                                                    JsonObject rootCause,
                                                                     List<String> reasons) {
-        final JsonNode lineJson = rootCause.path("line");
-        final Integer line = lineJson.isInt() ? lineJson.asInt() : null;
-        final JsonNode columnJson = rootCause.path("col");
-        final Integer column = columnJson.isInt() ? columnJson.asInt() : null;
-        final String index = rootCause.path("index").asText(null);
+        final Integer line = asInteger(rootCause.get("line"));
+        final Integer column = asInteger(rootCause.get("col"));
+        final String index = asString(rootCause.get("index"));
 
         return new QueryParsingException(errorMessage.get(), line, column, index, reasons);
     }

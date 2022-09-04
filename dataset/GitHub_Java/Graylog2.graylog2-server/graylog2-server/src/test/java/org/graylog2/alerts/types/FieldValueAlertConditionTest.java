@@ -17,6 +17,7 @@
 package org.graylog2.alerts.types;
 
 import org.graylog2.alerts.AlertConditionTest;
+import org.graylog2.indexer.FieldTypeException;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlertCondition;
@@ -148,13 +149,17 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
     }
 
     private void fieldStatsShouldReturn(FieldStatsResult fieldStatsResult) {
-        when(searches.fieldStats(anyString(),
+        try {
+            when(searches.fieldStats(anyString(),
                 eq("*"),
                 anyString(),
                 any(RelativeRange.class),
                 anyBoolean(),
                 anyBoolean(),
                 anyBoolean())).thenReturn(fieldStatsResult);
+        } catch (FieldTypeException e) {
+            assertNotNull("This should not return an exception!", e);
+        }
     }
 
     private FieldStatsResult getFieldStatsResult(FieldValueAlertCondition.CheckType type, Number retValue) {
