@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.sandbox;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.actions.cache.VirtualActionInput.EmptyActionInput;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.exec.SpawnRunner.SpawnExecutionContext;
-import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingResult;
@@ -50,16 +48,9 @@ public final class SandboxHelpers {
    * @throws IOException If any files could not be written.
    */
   public static Map<PathFragment, Path> processInputFiles(
-      Spawn spawn,
-      SpawnExecutionContext context,
-      Path execRoot,
-      boolean expandTreeArtifactsInRunfiles)
-      throws IOException {
+      Spawn spawn, SpawnExecutionContext context, Path execRoot) throws IOException {
     return processInputFiles(
-        context.getInputMapping(expandTreeArtifactsInRunfiles),
-        spawn,
-        context.getArtifactExpander(),
-        execRoot);
+        context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
   }
 
   /**
@@ -119,31 +110,12 @@ public final class SandboxHelpers {
     return inputFiles;
   }
 
-  /** The file and directory outputs of a sandboxed spawn. */
-  @AutoValue
-  public abstract static class SandboxOutputs {
-    public abstract ImmutableSet<PathFragment> files();
-
-    public abstract ImmutableSet<PathFragment> dirs();
-
-    public static SandboxOutputs create(
-        ImmutableSet<PathFragment> files, ImmutableSet<PathFragment> dirs) {
-      return new AutoValue_SandboxHelpers_SandboxOutputs(files, dirs);
-    }
-  }
-
-  public static SandboxOutputs getOutputs(Spawn spawn) {
-    ImmutableSet.Builder<PathFragment> files = ImmutableSet.builder();
-    ImmutableSet.Builder<PathFragment> dirs = ImmutableSet.builder();
+  public static ImmutableSet<PathFragment> getOutputFiles(Spawn spawn) {
+    ImmutableSet.Builder<PathFragment> outputFiles = ImmutableSet.builder();
     for (ActionInput output : spawn.getOutputFiles()) {
-      PathFragment path = PathFragment.create(output.getExecPathString());
-      if (output instanceof Artifact && ((Artifact) output).isTreeArtifact()) {
-        dirs.add(path);
-      } else {
-        files.add(path);
-      }
+      outputFiles.add(PathFragment.create(output.getExecPathString()));
     }
-    return SandboxOutputs.create(files.build(), dirs.build());
+    return outputFiles.build();
   }
 
   /**
@@ -160,30 +132,5 @@ public final class SandboxHelpers {
         .getOptions(TestConfiguration.TestOptions.class)
         .testArguments
         .contains("--wrapper_script_flag=--debug");
-  }
-
-  /**
-   * Waits for a process to terminate.
-   *
-   * @param process the process to wait for
-   * @return the exit code of the terminated process
-   */
-  static int waitForProcess(Subprocess process) {
-    boolean interrupted = false;
-    try {
-      while (true) {
-        try {
-          process.waitFor();
-          break;
-        } catch (InterruptedException ie) {
-          interrupted = true;
-        }
-      }
-    } finally {
-      if (interrupted) {
-        Thread.currentThread().interrupt();
-      }
-    }
-    return process.exitValue();
   }
 }

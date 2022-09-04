@@ -84,10 +84,10 @@ import com.google.devtools.common.options.InvocationPolicyParser;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionPriority.PriorityCategory;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsParsingResult;
-import com.google.devtools.common.options.OptionsProvider;
 import com.google.devtools.common.options.TriState;
 import java.io.File;
 import java.io.IOException;
@@ -153,6 +153,7 @@ public final class BlazeRuntime {
 
   private final ProjectFile.Provider projectFileProvider;
   @Nullable private final InvocationPolicy moduleInvocationPolicy;
+  private final String defaultsPackageContent;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final String productName;
   private final BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap;
@@ -202,6 +203,8 @@ public final class BlazeRuntime {
     this.queryOutputFormatters = queryOutputFormatters;
     this.eventBusExceptionHandler = eventBusExceptionHandler;
 
+    this.defaultsPackageContent =
+        ruleClassProvider.getDefaultsPackageContent(getModuleInvocationPolicy());
     CommandNameCache.CommandNameCacheInstance.INSTANCE.setCommandNameCache(
         new CommandNameCacheImpl(getCommandMap()));
     this.productName = productName;
@@ -221,7 +224,7 @@ public final class BlazeRuntime {
   }
 
   @Nullable public CoverageReportActionFactory getCoverageReportActionFactory(
-      OptionsProvider commandOptions) {
+      OptionsClassProvider commandOptions) {
     CoverageReportActionFactory firstFactory = null;
     for (BlazeModule module : blazeModules) {
       CoverageReportActionFactory factory = module.getCoverageReportFactory(commandOptions);
@@ -584,8 +587,26 @@ public final class BlazeRuntime {
     }
   }
 
-  /** Creates a BuildOptions class for the given options taken from an optionsProvider. */
-  public BuildOptions createBuildOptions(OptionsProvider optionsProvider) {
+  /**
+   * Returns the defaults package for the default settings. Should only be called by commands that
+   * do <i>not</i> process {@link BuildOptions}, since build options can alter the contents of the
+   * defaults package, which will not be reflected here.
+   */
+  public String getDefaultsPackageContent() {
+    return defaultsPackageContent;
+  }
+
+  /**
+   * Returns the defaults package for the given options taken from an optionsProvider.
+   */
+  public String getDefaultsPackageContent(OptionsClassProvider optionsProvider) {
+    return ruleClassProvider.getDefaultsPackageContent(optionsProvider);
+  }
+
+  /**
+   * Creates a BuildOptions class for the given options taken from an optionsProvider.
+   */
+  public BuildOptions createBuildOptions(OptionsClassProvider optionsProvider) {
     return ruleClassProvider.createBuildOptions(optionsProvider);
   }
 

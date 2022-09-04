@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -263,8 +264,7 @@ public abstract class BlazeModule {
    * does not provide any helper, it should return null. Note that only one helper per Bazel/Blaze
    * runtime is allowed.
    */
-  public Package.Builder.Helper getPackageBuilderHelper(
-      ConfiguredRuleClassProvider ruleClassProvider) {
+  public Package.Builder.Helper getPackageBuilderHelper(RuleClassProvider ruleClassProvider) {
     return null;
   }
 

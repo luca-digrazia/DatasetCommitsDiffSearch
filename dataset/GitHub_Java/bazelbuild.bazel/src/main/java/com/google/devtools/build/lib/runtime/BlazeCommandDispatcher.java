@@ -299,8 +299,16 @@ public class BlazeCommandDispatcher {
       }
       env.getReporter().removeHandler(storedEventHandler);
 
-      // Setup stdout / stderr.
-      outErr = tee(outErr, env.getOutputListeners());
+      // We may only start writing to outErr once we've given the modules the chance to hook in.
+      for (BlazeModule module : runtime.getBlazeModules()) {
+        try (SilentCloseable closeable =
+            Profiler.instance().profile(module + ".getOutputListener")) {
+          OutErr listener = module.getOutputListener();
+          if (listener != null) {
+            outErr = tee(outErr, listener);
+          }
+        }
+      }
 
       // Early exit. We need to guarantee that the ErrOut and Reporter setup below never error out,
       // so any invariants they need must be checked before this point.
@@ -483,9 +491,6 @@ public class BlazeCommandDispatcher {
       }
       return result;
     } catch (Throwable e) {
-      outErr.printErr(
-          "Internal error thrown during build. Printing stack trace: "
-              + Throwables.getStackTraceAsString(e));
       e.printStackTrace();
       BugReport.printBug(outErr, e);
       BugReport.sendBugReport(e, args, env.getCrashData());
@@ -556,16 +561,11 @@ public class BlazeCommandDispatcher {
   }
 
 
-  private OutErr tee(OutErr outErr, List<OutErr> additionalOutErrs) {
-    if (additionalOutErrs.isEmpty()) {
-      return outErr;
-    }
-    DelegatingOutErr result = new DelegatingOutErr();
-    result.addSink(outErr);
-    for (OutErr additionalOutErr : additionalOutErrs) {
-      result.addSink(additionalOutErr);
-    }
-    return result;
+  private OutErr tee(OutErr outErr1, OutErr outErr2) {
+    DelegatingOutErr outErr = new DelegatingOutErr();
+    outErr.addSink(outErr1);
+    outErr.addSink(outErr2);
+    return outErr;
   }
 
   private void closeSilently(OutputStream logOutputStream) {

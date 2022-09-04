@@ -122,41 +122,41 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
             positional = false,
             defaultValue = "[]",
             doc = "List of the input files of the action."),
-      },
-      useLocation = true)
-  public void doNothing(String mnemonic, Object inputs, Location location) throws EvalException;
+      })
+  public void doNothing(String mnemonic, Object inputs) throws EvalException;
 
   @SkylarkCallable(
-      name = "write",
-      doc =
-          "Creates a file write action. When the action is executed, it will write the given "
-              + "content to a file. This is used to generate files using information available in "
-              + "the analysis phase. If the file is large and with a lot of static content, "
-              + "consider using <a href=\"#expand_template\"><code>expand_template</code></a>.",
-      parameters = {
-        @Param(name = "output", type = FileApi.class, doc = "The output file.", named = true),
-        @Param(
-            name = "content",
-            type = Object.class,
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = CommandLineArgsApi.class)
-            },
-            doc =
-                "the contents of the file. "
-                    + "May be a either a string or an "
-                    + "<a href=\"actions.html#args\"><code>actions.args()</code></a> object.",
-            named = true),
-        @Param(
-            name = "is_executable",
-            type = Boolean.class,
-            defaultValue = "False",
-            doc = "Whether the output file should be executable.",
-            named = true)
-      },
-      useLocation = true)
-  public void write(FileApi output, Object content, Boolean isExecutable, Location location)
-      throws EvalException;
+    name = "write",
+    doc =
+        "Creates a file write action. When the action is executed, it will write the given content "
+            + "to a file. This is used to generate files using information available in the "
+            + "analysis phase. If the file is large and with a lot of static content, consider "
+            + "using <a href=\"#expand_template\"><code>expand_template</code></a>.",
+    parameters = {
+      @Param(name = "output", type = FileApi.class, doc = "The output file.", named = true),
+      @Param(
+        name = "content",
+        type = Object.class,
+        allowedTypes = {
+          @ParamType(type = String.class),
+          @ParamType(type = CommandLineArgsApi.class)
+        },
+        doc =
+            "the contents of the file. "
+                + "May be a either a string or an "
+                + "<a href=\"actions.html#args\"><code>actions.args()</code></a> object.",
+        named = true
+      ),
+      @Param(
+        name = "is_executable",
+        type = Boolean.class,
+        defaultValue = "False",
+        doc = "Whether the output file should be executable.",
+        named = true
+      )
+    }
+  )
+  public void write(FileApi output, Object content, Boolean isExecutable) throws EvalException;
 
   @SkylarkCallable(
       name = "run",
@@ -346,12 +346,10 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
                     + "<a href=\"actions.html#args\"><code>actions.args()</code></a> objects."
                     + ""
                     + "<p>Bazel passes the elements in this attribute as arguments to the command."
-                    + "The command can access these arguments using shell variable substitutions "
-                    + "such as <code>$1</code>, <code>$2</code>, etc. Note that since Args "
-                    + "objects are flattened before indexing, if there is an Args object of "
-                    + "unknown size then all subsequent strings will be at unpredictable indices. "
-                    + "It may be useful to use <code>$@</code> (to retrieve all arguments) in "
-                    + "conjunction with Args objects of indeterminate size."
+                    + "The command can access these arguments as <code>$1</code>, <code>$2</code>, "
+                    + "etc. Args objects are flattened before indexing. It is generally not useful "
+                    + "to have an Args object of unknown size in this list, since that means all "
+                    + "strings in or after that Args object will be at unpredictable indices."
                     + ""
                     + "<p>In the case where <code>command</code> is a list of strings, this "
                     + "parameter may not be used."),
@@ -383,10 +381,9 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
                     + "any <a href=\"actions.html#args\"><code>actions.args()</code></a> objects, "
                     + "their contents are appended one by one to the command line, so "
                     + "<code>$</code><i>i</i> can refer to individual strings within an Args "
-                    + "object. Note that if an Args object of unknown size is passed as part of "
-                    + "<code>arguments</code>, then the strings will be at unknown indices; in "
-                    + "this case the <code>$@</code> shell substitution (retrieve all arguments) "
-                    + "may be useful."
+                    + "object. Note that it is not useful to pass an Args object of unknown size "
+                    + "as part of <code>arguments</code>, since then the strings would not be at "
+                    + "known indices."
                     + ""
                     + "<p><b>(Deprecated)</b> If <code>command</code> is a sequence of strings, "
                     + "the first item is the executable to run and the remaining items are its "
@@ -500,14 +497,12 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
             named = true,
             positional = false,
             doc = "Whether the output file should be executable.")
-      },
-      useLocation = true)
+      })
   public void expandTemplate(
       FileApi template,
       FileApi output,
       SkylarkDict<?, ?> substitutionsUnchecked,
-      Boolean executable,
-      Location location)
+      Boolean executable)
       throws EvalException;
 
   @SkylarkCallable(

@@ -230,7 +230,7 @@ public final class BlazeWorkspace {
       actionCache.clear();
     }
     actionCache = null;
-    getCacheDirectory().deleteTree();
+    FileSystemUtils.deleteTree(getCacheDirectory());
   }
 
   /**

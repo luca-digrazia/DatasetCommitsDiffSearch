@@ -14,7 +14,6 @@
 
 package com.google.devtools.common.options;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -198,8 +197,7 @@ public class OptionsParser implements OptionsParsingResult {
     return skylarkOptions;
   }
 
-  @VisibleForTesting
-  public void setSkylarkOptionsForTesting(Map<String, Object> skylarkOptions) {
+  void setSkylarkOptions(Map<String, Object> skylarkOptions) {
     this.skylarkOptions = skylarkOptions;
   }
 

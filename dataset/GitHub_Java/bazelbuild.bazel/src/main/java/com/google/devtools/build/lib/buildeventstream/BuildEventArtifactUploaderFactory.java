@@ -14,13 +14,15 @@
 
 package com.google.devtools.build.lib.buildeventstream;
 
+import static com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader.LOCAL_FILES_UPLOADER;
+
 import com.google.devtools.common.options.OptionsParsingResult;
 
 /** A factory for {@link BuildEventArtifactUploader}. */
 public interface BuildEventArtifactUploaderFactory {
 
   BuildEventArtifactUploaderFactory LOCAL_FILES_UPLOADER_FACTORY =
-      (OptionsParsingResult options) -> new LocalFilesArtifactUploader();
+      (OptionsParsingResult options) -> LOCAL_FILES_UPLOADER;
 
   /**
    * Returns a new instance of a {@link BuildEventArtifactUploader}. The call is responsible for

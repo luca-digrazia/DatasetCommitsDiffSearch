@@ -116,7 +116,6 @@ public class BazelRepositoryModule extends BlazeModule {
       new MutableSupplier<>();
   private ImmutableMap<RepositoryName, PathFragment> overrides = ImmutableMap.of();
   private Optional<RootedPath> resolvedFile = Optional.<RootedPath>absent();
-  private Optional<RootedPath> resolvedFileReplacingWorkspace = Optional.<RootedPath>absent();
   private Set<String> outputVerificationRules = ImmutableSet.<String>of();
   private FileSystem filesystem;
 
@@ -241,7 +240,6 @@ public class BazelRepositoryModule extends BlazeModule {
     RepositoryOptions repoOptions = env.getOptions().getOptions(RepositoryOptions.class);
     if (repoOptions != null) {
       repositoryCache.setHardlink(repoOptions.useHardlinks);
-      skylarkRepositoryFunction.setTimeoutScaling(repoOptions.experimentalScaleTimeouts);
       if (repoOptions.experimentalRepositoryCache != null) {
         Path repositoryCachePath;
         if (repoOptions.experimentalRepositoryCache.isAbsolute()) {
@@ -307,19 +305,6 @@ public class BazelRepositoryModule extends BlazeModule {
                     filesystem.getPath(repoOptions.repositoryHashFile)));
       }
 
-      if (!Strings.isNullOrEmpty(repoOptions.experimentalResolvedFileInsteadOfWorkspace)) {
-        Path resolvedFile;
-        if (env.getWorkspace() != null) {
-          resolvedFile =
-              env.getWorkspace()
-                  .getRelative(repoOptions.experimentalResolvedFileInsteadOfWorkspace);
-        } else {
-          resolvedFile = filesystem.getPath(repoOptions.experimentalResolvedFileInsteadOfWorkspace);
-        }
-        resolvedFileReplacingWorkspace =
-            Optional.of(RootedPath.toRootedPath(Root.absoluteRoot(filesystem), resolvedFile));
-      }
-
       if (repoOptions.experimentalVerifyRepositoryRules != null) {
         outputVerificationRules =
             ImmutableSet.copyOf(repoOptions.experimentalVerifyRepositoryRules);
@@ -336,9 +321,6 @@ public class BazelRepositoryModule extends BlazeModule {
         PrecomputedValue.injected(
             RepositoryDelegatorFunction.OUTPUT_VERIFICATION_REPOSITORY_RULES,
             outputVerificationRules),
-        PrecomputedValue.injected(
-            RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-            resolvedFileReplacingWorkspace),
         // That key will be reinjected by the sync command with a universally unique identifier.
         // Nevertheless, we need to provide a default value for other commands.
         PrecomputedValue.injected(

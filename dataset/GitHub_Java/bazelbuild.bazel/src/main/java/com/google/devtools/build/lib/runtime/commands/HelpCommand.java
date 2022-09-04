@@ -23,10 +23,12 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Iterables;
 import com.google.common.escape.Escaper;
 import com.google.common.html.HtmlEscapers;
+import com.google.devtools.build.docgen.BlazeRuleHelpPrinter;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
@@ -164,8 +166,18 @@ public final class HelpCommand implements BlazeCommand {
 
     BlazeCommand command = runtime.getCommandMap().get(helpSubject);
     if (command == null) {
-      env.getReporter().handle(Event.error(null, "'" + helpSubject + "' is not a known command"));
+      ConfiguredRuleClassProvider provider = runtime.getRuleClassProvider();
+      RuleClass ruleClass = provider.getRuleClassMap().get(helpSubject);
+      if (ruleClass != null && ruleClass.isDocumented()) {
+        // There is a rule with a corresponding name
+        outErr.printOut(
+            BlazeRuleHelpPrinter.getRuleDoc(helpSubject, runtime.getProductName(), provider));
+        return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+      } else {
+        env.getReporter().handle(Event.error(
+            null, "'" + helpSubject + "' is neither a command nor a build rule"));
         return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      }
     }
     emitBlazeVersionInfo(outErr, productName);
     outErr.printOut(
@@ -271,10 +283,6 @@ public final class HelpCommand implements BlazeCommand {
     flagBuilder.setName(option.getOptionName());
     flagBuilder.setHasNegativeFlag(option.hasNegativeOption());
     flagBuilder.setDocumentation(option.getHelpText());
-    flagBuilder.setAllowsMultiple(option.allowsMultiple());
-    if (option.getAbbreviation() != '\0') {
-      flagBuilder.setAbbreviation(String.valueOf(option.getAbbreviation()));
-    }
     return flagBuilder;
   }
 
@@ -289,14 +297,13 @@ public final class HelpCommand implements BlazeCommand {
 
     Iterable<Class<? extends OptionsBase>> options =
         BlazeCommandUtils.getStartupOptions(blazeModules);
-    startupOptionVisitor.accept(OptionsParser.builder().optionsClasses(options).build());
+    startupOptionVisitor.accept(OptionsParser.newOptionsParser(options));
 
     for (Map.Entry<String, BlazeCommand> e : commandsByName.entrySet()) {
       BlazeCommand command = e.getValue();
       Command annotation = command.getClass().getAnnotation(Command.class);
       options = BlazeCommandUtils.getOptions(command.getClass(), blazeModules, ruleClassProvider);
-      commandOptionVisitor.visit(
-          e.getKey(), annotation, OptionsParser.builder().optionsClasses(options).build());
+      commandOptionVisitor.visit(e.getKey(), annotation, OptionsParser.newOptionsParser(options));
     }
   }
 
@@ -316,8 +323,9 @@ public final class HelpCommand implements BlazeCommand {
   }
 
   private void emitInfoKeysHelp(CommandEnvironment env, OutErr outErr) {
-    for (InfoItem item :
-        InfoCommand.getInfoItemMap(env, OptionsParser.builder().build()).values()) {
+    for (InfoItem item : InfoCommand.getInfoItemMap(env,
+        OptionsParser.newOptionsParser(
+            ImmutableList.<Class<? extends OptionsBase>>of())).values()) {
       outErr.printOut(String.format("%-23s %s\n", item.getName(), item.getDescription()));
     }
   }
@@ -480,7 +488,7 @@ public final class HelpCommand implements BlazeCommand {
 
     private void appendOptionsHtml(
         StringBuilder result, Iterable<Class<? extends OptionsBase>> optionsClasses) {
-      OptionsParser parser = OptionsParser.builder().optionsClasses(optionsClasses).build();
+      OptionsParser parser = OptionsParser.newOptionsParser(optionsClasses);
       String productName = runtime.getProductName();
         result.append(
             parser

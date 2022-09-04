@@ -20,6 +20,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.ParsedOptionDescription;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -115,21 +117,24 @@ public final class OptionsUtils {
     }
   }
 
-  /** Converts from a colon-separated list of strings into a list of PathFragment instances. */
-  public static class PathFragmentListConverter implements Converter<ImmutableList<PathFragment>> {
+  /**
+   * Converts from a colon-separated list of strings into a list of PathFragment instances.
+   */
+  public static class PathFragmentListConverter
+      implements Converter<List<PathFragment>> {
 
     @Override
-    public ImmutableList<PathFragment> convert(String input) {
-      ImmutableList.Builder<PathFragment> result = ImmutableList.builder();
+    public List<PathFragment> convert(String input) {
+      List<PathFragment> list = new ArrayList<>();
       for (String piece : input.split(":")) {
         if (!piece.isEmpty()) {
           if (piece.startsWith("~/")) {
             piece = piece.replace("~", System.getProperty("user.home"));
           }
-          result.add(PathFragment.create(piece));
+          list.add(PathFragment.create(piece));
         }
       }
-      return result.build();
+      return Collections.unmodifiableList(list);
     }
 
     @Override
