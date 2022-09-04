@@ -176,6 +176,7 @@ public class GELFClientChunk {
         sb.append(this.arrival);
         sb.append("\tData size: ");
         sb.append(this.data.length);
+        sb.append("\n");
 
         return sb.toString();
     }
