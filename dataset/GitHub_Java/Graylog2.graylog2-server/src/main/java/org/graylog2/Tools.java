@@ -29,8 +29,6 @@ package org.graylog2;
  */
 public class Tools {
 
-    private Tools() { }
-
     /**
      * Get the own PID of this process.
      *
