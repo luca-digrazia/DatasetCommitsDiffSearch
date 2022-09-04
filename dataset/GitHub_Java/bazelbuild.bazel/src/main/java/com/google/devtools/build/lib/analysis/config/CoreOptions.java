@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.EmptyT
 import com.google.devtools.build.lib.analysis.config.CoreOptionConverters.LabelListConverter;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.util.RegexFilter;
-import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -30,7 +29,6 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.LinkedHashMap;
@@ -69,18 +67,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       },
       help = "If true, the genfiles directory is folded into the bin directory.")
   public boolean mergeGenfilesDirectory;
-
-  @Option(
-      name = "incompatible_use_platforms_repo_for_constraints",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If true, constraint settings from @bazel_tools are removed.")
-  public boolean usePlatformsRepoForConstraints;
 
   @Option(
       name = "define",
@@ -253,7 +239,7 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   public String outputDirectoryName;
 
   /**
-   * This option is used by starlark transitions to add a distinguishing element to the output
+   * This option is used by skylark transitions to add a disginguishing element to the output
    * directory name, in order to avoid name clashing.
    */
   @Option(
@@ -267,38 +253,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
       },
       metadataTags = {OptionMetadataTag.INTERNAL})
   public String transitionDirectoryNameFragment;
-
-  /** Regardless of input, converts to an empty list. For use with affectedByStarlarkTransition */
-  public static class EmptyListConverter implements Converter<List<String>> {
-    @Override
-    public List<String> convert(String input) throws OptionsParsingException {
-      return ImmutableList.of();
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "Regardless of input, converts to an empty list. For use with"
-          + " affectedByStarlarkTransition";
-    }
-  }
-
-  /**
-   * This internal option is a *set* of names (e.g. "cpu") of *native* options that have been
-   * changed by starlark transitions at any point in the build at the time of accessing. This is
-   * used to regenerate {@code transitionDirectoryNameFragment} after each starlark transition.
-   */
-  @Option(
-      name = "affected by starlark transition",
-      defaultValue = "",
-      converter = EmptyListConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {
-        OptionEffectTag.LOSES_INCREMENTAL_STATE,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
-      },
-      metadataTags = {OptionMetadataTag.INTERNAL})
-  public List<String> affectedByStarlarkTransition;
 
   @Option(
       name = "platform_suffix",
@@ -529,15 +483,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
   public boolean isHost;
 
   @Option(
-      name = "is exec configuration",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      metadataTags = {OptionMetadataTag.INTERNAL},
-      help = "Shows whether these options are set for an execution configuration.")
-  public boolean isExec;
-
-  @Option(
       name = "allow_analysis_failures",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.TESTING,
@@ -728,18 +673,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
               + "all non-Genrule actions.\n")
   public ExecutionInfoModifier executionInfoModifier;
 
-  @Option(
-      name = "experimental_genquery_use_graphless_query",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-        OptionEffectTag.LOADING_AND_ANALYSIS
-      },
-      help = "Whether to use graphless query and disable output ordering.")
-  public boolean useGraphlessQuery;
-
   @Override
   public FragmentOptions getHost() {
     CoreOptions host = (CoreOptions) getDefault();
@@ -747,7 +680,6 @@ public class CoreOptions extends FragmentOptions implements Cloneable {
     host.outputDirectoryName = "host";
     host.compilationMode = hostCompilationMode;
     host.isHost = true;
-    host.isExec = false;
     host.configsMode = configsMode;
     host.outputPathsMode = outputPathsMode;
     host.enableRunfiles = enableRunfiles;
