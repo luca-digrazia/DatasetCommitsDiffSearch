@@ -133,8 +133,7 @@ public class JsonExtractor extends Extractor {
             final List values = (List) value;
             return Collections.singleton(Entry.create(key, Joiner.on(listSeparator).join(values)));
         } else if(value == null) {
-            // Ignore null values so we don't try to create fields for that in the message.
-            return Collections.emptySet();
+            return Collections.singleton(Entry.create(key, null));
         } else {
             LOG.debug("Unknown type \"{}\" in key \"{}\"", value.getClass(), key);
             return Collections.emptySet();
