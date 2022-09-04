@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import javax.mail.BodyPart;
@@ -20,6 +21,7 @@ import org.subethamail.wiser.Wiser;
 import org.subethamail.wiser.WiserMessage;
 
 import io.quarkus.mailer.Mail;
+import io.reactivex.Flowable;
 import io.vertx.axle.core.Vertx;
 import io.vertx.axle.ext.mail.MailClient;
 import io.vertx.ext.mail.MailConfig;
@@ -37,7 +39,7 @@ class MailerImplTest {
     @BeforeAll
     static void startWiser() {
         wiser = new Wiser();
-        wiser.setPort(1537);
+        wiser.setPort(0);
         wiser.start();
 
         vertx = Vertx.vertx();
@@ -52,10 +54,10 @@ class MailerImplTest {
     @BeforeEach
     void init() {
         mailer = new ReactiveMailerImpl();
-        mailer.configure(Optional.of(FROM), Optional.empty(), Optional.of(false));
+        mailer.configure(Optional.of(FROM), Optional.empty(), false);
         mailer.vertx = vertx;
         mailer.client = MailClient.createShared(mailer.vertx,
-                new MailConfig().setPort(1537));
+                new MailConfig().setPort(wiser.getServer().getPort()));
 
         wiser.getMessages().clear();
     }
@@ -118,7 +120,37 @@ class MailerImplTest {
     void testAttachment() throws MessagingException, IOException {
         String payload = UUID.randomUUID().toString();
         mailer.send(Mail.withText(TO, "Test", "testAttachment")
-                .addAttachment("my-file.txt", payload.getBytes(), TEXT_CONTENT_TYPE)).toCompletableFuture().join();
+                .addAttachment("my-file.txt", payload.getBytes("UTF-8"), TEXT_CONTENT_TYPE)).toCompletableFuture().join();
+        assertThat(wiser.getMessages()).hasSize(1);
+        WiserMessage actual = wiser.getMessages().get(0);
+        assertThat(getContent(actual)).contains("testAttachment");
+        MimeMessage msg = actual.getMimeMessage();
+        assertThat(msg.getSubject()).isEqualTo("Test");
+        assertThat(msg.getFrom()[0].toString()).isEqualTo(FROM);
+        String value = getAttachment("my-file.txt", (MimeMultipart) actual.getMimeMessage().getContent());
+        assertThat(value).isEqualTo(payload);
+    }
+
+    @Test
+    void testAttachmentAsStream() throws MessagingException, IOException {
+        String payload = UUID.randomUUID().toString();
+        byte[] bytes = payload.getBytes(StandardCharsets.UTF_8);
+        Iterable<Byte> iterable = () -> new Iterator<Byte>() {
+            private int index = 0;
+
+            @Override
+            public boolean hasNext() {
+                return bytes.length > index;
+            }
+
+            @Override
+            public Byte next() {
+                return bytes[index++];
+            }
+        };
+
+        mailer.send(Mail.withText(TO, "Test", "testAttachmentAsStream")
+                .addAttachment("my-file.txt", Flowable.fromIterable(iterable), TEXT_CONTENT_TYPE)).toCompletableFuture().join();
         assertThat(wiser.getMessages()).hasSize(1);
         WiserMessage actual = wiser.getMessages().get(0);
         assertThat(getContent(actual)).contains("testAttachment");
@@ -131,9 +163,10 @@ class MailerImplTest {
 
     @Test
     void testInlineAttachment() throws MessagingException, IOException {
-        String cid = "<" + UUID.randomUUID().toString() + "@acme>";
+        String cid = UUID.randomUUID().toString() + "@acme";
         mailer.send(Mail.withHtml(TO, "Test", "testInlineAttachment")
-                .addInlineAttachment("inline.txt", "my inlined text".getBytes(), TEXT_CONTENT_TYPE, cid)).toCompletableFuture()
+                .addInlineAttachment("inline.txt", "my inlined text".getBytes(StandardCharsets.UTF_8), TEXT_CONTENT_TYPE, cid))
+                .toCompletableFuture()
                 .join();
         assertThat(wiser.getMessages()).hasSize(1);
         WiserMessage actual = wiser.getMessages().get(0);
@@ -142,15 +175,16 @@ class MailerImplTest {
         assertThat(msg.getSubject()).isEqualTo("Test");
         assertThat(msg.getFrom()[0].toString()).isEqualTo(FROM);
 
-        String value = getInlineAttachment(cid, (MimeMultipart) actual.getMimeMessage().getContent());
+        String value = getInlineAttachment("<" + cid + ">", (MimeMultipart) actual.getMimeMessage().getContent());
         assertThat(value).isEqualTo("my inlined text");
     }
 
     @Test
     void testAttachments() throws MessagingException, IOException {
         mailer.send(Mail.withText(TO, "Test", "Simple Test")
-                .addAttachment("some-data.txt", "Hello".getBytes(), TEXT_CONTENT_TYPE)
-                .addAttachment("some-data-2.txt", "Hello 2".getBytes(), TEXT_CONTENT_TYPE)).toCompletableFuture().join();
+                .addAttachment("some-data.txt", "Hello".getBytes(StandardCharsets.UTF_8), TEXT_CONTENT_TYPE)
+                .addAttachment("some-data-2.txt", "Hello 2".getBytes(StandardCharsets.UTF_8), TEXT_CONTENT_TYPE))
+                .toCompletableFuture().join();
         assertThat(wiser.getMessages()).hasSize(1);
         WiserMessage actual = wiser.getMessages().get(0);
         assertThat(getContent(actual)).contains("Simple Test");
@@ -201,7 +235,7 @@ class MailerImplTest {
 
     private String read(BodyPart part) throws IOException, MessagingException {
         try (InputStream is = part.getInputStream()) {
-            Scanner s = new Scanner(is).useDelimiter("\\A");
+            Scanner s = new Scanner(is, "UTF-8").useDelimiter("\\A");
             return s.hasNext() ? s.next() : "";
         }
     }
