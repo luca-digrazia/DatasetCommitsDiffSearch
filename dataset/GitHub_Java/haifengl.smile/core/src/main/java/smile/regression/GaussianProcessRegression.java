@@ -21,7 +21,6 @@ import java.util.Properties;
 import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 import smile.math.matrix.Matrix;
-import smile.stat.distribution.MultivariateGaussianDistribution;
 import smile.util.Strings;
 
 /**
@@ -113,7 +112,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
     private Matrix.Cholesky cholesky;
 
     /** The prediction results. */
-    public class JointPrediction {
+    public class Prediction {
         /** The query points where the GP is evaluated. */
         public final T[] x;
         /** The mean of predictive distribution at query points. */
@@ -122,28 +121,13 @@ public class GaussianProcessRegression<T> implements Regression<T> {
         public final double[] sd;
         /** The covariance matrix of joint predictive distribution at query points. */
         public final Matrix cov;
-        /** The joint predictive distribution. */
-        private MultivariateGaussianDistribution dist;
 
         /** Constructor. */
-        public JointPrediction(T[] x, double[] mu, double[] sd, Matrix cov) {
+        public Prediction(T[] x, double[] mu, double[] sd, Matrix cov) {
             this.x = x;
             this.mu = mu;
             this.sd = sd;
             this.cov = cov;
-        }
-
-        /**
-         * Draw samples from Gaussian process.
-         * @param n The number of samples drawn from the Gaussian process.
-         * @return n samples drawn from Gaussian process.
-         */
-        public double[][] sample(int n) {
-            if (dist == null) {
-                dist = new MultivariateGaussianDistribution(mu, cov);
-            }
-
-            return dist.rand(n);
         }
 
         @Override
@@ -250,7 +234,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * @param samples query points.
      * @return The mean, standard deviation and covariances of GP at query points.
      */
-    public JointPrediction eval(T[] samples) {
+    public Prediction eval(T[] samples) {
         if (cholesky == null) {
             throw new UnsupportedOperationException("The Cholesky decomposition of kernel matrix is not available.");
         }
@@ -258,8 +242,10 @@ public class GaussianProcessRegression<T> implements Regression<T> {
         Matrix Kx = kernel.K(samples);
         Matrix Kt = kernel.K(samples, regressors);
 
+        System.out.println(Kx);
         Matrix Kv = Kt.transpose().clone();
         cholesky.solve(Kv);
+        System.out.println(Kt.mm(Kv));
         Matrix cov = Kx.sub(Kt.mm(Kv));
         cov.mul(sd * sd);
 
@@ -271,7 +257,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
             std[i] = Math.sqrt(std[i]);
         }
 
-        return new JointPrediction(samples, mu, std, cov);
+        return new Prediction(samples, mu, std, cov);
     }
 
     @Override

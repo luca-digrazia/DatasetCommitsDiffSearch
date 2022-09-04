@@ -17,7 +17,6 @@
 
 package smile.regression;
 
-import java.util.Arrays;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -27,11 +26,11 @@ import smile.clustering.KMeans;
 import smile.data.*;
 import smile.math.MathEx;
 import smile.math.kernel.GaussianKernel;
-import smile.math.matrix.Matrix;
-import smile.util.Strings;
 import smile.validation.CrossValidation;
 import smile.validation.LOOCV;
 import smile.validation.RMSE;
+
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 
@@ -77,20 +76,16 @@ public class GaussianProcessRegressionTest {
         GaussianProcessRegression<double[]> model = GaussianProcessRegression.fit(longley, Longley.y, new GaussianKernel(8.0), 0.2);
         System.out.println(model);
 
-        GaussianProcessRegression<double[]>.JointPrediction joint = model.eval(Arrays.copyOf(longley, 10));
-        System.out.println(joint);
+        GaussianProcessRegression<double[]>.Prediction pred = model.eval(Arrays.copyOf(longley, 10));
+        System.out.println(pred);
 
-        int n = joint.mu.length;
+        int n = pred.mu.length;
         double[] musd = new double[2];
         for (int i = 0; i < n; i++) {
             model.predict(longley[i], musd);
-            assertEquals(musd[0], joint.mu[i], 1E-7);
-            assertEquals(musd[1], joint.sd[i], 1E-7);
+            assertEquals(musd[0], pred.mu[i], 1E-7);
+            assertEquals(musd[1], pred.sd[i], 1E-7);
         }
-
-        double[][] samples = joint.sample(500);
-        System.out.format("samples = %s\n", new Matrix(samples).toString());
-        System.out.format("sample cov = %s\n", new Matrix(MathEx.cov(samples)).toString(true));
 
         java.nio.file.Path temp = smile.data.Serialize.write(model);
         smile.data.Serialize.read(temp);
