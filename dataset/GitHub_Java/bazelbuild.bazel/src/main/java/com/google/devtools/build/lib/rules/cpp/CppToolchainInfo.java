@@ -77,7 +77,7 @@ public final class CppToolchainInfo {
 
   private final String targetLibc;
   private final String hostSystemName;
-  private final ImmutableList<String> dynamicLibraryLinkFlags;
+  private final FlagList dynamicLibraryLinkFlags;
   private final ImmutableList<String> legacyLinkOptions;
   private final ImmutableListMultimap<LinkingMode, String> legacyLinkOptionsFromLinkingMode;
   private final ImmutableListMultimap<LipoMode, String> legacyLinkOptionsFromLipoMode;
@@ -103,7 +103,7 @@ public final class CppToolchainInfo {
   private final ImmutableListMultimap<LipoMode, String> lipoCFlags;
   private final ImmutableListMultimap<LipoMode, String> lipoCxxFlags;
 
-  private final ImmutableList<String> unfilteredCompilerFlags;
+  private final FlagList unfilteredCompilerFlags;
 
   private final boolean supportsFission;
   private final boolean supportsStartEndLib;
@@ -182,7 +182,9 @@ public final class CppToolchainInfo {
           defaultSysroot,
           toolchain.getTargetLibc(),
           toolchain.getHostSystemName(),
-          ImmutableList.copyOf(toolchain.getDynamicLibraryLinkerFlagList()),
+          new FlagList(
+              ImmutableList.copyOf(toolchain.getDynamicLibraryLinkerFlagList()),
+              ImmutableList.of()),
           ImmutableList.copyOf(toolchain.getLinkerFlagList()),
           linkOptionsFromLinkingModeBuilder.build(),
           computeLinkOptionsFromLipoMode(toolchain),
@@ -209,7 +211,8 @@ public final class CppToolchainInfo {
           cxxFlagsBuilder.build(),
           lipoCFlagsBuilder.build(),
           lipoCxxFlagsBuilder.build(),
-          ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()),
+          new FlagList(
+              ImmutableList.copyOf(toolchain.getUnfilteredCxxFlagList()), ImmutableList.of()),
           toolchain.getSupportsFission(),
           toolchain.getSupportsStartEndLib(),
           toolchain.getSupportsEmbeddedRuntimes(),
@@ -239,7 +242,7 @@ public final class CppToolchainInfo {
       PathFragment runtimeSysroot,
       String targetLibc,
       String hostSystemName,
-      ImmutableList<String> dynamicLibraryLinkFlags,
+      FlagList dynamicLibraryLinkFlags,
       ImmutableList<String> legacyLinkOptions,
       ImmutableListMultimap<LinkingMode, String> legacyLinkOptionsFromLinkingMode,
       ImmutableListMultimap<LipoMode, String> legacyLinkOptionsFromLipoMode,
@@ -260,7 +263,7 @@ public final class CppToolchainInfo {
       ImmutableListMultimap<CompilationMode, String> cxxFlagsByCompilationMode,
       ImmutableListMultimap<LipoMode, String> lipoCFlags,
       ImmutableListMultimap<LipoMode, String> lipoCxxFlags,
-      ImmutableList<String> unfilteredCompilerFlags,
+      FlagList unfilteredCompilerFlags,
       boolean supportsFission,
       boolean supportsStartEndLib,
       boolean supportsEmbeddedRuntimes,
@@ -342,13 +345,11 @@ public final class CppToolchainInfo {
     }
 
     for (ArtifactCategory category : ArtifactCategory.values()) {
-      if (!definedCategories.contains(category) && category.getDefaultPrefix() != null
-          && category.getDefaultExtension() != null) {
+      if (!definedCategories.contains(category) && category.getDefaultPattern() != null) {
         toolchainBuilder.addArtifactNamePattern(
             ArtifactNamePattern.newBuilder()
                 .setCategoryName(category.toString().toLowerCase())
-                .setPrefix(category.getDefaultPrefix())
-                .setExtension(category.getDefaultExtension())
+                .setPattern(category.getDefaultPattern())
                 .build());
       }
     }
@@ -639,8 +640,11 @@ public final class CppToolchainInfo {
    * Returns link options for the specified flag list, combined with universal options for all
    * shared libraries (regardless of link staticness).
    */
-  ImmutableList<String> getSharedLibraryLinkOptions(ImmutableList<String> flags) {
-    return ImmutableList.<String>builder().addAll(flags).addAll(dynamicLibraryLinkFlags).build();
+  ImmutableList<String> getSharedLibraryLinkOptions(FlagList flags) {
+    return ImmutableList.<String>builder()
+        .addAll(flags.evaluate())
+        .addAll(dynamicLibraryLinkFlags.evaluate())
+        .build();
   }
 
   /**
@@ -749,11 +753,11 @@ public final class CppToolchainInfo {
   /** Returns unfiltered compiler options for C++ from this toolchain. */
   public ImmutableList<String> getUnfilteredCompilerOptions(@Nullable PathFragment sysroot) {
     if (sysroot == null) {
-      return unfilteredCompilerFlags;
+      return unfilteredCompilerFlags.evaluate();
     }
     return ImmutableList.<String>builder()
         .add("--sysroot=" + sysroot)
-        .addAll(unfilteredCompilerFlags)
+        .addAll(unfilteredCompilerFlags.evaluate())
         .build();
   }
 

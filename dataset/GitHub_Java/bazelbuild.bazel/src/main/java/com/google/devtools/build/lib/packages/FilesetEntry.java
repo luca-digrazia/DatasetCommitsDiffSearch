@@ -22,47 +22,70 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.starlarkbuildapi.FilesetEntryApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.StarlarkValue;
 
 /**
  * FilesetEntry is a value object used to represent a "FilesetEntry" inside a "Fileset" BUILD rule.
  */
+@SkylarkModule(
+    name = "FilesetEntry",
+    doc = "",
+    documented = false)
 @Immutable
 @ThreadSafe
-public final class FilesetEntry implements StarlarkValue, FilesetEntryApi {
+public final class FilesetEntry implements SkylarkValue {
 
-  private static final SymlinkBehavior DEFAULT_SYMLINK_BEHAVIOR = SymlinkBehavior.COPY;
+  public static final SymlinkBehavior DEFAULT_SYMLINK_BEHAVIOR = SymlinkBehavior.COPY;
   public static final String DEFAULT_STRIP_PREFIX = ".";
   public static final String STRIP_PREFIX_WORKSPACE = "%workspace%";
 
   @Override
   public boolean isImmutable() {
-    return true;
+    // TODO(laszlocsomor): set this to true. I think we could do this right now, but am not sure.
+    // Maybe we have to verify that Skylark recognizes every member's type to be recursively
+    // immutable; as of 15/01/2016 this is not true for enum types in general, to name an example.
+    return false;
+  }
+
+  public static List<String> makeStringList(List<Label> labels) {
+    if (labels == null) {
+      return Collections.emptyList();
+    }
+    List<String> strings = Lists.newArrayListWithCapacity(labels.size());
+    for (Label label : labels) {
+      strings.add(label.toString());
+    }
+    return strings;
+  }
+
+  public static List<?> makeList(Collection<?> list) {
+    return list == null ? Lists.newArrayList() : Lists.newArrayList(list);
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("FilesetEntry(srcdir = ");
-    printer.repr(srcLabel.toString());
+    printer.repr(getSrcLabel().toString());
     printer.append(", files = ");
-    printer.repr(files == null ? ImmutableList.of() : Lists.transform(files, Label::toString));
+    printer.repr(makeStringList(getFiles()));
     printer.append(", excludes = ");
-    printer.repr(excludes == null ? ImmutableList.of() : excludes.asList());
+    printer.repr(makeList(getExcludes()));
     printer.append(", destdir = ");
-    printer.repr(destDir.getPathString());
+    printer.repr(getDestDir().getPathString());
     printer.append(", strip_prefix = ");
-    printer.repr(stripPrefix);
+    printer.repr(getStripPrefix());
     printer.append(", symlinks = ");
-    printer.repr(symlinkBehavior.toString());
+    printer.repr(getSymlinkBehavior().toString());
     printer.append(")");
   }
 

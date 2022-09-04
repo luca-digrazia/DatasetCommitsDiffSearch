@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableRangeMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.collect.RangeMap;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.time.Duration;
@@ -110,7 +111,7 @@ public enum TestTimeout {
 
   private final int timeout;
 
-  TestTimeout(int timeout) {
+  private TestTimeout(int timeout) {
     this.timeout = timeout;
   }
 
@@ -202,7 +203,7 @@ public enum TestTimeout {
         // so we can't fully emulate String.split(String, 0).
         if (!token.isEmpty() || values.size() > 1) {
           try {
-            values.add(Duration.ofSeconds(Integer.parseInt(token)));
+            values.add(Duration.ofSeconds(Integer.valueOf(token)));
           } catch (NumberFormatException e) {
             throw new OptionsParsingException("'" + input + "' is not an int");
           }

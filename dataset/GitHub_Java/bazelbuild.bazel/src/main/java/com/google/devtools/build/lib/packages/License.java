@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Sets;
@@ -211,8 +210,7 @@ public final class License {
     for (String str : licStrings) {
       if (str.startsWith("exception=")) {
         try {
-          Label label =
-              Label.parseAbsolute(str.substring("exception=".length()), ImmutableMap.of());
+          Label label = Label.parseAbsolute(str.substring("exception=".length()));
           exceptions.add(label);
         } catch (LabelSyntaxException e) {
           throw new LicenseParsingException(e.getMessage());

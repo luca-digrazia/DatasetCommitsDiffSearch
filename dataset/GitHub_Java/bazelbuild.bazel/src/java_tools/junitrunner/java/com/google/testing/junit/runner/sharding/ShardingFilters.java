@@ -15,13 +15,11 @@
 package com.google.testing.junit.runner.sharding;
 
 import com.google.testing.junit.runner.sharding.api.ShardingFilterFactory;
-
+import java.util.Collection;
+import java.util.Locale;
+import javax.inject.Inject;
 import org.junit.runner.Description;
 import org.junit.runner.manipulation.Filter;
-
-import java.util.Collection;
-
-import javax.inject.Inject;
 
 /**
  * A factory for test sharding filters.
@@ -97,13 +95,14 @@ public class ShardingFilters {
     }
     ShardingFilterFactory shardingFilterFactory;
     try {
-      shardingFilterFactory = ShardingStrategy.valueOf(strategy.toUpperCase());
+      shardingFilterFactory = ShardingStrategy.valueOf(strategy.toUpperCase(Locale.ENGLISH));
     } catch (IllegalArgumentException e) {
       try {
-        Class<?> strategyClass = Thread.currentThread().getContextClassLoader().loadClass(strategy);
-        shardingFilterFactory = (ShardingFilterFactory) strategyClass.newInstance();
-      } catch (ClassNotFoundException | InstantiationException |
-          IllegalAccessException | IllegalArgumentException e2) {
+        ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        Class<? extends ShardingFilterFactory> strategyClass =
+            classLoader.loadClass(strategy).asSubclass(ShardingFilterFactory.class);
+        shardingFilterFactory = strategyClass.getConstructor().newInstance();
+      } catch (ReflectiveOperationException | IllegalArgumentException e2) {
         throw new RuntimeException(
             "Could not create custom sharding strategy class " + strategy, e2);
       }
