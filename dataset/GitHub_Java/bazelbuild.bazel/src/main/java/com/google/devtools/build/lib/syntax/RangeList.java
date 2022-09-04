@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import java.util.AbstractList;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -82,20 +83,6 @@ final class RangeList extends AbstractList<Integer> implements Sequence<Integer>
     } else {
       int diff = high - low - 1;
       this.size = diff / step + 1;
-    }
-  }
-
-  @Override
-  public boolean contains(Object x) {
-    if (!(x instanceof Integer)) {
-      return false;
-    }
-    int i = (Integer) x;
-    // constant-time implementation
-    if (step > 0) {
-      return start <= i && i < stop && (i - start) % step == 0;
-    } else {
-      return stop < i && i <= start && (i - start) % step == 0;
     }
   }
 
@@ -177,7 +164,7 @@ final class RangeList extends AbstractList<Integer> implements Sequence<Integer>
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     if (step == 1) {
       printer.format("range(%d, %d)", start, stop);
     } else {

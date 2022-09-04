@@ -114,18 +114,29 @@ public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E
   }
 
   /**
-   * Returns an immutable list with the given elements. Equivalent to {@code copyOf(null, elems)}.
+   * Returns a {@code StarlarkList} whose items are given by an iterable and which has the {@link
+   * Mutability} belonging to the given {@link StarlarkThread}. If {@code thread} is null, the list
+   * is immutable.
+   *
+   * @deprecated call {@code copyOf(thread.mutability(), elems)} instead.
    */
-  public static <T> StarlarkList<T> immutableCopyOf(Iterable<? extends T> elems) {
-    return copyOf(null, elems);
+  @Deprecated
+  public static <T> StarlarkList<T> copyOf(
+      @Nullable StarlarkThread thread, Iterable<? extends T> elems) {
+    Mutability mu = thread == null ? null : thread.mutability();
+    return copyOf(mu, elems);
   }
 
   /**
-   * Returns a {@code StarlarkList} with the given items and the {@link Mutability}. If {@code
-   * mutability} is null, the list is immutable.
+   * Returns a {@code StarlarkList} with the given items and the {@link Mutability} of the given
+   * {@link StarlarkThread}. If {@code thread} is null, the list is immutable.
+   *
+   * @deprecated call {@code of(thread.mutability(), elems)} instead.
    */
-  public static <T> StarlarkList<T> of(@Nullable Mutability mutability, T... elems) {
-    return wrap(mutability, Arrays.copyOf(elems, elems.length));
+  @Deprecated
+  public static <T> StarlarkList<T> of(@Nullable StarlarkThread thread, T... elems) {
+    Mutability mu = thread == null ? null : thread.mutability();
+    return wrap(mu, Arrays.copyOf(elems, elems.length));
   }
 
   @Override
