@@ -29,7 +29,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.Instant;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 
@@ -44,21 +44,16 @@ public class ToolsTest {
     @Test
     public void testGetUriWithPort() throws Exception {
         final URI uriWithPort = new URI("http://example.com:12345");
-        final URI httpUriWithoutPort = new URI("http://example.com");
-        final URI httpsUriWithoutPort = new URI("https://example.com");
-        final URI uriWithUnknownSchemeAndWithoutPort = new URI("foobar://example.com");
+        final URI uriWithoutPort = new URI("http://example.com");
 
         assertEquals(Tools.getUriWithPort(uriWithPort, 1).getPort(), 12345);
-        assertEquals(Tools.getUriWithPort(httpUriWithoutPort, 1).getPort(), 80);
-        assertEquals(Tools.getUriWithPort(httpsUriWithoutPort, 1).getPort(), 443);
-        assertEquals(Tools.getUriWithPort(uriWithUnknownSchemeAndWithoutPort, 1).getPort(), 1);
+        assertEquals(Tools.getUriWithPort(uriWithoutPort, 1).getPort(), 1);
     }
 
     @Test
     public void testGetUriWithScheme() throws Exception {
         assertEquals(Tools.getUriWithScheme(new URI("http://example.com"), "gopher").getScheme(), "gopher");
         assertNull(Tools.getUriWithScheme(new URI("http://example.com"), null).getScheme());
-        assertNull(Tools.getUriWithScheme(null, "http"));
     }
 
     @Test
@@ -77,7 +72,7 @@ public class ToolsTest {
     public void testGetUTCTimestampWithMilliseconds() {
 
         assertTrue(Tools.getUTCTimestampWithMilliseconds() > 0.0d);
-        assertTrue(Tools.getUTCTimestampWithMilliseconds(Instant.now().toEpochMilli()) > 0.0d);
+        assertTrue(Tools.getUTCTimestampWithMilliseconds(Calendar.getInstance().getTimeInMillis()) > 0.0d);
     }
 
     @Test
@@ -266,39 +261,5 @@ public class ToolsTest {
         assertTrue(Tools.dateTimeFromDouble(1381076986).toString().startsWith("2013-10-06T"));
         assertTrue(Tools.dateTimeFromDouble(1381079085.6).toString().startsWith("2013-10-06T"));
         assertTrue(Tools.dateTimeFromDouble(1381079085.06).toString().startsWith("2013-10-06T"));
-    }
-
-    @Test
-    public void uriWithTrailingSlashReturnsNullIfURIIsNull() {
-        assertNull(Tools.uriWithTrailingSlash(null));
-    }
-
-    @Test
-    public void uriWithTrailingSlashReturnsURIWithTrailingSlashIfTrailingSlashIsMissing() throws URISyntaxException {
-        final String uri = "http://example.com/api/";
-        assertEquals(URI.create(uri), Tools.uriWithTrailingSlash(URI.create("http://example.com/api")));
-    }
-
-    @Test
-    public void uriWithTrailingSlashReturnsURIIfTrailingSlashIsPresent() {
-        final URI uri = URI.create("http://example.com/api/");
-        assertEquals(uri, Tools.uriWithTrailingSlash(uri));
-    }
-
-    @Test
-    public void normalizeURIAddsSchemaAndPortAndPathWithTrailingSlash() {
-        final URI uri = URI.create("foobar://example.com");
-        assertEquals(URI.create("quux://example.com:1234/foobar/"), Tools.normalizeURI(uri, "quux", 1234, "/foobar"));
-    }
-
-    @Test
-    public void normalizeURIReturnsNormalizedURI() {
-        final URI uri = URI.create("foobar://example.com//foo/////bar");
-        assertEquals(URI.create("quux://example.com:1234/foo/bar/"), Tools.normalizeURI(uri, "quux", 1234, "/baz"));
-    }
-
-    @Test
-    public void normalizeURIReturnsNullIfURIIsNull() {
-        assertNull(Tools.normalizeURI(null, "http", 1234, "/baz"));
     }
 }
