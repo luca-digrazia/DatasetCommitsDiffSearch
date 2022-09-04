@@ -18,8 +18,8 @@ import java.util.Locale;
  * This deserializer is more permissive in the following ways:
  * <ul>
  * <li>Whitespace is permitted but stripped from the input.</li>
+ * <li>Lower-case characters are permitted and automatically translated to upper-case.</li>
  * <li>Dashes in the value are converted to underscores.</li>
- * <li>Matching against the enum values is case insensitive.</li>
  * </ul>
  */
 public class FuzzyEnumModule extends Module {
@@ -42,9 +42,10 @@ public class FuzzyEnumModule extends Module {
         public Enum<?> deserialize(JsonParser jp, DeserializationContext ctxt) throws IOException {
             final String text = CharMatcher.WHITESPACE
                                            .removeFrom(jp.getText())
-                                           .replace('-', '_');
+                                           .replace('-', '_')
+                                           .toUpperCase(Locale.ENGLISH);
             for (Enum<?> constant : constants) {
-                if (constant.name().equalsIgnoreCase(text)) {
+                if (constant.name().equals(text)) {
                     return constant;
                 }
             }
