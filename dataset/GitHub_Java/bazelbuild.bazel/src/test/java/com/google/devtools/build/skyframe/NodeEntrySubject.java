@@ -24,23 +24,24 @@ import com.google.common.truth.Subject;
 import javax.annotation.Nullable;
 
 /**
- * {@link Subject} for {@link NodeEntry}. Please add to this class if you need more functionality!
+ * {@link Subject} for {@link NodeEntry}. Please add to this class if you need more
+ * functionality!
  */
-public class NodeEntrySubject extends Subject<NodeEntrySubject, NodeEntry> {
+class NodeEntrySubject extends Subject<NodeEntrySubject, NodeEntry> {
   NodeEntrySubject(FailureMetadata failureMetadata, NodeEntry nodeEntry) {
     super(failureMetadata, nodeEntry);
   }
 
-  public DefaultSubject hasVersionThat() {
+  DefaultSubject hasVersionThat() {
     return assertThat(getSubject().getVersion()).named(detail("Version"));
   }
 
-  public IterableSubject hasTemporaryDirectDepsThat() {
+  IterableSubject hasTemporaryDirectDepsThat() {
     return assertThat(Iterables.concat(getSubject().getTemporaryDirectDeps()))
         .named(detail("TemporaryDirectDeps"));
   }
 
-  public ComparableSubject<?, NodeEntry.DependencyState> addReverseDepAndCheckIfDone(
+  ComparableSubject<?, NodeEntry.DependencyState> addReverseDepAndCheckIfDone(
       @Nullable SkyKey reverseDep) throws InterruptedException {
     return assertThat(getSubject().addReverseDepAndCheckIfDone(reverseDep))
         .named(detail("AddReverseDepAndCheckIfDone"));
