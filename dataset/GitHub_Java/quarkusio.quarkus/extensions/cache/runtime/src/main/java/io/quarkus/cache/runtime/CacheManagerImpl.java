@@ -2,23 +2,25 @@ package io.quarkus.cache.runtime;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import javax.enterprise.context.ApplicationScoped;
 
 import io.quarkus.cache.Cache;
 import io.quarkus.cache.CacheManager;
 
-/**
- * This class is registered as an @ApplicationScoped synthetic bean at build time.
- */
+@ApplicationScoped
 public class CacheManagerImpl implements CacheManager {
 
-    private final Map<String, Cache> caches;
-    private final Set<String> cacheNames;
+    // There's no need for concurrency here since the caches are created at build time and never modified after that.
+    private Map<String, Cache> caches = Collections.emptyMap();
+    private Set<String> cacheNames = Collections.emptySet();
 
-    public CacheManagerImpl(Map<String, Cache> caches) {
-        Objects.requireNonNull(caches);
+    public void setCaches(Map<String, Cache> caches) {
+        if (this.caches != Collections.EMPTY_MAP) {
+            throw new IllegalStateException("The caches map must only be set once at build time");
+        }
         this.caches = Collections.unmodifiableMap(caches);
         cacheNames = Collections.unmodifiableSet(caches.keySet());
     }
