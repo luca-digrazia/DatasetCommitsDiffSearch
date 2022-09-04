@@ -837,9 +837,8 @@ public abstract class AbstractParallelEvaluator {
               + entry);
     }
     for (Map.Entry<SkyKey, ? extends NodeEntry> newDep : previouslyRegisteredEntries.entrySet()) {
-      NodeEntry depEntry = newDep.getValue();
-      DependencyState triState = depEntry.checkIfDoneForDirtyReverseDep(skyKey);
-      if (maybeHandleUndoneDepForDoneEntry(entry, depEntry, triState, skyKey, newDep.getKey())) {
+      DependencyState triState = newDep.getValue().checkIfDoneForDirtyReverseDep(skyKey);
+      if (maybeHandleUndoneDepForDoneEntry(entry, triState, skyKey, newDep.getKey())) {
         dirtyDepFound = true;
       }
     }
@@ -848,7 +847,7 @@ public abstract class AbstractParallelEvaluator {
       NodeEntry depEntry =
           Preconditions.checkNotNull(newlyAddedNewDepNodes.get().get(newDep), newDep);
       DependencyState triState = depEntry.addReverseDepAndCheckIfDone(skyKey);
-      if (maybeHandleUndoneDepForDoneEntry(entry, depEntry, triState, skyKey, newDep)) {
+      if (maybeHandleUndoneDepForDoneEntry(entry, triState, skyKey, newDep)) {
         dirtyDepFound = true;
       }
     }
@@ -865,9 +864,9 @@ public abstract class AbstractParallelEvaluator {
    * <p>Otherwise, returns {@code false} and signals this node.
    */
   private boolean maybeHandleUndoneDepForDoneEntry(
-      NodeEntry entry, NodeEntry depEntry, DependencyState triState, SkyKey skyKey, SkyKey depKey) {
+      NodeEntry entry, DependencyState triState, SkyKey skyKey, SkyKey depKey) {
     if (triState == DependencyState.DONE) {
-      entry.signalDep(depEntry.getVersion(), depKey);
+      entry.signalDep();
       return false;
     }
     // The dep may have transitioned from done to dirty between when this node read its value and
