@@ -99,7 +99,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       CcToolchainProvider toolchain,
       CcLinkingOutputs linkingOutputs,
       CcLinkingOutputs ccLibraryLinkingOutputs,
-      CcCompilationContext ccCompilationContext,
+      CcCompilationContextInfo ccCompilationContextInfo,
       Link.LinkingMode linkingMode,
       NestedSet<Artifact> filesToBuild,
       Iterable<Artifact> fakeLinkerInputs,
@@ -109,7 +109,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     Runfiles.Builder builder = new Runfiles.Builder(
         context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
     Function<TransitiveInfoCollection, Runfiles> runfilesMapping =
-        CcRunfiles.runfilesFunction(linkingMode != Link.LinkingMode.DYNAMIC);
+        CcRunfilesInfo.runfilesFunction(linkingMode != Link.LinkingMode.DYNAMIC);
     builder.addTransitiveArtifacts(filesToBuild);
     // Add the shared libraries to the runfiles. This adds any shared libraries that are in the
     // srcs of this target.
@@ -153,12 +153,12 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         sourcesBuilder.add(cppSource.getSource());
       }
       builder.addSymlinksToArtifacts(sourcesBuilder.build());
-      builder.addSymlinksToArtifacts(ccCompilationContext.getDeclaredIncludeSrcs());
+      builder.addSymlinksToArtifacts(ccCompilationContextInfo.getDeclaredIncludeSrcs());
       // Add additional files that are referenced from the compile command, like module maps
       // or header modules.
-      builder.addSymlinksToArtifacts(ccCompilationContext.getAdditionalInputs());
+      builder.addSymlinksToArtifacts(ccCompilationContextInfo.getAdditionalInputs());
       builder.addSymlinksToArtifacts(
-          ccCompilationContext.getTransitiveModules(usePic(context, toolchain)));
+          ccCompilationContextInfo.getTransitiveModules(usePic(context, toolchain)));
     }
     return builder.build();
   }
@@ -238,7 +238,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             .setFake(fake)
             .addPrecompiledFiles(precompiledFiles);
     CompilationInfo compilationInfo = compilationHelper.compile();
-    CcCompilationContext ccCompilationContext = compilationInfo.getCcCompilationContext();
+    CcCompilationContextInfo ccCompilationContextInfo =
+        compilationInfo.getCcCompilationContextInfo();
     CcCompilationOutputs ccCompilationOutputs = compilationInfo.getCcCompilationOutputs();
 
     // We currently only want link the dynamic library generated for test code separately.
@@ -273,7 +274,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
               .enableInterfaceSharedObjects();
       linkingHelper.setStaticLinkType(LinkTargetType.STATIC_LIBRARY);
       ccLinkingOutputs =
-          linkingHelper.link(ccCompilationOutputs, ccCompilationContext).getCcLinkingOutputs();
+          linkingHelper.link(ccCompilationOutputs, ccCompilationContextInfo).getCcLinkingOutputs();
     }
 
     CcLinkParams linkParams =
@@ -292,7 +293,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             precompiledFiles,
             ccCompilationOutputs,
             ccLinkingOutputs,
-            ccCompilationContext.getTransitiveCompilationPrerequisites(),
+            ccCompilationContextInfo.getTransitiveCompilationPrerequisites(),
             fake,
             binary,
             linkParams,
@@ -473,7 +474,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             ccToolchain,
             linkingOutputs,
             ccLinkingOutputs,
-            ccCompilationContext,
+            ccCompilationContextInfo,
             linkingMode,
             filesToBuild,
             fakeLinkerInputs,
@@ -499,7 +500,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         ruleBuilder,
         filesToBuild,
         ccCompilationOutputs,
-        ccCompilationContext,
+        ccCompilationContextInfo,
         linkingOutputs,
         dwoArtifacts,
         transitiveLipoInfo,
@@ -548,7 +549,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addProvider(
             LipoContextProvider.class,
             new LipoContextProvider(
-                ccCompilationContext,
+                ccCompilationContextInfo,
                 ImmutableMap.copyOf(scannableMap),
                 ImmutableMap.copyOf(sourceFileMap)))
         .addProvider(CppLinkAction.Context.class, linkContext)
@@ -878,7 +879,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
       RuleConfiguredTargetBuilder builder,
       NestedSet<Artifact> filesToBuild,
       CcCompilationOutputs ccCompilationOutputs,
-      CcCompilationContext ccCompilationContext,
+      CcCompilationContextInfo ccCompilationContextInfo,
       CcLinkingOutputs linkingOutputs,
       DwoArtifactsCollector dwoArtifacts,
       TransitiveLipoInfoProvider transitiveLipoInfo,
@@ -898,7 +899,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             CppHelper.usePicForDynamicLibraries(ruleContext, toolchain));
 
     CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
-    ccCompilationInfoBuilder.setCcCompilationContext(ccCompilationContext);
+    ccCompilationInfoBuilder.setCcCompilationContextInfo(ccCompilationContextInfo);
 
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
     ccLinkingInfoBuilder.setCcExecutionDynamicLibrariesInfo(
@@ -930,7 +931,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, headerTokens)
         .addOutputGroup(
             OutputGroupInfo.COMPILATION_PREREQUISITES,
-            CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContext));
+            CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContextInfo));
 
     CppHelper.maybeAddStaticLinkMarkerProvider(builder, ruleContext);
   }

@@ -18,7 +18,8 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.SequenceBuilder;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.SequenceBuilder;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /** Enum covering all build variables we create for all various {@link CppLinkAction}. */
@@ -91,7 +92,7 @@ public enum LinkBuildVariables {
     return variableName;
   }
 
-  public static CcToolchainVariables setupVariables(
+  public static Variables setupVariables(
       boolean isUsingLinkerNotArchiver,
       BuildConfiguration configuration,
       Artifact outputArtifact,
@@ -112,7 +113,7 @@ public enum LinkBuildVariables {
       Iterable<String> runtimeLibrarySearchDirectories,
       SequenceBuilder librariesToLink,
       Iterable<String> librarySearchDirectories) {
-    CcToolchainVariables.Builder buildVariables = new CcToolchainVariables.Builder();
+    Variables.Builder buildVariables = new Variables.Builder();
 
     // symbol counting
     if (symbolCounts != null) {

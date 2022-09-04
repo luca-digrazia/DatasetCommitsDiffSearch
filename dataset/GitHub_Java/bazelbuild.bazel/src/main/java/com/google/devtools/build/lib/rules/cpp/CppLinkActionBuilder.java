@@ -44,7 +44,8 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.Context;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction.LinkArtifactFactory;
@@ -953,8 +954,7 @@ public class CppLinkActionBuilder {
             : null;
 
     // Add build variables necessary to template link args into the crosstool.
-    CcToolchainVariables.Builder buildVariablesBuilder =
-        new CcToolchainVariables.Builder(toolchain.getBuildVariables());
+    Variables.Builder buildVariablesBuilder = new Variables.Builder(toolchain.getBuildVariables());
     Preconditions.checkState(!isLtoIndexing || allowLtoIndexing);
     Preconditions.checkState(allowLtoIndexing || thinltoParamFile == null);
     Preconditions.checkState(allowLtoIndexing || thinltoMergedObjectFile == null);
@@ -992,7 +992,7 @@ public class CppLinkActionBuilder {
     ImmutableSet<Artifact> expandedLinkerArtifactsNoLinkstamps =
         Sets.difference(expandedLinkerArtifacts, linkstampObjectArtifacts).immutableCopy();
 
-    CcToolchainVariables variables =
+    Variables variables =
         LinkBuildVariables.setupVariables(
             getLinkType().linkerOrArchiver().equals(LinkerOrArchiver.LINKER),
             configuration,
@@ -1020,7 +1020,7 @@ public class CppLinkActionBuilder {
       extraVariablesExtension.addVariables(buildVariablesBuilder);
     }
 
-    CcToolchainVariables buildVariables = buildVariablesBuilder.build();
+    Variables buildVariables = buildVariablesBuilder.build();
 
     Preconditions.checkArgument(
         linkType != LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
@@ -1086,8 +1086,8 @@ public class CppLinkActionBuilder {
             : linkoptsForVariables;
     linkCommandLineBuilder.setLinkopts(linkoptsForVariables);
 
-    CcToolchainVariables patchedVariables =
-        new CcToolchainVariables.Builder(buildVariables)
+    Variables patchedVariables =
+        new Variables.Builder(buildVariables)
             .addStringSequenceVariable(
                 LinkBuildVariables.LEGACY_LINK_FLAGS.getVariableName(),
                 getToolchainFlags(linkoptsForVariables))
