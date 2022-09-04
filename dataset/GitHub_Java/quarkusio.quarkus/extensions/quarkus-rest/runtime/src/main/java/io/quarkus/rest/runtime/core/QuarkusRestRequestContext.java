@@ -23,7 +23,6 @@ import javax.enterprise.event.Event;
 import javax.ws.rs.container.CompletionCallback;
 import javax.ws.rs.container.ConnectionCallback;
 import javax.ws.rs.core.Cookie;
-import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.PathSegment;
 import javax.ws.rs.core.Request;
@@ -109,11 +108,6 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
      * The result of the invocation
      */
     private Object result;
-    /**
-     * The supplier of the actual response
-     */
-    private LazyResponse response;
-
     private boolean suspended = false;
     private volatile boolean requestScopeActivated = false;
     private volatile boolean running = false;
@@ -137,7 +131,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     // this is only set if we override the requestUri
     private String authority;
     private String remaining;
-    private EncodedMediaType responseContentType;
+    private MediaType producesMediaType;
     private MediaType consumesMediaType;
 
     private Annotation[] methodAnnotations;
@@ -417,28 +411,8 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return result;
     }
 
-    public Object getResponseEntity() {
-        Object result = responseEntity();
-        if (result instanceof GenericEntity) {
-            return ((GenericEntity<?>) result).getEntity();
-        }
-        return result;
-    }
-
-    private Object responseEntity() {
-        if (response != null && response.isCreated()) {
-            return response.get().getEntity();
-        }
-        return result;
-    }
-
     public QuarkusRestRequestContext setResult(Object result) {
         this.result = result;
-        if (result instanceof Response) {
-            this.response = new LazyResponse.Existing((Response) result);
-        } else if (result instanceof GenericEntity) {
-            setGenericReturnType(((GenericEntity<?>) result).getType());
-        }
         return this;
     }
 
@@ -490,8 +464,8 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         // this is called from the abort chain, but we can abort because we have a Response, or because
         // we got an exception
         if (throwable != null) {
-            this.responseContentType = null;
-            setResult(deployment.getExceptionMapping().mapException(throwable));
+            this.producesMediaType = null;
+            this.result = deployment.getExceptionMapping().mapException(throwable);
             // NOTE: keep the throwable around for close() AsyncResponse notification
         }
     }
@@ -525,13 +499,8 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         onComplete(throwable);
     }
 
-    public LazyResponse getResponse() {
-        return response;
-    }
-
-    public QuarkusRestRequestContext setResponse(LazyResponse response) {
-        this.response = response;
-        return this;
+    public Response getResponse() {
+        return (Response) result;
     }
 
     public Object getProperty(String name) {
@@ -671,42 +640,12 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
         return this;
     }
 
-    /**
-     * Returns the current response content type. If a response has been set and has an
-     * explicit content type then this is used, otherwise it returns any content type
-     * that has been explicitly set.
-     */
-    public EncodedMediaType getResponseContentType() {
-        if (response != null) {
-            if (response.isCreated()) {
-                MediaType mediaType = response.get().getMediaType();
-                if (mediaType != null) {
-                    return new EncodedMediaType(mediaType);
-                }
-            }
-        }
-        return responseContentType;
+    public MediaType getProducesMediaType() {
+        return producesMediaType;
     }
 
-    public MediaType getResponseContentMediaType() {
-        EncodedMediaType resp = getResponseContentType();
-        if (resp == null) {
-            return null;
-        }
-        return resp.mediaType;
-    }
-
-    public QuarkusRestRequestContext setResponseContentType(EncodedMediaType responseContentType) {
-        this.responseContentType = responseContentType;
-        return this;
-    }
-
-    public QuarkusRestRequestContext setResponseContentType(MediaType responseContentType) {
-        if (responseContentType == null) {
-            this.responseContentType = null;
-        } else {
-            this.responseContentType = new EncodedMediaType(responseContentType);
-        }
+    public QuarkusRestRequestContext setProducesMediaType(MediaType producesMediaType) {
+        this.producesMediaType = producesMediaType;
         return this;
     }
 

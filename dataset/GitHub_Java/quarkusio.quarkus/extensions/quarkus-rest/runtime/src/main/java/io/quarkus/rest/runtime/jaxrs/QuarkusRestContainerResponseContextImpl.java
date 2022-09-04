@@ -32,116 +32,112 @@ public class QuarkusRestContainerResponseContextImpl implements QuarkusRestConta
 
     @Override
     public int getStatus() {
-        return response().getStatus();
-    }
-
-    protected Response response() {
-        return context.getResponse().get();
+        return context.getResponse().getStatus();
     }
 
     @Override
     public void setStatus(int code) {
-        context.setResult(Response.fromResponse(response()).status(code).build());
+        context.setResult(Response.fromResponse(context.getResponse()).status(code).build());
     }
 
     @Override
     public StatusType getStatusInfo() {
-        return response().getStatusInfo();
+        return context.getResponse().getStatusInfo();
     }
 
     @Override
     public void setStatusInfo(StatusType statusInfo) {
-        context.setResult(Response.fromResponse(response()).status(statusInfo).build());
+        context.setResult(Response.fromResponse(context.getResponse()).status(statusInfo).build());
     }
 
     @Override
     public MultivaluedMap<String, Object> getHeaders() {
-        return response().getHeaders();
+        return context.getResponse().getHeaders();
     }
 
     @Override
     public MultivaluedMap<String, String> getStringHeaders() {
-        return response().getStringHeaders();
+        return context.getResponse().getStringHeaders();
     }
 
     @Override
     public String getHeaderString(String name) {
-        return response().getHeaderString(name);
+        return context.getResponse().getHeaderString(name);
     }
 
     @Override
     public Set<String> getAllowedMethods() {
-        return response().getAllowedMethods();
+        return context.getResponse().getAllowedMethods();
     }
 
     @Override
     public Date getDate() {
-        return response().getDate();
+        return context.getResponse().getDate();
     }
 
     @Override
     public Locale getLanguage() {
-        return response().getLanguage();
+        return context.getResponse().getLanguage();
     }
 
     @Override
     public int getLength() {
-        return response().getLength();
+        return context.getResponse().getLength();
     }
 
     @Override
     public MediaType getMediaType() {
-        return response().getMediaType();
+        return context.getResponse().getMediaType();
     }
 
     @Override
     public Map<String, NewCookie> getCookies() {
-        return response().getCookies();
+        return context.getResponse().getCookies();
     }
 
     @Override
     public EntityTag getEntityTag() {
-        return response().getEntityTag();
+        return context.getResponse().getEntityTag();
     }
 
     @Override
     public Date getLastModified() {
-        return response().getLastModified();
+        return context.getResponse().getLastModified();
     }
 
     @Override
     public URI getLocation() {
-        return response().getLocation();
+        return context.getResponse().getLocation();
     }
 
     @Override
     public Set<Link> getLinks() {
-        return response().getLinks();
+        return context.getResponse().getLinks();
     }
 
     @Override
     public boolean hasLink(String relation) {
-        return response().hasLink(relation);
+        return context.getResponse().hasLink(relation);
     }
 
     @Override
     public Link getLink(String relation) {
-        return response().getLink(relation);
+        return context.getResponse().getLink(relation);
     }
 
     @Override
     public Builder getLinkBuilder(String relation) {
-        return response().getLinkBuilder(relation);
+        return context.getResponse().getLinkBuilder(relation);
     }
 
     @Override
     public boolean hasEntity() {
-        return response().hasEntity();
+        return context.getResponse().hasEntity();
     }
 
     @Override
     public Object getEntity() {
-        return response().getEntity();
+        return context.getResponse().getEntity();
     }
 
     @Override
@@ -165,7 +161,7 @@ public class QuarkusRestContainerResponseContextImpl implements QuarkusRestConta
             context.setGenericReturnType(((GenericEntity<?>) entity).getType());
             entity = ((GenericEntity<?>) entity).getEntity();
         }
-        Response.ResponseBuilder resp = Response.fromResponse(response()).entity(entity);
+        Response.ResponseBuilder resp = Response.fromResponse(context.getResponse()).entity(entity);
         context.setResult(resp.build());
     }
 
@@ -176,9 +172,9 @@ public class QuarkusRestContainerResponseContextImpl implements QuarkusRestConta
             context.setGenericReturnType(((GenericEntity<?>) entity).getType());
             entity = ((GenericEntity<?>) entity).getEntity();
         }
-        context.setResponseContentType(mediaType);
+        context.setProducesMediaType(mediaType);
         context.setAllAnnotations(annotations);
-        Response.ResponseBuilder resp = Response.fromResponse(response()).entity(entity).type(mediaType);
+        Response.ResponseBuilder resp = Response.fromResponse(context.getResponse()).entity(entity).type(mediaType);
         context.setResult(resp.build());
     }
 

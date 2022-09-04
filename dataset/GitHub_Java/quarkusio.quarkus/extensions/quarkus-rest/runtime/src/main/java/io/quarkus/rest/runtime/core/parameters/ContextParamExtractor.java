@@ -5,7 +5,6 @@ import javax.ws.rs.container.AsyncResponse;
 import javax.ws.rs.container.ResourceContext;
 import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.core.Application;
-import javax.ws.rs.core.Configuration;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.SecurityContext;
@@ -20,7 +19,6 @@ import io.quarkus.rest.runtime.jaxrs.QuarkusRestResourceContext;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestSse;
 import io.quarkus.rest.runtime.jaxrs.QuarkusRestSseEventSink;
 import io.quarkus.rest.runtime.spi.QuarkusRestContext;
-import io.quarkus.rest.runtime.spi.SimplifiedResourceInfo;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 
@@ -34,18 +32,18 @@ public class ContextParamExtractor implements ParameterExtractor {
 
     @Override
     public Object extractParameter(QuarkusRestRequestContext context) {
-        // NOTE: Same list for CDI at ContextProducers and in EndpointIndexer.CONTEXT_TYPES
+        // NOTE: Same list for CDI at ContextProducers
         if (type.equals(QuarkusRestContext.class.getName())) {
             return context;
         }
         if (type.equals(HttpHeaders.class.getName())) {
             return context.getHttpHeaders();
         }
+        if (type.equals(QuarkusRestRequestContext.class.getName())) {
+            return context;
+        }
         if (type.equals(UriInfo.class.getName())) {
             return context.getUriInfo();
-        }
-        if (type.equals(Configuration.class.getName())) {
-            return context.getDeployment().getConfiguration();
         }
         if (type.equals(AsyncResponse.class.getName())) {
             QuarkusRestAsyncResponse response = new QuarkusRestAsyncResponse(context);
@@ -61,7 +59,7 @@ public class ContextParamExtractor implements ParameterExtractor {
             return context.getRequest();
         }
         if (type.equals(HttpServerResponse.class.getName())) {
-            return context.getHttpServerResponse();
+            return context.getContext().response();
         }
         if (type.equals(HttpServerRequest.class.getName())) {
             return context.getContext().request();
@@ -74,9 +72,6 @@ public class ContextParamExtractor implements ParameterExtractor {
         }
         if (type.equals(ResourceInfo.class.getName())) {
             return context.getTarget().getLazyMethod();
-        }
-        if (type.equals(SimplifiedResourceInfo.class.getName())) {
-            return context.getTarget().getSimplifiedResourceInfo();
         }
         if (type.equals(Application.class.getName())) {
             return CDI.current().select(Application.class).get();
