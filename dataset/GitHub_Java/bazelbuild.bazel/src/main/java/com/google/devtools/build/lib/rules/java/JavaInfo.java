@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
@@ -33,7 +34,13 @@ import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.skylarkbuildapi.java.JavaInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -47,9 +54,13 @@ import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /** A Skylark declared provider that encapsulates all providers that are needed by Java rules. */
+@SkylarkModule(
+    name = "JavaInfo",
+    doc = "Encapsulates all information provided by Java rules.",
+    category = SkylarkModuleCategory.PROVIDER)
 @Immutable
 @AutoCodec
-public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> {
+public final class JavaInfo extends NativeInfo {
 
   public static final String SKYLARK_NAME = "JavaInfo";
 
@@ -258,17 +269,36 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
     return neverlink;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "transitive_runtime_jars",
+      doc = "Depset of runtime jars required by this target",
+      structField = true
+  )
   public SkylarkNestedSet getTransitiveRuntimeJars() {
     return SkylarkNestedSet.of(Artifact.class, getTransitiveRuntimeDeps());
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "transitive_compile_time_jars",
+      doc = "Depset of compile time jars recusrively required by this target. See `compile_jars` "
+          + "for more details.",
+      structField = true
+  )
   public SkylarkNestedSet getTransitiveCompileTimeJars() {
     return SkylarkNestedSet.of(Artifact.class, getTransitiveDeps());
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "compile_jars",
+      doc = "Returns the compile time jars required by this target directly. They can be: <ul>"
+          + "<li> interface jars (ijars), if an ijar tool was used, either by calling "
+          + "java_common.create_provider(use_ijar=True, ...) or by passing --use_ijars on the "
+          + "command line for native Java rules and `java_common.compile`</li>"
+          + "<li> normal full jars, if no ijar action was requested</li>"
+          + "<li> both ijars and normal full jars, if this provider was created by merging two or "
+          + "more providers created with different ijar requests </li> </ul>",
+      structField = true
+  )
   public SkylarkNestedSet getCompileTimeJars() {
     NestedSet<Artifact> compileTimeJars =
         getProviderAsNestedSet(
@@ -277,7 +307,16 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
     return SkylarkNestedSet.of(Artifact.class, compileTimeJars);
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "full_compile_jars",
+      doc = "Returns the full compile time jars required by this target directly. They can be <ul>"
+          + "<li> the corresponding normal full jars of the ijars returned by `compile_jars`</li>"
+          + "<li> the normal full jars returned by `compile_jars`</li></ul>"
+          + "Note: `compile_jars` can return a mix of ijars and normal full jars. In that case, "
+          + "`full_compile_jars` returns the corresponding full jars of the ijars and the remaining"
+          + "normal full jars in `compile_jars`.",
+      structField = true
+  )
   public SkylarkNestedSet getFullCompileTimeJars() {
     NestedSet<Artifact> fullCompileTimeJars =
         getProviderAsNestedSet(
@@ -285,7 +324,13 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
     return SkylarkNestedSet.of(Artifact.class, fullCompileTimeJars);
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "source_jars",
+      doc = "Returns a list of jar files containing all the uncompiled source files (including "
+      + "those generated by annotations) from the target itself, i.e. NOT including the sources of "
+      + "the transitive dependencies",
+      structField = true
+  )
   public SkylarkList<Artifact> getSourceJars() {
     //TODO(#4221) change return type to NestedSet<Artifact>
     JavaSourceJarsProvider provider = providers.getProvider(JavaSourceJarsProvider.class);
@@ -294,23 +339,41 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
     return SkylarkList.createImmutable(sourceJars);
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "outputs",
+    doc = "Returns information about outputs of this Java target.",
+    structField = true,
+    allowReturnNones = true
+  )
   public JavaRuleOutputJarsProvider getOutputJars() {
     return getProvider(JavaRuleOutputJarsProvider.class);
   }
 
 
-  @Override
+  @SkylarkCallable(
+      name = "annotation_processing",
+      structField = true,
+      allowReturnNones = true,
+      doc = "Returns information about annotation processing for this Java target."
+  )
   public JavaGenJarsProvider getGenJarsProvider() {
     return getProvider(JavaGenJarsProvider.class);
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "compilation_info",
+    structField = true,
+    allowReturnNones = true,
+    doc = "Returns compilation information for this Java target."
+  )
   public JavaCompilationInfoProvider getCompilationInfoProvider() {
     return getProvider(JavaCompilationInfoProvider.class);
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "runtime_output_jars",
+      doc = "Returns the runtime output jars provided by this Java target.",
+      structField = true)
   public SkylarkList<Artifact> getRuntimeOutputJars() {
     return SkylarkList.createImmutable(getDirectRuntimeJars());
   }
@@ -319,27 +382,44 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
     return directRuntimeJars;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "transitive_deps",
+    doc = "Returns the transitive set of Jars required to build the target.",
+    structField = true
+  )
   public NestedSet<Artifact> getTransitiveDeps() {
     return getProviderAsNestedSet(
         JavaCompilationArgsProvider.class,
         JavaCompilationArgsProvider::getTransitiveCompileTimeJars);
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "transitive_runtime_deps",
+    doc = "Returns the transitive set of Jars required on the target's runtime classpath.",
+    structField = true
+  )
   public NestedSet<Artifact> getTransitiveRuntimeDeps() {
     return getProviderAsNestedSet(
         JavaCompilationArgsProvider.class, JavaCompilationArgsProvider::getRuntimeJars);
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "transitive_source_jars",
+    doc = "Returns the Jars containing Java source files for the target "
+            + "and all of its transitive dependencies.",
+    structField = true
+  )
   public NestedSet<Artifact> getTransitiveSourceJars() {
     return getProviderAsNestedSet(
         JavaSourceJarsProvider.class,
         JavaSourceJarsProvider::getTransitiveSourceJars);
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "transitive_exports",
+      structField = true,
+      doc = "Returns transitive set of labels that are being exported from this rule."
+  )
   public NestedSet<Label> getTransitiveExports() {
     return getProviderAsNestedSet(
         JavaExportsProvider.class,
@@ -396,13 +476,161 @@ public final class JavaInfo extends NativeInfo implements JavaInfoApi<Artifact> 
   }
 
   /** Provider class for {@link JavaInfo} objects. */
-  public static class JavaInfoProvider extends BuiltinProvider<JavaInfo>
-      implements JavaInfoProviderApi {
+  @SkylarkModule(name = "Provider", documented = false, doc = "")
+  public static class JavaInfoProvider extends BuiltinProvider<JavaInfo> implements ProviderApi {
     private JavaInfoProvider() {
       super(SKYLARK_NAME, JavaInfo.class);
     }
 
-    @Override
+    @SkylarkCallable(name = "JavaInfo",
+        doc = "The <code>JavaInfo</code> constructor.",
+        parameters = {
+            @Param(
+                name = "output_jar",
+                type = FileApi.class,
+                named = true,
+                doc = "The jar that was created as a result of a compilation "
+                    + "(e.g. javac, scalac, etc)."
+            ),
+            @Param(
+                name = "compile_jar",
+                type = FileApi.class,
+                named = true,
+                noneable = true,
+                defaultValue = "None",
+                doc = "A jar that is added as the compile-time dependency in lieu of "
+                    + "<code>output_jar</code>. Typically this is the ijar produced by "
+                    + "<code><a class=\"anchor\" href=\"java_common.html#run_ijar\">"
+                    + "run_ijar</a></code>. "
+                    + "If you cannot use ijar, consider instead using the output of "
+                    + "<code><a class=\"anchor\" href=\"java_common.html#stamp_jar\">"
+                    + "stamp_ijar</a></code>. If you do not wish to use either, "
+                    + "you can simply pass <code>output_jar</code>."
+            ),
+            @Param(
+                name = "source_jar",
+                type = FileApi.class,
+                named = true,
+                noneable = true,
+                defaultValue = "None",
+                doc = "The source jar that was used to create the output jar. "
+                    + "Use <code><a class=\"anchor\" href=\"java_common.html#pack_sources\">"
+                    + "pack_sources</a></code> to produce this source jar."
+            ),
+            @Param(
+                name = "neverlink",
+                type = Boolean.class,
+                named = true,
+                defaultValue = "False",
+                doc = "If true only use this library for compilation and not at runtime."
+            ),
+            @Param(
+                name = "deps",
+                type = SkylarkList.class,
+                generic1 = JavaInfo.class,
+                named = true,
+                defaultValue = "[]",
+                doc = "Compile time dependencies that were used to create the output jar."
+            ),
+            @Param(
+                name = "runtime_deps",
+                type = SkylarkList.class,
+                generic1 = JavaInfo.class,
+                named = true,
+                defaultValue = "[]",
+                doc = "Runtime dependencies that are needed for this library."
+            ),
+            @Param(
+                name = "exports",
+                type = SkylarkList.class,
+                generic1 = JavaInfo.class,
+                named = true,
+                defaultValue = "[]",
+                doc = "Libraries to make available for users of this library. See also "
+                    + "<a class=\"anchor\" href=\"https://docs.bazel.build/versions/"
+                    + "master/be/java.html#java_library.exports\">java_library.exports</a>."
+            ),
+            @Param(
+                name = "actions",
+                type = SkylarkActionFactoryApi.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "Deprecated. No longer needed when <code>compile_jar</code> and/or "
+                    + "<code>source_jar</code> are used. "
+                    + "<p>Used to create the ijar and pack source files to jar actions.</p>"
+            ),
+            @Param(
+                name = "sources",
+                type = SkylarkList.class,
+                generic1 = FileApi.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "Deprecated. Use <code>source_jar</code> instead. "
+                    + "<p>The sources that were used to create the output jar.</p>"
+            ),
+            @Param(
+                name = "source_jars",
+                type = SkylarkList.class,
+                generic1 = FileApi.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "Deprecated. Use <code>source_jar</code> instead. "
+                    + "<p>The source jars that were used to create the output jar.</p>"
+            ),
+            @Param(
+                name = "use_ijar",
+                type = Boolean.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "Deprecated. Use <code>compile_jar</code> instead. "
+                    + "<p>If an ijar of the output jar should be created and stored in the "
+                    + "provider. </p>"
+            ),
+            @Param(
+                name = "java_toolchain",
+                type = ConfiguredTarget.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "Deprecated. No longer needed when <code>compile_jar</code> and/or "
+                    + "<code>source_jar</code> are used. "
+                    + "<p>The toolchain to be used for retrieving the ijar tool and packing source "
+                    + "files to Jar.</p>"
+            ),
+            @Param(
+                name = "host_javabase",
+                type = ConfiguredTarget.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "Deprecated. No longer needed when <code>compile_jar</code> and/or "
+                    + "<code>source_jar</code> are used. "
+                    + "<p>The host_javabase to be used for packing source files to Jar.</p>"
+            ),
+            @Param(
+                name = "jdeps",
+                type = FileApi.class,
+                named = true,
+                defaultValue = "None",
+                noneable = true,
+                doc = "jdeps information for the rule output (if available). This should be a "
+                    + "binary proto encoded using the deps.proto protobuf included with Bazel.  "
+                    + "If available this file is typically produced by a compiler. IDEs and other "
+                    + "tools can use this information for more efficient processing."
+            ),
+        },
+        selfCall = true,
+        useLocation = true,
+        useEnvironment = true
+    )
+    @SkylarkConstructor(
+        objectType = JavaInfo.class,
+        receiverNameForDoc = "JavaInfo"
+    )
     @SuppressWarnings({"unchecked"})
     public JavaInfo javaInfo(
         FileApi outputJarApi,
