@@ -27,43 +27,58 @@ import java.util.List;
  */
 public class AuthAndTLSOptions extends OptionsBase {
   @Option(
-    name = "google_default_credentials",
-    oldName = "auth_enabled",
+    name = "auth_enabled",
     defaultValue = "false",
+    category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
-        "Whether to use 'Google Application Default Credentials' for authentication."
-            + " See https://cloud.google.com/docs/authentication for details. Disabled by default."
+        "Whether to enable authentication for remote execution/caching and the build event "
+            + "service (BES). If not otherwise specified 'Google Application Default Credentials' "
+            + "are used. Disabled by default."
   )
-  public boolean useGoogleDefaultCredentials;
+  public boolean authEnabled;
 
+  /**
+   * Comma-separated list of auth scopes.
+   *
+   * <ul>
+   *   <li><b>https://www.googleapis.com/auth/cloud-source-tools</b> is the auth scope for Build
+   *       Event Service (BES) and Remote Build Execution (RBE).
+   *   <li><b>https://www.googleapis.com/auth/devstorage.read_write</b> is the auth scope for Google
+   *       Cloud Storage (GCS).
+   * </ul>
+   */
   @Option(
-    name = "google_auth_scopes",
-    oldName = "auth_scope",
-    defaultValue = "https://www.googleapis.com/auth/cloud-platform",
+    name = "auth_scope",
+    defaultValue =
+        "https://www.googleapis.com/auth/cloud-source-tools,"
+            + "https://www.googleapis.com/auth/devstorage.read_write",
     converter = CommaSeparatedOptionListConverter.class,
+    category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
-    help = "A comma-separated list of Google Cloud authentication scopes."
+    help = "A comma-separated list of authentication scopes."
   )
-  public List<String> googleAuthScopes;
+  public List<String> authScope;
 
   @Option(
-    name = "google_credentials",
-    oldName = "auth_credentials",
+    name = "auth_credentials",
     defaultValue = "null",
+    category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Specifies the file to get authentication credentials from. See "
-            + "https://cloud.google.com/docs/authentication for details."
+            + "https://cloud.google.com/docs/authentication for more details. 'Google Application "
+            + "Default Credentials' are used by default."
   )
-  public String googleCredentials;
+  public String authCredentials;
 
   @Option(
     name = "tls_enabled",
     defaultValue = "false",
+    category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
@@ -75,6 +90,7 @@ public class AuthAndTLSOptions extends OptionsBase {
   @Option(
     name = "tls_certificate",
     defaultValue = "null",
+    category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help = "Specify the TLS client certificate to use."
@@ -84,6 +100,7 @@ public class AuthAndTLSOptions extends OptionsBase {
   @Option(
     name = "tls_authority_override",
     defaultValue = "null",
+    category = "remote",
     metadataTags = {OptionMetadataTag.HIDDEN},
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
     effectTags = {OptionEffectTag.UNKNOWN},

@@ -19,7 +19,6 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import io.grpc.CallCredentials;
-import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.auth.MoreCallCredentials;
 import io.grpc.netty.GrpcSslContexts;
@@ -43,12 +42,10 @@ public final class GoogleAuthUtils {
    *
    * @throws IOException in case the channel can't be constructed.
    */
-  public static ManagedChannel newChannel(String target, AuthAndTLSOptions options,
-      ClientInterceptor... interceptors)
+  public static ManagedChannel newChannel(String target, AuthAndTLSOptions options)
       throws IOException {
     Preconditions.checkNotNull(target);
     Preconditions.checkNotNull(options);
-    Preconditions.checkNotNull(interceptors);
 
     final SslContext sslContext =
         options.tlsEnabled ? createSSlContext(options.tlsCertificate) : null;
@@ -57,8 +54,7 @@ public final class GoogleAuthUtils {
       NettyChannelBuilder builder =
           NettyChannelBuilder.forTarget(target)
               .negotiationType(options.tlsEnabled ? NegotiationType.TLS : NegotiationType.PLAINTEXT)
-              .loadBalancerFactory(RoundRobinLoadBalancerFactory.getInstance())
-              .intercept(interceptors);
+              .loadBalancerFactory(RoundRobinLoadBalancerFactory.getInstance());
       if (sslContext != null) {
         builder.sslContext(sslContext);
         if (options.tlsAuthorityOverride != null) {
@@ -117,30 +113,29 @@ public final class GoogleAuthUtils {
   }
 
   /**
-   * Create a new {@link Credentials} object, or {@code null} if no options are provided.
+   * Create a new {@link Credentials} object.
    *
    * @throws IOException in case the credentials can't be constructed.
    */
-  @Nullable
-  public static Credentials newCredentials(@Nullable AuthAndTLSOptions options) throws IOException {
-    if (options == null) {
+  public static Credentials newCredentials(AuthAndTLSOptions options) throws IOException {
+    if (!options.authEnabled) {
       return null;
-    } else if (options.googleCredentials != null) {
+    }
+
+    if (options.authCredentials != null) {
       // Credentials from file
-      try (InputStream authFile = new FileInputStream(options.googleCredentials)) {
-        return newCredentials(authFile, options.googleAuthScopes);
+      try (InputStream authFile = new FileInputStream(options.authCredentials)) {
+        return newCredentials(authFile, options.authScope);
       } catch (FileNotFoundException e) {
         String message =
             String.format(
                 "Could not open auth credentials file '%s': %s",
-                options.googleCredentials, e.getMessage());
+                options.authCredentials, e.getMessage());
         throw new IOException(message, e);
       }
-    } else if (options.useGoogleDefaultCredentials) {
-      return newCredentials(
-          null /* Google Application Default Credentials */, options.googleAuthScopes);
     }
-    return null;
+    // Google Application Default Credentials
+    return newCredentials(null, options.authScope);
   }
 
   private static Credentials newCredentials(
