@@ -65,10 +65,11 @@ public class DashboardWidgetCreator {
         final String type = (String)fields.get(DashboardWidget.FIELD_TYPE);
         final BasicDBObject config = (BasicDBObject) fields.get(DashboardWidget.FIELD_CONFIG);
 
-        final String widgetId = (String) fields.get(DashboardWidget.FIELD_ID);
-
         // Build timerange.
         final BasicDBObject timerangeConfig = (BasicDBObject) config.get("timerange");
+
+        final String widgetId = (String) fields.get(DashboardWidget.FIELD_ID);
+
         final TimeRange timeRange = timeRangeFactory.create(timerangeConfig);
 
         final String description = (String) fields.get(DashboardWidget.FIELD_DESCRIPTION);

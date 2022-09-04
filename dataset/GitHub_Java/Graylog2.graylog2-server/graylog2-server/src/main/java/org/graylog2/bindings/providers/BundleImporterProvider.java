@@ -19,9 +19,8 @@ package org.graylog2.bindings.providers;
 import org.graylog2.bundles.BundleImporter;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
-import org.graylog2.events.ClusterEventBus;
 import org.graylog2.grok.GrokPatternService;
-import org.graylog2.indexer.IndexSetRegistry;
+import org.graylog2.indexer.searches.Searches;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.extractors.ExtractorFactory;
 import org.graylog2.plugin.ServerStatus;
@@ -43,16 +42,15 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
     private final ExtractorFactory extractorFactory;
     private final StreamService streamService;
     private final StreamRuleService streamRuleService;
-    private final IndexSetRegistry indexSetRegistry;
     private final OutputService outputService;
     private final DashboardService dashboardService;
     private final DashboardWidgetCreator dashboardWidgetCreator;
     private final ServerStatus serverStatus;
+    private final Searches searches;
     private final MessageInputFactory messageInputFactory;
     private final InputLauncher inputLauncher;
     private final GrokPatternService grokPatternService;
     private final TimeRangeFactory timeRangeFactory;
-    private final ClusterEventBus clusterBus;
 
     @Inject
     public BundleImporterProvider(final InputService inputService,
@@ -60,38 +58,36 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
                                   final ExtractorFactory extractorFactory,
                                   final StreamService streamService,
                                   final StreamRuleService streamRuleService,
-                                  final IndexSetRegistry indexSetRegistry,
                                   final OutputService outputService,
                                   final DashboardService dashboardService,
                                   final DashboardWidgetCreator dashboardWidgetCreator,
                                   final ServerStatus serverStatus,
+                                  final Searches searches,
                                   final MessageInputFactory messageInputFactory,
                                   final InputLauncher inputLauncher,
                                   final GrokPatternService grokPatternService,
-                                  final TimeRangeFactory timeRangeFactory,
-                                  final ClusterEventBus clusterBus) {
+                                  final TimeRangeFactory timeRangeFactory) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
-        this.indexSetRegistry = indexSetRegistry;
         this.outputService = outputService;
         this.dashboardService = dashboardService;
         this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.serverStatus = serverStatus;
+        this.searches = searches;
         this.messageInputFactory = messageInputFactory;
         this.inputLauncher = inputLauncher;
         this.grokPatternService = grokPatternService;
         this.timeRangeFactory = timeRangeFactory;
-        this.clusterBus = clusterBus;
     }
 
     @Override
     public BundleImporter get() {
         return new BundleImporter(inputService, inputRegistry, extractorFactory,
-                streamService, streamRuleService, indexSetRegistry, outputService, dashboardService,
-                dashboardWidgetCreator, serverStatus, messageInputFactory,
-                inputLauncher, grokPatternService, timeRangeFactory, clusterBus);
+                streamService, streamRuleService, outputService, dashboardService,
+                dashboardWidgetCreator, serverStatus, searches,
+                messageInputFactory, inputLauncher, grokPatternService, timeRangeFactory);
     }
 }

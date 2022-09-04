@@ -88,7 +88,7 @@ public class DashboardServiceImpl extends PersistedServiceImpl implements Dashbo
         final BasicDBObject o = (BasicDBObject) get(DashboardImpl.class, id);
 
         if (o == null) {
-            throw new NotFoundException("Couldn't find dashboard with ID " + id);
+            throw new NotFoundException();
         }
 
         final Dashboard dashboard = this.create((ObjectId) o.get("_id"), o.toMap());

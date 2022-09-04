@@ -27,6 +27,11 @@ import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.grok.GrokPatternService;
 import org.graylog2.indexer.searches.Searches;
+import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.plugin.indexer.searches.timeranges.KeywordRange;
+import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
@@ -36,8 +41,6 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
-import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.models.dashboards.requests.WidgetPositionsRequest;
 import org.graylog2.shared.inputs.InputLauncher;
@@ -52,11 +55,11 @@ import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
 import org.graylog2.timeranges.TimeRangeFactory;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,8 +67,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static org.graylog2.plugin.inputs.Extractor.Type.GROK;
-import static org.graylog2.plugin.inputs.Extractor.Type.JSON;
 
 public class BundleImporter {
     private static final Logger LOG = LoggerFactory.getLogger(BundleImporter.class);
@@ -79,6 +80,7 @@ public class BundleImporter {
     private final DashboardService dashboardService;
     private final DashboardWidgetCreator dashboardWidgetCreator;
     private final ServerStatus serverStatus;
+    private final Searches searches;
     private final MessageInputFactory messageInputFactory;
     private final InputLauncher inputLauncher;
     private final GrokPatternService grokPatternService;
@@ -102,6 +104,7 @@ public class BundleImporter {
                           final DashboardService dashboardService,
                           final DashboardWidgetCreator dashboardWidgetCreator,
                           final ServerStatus serverStatus,
+                          final Searches searches,
                           final MessageInputFactory messageInputFactory,
                           final InputLauncher inputLauncher,
                           final GrokPatternService grokPatternService,
@@ -115,6 +118,7 @@ public class BundleImporter {
         this.dashboardService = dashboardService;
         this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.serverStatus = serverStatus;
+        this.searches = searches;
         this.messageInputFactory = messageInputFactory;
         this.inputLauncher = inputLauncher;
         this.grokPatternService = grokPatternService;
@@ -131,7 +135,7 @@ public class BundleImporter {
             createStreams(bundleId, bundle.getStreams(), userName);
             createDashboards(bundleId, bundle.getDashboards(), userName);
         } catch (Exception e) {
-            LOG.error("Error while creating entities in content pack. Starting rollback.", e);
+            LOG.error("Error while creating dashboards. Starting rollback.", e);
             if (!rollback()) {
                 LOG.error("Rollback unsuccessful.");
             }
@@ -183,9 +187,9 @@ public class BundleImporter {
         for (String grokPatternName : createdGrokPatterns.keySet()) {
             final org.graylog2.grok.GrokPattern grokPattern = grokPatternService.load(grokPatternName);
 
-            if (grokPattern.id() != null) {
+            if(grokPattern.id != null) {
                 LOG.debug("Deleting grok pattern \"{}\" from database", grokPatternName);
-                grokPatternService.delete(grokPattern.id());
+                grokPatternService.delete(grokPattern.id.toHexString());
             } else {
                 LOG.debug("Couldn't find grok pattern \"{}\" in database", grokPatternName);
             }
@@ -235,7 +239,10 @@ public class BundleImporter {
     }
 
     private org.graylog2.grok.GrokPattern createGrokPattern(String bundleId, GrokPattern grokPattern) throws ValidationException {
-        final org.graylog2.grok.GrokPattern pattern = org.graylog2.grok.GrokPattern.create(null, grokPattern.name(), grokPattern.pattern(), bundleId);
+        final org.graylog2.grok.GrokPattern pattern = new org.graylog2.grok.GrokPattern();
+        pattern.name = grokPattern.name();
+        pattern.pattern = grokPattern.pattern();
+        pattern.contentPack = bundleId;
 
         return grokPatternService.save(pattern);
     }
@@ -287,18 +294,6 @@ public class BundleImporter {
         return messageInput;
     }
 
-    private void validateExtractor(final Extractor extractorDescription) throws ValidationException {
-        if (extractorDescription.getSourceField().isEmpty()) {
-            throw new ValidationException("Missing parameter source_field in extractor " + extractorDescription.getTitle());
-        }
-
-        if (extractorDescription.getType() != GROK &&
-                extractorDescription.getType() != JSON &&
-                extractorDescription.getTargetField().isEmpty()) {
-            throw new ValidationException("Missing parameter target_field in extractor " + extractorDescription.getTitle());
-        }
-    }
-
     private void addExtractors(final MessageInput messageInput, final List<Extractor> extractors, final String userName)
             throws org.graylog2.plugin.inputs.Extractor.ReservedFieldException, org.graylog2.ConfigurationException,
             ExtractorFactory.NoSuchExtractorException, NotFoundException, ValidationException {
@@ -314,7 +309,9 @@ public class BundleImporter {
             final String userName)
             throws NotFoundException, ValidationException, org.graylog2.ConfigurationException,
             ExtractorFactory.NoSuchExtractorException, org.graylog2.plugin.inputs.Extractor.ReservedFieldException {
-        this.validateExtractor(extractorDescription);
+        if (extractorDescription.getSourceField().isEmpty() || extractorDescription.getTargetField().isEmpty()) {
+            throw new ValidationException("Missing parameters source_field or target_field.");
+        }
 
         final String extractorId = UUID.randomUUID().toString();
         final org.graylog2.plugin.inputs.Extractor extractor = extractorFactory.factory(
@@ -458,18 +455,8 @@ public class BundleImporter {
         streamData.put(StreamImpl.FIELD_CREATOR_USER_ID, userName);
         streamData.put(StreamImpl.FIELD_CREATED_AT, Tools.nowUTC());
         streamData.put(StreamImpl.FIELD_CONTENT_PACK, bundleId);
-        streamData.put(StreamImpl.FIELD_DEFAULT_STREAM, streamDescription.isDefaultStream());
 
-        final org.graylog2.plugin.streams.Stream stream;
-        if (streamDescription.isDefaultStream()) {
-            stream = new StreamImpl(
-                    new ObjectId(org.graylog2.plugin.streams.Stream.DEFAULT_STREAM_ID),
-                    streamData.build(),
-                    Collections.emptyList(),
-                    Collections.emptySet());
-        } else {
-            stream = streamService.create(streamData.build());
-        }
+        final org.graylog2.plugin.streams.Stream stream = streamService.create(streamData.build());
         final String streamId = streamService.save(stream);
 
         if (streamDescription.getStreamRules() != null) {
@@ -481,7 +468,6 @@ public class BundleImporter {
                 streamRuleData.put(StreamRuleImpl.FIELD_INVERTED, streamRule.isInverted());
                 streamRuleData.put(StreamRuleImpl.FIELD_STREAM_ID, new ObjectId(streamId));
                 streamRuleData.put(StreamRuleImpl.FIELD_CONTENT_PACK, bundleId);
-                streamRuleData.put(StreamRuleImpl.FIELD_DESCRIPTION, streamRule.getDescription());
 
                 streamRuleService.save(new StreamRuleImpl(streamRuleData.build()));
             }

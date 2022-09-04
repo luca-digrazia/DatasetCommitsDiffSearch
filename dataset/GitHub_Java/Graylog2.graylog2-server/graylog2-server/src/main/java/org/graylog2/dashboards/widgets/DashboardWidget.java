@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
@@ -110,9 +109,7 @@ public class DashboardWidget implements EmbeddedPersistable {
     }
 
     public Map<String, Object> getPersistedConfig() {
-        final Map<String, Object> config = new HashMap<>(this.getConfig());
-        config.put("timerange", this.getTimeRange().getPersistedConfig());
-        return config;
+        return ImmutableMap.of("timerange", this.getTimeRange().getPersistedConfig());
     }
 
     public static class NoSuchWidgetTypeException extends Exception {

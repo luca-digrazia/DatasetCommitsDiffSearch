@@ -109,7 +109,7 @@ public class BundleExporter {
             return null;
         }
 
-        return GrokPattern.create(grokPattern.name(), grokPattern.pattern());
+        return GrokPattern.create(grokPattern.name, grokPattern.pattern);
     }
 
     private Set<Input> exportInputs(final Set<String> inputs) {
@@ -222,7 +222,6 @@ public class BundleExporter {
         streamDescription.setMatchingType(stream.getMatchingType());
         streamDescription.setOutputs(exportOutputReferences(stream.getOutputs()));
         streamDescription.setStreamRules(exportStreamRules(stream.getStreamRules()));
-        streamDescription.setDefaultStream(stream.isDefaultStream());
 
         return streamDescription;
     }
@@ -236,7 +235,6 @@ public class BundleExporter {
             streamRuleDescription.setField(streamRule.getField());
             streamRuleDescription.setValue(streamRule.getValue());
             streamRuleDescription.setInverted(streamRule.getInverted());
-            streamRuleDescription.setDescription(streamRule.getDescription());
 
             streamRuleBuilder.add(streamRuleDescription);
         }
