@@ -44,8 +44,8 @@ import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.PackageValue;
-import com.google.devtools.build.lib.skyframe.ToolchainContextKey;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
+import com.google.devtools.build.lib.skyframe.UnloadedToolchainContextKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.util.List;
 import java.util.Map;
@@ -160,7 +160,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
   public Set<QueryVisibility<ConfiguredTarget>> getVisibility(ConfiguredTarget from)
       throws QueryException, InterruptedException {
     // TODO(bazel-team): implement this if needed.
-    throw new QueryException("visible() is not supported on configured targets");
+    throw new UnsupportedOperationException();
   }
 
   public Target getTargetFromConfiguredTarget(ConfiguredTarget configuredTarget) {
@@ -191,10 +191,9 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
     return (RuleConfiguredTarget)
         ((ConfiguredTargetValue)
                 walkableGraph.getValue(
-                    ConfiguredTargetKey.builder()
-                        .setLabel(oct.getGeneratingRule().getLabel())
-                        .setConfiguration(queryEnvironment.getConfiguration(oct))
-                        .build()))
+                    ConfiguredTargetKey.of(
+                        oct.getGeneratingRule().getLabel(),
+                        queryEnvironment.getConfiguration(oct))))
             .getConfiguredTarget();
   }
 
@@ -230,7 +229,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
         UnloadedToolchainContext context =
             (UnloadedToolchainContext)
                 walkableGraph.getValue(
-                    ToolchainContextKey.key()
+                    UnloadedToolchainContextKey.key()
                         .configurationKey(BuildConfigurationValue.key(config))
                         .requiredToolchainTypeLabels(execGroup.getRequiredToolchains())
                         .execConstraintLabels(execGroup.getExecutionPlatformConstraints())
@@ -243,7 +242,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
       UnloadedToolchainContext defaultContext =
           (UnloadedToolchainContext)
               walkableGraph.getValue(
-                  ToolchainContextKey.key()
+                  UnloadedToolchainContextKey.key()
                       .configurationKey(BuildConfigurationValue.key(config))
                       .requiredToolchainTypeLabels(requiredToolchains)
                       .execConstraintLabels(execConstraintLabels)

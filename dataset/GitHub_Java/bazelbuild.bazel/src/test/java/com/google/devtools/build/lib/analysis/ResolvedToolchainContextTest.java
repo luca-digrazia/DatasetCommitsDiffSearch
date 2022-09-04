@@ -14,18 +14,16 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.analysis.testing.ResolvedToolchainContextSubject.assertThat;
 import static org.junit.Assert.assertThrows;
 
+import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSetMultimap;
 import com.google.devtools.build.lib.analysis.platform.ToolchainTypeInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
-import com.google.devtools.build.lib.skyframe.ToolchainContextKey;
 import com.google.devtools.build.lib.skyframe.ToolchainException;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContextImpl;
@@ -46,23 +44,16 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
         ImmutableList.of("//constraints:linux"),
         "baz");
 
-    ToolchainContextKey toolchainContextKey =
-        ToolchainContextKey.key()
-            .configurationKey(targetConfigKey)
-            .requiredToolchainTypeLabels(testToolchainTypeLabel)
-            .build();
-
     // Create a static UnloadedToolchainContext.
     UnloadedToolchainContext unloadedToolchainContext =
         UnloadedToolchainContextImpl.builder()
-            .setKey(toolchainContextKey)
             .setExecutionPlatform(linuxPlatform)
             .setTargetPlatform(linuxPlatform)
             .setRequiredToolchainTypes(ImmutableSet.of(testToolchainType))
             .setRequestedLabelToToolchainType(
                 ImmutableMap.of(testToolchainTypeLabel, testToolchainType))
             .setToolchainTypeToResolved(
-                ImmutableSetMultimap.<ToolchainTypeInfo, Label>builder()
+                ImmutableBiMap.<ToolchainTypeInfo, Label>builder()
                     .put(
                         testToolchainType,
                         Label.parseAbsoluteUnchecked("//extra:extra_toolchain_linux_impl"))
@@ -77,14 +68,13 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
     // Resolve toolchains.
     ResolvedToolchainContext toolchainContext =
         ResolvedToolchainContext.load(
+            toolchain.getTarget().getPackage().getRepositoryMapping(),
             unloadedToolchainContext,
             "test",
             ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
-    assertThat(toolchainContext).hasToolchainType(testToolchainTypeLabel);
-    assertThat(toolchainContext)
-        .forToolchainType(testToolchainTypeLabel)
-        .getValue("data")
+    assertThat(toolchainContext.forToolchainType(testToolchainType)).isNotNull();
+    assertThat(toolchainContext.forToolchainType(testToolchainType).getValue("data"))
         .isEqualTo("baz");
   }
 
@@ -99,23 +89,16 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
         ImmutableList.of("//constraints:linux"),
         "baz");
 
-    ToolchainContextKey toolchainContextKey =
-        ToolchainContextKey.key()
-            .configurationKey(targetConfigKey)
-            .requiredToolchainTypeLabels(testToolchainTypeLabel)
-            .build();
-
     // Create a static UnloadedToolchainContext.
     UnloadedToolchainContext unloadedToolchainContext =
         UnloadedToolchainContextImpl.builder()
-            .setKey(toolchainContextKey)
             .setExecutionPlatform(linuxPlatform)
             .setTargetPlatform(linuxPlatform)
             .setRequiredToolchainTypes(ImmutableSet.of(testToolchainType))
             .setRequestedLabelToToolchainType(
                 ImmutableMap.of(testToolchainTypeLabel, testToolchainType))
             .setToolchainTypeToResolved(
-                ImmutableSetMultimap.<ToolchainTypeInfo, Label>builder()
+                ImmutableBiMap.<ToolchainTypeInfo, Label>builder()
                     .put(testToolchainType, Label.parseAbsoluteUnchecked("//alias:toolchain"))
                     .build())
             .build();
@@ -127,14 +110,13 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
     // Resolve toolchains.
     ResolvedToolchainContext toolchainContext =
         ResolvedToolchainContext.load(
+            toolchain.getTarget().getPackage().getRepositoryMapping(),
             unloadedToolchainContext,
             "test",
             ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
-    assertThat(toolchainContext).hasToolchainType(testToolchainTypeLabel);
-    assertThat(toolchainContext)
-        .forToolchainType(testToolchainTypeLabel)
-        .getValue("data")
+    assertThat(toolchainContext.forToolchainType(testToolchainType)).isNotNull();
+    assertThat(toolchainContext.forToolchainType(testToolchainType).getValue("data"))
         .isEqualTo("baz");
   }
 
@@ -142,23 +124,16 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
   public void load_notToolchain() throws Exception {
     scratch.file("foo/BUILD", "filegroup(name = 'not_a_toolchain')");
 
-    ToolchainContextKey toolchainContextKey =
-        ToolchainContextKey.key()
-            .configurationKey(targetConfigKey)
-            .requiredToolchainTypeLabels(testToolchainTypeLabel)
-            .build();
-
     // Create a static UnloadedToolchainContext.
     UnloadedToolchainContext unloadedToolchainContext =
         UnloadedToolchainContextImpl.builder()
-            .setKey(toolchainContextKey)
             .setExecutionPlatform(linuxPlatform)
             .setTargetPlatform(linuxPlatform)
             .setRequiredToolchainTypes(ImmutableSet.of(testToolchainType))
             .setRequestedLabelToToolchainType(
                 ImmutableMap.of(testToolchainTypeLabel, testToolchainType))
             .setToolchainTypeToResolved(
-                ImmutableSetMultimap.<ToolchainTypeInfo, Label>builder()
+                ImmutableBiMap.<ToolchainTypeInfo, Label>builder()
                     .put(testToolchainType, Label.parseAbsoluteUnchecked("//foo:not_a_toolchain"))
                     .build())
             .build();
@@ -171,6 +146,7 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
         ToolchainException.class,
         () ->
             ResolvedToolchainContext.load(
+                toolchain.getTarget().getPackage().getRepositoryMapping(),
                 unloadedToolchainContext,
                 "test",
                 ImmutableList.of(toolchain)));
@@ -202,23 +178,16 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
         "  name='variable_toolchain_impl',",
         "  value = 'foo')");
 
-    ToolchainContextKey toolchainContextKey =
-        ToolchainContextKey.key()
-            .configurationKey(targetConfigKey)
-            .requiredToolchainTypeLabels(testToolchainTypeLabel)
-            .build();
-
     // Create a static UnloadedToolchainContext.
     UnloadedToolchainContext unloadedToolchainContext =
         UnloadedToolchainContextImpl.builder()
-            .setKey(toolchainContextKey)
             .setExecutionPlatform(linuxPlatform)
             .setTargetPlatform(linuxPlatform)
             .setRequiredToolchainTypes(ImmutableSet.of(variableToolchainType))
             .setRequestedLabelToToolchainType(
                 ImmutableMap.of(variableToolchainTypeLabel, variableToolchainType))
             .setToolchainTypeToResolved(
-                ImmutableSetMultimap.<ToolchainTypeInfo, Label>builder()
+                ImmutableBiMap.<ToolchainTypeInfo, Label>builder()
                     .put(
                         variableToolchainType,
                         Label.parseAbsoluteUnchecked("//variable:variable_toolchain_impl"))
@@ -231,11 +200,12 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
             Label.parseAbsoluteUnchecked("//variable:variable_toolchain_impl"), targetConfig);
     ResolvedToolchainContext toolchainContext =
         ResolvedToolchainContext.load(
+            toolchain.getTarget().getPackage().getRepositoryMapping(),
             unloadedToolchainContext,
             "test",
             ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
-    assertThat(toolchainContext).hasToolchainType(variableToolchainTypeLabel);
+    assertThat(toolchainContext.forToolchainType(variableToolchainType)).isNotNull();
     assertThat(toolchainContext.templateVariableProviders()).hasSize(1);
     assertThat(toolchainContext.templateVariableProviders().get(0).getVariables())
         .containsExactly("VALUE", "foo");

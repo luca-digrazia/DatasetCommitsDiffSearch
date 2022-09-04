@@ -14,20 +14,25 @@
 
 package com.google.devtools.build.lib.skyframe;
 
+import static java.util.stream.Collectors.joining;
+
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.skyframe.SingleToolchainResolutionValue.SingleToolchainResolutionKey;
 import com.google.devtools.build.skyframe.CycleInfo;
 import com.google.devtools.build.skyframe.CyclesReporter;
 import com.google.devtools.build.skyframe.SkyKey;
 import java.util.Optional;
 
 /**
- * {@link CyclesReporter#SingleCycleReporter} implementation that can handle cycles involving
+ * {@link CyclesReporter.SingleCycleReporter} implementation that can handle cycles involving
  * registered toolchains.
  */
 public class RegisteredToolchainsCycleReporter implements CyclesReporter.SingleCycleReporter {
@@ -38,8 +43,17 @@ public class RegisteredToolchainsCycleReporter implements CyclesReporter.SingleC
   private static final Predicate<SkyKey> IS_CONFIGURED_TARGET_SKY_KEY =
       SkyFunctions.isSkyFunction(SkyFunctions.CONFIGURED_TARGET);
 
+  private static final Predicate<SkyKey> IS_SINGLE_TOOLCHAIN_RESOLUTION_SKY_KEY =
+      SkyFunctions.isSkyFunction(SkyFunctions.SINGLE_TOOLCHAIN_RESOLUTION);
+
   private static final Predicate<SkyKey> IS_TOOLCHAIN_RESOLUTION_SKY_KEY =
       SkyFunctions.isSkyFunction(SkyFunctions.TOOLCHAIN_RESOLUTION);
+
+  private static final Predicate<SkyKey> IS_TOOLCHAIN_RELATED =
+      Predicates.or(
+          IS_REGISTERED_TOOLCHAINS_SKY_KEY,
+          IS_SINGLE_TOOLCHAIN_RESOLUTION_SKY_KEY,
+          IS_TOOLCHAIN_RESOLUTION_SKY_KEY);
 
   @Override
   public boolean maybeReportCycle(
@@ -50,9 +64,7 @@ public class RegisteredToolchainsCycleReporter implements CyclesReporter.SingleC
     ImmutableList<SkyKey> cycle = cycleInfo.getCycle();
     if (alreadyReported) {
       return true;
-    } else if (!Iterables.any(cycle, IS_REGISTERED_TOOLCHAINS_SKY_KEY)
-        || !Iterables.any(cycle, IS_CONFIGURED_TARGET_SKY_KEY)
-        || !Iterables.any(cycle, IS_TOOLCHAIN_RESOLUTION_SKY_KEY)) {
+    } else if (!Iterables.any(cycle, IS_TOOLCHAIN_RELATED)) {
       return false;
     }
 
@@ -63,24 +75,28 @@ public class RegisteredToolchainsCycleReporter implements CyclesReporter.SingleC
     }
 
     Function<SkyKey, String> printer =
-        new Function<SkyKey, String>() {
-          @Override
-          public String apply(SkyKey input) {
-            if (input.argument() instanceof ConfiguredTargetKey) {
-              Label label = ((ConfiguredTargetKey) input.argument()).getLabel();
-              return label.toString();
-            }
-            if (input.argument() instanceof RegisteredToolchainsValue.Key) {
-              return "RegisteredToolchains";
-            }
-            if (input.argument() instanceof ToolchainResolutionValue.Key) {
-              Label toolchainType =
-                  ((ToolchainResolutionValue.Key) input.argument()).toolchainTypeLabel();
-              return String.format("toolchain type %s", toolchainType.toString());
-            } else {
-              throw new UnsupportedOperationException();
-            }
+        input -> {
+          if (input.argument() instanceof ConfiguredTargetKey) {
+            Label label = ((ConfiguredTargetKey) input.argument()).getLabel();
+            return label.toString();
           }
+          if (input.argument() instanceof RegisteredToolchainsValue.Key) {
+            return "RegisteredToolchains";
+          }
+          if (input.argument() instanceof SingleToolchainResolutionKey) {
+            Label toolchainType =
+                ((SingleToolchainResolutionKey) input.argument()).toolchainTypeLabel();
+            return String.format("toolchain type %s", toolchainType);
+          }
+          if (input.argument() instanceof UnloadedToolchainContextKey) {
+            ImmutableSet<Label> toolchainTypes =
+                ((UnloadedToolchainContextKey) input.argument()).requiredToolchainTypeLabels();
+            return String.format(
+                "toolchain types %s",
+                toolchainTypes.stream().map(Label::toString).collect(joining(", ")));
+          }
+
+          throw new UnsupportedOperationException();
         };
 
     StringBuilder cycleMessage =

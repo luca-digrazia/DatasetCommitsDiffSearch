@@ -62,11 +62,10 @@ public class ToolchainResolutionFunction implements SkyFunction {
   @Override
   public UnloadedToolchainContext compute(SkyKey skyKey, Environment env)
       throws ToolchainResolutionFunctionException, InterruptedException {
-    ToolchainContextKey key = (ToolchainContextKey) skyKey.argument();
+    UnloadedToolchainContextKey key = (UnloadedToolchainContextKey) skyKey.argument();
 
     try {
-      UnloadedToolchainContextImpl.Builder builder =
-          UnloadedToolchainContextImpl.builder().setKey(key);
+      UnloadedToolchainContextImpl.Builder builder = UnloadedToolchainContextImpl.builder();
 
       // Determine the configuration being used.
       BuildConfigurationValue value =
@@ -152,12 +151,7 @@ public class ToolchainResolutionFunction implements SkyFunction {
       throws InvalidToolchainTypeException, InterruptedException, ValueMissingException {
     ImmutableSet<ConfiguredTargetKey> toolchainTypeKeys =
         requestedToolchainTypeLabels.stream()
-            .map(
-                label ->
-                    ConfiguredTargetKey.builder()
-                        .setLabel(label)
-                        .setConfiguration(configuration)
-                        .build())
+            .map(label -> ConfiguredTargetKey.of(label, configuration))
             .collect(toImmutableSet());
 
     ImmutableMap<Label, ToolchainTypeInfo> resolvedToolchainTypes =
@@ -200,16 +194,9 @@ public class ToolchainResolutionFunction implements SkyFunction {
     Label hostPlatformLabel = platformConfiguration.getHostPlatform();
     Label targetPlatformLabel = platformConfiguration.getTargetPlatform();
 
-    ConfiguredTargetKey hostPlatformKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(hostPlatformLabel)
-            .setConfiguration(configuration)
-            .build();
+    ConfiguredTargetKey hostPlatformKey = ConfiguredTargetKey.of(hostPlatformLabel, configuration);
     ConfiguredTargetKey targetPlatformKey =
-        ConfiguredTargetKey.builder()
-            .setLabel(targetPlatformLabel)
-            .setConfiguration(configuration)
-            .build();
+        ConfiguredTargetKey.of(targetPlatformLabel, configuration);
 
     // Load the host and target platforms early, to check for errors.
     PlatformLookupUtil.getPlatformInfo(
@@ -261,12 +248,7 @@ public class ToolchainResolutionFunction implements SkyFunction {
     // Filter out execution platforms that don't satisfy the extra constraints.
     ImmutableList<ConfiguredTargetKey> execConstraintKeys =
         execConstraintLabels.stream()
-            .map(
-                label ->
-                    ConfiguredTargetKey.builder()
-                        .setLabel(label)
-                        .setConfiguration(configuration)
-                        .build())
+            .map(label -> ConfiguredTargetKey.of(label, configuration))
             .collect(toImmutableList());
 
     return filterAvailablePlatforms(
