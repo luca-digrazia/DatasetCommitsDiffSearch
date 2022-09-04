@@ -127,14 +127,15 @@ public class JavaHeaderCompileAction extends SpawnAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint().addString(GUID);
     try {
-      super.computeKey(actionKeyContext, fp);
-      fp.addStrings(directCommandLine.arguments());
+      f.addString(super.computeKey(actionKeyContext));
+      f.addStrings(directCommandLine.arguments());
     } catch (CommandLineExpansionException e) {
       throw new AssertionError("JavaHeaderCompileAction command line expansion cannot fail");
     }
+    return f.hexDigestAndReset();
   }
 
   @Override
