@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Properties;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
@@ -176,13 +175,6 @@ public class BuildMojo extends AbstractMojo {
         } catch (AppModelResolverException e) {
             throw new MojoExecutionException("Failed to resolve application model " + appArtifact + " dependencies", e);
         }
-        final Properties projectProperties = project.getProperties();
-        final Properties realProperties = new Properties();
-        for (String name : projectProperties.stringPropertyNames()) {
-            if (name.startsWith("quarkus.")) {
-                realProperties.setProperty(name, projectProperties.getProperty(name));
-            }
-        }
         try (AppCreator appCreator = AppCreator.builder()
                 // configure the build phases we want the app to go through
                 .addPhase(new AugmentPhase()
@@ -191,7 +183,7 @@ public class BuildMojo extends AbstractMojo {
                         .setTransformedClassesDir(transformedClassesDirectory.toPath())
                         .setWiringClassesDir(wiringClassesDirectory.toPath())
                         .setGeneratedSourcesDir(generatedSourcesDirectory.toPath())
-                        .setBuildSystemProperties(realProperties))
+                        .setBuildSystemProperties(project.getProperties()))
                 .addPhase(new RunnerJarPhase()
                         .setLibDir(libDir.toPath())
                         .setFinalName(finalName)

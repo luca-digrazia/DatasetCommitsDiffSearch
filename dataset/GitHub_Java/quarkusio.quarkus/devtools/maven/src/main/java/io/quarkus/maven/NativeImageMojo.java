@@ -5,7 +5,6 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
 import org.apache.maven.artifact.Artifact;
@@ -47,9 +46,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
 
-    @Parameter(defaultValue = "${java.home}", required = true, readonly = true)
-    public File javaHome;
-
     @Parameter(defaultValue = "${project.build.directory}")
     private File buildDir;
 
@@ -89,7 +85,7 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter
     private boolean enableRetainedHeapReporting;
 
-    @Parameter(defaultValue = "true")
+    @Parameter
     private boolean enableIsolates;
 
     @Parameter
@@ -196,7 +192,6 @@ public class NativeImageMojo extends AbstractMojo {
         if (!buildDir.isDirectory() || !new File(buildDir, "lib").isDirectory()) {
             // The runner JAR has not been built yet, so we are going to build it
             final AppArtifact appCoords;
-            AppArtifact managingProject = null;
             DefaultArtifact appMvnArtifact = null;
             if (appArtifact == null) {
                 appMvnArtifact = new DefaultArtifact(project.getArtifact().getGroupId(),
@@ -253,11 +248,6 @@ public class NativeImageMojo extends AbstractMojo {
                     appCoords = new AppArtifact(groupId, artifactId, classifier, type, version);
                     appMvnArtifact = new DefaultArtifact(groupId, artifactId, classifier, type, version);
                 }
-                managingProject = new AppArtifact(project.getArtifact().getGroupId(),
-                        project.getArtifact().getArtifactId(),
-                        project.getArtifact().getClassifier(),
-                        project.getArtifact().getArtifactHandler().getExtension(),
-                        project.getArtifact().getVersion());
             }
 
             final AppModel appModel;
@@ -270,21 +260,15 @@ public class NativeImageMojo extends AbstractMojo {
                         .build();
                 appCoords.setPath(mvn.resolve(appMvnArtifact).getArtifact().getFile().toPath());
                 modelResolver = new BootstrapAppModelResolver(mvn);
-                appModel = modelResolver.resolveManagedModel(appCoords, Collections.emptyList(), managingProject);
+                appModel = modelResolver.resolveModel(appCoords);
             } catch (AppModelResolverException e) {
                 throw new MojoExecutionException("Failed to resolve application model dependencies for " + appCoords, e);
             }
 
-            final Properties buildSystemProperties = project.getProperties();
-            final Properties projectProperties = new Properties();
-            projectProperties.putAll(buildSystemProperties);
-            projectProperties.putIfAbsent("quarkus.application.name", project.getArtifactId());
-            projectProperties.putIfAbsent("quarkus.application.version", project.getVersion());
-
             creatorBuilder.addPhase(new AugmentPhase()
                     .setAppClassesDir(new File(outputDirectory, "classes").toPath())
                     .setWiringClassesDir(wiringClassesDirectory.toPath())
-                    .setBuildSystemProperties(projectProperties))
+                    .setBuildSystemProperties(project.getProperties()))
                     .addPhase(new RunnerJarPhase()
                             .setFinalName(finalName))
                     .setWorkDir(buildDir.toPath());
@@ -372,7 +356,6 @@ public class NativeImageMojo extends AbstractMojo {
                 .setEnableVMInspection(enableVMInspection)
                 .setFullStackTraces(fullStackTraces)
                 .setGraalvmHome(graalvmHome)
-                .setJavaHome(javaHome)
                 .setNativeImageXmx(nativeImageXmx)
                 .setReportErrorsAtRuntime(reportErrorsAtRuntime)
                 .setReportExceptionStackTraces(reportExceptionStackTraces));
