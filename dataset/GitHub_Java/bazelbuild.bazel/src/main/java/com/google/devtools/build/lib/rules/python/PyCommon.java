@@ -56,7 +56,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/** A helper class for analyzing a Python configured target. */
+/**
+ * A helper class for Python rules.
+ */
 public final class PyCommon {
 
   public static final String DEFAULT_PYTHON_VERSION_ATTRIBUTE = "default_python_version";
@@ -72,6 +74,12 @@ public final class PyCommon {
 
   private final RuleContext ruleContext;
 
+  private Artifact executable = null;
+
+  private final NestedSet<Artifact> transitivePythonSources;
+
+  private final boolean usesSharedLibraries;
+
   /**
    * The Python major version for which this target is being built, as per the {@code
    * python_version} attribute or the configuration.
@@ -86,29 +94,7 @@ public final class PyCommon {
    */
   private final PythonVersion sourcesVersion;
 
-  /**
-   * The Python sources belonging to this target's transitive {@code deps}, not including this
-   * target's own {@code srcs}.
-   */
-  private final NestedSet<Artifact> dependencyTransitivePythonSources;
-
-  /**
-   * The Python sources belonging to this target's transitive {@code deps}, including the Python
-   * sources in this target's {@code srcs}.
-   */
-  private final NestedSet<Artifact> transitivePythonSources;
-
-  /** Whether this target or any of its {@code deps} or {@code data} deps has a shared library. */
-  private final boolean usesSharedLibraries;
-
-  /**
-   * Symlink map from root-relative paths to 2to3 converted source artifacts.
-   *
-   * <p>Null if no 2to3 conversion is required.
-   */
-  private final Map<PathFragment, Artifact> convertedFiles;
-
-  private Artifact executable = null;
+  private Map<PathFragment, Artifact> convertedFiles;
 
   private NestedSet<Artifact> filesToBuild = null;
 
@@ -116,10 +102,8 @@ public final class PyCommon {
     this.ruleContext = ruleContext;
     this.sourcesVersion = getSrcsVersionAttr(ruleContext);
     this.version = ruleContext.getFragment(PythonConfiguration.class).getPythonVersion();
-    this.dependencyTransitivePythonSources = collectDependencyTransitivePythonSources();
     this.transitivePythonSources = collectTransitivePythonSources();
     this.usesSharedLibraries = checkForSharedLibraries();
-    this.convertedFiles = maybeMakeConvertedFiles();
     checkSourceIsCompatible(this.version, this.sourcesVersion, ruleContext.getLabel());
     validatePythonVersionAttr(ruleContext);
   }
@@ -268,21 +252,28 @@ public final class PyCommon {
   }
 
   /**
-   * Adds a {@link PseudoAction} to the build graph that is only used for providing information to
-   * the blaze extra_action feature.
+   * Adds a {@link PseudoAction} to the build graph that is only used
+   * for providing information to the blaze extra_action feature.
    */
   void addPyExtraActionPseudoAction() {
     if (ruleContext.getConfiguration().getActionListeners().isEmpty()) {
       return;
     }
+
+    // We need to do it in this convoluted way because we must not add the files declared in the
+    // srcs of this rule. Note that it is not enough to remove the direct members from the nested
+    // set of the current rule, because the same files may have been declared in a dependency, too.
+    NestedSetBuilder<Artifact> depBuilder = NestedSetBuilder.compileOrder();
+    collectTransitivePythonSourcesFrom(getTargetDeps(), depBuilder);
+    NestedSet<Artifact> dependencies = depBuilder.build();
+
     ruleContext.registerAction(
         makePyExtraActionPseudoAction(
             ruleContext.getActionOwner(),
             // Has to be unfiltered sources as filtered will give an error for
             // unsupported file types where as certain tests only expect a warning.
             ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list(),
-            // We must not add the files declared in the srcs of this rule.;
-            dependencyTransitivePythonSources,
+            dependencies,
             PseudoAction.getDummyOutput(ruleContext)));
   }
 
@@ -314,23 +305,16 @@ public final class PyCommon {
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final GeneratedExtension<ExtraActionInfo, PythonInfo> PYTHON_INFO = PythonInfo.pythonInfo;
 
-  /**
-   * If 2to3 conversion is to be done, creates the 2to3 actions and returns the map of converted
-   * files; otherwise returns null.
-   */
-  // TODO(#1393): 2to3 conversion doesn't work in Bazel and the attempt to invoke it for Bazel
-  // should be removed / factored away into PythonSemantics.
-  private Map<PathFragment, Artifact> maybeMakeConvertedFiles() {
+  private void addSourceFiles(NestedSetBuilder<Artifact> builder, Iterable<Artifact> artifacts) {
+    Preconditions.checkState(convertedFiles == null);
     if (sourcesVersion == PythonVersion.PY2 && version == PythonVersion.PY3) {
-      Iterable<Artifact> artifacts =
-          ruleContext
-              .getPrerequisiteArtifacts("srcs", Mode.TARGET)
-              .filter(PyRuleClasses.PYTHON_SOURCE)
-              .list();
-      return PythonUtils.generate2to3Actions(ruleContext, artifacts);
-    } else {
-      return null;
+      convertedFiles = PythonUtils.generate2to3Actions(ruleContext, artifacts);
     }
+    builder.addAll(artifacts);
+  }
+
+  private Iterable<? extends TransitiveInfoCollection> getTargetDeps() {
+    return ruleContext.getPrerequisites("deps", Mode.TARGET);
   }
 
   private static String getOrderErrorMessage(String fieldName, Order expected, Order actual) {
@@ -368,32 +352,19 @@ public final class PyCommon {
 
   private NestedSet<Artifact> collectTransitivePythonSources() {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.compileOrder();
-    collectTransitivePythonSourcesFrom(ruleContext.getPrerequisites("deps", Mode.TARGET), builder);
-    builder.addAll(
-        ruleContext
-            .getPrerequisiteArtifacts("srcs", Mode.TARGET)
-            .filter(PyRuleClasses.PYTHON_SOURCE)
-            .list());
+    collectTransitivePythonSourcesFrom(getTargetDeps(), builder);
+    addSourceFiles(builder,
+        ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET)
+            .filter(PyRuleClasses.PYTHON_SOURCE).list());
     return builder.build();
   }
 
-  private NestedSet<Artifact> collectDependencyTransitivePythonSources() {
+  // TODO(brandjon): Move provider merging logic into PyProvider. Have rule implementations read
+  // the sources off a merged provider of deps (with/without the local rule included in the merge).
+  public NestedSet<Artifact> collectTransitivePythonSourcesWithoutLocal() {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.compileOrder();
-    collectTransitivePythonSourcesFrom(ruleContext.getPrerequisites("deps", Mode.TARGET), builder);
+    collectTransitivePythonSourcesFrom(getTargetDeps(), builder);
     return builder.build();
-  }
-
-  /** Returns the transitive Python sources collected from the deps and srcs attributes. */
-  public NestedSet<Artifact> getTransitivePythonSources() {
-    return transitivePythonSources;
-  }
-
-  /**
-   * Returns the transitive Python sources collected from the deps attribute, not including sources
-   * from the srcs attribute (unless they were separately reached via deps).
-   */
-  public NestedSet<Artifact> getDependencyTransitivePythonSources() {
-    return dependencyTransitivePythonSources;
   }
 
   public NestedSet<String> collectImports(RuleContext ruleContext, PythonSemantics semantics) {
@@ -404,7 +375,7 @@ public final class PyCommon {
   }
 
   private void collectTransitivePythonImports(NestedSetBuilder<String> builder) {
-    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
+    for (TransitiveInfoCollection dep : getTargetDeps()) {
       if (dep.getProvider(PythonImportsProvider.class) != null) {
         PythonImportsProvider provider = dep.getProvider(PythonImportsProvider.class);
         NestedSet<String> imports = provider.getTransitivePythonImports();
