@@ -20,9 +20,8 @@
 
 package org.graylog2.messagehandlers.gelf;
 
-import java.util.HashMap;
-import java.util.zip.DataFormatException;
-import java.util.zip.Inflater;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * ChunkedGELFClientManager.java: Sep 20, 2010 6:52:36 PM
@@ -30,27 +29,36 @@ import java.util.zip.Inflater;
  * Singleton. Managing chunks of GELF messages. Ordering them, reporting when complete and
  * discards incomplete after a given time.
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class ChunkedGELFClientManager {
 
-    private static HashMap<String, ChunkedGELFMessage> messageMap = new HashMap<String, ChunkedGELFMessage>();
+    private static ConcurrentMap<String, ChunkedGELFMessage> messageMap = new ConcurrentHashMap<String, ChunkedGELFMessage>();
 
-    private static ChunkedGELFClientManager INSTANCE;
-
-    public static final int MESSAGE_IS_COMPLETE = 1;
-    public static final int MESSAGE_IS_INCOMPLETE = 2;
+    private static ChunkedGELFClientManager instance;
 
     private ChunkedGELFClientManager() { }
 
-    public synchronized static ChunkedGELFClientManager getInstance() {
-        if (INSTANCE == null) {
-            INSTANCE = new ChunkedGELFClientManager();
+    /**
+     *
+     * @return
+     */
+    public static synchronized ChunkedGELFClientManager getInstance() {
+        if (instance == null) {
+            instance = new ChunkedGELFClientManager();
         }
-        return INSTANCE;
+        return instance;
     }
 
-    public int insertChunk(GELFClientChunk chunk) throws ForeignGELFChunkException, InvalidGELFChunkException {
+    /**
+     * Add a chunk to it's message
+     *
+     * @param chunk
+     * @return NULL if message is not yet complete, the complete ChunkedGELFMessage if this was the last missing chunk
+     * @throws ForeignGELFChunkException
+     * @throws InvalidGELFChunkException
+     */
+    public ChunkedGELFMessage insertChunk(GELFClientChunk chunk) throws ForeignGELFChunkException, InvalidGELFChunkException {
         ChunkedGELFMessage fullMessage = messageMap.get(chunk.getHash());
         
         if (fullMessage == null) {
@@ -65,24 +73,27 @@ public final class ChunkedGELFClientManager {
         messageMap.put(chunk.getHash(), fullMessage);
 
         if (fullMessage.isComplete()) {
-            /////
-            try {
-                byte[] result = new byte[8192*3];
-                Inflater decompresser = new Inflater();
-                decompresser.setInput(fullMessage.getData(), 0, fullMessage.getData().length);
-                int finalLength = decompresser.inflate(result);
-                System.out.println("FULL MESSAGE:" + new String(result, 0, finalLength, "UTF-8"));
-            } catch(Exception e) {
-                System.out.println("Damn: " + e.getMessage());
-            }
-            /////
-            return MESSAGE_IS_COMPLETE;
+            return fullMessage;
         }
 
-        return MESSAGE_IS_INCOMPLETE;
+        return null;
     }
 
-    public HashMap<String, ChunkedGELFMessage> getMessageMap() {
+    /**
+     * Remove a message
+     *
+     * @param hash The has of the message to remove
+     */
+    public void dropMessage(String hash) {
+        messageMap.remove(hash);
+    }
+
+    /**
+     * Get the message map
+     *
+     * @return
+     */
+    public ConcurrentMap<String, ChunkedGELFMessage> getMessageMap() {
         return messageMap;
     }
 

@@ -1,6 +1,6 @@
 /**
  * Copyright 2010, 2011 Lennart Koopmann <lennart@socketfeed.com>
- *
+ * 
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -34,6 +34,7 @@ import org.graylog2.indexer.Indexer;
 import org.graylog2.messagehandlers.amqp.AMQPBroker;
 import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
 import org.graylog2.messagehandlers.amqp.AMQPSubscriberThread;
+import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
 import org.graylog2.messagehandlers.gelf.GELFMainThread;
 import org.graylog2.messagehandlers.syslog.SyslogServerThread;
 import org.graylog2.periodical.ChunkedGELFClientManagerThread;
@@ -44,9 +45,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Main class of Graylog2.
@@ -57,12 +55,10 @@ public final class Main {
 
     private static final Logger LOG = Logger.getLogger(Main.class);
     private static final String GRAYLOG2_VERSION = "0.9.6-PREVIEW";
-
+    
     public static RulesEngine drools = null;
-    private static final int SCHEDULED_THREADS_POOL_SIZE = 4;
-
-    private Main() {
-    }
+    
+    private Main() { }
 
     /**
      * @param args the command line arguments
@@ -73,12 +69,12 @@ public final class Main {
         JCommander jCommander = new JCommander(commandLineArguments, args);
         jCommander.setProgramName("graylog2");
 
-        if (commandLineArguments.isShowHelp()) {
+        if(commandLineArguments.isShowHelp()) {
             jCommander.usage();
             System.exit(0);
         }
 
-        if (commandLineArguments.isShowVersion()) {
+        if(commandLineArguments.isShowVersion()) {
             System.out.println("Graylog2 Server " + GRAYLOG2_VERSION);
             System.out.println("JRE: " + Tools.getSystemInformation());
             System.exit(0);
@@ -111,7 +107,7 @@ public final class Main {
         }
 
         // If we only want to check our configuration, we can gracefully exit here
-        if (commandLineArguments.isConfigTest()) {
+        if(commandLineArguments.isConfigTest()) {
             System.exit(0);
         }
 
@@ -129,7 +125,7 @@ public final class Main {
                     System.exit(1);
                 }
             }
-        } catch (IOException e) {
+        } catch(IOException e) {
             LOG.fatal("IOException while trying to check Index. Make sure that your ElasticSearch server is running.", e);
             System.exit(1);
         }
@@ -140,48 +136,45 @@ public final class Main {
         // TODO: This is a code smell and needs to be fixed.
         LogglyForwarder.setTimeout(configuration.getForwarderLogglyTimeout());
 
-        ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE);
-
         initializeMongoConnection(configuration);
         initializeRulesEngine(configuration.getDroolsRulesFile());
         initializeSyslogServer(configuration.getSyslogProtocol(), configuration.getSyslogListenPort());
-        initializeHostCounterCache(scheduler);
+        initializeHostCounterCache();
 
         // Start message counter thread.
-        initializeMessageCounters(scheduler);
+        initializeMessageCounters();
 
         // Start GELF threads
         if (configuration.isUseGELF()) {
-            initializeGELFThreads(configuration.getGelfListenPort(), scheduler);
+            initializeGELFThreads(configuration.getGelfListenPort());
         }
 
         // Initialize AMQP Broker if enabled
         if (configuration.isAmqpEnabled()) {
-            initializeAMQP(configuration);
-        }
+             initializeAMQP(configuration);
+         }
 
         LOG.info("Graylog2 up and running.");
     }
 
-    private static void initializeHostCounterCache(ScheduledExecutorService scheduler) {
-
-        scheduler.scheduleAtFixedRate(new HostCounterCacheWriterThread(), HostCounterCacheWriterThread.INITIAL_DELAY, HostCounterCacheWriterThread.PERIOD, TimeUnit.SECONDS);
-
+    private static void initializeHostCounterCache() {
+        HostCounterCacheWriterThread hostCounterCacheWriterThread = new HostCounterCacheWriterThread();
+        hostCounterCacheWriterThread.start();
         LOG.info("Host count cache is up.");
     }
 
-    private static void initializeMessageCounters(ScheduledExecutorService scheduler) {
-
-        scheduler.scheduleAtFixedRate(new MessageCountWriterThread(), MessageCountWriterThread.INITIAL_DELAY, MessageCountWriterThread.PERIOD, TimeUnit.SECONDS);
-
+    private static void initializeMessageCounters() {
+        MessageCountWriterThread messageCountWriterThread = new MessageCountWriterThread();
+        messageCountWriterThread.start();
         LOG.info("Message counters initialized.");
     }
 
-    private static void initializeGELFThreads(int gelfPort, ScheduledExecutorService scheduler) {
+    private static void initializeGELFThreads(int gelfPort) {
         GELFMainThread gelfThread = new GELFMainThread(gelfPort);
         gelfThread.start();
 
-        scheduler.scheduleAtFixedRate(new ChunkedGELFClientManagerThread(), ChunkedGELFClientManagerThread.INITIAL_DELAY, ChunkedGELFClientManagerThread.PERIOD, TimeUnit.SECONDS);
+        ChunkedGELFClientManagerThread gelfManager = new ChunkedGELFClientManagerThread(ChunkedGELFClientManager.getInstance());
+        gelfManager.start();
 
         LOG.info("GELF threads started");
     }
@@ -193,11 +186,8 @@ public final class Main {
         syslogServerThread.start();
 
         // Check if the thread started up completely.
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException e) {
-        }
-        if (syslogServerThread.getCoreThread().isAlive()) {
+        try { Thread.sleep(1000); } catch(InterruptedException e) {}
+        if(syslogServerThread.getCoreThread().isAlive()) {
             LOG.info("Syslog server thread is up.");
         } else {
             LOG.fatal("Could not start syslog server core thread. Do you have permissions to listen on port " + syslogPort + "?");
