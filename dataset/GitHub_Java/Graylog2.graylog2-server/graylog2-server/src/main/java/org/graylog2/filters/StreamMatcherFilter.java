@@ -19,11 +19,12 @@
 
 package org.graylog2.filters;
 
+import org.graylog2.Core;
+import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.stats.ThroughputStats;
-import org.graylog2.streams.CachedStreamRouter;
 import org.graylog2.streams.StreamRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,14 +43,16 @@ public class StreamMatcherFilter implements MessageFilter {
     private final ThroughputStats throughputStats;
 
     @Inject
-    public StreamMatcherFilter(CachedStreamRouter streamRouter,
+    public StreamMatcherFilter(StreamRouter streamRouter,
                                ThroughputStats throughputStats) {
         this.streamRouter = streamRouter;
         this.throughputStats = throughputStats;
     }
 
     @Override
-    public boolean filter(Message msg) {
+    public boolean filter(Message msg, GraylogServer server) {
+        Core core = (Core) server;
+
         List<Stream> streams = streamRouter.route(msg);
 
         for (Stream stream : streams) {
@@ -65,12 +68,6 @@ public class StreamMatcherFilter implements MessageFilter {
     @Override
     public String getName() {
         return "StreamMatcher";
-    }
-
-    @Override
-    public int getPriority() {
-        // of the built-in filters this gets run last
-        return 40;
     }
 
 }

@@ -65,6 +65,9 @@ public class DashboardsResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(DashboardsResource.class);
 
     @Inject
+    private Core core;
+
+    @Inject
     private DashboardService dashboardService;
 
     @Inject

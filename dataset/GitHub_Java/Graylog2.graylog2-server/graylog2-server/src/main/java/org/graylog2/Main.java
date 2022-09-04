@@ -58,7 +58,6 @@ import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationImpl;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.outputs.ElasticSearchOutput;
-import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.lifecycles.Lifecycle;
@@ -264,8 +263,7 @@ public final class Main extends NodeRunner {
         filterRegistry.register(injector.getInstance(RewriteFilter.class));
 
         // Register outputs.
-        final OutputRegistry outputRegistry = injector.getInstance(OutputRegistry.class);
-        outputRegistry.register(injector.getInstance(ElasticSearchOutput.class));
+        server.outputs().register(injector.getInstance(ElasticSearchOutput.class));
 
         // Start services.
         server.run();
