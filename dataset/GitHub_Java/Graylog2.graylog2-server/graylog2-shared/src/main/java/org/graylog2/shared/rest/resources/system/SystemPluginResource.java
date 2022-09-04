@@ -19,7 +19,6 @@ package org.graylog2.shared.rest.resources.system;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import org.graylog2.plugin.Capabilities;
 import org.graylog2.plugin.PluginMetaData;
 import org.graylog2.plugin.ServerStatus;
 import com.wordnik.swagger.annotations.Api;
@@ -62,10 +61,19 @@ public class SystemPluginResource extends RestResource {
                     pluginMetaData.getVersion().toString(),
                     pluginMetaData.getDescription(),
                     pluginMetaData.getRequiredVersion().toString(),
-                    Capabilities.toStringSet(pluginMetaData.getRequiredCapabilities())
+                    capabilityToStringSet(pluginMetaData.getRequiredCapabilities())
             ));
         }
 
         return PluginList.create(pluginMetaDataValues);
+    }
+
+    private Set<String> capabilityToStringSet(Set<ServerStatus.Capability> capabilities) {
+        final Set<String> stringSet = Sets.newHashSetWithExpectedSize(capabilities.size());
+        for (ServerStatus.Capability capability : capabilities) {
+            stringSet.add(capability.toString());
+        }
+
+        return stringSet;
     }
 }
