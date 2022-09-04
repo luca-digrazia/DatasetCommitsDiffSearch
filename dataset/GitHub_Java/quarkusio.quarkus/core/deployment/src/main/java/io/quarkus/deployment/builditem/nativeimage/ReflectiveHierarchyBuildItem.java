@@ -73,7 +73,7 @@ public final class ReflectiveHierarchyBuildItem extends MultiBuildItem {
         private static final List<String> DEFAULT_IGNORED_PACKAGES = Arrays.asList("java.", "io.reactivex.",
                 "org.reactivestreams.");
         // if this gets more complicated we will need to move to some tree like structure
-        static final Set<String> WHITELISTED_FROM_IGNORED_PACKAGES = new HashSet<>(
+        private static final Set<String> WHITELISTED_FROM_IGNORED_PACKAGES = new HashSet<>(
                 Arrays.asList("java.math.BigDecimal", "java.math.BigInteger"));
 
         @Override
@@ -88,15 +88,4 @@ public final class ReflectiveHierarchyBuildItem extends MultiBuildItem {
         }
 
     }
-
-    public static class IgnoreWhiteListedPredicate implements Predicate<DotName> {
-
-        public static IgnoreWhiteListedPredicate INSTANCE = new IgnoreWhiteListedPredicate();
-
-        @Override
-        public boolean test(DotName dotName) {
-            return DefaultIgnorePredicate.WHITELISTED_FROM_IGNORED_PACKAGES.contains(dotName.toString());
-        }
-    }
-
 }
