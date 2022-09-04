@@ -17,12 +17,11 @@
 package org.graylog2.alarmcallbacks;
 
 import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackResult;
-import org.graylog2.rest.models.alarmcallbacks.AlarmCallbackSummary;
 import org.joda.time.DateTime;
 
 public interface AlarmCallbackHistory {
     String id();
-    AlarmCallbackSummary alarmcallbackConfiguration();
+    String alarmcallbackConfigurationId();
     String alertId();
     String alertConditionId();
     AlarmCallbackResult result();

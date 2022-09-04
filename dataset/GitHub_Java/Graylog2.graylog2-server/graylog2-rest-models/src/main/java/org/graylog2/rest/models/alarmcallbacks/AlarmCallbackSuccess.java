@@ -23,15 +23,12 @@ import com.google.auto.value.AutoValue;
 
 @AutoValue
 @JsonAutoDetect
-public abstract class AlarmCallbackError extends AlarmCallbackResult {
+public abstract class AlarmCallbackSuccess extends AlarmCallbackResult {
     @JsonProperty("type")
-    public String type() { return "error"; }
-
-    @JsonProperty("error")
-    public abstract String error();
+    public String type() { return "success"; }
 
     @JsonCreator
-    public static AlarmCallbackError create(@JsonProperty("error") String error) {
-        return new AutoValue_AlarmCallbackError(error);
+    public static AlarmCallbackSuccess create() {
+        return new AutoValue_AlarmCallbackSuccess();
     }
 }

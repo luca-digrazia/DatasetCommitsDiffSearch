@@ -22,9 +22,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Map;
 
 @JsonAutoDetect
-public abstract class AlarmCallbackResult {
-    public abstract String type();
-
+public class AlarmCallbackResult {
     @JsonCreator
     public static AlarmCallbackResult create(Map<String, Object> result) {
         if (result.get("type") != null) {

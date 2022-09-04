@@ -106,19 +106,14 @@ public class AlertScannerThread extends Periodical {
                         // Checking if alarm callbacks have been defined
                         if (callConfigurations.size() > 0)
                             for (AlarmCallbackConfiguration configuration : callConfigurations) {
+                                final AlarmCallback alarmCallback = alarmCallbackFactory.create(configuration);
                                 AlarmCallbackHistory alarmCallbackHistory;
-                                AlarmCallback alarmCallback = null;
                                 try {
-                                    alarmCallback = alarmCallbackFactory.create(configuration);
                                     alarmCallback.call(stream, result);
                                     alarmCallbackHistory = alarmCallbackHistoryService.success(configuration, alert, alertCondition);
                                 } catch (Exception e) {
-                                    if (alarmCallback != null) {
-                                        LOG.warn("Alarm callback <" + alarmCallback.getName() + "> failed. Skipping.", e);
-                                    } else {
-                                        LOG.warn("Alarm callback with id " + configuration.getId() + " failed. Skipping.", e);
-                                    }
-                                    alarmCallbackHistory = alarmCallbackHistoryService.error(configuration, alert, alertCondition, e.getMessage());
+                                    LOG.warn("Alarm callback <" + alarmCallback.getName() + "> failed. Skipping.", e);
+                                    alarmCallbackHistory = alarmCallbackHistoryService.error(configuration, alert, alertCondition, e.toString());
                                 }
 
                                 try {
