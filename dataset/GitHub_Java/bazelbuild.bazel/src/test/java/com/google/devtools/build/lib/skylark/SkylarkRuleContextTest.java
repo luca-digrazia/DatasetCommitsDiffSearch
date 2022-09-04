@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
+import com.google.devtools.build.lib.analysis.SkylarkProviders;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -339,7 +340,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   /* The error message for this case used to be wrong. */
   @Test
   public void testPackageBoundaryError_ExternalRepository() throws Exception {
-    scratch.file("/r/WORKSPACE");
     scratch.file("/r/BUILD", "cc_library(name = 'cclib',", "  srcs = ['sub/my_sub_lib.h'])");
     scratch.file("/r/sub/BUILD", "cc_library(name = 'my_sub_lib', srcs = ['my_sub_lib.h'])");
     scratch.overwriteFile("WORKSPACE",
@@ -434,7 +434,8 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     TransitiveInfoCollection tic1 = (TransitiveInfoCollection) ((SkylarkList) result).get(0);
     assertNotNull(JavaProvider.getProvider(JavaSourceJarsProvider.class, tic1));
     // Check an unimplemented provider too
-    assertNull(tic1.get(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME));
+    assertNull(tic1.getProvider(SkylarkProviders.class)
+        .getValue(PyCommon.PYTHON_SKYLARK_PROVIDER_NAME));
   }
 
   @Test
@@ -730,7 +731,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat(ruleClassProvider.getRunfilesPrefix()).isNotEmpty();
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.workspace_name");
-    assertSame(result, ruleClassProvider.getRunfilesPrefix());
+    assertEquals(result, ruleClassProvider.getRunfilesPrefix());
   }
 
   @Test
@@ -1180,7 +1181,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     scratch.file("BUILD",
         "filegroup(name='dep')");
 
-    scratch.file("/r/WORKSPACE");
     scratch.file("/r/a/BUILD",
         "load('/external_rule', 'external_rule')",
         "external_rule(name='r')");
@@ -1212,7 +1212,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "  }",
         ")");
 
-    scratch.file("/r/WORKSPACE");
     scratch.file("/r/BUILD",
         "filegroup(name='dep')");
 
@@ -1247,7 +1246,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
         "def macro(name, path):",
         "  native.local_repository(name = name, path = path)"
     );
-    scratch.file("/r2/WORKSPACE");
     scratch.file(
         "/r2/other_test.bzl",
         "def other_macro(name, path):",
