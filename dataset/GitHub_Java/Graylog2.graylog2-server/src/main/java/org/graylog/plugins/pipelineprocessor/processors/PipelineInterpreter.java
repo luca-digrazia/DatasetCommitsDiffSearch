@@ -276,7 +276,6 @@ public class PipelineInterpreter implements MessageProcessor {
                                 log.debug("[{}] rule `{}` does not match", msgId, rule.name());
                             }
                         }
-                        RULES:
                         for (Rule rule : rulesToRun) {
                             countRuleExecution(rule, pipeline, stage, "executed");
                             log.debug("[{}] rule `{}` matched running actions", msgId, rule.name());
@@ -289,7 +288,7 @@ public class PipelineInterpreter implements MessageProcessor {
                                     log.debug("Encountered evaluation error, skipping rest of the rule: {}",
                                               lastError);
                                     countRuleExecution(rule, pipeline, stage, "failed");
-                                    break RULES;
+                                    break;
                                 }
                             }
                         }
