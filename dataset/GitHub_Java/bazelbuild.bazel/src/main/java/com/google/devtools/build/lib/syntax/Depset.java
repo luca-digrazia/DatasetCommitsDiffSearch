@@ -25,6 +25,8 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import java.util.Collection;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -87,7 +89,7 @@ import javax.annotation.Nullable;
             + " may interfere with the ordering semantics.")
 @Immutable
 @AutoCodec
-public final class Depset implements StarlarkValue {
+public final class Depset implements SkylarkValue {
   private final SkylarkType contentType;
   private final NestedSet<?> set;
   @Nullable private final ImmutableList<Object> items;
@@ -203,6 +205,16 @@ public final class Depset implements StarlarkValue {
   // Object.class means "any Starlark value" but in fact allows any Java value.
   public static <T> Depset of(SkylarkType contentType, NestedSet<T> set) {
     return new Depset(contentType, set, null, null);
+  }
+
+  /**
+   * Returns a Depset that wraps the specified NestedSet.
+   *
+   * <p>This operation is type-safe only if the specified element type is appropriate for every
+   * element of the set.
+   */
+  public static <T> Depset of(Class<T> contentType, NestedSet<T> set) {
+    return new Depset(SkylarkType.of(contentType), set, null, null);
   }
 
   /**
@@ -379,7 +391,7 @@ public final class Depset implements StarlarkValue {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("depset(");
     printer.printList(set, "[", ", ", "]", null);
     Order order = getOrder();
@@ -411,7 +423,7 @@ public final class Depset implements StarlarkValue {
     }
     // newElements' type is Object because of the polymorphism on unioning two
     // Depsets versus a set and another kind of iterable.
-    // Can't use Starlark#toIterable since that would discard this information.
+    // Can't use EvalUtils#toIterable since that would discard this information.
     return Depset.unionOf(this, newElements);
   }
 

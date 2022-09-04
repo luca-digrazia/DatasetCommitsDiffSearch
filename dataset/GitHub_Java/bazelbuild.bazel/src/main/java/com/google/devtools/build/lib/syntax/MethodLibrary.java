@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import static java.util.stream.Collectors.joining;
 
 import com.google.common.base.Ascii;
 import com.google.common.collect.ImmutableList;
@@ -30,6 +31,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import java.util.ArrayDeque;
@@ -94,7 +96,7 @@ class MethodLibrary {
     // Args can either be a list of items to compare, or a singleton list whose element is an
     // iterable of items to compare. In either case, there must be at least one item to compare.
     try {
-      Iterable<?> items = (args.size() == 1) ? Starlark.toIterable(args.get(0)) : args;
+      Iterable<?> items = (args.size() == 1) ? EvalUtils.toIterable(args.get(0), loc) : args;
       return maxOrdering.max(items);
     } catch (NoSuchElementException ex) {
       throw new EvalException(loc, "expected at least one item", ex);
@@ -116,9 +118,10 @@ class MethodLibrary {
             doc = "A string or a collection of elements.",
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
-      })
-  public Boolean all(Object collection) throws EvalException {
-    return !hasElementWithBooleanValue(collection, false);
+      },
+      useLocation = true)
+  public Boolean all(Object collection, Location loc) throws EvalException {
+    return !hasElementWithBooleanValue(collection, false, loc);
   }
 
   @SkylarkCallable(
@@ -136,15 +139,17 @@ class MethodLibrary {
             doc = "A string or a collection of elements.",
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
-      })
-  public Boolean any(Object collection) throws EvalException {
-    return hasElementWithBooleanValue(collection, true);
+      },
+      useLocation = true)
+  public Boolean any(Object collection, Location loc) throws EvalException {
+    return hasElementWithBooleanValue(collection, true, loc);
   }
 
-  private static boolean hasElementWithBooleanValue(Object seq, boolean value)
+  private static boolean hasElementWithBooleanValue(Object collection, boolean value, Location loc)
       throws EvalException {
-    for (Object x : Starlark.toIterable(seq)) {
-      if (Starlark.truth(x) == value) {
+    Iterable<?> iterable = EvalUtils.toIterable(collection, loc);
+    for (Object obj : iterable) {
+      if (Starlark.truth(obj) == value) {
         return true;
       }
     }
@@ -262,13 +267,15 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true),
       },
+      useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> reversed(Object sequence, StarlarkThread thread) throws EvalException {
+  public StarlarkList<?> reversed(Object sequence, Location loc, StarlarkThread thread)
+      throws EvalException {
     if (sequence instanceof Dict) {
-      throw new EvalException(null, "Argument to reversed() must be a sequence, not a dictionary.");
+      throw new EvalException(loc, "Argument to reversed() must be a sequence, not a dictionary.");
     }
     ArrayDeque<Object> tmpList = new ArrayDeque<>();
-    for (Object element : Starlark.toIterable(sequence)) {
+    for (Object element : EvalUtils.toIterable(sequence, loc)) {
       tmpList.addFirst(element);
     }
     return StarlarkList.copyOf(thread.mutability(), tmpList);
@@ -334,7 +341,7 @@ class MethodLibrary {
       return ((Map<?, ?>) x).size();
     } else if (x instanceof Sequence) {
       return ((Sequence<?>) x).size();
-    } else if (x instanceof StarlarkIterable) {
+    } else if (x instanceof Iterable) {
       // Iterables.size() checks if x is a Collection so it's efficient in that sense.
       return Iterables.size((Iterable<?>) x);
     } else {
@@ -865,23 +872,17 @@ class MethodLibrary {
       extraPositionals = @Param(name = "args", doc = "The objects to print."),
       useLocation = true,
       useStarlarkThread = true)
-  public NoneType print(String sep, Sequence<?> args, Location loc, StarlarkThread thread)
+  public NoneType print(String sep, Sequence<?> starargs, Location loc, StarlarkThread thread)
       throws EvalException {
     try {
-      Printer p = Printer.getPrinter();
-      String separator = "";
-      for (Object x : args) {
-        p.append(separator);
-        p.debugPrint(x);
-        separator = sep;
-      }
+      String msg = starargs.stream().map(Printer::debugPrint).collect(joining(sep));
       // As part of the integration test "skylark_flag_test.sh", if the
       // "--internal_skylark_flag_test_canary" flag is enabled, append an extra marker string to
       // the output.
       if (thread.getSemantics().internalSkylarkFlagTestCanary()) {
-        p.append("<== skylark flag test ==>");
+        msg += "<== skylark flag test ==>";
       }
-      thread.handleEvent(Event.debug(loc, p.toString()));
+      thread.handleEvent(Event.debug(loc, msg));
       return Starlark.NONE;
     } catch (NestedSetDepthException exception) {
       throw new EvalException(
@@ -932,20 +933,7 @@ class MethodLibrary {
               + "The order in which elements are returned when the depset is converted to a list "
               + "is specified by the <code>order</code> parameter. "
               + "See the <a href=\"../depsets.md\">Depsets overview</a> for more information. "
-              + ""
-              + "<p>All elements (direct and indirect) of a depset must be of the same type, "
-              + "as obtained by the expression <code>type(x)</code>."
-              + ""
-              + "<p>Because a hash-based set is used to eliminate duplicates during iteration, "
-              + "all elements of a depset should be hashable. However, this invariant is not "
-              + "currently checked consistently in all constructors. Use the "
-              + "--incompatible_always_check_depset_elements flag to enable "
-              + "consistent checking; this will be the default behavior in future releases; "
-              + " see https://github.com/bazelbuild/bazel/issues/10313."
-              + ""
-              + "<p>In addition, elements must currently be immutable, though this restriction "
-              + "will be relaxed in future."
-              + ""
+              + "<p> All elements (direct and indirect) of a depset must be of the same type. "
               + "<p> The order of the created depset should be <i>compatible</i> with the order of "
               + "its <code>transitive</code> depsets. <code>\"default\"</code> order is compatible "
               + "with any other order, all other orders are only compatible with themselves."
@@ -1049,8 +1037,8 @@ class MethodLibrary {
           Depset.fromDirectAndTransitive(
               order,
               listFromNoneable(direct, Object.class, "direct"),
-              listFromNoneable(transitive, Depset.class, "transitive"),
-              semantics.incompatibleAlwaysCheckDepsetElements());
+              listFromNoneable(transitive, Depset.class, "transitive"));
+
     } else {
       if (x != Starlark.NONE) {
         if (!isEmptySkylarkList(items)) {
@@ -1059,7 +1047,7 @@ class MethodLibrary {
         }
         items = x;
       }
-      result = legacyDepsetConstructor(items, order, direct, transitive, semantics);
+      result = legacyDepsetConstructor(items, order, direct, transitive);
     }
 
     if (semantics.debugDepsetDepth()) {
@@ -1087,8 +1075,7 @@ class MethodLibrary {
   }
 
   private static Depset legacyDepsetConstructor(
-      Object items, Order order, Object direct, Object transitive, StarlarkSemantics semantics)
-      throws EvalException {
+      Object items, Order order, Object direct, Object transitive) throws EvalException {
 
     if (transitive == Starlark.NONE && direct == Starlark.NONE) {
       // Legacy behavior.
@@ -1117,8 +1104,7 @@ class MethodLibrary {
     } else {
       transitiveList = ImmutableList.of();
     }
-    return Depset.fromDirectAndTransitive(
-        order, directElements, transitiveList, semantics.incompatibleAlwaysCheckDepsetElements());
+    return Depset.fromDirectAndTransitive(order, directElements, transitiveList);
   }
 
   private static boolean isEmptySkylarkList(Object o) {
@@ -1180,11 +1166,13 @@ class MethodLibrary {
               + "zip([1, 2], [3, 4])  # == [(1, 3), (2, 4)]\n"
               + "zip([1, 2], [3, 4, 5])  # == [(1, 3), (2, 4)]</pre>",
       extraPositionals = @Param(name = "args", doc = "lists to zip."),
+      useLocation = true,
       useStarlarkThread = true)
-  public StarlarkList<?> zip(Sequence<?> args, StarlarkThread thread) throws EvalException {
+  public StarlarkList<?> zip(Sequence<?> args, Location loc, StarlarkThread thread)
+      throws EvalException {
     Iterator<?>[] iterators = new Iterator<?>[args.size()];
     for (int i = 0; i < args.size(); i++) {
-      iterators[i] = Starlark.toIterable(args.get(i)).iterator();
+      iterators[i] = EvalUtils.toIterable(args.get(i), loc).iterator();
     }
     ArrayList<Tuple<?>> result = new ArrayList<>();
     boolean allHasNext;
@@ -1222,7 +1210,7 @@ class MethodLibrary {
               + "100 % -7  # -5 (unlike in some other languages)\n"
               + "int(\"18\")\n"
               + "</pre>")
-  static final class IntModule implements StarlarkValue {} // (documentation only)
+  static final class IntModule implements SkylarkValue {} // (documentation only)
 
   /** Skylark bool type. */
   @SkylarkModule(
@@ -1234,5 +1222,5 @@ class MethodLibrary {
               + "<a href=\"globals.html#False\">False</a>. "
               + "Any value can be converted to a boolean using the "
               + "<a href=\"globals.html#bool\">bool</a> function.")
-  static final class BoolModule implements StarlarkValue {} // (documentation only)
+  static final class BoolModule implements SkylarkValue {} // (documentation only)
 }

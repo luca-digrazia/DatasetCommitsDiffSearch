@@ -57,7 +57,6 @@ import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
-import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -883,22 +882,14 @@ public abstract class CcModule
   /** Checks whether the {@link SkylarkInfo} is of the required type. */
   private static void checkRightProviderType(SkylarkInfo provider, String type)
       throws EvalException {
-    String providerType = (String) getValueOrNull(provider, "type_name");
+    String providerType = (String) provider.getValueOrNull("type_name");
     if (providerType == null) {
       providerType = provider.getProvider().getPrintableName();
     }
-    if (!type.equals(provider.getValue("type_name"))) {
+    if (!provider.hasField("type_name") || !provider.getValue("type_name").equals(type)) {
       throw new EvalException(
           provider.getCreationLoc(),
           String.format("Expected object of type '%s', received '%s'.", type, providerType));
-    }
-  }
-
-  private static Object getValueOrNull(ClassObject x, String name) {
-    try {
-      return x.getValue(name);
-    } catch (EvalException e) {
-      return null;
     }
   }
 
@@ -948,7 +939,8 @@ public abstract class CcModule
     ImmutableList<SkylarkInfo> requires =
         getSkylarkProviderListFromSkylarkField(featureStruct, "requires");
     for (SkylarkInfo featureSetStruct : requires) {
-      if (!"feature_set".equals(featureSetStruct.getValue("type_name"))) { // getValue() may be null
+      if (!featureSetStruct.hasField("type_name")
+          || !featureSetStruct.getValue("type_name").equals("feature_set")) {
         throw new EvalException(
             featureStruct.getCreationLoc(), "expected object of type 'feature_set'.");
       }
@@ -1298,7 +1290,7 @@ public abstract class CcModule
 
   private static <T> T getFieldFromSkylarkProvider(
       SkylarkInfo provider, String fieldName, Class<T> clazz) throws EvalException {
-    Object obj = provider.getValue(fieldName);
+    Object obj = provider.getValueOrNull(fieldName);
     if (obj == null) {
       throw new EvalException(
           provider.getCreationLoc(), String.format("Missing mandatory field '%s'", fieldName));
@@ -1317,25 +1309,28 @@ public abstract class CcModule
   /** Returns a list of strings from a field of a {@link SkylarkInfo}. */
   private static ImmutableList<String> getStringListFromSkylarkProviderField(
       SkylarkInfo provider, String fieldName) throws EvalException {
-    return ImmutableList.copyOf(
-        Sequence.castSkylarkListOrNoneToList(
-            getValueOrNull(provider, fieldName), String.class, fieldName));
+    return Sequence.castSkylarkListOrNoneToList(
+            provider.getValueOrNull(fieldName), String.class, fieldName)
+        .stream()
+        .collect(ImmutableList.toImmutableList());
   }
 
   /** Returns a set of strings from a field of a {@link SkylarkInfo}. */
   private static ImmutableSet<String> getStringSetFromSkylarkProviderField(
       SkylarkInfo provider, String fieldName) throws EvalException {
-    return ImmutableSet.copyOf(
-        Sequence.castSkylarkListOrNoneToList(
-            getValueOrNull(provider, fieldName), String.class, fieldName));
+    return Sequence.castSkylarkListOrNoneToList(
+            provider.getValueOrNull(fieldName), String.class, fieldName)
+        .stream()
+        .collect(ImmutableSet.toImmutableSet());
   }
 
   /** Returns a list of SkylarkInfo providers from a field of a {@link SkylarkInfo}. */
   private static ImmutableList<SkylarkInfo> getSkylarkProviderListFromSkylarkField(
       SkylarkInfo provider, String fieldName) throws EvalException {
-    return ImmutableList.copyOf(
-        Sequence.castSkylarkListOrNoneToList(
-            getValueOrNull(provider, fieldName), SkylarkInfo.class, fieldName));
+    return Sequence.castSkylarkListOrNoneToList(
+            provider.getValueOrNull(fieldName), SkylarkInfo.class, fieldName)
+        .stream()
+        .collect(ImmutableList.toImmutableList());
   }
 
   private static void getLegacyArtifactNamePatterns(
