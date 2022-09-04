@@ -19,7 +19,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Map.Entry;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 
@@ -32,13 +32,6 @@ import javax.inject.Inject;
 public final class AntXmlResultWriter implements XmlResultWriter {
   private static final String JUNIT_ELEMENT_TESTSUITES = "testsuites";
   private static final String JUNIT_ELEMENT_TESTSUITE = "testsuite";
-  private static final String JUNIT_ELEMENT_TESTSUITE_PROPERTIES = "properties";
-  private static final String JUNIT_ELEMENT_TESTSUITE_SYSTEM_OUT = "system-out";
-  private static final String JUNIT_ELEMENT_TESTSUITE_SYSTEM_ERR = "system-err";
-  private static final String JUNIT_ELEMENT_PROPERTY = "property";
-  private static final String JUNIT_ELEMENT_TESTCASE = "testcase";
-  private static final String JUNIT_ELEMENT_FAILURE = "failure";
-
   private static final String JUNIT_ATTR_TESTSUITE_ERRORS = "errors";
   private static final String JUNIT_ATTR_TESTSUITE_FAILURES = "failures";
   private static final String JUNIT_ATTR_TESTSUITE_HOSTNAME = "hostname";
@@ -48,8 +41,14 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   private static final String JUNIT_ATTR_TESTSUITE_TIMESTAMP = "timestamp";
   private static final String JUNIT_ATTR_TESTSUITE_ID = "id";
   private static final String JUNIT_ATTR_TESTSUITE_PACKAGE = "package";
+  private static final String JUNIT_ATTR_TESTSUITE_PROPERTIES = "properties";
+  private static final String JUNIT_ATTR_TESTSUITE_SYSTEM_OUT = "system-out";
+  private static final String JUNIT_ATTR_TESTSUITE_SYSTEM_ERR = "system-err";
+  private static final String JUNIT_ELEMENT_PROPERTY = "property";
   private static final String JUNIT_ATTR_PROPERTY_NAME = "name";
   private static final String JUNIT_ATTR_PROPERTY_VALUE = "value";
+  private static final String JUNIT_ELEMENT_TESTCASE = "testcase";
+  private static final String JUNIT_ELEMENT_FAILURE = "failure";
   private static final String JUNIT_ATTR_FAILURE_MESSAGE = "message";
   private static final String JUNIT_ATTR_FAILURE_TYPE = "type";
   private static final String JUNIT_ATTR_TESTCASE_NAME = "name";
@@ -100,8 +99,8 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   }
 
   private void writeTestSuiteProperties(XmlWriter writer, TestResult result) throws IOException {
-    writer.startElement(JUNIT_ELEMENT_TESTSUITE_PROPERTIES);
-    for (Map.Entry<String, String> entry : result.getProperties().entrySet()) {
+    writer.startElement(JUNIT_ATTR_TESTSUITE_PROPERTIES);
+    for (Entry<String, String> entry : result.getProperties().entrySet()) {
       writer.startElement(JUNIT_ELEMENT_PROPERTY);
       writer.writeAttribute(JUNIT_ATTR_PROPERTY_NAME, entry.getKey());
       writer.writeAttribute(JUNIT_ATTR_PROPERTY_VALUE, entry.getValue());
@@ -123,10 +122,10 @@ public final class AntXmlResultWriter implements XmlResultWriter {
   }
 
   private void writeTestSuiteOutput(XmlWriter writer) throws IOException {
-    writer.startElement(JUNIT_ELEMENT_TESTSUITE_SYSTEM_OUT);
+    writer.startElement(JUNIT_ATTR_TESTSUITE_SYSTEM_OUT);
     // TODO(bazel-team) - where to get this from?
     writer.endElement();
-    writer.startElement(JUNIT_ELEMENT_TESTSUITE_SYSTEM_ERR);
+    writer.startElement(JUNIT_ATTR_TESTSUITE_SYSTEM_ERR);
     // TODO(bazel-team) - where to get this from?
     writer.endElement();
   }
