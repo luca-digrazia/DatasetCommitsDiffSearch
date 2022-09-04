@@ -407,7 +407,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null,
         executor,
         null,
-        null,
         false,
         null,
         null);
@@ -436,7 +435,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null,
         null,
         executor,
-        null,
         null,
         false,
         null,
@@ -817,7 +815,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null,
         null,
         executor,
-        null,
         null,
         false,
         null,
