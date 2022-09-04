@@ -27,31 +27,30 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.LanguageDependentFragment;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.GeneratedMessage.GeneratedExtension;
@@ -114,43 +113,22 @@ public final class PyCommon {
     Preconditions.checkNotNull(version);
 
     validatePackageName();
-    if (OS.getCurrent() == OS.WINDOWS) {
-      String executableSuffix;
-      if (ruleContext.getConfiguration().enableWindowsExeLauncher()) {
-        executableSuffix = ".exe";
-      } else {
-        executableSuffix = ".cmd";
-      }
-      executable =
-          ruleContext.getImplicitOutputArtifact(
-              ruleContext.getTarget().getName() + executableSuffix);
-    } else {
-      executable = ruleContext.createOutputArtifact();
-    }
+    executable = ruleContext.createOutputArtifact();
     if (this.version == PythonVersion.PY2AND3) {
       // TODO(bazel-team): we need to create two actions
       ruleContext.ruleError("PY2AND3 is not yet implemented");
     }
 
-    NestedSetBuilder<Artifact> filesToBuildBuilder =
-        NestedSetBuilder.<Artifact>stableOrder().addAll(srcs).add(executable);
-
-    if (ruleContext.getFragment(PythonConfiguration.class).buildPythonZip()) {
-      filesToBuildBuilder.add(getPythonZipArtifact(executable));
-    }
-
-    filesToBuild = filesToBuildBuilder.build();
+    filesToBuild = NestedSetBuilder.<Artifact>stableOrder()
+        .addAll(srcs)
+        .add(executable)
+        .build();
 
     if (ruleContext.hasErrors()) {
       return;
     }
 
     addPyExtraActionPseudoAction();
-  }
-
-  /** @return An artifact next to the executable file with ".zip" suffix */
-  public Artifact getPythonZipArtifact(Artifact executable) {
-    return ruleContext.getRelatedArtifact(executable.getRootRelativePath(), ".zip");
   }
 
   public void addCommonTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
@@ -176,11 +154,11 @@ public final class PyCommon {
   /**
    * Returns a Skylark struct for exposing transitive Python sources:
    *
-   * <p>addSkylarkTransitiveInfo(PYTHON_SKYLARK_PROVIDER_NAME, createSourceProvider(...))
+   *     addSkylarkTransitiveInfo(PYTHON_SKYLARK_PROVIDER_NAME, createSourceProvider(...))
    */
-  public static Info createSourceProvider(
+  public static SkylarkClassObject createSourceProvider(
       NestedSet<Artifact> transitivePythonSources, boolean isUsingSharedLibrary) {
-    return NativeProvider.STRUCT.create(
+    return NativeClassObjectConstructor.STRUCT.create(
         ImmutableMap.<String, Object>of(
             TRANSITIVE_PYTHON_SRCS,
             SkylarkNestedSet.of(Artifact.class, transitivePythonSources),
@@ -315,15 +293,14 @@ public final class PyCommon {
 
   private NestedSet<Artifact> getTransitivePythonSourcesFromSkylarkProvider(
       TransitiveInfoCollection dep) {
-    Info pythonSkylarkProvider = null;
+    SkylarkClassObject pythonSkylarkProvider = null;
     try {
-      pythonSkylarkProvider =
-          SkylarkType.cast(
+      pythonSkylarkProvider = SkylarkType.cast(
               dep.get(PYTHON_SKYLARK_PROVIDER_NAME),
-              Info.class,
+              SkylarkClassObject.class,
               null,
-              "%s should be a struct",
-              PYTHON_SKYLARK_PROVIDER_NAME);
+              "%s should be a struct", PYTHON_SKYLARK_PROVIDER_NAME
+      );
 
       if (pythonSkylarkProvider != null) {
         Object sourceFiles = pythonSkylarkProvider.getValue(TRANSITIVE_PYTHON_SRCS);
@@ -498,8 +475,8 @@ public final class PyCommon {
     for (TransitiveInfoCollection dep : deps) {
       Object providerObject = dep.get(PYTHON_SKYLARK_PROVIDER_NAME);
       if (providerObject != null) {
-        SkylarkType.checkType(providerObject, Info.class, null);
-        Info provider = (Info) providerObject;
+        SkylarkType.checkType(providerObject, SkylarkClassObject.class, null);
+        SkylarkClassObject provider = (SkylarkClassObject) providerObject;
         Boolean isUsingSharedLibrary = provider.getValue(IS_USING_SHARED_LIBRARY, Boolean.class);
         if (Boolean.TRUE.equals(isUsingSharedLibrary)) {
           return true;
