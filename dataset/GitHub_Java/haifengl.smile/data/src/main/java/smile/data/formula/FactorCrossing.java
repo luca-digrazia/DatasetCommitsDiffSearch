@@ -32,17 +32,18 @@ import smile.data.type.StructType;
  */
 public class FactorCrossing implements Term {
     /** The order of interactions. */
-    private final int order;
+    private int order;
     /** The children factors. */
-    private final List<String> factors;
+    private List<String> factors;
     /** The terms. */
-    private final List<Term> terms;
+    private List<Term> terms;
 
     /**
      * Constructor.
      *
      * @param factors the factors to be crossed.
      */
+    @SafeVarargs
     public FactorCrossing(String... factors) {
         this(factors.length, factors);
     }
@@ -53,6 +54,7 @@ public class FactorCrossing implements Term {
      * @param order the order of interactions.
      * @param factors the factors to be crossed.
      */
+    @SafeVarargs
     public FactorCrossing(int order, String... factors) {
         if (factors.length < 2) {
             throw new IllegalArgumentException("FactorCrossing takes at least two factors");
@@ -73,13 +75,13 @@ public class FactorCrossing implements Term {
             int n2 = o2 instanceof FactorInteraction ? ((FactorInteraction) o2).size() : 1;
             return n1 - n2;
         };
-        terms.sort(compareBySize);
+        Collections.sort(terms, compareBySize);
     }
 
     /**
      * Generates all combinations of `order` elements in the array `factors`.
      */
-    private static void combination(List<Term> terms, String[] factors, String[] data, int order, int start, int end, int index) {
+    private static void combination(List<Term> terms, String factors[], String data[], int order, int start, int end, int index) {
         if (index == order) {
             return;
         }
