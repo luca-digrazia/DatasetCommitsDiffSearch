@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2017 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -55,7 +54,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	private JMethod onViewChanged;
 	private JBlock onViewChangedBody;
 	private JBlock onViewChangedBodyInjectionBlock;
-	private JBlock onViewChangedBodyViewHolderBlock;
 	private JBlock onViewChangedBodyAfterInjectionBlock;
 	private JBlock onViewChangedBodyBeforeInjectionBlock;
 	private JVar onViewChangedHasViewsParam;
@@ -96,13 +94,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		return onViewChangedBodyInjectionBlock;
 	}
 
-	public JBlock getOnViewChangedBodyViewHolderBlock() {
-		if (onViewChangedBodyViewHolderBlock == null) {
-			setOnViewChanged();
-		}
-		return onViewChangedBodyViewHolderBlock;
-	}
-
 	public JBlock getOnViewChangedBodyAfterInjectionBlock() {
 		if (onViewChangedBodyAfterInjectionBlock == null) {
 			setOnViewChanged();
@@ -123,7 +114,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		onViewChanged.annotate(Override.class);
 		onViewChangedBody = onViewChanged.body();
 		onViewChangedBodyBeforeInjectionBlock = onViewChangedBody.blockVirtual();
-		onViewChangedBodyViewHolderBlock = onViewChangedBody.blockVirtual();
 		onViewChangedBodyInjectionBlock = onViewChangedBody.blockVirtual();
 		onViewChangedBodyAfterInjectionBlock = onViewChangedBody.blockVirtual();
 		onViewChangedHasViewsParam = onViewChanged.param(HasViews.class, "hasViews");
@@ -171,7 +161,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		} else {
 			block.add(foundView.assign(findViewExpression));
 		}
-		return new FoundViewHolder(this, viewClass, foundView, getOnViewChangedBodyViewHolderBlock());
+		return new FoundViewHolder(this, viewClass, foundView, getOnViewChangedBodyInjectionBlock());
 	}
 
 	public JMethod getFindNativeFragmentById() {

@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -50,9 +50,6 @@ public class ViewByIdHandler extends BaseAnnotationHandler<EComponentWithViewSup
 	@Override
 	public void validate(Element element, ElementValidation validation) {
 		injectHelper.validate(ViewById.class, element, validation);
-		if (!validation.isValid()) {
-			return;
-		}
 
 		Element param = injectHelper.getParam(element);
 		validatorHelper.isDeclaredType(param, validation);
