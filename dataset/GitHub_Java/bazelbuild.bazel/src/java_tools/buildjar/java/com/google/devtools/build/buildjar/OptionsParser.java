@@ -29,7 +29,6 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -43,16 +42,15 @@ import javax.annotation.Nullable;
 public final class OptionsParser {
   private final List<String> javacOpts = new ArrayList<>();
 
-  private final Set<String> directJars = new LinkedHashSet<>();
+  private final Set<String> directJars = new HashSet<>();
 
   private String strictJavaDeps;
   private String fixDepsTool;
 
   private String outputDepsProtoFile;
-  private final Set<String> depsArtifacts = new LinkedHashSet<>();
+  private final Set<String> depsArtifacts = new HashSet<>();
 
   private boolean strictClasspathMode;
-  private boolean noClasspathFallback;
 
   private String sourceGenDir;
   private String generatedSourcesOutputJar;
@@ -71,7 +69,7 @@ public final class OptionsParser {
   private final List<String> processorNames = new ArrayList<>();
 
   private String outputJar;
-  @Nullable private String nativeHeaderOutput;
+  private @Nullable String nativeHeaderOutput;
 
   private String classDir;
   private String tempDir;
@@ -123,9 +121,6 @@ public final class OptionsParser {
           break;
         case "--reduce_classpath":
           strictClasspathMode = true;
-          break;
-        case "--noclasspathfallback":
-          noClasspathFallback = true;
           break;
         case "--sourcegendir":
           sourceGenDir = getArgument(argQueue, arg);
@@ -352,10 +347,6 @@ public final class OptionsParser {
 
   public boolean reduceClasspath() {
     return strictClasspathMode;
-  }
-
-  public boolean noClasspathFallback() {
-    return noClasspathFallback;
   }
 
   public String getSourceGenDir() {
