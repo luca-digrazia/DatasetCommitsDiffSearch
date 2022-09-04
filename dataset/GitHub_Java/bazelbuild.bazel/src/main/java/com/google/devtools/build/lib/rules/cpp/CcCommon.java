@@ -927,10 +927,6 @@ public final class CcCommon {
       allRequestedFeaturesBuilder.add(CppRuleClasses.FDO_PREFETCH_HINTS);
     }
 
-    if (cppConfiguration.getPropellerOptimizeLabel() != null) {
-      allRequestedFeaturesBuilder.add(CppRuleClasses.PROPELLER_OPTIMIZE);
-    }
-
     for (String feature : allFeatures.build()) {
       if (!allUnsupportedFeatures.contains(feature)) {
         allRequestedFeaturesBuilder.add(feature);

@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.util.Pair;
@@ -75,7 +76,11 @@ public class CcToolchainProviderHelper {
     CcToolchainFeatures toolchainFeatures;
     PathFragment toolsDirectory =
         getToolsDirectory(
-            attributes.getCcToolchainLabel(), configuration.isSiblingRepositoryLayout());
+            attributes.getCcToolchainLabel(),
+            ruleContext
+                .getAnalysisEnvironment()
+                .getStarlarkSemantics()
+                .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
     try {
       toolPaths = computeToolPaths(toolchainConfigInfo, toolsDirectory);
       toolchainFeatures = new CcToolchainFeatures(toolchainConfigInfo, toolsDirectory);
@@ -93,7 +98,7 @@ public class CcToolchainProviderHelper {
     String purposePrefix = attributes.getPurposePrefix();
     String runtimeSolibDirBase = attributes.getRuntimeSolibDirBase();
     final PathFragment runtimeSolibDir =
-        ruleContext.getBinFragment().getRelative(runtimeSolibDirBase);
+        configuration.getBinFragment().getRelative(runtimeSolibDirBase);
     String solibDirectory = "_solib_" + toolchainConfigInfo.getTargetCpu();
     PathFragment defaultSysroot =
         CppConfiguration.computeDefaultSysroot(toolchainConfigInfo.getBuiltinSysroot());

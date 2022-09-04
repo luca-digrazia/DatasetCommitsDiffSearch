@@ -319,7 +319,7 @@ public class ProtoCommon {
     for (Artifact realProtoSource : protoSources) {
       if (siblingRepositoryLayout && realProtoSource.isSourceArtifact()
           ? !realProtoSource.getExecPath().startsWith(stripImportPrefix)
-          : !realProtoSource.getOutputDirRelativePath().startsWith(stripImportPrefix)) {
+          : !realProtoSource.getPackagePath().startsWith(stripImportPrefix)) {
         ruleContext.ruleError(
             String.format(
                 ".proto file '%s' is not under the specified strip prefix '%s'",
@@ -362,8 +362,7 @@ public class ProtoCommon {
           importPrefix.getRelative(realProtoSource.getExecPath().relativeTo(stripImportPrefix));
     } else {
       importPath =
-          importPrefix.getRelative(
-              realProtoSource.getOutputDirRelativePath().relativeTo(stripImportPrefix));
+          importPrefix.getRelative(realProtoSource.getPackagePath().relativeTo(stripImportPrefix));
     }
 
     Artifact virtualProtoSource =
@@ -578,7 +577,7 @@ public class ProtoCommon {
     ArtifactRoot genfiles =
         ruleContext.getConfiguration().getGenfilesDirectory(ruleContext.getRule().getRepository());
     for (Artifact src : protoSources) {
-      PathFragment srcPath = src.getOutputDirRelativePath();
+      PathFragment srcPath = src.getPackagePath();
       if (pythonNames) {
         srcPath = srcPath.replaceName(srcPath.getBaseName().replace('-', '_'));
       }

@@ -110,7 +110,7 @@ public abstract class JavaHelper {
   public static PathFragment getJavaResourcePath(
       JavaSemantics semantics, RuleContext ruleContext, Artifact resource)
       throws InterruptedException {
-    PathFragment resourcePath = resource.getOutputDirRelativePath();
+    PathFragment resourcePath = resource.getPackagePath();
     StarlarkSemantics starlarkSemantics =
         ruleContext.getAnalysisEnvironment().getStarlarkSemantics();
 

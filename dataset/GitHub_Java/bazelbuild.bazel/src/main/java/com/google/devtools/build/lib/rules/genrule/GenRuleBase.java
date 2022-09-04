@@ -351,7 +351,8 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
         return expandSingletonArtifact(filesToBuild, "$@", "output file");
       }
 
-      PathFragment ruleDirPackagePath = ruleContext.getPackageDirectory();
+      PathFragment ruleDirPackagePath =
+          ruleContext.getRule().getLabel().getPackageIdentifier().getPackagePath();
       PathFragment ruleDirExecPath =
           ruleContext.getBinOrGenfilesDirectory().getExecPath().getRelative(ruleDirPackagePath);
 
