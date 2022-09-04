@@ -25,7 +25,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.ActionsProvider;
 import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.DefaultInfo;
@@ -37,7 +37,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
@@ -225,7 +225,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
     this.actionFactory = new SkylarkActionFactory(this, skylarkSemantics, ruleContext);
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.ruleLabelCanonicalName = ruleContext.getLabel().getCanonicalForm();
-    this.fragments = new FragmentCollection(ruleContext, NoTransition.INSTANCE);
+    this.fragments = new FragmentCollection(ruleContext, ConfigurationTransitionProxy.NONE);
     this.hostFragments = new FragmentCollection(ruleContext, HostTransition.INSTANCE);
     this.aspectDescriptor = aspectDescriptor;
     this.skylarkSemantics = skylarkSemantics;
@@ -708,22 +708,16 @@ public final class SkylarkRuleContext implements SkylarkValue {
     return ImmutableList.copyOf(ruleContext.getFeatures());
   }
 
-  @SkylarkCallable(
-    name = "bin_dir",
-    structField = true,
-    doc = "The root corresponding to bin directory."
-  )
-  public ArtifactRoot getBinDirectory() throws EvalException {
+  @SkylarkCallable(name = "bin_dir", structField = true,
+      doc = "The root corresponding to bin directory.")
+  public Root getBinDirectory() throws EvalException {
     checkMutable("bin_dir");
     return getConfiguration().getBinDirectory(ruleContext.getRule().getRepository());
   }
 
-  @SkylarkCallable(
-    name = "genfiles_dir",
-    structField = true,
-    doc = "The root corresponding to genfiles directory."
-  )
-  public ArtifactRoot getGenfilesDirectory() throws EvalException {
+  @SkylarkCallable(name = "genfiles_dir", structField = true,
+      doc = "The root corresponding to genfiles directory.")
+  public Root getGenfilesDirectory() throws EvalException {
     checkMutable("genfiles_dir");
     return getConfiguration().getGenfilesDirectory(ruleContext.getRule().getRepository());
   }
@@ -851,7 +845,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
 
   // Kept for compatibility with old code.
   @SkylarkCallable(documented = false)
-  public Artifact newFile(ArtifactRoot root, String filename) throws EvalException {
+  public Artifact newFile(Root root, String filename) throws EvalException {
     checkMutable("new_file");
     return ruleContext.getPackageRelativeArtifact(filename, root);
   }
@@ -883,8 +877,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
 
   // Kept for compatibility with old code.
   @SkylarkCallable(documented = false)
-  public Artifact newFile(ArtifactRoot root, Artifact baseArtifact, String suffix)
-      throws EvalException {
+  public Artifact newFile(Root root, Artifact baseArtifact, String suffix) throws EvalException {
     checkMutable("new_file");
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(original.getBaseName() + suffix);
@@ -1008,6 +1001,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
   public String getBuildFileRelativePath() throws EvalException {
     checkMutable("build_file_path");
     Package pkg = ruleContext.getRule().getPackage();
-    return pkg.getSourceRoot().relativize(pkg.getBuildFile().getPath()).getPathString();
+    return pkg.getBuildFile().getPath().relativeTo(pkg.getSourceRoot()).getPathString();
   }
 }
