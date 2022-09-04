@@ -337,7 +337,6 @@ public class TestRunnerAction extends AbstractAction
     fp.addString(GUID);
     fp.addStrings(executionSettings.getArgs().arguments());
     fp.addString(Strings.nullToEmpty(executionSettings.getTestFilter()));
-    fp.addBoolean(executionSettings.getTestRunnerFailFast());
     RunUnder runUnder = executionSettings.getRunUnder();
     fp.addString(runUnder == null ? "" : runUnder.getValue());
     fp.addStringMap(extraTestEnv);
@@ -384,35 +383,25 @@ public class TestRunnerAction extends AbstractAction
 
   /** Returns the cache from disk, or null if the file doesn't exist or if there is an error. */
   @Nullable
-  private TestResultData maybeReadCacheStatus() {
-    try {
-      return readCacheStatus();
-    } catch (IOException expected) {
-      return null;
-    }
-  }
-
-  @VisibleForTesting
-  TestResultData readCacheStatus() throws IOException {
+  private TestResultData readCacheStatus() {
     try (InputStream in = cacheStatus.getPath().getInputStream()) {
       return TestResultData.parseFrom(in, ExtensionRegistry.getEmptyRegistry());
+    } catch (IOException expected) {
+      return null;
     }
   }
 
   private boolean computeExecuteUnconditionallyFromTestStatus() {
     return !canBeCached(
         testConfiguration.cacheTestResults(),
-        maybeReadCacheStatus(),
+        readCacheStatus(),
         testProperties.isExternal(),
         executionSettings.getTotalRuns());
   }
 
   @VisibleForTesting
   static boolean canBeCached(
-      TriState cacheTestResults,
-      @Nullable TestResultData prevStatus,
-      boolean isExternal,
-      int runsPerTest) {
+      TriState cacheTestResults, TestResultData prevStatus, boolean isExternal, int runsPerTest) {
     if (cacheTestResults == TriState.NO) {
       return false;
     }
@@ -453,8 +442,6 @@ public class TestRunnerAction extends AbstractAction
                   .getContext(TestActionContext.class)
                   .newCachedTestResult(executor.getExecRoot(), this, readCacheStatus()));
     } catch (IOException e) {
-      // TODO(b/150311421): Produce a user facing warning/error and a TestResult with information
-      //  about the failure to retrieve cached test status.
       LoggingUtil.logToRemote(Level.WARNING, "Failed creating cached protocol buffer", e);
     }
   }
@@ -547,9 +534,6 @@ public class TestRunnerAction extends AbstractAction
     String testFilter = getExecutionSettings().getTestFilter();
     if (testFilter != null) {
       env.put(TEST_BRIDGE_TEST_FILTER_ENV, testFilter);
-    }
-    if (testConfiguration.getTestRunnerFailFast()) {
-      env.put("TESTBRIDGE_TEST_RUNNER_FAIL_FAST", "1");
     }
 
     env.put("TEST_WARNINGS_OUTPUT_FILE", getTestWarningsPath().getPathString());

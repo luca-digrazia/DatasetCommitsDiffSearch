@@ -26,10 +26,17 @@ import java.util.Locale;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
-/** The result of a {@link Spawn}'s execution. */
+/**
+ * The result of a spawn execution.
+ *
+ * <p>DO NOT IMPLEMENT THIS INTERFACE! Use {@link SpawnResult.Builder} to create instances instead.
+ * This is a temporary situation as long as we still have separate internal and external
+ * implementations - the plan is to merge the two into a single immutable, final class.
+ */
+// TODO(ulfjack): Change this from an interface to an immutable, final class.
 public interface SpawnResult {
   /** The status of the attempted Spawn execution. */
-  enum Status {
+  public enum Status {
     /** Subprocess executed successfully, and returned a zero exit code. */
     SUCCESS,
 
@@ -46,27 +53,26 @@ public interface SpawnResult {
     OUT_OF_MEMORY(true),
 
     /**
-     * Subprocess did not execute, it's not the user's fault, and the error is not catastrophic. If
-     * keep_going is enabled then Bazel will try to continue the build, possibly will attempt to
-     * rerun the same spawn, and possibly will attempt to run other actions.
+     * Subprocess did not execute. This error is not catastrophic - Bazel will try to continue the
+     * build if keep_going is enabled, possibly attempt to rerun the same spawn, and attempt to run
+     * other actions.
      */
     EXECUTION_FAILED,
 
     /**
-     * Subprocess did not execute, it's not the user's fault, and the error is catastrophic. Bazel
-     * will not rerun this spawn. Bazel will attempt to not run other actions (regardless of whether
-     * keep_going is enabled).
+     * Subprocess did not execute. Do not retry, and exit immediately even if keep_going is enabled.
      */
     EXECUTION_FAILED_CATASTROPHICALLY,
 
     /**
-     * Subprocess did not execute, and it may be the user's fault. The user may be able to fix it.
-     * For example, a remote system may have denied the execution due to too many inputs or too
-     * large inputs.
+     * Subprocess did not execute in a way that indicates that the user can fix it. For example, a
+     * remote system may have denied the execution due to too many inputs or too large inputs.
      */
     EXECUTION_DENIED(true),
 
-    /** The remote execution system is overloaded and had to refuse execution for this Spawn. */
+    /**
+     * The remote execution system is overloaded and had to refuse execution for this Spawn.
+     */
     REMOTE_EXECUTOR_OVERLOADED,
 
     /**
@@ -77,11 +83,11 @@ public interface SpawnResult {
 
     private final boolean isUserError;
 
-    Status(boolean isUserError) {
+    private Status(boolean isUserError) {
       this.isUserError = isUserError;
     }
 
-    Status() {
+    private Status() {
       this(false);
     }
 
@@ -103,33 +109,31 @@ public interface SpawnResult {
   /** Returns true if the status was {@link Status#EXECUTION_FAILED_CATASTROPHICALLY}. */
   boolean isCatastrophe();
 
-  /** Returns the status of the attempted Spawn execution. */
+  /** The status of the attempted Spawn execution. */
   Status status();
 
   /**
-   * Returns the exit code of the subprocess if the subprocess was executed.
+   * The exit code of the subprocess if the subprocess was executed. Should only be called if
+   * {@link #status} returns {@link Status#SUCCESS} or {@link Status#NON_ZERO_EXIT}.
    *
-   * <p>Returns zero if {@link #status} returns {@link Status#SUCCESS}.
+   * <p>This method must return a non-zero exit code if the status is {@link Status#TIMEOUT} or
+   * {@link Status#OUT_OF_MEMORY}. It is recommended to return 128 + 14 when the status is
+   * {@link Status#TIMEOUT}, which corresponds to the Unix signal SIGALRM.
    *
-   * <p>Returns non-zero if {@link #status} returns {@link Status#NON_ZERO_EXIT} or {@link
-   * Status#OUT_OF_MEMORY}.
-   *
-   * <p>Returns 128 + 14 (corresponding to the Unix signal SIGALRM) if {@link #status} returns
-   * {@link Status#TIMEOUT}.
+   * <p>This method may throw {@link IllegalStateException} if called for any other status.
    */
   int exitCode();
 
   /**
-   * Returns the host name of the executor or {@code null}. This information is intended for
-   * debugging purposes, especially for remote execution systems. Remote caches usually do not store
-   * the original host name, so this is generally {@code null} for cache hits.
+   * The host name of the executor or {@code null}. This information is intended for debugging
+   * purposes, especially for remote execution systems. Remote caches usually do not store the
+   * original host name, so this is generally {@code null} for cache hits.
    */
-  @Nullable
-  String getExecutorHostName();
+  @Nullable String getExecutorHostName();
 
   /**
-   * Returns the name of the SpawnRunner that executed the spawn. It should always be defined,
-   * unless isCacheHit is true, in which case the spawn was not actually run.
+   * The name of the SpawnRunner that executed the spawn. It should always be defined, unless
+   * isCacheHit is true, in which case the spawn was not actually run.
    */
   String getRunnerName();
 
@@ -183,7 +187,7 @@ public interface SpawnResult {
 
   SpawnMetrics getMetrics();
 
-  /** Returns whether the spawn result was a cache hit. */
+  /** Whether the spawn result was a cache hit. */
   boolean isCacheHit();
 
   /** Returns an optional custom failure message for the result. */
@@ -192,10 +196,9 @@ public interface SpawnResult {
   }
 
   /**
-   * Returns a {@link Spawn}'s output in-memory, if supported and available.
-   *
-   * <p>This behavior may be triggered with {@link
-   * ExecutionRequirements#REMOTE_EXECUTION_INLINE_OUTPUTS}.
+   * SpawnResults can optionally support returning outputs in-memory. Such outputs can be obtained
+   * from this method if so. This behavior is optional, and can be triggered with
+   * {@link ExecutionRequirements#REMOTE_EXECUTION_INLINE_OUTPUTS}.
    */
   @Nullable
   default InputStream getInMemoryOutput(ActionInput output) {
@@ -212,10 +215,11 @@ public interface SpawnResult {
   /** Returns a file path to the action metadata log. */
   Optional<MetadataLog> getActionMetadataLog();
 
-  /** Basic implementation of {@link SpawnResult}. */
-  @Immutable
-  @ThreadSafe
-  final class SimpleSpawnResult implements SpawnResult {
+  /**
+   * Basic implementation of {@link SpawnResult}.
+   */
+  @Immutable @ThreadSafe
+  public static final class SimpleSpawnResult implements SpawnResult {
     private final int exitCode;
     private final Status status;
     private final String executorHostName;
@@ -227,13 +231,11 @@ public interface SpawnResult {
     private final Optional<Long> numBlockOutputOperations;
     private final Optional<Long> numBlockInputOperations;
     private final Optional<Long> numInvoluntaryContextSwitches;
-    private final Optional<MetadataLog> actionMetadataLog;
     private final boolean cacheHit;
     private final String failureMessage;
-
-    // Invariant: Either both have a value or both are null.
-    @Nullable private final ActionInput inMemoryOutputFile;
-    @Nullable private final ByteString inMemoryContents;
+    private final ActionInput inMemoryOutputFile;
+    private final ByteString inMemoryContents;
+    private final Optional<MetadataLog> actionMetadataLog;
 
     SimpleSpawnResult(Builder builder) {
       this.exitCode = builder.exitCode;
@@ -391,8 +393,10 @@ public interface SpawnResult {
     }
   }
 
-  /** Builder class for {@link SpawnResult}. */
-  final class Builder {
+  /**
+   * Builder class for {@link SpawnResult}.
+   */
+  public static final class Builder {
     private int exitCode;
     private Status status;
     private String executorHostName;
@@ -407,10 +411,9 @@ public interface SpawnResult {
     private Optional<MetadataLog> actionMetadataLog = Optional.empty();
     private boolean cacheHit;
     private String failureMessage = "";
-
-    // Invariant: Either both have a value or both are null.
-    @Nullable private ActionInput inMemoryOutputFile;
-    @Nullable private ByteString inMemoryContents;
+    /* Invariant: Either both have a value or both are null. */
+    private ActionInput inMemoryOutputFile;
+    private ByteString inMemoryContents;
 
     public SpawnResult build() {
       Preconditions.checkArgument(!runnerName.isEmpty());
@@ -496,14 +499,14 @@ public interface SpawnResult {
       return this;
     }
 
-    Builder setActionMetadataLog(MetadataLog actionMetadataLog) {
+    public Builder setActionMetadataLog(MetadataLog actionMetadataLog) {
       this.actionMetadataLog = Optional.of(actionMetadataLog);
       return this;
     }
   }
 
-  /** A {@link Spawn}'s metadata name and {@link Path}. */
-  final class MetadataLog {
+  /** A tuple containing the name reference to the metadata and the file path to the Metadata */
+  public static final class MetadataLog {
     private final String name;
     private final Path filePath;
 
