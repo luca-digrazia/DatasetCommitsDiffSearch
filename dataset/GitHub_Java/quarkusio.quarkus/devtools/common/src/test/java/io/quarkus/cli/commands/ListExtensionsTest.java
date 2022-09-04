@@ -1,9 +1,10 @@
 package io.quarkus.cli.commands;
 
-import static java.util.Arrays.asList;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 import static io.quarkus.maven.utilities.MojoUtils.readPom;
+import static java.util.Arrays.asList;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -16,10 +17,13 @@ import java.util.Map;
 
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Model;
-import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.generators.BuildTool;
+import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 
 public class ListExtensionsTest {
 
@@ -30,22 +34,22 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(pom.getParentFile())
-            .groupId(getPluginGroupId())
-            .artifactId("add-extension-test")
-            .version("0.0.1-SNAPSHOT")
-            .doCreateProject(context);
+        FileProjectWriter writer = new FileProjectWriter(pom.getParentFile());
+        new CreateProject(writer)
+                .groupId(getPluginGroupId())
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
 
-        new AddExtensions(pom)
-            .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+        File pomFile = new File(pom.getAbsolutePath());
+        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
-        Model model = readPom(pom);
-
-        final ListExtensions listExtensions = new ListExtensions(model);
+        final ListExtensions listExtensions = new ListExtensions(writer, BuildTool.MAVEN);
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
-        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-agroal-deployment"));
+        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-agroal"));
     }
 
     /**
@@ -61,23 +65,23 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(pom.getParentFile())
-            .groupId(getPluginGroupId())
-            .artifactId("add-extension-test")
-            .version("0.0.1-SNAPSHOT")
-            .doCreateProject(context);
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
 
-        new AddExtensions(pom)
-            .addExtensions(new HashSet<>(asList("resteasy", " hibernate-validator ")));
+        new CreateProject(writer)
+                .groupId(getPluginGroupId())
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("resteasy", " hibernate-validator ")));
 
-        Model model = readPom(pom);
-
-        final ListExtensions listExtensions = new ListExtensions(model);
+        final ListExtensions listExtensions = new ListExtensions(writer, BuildTool.MAVEN);
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
-        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-resteasy-deployment"));
-        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-hibernate-validator-deployment"));
+        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-resteasy"));
+        Assertions.assertNotNull(installed.get(getPluginGroupId() + ":quarkus-hibernate-validator"));
     }
 
     @Test
@@ -87,23 +91,26 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        new CreateProject(pom.getParentFile())
-            .groupId(getPluginGroupId())
-            .artifactId("add-extension-test")
-            .version("0.0.1-SNAPSHOT")
-            .doCreateProject(context);
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId(getPluginGroupId())
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
 
         Model model = readPom(pom);
 
         model.setDependencyManagement(null);
         model.getDependencies().stream()
-             .filter(new QuarkusDependencyPredicate())
-             .forEach(d -> d.setVersion("0.0.1"));
+                .filter(new QuarkusDependencyPredicate())
+                .forEach(d -> d.setVersion("0.0.1"));
 
         MojoUtils.write(model, pom);
 
-        new AddExtensions(pom)
-            .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         model = readPom(pom);
 
@@ -111,34 +118,111 @@ public class ListExtensionsTest {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(model)
-                .listExtensions();
+            new ListExtensions(writer, BuildTool.MAVEN)
+                    .listExtensions(true, "full", null);
         } finally {
             System.setOut(out);
         }
-        boolean resteasy = false;
-        boolean arc = false;
         boolean agroal = false;
-        boolean bean = false;
-        final String output = baos.toString();
+        boolean resteasy = false;
+        boolean hibernateValidator = false;
+        final String output = baos.toString("UTF-8");
+        boolean checkGuideInLineAfter = false;
         for (String line : output.split("\r?\n")) {
             if (line.contains(" Agroal ")) {
                 assertTrue(line.startsWith("current"), "Agroal should list as current: " + line);
                 agroal = true;
-            } else if (line.contains(" Arc  ")) {
-                assertTrue(line.startsWith("update"), "Arc should list as having an update: " + line);
-                assertTrue(line.endsWith(getPluginVersion()), "Arc should list as having an update: " + line);
-                arc = true;
             } else if (line.contains(" RESTEasy  ")) {
                 assertTrue(line.startsWith("update"), "RESTEasy should list as having an update: " + line);
-                assertTrue(line.endsWith(getPluginVersion()), "RESTEasy should list as having an update: " + line);
+                assertTrue(
+                        line.endsWith(
+                                String.format("%-16s", getPluginVersion())),
+                        "RESTEasy should list as having an update: " + line);
                 resteasy = true;
+                checkGuideInLineAfter = true;
             } else if (line.contains(" Hibernate Validator  ")) {
                 assertTrue(line.startsWith("   "), "Hibernate Validator should not list as anything: " + line);
-                bean = true;
+                hibernateValidator = true;
+            } else if (checkGuideInLineAfter) {
+                checkGuideInLineAfter = false;
+                assertTrue(
+                        line.endsWith(
+                                String.format("%s", "https://quarkus.io/guides/rest-json-guide")),
+                        "RESTEasy should list as having an guide: " + line);
             }
         }
 
-        assertTrue(agroal && arc && resteasy && bean);
+        assertTrue(agroal && resteasy && hibernateValidator);
+    }
+
+    @Test
+    public void searchUnexpected() throws IOException {
+        final File pom = new File("target/list-extensions-test", "pom.xml");
+
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId(getPluginGroupId())
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+
+        final PrintStream out = System.out;
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
+            System.setOut(printStream);
+            new ListExtensions(writer, BuildTool.MAVEN)
+                    .listExtensions(true, "full", "unexpectedSearch");
+        } finally {
+            System.setOut(out);
+        }
+        final String output = baos.toString("UTF-8");
+        Assertions.assertEquals(String.format("No extension found with this pattern%n"), output,
+                "search to unexpected extension must return a message");
+    }
+
+    @Test
+    public void searchRest() throws IOException {
+        final File pom = new File("target/list-extensions-test", "pom.xml");
+
+        CreateProjectTest.delete(pom.getParentFile());
+        final HashMap<String, Object> context = new HashMap<>();
+
+        File pomFile = new File(pom.getAbsolutePath());
+        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
+
+        new CreateProject(writer)
+                .groupId(getPluginGroupId())
+                .artifactId("add-extension-test")
+                .version("0.0.1-SNAPSHOT")
+                .doCreateProject(context);
+
+        new AddExtensions(writer)
+                .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+
+        final PrintStream out = System.out;
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
+            System.setOut(printStream);
+            new ListExtensions(writer, BuildTool.MAVEN)
+                    .listExtensions(true, "full", "Rest");
+        } finally {
+            System.setOut(out);
+        }
+        final String output = baos.toString("UTF-8");
+        Assertions.assertTrue(output.split("\r?\n").length > 7, "search to unexpected extension must return a message");
+    }
+
+    @Test
+    void testListExtensionsWithoutAPomFile() throws IOException {
+        ListExtensions listExtensions = new ListExtensions(null, BuildTool.MAVEN);
+        assertThat(listExtensions.findInstalled()).isEmpty();
     }
 }
