@@ -50,8 +50,10 @@ import java.util.List;
  */
 public final class XcodeSupport {
 
-  /** Template for a target's xcode project. */
-  private static final SafeImplicitOutputsFunction PBXPROJ =
+  /**
+   * Template for a target's xcode project.
+   */
+  public static final SafeImplicitOutputsFunction PBXPROJ =
       fromTemplates("%{name}.xcodeproj/project.pbxproj");
 
   private final RuleContext ruleContext;
