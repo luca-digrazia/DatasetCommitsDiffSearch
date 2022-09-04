@@ -97,14 +97,12 @@ public abstract class MessageInput implements Stoppable {
     protected Boolean global = false;
     protected String contentPack;
 
-    protected final Configuration configuration;
+    protected Configuration configuration;
     protected InputBuffer inputBuffer;
 
     public MessageInput(MetricRegistry metricRegistry,
-                        Configuration configuration,
                         Transport transport,
                         LocalMetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor, ServerStatus serverStatus) {
-        this.configuration = configuration;
         if (metricRegistry == localRegistry) {
             LOG.error("########### Do not add the global metric registry twice, the localRegistry parameter is " +
                               "the same as the global metricRegistry. " +
@@ -223,7 +221,12 @@ public abstract class MessageInput implements Stoppable {
         return configuration;
     }
 
-    public Boolean isGlobal() {
+    // TODO pass in via constructor
+    public void setConfiguration(Configuration configuration) {
+        this.configuration = configuration;
+    }
+
+    public Boolean getGlobal() {
         return global;
     }
 
@@ -285,7 +288,7 @@ public abstract class MessageInput implements Stoppable {
         inputMap.put(FIELD_CREATED_AT, Tools.getISO8601String(this.getCreatedAt()));
         inputMap.put(FIELD_ATTRIBUTES, this.getAttributesWithMaskedPasswords());
         inputMap.put(FIELD_STATIC_FIELDS, this.getStaticFields());
-        inputMap.put(FIELD_GLOBAL, this.isGlobal());
+        inputMap.put(FIELD_GLOBAL, this.getGlobal());
         inputMap.put(FIELD_CONTENT_PACK, this.getContentPack());
 
         return inputMap;
@@ -336,10 +339,6 @@ public abstract class MessageInput implements Stoppable {
 
         incomingMessages.mark();
         rawSize.mark(rawMessage.getPayload().length);
-    }
-
-    public String getType() {
-        return this.getClass().getCanonicalName();
     }
 
     public interface Factory<M> {

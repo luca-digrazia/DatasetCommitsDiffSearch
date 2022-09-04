@@ -22,7 +22,6 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.buffers.InputBuffer;
-import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.MisfireException;
@@ -54,7 +53,7 @@ public class StaticFieldFilterTest {
     public void testFilter() throws Exception {
         Message msg = new Message("hello", "junit", Tools.iso8601());
 
-        FakeInput fakeInput = new FakeInput(mock(MetricRegistry.class), mock(Configuration.class), mock(Transport.class),
+        FakeInput fakeInput = new FakeInput(mock(MetricRegistry.class), mock(Transport.class),
                 mock(LocalMetricRegistry.class),
                 mock(Codec.class),
                 fakeMessageCodecConfig, mock(MessageInput.Descriptor.class), null);
@@ -75,7 +74,7 @@ public class StaticFieldFilterTest {
         Message msg = new Message("hello", "junit", Tools.iso8601());
         msg.addField("foo", "IWILLSURVIVE");
 
-        FakeInput fakeInput = new FakeInput(mock(MetricRegistry.class), mock(Configuration.class), mock(Transport.class),
+        FakeInput fakeInput = new FakeInput(mock(MetricRegistry.class), mock(Transport.class),
                 mock(LocalMetricRegistry.class),
                 mock(Codec.class),
                 fakeMessageCodecConfig, mock(MessageInput.Descriptor.class), null);
@@ -94,10 +93,9 @@ public class StaticFieldFilterTest {
     private class FakeInput extends MessageInput {
 
         public FakeInput(MetricRegistry metricRegistry,
-                         Configuration configuration,
                          Transport transport,
                          LocalMetricRegistry localRegistry, Codec codec, Config config, Descriptor descriptor, ServerStatus serverStatus) {
-            super(metricRegistry, configuration, transport, localRegistry, codec, config, descriptor, serverStatus);
+            super(metricRegistry, transport, localRegistry, codec, config, descriptor, serverStatus);
         }
 
 
