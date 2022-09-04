@@ -333,9 +333,9 @@ public class CppCompileActionBuilder {
     NestedSet<Artifact> realMandatoryInputs = buildMandatoryInputs();
     NestedSet<Artifact> allInputs = buildAllInputs(realMandatoryInputs);
 
-    NestedSetBuilder<Artifact> prunableHeadersBuilder = NestedSetBuilder.stableOrder();
-    prunableHeadersBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
-    prunableHeadersBuilder.addTransitive(cppSemantics.getAdditionalPrunableIncludes());
+    NestedSetBuilder<Artifact> prunableInputBuilder = NestedSetBuilder.stableOrder();
+    prunableInputBuilder.addTransitive(ccCompilationContext.getDeclaredIncludeSrcs());
+    prunableInputBuilder.addTransitive(cppSemantics.getAdditionalPrunableIncludes());
 
     Iterable<IncludeScannable> lipoScannables = getLipoScannables(realMandatoryInputs);
     // We need to add "legal generated scanner files" coming through LIPO scannables here. These
@@ -346,12 +346,12 @@ public class CppCompileActionBuilder {
     for (IncludeScannable lipoScannable : lipoScannables) {
       for (Artifact value : lipoScannable.getLegalGeneratedScannerFileMap().values()) {
         if (value != null) {
-          prunableHeadersBuilder.add(value);
+          prunableInputBuilder.add(value);
         }
       }
     }
 
-    NestedSet<Artifact> prunableHeaders = prunableHeadersBuilder.build();
+    NestedSet<Artifact> prunableInputs = prunableInputBuilder.build();
 
     // Copying the collections is needed to make the builder reusable.
     CppCompileAction action;
@@ -373,7 +373,7 @@ public class CppCompileActionBuilder {
               realMandatoryInputs,
               inputsForInvalidation,
               getBuiltinIncludeFiles(),
-              prunableHeaders,
+              prunableInputs,
               outputFile,
               tempOutputFile,
               dotdFile,
@@ -402,7 +402,7 @@ public class CppCompileActionBuilder {
               realMandatoryInputs,
               inputsForInvalidation,
               getBuiltinIncludeFiles(),
-              prunableHeaders,
+              prunableInputs,
               outputFile,
               dotdFile,
               gcnoFile,

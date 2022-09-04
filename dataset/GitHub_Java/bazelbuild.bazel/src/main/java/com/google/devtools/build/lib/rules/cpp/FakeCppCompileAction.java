@@ -71,7 +71,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       NestedSet<Artifact> mandatoryInputs,
       Iterable<Artifact> inputsForInvalidation,
       ImmutableList<Artifact> builtinIncludeFiles,
-      NestedSet<Artifact> prunableHeaders,
+      NestedSet<Artifact> prunableInputs,
       Artifact outputFile,
       PathFragment tempOutputFile,
       DotdFile dotdFile,
@@ -98,7 +98,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         mandatoryInputs,
         inputsForInvalidation,
         builtinIncludeFiles,
-        prunableHeaders,
+        prunableInputs,
         outputFile,
         dotdFile,
         /* gcnoFile=*/ null,
@@ -255,6 +255,11 @@ public class FakeCppCompileAction extends CppCompileAction {
           + getOwner().getLabel() + ": " + e.getMessage(), this, false);
     }
     return ActionResult.create(spawnResults);
+  }
+
+  @Override
+  protected PathFragment getInternalOutputFile() {
+    return tempOutputFile;
   }
 
   @Override
