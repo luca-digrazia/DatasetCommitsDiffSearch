@@ -92,7 +92,6 @@ public class EBeansHolder {
 		public final JClass ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.ON_TOUCH_LISTENER);
 		public final JClass HANDLER = refClass(CanonicalNameConstants.HANDLER);
 		public final JClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
-		public final JClass VIEW_SERVER = refClass(CanonicalNameConstants.VIEW_SERVER);
 
 		/*
 		 * Sherlock
@@ -214,6 +213,22 @@ public class EBeansHolder {
 			} catch (JClassAlreadyExistsException e) {
 				refClass = (JDefinedClass) refClass(fullyQualifiedClassName);
 			}
+			loadedClasses.put(fullyQualifiedClassName, refClass);
+		}
+		return refClass;
+	}
+
+	/**
+	 * Return a unique JClass reference by using {@link JCodeModel#ref(String)}
+	 * and keeping a buffer.
+	 * 
+	 * @param fullyQualifiedClassName
+	 * @return
+	 */
+	JClass uniqueClass(String fullyQualifiedClassName) {
+		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
+		if (refClass == null) {
+			refClass = codeModel.directClass(fullyQualifiedClassName);
 			loadedClasses.put(fullyQualifiedClassName, refClass);
 		}
 		return refClass;

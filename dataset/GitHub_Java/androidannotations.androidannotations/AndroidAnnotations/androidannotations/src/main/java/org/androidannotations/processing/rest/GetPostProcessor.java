@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -42,7 +42,6 @@ import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JPackage;
 
@@ -268,7 +267,7 @@ public abstract class GetPostProcessor extends MethodProcessor {
 	}
 
 	@Override
-	protected JExpression addResultCallMethod(JExpression restCall, MethodProcessorHolder methodHolder) {
+	protected JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder) {
 		JClass generatedReturnType = methodHolder.getMethodReturnClass();
 		if (generatedReturnType == null) {
 			return restCall;
