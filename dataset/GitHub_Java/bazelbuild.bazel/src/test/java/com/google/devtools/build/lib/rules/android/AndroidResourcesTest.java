@@ -42,11 +42,6 @@ public class AndroidResourcesTest extends ResourceTestBase {
       ImmutableList.of(DEFAULT_RESOURCE_ROOT);
 
   @Before
-  public void setupCcToolchain() throws Exception {
-    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
-  }
-
-  @Before
   @Test
   public void testGetResourceRootsNoResources() throws Exception {
     assertThat(getResourceRoots()).isEmpty();
@@ -230,14 +225,15 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testParseNoCompile() throws Exception {
+    useConfiguration("--android_aapt=aapt");
+
     RuleContext ruleContext = getRuleContext();
     ParsedAndroidResources parsed =
         assertParse(
             ruleContext,
             DataBinding.contextFrom(
                 ruleContext,
-                ruleContext.getConfiguration().getFragment(AndroidConfiguration.class)),
-            AndroidAaptVersion.AAPT);
+                ruleContext.getConfiguration().getFragment(AndroidConfiguration.class)));
 
     // Since we are not using aapt2, there should be no compiled symbols
     assertThat(parsed.getCompiledSymbols()).isNull();
@@ -251,8 +247,11 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testParseAndCompile() throws Exception {
+    mockAndroidSdkWithAapt2();
+    useConfiguration("--android_sdk=//sdk:sdk", "--android_aapt=aapt2");
+
     RuleContext ruleContext = getRuleContext();
-    ParsedAndroidResources parsed = assertParse(ruleContext, AndroidAaptVersion.AAPT2);
+    ParsedAndroidResources parsed = assertParse(ruleContext);
 
     assertThat(parsed.getCompiledSymbols()).isNotNull();
 
@@ -272,9 +271,12 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testParseWithDataBinding() throws Exception {
+    mockAndroidSdkWithAapt2();
+    useConfiguration("--android_sdk=//sdk:sdk", "--android_aapt=aapt2");
+
     RuleContext ruleContext = getRuleContextWithDataBinding();
 
-    ParsedAndroidResources parsed = assertParse(ruleContext, AndroidAaptVersion.AAPT2);
+    ParsedAndroidResources parsed = assertParse(ruleContext);
 
     // The parse action should take resources and busybox artifacts in and output symbols
     assertActionArtifacts(
@@ -297,13 +299,15 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testMergeDataBinding() throws Exception {
+    useConfiguration("--android_aapt=aapt");
+
     RuleContext ruleContext = getRuleContextWithDataBinding();
-    ParsedAndroidResources parsed = assertParse(ruleContext, AndroidAaptVersion.AAPT);
+    ParsedAndroidResources parsed = assertParse(ruleContext);
     MergedAndroidResources merged =
         parsed.merge(
             AndroidDataContext.forNative(ruleContext),
             ResourceDependencies.empty(),
-            AndroidAaptVersion.AAPT);
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
     // Besides processed manifest, inherited values should be equal
     assertThat(parsed).isEqualTo(new ParsedAndroidResources(merged, parsed.getStampedManifest()));
@@ -329,8 +333,12 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testMergeCompiled() throws Exception {
+    mockAndroidSdkWithAapt2();
+    useConfiguration(
+        "--android_sdk=//sdk:sdk", "--android_aapt=aapt2", "--experimental_skip_parsing_action");
+
     RuleContext ruleContext = getRuleContext();
-    ParsedAndroidResources parsed = assertParse(ruleContext, AndroidAaptVersion.AAPT2);
+    ParsedAndroidResources parsed = assertParse(ruleContext);
     MergedAndroidResources merged =
         parsed.merge(
             AndroidDataContext.forNative(ruleContext),
@@ -369,11 +377,14 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testValidateAapt() throws Exception {
+    useConfiguration("--android_aapt=aapt");
     RuleContext ruleContext = getRuleContext();
 
-    MergedAndroidResources merged = makeMergedResources(ruleContext, AndroidAaptVersion.AAPT);
+    MergedAndroidResources merged = makeMergedResources(ruleContext);
     ValidatedAndroidResources validated =
-        merged.validate(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT);
+        merged.validate(
+            AndroidDataContext.forNative(ruleContext),
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
     // Inherited values should be equal
     assertThat(merged).isEqualTo(new MergedAndroidResources(validated));
@@ -394,11 +405,15 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void testValidateAapt2() throws Exception {
+    mockAndroidSdkWithAapt2();
+    useConfiguration("--android_sdk=//sdk:sdk", "--android_aapt=aapt2");
     RuleContext ruleContext = getRuleContext();
 
-    MergedAndroidResources merged = makeMergedResources(ruleContext, AndroidAaptVersion.AAPT2);
+    MergedAndroidResources merged = makeMergedResources(ruleContext);
     ValidatedAndroidResources validated =
-        merged.validate(AndroidDataContext.forNative(ruleContext), AndroidAaptVersion.AAPT2);
+        merged.validate(
+            AndroidDataContext.forNative(ruleContext),
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
 
     // Inherited values should be equal
     assertThat(merged).isEqualTo(new MergedAndroidResources(validated));
@@ -438,12 +453,12 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
     ProcessedAndroidData processedData =
         ProcessedAndroidData.of(
-            makeParsedResources(ruleContext, AndroidAaptVersion.AAPT),
+            makeParsedResources(ruleContext),
             AndroidAssets.from(ruleContext)
                 .process(
                     AndroidDataContext.forNative(ruleContext),
                     AssetDependencies.empty(),
-                    AndroidAaptVersion.AAPT),
+                    AndroidAaptVersion.chooseTargetAaptVersion(ruleContext)),
             manifest,
             rTxt,
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR),
@@ -498,7 +513,8 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
   @Test
   public void test_incompatibleUseAapt2ByDefaultEnabled_targetsAapt2() throws Exception {
-    useConfiguration("--incompatible_use_aapt2_by_default");
+    mockAndroidSdkWithAapt2();
+    useConfiguration("--android_sdk=//sdk:sdk", "--incompatible_use_aapt2_by_default");
     RuleContext ruleContext =
         getRuleContext(
             "android_binary", "aapt_version = 'auto',", "manifest = 'AndroidManifest.xml',");
@@ -506,24 +522,30 @@ public class AndroidResourcesTest extends ResourceTestBase {
         .isEqualTo(AndroidAaptVersion.AAPT2);
   }
 
+  @Test
+  public void test_incompatibleUseAapt2ByDefaultDisabled_targetsAapt() throws Exception {
+    mockAndroidSdkWithAapt2();
+    useConfiguration("--android_sdk=//sdk:sdk", "--noincompatible_use_aapt2_by_default");
+    RuleContext ruleContext =
+        getRuleContext(
+            "android_binary", "aapt_version = 'auto',", "manifest = 'AndroidManifest.xml',");
+    assertThat(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
+        .isEqualTo(AndroidAaptVersion.AAPT);
+  }
+
   /**
    * Validates that a parse action was invoked correctly. Returns the {@link ParsedAndroidResources}
    * for further validation.
    */
-  private ParsedAndroidResources assertParse(
-      RuleContext ruleContext, AndroidAaptVersion aaptVersion) throws Exception {
+  private ParsedAndroidResources assertParse(RuleContext ruleContext) throws Exception {
     return assertParse(
         ruleContext,
         DataBinding.contextFrom(
-            ruleContext, ruleContext.getConfiguration().getFragment(AndroidConfiguration.class)),
-        aaptVersion);
+            ruleContext, ruleContext.getConfiguration().getFragment(AndroidConfiguration.class)));
   }
 
   private ParsedAndroidResources assertParse(
-      RuleContext ruleContext,
-      DataBindingContext dataBindingContext,
-      AndroidAaptVersion aaptVersion)
-      throws Exception {
+      RuleContext ruleContext, DataBindingContext dataBindingContext) throws Exception {
     ImmutableList<Artifact> resources = getResources("values-en/foo.xml", "drawable-hdpi/bar.png");
     AndroidResources raw =
         new AndroidResources(
@@ -532,7 +554,10 @@ public class AndroidResourcesTest extends ResourceTestBase {
 
     ParsedAndroidResources parsed =
         raw.parse(
-            AndroidDataContext.forNative(ruleContext), manifest, aaptVersion, dataBindingContext);
+            AndroidDataContext.forNative(ruleContext),
+            manifest,
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext),
+            dataBindingContext);
 
     // Inherited values should be equal
     assertThat(raw).isEqualTo(new AndroidResources(parsed));
@@ -543,29 +568,25 @@ public class AndroidResourcesTest extends ResourceTestBase {
     return parsed;
   }
 
-  private MergedAndroidResources makeMergedResources(
-      RuleContext ruleContext, AndroidAaptVersion aaptVersion)
+  private MergedAndroidResources makeMergedResources(RuleContext ruleContext)
       throws RuleErrorException, InterruptedException {
-    return makeParsedResources(ruleContext, aaptVersion)
+    return makeParsedResources(ruleContext)
         .merge(
             AndroidDataContext.forNative(ruleContext),
             ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
-            aaptVersion);
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext));
   }
 
-  private ParsedAndroidResources makeParsedResources(
-      RuleContext ruleContext, AndroidAaptVersion aaptVersion)
+  private ParsedAndroidResources makeParsedResources(RuleContext ruleContext)
       throws RuleErrorException, InterruptedException {
     DataBindingContext dataBindingContext =
-        DataBinding.contextFrom(
-            ruleContext, ruleContext.getConfiguration().getFragment(AndroidConfiguration.class));
-    return makeParsedResources(ruleContext, dataBindingContext, aaptVersion);
+        DataBinding.contextFrom(ruleContext,
+            ruleContext.getConfiguration().getFragment(AndroidConfiguration.class));
+    return makeParsedResources(ruleContext, dataBindingContext);
   }
 
   private ParsedAndroidResources makeParsedResources(
-      RuleContext ruleContext,
-      DataBindingContext dataBindingContext,
-      AndroidAaptVersion aaptVersion)
+      RuleContext ruleContext, DataBindingContext dataBindingContext)
       throws RuleErrorException, InterruptedException {
     ImmutableList<Artifact> resources = getResources("values-en/foo.xml", "drawable-hdpi/bar.png");
     return new AndroidResources(
@@ -573,7 +594,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
         .parse(
             AndroidDataContext.forNative(ruleContext),
             getManifest(),
-            aaptVersion,
+            AndroidAaptVersion.chooseTargetAaptVersion(ruleContext),
             dataBindingContext);
   }
 
