@@ -22,7 +22,6 @@
  */
 package org.graylog2.plugin.inputs.transports;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.Callables;
 import org.graylog2.plugin.LocalMetricRegistry;
@@ -30,7 +29,6 @@ import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.BooleanField;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.DropdownField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
@@ -58,7 +56,6 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
 
@@ -69,12 +66,9 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     private static final String CK_TLS_KEY_FILE = "tls_key_file";
     private static final String CK_TLS_ENABLE = "tls_enable";
     private static final String CK_TLS_KEY_PASSWORD = "tls_key_password";
-    private static final String CK_TLS_CLIENT_AUTH = "tls_client_auth";
+    private static final String CK_TLS_NEED_CLIENT_AUTH = "tls_need_client_auth";
+    private static final String CK_TLS_WANT_CLIENT_AUTH = "tls_want_client_auth";
     private static final String CK_TLS_CLIENT_AUTH_TRUSTED_CERT_FILE = "tls_client_auth_cert_file";
-    private static final Map<String, String> TLS_CLIENT_AUTH_OPTIONS = ImmutableMap.of(
-            "disabled", "disabled",
-            "optional", "optional",
-            "required", "required");
 
     protected final Executor bossExecutor;
     protected final Executor workerExecutor;
@@ -86,7 +80,8 @@ public abstract class AbstractTcpTransport extends NettyTransport {
     private File tlsCertFile;
     private File tlsKeyFile;
     private final File tlsClientAuthCertFile;
-    private final String tlsClientAuth;
+    private final boolean tlsNeedClientAuth;
+    private final boolean tlsWantClientAuth;
 
     public AbstractTcpTransport(
             Configuration configuration,
@@ -105,7 +100,8 @@ public abstract class AbstractTcpTransport extends NettyTransport {
         this.tlsCertFile = getTlsFile(configuration, CK_TLS_CERT_FILE);
         this.tlsKeyFile = getTlsFile(configuration, CK_TLS_KEY_FILE);
         this.tlsKeyPassword = configuration.getString(CK_TLS_KEY_PASSWORD);
-        this.tlsClientAuth = configuration.getString(CK_TLS_CLIENT_AUTH, "disabled");
+        this.tlsNeedClientAuth = configuration.getBoolean(CK_TLS_NEED_CLIENT_AUTH);
+        this.tlsWantClientAuth = configuration.getBoolean(CK_TLS_WANT_CLIENT_AUTH);
         this.tlsClientAuthCertFile = getTlsFile(configuration, CK_TLS_CLIENT_AUTH_TRUSTED_CERT_FILE);
 
 
@@ -179,7 +175,7 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 final SSLContext instance = SSLContext.getInstance("TLS");
                 TrustManager[] initTrustStore = new TrustManager[0];
 
-                if ("optional".equals(tlsClientAuth) || "required".equals(tlsClientAuth)) {
+                if ((tlsWantClientAuth || tlsNeedClientAuth)) {
                     if (tlsClientAuthCertFile.exists()) {
                         initTrustStore = KeyUtil.initTrustStore(tlsClientAuthCertFile);
                     } else {
@@ -191,22 +187,8 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                 final SSLEngine engine = instance.createSSLEngine();
 
                 engine.setUseClientMode(false);
-
-                switch (tlsClientAuth) {
-                    case "disabled":
-                        LOG.debug("Not using TLS client authentication");
-                        break;
-                    case "optional":
-                        LOG.debug("Using optional TLS client authentication");
-                        engine.setWantClientAuth(true);
-                        break;
-                    case "required":
-                        LOG.debug("Using mandatory TLS client authentication");
-                        engine.setNeedClientAuth(true);
-                        break;
-                    default:
-                        throw new IllegalArgumentException("Unknown TLS client authentication mode: " + tlsClientAuth);
-                }
+                engine.setNeedClientAuth(tlsNeedClientAuth);
+                engine.setNeedClientAuth(tlsWantClientAuth);
 
                 return engine;
             }
@@ -256,14 +238,18 @@ public abstract class AbstractTcpTransport extends NettyTransport {
                     )
             );
             x.addField(
-                    new DropdownField(
-                            CK_TLS_CLIENT_AUTH,
-                            "TLS client authentication",
-                            "disabled",
-                            TLS_CLIENT_AUTH_OPTIONS,
-                            "Whether clients need to authenticate themselves in a TLS connection",
-                            ConfigurationField.Optional.OPTIONAL
-                    )
+                    new BooleanField(
+                            CK_TLS_NEED_CLIENT_AUTH,
+                            "TLS Need Client Auth",
+                            false,
+                            "TLS Need Client Auth")
+            );
+            x.addField(
+                    new BooleanField(
+                            CK_TLS_WANT_CLIENT_AUTH,
+                            "TLS Want Client Auth",
+                            false,
+                            "TLS Want Client Auth")
             );
             x.addField(
                     new TextField(
