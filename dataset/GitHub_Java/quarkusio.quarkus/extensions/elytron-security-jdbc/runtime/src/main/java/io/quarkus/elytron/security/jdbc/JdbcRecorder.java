@@ -5,12 +5,12 @@ import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
-import org.wildfly.security.WildFlyElytronProvider;
 import org.wildfly.security.auth.realm.jdbc.JdbcSecurityRealm;
 import org.wildfly.security.auth.realm.jdbc.JdbcSecurityRealmBuilder;
 import org.wildfly.security.auth.realm.jdbc.QueryBuilder;
 import org.wildfly.security.auth.realm.jdbc.mapper.AttributeMapper;
 import org.wildfly.security.auth.server.SecurityRealm;
+import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 
 import io.quarkus.arc.Arc;
 import io.quarkus.runtime.RuntimeValue;
@@ -18,6 +18,8 @@ import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
 public class JdbcRecorder {
+
+    private static final Provider[] PROVIDERS = new Provider[] { new WildFlyElytronPasswordProvider() };
 
     /**
      * Create a runtime value for a {@linkplain JdbcSecurityRealm}
@@ -29,7 +31,7 @@ public class JdbcRecorder {
         Supplier<Provider[]> providers = new Supplier<Provider[]>() {
             @Override
             public Provider[] get() {
-                return new Provider[] { new WildFlyElytronProvider() };
+                return PROVIDERS;
             }
         };
         JdbcSecurityRealmBuilder builder = JdbcSecurityRealm.builder().setProviders(providers);
@@ -41,14 +43,10 @@ public class JdbcRecorder {
     }
 
     private void registerPrincipalQuery(PrincipalQueryConfig principalQuery, JdbcSecurityRealmBuilder builder) {
-        if (Arc.container() == null) {
-            Arc.initialize();
-        }
-        DataSource dataSource = (DataSource) principalQuery.datasource
-                .map(name -> Arc.container().instance(name).get())
-                .orElse(Arc.container().instance(DataSource.class).get());
 
-        QueryBuilder queryBuilder = builder.principalQuery(principalQuery.sql).from(dataSource);
+        QueryBuilder queryBuilder = builder.principalQuery(principalQuery.sql.orElseThrow(
+                () -> new IllegalStateException("quarkus.security.jdbc.principal-query.sql property must be set")))
+                .from(getDataSource(principalQuery));
 
         AttributeMapper[] mappers = principalQuery.attributeMappings.entrySet()
                 .stream()
@@ -62,5 +60,16 @@ public class JdbcRecorder {
         if (principalQuery.bcryptPasswordKeyMapperConfig.enabled) {
             queryBuilder.withMapper(principalQuery.bcryptPasswordKeyMapperConfig.toPasswordKeyMapper());
         }
+    }
+
+    private DataSource getDataSource(PrincipalQueryConfig principalQuery) {
+        if (principalQuery.datasource.isPresent()) {
+            return Arc.container()
+                    .instance(DataSource.class,
+                            new io.quarkus.agroal.DataSource.DataSourceLiteral(principalQuery.datasource.get()))
+                    .get();
+        }
+
+        return Arc.container().instance(DataSource.class).get();
     }
 }
