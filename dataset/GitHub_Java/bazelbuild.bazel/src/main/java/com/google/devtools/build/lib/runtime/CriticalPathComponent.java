@@ -54,10 +54,6 @@ public class CriticalPathComponent {
     return (startNanos) -> nowInMillis - TimeUnit.NANOSECONDS.toMillis((nowInNanos - startNanos));
   }
 
-  /** Empty metrics used to simplify handling of {@link #phaseMaxMetrics}. */
-  private static final SpawnMetrics EMPTY_PLACEHOLDER_METRICS =
-      SpawnMetrics.Builder.forOtherExec().build();
-
   // These two fields are values of BlazeClock.nanoTime() at the relevant points in time.
   private long startNanos;
   private long finishNanos = 0;
@@ -70,7 +66,7 @@ public class CriticalPathComponent {
   private final Artifact primaryOutput;
 
   /** Spawn metrics for this action. */
-  private SpawnMetrics phaseMaxMetrics = EMPTY_PLACEHOLDER_METRICS;
+  @Nullable private SpawnMetrics phaseMaxMetrics = null;
 
   private AggregatedSpawnMetrics totalSpawnMetrics = AggregatedSpawnMetrics.EMPTY;
   private Duration longestRunningTotalDuration = Duration.ZERO;
@@ -128,9 +124,9 @@ public class CriticalPathComponent {
     }
 
     // If the phaseMaxMetrics has Duration, then we want to aggregate it to the total.
-    if (!this.phaseMaxMetrics.isEmpty()) {
+    if (this.phaseMaxMetrics != null && !this.phaseMaxMetrics.totalTime().isZero()) {
       this.totalSpawnMetrics = this.totalSpawnMetrics.sumDurationsMaxOther(phaseMaxMetrics);
-      this.phaseMaxMetrics = EMPTY_PLACEHOLDER_METRICS;
+      this.phaseMaxMetrics = null;
     }
   }
 
@@ -201,12 +197,13 @@ public class CriticalPathComponent {
       this.remote = true;
     }
     if (this.phaseChange) {
-      if (!this.phaseMaxMetrics.isEmpty()) {
+      if (this.phaseMaxMetrics != null) {
         this.totalSpawnMetrics = this.totalSpawnMetrics.sumDurationsMaxOther(phaseMaxMetrics);
       }
       this.phaseMaxMetrics = metrics;
       this.phaseChange = false;
-    } else if (metrics.totalTime().compareTo(this.phaseMaxMetrics.totalTime()) > 0) {
+    } else if (this.phaseMaxMetrics == null
+        || metrics.totalTime().compareTo(this.phaseMaxMetrics.totalTime()) > 0) {
       this.phaseMaxMetrics = metrics;
     }
 

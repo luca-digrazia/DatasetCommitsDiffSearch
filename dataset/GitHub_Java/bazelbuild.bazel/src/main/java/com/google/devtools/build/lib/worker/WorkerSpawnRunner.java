@@ -44,9 +44,6 @@ import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Worker.Code;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -152,9 +149,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
   private SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
       throws ExecException, IOException, InterruptedException {
     if (spawn.getToolFiles().isEmpty()) {
-      throw createUserExecException(
-          String.format(ERROR_MESSAGE_PREFIX + REASON_NO_TOOLS, spawn.getMnemonic()),
-          Code.NO_TOOLS);
+      throw new UserExecException(
+          String.format(ERROR_MESSAGE_PREFIX + REASON_NO_TOOLS, spawn.getMnemonic()));
     }
 
     runfilesTreeUpdater.updateRunfilesDirectory(
@@ -243,9 +239,8 @@ final class WorkerSpawnRunner implements SpawnRunner {
     }
 
     if (flagFiles.isEmpty()) {
-      throw createUserExecException(
-          String.format(ERROR_MESSAGE_PREFIX + REASON_NO_FLAGFILE, spawn.getMnemonic()),
-          Code.NO_FLAGFILE);
+      throw new UserExecException(
+          String.format(ERROR_MESSAGE_PREFIX + REASON_NO_FLAGFILE, spawn.getMnemonic()));
     }
 
     return workerArgs
@@ -338,15 +333,12 @@ final class WorkerSpawnRunner implements SpawnRunner {
       try {
         inputFiles.materializeVirtualInputs(execRoot);
       } catch (IOException e) {
-        String message = "IOException while materializing virtual inputs:";
-        throw createUserExecException(e, message, Code.VIRTUAL_INPUT_MATERIALIZATION_FAILURE);
-      }
-
-      try {
-        context.prefetchInputs();
-      } catch (IOException e) {
-        String message = "IOException while prefetching for worker:";
-        throw createUserExecException(e, message, Code.PREFETCH_FAILURE);
+        throw new UserExecException(
+            ErrorMessage.builder()
+                .message("IOException while materializing virtual inputs:")
+                .exception(e)
+                .build()
+                .toString());
       }
 
       try {
@@ -354,8 +346,23 @@ final class WorkerSpawnRunner implements SpawnRunner {
         request =
             createWorkRequest(spawn, context, flagFiles, inputFileCache, worker.getWorkerId());
       } catch (IOException e) {
-        String message = "IOException while borrowing a worker from the pool:";
-        throw createUserExecException(e, message, Code.BORROW_FAILURE);
+        throw new UserExecException(
+            ErrorMessage.builder()
+                .message("IOException while borrowing a worker from the pool:")
+                .exception(e)
+                .build()
+                .toString());
+      }
+
+      try {
+        context.prefetchInputs();
+      } catch (IOException e) {
+        throw new UserExecException(
+            ErrorMessage.builder()
+                .message("IOException while prefetching for worker:")
+                .exception(e)
+                .build()
+                .toString());
       }
 
       try (ResourceHandle handle =
@@ -364,20 +371,19 @@ final class WorkerSpawnRunner implements SpawnRunner {
         try {
           worker.prepareExecution(inputFiles, outputs, key.getWorkerFilesWithHashes().keySet());
         } catch (IOException e) {
-          String message =
+          throw new UserExecException(
               ErrorMessage.builder()
                   .message("IOException while preparing the execution environment of a worker:")
                   .logFile(worker.getLogFile())
                   .exception(e)
                   .build()
-                  .toString();
-          throw createUserExecException(message, Code.PREPARE_FAILURE);
+                  .toString());
         }
 
         try {
           worker.putRequest(request);
         } catch (IOException e) {
-          String message =
+          throw new UserExecException(
               ErrorMessage.builder()
                   .message(
                       "Worker process quit or closed its stdin stream when we tried to send a"
@@ -385,8 +391,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
                   .logFile(worker.getLogFile())
                   .exception(e)
                   .build()
-                  .toString();
-          throw createUserExecException(message, Code.REQUEST_FAILURE);
+                  .toString());
         }
 
         try {
@@ -396,7 +401,7 @@ final class WorkerSpawnRunner implements SpawnRunner {
           // to stdout - it's probably a stack trace or some kind of error message that will help
           // the user figure out why the compiler is failing.
           String recordingStreamMessage = worker.getRecordingStreamMessage();
-          String message =
+          throw new UserExecException(
               ErrorMessage.builder()
                   .message(
                       "Worker process returned an unparseable WorkResponse!\n\n"
@@ -406,35 +411,32 @@ final class WorkerSpawnRunner implements SpawnRunner {
                   .logText(recordingStreamMessage)
                   .exception(e)
                   .build()
-                  .toString();
-          throw createUserExecException(message, Code.PARSE_RESPONSE_FAILURE);
+                  .toString());
         }
       }
 
       if (response == null) {
-        String message =
+        throw new UserExecException(
             ErrorMessage.builder()
                 .message("Worker process did not return a WorkResponse:")
                 .logFile(worker.getLogFile())
                 .logSizeLimit(4096)
                 .build()
-                .toString();
-        throw createUserExecException(message, Code.NO_RESPONSE);
+                .toString());
       }
 
       try {
         context.lockOutputFiles();
         worker.finishExecution(execRoot);
       } catch (IOException e) {
-        String message =
+        throw new UserExecException(
             ErrorMessage.builder()
                 .message("IOException while finishing worker execution:")
                 .exception(e)
                 .build()
-                .toString();
-        throw createUserExecException(message, Code.FINISH_FAILURE);
+                .toString());
       }
-    } catch (UserExecException e) {
+    } catch (ExecException e) {
       if (worker != null) {
         try {
           workers.invalidateObject(key, worker);
@@ -452,19 +454,5 @@ final class WorkerSpawnRunner implements SpawnRunner {
     }
 
     return response;
-  }
-
-  private static UserExecException createUserExecException(
-      IOException e, String message, Code detailedCode) {
-    return createUserExecException(
-        ErrorMessage.builder().message(message).exception(e).build().toString(), detailedCode);
-  }
-
-  private static UserExecException createUserExecException(String message, Code detailedCode) {
-    return new UserExecException(
-        FailureDetail.newBuilder()
-            .setMessage(message)
-            .setWorker(FailureDetails.Worker.newBuilder().setCode(detailedCode))
-            .build());
   }
 }
