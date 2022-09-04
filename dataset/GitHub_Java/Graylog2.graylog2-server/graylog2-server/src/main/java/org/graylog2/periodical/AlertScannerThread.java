@@ -19,6 +19,7 @@
  */
 package org.graylog2.periodical;
 
+import org.graylog2.ConfigurationException;
 import org.graylog2.Core;
 import org.graylog2.alerts.Alert;
 import org.graylog2.alerts.AlertCondition;
