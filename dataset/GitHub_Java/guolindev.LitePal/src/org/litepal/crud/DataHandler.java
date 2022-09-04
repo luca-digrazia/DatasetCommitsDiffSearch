@@ -301,7 +301,7 @@ abstract class DataHandler extends LitePalBase {
 	 *         rows.
 	 */
 	protected String getWhereClause(String... conditions) {
-		if (isAffectAllLines((Object) conditions)) {
+		if (isAffectAllLines(conditions)) {
 			return null;
 		}
 		if (conditions != null && conditions.length > 0) {
@@ -321,7 +321,7 @@ abstract class DataHandler extends LitePalBase {
 	 *         deleting multiple rows.
 	 */
 	protected String[] getWhereArgs(String... conditions) {
-		if (isAffectAllLines((Object) conditions)) {
+		if (isAffectAllLines(conditions)) {
 			return null;
 		}
 		if (conditions != null && conditions.length > 1) {
@@ -723,8 +723,11 @@ abstract class DataHandler extends LitePalBase {
 	 *            statement.
 	 * @return Affect all lines or not.
 	 */
-	private boolean isAffectAllLines(Object... conditions) {
-		if (conditions != null && conditions.length == 0) {
+	private boolean isAffectAllLines(String... conditions) {
+		if (conditions == null) {
+			return true;
+		}
+		if (conditions.length == 1 && conditions[0] == null || "".equals(conditions[0].trim())) {
 			return true;
 		}
 		return false;
