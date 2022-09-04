@@ -1,19 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.math.matrix;
 
@@ -28,10 +27,13 @@ import smile.math.MathEx;
 public class BiconjugateGradient {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BiconjugateGradient.class);
 
+    /** The instance with default settings. */
+    private static BiconjugateGradient instance = new BiconjugateGradient();
+
     /**
      * The desired convergence tolerance.
      */
-    private double tol = 1E-8;
+    private double tol = 1E-10;
     /**
      * Which convergence test is applied. If itol = 1,
      * iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
@@ -52,46 +54,77 @@ public class BiconjugateGradient {
     private Preconditioner preconditioner;
 
     /**
-     * Constructor with itol = 1 and tol = 1E-8.
+     * Constructor with itol = 1 and tol = 1E-10.
      * The maximum number of iterations will be determined by
      * the size of matrix. The preconditioner will be
      * a trivial diagonal part of input matrix if not set.
      */
     public BiconjugateGradient() {
-        this(1E-10, 1, 0, null);
+
     }
 
     /**
      * Constructor.
-     * @param tol The desired convergence tolerance.
-     * @param itol Which convergence test is applied.
-     *             If itol = 1, iteration stops when |Ax - b| / |b| is less
-     *             than the parameter tolerance.
-     *             If itol = 2, the stop criterion is that |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b|
-     *             is less than tolerance.
-     *             If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
-     *             tolerance.
-     *             The setting of tol = 4 is same as tol = 3 except that the
-     *             L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
-     * @param maxIter The maximum number of allowed iterations. If zero or negative,
-     *                the maximum number of iterations will be determined by
-     *                the size of matrix.
-     * @param preconditioner The preconditioner matrix. If null, use a simple preconditioner matrix
-     *                       that is the trivial diagonal part of A.
      */
-    public BiconjugateGradient(double tol, int itol, int maxIter, Preconditioner preconditioner) {
+    public BiconjugateGradient(double tol, int itol, int maxIter) {
+        setTolerance(tol);
+        setConvergenceTest(itol);
+        setMaxIter(maxIter);
+    }
+
+    /** Returns the instance with default settings. */
+    public static BiconjugateGradient getInstance() {
+        return instance;
+    }
+
+    /**
+     * Sets the desired convergence tolerance.
+     * @return return this object.
+     */
+    public BiconjugateGradient setTolerance(double tol) {
         if (tol <= 0.0) {
             throw new IllegalArgumentException("Invalid tolerance: " + tol);
         }
 
+        this.tol = tol;
+        return this;
+    }
+
+    /**
+     * Sets which convergence test is applied. If itol = 1,
+     * iteration stops when |Ax - b| / |b| is less than the parameter tolerance.
+     * If itol = 2, the stop criterion is
+     * |A<sup>-1</sup> (Ax - b)| / |A<sup>-1</sup>b| is less than tolerance.
+     * If tol = 3, |x<sub>k+1</sub> - x<sub>k</sub>|<sub>2</sub> is less than
+     * tolerance. The setting of tol = 4 is same as tol = 3 except that the
+     * L<sub>&infin;</sub> norm instead of L<sub>2</sub>.
+     * @return return this object.
+     */
+    public BiconjugateGradient setConvergenceTest(int itol) {
         if (itol < 1 || itol > 4) {
             throw new IllegalArgumentException(String.format("Invalid itol: %d", itol));
         }
 
-        this.tol = tol;
         this.itol = itol;
+        return this;
+    }
+
+    /**
+     * Sets the maximum number of allowed iterations.
+     * @return return this object.
+     */
+    public BiconjugateGradient setMaxIter(int maxIter) {
         this.maxIter = maxIter;
+        return this;
+    }
+
+    /**
+     * Sets the preconditioner matrix.
+     * @return return this object.
+     */
+    public BiconjugateGradient setPreconditioner(Preconditioner preconditioner) {
         this.preconditioner = preconditioner;
+        return this;
     }
 
     /**

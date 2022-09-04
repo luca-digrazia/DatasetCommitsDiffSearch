@@ -1,24 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.regression;
 
 import java.util.Arrays;
 import java.util.Properties;
+
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
@@ -75,8 +75,89 @@ import smile.math.special.Beta;
  * 
  * @author Haifeng Li
  */
-public class OLS {
+public class OLS implements Regression<double[]> {
+    private static final long serialVersionUID = 1L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(OLS.class);
+
+    /**
+     * Design matrix formula
+     */
+    private Formula formula;
+    /**
+     * The variable names.
+     */
+    private String[] names;
+    /**
+     * The dimensionality.
+     */
+    private int p;
+    /**
+     * The intercept.
+     */
+    private double b;
+    /**
+     * The linear weights.
+     */
+    private double[] w;
+    /**
+     * The coefficients, their standard errors, t-scores, and p-values.
+     */
+    private double[][] coefficients;
+    /**
+     * The fitted values.
+     */
+    private double[] fittedValues;
+    /**
+     * The residuals, that is response minus fitted values.
+     */
+    private double[] residuals;
+    /**
+     * Residual sum of squares.
+     */
+    private double RSS;
+    /**
+     * Residual standard error.
+     */
+    private double error;
+    /**
+     * The degree-of-freedom of residual standard error.
+     */
+    private int df;
+    /**
+     * R<sup>2</sup>. R<sup>2</sup> is a statistic that will give some information
+     * about the goodness of fit of a model. In regression, the R<sup>2</sup>
+     * coefficient of determination is a statistical measure of how well
+     * the regression line approximates the real data points. An R<sup>2</sup>
+     * of 1.0 indicates that the regression line perfectly fits the data.
+     * <p>
+     * In the case of ordinary least-squares regression, R<sup>2</sup>
+     * increases as we increase the number of variables in the model
+     * (R<sup>2</sup> will not decrease). This illustrates a drawback to
+     * one possible use of R<sup>2</sup>, where one might try to include
+     * more variables in the model until "there is no more improvement".
+     * This leads to the alternative approach of looking at the
+     * adjusted R<sup>2</sup>.
+     */
+    private double RSquared;
+    /**
+     * Adjusted R<sup>2</sup>. The adjusted R<sup>2</sup> has almost same
+     * explanation as R<sup>2</sup> but it penalizes the statistic as
+     * extra variables are included in the model.
+     */
+    private double adjustedRSquared;
+    /**
+     * The F-statistic of the goodness-of-fit of the model.
+     */
+    private double F;
+    /**
+     * The p-value of the goodness-of-fit test of the model.
+     */
+    private double pvalue;
+
+    /** Private constructor. */
+    private OLS() {
+
+    }
 
     /**
      * Fits an ordinary least squares model.
@@ -84,42 +165,23 @@ public class OLS {
      * @param data the data frame of the explanatory and response variables.
      *             NO NEED to include a constant column of 1s for bias.
      */
-    public static LinearModel fit(Formula formula, DataFrame data) {
+    public static OLS fit(Formula formula, DataFrame data) {
         return fit(formula, data, new Properties());
     }
 
     /**
-     * Fits an ordinary least squares model. The hyper-parameters in <code>prop</code> include
-     * <ul>
-     * <li><code>smile.ols.method</code> (default "svd") is a string (svd or qr) for the fitting method
-     * <li><code>smile.ols.standard.error</code> (default true) is a boolean. If true, compute the estimated standard
-     *     errors of the estimate of parameters
-     * <li><code>smile.ols.recursive</code>  (default true) is a boolean. If true, the return model supports recursive least squares
-     * </ul>
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     *             NO NEED to include a constant column of 1s for bias.
-     * @param prop Training algorithm hyper-parameters and properties.
-     */
-    public static LinearModel fit(Formula formula, DataFrame data, Properties prop) {
-        String method = prop.getProperty("smile.ols.method", "qr");
-        boolean stderr = Boolean.valueOf(prop.getProperty("smile.ols.standard.error", "true"));
-        boolean recursive = Boolean.valueOf(prop.getProperty("smile.ols.recursive", "true"));
-        return fit(formula, data, method, stderr, recursive);
-    }
-    
-    /**
      * Fits an ordinary least squares model.
      * @param formula a symbolic description of the model to be fitted.
      * @param data the data frame of the explanatory and response variables.
      *             NO NEED to include a constant column of 1s for bias.
-     * @param method the fitting method ("svd" or "qr").
-     * @param stderr if true, compute the estimated standard errors of the estimate of parameters.
-     * @param recursive if true, the return model supports recursive least squares.
+     * @param prop Training algorithm properties and hyper-parameters (if any) including "method" (svd or qr)
+     *             for the fitting method, "standard.error" (boolean) to compute the estimated standard
+     *             errors of the estimate of parameters, "eps" (default 1E-7) as the tolerance in SVD
+     *             to detect if a singular value is zero.
      */
-    public static LinearModel fit(Formula formula, DataFrame data, String method, boolean stderr, boolean recursive) {
-        DenseMatrix X = formula.matrix(data);
-        double[] y = formula.y(data).toDoubleArray();
+    public static OLS fit(Formula formula, DataFrame data, Properties prop) {
+        DenseMatrix X = formula.matrix(data, true);
+        double[] y = formula.response(data).toDoubleArray();
 
         int n = X.nrows();
         int p = X.ncols() - 1;
@@ -131,9 +193,10 @@ public class OLS {
         // weights and intercept
         double[] w1 = new double[p+1];
 
+
         QR qr = null;
         SVD svd = null;
-
+        String method = prop.getProperty("method", "svd").toLowerCase();
         if (method.equalsIgnoreCase("svd")) {
             svd = X.svd(false);
             svd.solve(y, w1);
@@ -150,40 +213,238 @@ public class OLS {
             }
         }
 
-        LinearModel model = new LinearModel();
+        OLS model = new OLS();
+        model.names = formula.predictors();
         model.formula = formula;
-        model.schema = formula.xschema();
         model.p = p;
         model.b = w1[p];
         model.w = new double[p];
         System.arraycopy(w1, 0, model.w, 0, p);
 
-        double[] fittedValues = new double[n];
-        X.ax(w1, fittedValues);
-        model.fitness(fittedValues, y, MathEx.mean(y));
+        model.fittedValues = new double[n];
+        model.residuals = new double[n];
+        X.ax(w1, model.fittedValues);
 
-        DenseMatrix inv = null;
-
-        if (stderr || recursive) {
-            Cholesky cholesky = method.equalsIgnoreCase("svd") ? X.ata().cholesky() : qr.CholeskyOfAtA();
-            inv = cholesky.inverse();
-            model.V = inv;
+        double TSS = 0.0;
+        model.RSS = 0.0;
+        double ybar = MathEx.mean(y);
+        for (int i = 0; i < n; i++) {
+            double r = y[i] - model.fittedValues[i];
+            model.residuals[i] = r;
+            model.RSS += MathEx.sqr(r);
+            TSS += MathEx.sqr(y[i] - ybar);
         }
 
-        if (stderr) {
-            double[][] ttest = new double[p + 1][4];
-            model.ttest = ttest;
+        model.error = Math.sqrt(model.RSS / (n - p - 1));
+        int df = n - p - 1;
+        model.df = df;
 
-            for (int i = 0; i <= p; i++) {
-                ttest[i][0] = w1[i];
-                double se = model.error * Math.sqrt(inv.get(i, i));
-                ttest[i][1] = se;
-                double t = w1[i] / se;
-                ttest[i][2] = t;
-                ttest[i][3] = Beta.regularizedIncompleteBetaFunction(0.5 * model.df, 0.5, model.df / (model.df + t * t));
+        model.RSquared = 1.0 - model.RSS / TSS;
+        model.adjustedRSquared = 1.0 - ((1 - model.RSquared) * (n-1) / (n-p-1));
+
+        model.F = (TSS - model.RSS) * (n - p - 1) / (model.RSS * p);
+        int df1 = p;
+        int df2 = n - p - 1;
+        model.pvalue = Beta.regularizedIncompleteBetaFunction(0.5 * df2, 0.5 * df1, df2 / (df2 + df1 * model.F));
+
+        if (prop.getProperty("standard.error", "true").equalsIgnoreCase("true")) {
+            double eps = Double.valueOf(prop.getProperty("eps", "1E-7"));
+            double[][] coefficients = new double[p + 1][4];
+            model.coefficients = coefficients;
+            if (method.equalsIgnoreCase("svd")) {
+                for (int i = 0; i <= p; i++) {
+                    coefficients[i][0] = w1[i];
+                    double s = svd.getSingularValues()[i];
+                    if (!MathEx.isZero(s, eps)) {
+                        double se = model.error / s;
+                        coefficients[i][1] = se;
+                        double t = w1[i] / se;
+                        coefficients[i][2] = t;
+                        coefficients[i][3] = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
+                    } else {
+                        coefficients[i][1] = Double.NaN;
+                        coefficients[i][2] = 0.0;
+                        coefficients[i][3] = 1.0;
+                    }
+                }
+            } else {
+                Cholesky cholesky = qr.CholeskyOfAtA();
+
+                DenseMatrix inv = cholesky.inverse();
+
+                for (int i = 0; i <= p; i++) {
+                    coefficients[i][0] = w1[i];
+                    double se = model.error * Math.sqrt(inv.get(i, i));
+                    coefficients[i][1] = se;
+                    double t = w1[i] / se;
+                    coefficients[i][2] = t;
+                    coefficients[i][3] = Beta.regularizedIncompleteBetaFunction(0.5 * df, 0.5, df / (df + t * t));
+                }
             }
         }
 
         return model;
+    }
+
+    /**
+     * Returns the t-test of the coefficients (including intercept).
+     * The first column is the coefficients, the second column is the standard
+     * error of coefficients, the third column is the t-score of the hypothesis
+     * test if the coefficient is zero, the fourth column is the p-values of
+     * test. The last row is of intercept.
+     */
+    public double[][] ttest() {
+        return coefficients;
+    }
+
+    /**
+     * Returns the linear coefficients (without intercept).
+     */
+    public double[] coefficients() {
+        return w;
+    }
+
+    /**
+     * Returns the intercept.
+     */
+    public double intercept() {
+        return b;
+    }
+
+    /**
+     * Returns the residuals, that is response minus fitted values.
+     */
+    public double[] residuals() {
+        return residuals;
+    }
+
+    /**
+     * Returns the fitted values.
+     */
+    public double[] fittedValues() {
+        return fittedValues;
+    }
+
+    /**
+     * Returns the residual sum of squares.
+     */
+    public double RSS() {
+        return RSS;
+    }
+
+    /**
+     * Returns the residual standard error.
+     */
+    public double error() {
+        return error;
+    }
+
+    /**
+     * Returns the degree-of-freedom of residual standard error.
+     */
+    public int df() {
+        return df;
+    }
+
+    /**
+     * Returns R<sup>2</sup> statistic. In regression, the R<sup>2</sup>
+     * coefficient of determination is a statistical measure of how well
+     * the regression line approximates the real data points. An R<sup>2</sup>
+     * of 1.0 indicates that the regression line perfectly fits the data.
+     * <p>
+     * In the case of ordinary least-squares regression, R<sup>2</sup>
+     * increases as we increase the number of variables in the model
+     * (R<sup>2</sup> will not decrease). This illustrates a drawback to
+     * one possible use of R<sup>2</sup>, where one might try to include more
+     * variables in the model until "there is no more improvement". This leads
+     * to the alternative approach of looking at the adjusted R<sup>2</sup>.
+     */
+    public double RSquared() {
+        return RSquared;
+    }
+
+    /**
+     * Returns adjusted R<sup>2</sup> statistic. The adjusted R<sup>2</sup>
+     * has almost same explanation as R<sup>2</sup> but it penalizes the
+     * statistic as extra variables are included in the model.
+     */
+    public double adjustedRSquared() {
+        return adjustedRSquared;
+    }
+
+    /**
+     * Returns the F-statistic of goodness-of-fit.
+     */
+    public double ftest() {
+        return F;
+    }
+
+    /**
+     * Returns the p-value of goodness-of-fit test.
+     */
+    public double pvalue() {
+        return pvalue;
+    }
+
+    @Override
+    public double predict(double[] x) {
+        if (x.length != p) {
+            throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, p));
+        }
+
+        return b + MathEx.dot(x, w);
+    }
+
+    /** Predicts the dependent variables of instances in a data frame. */
+    public double[] predict(DataFrame df) {
+        DenseMatrix X = formula.matrix(df, false);
+        double[] y = new double[X.nrows()];
+        Arrays.fill(y, b);
+        X.axpy(w, y);
+        return y;
+    }
+
+    /**
+     * Returns the significance code given a p-value.
+     * Significance codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+     */
+    private String significance(double pvalue) {
+        if (pvalue < 0.001)
+            return "***";
+        else if (pvalue < 0.01)
+            return "**";
+        else if (pvalue < 0.05)
+            return "*";
+        else if (pvalue < 0.1)
+            return ".";
+        else
+            return "";
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Linear Model:\n");
+
+        double[] r = residuals.clone();
+        builder.append("\nResiduals:\n");
+        builder.append("\t       Min\t        1Q\t    Median\t        3Q\t       Max\n");
+        builder.append(String.format("\t%10.4f\t%10.4f\t%10.4f\t%10.4f\t%10.4f%n", MathEx.min(r), MathEx.q1(r), MathEx.median(r), MathEx.q3(r), MathEx.max(r)));
+
+        builder.append("\nCoefficients:\n");
+        builder.append("            Estimate        Std. Error        t value        Pr(>|t|)\n");
+        builder.append(String.format("Intercept%11.4f%18.4f%15.4f%16.4f %s%n", coefficients[p][0], coefficients[p][1], coefficients[p][2], coefficients[p][3], significance(coefficients[p][3])));
+        for (int i = 0; i < p; i++) {
+            builder.append(String.format("%s\t %11.4f%18.4f%15.4f%16.4f %s%n", names[i], coefficients[i][0], coefficients[i][1], coefficients[i][2], coefficients[i][3], significance(coefficients[i][3])));
+        }
+
+        builder.append("---------------------------------------------------------------------\n");
+        builder.append("Significance codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n");
+
+        builder.append(String.format("\nResidual standard error: %.4f on %d degrees of freedom%n", error, df));
+        builder.append(String.format("Multiple R-squared: %.4f,    Adjusted R-squared: %.4f%n", RSquared, adjustedRSquared));
+        builder.append(String.format("F-statistic: %.4f on %d and %d DF,  p-value: %.4g%n", F, p, df, pvalue));
+
+        return builder.toString();
     }
 }
