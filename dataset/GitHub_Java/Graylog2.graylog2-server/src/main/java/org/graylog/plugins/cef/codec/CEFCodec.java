@@ -25,13 +25,24 @@ import javax.annotation.Nullable;
 public class CEFCodec extends BaseCEFCodec {
     public static final String NAME = "CEF";
 
+    private static final Logger LOG = LoggerFactory.getLogger(CEFCodec.class);
+    private static final String CK_TIMEZONE = "timezone";
+
     private final CEFParser parser;
 
     @AssistedInject
     public CEFCodec(@Assisted Configuration configuration) {
         super(configuration);
 
-        this.parser = new CEFParser(useFullNames);
+        DateTimeZone timezone;
+        try {
+            timezone = DateTimeZone.forID(configuration.getString(CK_TIMEZONE));
+        } catch (Exception e) {
+            LOG.warn("Could not configure CEF input timezone. Falling back to local default. Please check the error message:", e);
+            timezone = DateTimeZone.getDefault();
+        }
+
+        this.parser = new CEFParser();
     }
 
     @Nullable
@@ -66,9 +77,21 @@ public class CEFCodec extends BaseCEFCodec {
         }
     }
 
+    @Nullable
+    @Override
+    public CodecAggregator getAggregator() {
+        return null;
+    }
+
     @Override
     public String getName() {
         return NAME;
+    }
+
+    @Nonnull
+    @Override
+    public Configuration getConfiguration() {
+        return configuration;
     }
 
     @FactoryClass
@@ -81,6 +104,25 @@ public class CEFCodec extends BaseCEFCodec {
     }
 
     @ConfigClass
-    public static class Config extends BaseCEFCodec.Config {
+    public static class Config implements Codec.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            ConfigurationRequest cr = new ConfigurationRequest();
+
+            cr.addField(new TextField(
+                    CK_TIMEZONE,
+                    "Timezone",
+                    DateTimeZone.getDefault().getID(),
+                    "Timezone of the timestamps in the CEF messages we'l receive. Set this to the local timezone if in doubt. (CEF messages do not include timezone information) Format example: +01:00 or America/Chicago",
+                    ConfigurationField.Optional.NOT_OPTIONAL
+            ));
+
+            return cr;
+        }
+
+        @Override
+        public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
+        }
     }
+
 }
