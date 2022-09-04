@@ -26,10 +26,8 @@ import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
-import com.google.devtools.build.lib.buildeventstream.BuildEventServiceAbruptExitCallback;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.runtime.BlazeModule.ModuleEnvironment;
 import com.google.devtools.build.lib.util.JavaSleeper;
 import com.google.devtools.build.lib.util.Sleeper;
 import java.time.Duration;
@@ -38,7 +36,6 @@ import javax.annotation.Nullable;
 /** A {@link BuildEventTransport} that streams {@link BuildEvent}s to BuildEventService. */
 public class BuildEventServiceTransport implements BuildEventTransport {
   private final BuildEventServiceUploader besUploader;
-  private ModuleEnvironment moduleEnvironment;
 
   private BuildEventServiceTransport(
       BuildEventServiceClient besClient,
@@ -46,7 +43,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       BuildEventProtocolOptions bepOptions,
       BuildEventServiceProtoUtil besProtoUtil,
       Clock clock,
-      BuildEventServiceAbruptExitCallback abruptExitCallback,
+      ExitFunction exitFunc,
       boolean publishLifecycleEvents,
       ArtifactGroupNamer artifactGroupNamer,
       EventBus eventBus,
@@ -59,7 +56,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
             .bepOptions(bepOptions)
             .besProtoUtil(besProtoUtil)
             .clock(clock)
-            .abruptExitCallback(abruptExitCallback)
+            .exitFunc(exitFunc)
             .publishLifecycleEvents(publishLifecycleEvents)
             .sleeper(sleeper)
             .artifactGroupNamer(artifactGroupNamer)
@@ -108,7 +105,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     private ArtifactGroupNamer artifactGroupNamer;
     private BuildEventServiceProtoUtil besProtoUtil;
     private EventBus eventBus;
-    private BuildEventServiceAbruptExitCallback abruptExitCallback;
+    private ExitFunction exitFunction;
     private @Nullable Sleeper sleeper;
 
     public Builder besClient(BuildEventServiceClient value) {
@@ -151,8 +148,8 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       return this;
     }
 
-    public Builder abruptExitCallback(BuildEventServiceAbruptExitCallback value) {
-      this.abruptExitCallback = value;
+    public Builder exitFunction(ExitFunction value) {
+      this.exitFunction = value;
       return this;
     }
 
@@ -170,7 +167,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           checkNotNull(bepOptions),
           checkNotNull(besProtoUtil),
           checkNotNull(clock),
-          checkNotNull(abruptExitCallback),
+          checkNotNull(exitFunction),
           besOptions.besLifecycleEvents,
           checkNotNull(artifactGroupNamer),
           checkNotNull(eventBus),
