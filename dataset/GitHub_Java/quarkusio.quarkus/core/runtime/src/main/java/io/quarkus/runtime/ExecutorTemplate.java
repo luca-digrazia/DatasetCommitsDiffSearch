@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.runtime;
 
 import java.time.Duration;
@@ -150,13 +166,7 @@ public class ExecutorTemplate {
         // run time config variables
         builder.setCorePoolSize(threadPoolConfig.coreThreads);
         builder.setMaximumPoolSize(threadPoolConfig.maxThreads.orElse(8 * cpus));
-        if (threadPoolConfig.queueSize.isPresent()) {
-            if (threadPoolConfig.queueSize.getAsInt() < 0) {
-                builder.setMaximumQueueSize(Integer.MAX_VALUE);
-            } else {
-                builder.setMaximumQueueSize(threadPoolConfig.queueSize.getAsInt());
-            }
-        }
+        builder.setMaximumQueueSize(threadPoolConfig.queueSize);
         builder.setGrowthResistance(threadPoolConfig.growthResistance);
         builder.setKeepAliveTime(threadPoolConfig.keepAliveTime);
         return builder.build();
