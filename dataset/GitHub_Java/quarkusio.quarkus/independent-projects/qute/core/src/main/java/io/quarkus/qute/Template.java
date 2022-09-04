@@ -1,7 +1,7 @@
 package io.quarkus.qute;
 
-import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Represents an immutable template definition.
@@ -115,9 +115,9 @@ public interface Template {
 
     /**
      * 
-     * @return an immutable list of expressions used in the template
+     * @return an immutable set of expressions used in the template
      */
-    List<Expression> getExpressions();
+    Set<Expression> getExpressions();
 
     /**
      * The id is unique for the engine instance.
