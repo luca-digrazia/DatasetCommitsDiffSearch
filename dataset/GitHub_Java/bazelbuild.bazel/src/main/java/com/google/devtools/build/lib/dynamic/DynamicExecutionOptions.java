@@ -17,7 +17,6 @@ import com.google.devtools.common.options.Converters.AssignmentToListOfValuesCon
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import java.util.List;
 import java.util.Map;
@@ -86,9 +85,10 @@ public class DynamicExecutionOptions extends OptionsBase {
       name = "dynamic_worker_strategy",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
-      metadataTags = {OptionMetadataTag.DEPRECATED},
-      defaultValue = "",
-      help = "Deprecated. Please use --dynamic_local_strategy=worker_strategy,local_strategy.")
+      defaultValue = "worker",
+      help = "Strategy to use when the dynamic spawn scheduler decides to run an action in a"
+          + " worker."
+  )
   public String dynamicWorkerStrategy;
 
   @Option(

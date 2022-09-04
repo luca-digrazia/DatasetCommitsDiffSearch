@@ -182,6 +182,7 @@ public class DynamicSpawnStrategy implements SpawnActionContext {
 
   @Override
   public void executorCreated(Iterable<ActionContext> usedContexts) throws ExecutorInitException {
+    workerStrategy = findStrategy(usedContexts, options.dynamicWorkerStrategy);
     localStrategiesByMnemonic =
         buildStrategiesMap(usedContexts, DynamicExecutionModule.localStrategiesByMnemonic);
     remoteStrategiesByMnemonic =
@@ -398,6 +399,10 @@ public class DynamicSpawnStrategy implements SpawnActionContext {
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> outputWriteBarrier)
       throws ExecException, InterruptedException {
+    if (supportsWorkers(spawn)) {
+      return Preconditions.checkNotNull(workerStrategy, "executorCreated not yet called")
+          .exec(spawn, actionExecutionContext, outputWriteBarrier);
+    }
     for (SandboxedSpawnActionContext strategy :
         getValidStrategies(localStrategiesByMnemonic, spawn)) {
       if (!strategy.toString().contains("worker") || supportsWorkers(spawn)) {
