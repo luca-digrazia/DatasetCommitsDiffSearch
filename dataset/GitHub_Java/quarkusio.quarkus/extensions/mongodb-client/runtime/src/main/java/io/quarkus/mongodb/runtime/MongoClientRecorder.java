@@ -1,6 +1,5 @@
 package io.quarkus.mongodb.runtime;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -12,8 +11,6 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.event.ConnectionPoolListener;
 
 import io.quarkus.arc.Arc;
-import io.quarkus.mongodb.metrics.MicrometerConnectionPoolListener;
-import io.quarkus.mongodb.metrics.MongoMetricsConnectionPoolListener;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
@@ -21,21 +18,12 @@ import io.quarkus.runtime.annotations.Recorder;
 @Recorder
 public class MongoClientRecorder {
 
-    public Supplier<MongoClientSupport> mongoClientSupportSupplier(List<String> codecProviders,
-            List<String> propertyCodecProviders, List<String> bsonDiscriminators, List<String> commandListeners,
-            List<Supplier<ConnectionPoolListener>> connectionPoolListenerSuppliers, boolean disableSslSupport) {
-
+    public Supplier<MongoClientSupport> mongoClientSupportSupplier(List<String> codecProviders, List<String> bsonDiscriminators,
+            List<ConnectionPoolListener> connectionPoolListeners, boolean disableSslSupport) {
         return new Supplier<MongoClientSupport>() {
             @Override
             public MongoClientSupport get() {
-
-                List<ConnectionPoolListener> connectionPoolListeners = new ArrayList<>(connectionPoolListenerSuppliers.size());
-                for (Supplier<ConnectionPoolListener> item : connectionPoolListenerSuppliers) {
-                    connectionPoolListeners.add(item.get());
-                }
-
-                return new MongoClientSupport(codecProviders, propertyCodecProviders, bsonDiscriminators, commandListeners,
-                        connectionPoolListeners, disableSslSupport);
+                return new MongoClientSupport(codecProviders, bsonDiscriminators, connectionPoolListeners, disableSslSupport);
             }
         };
     }
@@ -80,23 +68,5 @@ public class MongoClientRecorder {
             return Default.Literal.INSTANCE;
         }
         return NamedLiteral.of(name);
-    }
-
-    public Supplier<ConnectionPoolListener> createMicrometerConnectionPoolListener() {
-        return new Supplier<ConnectionPoolListener>() {
-            @Override
-            public ConnectionPoolListener get() {
-                return MicrometerConnectionPoolListener.createMicrometerConnectionPool();
-            }
-        };
-    }
-
-    public Supplier<ConnectionPoolListener> createMPMetricsConnectionPoolListener() {
-        return new Supplier<ConnectionPoolListener>() {
-            @Override
-            public ConnectionPoolListener get() {
-                return new MongoMetricsConnectionPoolListener();
-            }
-        };
     }
 }

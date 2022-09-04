@@ -9,14 +9,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.enterprise.inject.Default;
 import javax.inject.Singleton;
 
 import org.bson.codecs.configuration.CodecProvider;
-import org.bson.codecs.pojo.PropertyCodecProvider;
 import org.bson.codecs.pojo.annotations.BsonDiscriminator;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
@@ -24,7 +22,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.event.CommandListener;
 import com.mongodb.event.ConnectionPoolListener;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -54,7 +51,6 @@ import io.quarkus.mongodb.runtime.MongoClientRecorder;
 import io.quarkus.mongodb.runtime.MongoClientSupport;
 import io.quarkus.mongodb.runtime.MongoClients;
 import io.quarkus.mongodb.runtime.MongodbConfig;
-import io.quarkus.runtime.metrics.MetricsFactory;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
 public class MongoClientProcessor {
@@ -74,14 +70,6 @@ public class MongoClientProcessor {
     }
 
     @BuildStep
-    PropertyCodecProviderBuildItem collectPropertyCodecProviders(CombinedIndexBuildItem indexBuildItem) {
-        Collection<ClassInfo> propertyCodecProviderClasses = indexBuildItem.getIndex()
-                .getAllKnownImplementors(DotName.createSimple(PropertyCodecProvider.class.getName()));
-        List<String> names = propertyCodecProviderClasses.stream().map(ci -> ci.name().toString()).collect(Collectors.toList());
-        return new PropertyCodecProviderBuildItem(names);
-    }
-
-    @BuildStep
     BsonDiscriminatorBuildItem collectBsonDiscriminators(CombinedIndexBuildItem indexBuildItem) {
         List<String> names = new ArrayList<>();
         DotName bsonDiscriminatorName = DotName.createSimple(BsonDiscriminator.class.getName());
@@ -92,22 +80,11 @@ public class MongoClientProcessor {
     }
 
     @BuildStep
-    CommandListenerBuildItem collectCommandListeners(CombinedIndexBuildItem indexBuildItem) {
-        Collection<ClassInfo> commandListenerClasses = indexBuildItem.getIndex()
-                .getAllKnownImplementors(DotName.createSimple(CommandListener.class.getName()));
-        List<String> names = commandListenerClasses.stream().map(ci -> ci.name().toString()).collect(Collectors.toList());
-        return new CommandListenerBuildItem(names);
-    }
-
-    @BuildStep
-    List<ReflectiveClassBuildItem> addExtensionPointsToNative(CodecProviderBuildItem codecProviders,
-            PropertyCodecProviderBuildItem propertyCodecProviders, BsonDiscriminatorBuildItem bsonDiscriminators,
-            CommandListenerBuildItem commandListeners) {
+    List<ReflectiveClassBuildItem> addCodecsAndDiscriminatorsToNative(CodecProviderBuildItem codecProviders,
+            BsonDiscriminatorBuildItem bsonDiscriminators) {
         List<String> reflectiveClassNames = new ArrayList<>();
         reflectiveClassNames.addAll(codecProviders.getCodecProviderClassNames());
-        reflectiveClassNames.addAll(propertyCodecProviders.getPropertyCodecProviderClassNames());
         reflectiveClassNames.addAll(bsonDiscriminators.getBsonDiscriminatorClassNames());
-        reflectiveClassNames.addAll(commandListeners.getCommandListenerClassNames());
 
         return reflectiveClassNames.stream()
                 .map(s -> new ReflectiveClassBuildItem(true, true, false, s))
@@ -144,20 +121,14 @@ public class MongoClientProcessor {
     }
 
     @BuildStep
-    @Record(STATIC_INIT)
     MongoConnectionPoolListenerBuildItem setupMetrics(
             MongoClientBuildTimeConfig buildTimeConfig,
-            MongoClientRecorder recorder,
             Optional<MetricsCapabilityBuildItem> metricsCapability) {
 
-        // Construction of MongoClient isn't compatible with the MetricsFactoryConsumer pattern.
-        // Use a supplier to defer construction of the pool listener for the supported metrics system
         if (buildTimeConfig.metricsEnabled && metricsCapability.isPresent()) {
-            if (metricsCapability.get().metricsSupported(MetricsFactory.MICROMETER)) {
-                return new MongoConnectionPoolListenerBuildItem(recorder.createMicrometerConnectionPoolListener());
-            } else {
-                return new MongoConnectionPoolListenerBuildItem(recorder.createMPMetricsConnectionPoolListener());
-            }
+            // avoid import for lazy classloading
+            return new MongoConnectionPoolListenerBuildItem(
+                    new io.quarkus.mongodb.metrics.MongoMetricsConnectionPoolListener());
         }
         return null;
     }
@@ -169,9 +140,7 @@ public class MongoClientProcessor {
             MongoClientRecorder recorder,
             SslNativeConfigBuildItem sslNativeConfig,
             CodecProviderBuildItem codecProvider,
-            PropertyCodecProviderBuildItem propertyCodecProvider,
             BsonDiscriminatorBuildItem bsonDiscriminator,
-            CommandListenerBuildItem commandListener,
             List<MongoConnectionPoolListenerBuildItem> connectionPoolListenerProvider,
             BuildProducer<MongoConnectionNameBuildItem> mongoConnections,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer,
@@ -182,10 +151,9 @@ public class MongoClientProcessor {
                 AdditionalBeanBuildItem.builder().addBeanClass(io.quarkus.mongodb.runtime.MongoClientName.class).build());
         additionalBeans.produce(AdditionalBeanBuildItem.builder().addBeanClass(MongoClientName.class).build());
 
-        List<Supplier<ConnectionPoolListener>> poolListenerList = new ArrayList<>(connectionPoolListenerProvider.size());
-        for (MongoConnectionPoolListenerBuildItem item : connectionPoolListenerProvider) {
-            poolListenerList.add(item.getConnectionPoolListener());
-        }
+        List<ConnectionPoolListener> poolListenerList = connectionPoolListenerProvider.stream()
+                .map(MongoConnectionPoolListenerBuildItem::getConnectionPoolListener)
+                .collect(Collectors.toList());
 
         // make MongoClients an unremoveable bean
         additionalBeans.produce(AdditionalBeanBuildItem.builder().addBeanClasses(MongoClients.class).setUnremovable().build());
@@ -194,8 +162,7 @@ public class MongoClientProcessor {
         syntheticBeanBuildItemBuildProducer.produce(SyntheticBeanBuildItem.configure(MongoClientSupport.class)
                 .scope(Singleton.class)
                 .supplier(recorder.mongoClientSupportSupplier(codecProvider.getCodecProviderClassNames(),
-                        propertyCodecProvider.getPropertyCodecProviderClassNames(),
-                        bsonDiscriminator.getBsonDiscriminatorClassNames(), commandListener.getCommandListenerClassNames(),
+                        bsonDiscriminator.getBsonDiscriminatorClassNames(),
                         poolListenerList, sslNativeConfig.isExplicitlyDisabled()))
                 .done());
 
