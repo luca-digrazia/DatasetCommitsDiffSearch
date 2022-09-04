@@ -32,15 +32,11 @@ public class LocalProject {
     private static final String POM_XML = "pom.xml";
 
     public static LocalProject load(Path path) throws BootstrapException {
-        return new LocalProject(readModel(locateCurrentProjectDir(path, true).resolve(POM_XML)), null);
+        return new LocalProject(readModel(locateCurrentProjectDir(path).resolve(POM_XML)), null);
     }
 
     public static LocalProject loadWorkspace(Path path) throws BootstrapException {
-        return loadWorkspace(path, true);
-    }
-
-    public static LocalProject loadWorkspace(Path path, boolean required) throws BootstrapException {
-        final Path currentProjectDir = locateCurrentProjectDir(path, required);
+        final Path currentProjectDir = locateCurrentProjectDir(path);
         final LocalWorkspace ws = new LocalWorkspace();
         final LocalProject project = load(ws, null, loadRootModel(currentProjectDir), currentProjectDir);
         return project == null ? load(ws, null, readModel(currentProjectDir.resolve(POM_XML)), currentProjectDir) : project;
@@ -101,7 +97,7 @@ public class LocalProject {
         }
     }
 
-    private static Path locateCurrentProjectDir(Path path, boolean required) throws BootstrapException {
+    private static Path locateCurrentProjectDir(Path path) throws BootstrapException {
         Path p = path;
         while(p != null) {
             if(Files.exists(p.resolve(POM_XML))) {
@@ -109,10 +105,7 @@ public class LocalProject {
             }
             p = p.getParent();
         }
-        if(required) {
-            throw new BootstrapException("Failed to locate project pom.xml for " + path);
-        }
-        return null;
+        throw new BootstrapException("Failed to locate project pom.xml for " + path);
     }
 
     private final Model rawModel;
@@ -127,9 +120,27 @@ public class LocalProject {
         this.rawModel = rawModel;
         this.dir = rawModel.getProjectDirectory().toPath();
         this.workspace = workspace;
-        this.groupId = ModelUtils.getGroupId(rawModel);
+        final Parent parent = rawModel.getParent();
+        String groupId = rawModel.getGroupId();
+        if(groupId == null) {
+            if(parent == null) {
+                throw new BootstrapException("Failed to determine groupId for " + rawModel.getPomFile());
+            }
+            this.groupId = parent.getGroupId();
+        } else {
+            this.groupId = groupId;
+        }
+
         this.artifactId = rawModel.getArtifactId();
-        this.version = ModelUtils.getVersion(rawModel);
+        String version = rawModel.getVersion();
+        if(version == null) {
+            if(parent == null) {
+                throw new BootstrapException("Failed to determine version for " + rawModel.getPomFile());
+            }
+            this.version = parent.getVersion();
+        } else {
+            this.version = version;
+        }
         if(workspace != null) {
             workspace.addProject(this, rawModel.getPomFile().lastModified());
         }
