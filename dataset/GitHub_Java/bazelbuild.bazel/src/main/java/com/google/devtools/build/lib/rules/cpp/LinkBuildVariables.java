@@ -121,7 +121,7 @@ public enum LinkBuildVariables {
         new CcToolchainVariables.Builder(ccToolchainProvider.getBuildVariables());
 
     // pic
-    if (cppConfiguration.forcePic()) {
+    if (ccToolchainProvider.getForcePic()) {
       buildVariables.addStringVariable(FORCE_PIC.getVariableName(), "");
     }
 

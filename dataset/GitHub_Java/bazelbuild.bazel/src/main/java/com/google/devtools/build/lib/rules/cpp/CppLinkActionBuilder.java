@@ -1044,8 +1044,7 @@ public class CppLinkActionBuilder {
                 featureConfiguration,
                 cppConfiguration.forcePic()
                     || (linkType.isDynamicLibrary()
-                        && toolchain.usePicForDynamicLibraries(
-                            cppConfiguration, featureConfiguration)),
+                        && toolchain.usePicForDynamicLibraries(featureConfiguration)),
                 Matcher.quoteReplacement(
                     isNativeDeps && cppConfiguration.shareNativeDeps()
                         ? output.getExecPathString()
