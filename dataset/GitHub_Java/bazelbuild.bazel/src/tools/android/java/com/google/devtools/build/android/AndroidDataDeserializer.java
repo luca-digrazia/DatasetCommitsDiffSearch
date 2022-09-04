@@ -149,11 +149,9 @@ public class AndroidDataDeserializer {
     for (Entry<DataKey, KeyValueConsumer<DataKey, ?>> entry : keys.entrySet()) {
       SerializeFormat.DataValue protoValue = SerializeFormat.DataValue.parseDelimitedFrom(in);
       DataSource source = sourceTable.sourceFromId(protoValue.getSourceId());
-      // Compose the `shortPath` manually to ensure it uses a forward slash.
-      // Using Path.subpath would return a backslash-using path on Windows.
-      String shortPath =
-          source.getPath().getParent().getFileName() + "/" + source.getPath().getFileName();
-      if (filteredResources.contains(shortPath) && !Files.exists(source.getPath())) {
+      int nameCount = source.getPath().getNameCount();
+      String shortPath = source.getPath().subpath(nameCount - 2, nameCount).toString();
+      if (filteredResources.contains(shortPath)) {
         // Skip files that were filtered out during analysis.
         // TODO(asteinb): Properly filter out these files from android_library symbol files during
         // analysis instead, and remove this list.

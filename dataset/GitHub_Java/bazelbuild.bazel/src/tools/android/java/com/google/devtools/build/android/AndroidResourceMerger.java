@@ -70,6 +70,8 @@ public class AndroidResourceMerger {
     final ListeningExecutorService executorService =
         MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(15));
     try (Closeable closeable = ExecutorServiceCloser.createWith(executorService)) {
+      AndroidDataMerger merger =
+          AndroidDataMerger.createWithPathDeduplictor(executorService, deserializer);
       UnwrittenMergedAndroidData merged =
           mergeData(
               executorService,

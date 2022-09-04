@@ -161,7 +161,11 @@ public class AndroidDataBuilder {
   public DependencyAndroidData buildDependency() throws IOException {
     writeFiles();
     return new DependencyAndroidData(
-        ImmutableList.of(resourceDir), ImmutableList.of(assetDir), manifest, rTxt, null, null);
+        ImmutableList.of(resourceDir),
+        ImmutableList.of(assetDir),
+        manifest,
+        rTxt,
+        null);
   }
 
   public MergedAndroidData buildMerged() throws IOException {

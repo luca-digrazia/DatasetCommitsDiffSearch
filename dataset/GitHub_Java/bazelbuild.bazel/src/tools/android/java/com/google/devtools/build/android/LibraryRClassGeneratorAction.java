@@ -20,9 +20,6 @@ import com.google.devtools.build.android.AndroidResourceProcessor.AaptConfigOpti
 import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.build.android.Converters.PathListConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
@@ -51,8 +48,6 @@ public class LibraryRClassGeneratorAction {
       name = "classJarOutput",
       defaultValue = "null",
       converter = PathConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       category = "output",
       help = "Path for the generated java class jar."
     )
@@ -61,40 +56,19 @@ public class LibraryRClassGeneratorAction {
     @Option(
       name = "packageForR",
       defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       category = "config",
       help = "Custom java package to generate the R symbols files."
     )
     public String packageForR;
 
     @Option(
-      name = "symbol",
-      allowMultiple = true,
+      name = "symbols",
       defaultValue = "",
-      converter = PathConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
+      converter = PathListConverter.class,
       category = "config",
       help = "Parsed symbol binaries to write as R classes."
     )
     public List<Path> symbols;
-
-    // TODO(laszlocsomor): remove this flag after 2018-01-31 (about 6 months from now). Everyone
-    // should have updated to newer Bazel versions by then.
-    @Deprecated
-    @Option(
-      name = "symbols",
-      defaultValue = "",
-      converter = PathListConverter.class,
-      deprecationWarning = "Deprecated in favour of \"--symbol\"",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      category = "config",
-      help = "Parsed symbol binaries to write as R classes.",
-      metadataTags = {OptionMetadataTag.DEPRECATED}
-    )
-    public List<Path> deprecatedSymbols;
   }
 
   public static void main(String[] args) throws Exception {
@@ -105,7 +79,6 @@ public class LibraryRClassGeneratorAction {
     optionsParser.parseAndExitUponError(args);
     AaptConfigOptions aaptConfigOptions = optionsParser.getOptions(AaptConfigOptions.class);
     Options options = optionsParser.getOptions(Options.class);
-    options.symbols = Converters.concatLists(options.symbols, options.deprecatedSymbols);
     logger.fine(
         String.format("Option parsing finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
     try (ScopedTemporaryDirectory scopedTmp =
