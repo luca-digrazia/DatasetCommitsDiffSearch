@@ -14,37 +14,36 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.query2.common.UniverseSkyKey;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * The value returned by {@link PrepareDepsOfPatternsFunction}. Although that function is invoked
- * primarily for its side effect (i.e. ensuring the graph contains targets matching the pattern
- * sequence and their transitive dependencies), this value contains the {@link TargetPatternKey}
- * arguments of the {@link PrepareDepsOfPatternFunction}s evaluated in service of it.
+ * The value returned by {@link PrepareDepsOfPatternsFunction}. Although that function is
+ * invoked primarily for its side effect (i.e. ensuring the graph contains targets matching the
+ * pattern sequence and their transitive dependencies), this value contains the
+ * {@link TargetPatternKey} arguments of the {@link PrepareDepsOfPatternFunction}s evaluated in
+ * service of it.
  *
  * <p>Because the returned value may remain the same when the side-effects of this function
- * evaluation change, this value and the {@link PrepareDepsOfPatternsFunction} which computes it are
- * incompatible with change pruning. It should only be requested by consumers who do not require
- * reevaluation when {@link PrepareDepsOfPatternsFunction} is reevaluated. Safe consumers include,
- * e.g., top-level consumers, and other functions which invoke {@link PrepareDepsOfPatternsFunction}
- * solely for its side-effects and which do not behave differently depending on those side-effects.
+ * evaluation change, this value and the {@link PrepareDepsOfPatternsFunction} which computes it
+ * are incompatible with change pruning. It should only be requested by consumers who do not
+ * require reevaluation when {@link PrepareDepsOfPatternsFunction} is reevaluated. Safe consumers
+ * include, e.g., top-level consumers, and other functions which invoke {@link
+ * PrepareDepsOfPatternsFunction} solely for its side-effects and which do not behave differently
+ * depending on those side-effects.
  */
 @Immutable
 @ThreadSafe
 public final class PrepareDepsOfPatternsValue implements SkyValue {
+
   private final ImmutableList<TargetPatternKey> targetPatternKeys;
 
   public PrepareDepsOfPatternsValue(ImmutableList<TargetPatternKey> targetPatternKeys) {
@@ -56,38 +55,27 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
   }
 
   @ThreadSafe
-  public static TargetPatternSequence key(ImmutableList<String> patterns, PathFragment offset) {
-    return TargetPatternSequence.create(patterns, offset);
+  public static SkyKey key(ImmutableList<String> patterns, String offset) {
+    return LegacySkyKey.create(
+        SkyFunctions.PREPARE_DEPS_OF_PATTERNS, new TargetPatternSequence(patterns, offset));
   }
 
   /** The argument value for {@link SkyKey}s of {@link PrepareDepsOfPatternsFunction}. */
   @ThreadSafe
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static class TargetPatternSequence implements UniverseSkyKey {
-    private static final Interner<TargetPatternSequence> interner =
-        BlazeInterners.newWeakInterner();
-
+  public static class TargetPatternSequence implements Serializable {
     private final ImmutableList<String> patterns;
-    private final PathFragment offset;
+    private final String offset;
 
-    private TargetPatternSequence(ImmutableList<String> patterns, PathFragment offset) {
+    public TargetPatternSequence(ImmutableList<String> patterns, String offset) {
       this.patterns = Preconditions.checkNotNull(patterns);
       this.offset = Preconditions.checkNotNull(offset);
     }
 
-    @AutoCodec.VisibleForSerialization
-    @AutoCodec.Instantiator
-    static TargetPatternSequence create(ImmutableList<String> patterns, PathFragment offset) {
-      return interner.intern(new TargetPatternSequence(patterns, offset));
-    }
-
-    @Override
     public ImmutableList<String> getPatterns() {
       return patterns;
     }
 
-    public PathFragment getOffset() {
+    public String getOffset() {
       return offset;
     }
 
@@ -114,11 +102,6 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
           .add("patterns", patterns)
           .add("offset", offset)
           .toString();
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.PREPARE_DEPS_OF_PATTERNS;
     }
   }
 
