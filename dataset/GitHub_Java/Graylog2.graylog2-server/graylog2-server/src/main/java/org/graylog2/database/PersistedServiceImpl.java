@@ -28,15 +28,12 @@ import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.database.Persisted;
-import org.graylog2.plugin.database.validators.ValidationResult;
 import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -180,9 +177,8 @@ public class PersistedServiceImpl implements PersistedService {
 
     @Override
     public <T extends Persisted> String save(T model) throws ValidationException {
-        Map<String, List<ValidationResult>> errors = validate(model, model.getFields());
-        if (!errors.isEmpty()) {
-            throw new ValidationException(errors);
+        if (!validate(model, model.getFields())) {
+            throw new ValidationException();
         }
 
         BasicDBObject doc = new BasicDBObject(model.getFields());
@@ -212,15 +208,14 @@ public class PersistedServiceImpl implements PersistedService {
     }
 
     @Override
-    public <T extends Persisted> Map<String, List<ValidationResult>> validate(T model, Map<String, Object> fields) {
+    public <T extends Persisted> boolean validate(T model, Map<String, Object> fields) {
         return validate(model.getValidations(), fields);
     }
 
     @Override
-    public Map<String, List<ValidationResult>> validate(Map<String, Validator> validators, Map<String, Object> fields) {
-        Map<String, List<ValidationResult>> validationErrors = new HashMap<>();
+    public boolean validate(Map<String, Validator> validators, Map<String, Object> fields) {
         if (validators == null || validators.isEmpty()) {
-            return validationErrors;
+            return true;
         }
 
         for (Map.Entry<String, Validator> validation : validators.entrySet()) {
@@ -228,34 +223,27 @@ public class PersistedServiceImpl implements PersistedService {
             String field = validation.getKey();
 
             try {
-                ValidationResult validationResult = v.validate(fields.get(field));
-                if (validationResult instanceof ValidationResult.ValidationFailed) {
-                    LOG.debug("Validation failure: [{}] on field [{}]", v.getClass().getCanonicalName(), field);
-                    if (validationErrors.get(field) == null)
-                        validationErrors.put(field, new ArrayList<ValidationResult>());
-                    validationErrors.get(field).add(validationResult);
+                if (!v.validate(fields.get(field))) {
+                    LOG.info("Validation failure: [{}] on field [{}]", v.getClass().getCanonicalName(), field);
+                    return false;
                 }
             } catch (Exception e) {
-                final String error = "Error while trying to validate <" + field + ">, got exception: " + e;
-                LOG.debug(error);
-                if (validationErrors.get(field) == null)
-                    validationErrors.put(field, new ArrayList<ValidationResult>());
-                validationErrors.get(field).add(new ValidationResult.ValidationFailed(error));
+                LOG.error("Error while trying to validate <{}>. Marking as invalid.", field, e);
+                return false;
             }
         }
 
-        return validationErrors;
+        return true;
     }
 
     @Override
-    public <T extends Persisted> Map<String, List<ValidationResult>> validate(T model) {
+    public <T extends Persisted> boolean validate(T model) {
         return validate(model, model.getFields());
     }
 
     protected <T extends Persisted> void embed(T model, String key, EmbeddedPersistable o) throws ValidationException {
-        Map<String, List<ValidationResult>> errors = validate(model.getEmbeddedValidations(key), o.getPersistedFields());
-        if (!errors.isEmpty()) {
-            throw new ValidationException(errors);
+        if (!validate(model.getEmbeddedValidations(key), o.getPersistedFields())) {
+            throw new ValidationException();
         }
 
         Map<String, Object> fields = Maps.newHashMap(o.getPersistedFields());
