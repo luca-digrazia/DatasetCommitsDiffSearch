@@ -44,8 +44,10 @@ public class ZipUtils {
     private static final Map<String, String> CREATE_ENV = Collections.singletonMap("create", "true");
 
     public static void unzip(Path zipFile, Path targetDir) throws IOException {
-        if(!Files.exists(targetDir)) {
+        try {
             Files.createDirectories(targetDir);
+        } catch (FileAlreadyExistsException fae) {
+            throw new IOException("Could not create directory '" + targetDir + "' as a file already exists with the same name");
         }
         try (FileSystem zipfs = newFileSystem(zipFile)) {
             for (Path zipRoot : zipfs.getRootDirectories()) {
@@ -69,20 +71,22 @@ public class ZipUtils {
                 new SimpleFileVisitor<Path>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                        throws IOException {
+                            throws IOException {
                         final Path targetDir = target.resolve(source.relativize(dir).toString());
                         try {
                             Files.copy(dir, targetDir);
                         } catch (FileAlreadyExistsException e) {
-                             if (!Files.isDirectory(targetDir))
-                                 throw e;
+                            if (!Files.isDirectory(targetDir))
+                                throw e;
                         }
                         return FileVisitResult.CONTINUE;
                     }
+
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                        throws IOException {
-                        Files.copy(file, target.resolve(source.relativize(file).toString()), StandardCopyOption.REPLACE_EXISTING);
+                            throws IOException {
+                        Files.copy(file, target.resolve(source.relativize(file).toString()),
+                                StandardCopyOption.REPLACE_EXISTING);
                         return FileVisitResult.CONTINUE;
                     }
                 });
@@ -90,9 +94,9 @@ public class ZipUtils {
 
     public static void zip(Path src, Path zipFile) throws IOException {
         try (FileSystem zipfs = newZip(zipFile)) {
-            if(Files.isDirectory(src)) {
+            if (Files.isDirectory(src)) {
                 try (DirectoryStream<Path> stream = Files.newDirectoryStream(src)) {
-                    for(Path srcPath : stream) {
+                    for (Path srcPath : stream) {
                         copyToZip(src, srcPath, zipfs);
                     }
                 }
@@ -111,21 +115,23 @@ public class ZipUtils {
                 new SimpleFileVisitor<Path>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
-                        throws IOException {
+                            throws IOException {
                         final Path targetDir = zipfs.getPath(srcRoot.relativize(dir).toString());
                         try {
                             Files.copy(dir, targetDir);
                         } catch (FileAlreadyExistsException e) {
-                             if (!Files.isDirectory(targetDir)) {
-                                 throw e;
-                             }
+                            if (!Files.isDirectory(targetDir)) {
+                                throw e;
+                            }
                         }
                         return FileVisitResult.CONTINUE;
                     }
+
                     @Override
                     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                        throws IOException {
-                        Files.copy(file, zipfs.getPath(srcRoot.relativize(file).toString()), StandardCopyOption.REPLACE_EXISTING);
+                            throws IOException {
+                        Files.copy(file, zipfs.getPath(srcRoot.relativize(file).toString()),
+                                StandardCopyOption.REPLACE_EXISTING);
                         return FileVisitResult.CONTINUE;
                     }
                 });
@@ -134,10 +140,11 @@ public class ZipUtils {
     /**
      * This call is not thread safe, a single of FileSystem can be created for the
      * profided uri until it is closed.
+     * 
      * @param uri The uri to the zip file.
      * @param env Env map.
      * @return A new FileSystem.
-     * @throws IOException  in case of a failure
+     * @throws IOException in case of a failure
      */
     public static FileSystem newFileSystem(URI uri, Map<String, ?> env) throws IOException {
         // If Multi threading required, logic should be added to wrap this fs
@@ -148,11 +155,12 @@ public class ZipUtils {
 
     /**
      * This call is thread safe, a new FS is created for each invocation.
+     * 
      * @param path The zip file.
      * @return A new FileSystem instance
-     * @throws IOException  in case of a failure
+     * @throws IOException in case of a failure
      */
-     public static FileSystem newFileSystem(Path path) throws IOException {
-         return FileSystems.newFileSystem(path, null);
-     }
+    public static FileSystem newFileSystem(Path path) throws IOException {
+        return FileSystems.newFileSystem(path, null);
+    }
 }
