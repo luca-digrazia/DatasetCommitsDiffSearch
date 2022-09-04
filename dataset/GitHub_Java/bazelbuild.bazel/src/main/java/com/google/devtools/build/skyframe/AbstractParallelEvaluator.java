@@ -896,10 +896,8 @@ public abstract class AbstractParallelEvaluator {
       }
       BigInteger depFingerprint = depValue.getValueFingerprint();
       if (depFingerprint == null) {
-        depFingerprint = depEntry.getVersion().getFingerprint();
-        if (depFingerprint == null) {
-          return null;
-        }
+        // TODO(janakr): Use transitive data here.
+        return null;
       }
       groupFingerprint =
           BigIntegerFingerprintUtils.composeOrdered(groupFingerprint, depFingerprint);
