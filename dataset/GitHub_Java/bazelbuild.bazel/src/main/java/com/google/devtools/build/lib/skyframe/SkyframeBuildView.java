@@ -434,12 +434,14 @@ public final class SkyframeBuildView {
    */
   // TODO(bazel-team): Allow analysis to return null so the value builder can exit and wait for a
   // restart deps are not present.
-  private static boolean getWorkspaceStatusValues(
-      Environment env,
-      BuildConfiguration config,
-      ImmutableMap<BuildInfoKey, BuildInfoFactory> buildInfoFactories)
+  private static boolean getWorkspaceStatusValues(Environment env, BuildConfiguration config)
       throws InterruptedException {
     env.getValue(WorkspaceStatusValue.SKY_KEY);
+    Map<BuildInfoKey, BuildInfoFactory> buildInfoFactories =
+        PrecomputedValue.BUILD_INFO_FACTORIES.get(env);
+    if (buildInfoFactories == null) {
+      return false;
+    }
     // These factories may each create their own build info artifacts, all depending on the basic
     // build-info.txt and build-changelist.txt.
     List<SkyKey> depKeys = Lists.newArrayList();
@@ -461,8 +463,7 @@ public final class SkyframeBuildView {
       Environment env,
       BuildConfiguration config)
       throws InterruptedException {
-    if (config != null
-        && !getWorkspaceStatusValues(env, config, skyframeExecutor.getBuildInfoFactories())) {
+    if (config != null && !getWorkspaceStatusValues(env, config)) {
       return null;
     }
     boolean extendedSanityChecks = config != null && config.extendedSanityChecks();
