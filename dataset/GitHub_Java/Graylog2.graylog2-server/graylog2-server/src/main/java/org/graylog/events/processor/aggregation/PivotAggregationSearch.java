@@ -34,12 +34,10 @@ import org.graylog.plugins.views.search.SearchType;
 import org.graylog.plugins.views.search.db.SearchJobService;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
 import org.graylog.plugins.views.search.engine.QueryEngine;
-import org.graylog.plugins.views.search.errors.EmptyParameterError;
 import org.graylog.plugins.views.search.errors.QueryError;
 import org.graylog.plugins.views.search.errors.SearchError;
 import org.graylog.plugins.views.search.filter.OrFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
-import org.graylog.plugins.views.search.rest.PermittedStreams;
 import org.graylog.plugins.views.search.searchtypes.pivot.BucketSpec;
 import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotResult;
@@ -80,7 +78,6 @@ public class PivotAggregationSearch implements AggregationSearch {
     private final EventsConfigurationProvider configurationProvider;
     private final EventDefinition eventDefinition;
     private final MoreSearch moreSearch;
-    private final PermittedStreams permittedStreams;
 
     @Inject
     public PivotAggregationSearch(@Assisted AggregationEventProcessorConfig config,
@@ -90,8 +87,7 @@ public class PivotAggregationSearch implements AggregationSearch {
                                   SearchJobService searchJobService,
                                   QueryEngine queryEngine,
                                   EventsConfigurationProvider configProvider,
-                                  MoreSearch moreSearch,
-                                  PermittedStreams permittedStreams) {
+                                  MoreSearch moreSearch) {
         this.config = config;
         this.parameters = parameters;
         this.searchOwner = searchOwner;
@@ -100,7 +96,6 @@ public class PivotAggregationSearch implements AggregationSearch {
         this.queryEngine = queryEngine;
         this.configurationProvider = configProvider;
         this.moreSearch = moreSearch;
-        this.permittedStreams = permittedStreams;
     }
 
     private String metricName(AggregationSeries series) {
@@ -120,26 +115,17 @@ public class PivotAggregationSearch implements AggregationSearch {
         if (!aggregationErrors.isEmpty() || !streamErrors.isEmpty()) {
             final Set<SearchError> errors = aggregationErrors.isEmpty() ? streamErrors : aggregationErrors;
 
+            LOG.error("Aggregation search resulted in {} errors", errors.size());
             errors.forEach(error -> {
                 if (error instanceof QueryError) {
                     final QueryError queryError = (QueryError) error;
-                    final String backtrace = queryError.backtrace() != null ? queryError.backtrace() : "";
-                    if (error instanceof EmptyParameterError) {
-                        LOG.debug("Aggregation search query <{}> with empty Parameter: {}\n{}",
-                                queryError.queryId(), queryError.description(), backtrace);
-                    } else {
-                        LOG.error("Aggregation search query <{}> returned an error: {}\n{}",
-                                queryError.queryId(), queryError.description(), backtrace);
-                    }
+                    LOG.error("Aggregation search query <{}> returned an error: {}\n{}",
+                            queryError.queryId(), queryError.description(), queryError.backtrace());
                 } else {
                     LOG.error("Aggregation search returned an error: {}", error);
                 }
             });
 
-            // If we have only EmptyParameterErrors, just return an empty Result
-            if (! (errors.stream().filter(e -> !(e instanceof EmptyParameterError)).count() > 1)) {
-                return AggregationResult.empty();
-            }
             if (errors.size() > 1) {
                 throw new EventProcessorException("Pivot search failed with multiple errors.", false, eventDefinition);
             } else {
@@ -303,14 +289,9 @@ public class PivotAggregationSearch implements AggregationSearch {
     }
 
     private SearchJob getSearchJob(AggregationEventProcessorParameters parameters, String username) throws EventProcessorException {
-        Search search = Search.builder()
+        final Search search = Search.builder()
                 .queries(ImmutableSet.of(getAggregationQuery(parameters), getSourceStreamsQuery(parameters)))
-                .parameters(config.queryParameters())
                 .build();
-        // This adds all streams if none were provided
-        // TODO: Once we introduce "EventProcessor owners" this should only load the permitted streams of the
-        //       user who created this EventProcessor.
-        search = search.addStreamsToQueriesWithoutStreams(() -> permittedStreams.load((streamId) -> true));
         final SearchJob searchJob = queryEngine.execute(searchJobService.create(search, username));
         try {
             Uninterruptibles.getUninterruptibly(
