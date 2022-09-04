@@ -20,7 +20,6 @@ import static org.androidannotations.helper.AndroidConstants.LOG_ERROR;
 import static org.androidannotations.helper.AndroidConstants.LOG_INFO;
 import static org.androidannotations.helper.AndroidConstants.LOG_VERBOSE;
 import static org.androidannotations.helper.AndroidConstants.LOG_WARN;
-import static org.androidannotations.helper.LogHelper.trimLogTag;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -244,6 +243,9 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 		if (Trace.DEFAULT_TAG.equals(tag)) {
 			tag = element.getEnclosingElement().getSimpleName().toString();
 		}
-		return trimLogTag(tag);
+		if (tag.length() > 23) {
+			tag = tag.substring(0, 23);
+		}
+		return tag;
 	}
 }
