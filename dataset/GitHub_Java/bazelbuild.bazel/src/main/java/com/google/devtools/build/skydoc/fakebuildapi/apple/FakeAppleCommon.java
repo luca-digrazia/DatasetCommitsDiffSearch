@@ -67,46 +67,37 @@ public class FakeAppleCommon
 
   @Override
   public StructApi getPlatformStruct() {
-    return new FakeStructApi(
-        new ImmutableMap.Builder<String, Object>()
-            .put("ios_device", "ios_device")
-            .put("ios_simulator", "ios_simulator")
-            .put("macos", "macos")
-            .put("tvos_device", "tvos_device")
-            .put("tvos_simulator", "tvos_simulator")
-            .put("watchos_device", "watchos_device")
-            .put("watchos_simulator", "watchos_simulator")
-            .build());
+    return new FakeStructApi();
   }
 
   @Override
   public ProviderApi getXcodeVersionPropertiesConstructor() {
-    return new FakeProviderApi("XcodeProperties");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getXcodeVersionConfigConstructor() {
-    return new FakeProviderApi("XcodeVersionConfig");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getObjcProviderConstructor() {
-    return new FakeProviderApi("objc");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getAppleDynamicFrameworkConstructor() {
-    return new FakeProviderApi("AppleDynamicFramework");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getAppleDylibBinaryConstructor() {
-    return new FakeProviderApi("AppleDylibBinary");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getAppleExecutableBinaryConstructor() {
-    return new FakeProviderApi("AppleExecutableBinary");
+    return new FakeProviderApi();
   }
 
   @Override
@@ -116,12 +107,12 @@ public class FakeAppleCommon
 
   @Override
   public ProviderApi getAppleDebugOutputsConstructor() {
-    return new FakeProviderApi("AppleDebugOutputs");
+    return new FakeProviderApi();
   }
 
   @Override
   public ProviderApi getAppleLoadableBundleBinaryConstructor() {
-    return new FakeProviderApi("AppleLoadableBundleBinary");
+    return new FakeProviderApi();
   }
 
   @Override

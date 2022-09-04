@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
@@ -36,9 +34,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -166,10 +163,6 @@ public class MultiArchBinarySupport {
           new J2ObjcEntryClassProvider.Builder()
               .addTransitive(getTypedProviders(infoCollections, J2ObjcEntryClassProvider.class))
               .build();
-      ImmutableList<CcLinkingContext> ccLinkingContexts =
-          getTypedProviders(infoCollections, CcInfo.PROVIDER).stream()
-              .map(CcInfo::getCcLinkingContext)
-              .collect(toImmutableList());
 
       binariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureBinary());
 
@@ -191,7 +184,6 @@ public class MultiArchBinarySupport {
           .registerCompileAndArchiveActions(compilationArtifacts, ObjcCompilationContext.EMPTY)
           .registerLinkActions(
               objcProvider,
-              ccLinkingContexts,
               j2ObjcMappingFileProvider,
               j2ObjcEntryClassProvider,
               extraLinkArgs,
@@ -333,6 +325,15 @@ public class MultiArchBinarySupport {
       avoidArtifacts.addTransitive(avoidProvider.getProtoFiles());
     }
     return avoidArtifacts.build();
+  }
+
+  @Deprecated // Use BuiltinProvider instead.
+  private static <T extends Info> ImmutableList<T> getTypedProviders(
+      Iterable<TransitiveInfoCollection> infoCollections, NativeProvider<T> providerClass) {
+    return Streams.stream(infoCollections)
+        .filter(infoCollection -> infoCollection.get(providerClass) != null)
+        .map(infoCollection -> infoCollection.get(providerClass))
+        .collect(ImmutableList.toImmutableList());
   }
 
   private static <T extends Info> ImmutableList<T> getTypedProviders(
