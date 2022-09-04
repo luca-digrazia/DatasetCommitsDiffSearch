@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,13 +30,11 @@ import java.util.Map;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.api.view.HasViews;
 import org.androidannotations.api.view.OnViewChangedListener;
 import org.androidannotations.api.view.OnViewChangedNotifier;
-import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.internal.helper.ViewNotifierHelper;
 
 import com.helger.jcodemodel.AbstractJClass;
@@ -46,7 +44,6 @@ import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JDefinedClass;
 import com.helger.jcodemodel.JExpr;
 import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JFieldVar;
 import com.helger.jcodemodel.JInvocation;
 import com.helger.jcodemodel.JMethod;
 import com.helger.jcodemodel.JSwitch;
@@ -63,7 +60,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	private JBlock onViewChangedBodyBeforeInjectionBlock;
 	private JVar onViewChangedHasViewsParam;
 	protected Map<String, FoundHolder> foundHolders = new HashMap<>();
-	protected DataBindingDelegate dataBindingDelegate;
 	protected JMethod findNativeFragmentById;
 	protected JMethod findSupportFragmentById;
 	protected JMethod findNativeFragmentByTag;
@@ -77,7 +73,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		super(environment, annotatedElement);
 		viewNotifierHelper = new ViewNotifierHelper(this, environment);
 		keyEventCallbackMethodsDelegate = new KeyEventCallbackMethodsDelegate<>(this);
-		dataBindingDelegate = new DataBindingDelegate(this);
 	}
 
 	public IJExpression getFindViewByIdExpression(JVar idParam) {
@@ -214,21 +209,11 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 		JBlock body = findSupportFragmentById.body();
 
-		AbstractJClass fragmentActivity = getFragmentActivity();
-		body._if(getContextRef()._instanceof(fragmentActivity).not())._then()._return(_null());
+		body._if(getContextRef()._instanceof(getClasses().FRAGMENT_ACTIVITY).not())._then()._return(_null());
 
-		JVar activityVar = body.decl(fragmentActivity, "activity_", cast(fragmentActivity, getContextRef()));
+		JVar activityVar = body.decl(getClasses().FRAGMENT_ACTIVITY, "activity_", cast(getClasses().FRAGMENT_ACTIVITY, getContextRef()));
 
 		body._return(activityVar.invoke("getSupportFragmentManager").invoke("findFragmentById").arg(idParam));
-	}
-
-	private AbstractJClass getFragmentActivity() {
-		Elements elementUtils = getProcessingEnvironment().getElementUtils();
-		if (elementUtils.getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT_ACTIVITY) != null) {
-			return getClasses().ANDROIDX_FRAGMENT_ACTIVITY;
-		} else {
-			return getClasses().FRAGMENT_ACTIVITY;
-		}
 	}
 
 	public JMethod getFindNativeFragmentByTag() {
@@ -264,10 +249,9 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 		JBlock body = findSupportFragmentByTag.body();
 
-		AbstractJClass fragmentActivity = getFragmentActivity();
-		body._if(getContextRef()._instanceof(fragmentActivity).not())._then()._return(_null());
+		body._if(getContextRef()._instanceof(getClasses().FRAGMENT_ACTIVITY).not())._then()._return(_null());
 
-		JVar activityVar = body.decl(fragmentActivity, "activity_", cast(fragmentActivity, getContextRef()));
+		JVar activityVar = body.decl(getClasses().FRAGMENT_ACTIVITY, "activity_", cast(getClasses().FRAGMENT_ACTIVITY, getContextRef()));
 
 		body._return(activityVar.invoke("getSupportFragmentManager").invoke("findFragmentByTag").arg(tagParam));
 	}
@@ -292,7 +276,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		JBlock onViewChangedBody = getOnViewChangedBodyInjectionBlock().blockSimple();
 		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
 		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
-				.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
+		.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
 
 		return new TextWatcherHolder(this, viewVariable, onTextChangeListenerClass);
 	}
@@ -387,14 +371,6 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	@Override
 	public JVar getOnKeyUpKeyEventParam() {
 		return keyEventCallbackMethodsDelegate.getOnKeyUpKeyEventParam();
-	}
-
-	public JFieldVar getDataBindingField() {
-		return dataBindingDelegate.getDataBindingField();
-	}
-
-	public IJExpression getDataBindingInflationExpression(IJExpression contentViewId, IJExpression container, boolean attachToRoot) {
-		return dataBindingDelegate.getDataBindingInflationExpression(contentViewId, container, attachToRoot);
 	}
 
 }
