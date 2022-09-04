@@ -18,10 +18,7 @@ package org.androidannotations.helper;
 import java.net.URI;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public final class CanonicalNameConstants {
@@ -29,12 +26,8 @@ public final class CanonicalNameConstants {
 	/*
 	 * Java
 	 */
-	public static final String OBJECT = Object.class.getCanonicalName();
 	public static final String URI = URI.class.getCanonicalName();
-	public static final String MAP = Map.class.getCanonicalName();
 	public static final String SET = Set.class.getCanonicalName();
-	public static final String LIST = List.class.getCanonicalName();
-	public static final String COLLECTION = Collection.class.getCanonicalName();
 	public static final String COLLECTIONS = Collections.class.getCanonicalName();
 	public static final String STRING = String.class.getCanonicalName();
 	public static final String CHAR_SEQUENCE = CharSequence.class.getCanonicalName();
@@ -49,7 +42,6 @@ public final class CanonicalNameConstants {
 	public static final String LOG = "android.util.Log";
 	public static final String PARCELABLE = "android.os.Parcelable";
 	public static final String INTENT = "android.content.Intent";
-	public static final String COMPONENT_NAME = "android.content.ComponentName";
 	public static final String BUNDLE = "android.os.Bundle";
 	public static final String APPLICATION = "android.app.Application";
 	public static final String ACTIVITY = "android.app.Activity";
@@ -92,12 +84,6 @@ public final class CanonicalNameConstants {
 	public static final String SQLITE_DATABASE = "android.database.sqlite.SQLiteDatabase";
 	public static final String KEY_STORE = "java.security.KeyStore";
 	public static final String SQLLITE_OPEN_HELPER = "android.database.sqlite.SQLiteOpenHelper";
-	public static final String VIEW_SERVER = "org.androidannotations.api.ViewServer";
-
-	/*
-	 * Android permission
-	 */
-	public static final String INTERNET_PERMISSION = "android.permission.INTERNET";
 
 	/*
 	 * Sherlock
