@@ -17,7 +17,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.analysis.OutputGroupInfo.INTERNAL_SUFFIX;
 import static com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist.WHITELIST_ATTRIBUTE_NAME;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -55,7 +55,7 @@ import com.google.devtools.build.lib.rules.objc.ObjcProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
-import com.google.devtools.build.lib.skyframe.StarlarkImportLookupFunction;
+import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -240,7 +240,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     AttributeContainer withMacro = getContainerForTarget("macro_target");
     assertThat(withMacro.getAttr("generator_name")).isEqualTo("macro_target");
     assertThat(withMacro.getAttr("generator_function")).isEqualTo("macro");
-    assertThat(withMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:3:11");
+    assertThat(withMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:3:1");
 
     // Attributes are only set when the rule was created by a macro
     AttributeContainer noMacro = getContainerForTarget("no_macro_target");
@@ -251,7 +251,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     AttributeContainer nativeMacro = getContainerForTarget("native_macro_target_suffix");
     assertThat(nativeMacro.getAttr("generator_name")).isEqualTo("native_macro_target");
     assertThat(nativeMacro.getAttr("generator_function")).isEqualTo("native_macro");
-    assertThat(nativeMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:5:18");
+    assertThat(nativeMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:5:1");
 
     AttributeContainer ccTarget = getContainerForTarget("cc_target");
     assertThat(ccTarget.getAttr("generator_name")).isEqualTo("");
@@ -279,6 +279,36 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "load('//test/skylark:test_rule.bzl', 'fake_test')",
         "fake_test(name = 'test_name')");
     getConfiguredTarget("//test/skylark:test_name");
+  }
+
+  @Test
+  public void testOutputGroups() throws Exception {
+    setSkylarkSemanticsOptions(
+        "--incompatible_disallow_struct_provider_syntax=false",
+        "--incompatible_no_target_output_group=false");
+    scratch.file(
+        "test/skylark/extension.bzl",
+        "load('//myinfo:myinfo.bzl', 'MyInfo')",
+        "def _impl(ctx):",
+        "  f = ctx.attr.dep.output_group('_hidden_top_level" + INTERNAL_SUFFIX + "')",
+        "  return [MyInfo(result = f),",
+        "      OutputGroupInfo(my_group = f)]",
+        "my_rule = rule(implementation = _impl,",
+        "    attrs = { 'dep' : attr.label() })");
+    scratch.file(
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension.bzl',  'my_rule')",
+        "cc_binary(name = 'lib', data = ['a.txt'])",
+        "my_rule(name='my', dep = ':lib')");
+    NestedSet<Artifact> hiddenTopLevelArtifacts =
+        OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
+            .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
+    ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
+    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    assertThat(result.getSet(Artifact.class).toList())
+        .containsExactlyElementsIn(hiddenTopLevelArtifacts.toList());
+    assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group").toList())
+        .containsExactlyElementsIn(hiddenTopLevelArtifacts.toList());
   }
 
   @Test
@@ -376,6 +406,37 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         .containsExactlyElementsIn(hiddenTopLevelArtifacts.toList());
     assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group").toList())
         .containsExactlyElementsIn(hiddenTopLevelArtifacts.toList());
+  }
+
+  @Test
+  public void testOutputGroupsWithList() throws Exception {
+    scratch.file(
+        "test/skylark/extension.bzl",
+        "load('//myinfo:myinfo.bzl', 'MyInfo')",
+        "def _impl(ctx):",
+        "  f = ctx.attr.dep.output_group('_hidden_top_level" + INTERNAL_SUFFIX + "')",
+        "  g = f.to_list()",
+        "  return [MyInfo(result = f),",
+        "      OutputGroupInfo(my_group = g, my_empty_group = [])]",
+        "my_rule = rule(implementation = _impl,",
+        "    attrs = { 'dep' : attr.label() })");
+    scratch.file(
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension.bzl',  'my_rule')",
+        "cc_binary(name = 'lib', data = ['a.txt'])",
+        "my_rule(name='my', dep = ':lib')");
+
+    setSkylarkSemanticsOptions("--incompatible_no_target_output_group=false");
+    NestedSet<Artifact> hiddenTopLevelArtifacts =
+        OutputGroupInfo.get(getConfiguredTarget("//test/skylark:lib"))
+            .getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
+    ConfiguredTarget myTarget = getConfiguredTarget("//test/skylark:my");
+    Depset result = (Depset) getMyInfoFromTarget(myTarget).getValue("result");
+    assertThat(result.getSet(Artifact.class).toList())
+        .containsExactlyElementsIn(hiddenTopLevelArtifacts.toList());
+    assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_group").toList())
+        .containsExactlyElementsIn(hiddenTopLevelArtifacts.toList());
+    assertThat(OutputGroupInfo.get(myTarget).getOutputGroup("my_empty_group").toList()).isEmpty();
   }
 
   @Test
@@ -1670,7 +1731,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:xxx");
-    assertContainsEvent("ERROR /workspace/test/BUILD:2:8: in my_rule rule //test:xxx: ");
+    assertContainsEvent("ERROR /workspace/test/BUILD:2:1: in my_rule rule //test:xxx: ");
     assertContainsEvent("The following files have no generating action:");
     assertContainsEvent("test/xxx");
   }
@@ -1716,11 +1777,10 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     );
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:xxx");
-    assertContainsEvent("ERROR /workspace/test/BUILD:2:8: in my_rule rule //test:xxx: ");
-    assertContainsEvent(
-        "/workspace/test/rule.bzl:5:23: The rule 'my_rule' both accesses "
-            + "'ctx.outputs.executable' and provides a different executable 'test/x.sh'. "
-            + "Do not use 'ctx.output.executable'.");
+    assertContainsEvent("ERROR /workspace/test/BUILD:2:1: in my_rule rule //test:xxx: ");
+    assertContainsEvent("/workspace/test/rule.bzl:5:12: The rule 'my_rule' both accesses "
+        + "'ctx.outputs.executable' and provides a different executable 'test/x.sh'. "
+        + "Do not use 'ctx.output.executable'.");
   }
 
 
@@ -1795,7 +1855,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:yyy");
-    assertContainsEvent("ERROR /workspace/test/BUILD:3:12: in my_dep_rule rule //test:yyy: ");
+    assertContainsEvent("ERROR /workspace/test/BUILD:3:1: in my_dep_rule rule //test:yyy: ");
     assertContainsEvent("File \"/workspace/test/rule.bzl\", line 8, in _dep_impl");
     assertContainsEvent("ctx.attr.dep[PInfo].outputs.executable");
     assertContainsEvent("cannot access outputs of rule '//test:xxx' outside "
@@ -1858,7 +1918,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:xxx");
-    assertContainsEvent("ERROR /workspace/test/BUILD:2:8: in my_rule rule //test:xxx: ");
+    assertContainsEvent("ERROR /workspace/test/BUILD:2:1: in my_rule rule //test:xxx: ");
     assertContainsEvent("/rule.bzl:1:5: The rule 'my_rule' is executable. "
         + "It needs to create an executable File and pass it as the 'executable' "
         + "parameter to the DefaultInfo it returns.");
@@ -1891,7 +1951,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//src:r_tools");
     assertContainsEvent(
-        "/workspace/src/rulez.bzl:2:23: 'executable' provided by an executable"
+        "/workspace/src/rulez.bzl:2:12: 'executable' provided by an executable"
             + " rule 'r' should be created by the same rule.");
   }
 
@@ -1911,16 +1971,10 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "      'out': 'foo/bar/baz',",
         "    },",
         ")");
-    scratch.file(
-        "BUILD", //
-        "load(':ext.bzl', 'extrule')",
-        "",
-        "extrule(",
-        "    name = 'test'",
-        ")");
+    scratch.file("BUILD", "load(':ext.bzl', 'extrule')", "", "extrule(", "    name = 'test'", ")");
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//:test");
-    assertContainsEvent("ERROR /workspace/BUILD:3:8: in extrule rule //:test:");
+    assertContainsEvent("ERROR /workspace/BUILD:3:1: in extrule rule //:test:");
     assertContainsEvent("he following directories were also declared as files:");
     assertContainsEvent("foo/bar/baz");
   }
@@ -1956,6 +2010,25 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertThat(getConfiguredTarget("//test/skylark:my")).isNull();
     assertContainsEvent(
         "//test/skylark:dep doesn't support expected environment: //buildenv/foo:default");
+  }
+
+  @Test
+  public void testNoTargetOutputGroup() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_no_target_output_group=true");
+    scratch.file(
+        "test/skylark/extension.bzl",
+        "def _impl(ctx):",
+        "  f = ctx.attr.dep.output_group()",
+        "my_rule = rule(implementation = _impl,",
+        "    attrs = { 'dep' : attr.label() })");
+
+    checkError(
+        "test/skylark",
+        "r",
+        "<target //test/skylark:lib> (rule 'cc_binary') doesn't have provider 'output_group'",
+        "load('//test/skylark:extension.bzl',  'my_rule')",
+        "cc_binary(name = 'lib', data = ['a.txt'])",
+        "my_rule(name='r', dep = ':lib')");
   }
 
   @Test
@@ -2980,14 +3053,14 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
       ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions =
           ((InMemoryMemoizingEvaluator) getSkyframeExecutor().getEvaluatorForTesting())
               .getSkyFunctionsForTesting();
-      StarlarkImportLookupFunction starlarkImportLookupFunction =
-          new StarlarkImportLookupFunction(
+      SkylarkImportLookupFunction skylarkImportLookupFunction =
+          new SkylarkImportLookupFunction(
               this.getRuleClassProvider(),
               this.getPackageFactory(),
               /*starlarkImportLookupValueCacheSize=*/ 2);
-      starlarkImportLookupFunction.resetCache();
+      skylarkImportLookupFunction.resetCache();
       ((PackageFunction) skyFunctions.get(SkyFunctions.PACKAGE))
-          .setStarlarkImportLookupFunctionForInliningForTesting(starlarkImportLookupFunction);
+          .setSkylarkImportLookupFunctionForInliningForTesting(skylarkImportLookupFunction);
     }
 
     @Override
