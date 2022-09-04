@@ -57,7 +57,6 @@ import io.quarkus.deployment.configuration.LeafConfigType;
 import io.quarkus.deployment.recording.ObjectLoader;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.runtime.annotations.ConfigPhase;
-import io.quarkus.runtime.configuration.ApplicationPropertiesConfigSource;
 import io.quarkus.runtime.configuration.CidrAddressConverter;
 import io.quarkus.runtime.configuration.ConverterFactory;
 import io.quarkus.runtime.configuration.DefaultConfigSource;
@@ -154,7 +153,6 @@ public class ConfigurationSetup {
         // expand properties
         builder.withWrapper(ExpandingConfigSource::new);
         builder.addDefaultSources();
-        builder.withSources(new ApplicationPropertiesConfigSource.InJar());
         for (ConfigurationCustomConverterBuildItem converter : converters) {
             withConverterHelper(builder, converter.getType(), converter.getPriority(), converter.getConverter());
         }
@@ -180,17 +178,6 @@ public class ConfigurationSetup {
         } catch (IllegalAccessException e) {
             throw toError(e);
         }
-    }
-
-    /**
-     * Add a config sources for {@code application.properties}.
-     */
-    @BuildStep
-    void setUpConfigFile(BuildProducer<RunTimeConfigurationSourceBuildItem> configSourceConsumer) {
-        configSourceConsumer.produce(new RunTimeConfigurationSourceBuildItem(
-                ApplicationPropertiesConfigSource.InJar.class.getName(), OptionalInt.empty()));
-        configSourceConsumer.produce(new RunTimeConfigurationSourceBuildItem(
-                ApplicationPropertiesConfigSource.InFileSystem.class.getName(), OptionalInt.empty()));
     }
 
     /**
