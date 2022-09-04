@@ -22,8 +22,8 @@ import static com.google.devtools.build.lib.syntax.Type.INTEGER;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.Whitelist;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
+import com.google.devtools.build.lib.analysis.whitelisting.Whitelist;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 
@@ -95,10 +95,9 @@ public final class AndroidDeviceRule implements RuleDefinition {
         a specific device). The properties in this file will override read only
         properties typically set by the emulator such as ro.product.model.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(
-            attr("default_properties", LABEL)
-                .cfg(HostTransition.createFactory())
-                .allowedFileTypes(JavaSemantics.PROPERTIES))
+        .add(attr("default_properties", LABEL)
+            .cfg(HostTransition.INSTANCE)
+            .allowedFileTypes(JavaSemantics.PROPERTIES))
         /* <!-- #BLAZE_RULE(android_device).ATTRIBUTE(platform_apks) -->
         A list of apks to be installed on the device at boot time.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -108,54 +107,53 @@ public final class AndroidDeviceRule implements RuleDefinition {
         .add(attr("pregenerate_oat_files_for_tests", BOOLEAN).value(false))
         .add(
             attr("$adb_static", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android:adb_static")))
-        .add(
-            attr("$adb", LABEL)
-                .cfg(HostTransition.createFactory())
-                .value(env.getToolsLabel("//tools/android:adb")))
+        .add(attr("$adb", LABEL)
+            .cfg(HostTransition.INSTANCE)
+            .value(env.getToolsLabel("//tools/android:adb")))
         .add(
             attr("$emulator_arm", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android/emulator:emulator_arm")))
         .add(
             attr("$emulator_x86", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android/emulator:emulator_x86")))
         .add(
             attr("$emulator_x86_bios", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android/emulator:emulator_x86_bios")))
         .add(
             attr("$mksd", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(env.getToolsLabel("//tools/android/emulator:mksd")))
         .add(
             attr("$empty_snapshot_fs", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android/emulator:empty_snapshot_fs")))
         .add(
             attr("$xvfb_support", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android/emulator:xvfb_support")))
         .add(
             attr("$unified_launcher", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(env.getToolsLabel("//tools/android/emulator:unified_launcher")))
         .add(
             attr("$android_runtest", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(env.getToolsLabel("//tools/android:android_runtest")))
         .add(
             attr("$testing_shbase", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(env.getToolsLabel("//tools/android/emulator:shbase")))
         .add(
             attr("$sdk_path", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .exec()
                 .value(env.getToolsLabel("//tools/android/emulator:sdk_path")))
         .add(
@@ -183,11 +181,11 @@ public final class AndroidDeviceRule implements RuleDefinition {
 /*<!-- #BLAZE_RULE (NAME = android_device, TYPE = OTHER, FAMILY = Android) -->
 
 <p>This rule creates an android emulator configured with the given
-  specifications. This emulator may be started via a bazel run
+  specifications. This emulator may be started via a blaze run
   command or by executing the generated script directly. It is encouraged to depend
   on existing android_device rules rather than defining your own.
 </p>
-<p>This rule is a suitable target for the --run_under flag to bazel test and blaze
+<p>This rule is a suitable target for the --run_under flag to blaze test and blaze
   run.  It starts an emulator, copies the target being tested/run to the emulator,
   and tests it or runs it as appropriate.
 </p>
@@ -231,7 +229,7 @@ ro.product.name=soju
 </pre>
 <p>
   This rule will generate images and a start script. You can start the emulator
-  locally by executing bazel run :nexus_s -- --action=start. The script exposes
+  locally by executing blaze run :nexus_s -- --action=start. The script exposes
   the following flags:
 </p>
   <ul>
