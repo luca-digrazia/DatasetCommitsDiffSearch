@@ -435,6 +435,7 @@ public final class BuildTool {
     LoadingResult result =
         loadingPhaseRunner.execute(
             getReporter(),
+            env.getEventBus(),
             request.getTargets(),
             env.getRelativeWorkingDirectory(),
             request.getLoadingOptions(),
