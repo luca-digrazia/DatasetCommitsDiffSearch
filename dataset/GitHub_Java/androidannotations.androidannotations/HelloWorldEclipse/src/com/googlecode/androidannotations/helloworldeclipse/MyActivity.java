@@ -3,7 +3,6 @@ package com.googlecode.androidannotations.helloworldeclipse;
 import java.util.Date;
 
 import android.app.Activity;
-import android.app.NotificationManager;
 import android.content.Intent;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -15,7 +14,6 @@ import com.googlecode.androidannotations.annotations.ColorValue;
 import com.googlecode.androidannotations.annotations.Layout;
 import com.googlecode.androidannotations.annotations.StringArrayValue;
 import com.googlecode.androidannotations.annotations.StringResValue;
-import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.UiThread;
 import com.googlecode.androidannotations.annotations.ViewById;
 
@@ -36,9 +34,6 @@ public class MyActivity extends Activity {
 
 	@ColorValue
 	int androidColor;
-	
-	@SystemService
-	NotificationManager notificationManager;
 
 	@Click
 	void myButton() {
