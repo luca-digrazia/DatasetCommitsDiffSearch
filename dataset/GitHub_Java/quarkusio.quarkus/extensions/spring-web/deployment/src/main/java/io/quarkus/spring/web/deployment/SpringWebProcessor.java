@@ -326,7 +326,7 @@ public class SpringWebProcessor {
         return false;
     }
 
-    @BuildStep(loadsApplicationClasses = true)
+    @BuildStep
     public void generateExceptionMapperProviders(BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
             BuildProducer<GeneratedClassBuildItem> generatedExceptionMappers,
             BuildProducer<ResteasyJaxrsProviderBuildItem> providersProducer,
@@ -401,6 +401,12 @@ public class SpringWebProcessor {
 
             if (!RESPONSE_ENTITY.equals(returnTypeDotName)) {
                 reflectiveClassProducer.produce(new ReflectiveClassBuildItem(true, true, returnTypeDotName.toString()));
+            }
+
+            AnnotationInstance responseStatusInstance = method.annotation(RESPONSE_STATUS);
+            if ((method.returnType().kind() == Type.Kind.VOID) && (responseStatusInstance == null)) {
+                throw new IllegalStateException(
+                        "void methods annotated with @ExceptionHandler must also be annotated with @ResponseStatus");
             }
 
             // we need to generate one JAX-RS ExceptionMapper per Exception type
