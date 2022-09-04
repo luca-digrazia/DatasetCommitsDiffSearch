@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
@@ -31,12 +30,16 @@ import javax.annotation.Nullable;
  */
 public abstract class Parameter<V, T> extends Argument {
 
-  @Nullable protected final Identifier identifier;
+  @Nullable protected final String name;
   @Nullable protected final T type;
 
-  private Parameter(@Nullable Identifier identifier, @Nullable T type) {
-    this.identifier = identifier;
+  private Parameter(@Nullable String name, @Nullable T type) {
+    this.name = name;
     this.type = type;
+  }
+  private Parameter(@Nullable String name) {
+    this.name = name;
+    this.type = null;
   }
 
   public boolean isMandatory() {
@@ -59,12 +62,7 @@ public abstract class Parameter<V, T> extends Argument {
 
   @Nullable
   public String getName() {
-    return identifier != null ? identifier.getName() : null;
-  }
-
-  @Nullable
-  public Identifier getIdentifier() {
-    return identifier;
+    return name;
   }
 
   public boolean hasName() {
@@ -82,16 +80,14 @@ public abstract class Parameter<V, T> extends Argument {
   }
 
   /** mandatory parameter (positional or key-only depending on position): Ident */
-  @AutoCodec
   public static final class Mandatory<V, T> extends Parameter<V, T> {
 
-    Mandatory(Identifier identifier) {
-      this(identifier, null);
+    public Mandatory(String name) {
+      super(name);
     }
 
-    @AutoCodec.Instantiator
-    public Mandatory(Identifier identifier, @Nullable T type) {
-      super(identifier, type);
+    public Mandatory(String name, @Nullable T type) {
+      super(name, type);
     }
 
     @Override
@@ -101,23 +97,22 @@ public abstract class Parameter<V, T> extends Argument {
 
     @Override
     public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append(getName());
+      buffer.append(name);
     }
   }
 
   /** optional parameter (positional or key-only depending on position): Ident = Value */
-  @AutoCodec
   public static final class Optional<V, T> extends Parameter<V, T> {
 
     public final V defaultValue;
 
-    Optional(Identifier identifier, @Nullable V defaultValue) {
-      this(identifier, null, defaultValue);
+    public Optional(String name, @Nullable V defaultValue) {
+      super(name);
+      this.defaultValue = defaultValue;
     }
 
-    @AutoCodec.Instantiator
-    public Optional(Identifier identifier, @Nullable T type, @Nullable V defaultValue) {
-      super(identifier, type);
+    public Optional(String name, @Nullable T type, @Nullable V defaultValue) {
+      super(name, type);
       this.defaultValue = defaultValue;
     }
 
@@ -134,7 +129,7 @@ public abstract class Parameter<V, T> extends Argument {
 
     @Override
     public void prettyPrint(Appendable buffer) throws IOException {
-      buffer.append(getName());
+      buffer.append(name);
       buffer.append('=');
       // This should only ever be used on a parameter representing static information, i.e. with V
       // and T instantiated as Expression.
@@ -145,26 +140,24 @@ public abstract class Parameter<V, T> extends Argument {
     // parameterized with.
     @Override
     public String toString() {
-      return getName() + "=" + defaultValue;
+      return name + "=" + defaultValue;
     }
   }
 
   /** extra positionals parameter (star): *identifier */
-  @AutoCodec
   public static final class Star<V, T> extends Parameter<V, T> {
 
-    @AutoCodec.Instantiator
-    Star(@Nullable Identifier identifier, @Nullable T type) {
-      super(identifier, type);
+    public Star(@Nullable String name, @Nullable T type) {
+      super(name, type);
     }
 
-    Star(@Nullable Identifier identifier) {
-      this(identifier, null);
+    public Star(@Nullable String name) {
+      super(name);
     }
 
     @Override
     public boolean hasName() {
-      return getName() != null;
+      return name != null;
     }
 
     @Override
@@ -175,23 +168,21 @@ public abstract class Parameter<V, T> extends Argument {
     @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append('*');
-      if (getName() != null) {
-        buffer.append(getName());
+      if (name != null) {
+        buffer.append(name);
       }
     }
   }
 
   /** extra keywords parameter (star_star): **identifier */
-  @AutoCodec
   public static final class StarStar<V, T> extends Parameter<V, T> {
 
-    @AutoCodec.Instantiator
-    StarStar(Identifier identifier, @Nullable T type) {
-      super(identifier, type);
+    public StarStar(String name, @Nullable T type) {
+      super(name, type);
     }
 
-    StarStar(Identifier identifier) {
-      this(identifier, null);
+    public StarStar(String name) {
+      super(name);
     }
 
     @Override
@@ -202,12 +193,11 @@ public abstract class Parameter<V, T> extends Argument {
     @Override
     public void prettyPrint(Appendable buffer) throws IOException {
       buffer.append("**");
-      buffer.append(getName());
+      buffer.append(name);
     }
   }
 
   @Override
-  @SuppressWarnings("unchecked")
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit((Parameter<Expression, Expression>) this);
   }

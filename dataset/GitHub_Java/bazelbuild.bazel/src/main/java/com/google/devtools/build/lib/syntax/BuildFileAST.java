@@ -13,6 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import static com.google.devtools.build.lib.syntax.Parser.Dialect.BUILD;
+import static com.google.devtools.build.lib.syntax.Parser.Dialect.SKYLARK;
+
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -120,7 +124,8 @@ public class BuildFileAST extends ASTNode {
    * Collects all load statements. Returns a pair with a boolean saying if there were errors and the
    * imports that could be resolved.
    */
-  private static Pair<Boolean, ImmutableList<SkylarkImport>> fetchLoads(
+  @VisibleForTesting
+  static Pair<Boolean, ImmutableList<SkylarkImport>> fetchLoads(
       List<Statement> statements, EventHandler eventHandler) {
     ImmutableList.Builder<SkylarkImport> imports = ImmutableList.builder();
     boolean error = false;
@@ -267,15 +272,13 @@ public class BuildFileAST extends ASTNode {
   public static BuildFileAST parseBuildFile(ParserInputSource input,
                                             List<Statement> preludeStatements,
                                             EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
-    return create(preludeStatements, result, /*contentHashCode=*/ null, eventHandler)
-        .validateBuildFile(eventHandler);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, BUILD);
+    return create(preludeStatements, result, /*contentHashCode=*/ null, eventHandler);
   }
 
   public static BuildFileAST parseBuildFile(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
-    return create(ImmutableList.<Statement>of(), result, /*contentHashCode=*/ null, eventHandler)
-        .validateBuildFile(eventHandler);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, BUILD);
+    return create(ImmutableList.<Statement>of(), result, /*contentHashCode=*/ null, eventHandler);
   }
 
   /**
@@ -292,14 +295,14 @@ public class BuildFileAST extends ASTNode {
   public static BuildFileAST parseSkylarkFile(Path file, long fileSize, EventHandler eventHandler)
       throws IOException {
     ParserInputSource input = ParserInputSource.create(file, fileSize);
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
     return create(
         ImmutableList.of(), result,
         HashCode.fromBytes(file.getDigest()).toString(), eventHandler);
   }
 
   public static BuildFileAST parseSkylarkFile(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
     return create(ImmutableList.<Statement>of(), result, /*contentHashCode=*/ null, eventHandler);
   }
 
@@ -312,7 +315,7 @@ public class BuildFileAST extends ASTNode {
    */
   public static BuildFileAST parseSkylarkFileWithoutImports(
       ParserInputSource input, EventHandler eventHandler) {
-    ParseResult result = Parser.parseFile(input, eventHandler);
+    ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
     return new BuildFileAST(
         ImmutableList.<Statement>builder()
             .addAll(ImmutableList.<Statement>of())
@@ -338,28 +341,20 @@ public class BuildFileAST extends ASTNode {
     return new BuildFileAST(statements, true, contentHashCode, getLocation(), comments, imports);
   }
 
-  /**
-   * Run static checks for a BUILD file.
-   *
-   * @return a new AST (or the same), with the containsErrors flag updated.
-   */
-  public BuildFileAST validateBuildFile(EventHandler eventHandler) {
-    boolean valid = ValidationEnvironment.checkBuildSyntax(statements, eventHandler);
-    if (valid || containsErrors) {
-      return this;
-    }
-    return new BuildFileAST(statements, true, contentHashCode, getLocation(), comments, imports);
-  }
-
-  public static BuildFileAST parseString(EventHandler eventHandler, String... content) {
+  private static BuildFileAST parseString(
+      Parser.Dialect dialect, EventHandler eventHandler, String... content) {
     String str = Joiner.on("\n").join(content);
     ParserInputSource input = ParserInputSource.create(str, PathFragment.EMPTY_FRAGMENT);
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, dialect);
     return create(ImmutableList.of(), result, null, eventHandler);
   }
 
   public static BuildFileAST parseBuildString(EventHandler eventHandler, String... content) {
-    return parseString(eventHandler, content).validateBuildFile(eventHandler);
+    return parseString(BUILD, eventHandler, content);
+  }
+
+  public static BuildFileAST parseSkylarkString(EventHandler eventHandler, String... content) {
+    return parseString(SKYLARK, eventHandler, content);
   }
 
   /**
@@ -368,7 +363,7 @@ public class BuildFileAST extends ASTNode {
    * @return true if the input file is syntactically valid
    */
   public static boolean checkSyntax(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler, BUILD);
     return !result.containsErrors;
   }
 
@@ -407,7 +402,7 @@ public class BuildFileAST extends ASTNode {
    */
   public static BuildFileAST parseAndValidateSkylarkString(Environment env, String[] input)
       throws EvalException {
-    BuildFileAST ast = parseString(env.getEventHandler(), input);
+    BuildFileAST ast = parseSkylarkString(env.getEventHandler(), input);
     ValidationEnvironment.validateAst(env, ast.getStatements());
     return ast;
   }

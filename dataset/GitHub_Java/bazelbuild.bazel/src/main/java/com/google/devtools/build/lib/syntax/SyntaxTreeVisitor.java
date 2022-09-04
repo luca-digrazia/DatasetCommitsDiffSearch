@@ -66,17 +66,18 @@ public class SyntaxTreeVisitor {
   public void visit(@SuppressWarnings("unused") Identifier node) {}
 
   public void visit(AbstractComprehension node) {
+    visitAll(node.getOutputExpressions());
+
     for (ListComprehension.Clause clause : node.getClauses()) {
       if (clause.getLValue() != null) {
         visit(clause.getLValue());
       }
       visit(clause.getExpression());
     }
-    visitAll(node.getOutputExpressions());
   }
 
   public void visit(ForStatement node) {
-    visit(node.getVariable());
+    visit(node.getVariable().getExpression());
     visit(node.getCollection());
     visitAll(node.getBlock());
   }
