@@ -3126,10 +3126,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       return actionShards;
     }
 
-    int getActionCount() {
-      return actionCount;
-    }
-
     BuildEventStreamProtos.BuildMetrics.BuildGraphMetrics.Builder getMetrics() {
       return BuildEventStreamProtos.BuildMetrics.BuildGraphMetrics.newBuilder()
           .setActionLookupValueCount(configuredObjectCount)
