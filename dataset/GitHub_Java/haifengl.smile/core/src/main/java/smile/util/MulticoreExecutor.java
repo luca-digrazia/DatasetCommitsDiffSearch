@@ -23,8 +23,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Utility class to run tasks in a thread pool on multi-core systems.
@@ -32,39 +30,35 @@ import org.slf4j.LoggerFactory;
  * @author Haifeng Li
  */
 public class MulticoreExecutor {
-    private static final Logger logger = LoggerFactory.getLogger(MulticoreExecutor.class);
 
     /**
      * The number of processors.
      */
-    private static int nprocs = -1;
+    private static final int nprocs;
     /**
      * Thread pool.
      */
     private static ThreadPoolExecutor threads = null;
 
-    /** Creates the worker thread pool. */
-    private static void createThreadPool() {
-        if (nprocs == -1) {
-            int n = -1;
-            try {
-                String env = System.getProperty("smile.threads");
-                if (env != null) {
-                    n = Integer.parseInt(env);
-                }
-            } catch (Exception ex) {
-                logger.error("Failed to create multi-core execution thread pool", ex);
+    static {
+        int n = -1;
+        try {
+            String env = System.getProperty("smile.threads");
+            if (env != null) {
+                n = Integer.parseInt(env);
             }
+        } catch (Exception ex) {
+            System.err.println(ex);
+        }
 
-            if (n < 1) {
-                nprocs = Runtime.getRuntime().availableProcessors();
-            } else {
-                nprocs = n;
-            }
-
-            if (nprocs > 1) {
-                threads = (ThreadPoolExecutor) Executors.newFixedThreadPool(nprocs, new SimpleDeamonThreadFactory());
-            }
+        if (n == -1) {
+            nprocs = Runtime.getRuntime().availableProcessors();
+        } else {
+            nprocs = n;
+        }
+        
+        if (nprocs > 1) {
+            threads = (ThreadPoolExecutor) Executors.newFixedThreadPool(nprocs, new SimpleDeamonThreadFactory());
         }
     }
 
@@ -73,10 +67,9 @@ public class MulticoreExecutor {
      * @return the number of threads in the thread pool
      */
     public static int getThreadPoolSize() {
-        createThreadPool();
         return nprocs;
     }
-
+    
     /**
      * Executes the given tasks serially or parallel depending on the number
      * of cores of the system. Returns a list of result objects of each task.
@@ -88,9 +81,7 @@ public class MulticoreExecutor {
      * @throws Exception if unable to compute a result.
      */
     public static <T> List<T> run(Collection<? extends Callable<T>> tasks) throws Exception {
-        createThreadPool();
-
-        List<T> results = new ArrayList<>();
+        List<T> results = new ArrayList<T>();
         if (threads == null) {
             for (Callable<T> task : tasks) {
                 results.add(task.call());
