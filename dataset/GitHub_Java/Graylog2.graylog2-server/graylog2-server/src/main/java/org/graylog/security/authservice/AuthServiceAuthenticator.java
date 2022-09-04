@@ -35,9 +35,6 @@ public class AuthServiceAuthenticator {
         this.provisionerService = provisionerService;
     }
 
-    /**
-     * Tries to authenticate the user with the given token.
-     */
     public AuthServiceResult authenticate(AuthServiceToken token) {
         final Optional<AuthServiceBackend> activeBackend = authServiceConfig.getActiveBackend();
         if (!activeBackend.isPresent()) {
@@ -76,28 +73,26 @@ public class AuthServiceAuthenticator {
     }
 
     private AuthServiceResult authenticate(AuthServiceToken token, AuthServiceBackend backend) {
-        final Optional<AuthenticationDetails> optionalAuthDetails = backend.authenticateAndProvision(token, provisionerService);
+        final Optional<UserDetails> userDetails = backend.authenticateAndProvision(token, provisionerService);
 
-        return optionalAuthDetails.map(authDetails -> successResult(authDetails, backend))
+        return userDetails.map(ud -> successResult(ud, backend))
                 .orElseGet(() -> failResult("<token>", backend));
     }
 
     private AuthServiceResult authenticate(AuthServiceCredentials authCredentials, AuthServiceBackend backend) {
-        final Optional<AuthenticationDetails>
-                optionalAuthenticationDetails = backend.authenticateAndProvision(authCredentials, provisionerService);
+        final Optional<UserDetails> userDetails = backend.authenticateAndProvision(authCredentials, provisionerService);
 
-        return optionalAuthenticationDetails.map(authDetails -> successResult(authDetails, backend))
+        return userDetails.map(ud -> successResult(ud, backend))
                 .orElseGet(() -> failResult(authCredentials.username(), backend));
     }
 
-    private AuthServiceResult successResult(AuthenticationDetails authDetails, AuthServiceBackend backend) {
+    private AuthServiceResult successResult(UserDetails userDetails, AuthServiceBackend backend) {
         return AuthServiceResult.builder()
-                .username(authDetails.userDetails().username())
-                .userProfileId(authDetails.userDetails().databaseId().get())
+                .username(userDetails.username())
+                .userProfileId(userDetails.databaseId().get())
                 .backendType(backend.backendType())
                 .backendId(backend.backendId())
                 .backendTitle(backend.backendTitle())
-                .sessionAttributes(authDetails.sessionAttributes())
                 .build();
     }
 

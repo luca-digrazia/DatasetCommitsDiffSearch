@@ -32,14 +32,14 @@ public interface AuthServiceBackend {
         TYPE create(AuthServiceBackendDTO backend);
     }
 
-    default Optional<AuthenticationDetails> authenticateAndProvision(AuthServiceCredentials authCredentials,
+    default Optional<UserDetails> authenticateAndProvision(AuthServiceCredentials authCredentials,
             ProvisionerService provisionerService) {
         log.debug("Cannot authenticate by username/password. Username/password authentication is not supported by " +
                 "auth service backend type <" + backendType() + ">.");
         return Optional.empty();
     }
 
-    default Optional<AuthenticationDetails> authenticateAndProvision(AuthServiceToken token,
+    default Optional<UserDetails> authenticateAndProvision(AuthServiceToken token,
             ProvisionerService provisionerService) {
         log.debug("Cannot authenticate by token. Token-based authentication is not supported by auth service backend " +
                 "type <" + backendTitle() + ">.");
