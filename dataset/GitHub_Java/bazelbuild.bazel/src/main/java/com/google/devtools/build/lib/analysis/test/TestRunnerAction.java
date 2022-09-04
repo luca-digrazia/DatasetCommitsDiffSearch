@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis.test;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.auto.value.AutoValue;
@@ -29,7 +28,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionContinuationOrResult;
-import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -48,7 +46,6 @@ import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SpawnExecutedEvent;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.TestExecException;
-import com.google.devtools.build.lib.analysis.SingleRunfilesSupplier;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.analysis.test.TestActionContext.FailedAttemptResult;
@@ -63,9 +60,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.server.FailureDetails.Execution.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.TestAction;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
@@ -83,7 +78,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
 
@@ -138,7 +132,7 @@ public class TestRunnerAction extends AbstractAction
   private Boolean unconditionalExecution;
 
   /** Any extra environment variables (and values) added by the rule that created this action. */
-  private final ActionEnvironment extraTestEnv;
+  private final ImmutableMap<String, String> extraTestEnv;
 
   /**
    * The set of environment variables that are inherited from the client environment. These are
@@ -173,7 +167,7 @@ public class TestRunnerAction extends AbstractAction
   TestRunnerAction(
       ActionOwner owner,
       NestedSet<Artifact> inputs,
-      SingleRunfilesSupplier runfilesSupplier,
+      RunfilesSupplier runfilesSupplier,
       Artifact testSetupScript, // Must be in inputs
       Artifact testXmlGeneratorScript, // Must be in inputs
       @Nullable Artifact collectCoverageScript, // Must be in inputs, if not null
@@ -182,7 +176,7 @@ public class TestRunnerAction extends AbstractAction
       Artifact coverageArtifact,
       @Nullable Artifact coverageDirectory,
       TestTargetProperties testProperties,
-      ActionEnvironment extraTestEnv,
+      Map<String, String> extraTestEnv,
       TestTargetExecutionSettings executionSettings,
       int shardNum,
       int runNumber,
@@ -205,16 +199,17 @@ public class TestRunnerAction extends AbstractAction
     this.testSetupScript = testSetupScript;
     this.testXmlGeneratorScript = testXmlGeneratorScript;
     this.collectCoverageScript = collectCoverageScript;
-    this.configuration = checkNotNull(configuration);
-    this.testConfiguration = checkNotNull(configuration.getFragment(TestConfiguration.class));
+    this.configuration = Preconditions.checkNotNull(configuration);
+    this.testConfiguration =
+        Preconditions.checkNotNull(configuration.getFragment(TestConfiguration.class));
     this.testLog = testLog;
     this.cacheStatus = cacheStatus;
     this.coverageData = coverageArtifact;
     this.coverageDirectory = coverageDirectory;
     this.shardNum = shardNum;
     this.runNumber = runNumber;
-    this.testProperties = checkNotNull(testProperties);
-    this.executionSettings = checkNotNull(executionSettings);
+    this.testProperties = Preconditions.checkNotNull(testProperties);
+    this.executionSettings = Preconditions.checkNotNull(executionSettings);
 
     this.baseDir = cacheStatus.getExecPath().getParentDirectory();
 
@@ -241,13 +236,12 @@ public class TestRunnerAction extends AbstractAction
     this.testInfrastructureFailure = baseDir.getChild("test.infrastructure_failure");
     this.workspaceName = workspaceName;
 
-    this.extraTestEnv = extraTestEnv;
+    this.extraTestEnv = ImmutableMap.copyOf(extraTestEnv);
     this.requiredClientEnvVariables =
         ImmutableIterable.from(
             Iterables.concat(
                 configuration.getActionEnvironment().getInheritedEnv(),
-                configuration.getTestActionEnvironment().getInheritedEnv(),
-                this.extraTestEnv.getInheritedEnv()));
+                configuration.getTestActionEnvironment().getInheritedEnv()));
     this.cancelConcurrentTestsOnSuccess = cancelConcurrentTestsOnSuccess;
     this.splitCoveragePostProcessing = splitCoveragePostProcessing;
     this.lcovMergerFilesToRun = lcovMergerFilesToRun;
@@ -384,7 +378,7 @@ public class TestRunnerAction extends AbstractAction
     fp.addBoolean(executionSettings.getTestRunnerFailFast());
     RunUnder runUnder = executionSettings.getRunUnder();
     fp.addString(runUnder == null ? "" : runUnder.getValue());
-    extraTestEnv.addTo(fp);
+    fp.addStringMap(extraTestEnv);
     // TODO(ulfjack): It might be better for performance to hash the action and test envs in config,
     // and only add a hash here.
     configuration.getActionEnvironment().addTo(fp);
@@ -412,10 +406,6 @@ public class TestRunnerAction extends AbstractAction
     return unconditionalExecution;
   }
 
-  @Override // Tighten return type.
-  public SingleRunfilesSupplier getRunfilesSupplier() {
-    return (SingleRunfilesSupplier) super.getRunfilesSupplier();
-  }
 
   @Override
   public boolean isVolatile() {
@@ -450,7 +440,7 @@ public class TestRunnerAction extends AbstractAction
   private boolean computeExecuteUnconditionallyFromTestStatus() {
     return !canBeCached(
         testConfiguration.cacheTestResults(),
-        this::maybeReadCacheStatus,
+        maybeReadCacheStatus(),
         testProperties.isExternal(),
         executionSettings.getTotalRuns());
   }
@@ -458,24 +448,26 @@ public class TestRunnerAction extends AbstractAction
   @VisibleForTesting
   static boolean canBeCached(
       TriState cacheTestResults,
-      Supplier<TestResultData> prevStatus, // Lazy evaluation to avoid a disk read if possible.
+      @Nullable TestResultData prevStatus,
       boolean isExternal,
       int runsPerTest) {
-    if (isExternal || cacheTestResults == TriState.NO) {
+    if (cacheTestResults == TriState.NO) {
       return false;
     }
-    if (cacheTestResults == TriState.AUTO && runsPerTest > 1) {
+    if (isExternal) {
       return false;
     }
-    TestResultData status = prevStatus.get();
-    if (status != null) {
-      if (!status.getCachable()) {
-        return false;
-      }
-      if (cacheTestResults == TriState.AUTO && !status.getTestPassed()) {
-        return false;
-      }
+    if (cacheTestResults == TriState.AUTO && (runsPerTest > 1)) {
+      return false;
     }
+    // Test will not be executed unconditionally - check whether test result exists and is
+    // valid. If it is, method will return false and we will rely on the dependency checker
+    // to make a decision about test execution.
+    if (cacheTestResults == TriState.AUTO && prevStatus != null && !prevStatus.getTestPassed()) {
+      return false;
+    }
+    // Rely on the dependency checker to determine if the test can be cached. Note that the status
+    // is a declared output, so its non-existence also triggers a re-run.
     return true;
   }
 
@@ -683,7 +675,7 @@ public class TestRunnerAction extends AbstractAction
   }
 
   /** Returns all environment variables which must be set in order to run this test. */
-  public ActionEnvironment getExtraTestEnv() {
+  public Map<String, String> getExtraTestEnv() {
     return extraTestEnv;
   }
 
@@ -975,7 +967,7 @@ public class TestRunnerAction extends AbstractAction
     private final Path execRoot;
 
     ResolvedPaths(Path execRoot) {
-      this.execRoot = checkNotNull(execRoot);
+      this.execRoot = Preconditions.checkNotNull(execRoot);
     }
 
     private Path getPath(PathFragment relativePath) {
@@ -1215,21 +1207,8 @@ public class TestRunnerAction extends AbstractAction
       testRunnerSpawn.finalizeTest(result, failedAttempts);
 
       if (!keepGoing && testResult != TestAttemptResult.Result.PASSED) {
-        DetailedExitCode systemFailure = result.primarySystemFailure();
-        if (systemFailure != null) {
-          throw new TestExecException(
-              "Test failed (system error), aborting: "
-                  + systemFailure.getFailureDetail().getMessage(),
-              systemFailure.getFailureDetail());
-        }
-        String errorMessage = "Test failed, aborting";
         throw new TestExecException(
-            errorMessage,
-            FailureDetail.newBuilder()
-                .setTestAction(
-                    TestAction.newBuilder().setCode(TestAction.Code.NO_KEEP_GOING_TEST_FAILURE))
-                .setMessage(errorMessage)
-                .build());
+            "Test failed: aborting", TestAction.Code.NO_KEEP_GOING_TEST_FAILURE);
       }
       return ActionContinuationOrResult.of(ActionResult.create(spawnResults));
     }
