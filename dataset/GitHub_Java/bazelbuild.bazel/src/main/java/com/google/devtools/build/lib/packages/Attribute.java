@@ -112,9 +112,9 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   private static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
-    private final SkylarkDefinedAspect aspect;
+    private final SkylarkAspect aspect;
 
-    public SkylarkRuleAspect(SkylarkDefinedAspect aspect) {
+    public SkylarkRuleAspect(SkylarkAspect aspect) {
       super(aspect.getAspectClass(), aspect.getDefaultParametersExtractor());
       this.aspect = aspect;
     }
@@ -150,12 +150,6 @@ public final class Attribute implements Comparable<Attribute> {
    * A configuration transition.
    */
   public interface Transition {
-    /**
-     * Does this transition switch to a "host" configuration?
-     */
-    default boolean isHostTransition() {
-      return false;
-    }
   }
 
   /**
@@ -177,22 +171,13 @@ public final class Attribute implements Comparable<Attribute> {
 
   /**
    * Declaration how the configuration should change when following a label or label list attribute.
-   *
-   * <p>Do not add to this. Use {@link
-   * com.google.devtools.build.lib.analysis.config.PatchTransition} or {@link SplitTransition}
-   * instead.
    */
   public enum ConfigurationTransition implements Transition {
     /** No transition, i.e., the same configuration as the current. */
     NONE,
 
     /** Transition to the host configuration. */
-    HOST {
-      @Override
-      public boolean isHostTransition() {
-        return true;
-      }
-    },
+    HOST,
 
     /** Transition to a null configuration (applies to, e.g., input files). */
     NULL,
@@ -1018,8 +1003,8 @@ public final class Attribute implements Comparable<Attribute> {
       return this.aspect(aspect, input -> AspectParameters.EMPTY);
     }
 
-    public Builder<TYPE> aspect(SkylarkDefinedAspect skylarkAspect, Location location)
-        throws EvalException {
+    public Builder<TYPE> aspect(
+        SkylarkAspect skylarkAspect, Location location) throws EvalException {
       SkylarkRuleAspect skylarkRuleAspect = new SkylarkRuleAspect(skylarkAspect);
       RuleAspect<?> oldAspect = this.aspects.put(skylarkAspect.getName(), skylarkRuleAspect);
       if (oldAspect != null) {
@@ -1875,7 +1860,7 @@ public final class Attribute implements Comparable<Attribute> {
     if (isLateBound(name)) {
       LateBoundDefault<?, ?> lateBoundDefault = (LateBoundDefault<?, ?>) defaultValue;
       Preconditions.checkArgument(!lateBoundDefault.useHostConfiguration()
-          || (configTransition.isHostTransition()),
+          || (configTransition == ConfigurationTransition.HOST),
           "a late bound default value using the host configuration must use the host transition");
     }
 

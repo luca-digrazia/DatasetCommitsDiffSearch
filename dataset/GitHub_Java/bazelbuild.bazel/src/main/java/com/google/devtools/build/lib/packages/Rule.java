@@ -353,7 +353,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * <p>This method ignores whether the present rule was created by a macro or not.
    */
   public Location getAttributeLocationWithoutMacro(String attrName) {
-    return getAttributeLocation(attrName, /* useBuildLocation= */ false);
+    return getAttributeLocation(attrName, false /* useBuildLocation */);
   }
 
   /**
@@ -365,7 +365,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * location of the macro invocation in the BUILD file instead.
    */
   public Location getAttributeLocation(String attrName) {
-    return getAttributeLocation(attrName, /* useBuildLocation= */ true);
+    return getAttributeLocation(attrName, true /* useBuildLocation */);
   }
 
   private Location getAttributeLocation(String attrName, boolean useBuildLocation) {

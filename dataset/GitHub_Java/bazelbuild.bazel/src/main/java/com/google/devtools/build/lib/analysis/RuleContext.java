@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.fileset.FilesetProvider;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -998,15 +997,6 @@ public final class RuleContext extends TargetContext
   @Nullable
   public ToolchainContext getToolchainContext() {
     return toolchainContext;
-  }
-
-  @Override
-  @Nullable
-  public PlatformInfo getExecutionPlatform() {
-    if (getToolchainContext() == null) {
-      return null;
-    }
-    return getToolchainContext().getExecutionPlatform();
   }
 
   private void checkAttribute(String attributeName, Mode mode) {
