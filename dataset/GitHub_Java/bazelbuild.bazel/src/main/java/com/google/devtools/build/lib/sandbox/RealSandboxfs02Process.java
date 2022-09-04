@@ -281,14 +281,12 @@ final class RealSandboxfs02Process extends RealSandboxfsProcess {
   private static void writeMapping(JsonWriter writer, Mapping mapping) throws IOException {
     writer.beginObject();
     {
-      writer.name("p");
+      writer.name("path");
       writer.value(mapping.path().getPathString());
-      writer.name("u");
+      writer.name("underlying_path");
       writer.value(mapping.target().getPathString());
-      if (mapping.writable()) {
-        writer.name("w");
-        writer.value(mapping.writable());
-      }
+      writer.name("writable");
+      writer.value(mapping.writable());
     }
     writer.endObject();
   }
@@ -302,12 +300,12 @@ final class RealSandboxfs02Process extends RealSandboxfsProcess {
     synchronized (this) {
       processStdIn.beginObject();
       {
-        processStdIn.name("C");
+        processStdIn.name("CreateSandbox");
         processStdIn.beginObject();
         {
-          processStdIn.name("i");
+          processStdIn.name("id");
           processStdIn.value(id);
-          processStdIn.name("m");
+          processStdIn.name("mappings");
           processStdIn.beginArray();
           for (Mapping mapping : mappings) {
             writeMapping(processStdIn, mapping);
@@ -332,7 +330,7 @@ final class RealSandboxfs02Process extends RealSandboxfsProcess {
     synchronized (this) {
       processStdIn.beginObject();
       {
-        processStdIn.name("D");
+        processStdIn.name("DestroySandbox");
         processStdIn.value(id);
       }
       processStdIn.endObject();
