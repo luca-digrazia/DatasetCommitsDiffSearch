@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.worker;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -59,12 +61,14 @@ import java.util.Map;
 @ExecutionStrategy(contextType = TestActionContext.class, name = { "experimental_worker" })
 public class WorkerTestStrategy extends StandaloneTestStrategy {
   private final WorkerPool workerPool;
+  private final int maxRetries;
   private final Multimap<String, String> extraFlags;
 
   public WorkerTestStrategy(
       CommandEnvironment env,
       OptionsClassProvider requestOptions,
       WorkerPool workerPool,
+      int maxRetries,
       Multimap<String, String> extraFlags) {
     super(
         requestOptions,
@@ -72,6 +76,7 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
         env.getClientEnv(),
         env.getWorkspace());
     this.workerPool = workerPool;
+    this.maxRetries = maxRetries;
     this.extraFlags = extraFlags;
   }
 
@@ -104,7 +109,8 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
         actionExecutionContext,
         addPersistentRunnerVars(spawn.getEnvironment()),
         startupArgs,
-        actionExecutionContext.getExecutor().getExecRoot());
+        actionExecutionContext.getExecutor().getExecRoot(),
+        maxRetries);
   }
 
   private TestResultData execInWorker(
@@ -112,7 +118,8 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
       ActionExecutionContext actionExecutionContext,
       Map<String, String> environment,
       List<String> startupArgs,
-      Path execRoot)
+      Path execRoot,
+      int retriesLeft)
       throws ExecException, InterruptedException, IOException {
     Executor executor = actionExecutionContext.getExecutor();
 
@@ -160,7 +167,7 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
         // to stdout - it's probably a stack trace or some kind of error message that will help the
         // user figure out why the compiler is failing.
         recordingStream.readRemaining();
-        String data = recordingStream.getRecordedDataAsString();
+        String data = recordingStream.getRecordedDataAsString(UTF_8);
         ErrorMessage errorMessage =
             ErrorMessage.builder()
                 .message("Worker process returned an unparseable WorkResponse:")
@@ -210,12 +217,31 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
 
       return builder.build();
     } catch (IOException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        // The user pressed Ctrl-C. Get out here quick.
+        retriesLeft = 0;
+      }
+
       if (worker != null) {
         workerPool.invalidateObject(key, worker);
         worker = null;
       }
-
-      throw new TestExecException(e.getMessage());
+      if (retriesLeft > 0) {
+        // The worker process failed, but we still have some retries left. Let's retry with a fresh
+        // worker.
+        executor
+            .getEventHandler()
+            .handle(
+                Event.warn(
+                    key.getMnemonic()
+                        + " worker failed ("
+                        + e
+                        + "), invalidating and retrying with new worker..."));
+        return execInWorker(
+            action, actionExecutionContext, environment, startupArgs, execRoot, retriesLeft - 1);
+      } else {
+        throw new TestExecException(e.getMessage());
+      }
     } finally {
       if (worker != null) {
         workerPool.returnObject(key, worker);
