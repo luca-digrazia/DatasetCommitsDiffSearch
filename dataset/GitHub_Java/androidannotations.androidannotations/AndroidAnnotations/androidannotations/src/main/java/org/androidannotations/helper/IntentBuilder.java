@@ -35,7 +35,6 @@ public abstract class IntentBuilder {
 	protected AndroidManifest androidManifest;
 	protected JDefinedClass builderClass;
 	protected JFieldRef contextField;
-	protected JFieldRef intentField;
 	protected JClass contextClass;
 	protected JClass intentClass;
 	protected Map<Pair<TypeMirror, String>, JMethod> putExtraMethods = new HashMap<Pair<TypeMirror, String>, JMethod>();
@@ -64,7 +63,7 @@ public abstract class IntentBuilder {
 		builderClass._extends(getSuperClass());
 		holder.setIntentBuilderClass(builderClass);
 		contextField = ref("context");
-		intentField = ref("intent");
+		holder.setIntentField(ref("intent"));
 	}
 
 	private void createContextConstructor() {
@@ -112,7 +111,8 @@ public abstract class IntentBuilder {
 		JMethod method = holder.getIntentBuilderClass().method(PUBLIC, holder.getIntentBuilderClass(), parameterName);
 		JClass parameterClass = codeModelHelper.typeMirrorToJClass(elementType, holder);
 		JVar extraParameterVar = method.param(parameterClass, parameterName);
-		JInvocation invocation = _super().invoke("putExtra").arg(extraKeyField);
+		JBlock body = method.body();
+		JInvocation invocation = body.invoke(holder.getIntentField(), "putExtra").arg(extraKeyField);
 		if (castToSerializable) {
 			invocation.arg(cast(holder.classes().SERIALIZABLE, extraParameterVar));
 		} else if (castToParcelable) {
@@ -120,7 +120,7 @@ public abstract class IntentBuilder {
 		} else {
 			invocation.arg(extraParameterVar);
 		}
-		method.body()._return(invocation);
+		body._return(_this());
 		return method;
 	}
 
