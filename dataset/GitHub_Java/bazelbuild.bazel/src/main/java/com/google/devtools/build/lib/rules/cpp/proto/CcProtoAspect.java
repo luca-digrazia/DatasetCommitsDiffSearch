@@ -296,8 +296,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
               ruleContext,
               requestedFeatures.build(),
               unsupportedFeatures.build(),
-              ccToolchain(ruleContext),
-              cppSemantics);
+              ccToolchain(ruleContext));
       return featureConfiguration;
     }
 
@@ -338,15 +337,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
         protoRootFragment = protoRootFragment.relativeTo(binOrGenfiles);
       }
       PathFragment repositoryPath =
-          ruleContext
-              .getLabel()
-              .getPackageIdentifier()
-              .getRepository()
-              .getExecPath(
-                  ruleContext
-                      .getAnalysisEnvironment()
-                      .getSkylarkSemantics()
-                      .experimentalSiblingRepositoryLayout());
+          ruleContext.getLabel().getPackageIdentifier().getRepository().getPathUnderExecRoot();
       if (protoRootFragment.startsWith(repositoryPath)) {
         protoRootFragment = protoRootFragment.relativeTo(repositoryPath);
       }
@@ -429,8 +420,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
       helper.addAdditionalExportedHeaders(headers.build());
     }
 
-    private void createProtoCompileAction(Collection<Artifact> outputs)
-        throws InterruptedException {
+    private void createProtoCompileAction(Collection<Artifact> outputs) {
       PathFragment protoRootFragment = PathFragment.create(protoInfo.getDirectProtoSourceRoot());
       String genfilesPath;
       PathFragment genfilesFragment = ruleContext.getConfiguration().getGenfilesFragment();
