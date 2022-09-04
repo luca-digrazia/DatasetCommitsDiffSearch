@@ -34,7 +34,7 @@ public class ExecutionTransitionFactoryTest {
 
   @Test
   public void executionTransition() throws OptionsParsingException {
-    ExecutionTransitionFactory execTransitionFactory = ExecutionTransitionFactory.create();
+    ExecutionTransitionFactory execTransitionFactory = new ExecutionTransitionFactory();
     PatchTransition transition =
         execTransitionFactory.create(
             AttributeTransitionData.builder()
@@ -63,7 +63,7 @@ public class ExecutionTransitionFactoryTest {
 
   @Test
   public void executionTransition_noExecPlatform() throws OptionsParsingException {
-    ExecutionTransitionFactory execTransitionFactory = ExecutionTransitionFactory.create();
+    ExecutionTransitionFactory execTransitionFactory = new ExecutionTransitionFactory();
     // No execution platform available.
     PatchTransition transition =
         execTransitionFactory.create(
