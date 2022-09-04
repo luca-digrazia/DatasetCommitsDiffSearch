@@ -99,7 +99,6 @@ public final class CcImportRule implements RuleDefinition {
         .add(attr("alwayslink", BOOLEAN))
         .add(attr("data", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE).dontCheckConstraints())
         .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
-        .useToolchainTransition(true)
         .build();
   }
 
@@ -107,7 +106,7 @@ public final class CcImportRule implements RuleDefinition {
   public  Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("$cc_import")
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .type(RuleClassType.ABSTRACT)
         .build();
   }
