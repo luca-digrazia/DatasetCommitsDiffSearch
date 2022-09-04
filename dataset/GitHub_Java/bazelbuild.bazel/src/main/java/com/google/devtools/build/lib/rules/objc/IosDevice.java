@@ -22,10 +22,11 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionProperties;
 
 /**
@@ -43,10 +44,11 @@ public final class IosDevice implements RuleConfiguredTargetFactory {
     String iosVersionAttribute =
         context.attributes().get(IosDeviceRule.IOS_VERSION_ATTR_NAME, STRING);
     XcodeVersionProperties xcodeVersionProperties =
+        (XcodeVersionProperties)
             context.getPrerequisite(
                 IosDeviceRule.XCODE_ATTR_NAME,
                 Mode.TARGET,
-                XcodeVersionProperties.SKYLARK_CONSTRUCTOR);
+                XcodeVersionProperties.SKYLARK_CONSTRUCTOR.getKey());
 
     DottedVersion xcodeVersion = null;
     if (xcodeVersionProperties != null && xcodeVersionProperties.getXcodeVersion().isPresent()) {
@@ -61,7 +63,7 @@ public final class IosDevice implements RuleConfiguredTargetFactory {
     } else if (xcodeVersionProperties != null) {
       iosVersion = xcodeVersionProperties.getDefaultIosSdkVersion();
     } else {
-      iosVersion = appleConfiguration.getSdkVersionForPlatform(ApplePlatform.IOS_SIMULATOR);
+      iosVersion = appleConfiguration.getSdkVersionForPlatform(Platform.IOS_SIMULATOR);
     }
 
     IosDeviceProvider provider =

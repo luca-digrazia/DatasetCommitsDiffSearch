@@ -38,7 +38,9 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Map.Entry;
+
 import javax.annotation.Nullable;
 
 /**
@@ -321,9 +323,8 @@ public class AppleSkylarkCommon {
         type = ObjcProvider.class,
         named = true,
         positional = false,
-        doc =
-            "An ObjcProvider which contains information about the transitive "
-                + "dependencies linked into the binary."
+        doc = "An ObjcProvider which contains information about the transitive "
+            + "dependencies linked into the binary."
       ),
       @Param(
         name = AppleDynamicFrameworkProvider.FRAMEWORK_DIRS_FIELD_NAME,
@@ -333,9 +334,8 @@ public class AppleSkylarkCommon {
         noneable = true,
         positional = false,
         defaultValue = "None",
-        doc =
-            "The framework path names used as link inputs in order to link against the dynamic "
-                + "framework."
+        doc = "The framework path names used as link inputs in order to link against the dynamic "
+            + "framework."
       ),
       @Param(
         name = AppleDynamicFrameworkProvider.FRAMEWORK_FILES_FIELD_NAME,
@@ -345,9 +345,8 @@ public class AppleSkylarkCommon {
         noneable = true,
         positional = false,
         defaultValue = "None",
-        doc =
-            "The full set of artifacts that should be included as inputs to link against the "
-                + "dynamic framework"
+        doc = "The full set of artifacts that should be included as inputs to link against the "
+            + "dynamic framework"
       )
     }
   )
@@ -367,17 +366,14 @@ public class AppleSkylarkCommon {
           } else {
             Iterable<String> pathStrings =
                 ((SkylarkNestedSet) dynamicFrameworkDirs).getSet(String.class);
-            frameworkDirs =
-                NestedSetBuilder.<PathFragment>stableOrder()
-                    .addAll(Iterables.transform(pathStrings, PathFragment::create))
-                    .build();
+            frameworkDirs = NestedSetBuilder.<PathFragment>stableOrder().addAll(
+                Iterables.transform(pathStrings, PathFragment.TO_PATH_FRAGMENT)).build();
           }
-          NestedSet<Artifact> frameworkFiles =
-              dynamicFrameworkFiles != Runtime.NONE
-                  ? ((SkylarkNestedSet) dynamicFrameworkFiles).getSet(Artifact.class)
-                  : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
-          return new AppleDynamicFrameworkProvider(
-              dylibBinary, depsObjcProvider, frameworkDirs, frameworkFiles);
+          NestedSet<Artifact> frameworkFiles = dynamicFrameworkFiles != Runtime.NONE
+              ? ((SkylarkNestedSet) dynamicFrameworkFiles).getSet(Artifact.class)
+              : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
+          return new AppleDynamicFrameworkProvider(dylibBinary, depsObjcProvider,
+              frameworkDirs, frameworkFiles);
         }
       };
 
