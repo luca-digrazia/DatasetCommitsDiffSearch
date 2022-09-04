@@ -453,8 +453,8 @@ public final class ApplicationManifest {
 
     // Filter the resources during analysis to prevent processing of and dependencies on unwanted
     // resources during execution.
-    resourceContainer = resourceContainer.filter(ruleContext, resourceFilter);
-    resourceDeps = resourceDeps.filter(ruleContext, resourceFilter);
+    resourceContainer = resourceContainer.filter(resourceFilter);
+    resourceDeps = resourceDeps.filter(resourceFilter);
 
     ResourceContainer processed;
     if (isLibrary && AndroidCommon.getAndroidConfig(ruleContext).useParallelResourceProcessing()) {
