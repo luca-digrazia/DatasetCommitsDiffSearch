@@ -15,12 +15,14 @@ package com.google.devtools.build.lib.analysis.util;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClass;
+
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import java.util.Arrays;
 
@@ -114,7 +116,7 @@ public interface MockRule extends RuleDefinition {
         MockRuleDefaults.DefaultConfiguredTargetFactory.class;
     /** The default {@link RuleDefinition} for this rule class. */
     private static final ImmutableList<Class<? extends RuleDefinition>> DEFAULT_ANCESTORS =
-        ImmutableList.of();
+        ImmutableList.of(BaseRuleClasses.RootRule.class);
 
     State(String ruleClassName, MockRuleCustomBehavior customBehavior,
         Class<? extends RuleConfiguredTargetFactory> factory,
