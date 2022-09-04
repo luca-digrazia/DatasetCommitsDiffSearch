@@ -7,9 +7,9 @@ import io.dropwizard.util.Maps;
 import io.dropwizard.util.Resources;
 import io.dropwizard.validation.BaseValidator;
 import org.assertj.core.data.MapEntry;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import javax.validation.Valid;
 import javax.validation.Validator;
@@ -160,7 +160,7 @@ public abstract class BaseConfigurationFactoryTest {
         return new File(Resources.getResource(resourceName).toURI());
     }
 
-    @AfterEach
+    @After
     public void resetConfigOverrides() {
         for (Enumeration<?> props = System.getProperties().propertyNames(); props.hasMoreElements();) {
             String keyString = (String) props.nextElement();
@@ -169,6 +169,9 @@ public abstract class BaseConfigurationFactoryTest {
             }
         }
     }
+
+    @Before
+    public abstract void setUp() throws Exception;
 
     @Test
     public void usesDefaultedCacheBuilderSpec() throws Exception {
@@ -420,7 +423,7 @@ public abstract class BaseConfigurationFactoryTest {
             new YamlConfigurationFactory<>(NonInsatiableExample.class, validator, Jackson.newObjectMapper(), "dw");
         assertThatThrownBy(factory::build)
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unable to create an instance of the configuration class: " +
+            .hasMessage("Unable create an instance of the configuration class: " +
                 "'io.dropwizard.configuration.BaseConfigurationFactoryTest.NonInsatiableExample'");
     }
 

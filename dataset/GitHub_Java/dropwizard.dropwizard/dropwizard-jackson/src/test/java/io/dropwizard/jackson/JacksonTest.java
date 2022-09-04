@@ -2,7 +2,7 @@ package io.dropwizard.jackson;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.mockito.Mockito;
 
 import javax.annotation.Nullable;
@@ -15,7 +15,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 
 public class JacksonTest {
     @Test
-    void objectMapperUsesGivenCustomJsonFactory() {
+    public void objectMapperUsesGivenCustomJsonFactory() {
         JsonFactory factory = Mockito.mock(JsonFactory.class);
 
         ObjectMapper mapper = Jackson.newObjectMapper(factory);
@@ -24,14 +24,14 @@ public class JacksonTest {
     }
 
     @Test
-    void objectMapperCanHandleNullInsteadOfCustomJsonFactory() {
+    public void objectMapperCanHandleNullInsteadOfCustomJsonFactory() {
         ObjectMapper mapper = Jackson.newObjectMapper(null);
 
         assertThat(mapper.getFactory()).isNotNull();
     }
 
     @Test
-    void objectMapperCanDeserializeJdk7Types() throws IOException {
+    public void objectMapperCanDeserializeJdk7Types() throws IOException {
         final LogMetadata metadata = Jackson.newObjectMapper()
             .readValue("{\"path\": \"/var/log/app/server.log\"}", LogMetadata.class);
         assertThat(metadata).isNotNull();
@@ -39,7 +39,7 @@ public class JacksonTest {
     }
 
     @Test
-    void objectMapperSerializesNullValues() throws IOException {
+    public void objectMapperSerializesNullValues() throws IOException {
         final ObjectMapper mapper = Jackson.newObjectMapper();
         final Issue1627 pojo = new Issue1627(null, null);
         final String json = "{\"string\":null,\"uuid\":null}";
@@ -48,7 +48,7 @@ public class JacksonTest {
     }
 
     @Test
-    void objectMapperIgnoresUnknownProperties() {
+    public void objectMapperIgnoresUnknownProperties() {
         assertThatCode(() ->
             Jackson.newObjectMapper()
                 .readValue("{\"unknown\": 4711, \"path\": \"/var/log/app/server.log\"}", LogMetadata.class)

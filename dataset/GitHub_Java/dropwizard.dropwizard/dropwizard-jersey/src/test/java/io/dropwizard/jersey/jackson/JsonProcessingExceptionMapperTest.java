@@ -6,7 +6,7 @@ import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import io.dropwizard.jersey.errors.LoggingExceptionMapper;
 import org.glassfish.jersey.client.ClientConfig;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.Application;
@@ -35,7 +35,7 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA500ForNonDeserializableRepresentationClasses() throws Exception {
+    public void returnsA500ForNonDeserializableRepresentationClasses() throws Exception {
         Response response = target("/json/broken").request(MediaType.APPLICATION_JSON)
                 .post(Entity.entity(new BrokenRepresentation(Collections.singletonList("whee")), MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
@@ -43,7 +43,7 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA500ForListNonDeserializableRepresentationClasses() throws Exception {
+    public void returnsA500ForListNonDeserializableRepresentationClasses() throws Exception {
         final List<BrokenRepresentation> ent =
                 Arrays.asList(new BrokenRepresentation(Collections.emptyList()),
                 new BrokenRepresentation(Collections.singletonList("whoo")));
@@ -55,14 +55,14 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA500ForNonSerializableRepresentationClassesOutbound() throws Exception {
+    public void returnsA500ForNonSerializableRepresentationClassesOutbound() throws Exception {
         Response response = target("/json/brokenOutbound").request(MediaType.APPLICATION_JSON).get();
         assertThat(response.getStatus()).isEqualTo(500);
         assertThat(response.getMediaType()).isEqualTo(MediaType.APPLICATION_JSON_TYPE);
     }
 
     @Test
-    void returnsA500ForAbstractEntity() throws Exception {
+    public void returnsA500ForAbstractEntity() throws Exception {
         Response response = target("/json/interface").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity("\"hello\"", MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
@@ -70,7 +70,7 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA500ForAbstractEntities() throws Exception {
+    public void returnsA500ForAbstractEntities() throws Exception {
         Response response = target("/json/interfaceList").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity("[\"hello\"]", MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
@@ -78,7 +78,7 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA400ForCustomDeserializer() throws Exception {
+    public void returnsA400ForCustomDeserializer() throws Exception {
         Response response = target("/json/custom").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity("{}", MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(400);
@@ -87,7 +87,7 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA500ForCustomDeserializerUnexpected() throws Exception {
+    public void returnsA500ForCustomDeserializerUnexpected() throws Exception {
         Response response = target("/json/custom").request(MediaType.APPLICATION_JSON)
             .post(Entity.entity("\"SQL_INECTION\"", MediaType.APPLICATION_JSON));
         assertThat(response.getStatus()).isEqualTo(500);
@@ -96,42 +96,42 @@ public class JsonProcessingExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    void returnsA400ForMalformedInputCausingIoException() throws Exception {
+    public void returnsA400ForMalformedInputCausingIoException() throws Exception {
         assertEndpointReturns400("url", "\"no-scheme.com\"");
     }
 
     @Test
-    void returnsA400ForListWrongInputType() throws Exception {
+    public void returnsA400ForListWrongInputType() throws Exception {
         assertEndpointReturns400("urlList", "\"no-scheme.com\"");
     }
 
     @Test
-    void returnsA400ForMalformedListInputCausingIoException() throws Exception {
+    public void returnsA400ForMalformedListInputCausingIoException() throws Exception {
         assertEndpointReturns400("urlList", "[\"no-scheme.com\"]");
     }
 
     @Test
-    void returnsA400ForWrongInputType() throws Exception {
+    public void returnsA400ForWrongInputType() throws Exception {
         assertEndpointReturns400("ok", "false");
     }
 
     @Test
-    void returnsA400ForInvalidFormatRequestEntities() throws Exception {
+    public void returnsA400ForInvalidFormatRequestEntities() throws Exception {
         assertEndpointReturns400("ok", "{\"message\": \"a\", \"date\": \"2016-01-01\"}");
     }
 
     @Test
-    void returnsA400ForInvalidFormatRequestEntitiesWrapped() throws Exception {
+    public void returnsA400ForInvalidFormatRequestEntitiesWrapped() throws Exception {
         assertEndpointReturns400("ok", "{\"message\": \"1\", \"date\": \"a\"}");
     }
 
     @Test
-    void returnsA400ForInvalidFormatRequestEntitiesArray() throws Exception {
+    public void returnsA400ForInvalidFormatRequestEntitiesArray() throws Exception {
         assertEndpointReturns400("ok", "{\"message\": \"1\", \"date\": [1,1,1,1]}");
     }
 
     @Test
-    void returnsA400ForSemanticInvalidDate() throws Exception {
+    public void returnsA400ForSemanticInvalidDate() throws Exception {
         assertEndpointReturns400("ok", "{\"message\": \"1\", \"date\": [-1,-1,-1]}");
     }
 
