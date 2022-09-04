@@ -3,6 +3,9 @@ package io.quarkus.it.mongodb.panache;
 import static io.restassured.RestAssured.get;
 import static org.hamcrest.Matchers.is;
 
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -11,7 +14,10 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
 
+import org.jboss.logging.Logger;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,9 +25,15 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+import de.flapdoodle.embed.mongo.MongodExecutable;
+import de.flapdoodle.embed.mongo.MongodStarter;
+import de.flapdoodle.embed.mongo.config.IMongodConfig;
+import de.flapdoodle.embed.mongo.config.MongodConfigBuilder;
+import de.flapdoodle.embed.mongo.config.Net;
+import de.flapdoodle.embed.mongo.distribution.Version;
+import de.flapdoodle.embed.process.runtime.Network;
 import io.quarkus.it.mongodb.panache.book.BookDetail;
 import io.quarkus.it.mongodb.panache.person.Person;
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 import io.restassured.common.mapper.TypeRef;
@@ -30,12 +42,34 @@ import io.restassured.parsing.Parser;
 import io.restassured.response.Response;
 
 @QuarkusTest
-@QuarkusTestResource(MongoTestResource.class)
 class MongodbPanacheResourceTest {
+    private static final Logger LOGGER = Logger.getLogger(MongodbPanacheResourceTest.class);
     private static final TypeRef<List<BookDTO>> LIST_OF_BOOK_TYPE_REF = new TypeRef<List<BookDTO>>() {
     };
     private static final TypeRef<List<Person>> LIST_OF_PERSON_TYPE_REF = new TypeRef<List<Person>>() {
     };
+
+    private static MongodExecutable MONGO;
+
+    @BeforeAll
+    public static void startMongoDatabase() throws IOException {
+        Version.Main version = Version.Main.V4_0;
+        int port = 27018;
+        LOGGER.infof("Starting Mongo %s on port %s", version, port);
+        IMongodConfig config = new MongodConfigBuilder()
+                .version(version)
+                .net(new Net(port, Network.localhostIsIPv6()))
+                .build();
+        MONGO = MongodStarter.getDefaultInstance().prepare(config);
+        MONGO.start();
+    }
+
+    @AfterAll
+    public static void stopMongoDatabase() {
+        if (MONGO != null) {
+            MONGO.stop();
+        }
+    }
 
     @Test
     public void testBookEntity() {
@@ -131,9 +165,6 @@ class MongodbPanacheResourceTest {
         // magic query find("author", author)
         list = get(endpoint + "/search/Victor Hugo").as(LIST_OF_BOOK_TYPE_REF);
         Assertions.assertEquals(2, list.size());
-        // we have a projection so we should not have the details field but we should have the title thanks to @BsonProperty
-        Assertions.assertNotNull(list.get(0).getTitle());
-        Assertions.assertNull(list.get(0).getDetails());
 
         // magic query find("{'author':?1,'title':?1}", author, title)
         BookDTO book = get(endpoint + "/search?author=Victor Hugo&title=Notre-Dame de Paris").as(BookDTO.class);
@@ -185,13 +216,6 @@ class MongodbPanacheResourceTest {
         //test some special characters
         list = get(endpoint + "/search/Victor'\\ Hugo").as(LIST_OF_BOOK_TYPE_REF);
         Assertions.assertEquals(0, list.size());
-
-        //delete all
-        response = RestAssured
-                .given()
-                .delete(endpoint)
-                .andReturn();
-        Assertions.assertEquals(204, response.statusCode());
     }
 
     private void callPersonEndpoint(String endpoint) {
@@ -255,13 +279,6 @@ class MongodbPanacheResourceTest {
         list = get(endpoint + "?sort=firstname").as(LIST_OF_PERSON_TYPE_REF);
         Assertions.assertEquals(4, list.size());
 
-        //with project
-        list = get(endpoint + "/search/Doe").as(LIST_OF_PERSON_TYPE_REF);
-        Assertions.assertEquals(2, list.size());
-        Assertions.assertNotNull(list.get(0).lastname);
-        //expected the firstname field to be null as we project on lastname only
-        Assertions.assertNull(list.get(0).firstname);
-
         //count
         Long count = get(endpoint + "/count").as(Long.class);
         Assertions.assertEquals(4, count);
@@ -308,6 +325,10 @@ class MongodbPanacheResourceTest {
         return cal.getTime();
     }
 
+    private Date fromYear(int year) {
+        return Date.from(LocalDate.of(year, 1, 1).atStartOfDay().toInstant(ZoneOffset.UTC));
+    }
+
     @Test
     public void testBug5274() {
         get("/bugs/5274").then().body(is("OK"));
@@ -319,19 +340,9 @@ class MongodbPanacheResourceTest {
     }
 
     @Test
-    public void testDatesFormat() {
-        get("/bugs/dates").then().statusCode(200);
-    }
-
-    @Test
     public void testNeedReflection() {
         get("/bugs/6324").then().statusCode(200);
 
         get("/bugs/6324/abstract").then().statusCode(200);
-    }
-
-    @Test
-    public void testBug7415() {
-        get("/bugs/7415").then().statusCode(200);
     }
 }
