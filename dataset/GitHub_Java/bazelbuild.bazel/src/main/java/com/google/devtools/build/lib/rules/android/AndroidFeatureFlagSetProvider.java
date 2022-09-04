@@ -47,6 +47,7 @@ import java.util.Map;
 public final class AndroidFeatureFlagSetProvider extends NativeInfo
     implements AndroidFeatureFlagSetProviderApi {
 
+  public static final String PROVIDER_NAME = "AndroidFeatureFlagSetProvider";
   public static final Provider PROVIDER = new Provider();
 
   /** The name of the attribute used by Android rules to set config_feature_flags. */
@@ -145,15 +146,15 @@ public final class AndroidFeatureFlagSetProvider extends NativeInfo
   public static class Provider extends BuiltinProvider<AndroidFeatureFlagSetProvider>
       implements AndroidFeatureFlagSetProviderApi.Provider {
     private Provider() {
-      super(NAME, AndroidFeatureFlagSetProvider.class);
+      super(PROVIDER_NAME, AndroidFeatureFlagSetProvider.class);
     }
 
     public String getName() {
-      return NAME;
+      return PROVIDER_NAME;
     }
 
     @Override
-    public AndroidFeatureFlagSetProvider create(SkylarkDict<?, ?> flags) // <Label, String>
+    public AndroidFeatureFlagSetProvider create(SkylarkDict<Label, String> flags)
         throws EvalException {
       return new AndroidFeatureFlagSetProvider(
           Optional.of(

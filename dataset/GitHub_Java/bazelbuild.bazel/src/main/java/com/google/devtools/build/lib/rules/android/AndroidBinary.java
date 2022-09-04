@@ -610,8 +610,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         /* isLibrary = */ false);
 
     if (dexPostprocessingOutput.proguardMap() != null) {
-      builder.addNativeDeclaredProvider(
-          new ProguardMappingProvider(dexPostprocessingOutput.proguardMap()));
+      builder.addProvider(
+          ProguardMappingProvider.class,
+          ProguardMappingProvider.create(dexPostprocessingOutput.proguardMap()));
     }
 
     if (oneVersionEnforcementArtifact != null) {

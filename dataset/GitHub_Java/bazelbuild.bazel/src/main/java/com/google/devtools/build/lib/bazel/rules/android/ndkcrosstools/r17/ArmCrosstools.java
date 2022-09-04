@@ -103,7 +103,6 @@ final class ArmCrosstools {
             CompilationModeFlags.newBuilder()
                 .setMode(CompilationMode.DBG)
                 .addCompilerFlag("-O0")
-                .addCompilerFlag("-g")
                 .addCompilerFlag("-UNDEBUG"));
   }
 
