@@ -26,7 +26,9 @@ import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -71,7 +73,7 @@ public final class CommandHelper {
    * This is similar to heuristic location expansion in LocationExpander
    * and should be kept in sync.
    */
-  private final ImmutableMap<Label, ImmutableCollection<Artifact>> labelMap;
+  private final SkylarkDict<Label, ImmutableCollection<Artifact>> labelMap;
 
   /**
    * The ruleContext this helper works on
@@ -133,7 +135,7 @@ public final class CommandHelper {
     for (Entry<Label, Collection<Artifact>> entry : tempLabelMap.entrySet()) {
       labelMapBuilder.put(entry.getKey(), ImmutableList.copyOf(entry.getValue()));
     }
-    this.labelMap = labelMapBuilder.build();
+    this.labelMap = SkylarkDict.copyOf(null, labelMapBuilder.build());
   }
 
   public SkylarkList<Artifact> getResolvedTools() {
@@ -159,38 +161,38 @@ public final class CommandHelper {
   }
 
   /**
-   * Resolves a command, and expands known locations for $(location) variables. This method supports
-   * legacy heuristic label expansion, which replaces strings that look like labels with their
-   * corresponding file names. Use {@link #resolveCommandAndExpandLabels} instead.
+   * Resolves a command, and expands known locations for $(location)
+   * variables.
    */
-  public String resolveCommandAndHeuristicallyExpandLabels(
-      String command, @Nullable String attribute, boolean enableLegacyHeuristicLabelExpansion) {
-    command = resolveCommandAndExpandLabels(command, attribute, false);
-    if (enableLegacyHeuristicLabelExpansion) {
+  public String resolveCommandAndExpandLabels(
+      String command,
+      @Nullable String attribute,
+      Boolean supportLegacyExpansion,
+      Boolean allowDataInLabel) {
+    LocationExpander expander = new LocationExpander(
+        ruleContext, ImmutableMap.copyOf(labelMap), allowDataInLabel);
+    if (attribute != null) {
+      command = expander.expandAttribute(attribute, command);
+    } else {
+      command = expander.expand(command);
+    }
+    if (supportLegacyExpansion) {
       command = expandLabels(command, labelMap);
     }
     return command;
   }
 
   /**
-   * Resolves a command, and expands known locations for $(location)
+   * Resolves the 'cmd' attribute, and expands known locations for $(location)
    * variables.
    */
   public String resolveCommandAndExpandLabels(
-      String command, @Nullable String attribute, boolean allowDataInLabel) {
-    LocationExpander expander;
-    if (allowDataInLabel) {
-      expander = new LocationExpander(ruleContext, labelMap,
-          LocationExpander.Options.EXEC_PATHS, LocationExpander.Options.ALLOW_DATA);
-    } else {
-      expander = new LocationExpander(ruleContext, labelMap, LocationExpander.Options.EXEC_PATHS);
-    }
-    if (attribute != null) {
-      command = expander.expandAttribute(attribute, command);
-    } else {
-      command = expander.expand(command);
-    }
-    return command;
+      Boolean supportLegacyExpansion, Boolean allowDataInLabel) {
+    return resolveCommandAndExpandLabels(
+        ruleContext.attributes().get("cmd", Type.STRING),
+        "cmd",
+        supportLegacyExpansion,
+        allowDataInLabel);
   }
 
   /**
