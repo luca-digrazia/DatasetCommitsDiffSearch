@@ -25,6 +25,7 @@ import org.androidannotations.annotations.EViewGroup;
 import org.androidannotations.processing.EBeansHolder.Classes;
 
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCase;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
@@ -93,7 +94,7 @@ public class EBeanHolder {
 	/**
 	 * OnActivityResult byResultCode
 	 */
-	public final HashMap<Integer, JBlock> onActivityResultCases = new HashMap<Integer, JBlock>();
+	public final HashMap<Integer, JCase> onActivityResultCases = new HashMap<Integer, JCase>();
 
 	public JSwitch onActivityResultSwitch;
 	public JMethod onActivityResultMethod;
