@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.yammer.dropwizard.tasks.Task;
 import com.yammer.dropwizard.tasks.TaskServlet;
+import org.junit.Before;
 import org.junit.Test;
 
 import javax.servlet.http.HttpServletRequest;
@@ -25,6 +26,11 @@ public class TaskServletTest {
     private final TaskServlet servlet = new TaskServlet(ImmutableList.of(gc, clearCache));
     private final HttpServletRequest request = mock(HttpServletRequest.class);
     private final HttpServletResponse response = mock(HttpServletResponse.class);
+
+    @Before
+    public void setUp() throws Exception {
+//        Logger.getRootLogger().setLevel(Level.OFF);
+    }
     
     @Test
     public void returnsA404WhenNotFound() throws Exception {
@@ -81,6 +87,6 @@ public class TaskServletTest {
         
         servlet.service(request, response);
 
-        verify(response).setStatus(500);
+        verify(response).sendError(500);
     }
 }
