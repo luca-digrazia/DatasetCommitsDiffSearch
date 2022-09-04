@@ -1,6 +1,7 @@
 package org.jboss.shamrock.jpa;
 
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -32,7 +33,6 @@ public final class HibernateResourceProcessor implements ResourceProcessor {
 
     @Override
     public void process(final ArchiveContext archiveContext, final ProcessorContext processorContext) throws Exception {
-
         List<ParsedPersistenceXmlDescriptor> descriptors = PersistenceUnitsHolder.loadOriginalXMLParsedDescriptors();
         processorContext.setProperty(PARSED_DESCRIPTORS, descriptors);
 
@@ -68,14 +68,14 @@ public final class HibernateResourceProcessor implements ResourceProcessor {
             recorder.registerNonDefaultConstructor(ParsedPersistenceXmlDescriptor.class.getDeclaredConstructor(URL.class), (i) -> Collections.singletonList(i.getPersistenceUnitRootUrl()));
             recorder.getRecordingProxy(JPADeploymentTemplate.class).initMetadata(descriptors, scanner, null);
         }
+
+
     }
 
     private void enhanceEntities(final KnownDomainObjects domainObjects, ArchiveContext archiveContext, ProcessorContext processorContext) {
-        HibernateEntityEnhancer hibernateEntityEnhancer = new HibernateEntityEnhancer(domainObjects);
-        for(String i : domainObjects.getClassNames()) {
-            processorContext.addByteCodeTransformer(i, hibernateEntityEnhancer);
-        }
+        processorContext.addByteCodeTransformer(new HibernateEntityEnhancer(domainObjects));
     }
+
 
     @Override
     public int getPriority() {
