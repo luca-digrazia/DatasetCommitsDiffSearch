@@ -64,10 +64,9 @@ public class Turbine {
   }
 
   public int compile(TurbineOptions options) throws IOException {
-    try (PrintWriter writer =
-        new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true)) {
-      return compile(options, writer);
-    }
+    return compile(
+        options,
+        new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true));
   }
 
   public int compile(TurbineOptions options, PrintWriter out) throws IOException {

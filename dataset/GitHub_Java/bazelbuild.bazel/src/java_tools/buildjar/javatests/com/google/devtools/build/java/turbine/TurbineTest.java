@@ -63,15 +63,12 @@ public final class TurbineTest {
             .setTargetLabel("//test");
 
     StringWriter errOutput = new StringWriter();
-    int result = -1;
-    try (PrintWriter writer = new PrintWriter(errOutput, true)) {
-      result =
-          new Turbine(
-                  "An exception has occurred in turbine.",
-                  "",
-                  (type, target) -> String.format("jadep -classnames=%s %s", type, target))
-              .compile(optionsBuilder.build(), writer);
-    }
+    int result =
+        new Turbine(
+                "An exception has occurred in turbine.",
+                "",
+                (type, target) -> String.format("jadep -classnames=%s %s", type, target))
+            .compile(optionsBuilder.build(), new PrintWriter(errOutput, true));
     assertThat(errOutput.toString())
         .contains(
             "Hello.java:1: error: symbol not found p.Lib\n"
