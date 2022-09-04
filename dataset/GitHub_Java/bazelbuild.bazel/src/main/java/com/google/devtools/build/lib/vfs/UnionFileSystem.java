@@ -49,6 +49,10 @@ public class UnionFileSystem extends FileSystem {
   // This does not currently handle unicode filenames.
   private final PathTrie<FileSystem> pathDelegate;
 
+  // True iff the filesystem can be modified. If false, mutating operations
+  // will throw UnsupportedOperationExceptions.
+  private final boolean readOnly;
+
   // True if the file path is case-sensitive on all the FileSystem
   // or False if they are all case-insensitive, otherwise error.
   private final boolean isCaseSensitive;
@@ -57,9 +61,21 @@ public class UnionFileSystem extends FileSystem {
    * Creates a new modifiable UnionFileSystem with prefix mappings specified by a map.
    *
    * @param prefixMapping map of path prefixes to {@link FileSystem}s
-   * @param rootFileSystem root for default requests; i.e. mapping of "/"
    */
   public UnionFileSystem(Map<PathFragment, FileSystem> prefixMapping, FileSystem rootFileSystem) {
+    this(prefixMapping, rootFileSystem, /* readOnly */ false);
+  }
+
+  /**
+   * Creates a new modifiable or read-only UnionFileSystem with prefix mappings specified by a map.
+   *
+   * @param prefixMapping map of path prefixes to delegate {@link FileSystem} instances to use for
+   *     paths of that prefix. Note that all prefixes must be absolute paths.
+   * @param rootFileSystem root for default requests; i.e. mapping of "/"
+   * @param readOnly if true, mutating operations will throw
+   */
+  public UnionFileSystem(
+      Map<PathFragment, FileSystem> prefixMapping, FileSystem rootFileSystem, boolean readOnly) {
     super();
     Preconditions.checkNotNull(prefixMapping);
     Preconditions.checkNotNull(rootFileSystem);
@@ -69,6 +85,7 @@ public class UnionFileSystem extends FileSystem {
         "Attempted to specify an explicit root prefix mapping; "
             + "please use the rootFileSystem argument instead.");
 
+    this.readOnly = readOnly;
     this.pathDelegate = new PathTrie<>();
     this.isCaseSensitive = rootFileSystem.isFilePathCaseSensitive();
 
@@ -136,28 +153,22 @@ public class UnionFileSystem extends FileSystem {
 
   @Override
   public boolean supportsModifications(Path path) {
-    FileSystem delegate = getDelegate(path);
-    path = adjustPath(path, delegate);
-    return delegate.supportsModifications(path);
+    return !readOnly;
   }
 
   @Override
   public boolean supportsSymbolicLinksNatively(Path path) {
-    FileSystem delegate = getDelegate(path);
-    path = adjustPath(path, delegate);
-    return delegate.supportsSymbolicLinksNatively(path);
+    return true;
   }
 
   @Override
   public boolean supportsHardLinksNatively(Path path) {
-    FileSystem delegate = getDelegate(path);
-    path = adjustPath(path, delegate);
-    return delegate.supportsHardLinksNatively(path);
+    return true;
   }
 
   @Override
   public boolean isFilePathCaseSensitive() {
-    return isCaseSensitive;
+    return this.isCaseSensitive;
   }
 
   @Override
