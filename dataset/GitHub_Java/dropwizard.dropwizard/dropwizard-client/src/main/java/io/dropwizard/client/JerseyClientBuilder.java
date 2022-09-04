@@ -296,7 +296,7 @@ public class JerseyClientBuilder {
                     .executorService("jersey-client-" + name + "-%d")
                     .minThreads(configuration.getMinThreads())
                     .maxThreads(configuration.getMaxThreads())
-                    .workQueue(new ArrayBlockingQueue<>(configuration.getWorkQueueSize()))
+                    .workQueue(new ArrayBlockingQueue<Runnable>(configuration.getWorkQueueSize()))
                     .build();
         }
 
@@ -366,10 +366,15 @@ public class JerseyClientBuilder {
         if (connectorProvider == null) {
             final ConfiguredCloseableHttpClient apacheHttpClient =
                     apacheHttpClientBuilder.buildWithDefaultRequestConfiguration(name);
-            connectorProvider = (client, runtimeConfig) -> new DropwizardApacheConnector(
-                    apacheHttpClient.getClient(),
-                    apacheHttpClient.getDefaultRequestConfig(),
-                    configuration.isChunkedEncodingEnabled());
+            connectorProvider = new ConnectorProvider() {
+                @Override
+                public Connector getConnector(Client client, Configuration runtimeConfig) {
+                    return new DropwizardApacheConnector(
+                            apacheHttpClient.getClient(),
+                            apacheHttpClient.getDefaultRequestConfig(),
+                            configuration.isChunkedEncodingEnabled());
+                }
+            };
         }
         config.connectorProvider(connectorProvider);
 
