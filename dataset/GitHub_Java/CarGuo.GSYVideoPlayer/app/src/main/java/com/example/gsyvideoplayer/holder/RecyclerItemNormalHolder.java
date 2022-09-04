@@ -57,19 +57,16 @@ public class RecyclerItemNormalHolder extends RecyclerItemBaseHolder {
         String url;
         String title;
         if (position % 2 == 0) {
-            url = "https://res.exexm.com/cw_145225549855002";
+            url = "http://baobab.wdjcdn.com/14564977406580.mp4";
             title = "这是title";
         } else {
             url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
             title = "哦？Title？";
         }
-        //防止错位，离开释放
-        gsyVideoPlayer.initUIState();
         gsyVideoOptionBuilder
                 .setIsTouchWiget(false)
                 .setThumbImageView(imageView)
                 .setUrl(url)
-                .setSetUpLazy(true)//lazy可以防止滑动卡顿
                 .setVideoTitle(title)
                 .setCacheWithPlay(true)
                 .setRotateViewAuto(true)
