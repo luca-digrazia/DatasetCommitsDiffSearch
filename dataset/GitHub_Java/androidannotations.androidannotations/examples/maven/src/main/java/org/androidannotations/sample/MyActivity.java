@@ -3,6 +3,8 @@ package org.androidannotations.sample;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
+import android.annotation.TargetApi;
+import android.os.Build;
 import org.androidannotations.annotations.Background;
 import org.androidannotations.annotations.Click;
 import org.androidannotations.annotations.EActivity;
@@ -30,7 +32,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 @EActivity(R.layout.my_activity)
 public class MyActivity extends Activity {
@@ -55,13 +56,6 @@ public class MyActivity extends Activity {
 
 	@SystemService
 	WindowManager windowManager;
-
-	/**
-	 * AndroidAnnotations gracefully handles support for onBackPressed, whether you use ECLAIR (2.0), or pre ECLAIR android version.
-	 */
-	public void onBackPressed() {
-		Toast.makeText(this, "Back key pressed!", Toast.LENGTH_SHORT).show();
-	}
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -100,10 +94,17 @@ public class MyActivity extends Activity {
 	}
 
 	@UiThread(delay = 2000)
+	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	void showNotificationsDelayed() {
-		Notification notification = new Notification(R.drawable.icon, "Hello !", 0);
 		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, new Intent(), 0);
-		notification.setLatestEventInfo(getApplicationContext(), "My notification", "Hello World!", contentIntent);
+
+		Notification notification = new Notification.Builder(this)
+				.setSmallIcon(R.drawable.icon)
+				.setContentTitle("My notification")
+				.setContentText("Hello, World!")
+				.setContentIntent(contentIntent)
+				.getNotification();
+
 		notificationManager.notify(1, notification);
 	}
 
