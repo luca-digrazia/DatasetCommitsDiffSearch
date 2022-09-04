@@ -14,13 +14,14 @@
 
 package com.google.devtools.common.options;
 
+import static java.util.stream.Collectors.toList;
+
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.util.Classpath;
 import com.google.devtools.build.lib.util.Classpath.ClassPathException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -66,7 +67,7 @@ public class OptionDefaultValueConversionTest {
               .flatMap(c -> Arrays.stream(c.getFields()))
               .filter(f -> f.isAnnotationPresent(Option.class))
               .map(OptionDefinition::extractOptionDefinition)
-              .collect(Collectors.toList());
+              .collect(toList());
       logger.atFine().log(
           "Found %d Option-annotated fields in Prod code", optionDefinitions.size());
 
