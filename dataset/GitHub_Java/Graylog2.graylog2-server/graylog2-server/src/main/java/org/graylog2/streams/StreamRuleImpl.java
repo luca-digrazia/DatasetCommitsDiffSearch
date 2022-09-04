@@ -20,6 +20,7 @@
 
 package org.graylog2.streams;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
@@ -27,10 +28,7 @@ import org.bson.types.ObjectId;
 import org.graylog2.Core;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.Persisted;
-import org.graylog2.database.validators.FilledStringValidator;
-import org.graylog2.database.validators.IntegerValidator;
-import org.graylog2.database.validators.ObjectIdValidator;
-import org.graylog2.database.validators.Validator;
+import org.graylog2.database.validators.*;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
 
@@ -47,6 +45,11 @@ import java.util.Map;
 public class StreamRuleImpl extends Persisted implements StreamRule {
 
     private static final String COLLECTION = "streamrules";
+
+    /*public static final int TYPE_EXACT = 1;
+    public static final int TYPE_REGEX = 2;
+    public static final int TYPE_GREATER = 3;
+    public static final int TYPE_SMALLER = 4;*/
 
     public StreamRuleImpl(Map<String, Object> fields, Core core) {
         super(core, fields);
@@ -66,11 +69,10 @@ public class StreamRuleImpl extends Persisted implements StreamRule {
         return new StreamRuleImpl((ObjectId) o.get("_id"), o.toMap(), core);
     }
 
-    public static List<StreamRule> findAllForStream(String streamId, Core core) throws NotFoundException {
-        ObjectId id = new ObjectId(streamId);
+    public static List<StreamRule> findAllForStream(ObjectId streamId, Core core) throws NotFoundException {
         final List<StreamRule> streamRules = new ArrayList<StreamRule>();
         final List<DBObject> respStreamRules = StreamRuleImpl.query(
-                new BasicDBObject("stream_id", id),
+                new BasicDBObject("stream_id", streamId),
                 core,
                 COLLECTION
         );
@@ -134,8 +136,8 @@ public class StreamRuleImpl extends Persisted implements StreamRule {
         fields.put("inverted", inverted);
     }
 
-    public String getStreamId() {
-        return ((ObjectId) fields.get("stream_id")).toStringMongod();
+    public ObjectId getStreamId() {
+        return (ObjectId) fields.get("stream_id");
     }
 
     /*public StreamImpl getStream() throws NotFoundException {
@@ -165,8 +167,8 @@ public class StreamRuleImpl extends Persisted implements StreamRule {
         // We work on the result a bit to allow correct JSON serializing.
         Map<String, Object> result = Maps.newHashMap(fields);
         result.remove("_id");
-        result.put("id", getId());
-        result.put("stream_id", getStreamId());
+        result.put("id", ((ObjectId) fields.get("_id")).toStringMongod());
+        result.put("stream_id", getStreamId().toStringMongod());
 
         return result;
     }

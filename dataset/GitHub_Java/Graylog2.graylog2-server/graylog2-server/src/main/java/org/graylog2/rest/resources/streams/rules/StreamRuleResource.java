@@ -4,8 +4,8 @@ import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
+import org.graylog2.database.*;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
@@ -73,16 +73,16 @@ public class StreamRuleResource extends RestResource {
 
         final StreamRuleImpl streamRule = new StreamRuleImpl(streamRuleData, core);
 
-        String id;
+        ObjectId id;
         try {
-            id = streamRule.save().toStringMongod();
+            id = streamRule.save();
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
         Map<String, Object> result = Maps.newHashMap();
-        result.put("streamrule_id", id);
+        result.put("streamrule_id", id.toStringMongod());
 
         return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
@@ -111,7 +111,8 @@ public class StreamRuleResource extends RestResource {
         StreamRule streamRule;
         try {
             streamRule = StreamRuleImpl.load(loadObjectId(streamRuleId), core);
-            if (!streamRule.getStreamId().equals(streamid)) {
+            if (streamRule.getStreamId().toString().equals(streamid)) {
+            } else {
                 throw new NotFoundException();
             }
         } catch (org.graylog2.database.NotFoundException e) {
@@ -123,17 +124,16 @@ public class StreamRuleResource extends RestResource {
         streamRule.setInverted(cr.inverted);
         streamRule.setValue(cr.value);
 
-        String id;
+        ObjectId id;
         try {
-            ((StreamRuleImpl)streamRule).save();
-            id = streamRule.getId();
+            id = ((StreamRuleImpl)streamRule).save();
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
         Map<String, Object> result = Maps.newHashMap();
-        result.put("streamrule_id", id);
+        result.put("streamrule_id", id.toStringMongod());
 
         return Response.status(Response.Status.OK).entity(json(result)).build();
     }
@@ -145,7 +145,7 @@ public class StreamRuleResource extends RestResource {
         List<Map<String, Object>> streamRules = Lists.newArrayList();
 
         try {
-            for (StreamRule streamRule : StreamRuleImpl.findAllForStream(streamid, core)) {
+            for (StreamRule streamRule : StreamRuleImpl.findAllForStream(new ObjectId(streamid), core)) {
                 streamRules.add(((StreamRuleImpl) streamRule).asMap());
             }
         } catch (org.graylog2.database.NotFoundException e) {
@@ -189,7 +189,7 @@ public class StreamRuleResource extends RestResource {
 
         try {
             StreamRuleImpl streamRule = StreamRuleImpl.load(loadObjectId(streamRuleId), core);
-            if (streamRule.getStreamId().equals(streamid)) {
+            if (streamRule.getStreamId().toString().equals(streamid)) {
                 streamRule.destroy();
             } else {
                 throw new NotFoundException();

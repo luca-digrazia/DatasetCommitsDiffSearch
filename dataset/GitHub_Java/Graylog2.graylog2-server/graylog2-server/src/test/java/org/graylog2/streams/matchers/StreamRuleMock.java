@@ -1,6 +1,7 @@
 package org.graylog2.streams.matchers;
 
 import com.mongodb.DBObject;
+import org.bson.types.ObjectId;
 import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
 
@@ -8,15 +9,15 @@ import org.graylog2.plugin.streams.StreamRuleType;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class StreamRuleMock implements StreamRule {
-    private String id;
-    private String streamId;
+    private ObjectId objectId = null;
+    private ObjectId streamId = null;
     private StreamRuleType type = null;
-    private String value;
-    private String field;
-    private Boolean inverted;
+    private String value = null;
+    private String field = null;
+    private Boolean inverted = false;
 
     public StreamRuleMock(DBObject rule) {
-        this.id = rule.get("_id").toString();
+        this.objectId = (ObjectId) rule.get("_id");
         if (rule.get("type") != null)
             this.type = StreamRuleType.fromInteger((Integer) rule.get("type"));
         this.value = (String) rule.get("value");
@@ -24,11 +25,11 @@ public class StreamRuleMock implements StreamRule {
         this.inverted = (Boolean) rule.get("inverted");
     }
 
-    public String getId() {
-        return id;
+    public ObjectId getObjectId() {
+        return objectId;
     }
 
-    public String getStreamId() {
+    public ObjectId getStreamId() {
         return streamId;
     }
 
@@ -50,6 +51,14 @@ public class StreamRuleMock implements StreamRule {
         return inverted;
     }
 
+    public void setObjectId(ObjectId objectId) {
+        this.objectId = objectId;
+    }
+
+    public void setStreamId(ObjectId streamId) {
+        this.streamId = streamId;
+    }
+
     public void setType(StreamRuleType type) {
         this.type = type;
     }
@@ -64,9 +73,5 @@ public class StreamRuleMock implements StreamRule {
 
     public void setInverted(Boolean inverted) {
         this.inverted = inverted;
-    }
-
-    public void setStreamId(String streamId) {
-        this.streamId = streamId;
     }
 }
