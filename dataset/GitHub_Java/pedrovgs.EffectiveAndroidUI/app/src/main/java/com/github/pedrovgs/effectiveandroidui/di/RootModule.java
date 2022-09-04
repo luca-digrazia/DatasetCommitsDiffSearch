@@ -3,7 +3,7 @@ package com.github.pedrovgs.effectiveandroidui.di;
 import com.github.pedrovgs.effectiveandroidui.TvShowsApplication;
 import com.github.pedrovgs.effectiveandroidui.domain.TvShowsModule;
 import com.github.pedrovgs.effectiveandroidui.executor.ExecutorModule;
-import com.github.pedrovgs.effectiveandroidui.ui.activity.MainActivity;
+import com.github.pedrovgs.effectiveandroidui.ui.MainActivity;
 import dagger.Module;
 
 /**
@@ -16,7 +16,7 @@ import dagger.Module;
     includes = {
         FrameworkModule.class, ExecutorModule.class, TvShowsModule.class
     }, injects = {
-    TvShowsApplication.class, MainActivity.class
+    TvShowsApplication.class, MainActivity.class, MainActivity.PlaceholderFragment.class
 }
 )
 public class RootModule {

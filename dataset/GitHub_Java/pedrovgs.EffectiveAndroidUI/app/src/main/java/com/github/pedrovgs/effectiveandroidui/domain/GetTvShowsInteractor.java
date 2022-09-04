@@ -17,8 +17,6 @@ import javax.inject.Inject;
  * This application is a sample about how to work effectively on Android, this interactor will
  * return an error randomly.
  *
- * This interactor also contains a little delay to simulate a internal http request.
- *
  * @author Pedro Vicente Gómez Sánchez
  */
 class GetTvShowsInteractor implements Interactor, GetTvShows {
@@ -38,7 +36,7 @@ class GetTvShowsInteractor implements Interactor, GetTvShows {
     this.mainThread = mainThread;
   }
 
-  @Override public void execute(final Callback callback) {
+  @Override public void execute(Callback callback) {
     if (callback == null) {
       throw new IllegalArgumentException(
           "Callback can't be null, the client of this interactor needs to get the response in the callback");
@@ -50,7 +48,7 @@ class GetTvShowsInteractor implements Interactor, GetTvShows {
   @Override public void run() {
     waitToDoThisSampleMoreInteresting();
 
-    if (haveToShowError()) {
+    if (hasToShowError()) {
       notifyError();
     } else {
       Collection<TvShow> tvShows = catalog.getTvShows();
@@ -71,7 +69,7 @@ class GetTvShowsInteractor implements Interactor, GetTvShows {
     }
   }
 
-  private boolean haveToShowError() {
+  private boolean hasToShowError() {
     return RandomUtils.percent(PERCENTAGE_OF_FAILS);
   }
 
