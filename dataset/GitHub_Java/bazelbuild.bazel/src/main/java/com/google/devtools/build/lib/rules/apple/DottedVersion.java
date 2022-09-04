@@ -30,7 +30,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.StarlarkValue;
 
 /**
  * Represents Xcode versions and allows parsing them.
@@ -79,23 +78,18 @@ import net.starlark.java.eval.StarlarkValue;
 @Immutable
 @AutoCodec
 public final class DottedVersion implements DottedVersionApi<DottedVersion> {
-  /**
-   * Wrapper class for {@link DottedVersion} whose {@link #equals(Object)} method is string
+  /** Wrapper class for {@link DottedVersion} whose {@link #equals(Object)} method is string
    * equality.
    *
-   * <p>This is necessary because Bazel assumes that {@link
-   * com.google.devtools.build.lib.analysis.config.FragmentOptions} that are equal yield fragments
-   * that are the same. However, this does not hold if the options hold a {@link DottedVersion}
-   * because trailing zeroes are not considered significant when comparing them, but they do matter
-   * in configuration fragments (for example, they end up in output directory names).
-   *
-   * <p>When read from the {@code settings} dictionary in a Starlark transition function, these
-   * values are effectively opaque and need to be converted to strings for further use, such as
-   * comparing them by passing the string to {@code apple_common.dotted_version} to construct an
-   * instance of the actual version object.
-   */
+   * <p>This is necessary because Bazel assumes that
+   * {@link com.google.devtools.build.lib.analysis.config.FragmentOptions} that are equal yield
+   * fragments that are the same. However, this does not hold if the options hold a
+   * {@link DottedVersion} because trailing zeroes are not considered significant when comparing
+   * them, but they do matter in configuration fragments (for example, they end up in output
+   * directory names)</p>
+   * */
   @Immutable
-  public static final class Option implements StarlarkValue {
+  public static final class Option {
     private final DottedVersion version;
 
     private Option(DottedVersion version) {
@@ -104,21 +98,6 @@ public final class DottedVersion implements DottedVersionApi<DottedVersion> {
 
     public DottedVersion get() {
       return version;
-    }
-
-    @Override
-    public boolean isImmutable() {
-      return true;
-    }
-
-    @Override
-    public void repr(Printer printer) {
-      printer.append(version.toString());
-    }
-
-    @Override
-    public String toString() {
-      return version.toString();
     }
 
     @Override
