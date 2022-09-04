@@ -141,15 +141,11 @@ public class RuleClass {
 
   @AutoCodec
   static final Function<? super Rule, Map<String, Label>> NO_EXTERNAL_BINDINGS =
-      Functions.constant(ImmutableMap.of());
-
-  @AutoCodec
-  static final Function<? super Rule, List<String>> NO_TOOLCHAINS_TO_REGISTER =
-      Functions.constant(ImmutableList.of());
+      Functions.<Map<String, Label>>constant(ImmutableMap.<String, Label>of());
 
   @AutoCodec
   static final Function<? super Rule, Set<String>> NO_OPTION_REFERENCE =
-      Functions.constant(ImmutableSet.of());
+      Functions.<Set<String>>constant(ImmutableSet.<String>of());
 
   public static final PathFragment THIRD_PARTY_PREFIX = PathFragment.create("third_party");
   public static final PathFragment EXPERIMENTAL_PREFIX = PathFragment.create("experimental");
@@ -678,8 +674,6 @@ public class RuleClass {
     private BuildSetting buildSetting = null;
     private Function<? super Rule, Map<String, Label>> externalBindingsFunction =
         NO_EXTERNAL_BINDINGS;
-    private Function<? super Rule, ? extends List<String>> toolchainsToRegisterFunction =
-        NO_TOOLCHAINS_TO_REGISTER;
     private Function<? super Rule, ? extends Set<String>> optionReferenceFunction =
         NO_OPTION_REFERENCE;
     /** This field and the next are null iff the rule is native. */
@@ -827,7 +821,6 @@ public class RuleClass {
           assertStarlarkRuleClassHasEnvironmentLabel();
         }
         Preconditions.checkState(externalBindingsFunction == NO_EXTERNAL_BINDINGS);
-        Preconditions.checkState(toolchainsToRegisterFunction == NO_TOOLCHAINS_TO_REGISTER);
       }
       if (type == RuleClassType.PLACEHOLDER) {
         Preconditions.checkNotNull(ruleDefinitionEnvironmentDigest, this.name);
@@ -892,7 +885,6 @@ public class RuleClass {
           advertisedProviders.build(),
           configuredTargetFunction,
           externalBindingsFunction,
-          toolchainsToRegisterFunction,
           optionReferenceFunction,
           ruleDefinitionEnvironmentLabel,
           ruleDefinitionEnvironmentDigest,
@@ -1282,12 +1274,6 @@ public class RuleClass {
       return this;
     }
 
-    public Builder setToolchainsToRegisterFunction(
-        Function<? super Rule, ? extends List<String>> func) {
-      this.toolchainsToRegisterFunction = func;
-      return this;
-    }
-
     /**
      * Sets the rule definition environment label and transitive digest. Meant for Starlark usage.
      */
@@ -1630,9 +1616,6 @@ public class RuleClass {
    */
   private final Function<? super Rule, Map<String, Label>> externalBindingsFunction;
 
-  /** Returns the toolchains a workspace function wants to have registered in the WORKSPACE file. */
-  private final Function<? super Rule, ? extends List<String>> toolchainsToRegisterFunction;
-
   /**
    * Returns the options referenced by this rule's attributes.
    */
@@ -1712,7 +1695,6 @@ public class RuleClass {
       AdvertisedProviderSet advertisedProviders,
       @Nullable StarlarkCallable configuredTargetFunction,
       Function<? super Rule, Map<String, Label>> externalBindingsFunction,
-      Function<? super Rule, ? extends List<String>> toolchainsToRegisterFunction,
       Function<? super Rule, ? extends Set<String>> optionReferenceFunction,
       @Nullable Label ruleDefinitionEnvironmentLabel,
       @Nullable byte[] ruleDefinitionEnvironmentDigest,
@@ -1745,7 +1727,6 @@ public class RuleClass {
     this.advertisedProviders = advertisedProviders;
     this.configuredTargetFunction = configuredTargetFunction;
     this.externalBindingsFunction = externalBindingsFunction;
-    this.toolchainsToRegisterFunction = toolchainsToRegisterFunction;
     this.optionReferenceFunction = optionReferenceFunction;
     this.ruleDefinitionEnvironmentLabel = ruleDefinitionEnvironmentLabel;
     this.ruleDefinitionEnvironmentDigest = ruleDefinitionEnvironmentDigest;
@@ -2608,16 +2589,6 @@ public class RuleClass {
    */
   public Function<? super Rule, Map<String, Label>> getExternalBindingsFunction() {
     return externalBindingsFunction;
-  }
-
-  /**
-   * Returns a function that computes the toolchains that should be registered for a repository
-   * function.
-   *
-   * @return
-   */
-  public Function<? super Rule, ? extends List<String>> getToolchainsToRegisterFunction() {
-    return toolchainsToRegisterFunction;
   }
 
   /**
