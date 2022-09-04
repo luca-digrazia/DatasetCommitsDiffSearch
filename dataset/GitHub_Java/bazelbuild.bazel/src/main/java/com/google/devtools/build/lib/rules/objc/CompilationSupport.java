@@ -232,13 +232,6 @@ public class CompilationSupport {
           "c-compile",
           "c++-compile");
 
-  /** The kind of include processing to use. */
-  enum IncludeProcessingType {
-    HEADER_THINNING,
-    INCLUDE_SCANNING,
-    NO_PROCESSING;
-  }
-
   /** Returns the location of the xcrunwrapper tool. */
   public static final FilesToRunProvider xcrunwrapper(RuleContext ruleContext) {
     return ruleContext.getExecutablePrerequisite("$xcrunwrapper", Mode.HOST);
@@ -266,24 +259,21 @@ public class CompilationSupport {
 
   private IncludeProcessing createIncludeProcessing(
       Iterable<Artifact> privateHdrs, ObjcProvider objcProvider, @Nullable Artifact pchHdr) {
-    switch (includeProcessingType) {
-      case HEADER_THINNING:
-        Iterable<Artifact> potentialInputs =
-            Iterables.concat(privateHdrs, objcProvider.get(HEADER));
-        if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
-          potentialInputs =
-              Iterables.concat(
-                  potentialInputs,
-                  objcProvider.get(STATIC_FRAMEWORK_FILE),
-                  objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
-        }
-        if (pchHdr != null) {
-          potentialInputs = Iterables.concat(potentialInputs, ImmutableList.of(pchHdr));
-        }
-        return new HeaderThinning(potentialInputs);
-      case INCLUDE_SCANNING:
-      default:
-        return NoProcessing.INSTANCE;
+    if (isHeaderThinningEnabled()) {
+      Iterable<Artifact> potentialInputs = Iterables.concat(privateHdrs, objcProvider.get(HEADER));
+      if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
+        potentialInputs =
+            Iterables.concat(
+                potentialInputs,
+                objcProvider.get(STATIC_FRAMEWORK_FILE),
+                objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
+      }
+      if (pchHdr != null) {
+        potentialInputs = Iterables.concat(potentialInputs, ImmutableList.of(pchHdr));
+      }
+      return new HeaderThinning(potentialInputs);
+    } else {
+      return NoProcessing.INSTANCE;
     }
   }
 
@@ -518,9 +508,9 @@ public class CompilationSupport {
       ObjcProvider objcProvider, Collection<Artifact> privateHdrs, Artifact pchHdr) {
     return new ObjcCppSemantics(
         objcProvider,
-        includeProcessingType,
         createIncludeProcessing(privateHdrs, objcProvider, pchHdr),
         ruleContext.getFragment(ObjcConfiguration.class),
+        isHeaderThinningEnabled(),
         intermediateArtifacts,
         buildConfiguration,
         starlarkSemantics);
@@ -758,7 +748,6 @@ public class CompilationSupport {
   private final CcToolchainProvider toolchain;
   private final boolean isTestRule;
   private final boolean usePch;
-  private final IncludeProcessingType includeProcessingType;
 
   /**
    * Creates a new compilation support for the given rule and build configuration.
@@ -803,14 +792,6 @@ public class CompilationSupport {
     }
 
     this.toolchain = toolchain;
-
-    if (objcConfiguration.shouldScanIncludes()) {
-      includeProcessingType = IncludeProcessingType.INCLUDE_SCANNING;
-    } else if (isHeaderThinningEnabled()) {
-      includeProcessingType = IncludeProcessingType.HEADER_THINNING;
-    } else {
-      includeProcessingType = IncludeProcessingType.NO_PROCESSING;
-    }
   }
 
   /** Builder for {@link CompilationSupport} */
@@ -1829,8 +1810,7 @@ public class CompilationSupport {
       CompilationArtifacts compilationArtifacts)
       throws RuleErrorException {
     // PIC is not used for Obj-C builds, if that changes this method will need to change
-    if (includeProcessingType != IncludeProcessingType.HEADER_THINNING
-        || ccCompilationOutputs.getObjectFiles(false).isEmpty()) {
+    if (!isHeaderThinningEnabled() || ccCompilationOutputs.getObjectFiles(false).isEmpty()) {
       return;
     }
 
