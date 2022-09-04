@@ -454,18 +454,6 @@ public final class CcLinkingHelper {
               ccLinkingOutputsBuilder, libraryToLinkBuilder, usePic, libraryIdentifier, ccOutputs);
     }
 
-    if (shouldCreateStaticLibraries
-        && featureConfiguration.isEnabled(CppRuleClasses.DISABLE_WHOLE_ARCHIVE_FOR_STATIC_LIB)
-        && (staticLinkType == LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY)) {
-      ruleErrorConsumer.throwWithAttributeError(
-          "alwayslink",
-          "alwayslink should not be True for a target with the"
-              + " disable_whole_archive_for_static_lib feature enabled.");
-    }
-
-    libraryToLinkBuilder.setDisableWholeArchive(
-        featureConfiguration.isEnabled(CppRuleClasses.DISABLE_WHOLE_ARCHIVE_FOR_STATIC_LIB));
-
     if (hasBuiltDynamicLibrary || shouldCreateStaticLibraries) {
       ccLinkingOutputsBuilder.setLibraryToLink(libraryToLinkBuilder.build());
     }
@@ -622,11 +610,12 @@ public final class CcLinkingHelper {
       throws RuleErrorException, InterruptedException {
     Artifact linkedArtifact = getLinkedArtifact(linkTargetTypeUsedForNaming);
     CppLinkAction action =
-        newLinkActionBuilder(linkedArtifact, linkTargetTypeUsedForNaming)
+        newLinkActionBuilder(linkedArtifact)
             .addObjectFiles(ccOutputs.getObjectFiles(usePic))
             .addNonCodeInputs(nonCodeLinkerInputs)
             .addLtoCompilationContext(ccOutputs.getLtoCompilationContext())
             .setUsePicForLtoBackendActions(usePic)
+            .setLinkType(linkTargetTypeUsedForNaming)
             .setLinkingMode(LinkingMode.STATIC)
             .addActionInputs(linkActionInputs)
             .setLibraryIdentifier(libraryIdentifier)
@@ -678,13 +667,14 @@ public final class CcLinkingHelper {
     }
 
     CppLinkActionBuilder dynamicLinkActionBuilder =
-        newLinkActionBuilder(linkerOutput, dynamicLinkType)
+        newLinkActionBuilder(linkerOutput)
             .setWholeArchive(wholeArchive)
             .setNativeDeps(nativeDeps)
             .setAdditionalLinkstampDefines(additionalLinkstampDefines.build())
             .setInterfaceOutput(soInterface)
             .addNonCodeInputs(ccOutputs.getHeaderTokenFiles())
             .addLtoCompilationContext(ccOutputs.getLtoCompilationContext())
+            .setLinkType(dynamicLinkType)
             .setLinkingMode(linkingMode)
             .setFake(fake)
             .addActionInputs(linkActionInputs)
@@ -821,8 +811,7 @@ public final class CcLinkingHelper {
     return hasBuiltDynamicLibrary;
   }
 
-  private CppLinkActionBuilder newLinkActionBuilder(
-      Artifact outputArtifact, LinkTargetType linkType) {
+  private CppLinkActionBuilder newLinkActionBuilder(Artifact outputArtifact) {
     return new CppLinkActionBuilder(
             ruleErrorConsumer,
             actionConstructionContext,
@@ -836,12 +825,7 @@ public final class CcLinkingHelper {
         .setGrepIncludes(grepIncludes)
         .setIsStampingEnabled(isStampingEnabled)
         .setTestOrTestOnlyTarget(isTestOrTestOnlyTarget)
-        .setLinkType(linkType)
-        .setLinkerFiles(
-            (cppConfiguration.useSpecificToolFiles()
-                    && linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER)
-                ? ccToolchain.getArFiles()
-                : ccToolchain.getLinkerFiles())
+        .setLinkerFiles(ccToolchain.getLinkerFiles())
         .setLinkArtifactFactory(linkArtifactFactory)
         .setUseTestOnlyFlags(useTestOnlyFlags);
   }

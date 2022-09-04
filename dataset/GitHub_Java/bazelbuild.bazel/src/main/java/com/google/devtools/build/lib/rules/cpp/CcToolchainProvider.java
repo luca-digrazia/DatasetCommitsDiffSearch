@@ -86,8 +86,7 @@ public final class CcToolchainProvider extends ToolchainInfo
           /* targetSysroot= */ null,
           /* fdoContext= */ null,
           /* isHostConfiguration= */ false,
-          /* licensesProvider= */ null,
-          /* toolPaths= */ ImmutableMap.of());
+          /* licensesProvider= */ null);
 
   @Nullable private final CppConfiguration cppConfiguration;
   private final CppToolchainInfo toolchainInfo;
@@ -123,7 +122,6 @@ public final class CcToolchainProvider extends ToolchainInfo
   @Nullable private final PathFragment sysroot;
   private final PathFragment targetSysroot;
   private final boolean isHostConfiguration;
-  private final ImmutableMap<String, PathFragment> toolPaths;
   /**
    * WARNING: We don't like {@link FdoContext}. Its {@link FdoContext#fdoProfilePath} is pure path
    * and that is horrible as it breaks many Bazel assumptions! Don't do bad stuff with it, don't
@@ -170,8 +168,7 @@ public final class CcToolchainProvider extends ToolchainInfo
       @Nullable PathFragment targetSysroot,
       FdoContext fdoContext,
       boolean isHostConfiguration,
-      LicensesProvider licensesProvider,
-      ImmutableMap<String, PathFragment> toolPaths) {
+      LicensesProvider licensesProvider) {
     super(values, Location.BUILTIN);
     this.cppConfiguration = cppConfiguration;
     this.toolchainInfo = toolchainInfo;
@@ -213,7 +210,6 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.fdoContext = fdoContext == null ? FdoContext.getDisabledContext() : fdoContext;
     this.isHostConfiguration = isHostConfiguration;
     this.licensesProvider = licensesProvider;
-    this.toolPaths = toolPaths;
   }
 
   /**
@@ -349,15 +345,10 @@ public final class CcToolchainProvider extends ToolchainInfo
     return toolPathFragment == null ? null : toolPathFragment.getPathString();
   }
 
-  /**
-   * Returns the path fragment that is either absolute or relative to the execution root that can be
-   * used to execute the given tool.
-   */
   @Nullable
   public PathFragment getToolPathFragmentOrNull(CppConfiguration.Tool tool) {
-    return CcToolchainProviderHelper.getToolPathFragment(toolPaths, tool);
+    return toolchainInfo.getToolPathFragment(tool);
   }
-
 
   @Override
   public ImmutableList<String> getBuiltInIncludeDirectoriesAsStrings() {
@@ -889,6 +880,11 @@ public final class CcToolchainProvider extends ToolchainInfo
   public boolean requireCtxInConfigureFeatures() {
     return getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas()
         .requireCtxInConfigureFeatures();
+  }
+
+  public boolean disableGenruleCcToolchainDependency() {
+    return getCppConfigurationEvenThoughItCanBeDifferentThatWhatTargetHas()
+        .disableGenruleCcToolchainDependency();
   }
 
   @VisibleForTesting
