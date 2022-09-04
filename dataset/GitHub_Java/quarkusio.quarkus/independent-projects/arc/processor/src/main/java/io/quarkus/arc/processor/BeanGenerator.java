@@ -960,20 +960,19 @@ public class BeanGenerator extends AbstractGenerator {
                                     Types.getPackageName(beanCreator.getClassName())));
                 }
 
+                // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
                 ResultHandle invocationContextHandle = create.invokeStaticMethod(
-                        MethodDescriptors.INVOCATION_CONTEXTS_AROUND_CONSTRUCT, constructorHandle,
+                        MethodDescriptors.INVOCATION_CONTEXT_AROUND_CONSTRUCT, constructorHandle,
                         aroundConstructsHandle, func.getInstance(), bindingsHandle);
                 TryBlock tryCatch = create.tryBlock();
                 CatchBlockCreator exceptionCatch = tryCatch.addCatch(Exception.class);
                 // throw new RuntimeException(e)
                 exceptionCatch.throwException(RuntimeException.class, "Error invoking aroundConstructs",
                         exceptionCatch.getCaughtException());
-                // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
-                tryCatch.invokeInterfaceMethod(MethodDescriptors.INVOCATION_CONTEXT_PROCEED,
-                        invocationContextHandle);
-                // instance = InvocationContext.getTarget()
-                tryCatch.assign(instanceHandle, tryCatch.invokeInterfaceMethod(MethodDescriptors.INVOCATION_CONTEXT_GET_TARGET,
-                        invocationContextHandle));
+                tryCatch.assign(instanceHandle,
+                        tryCatch.invokeInterfaceMethod(
+                                MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
+                                invocationContextHandle));
 
             } else {
                 create.assign(instanceHandle, newInstanceHandle(bean, beanCreator, create, create, providerTypeName, baseName,
@@ -1080,7 +1079,7 @@ public class BeanGenerator extends AbstractGenerator {
 
                 // InvocationContextImpl.postConstruct(instance,postConstructs).proceed()
                 ResultHandle invocationContextHandle = create.invokeStaticMethod(
-                        MethodDescriptors.INVOCATION_CONTEXTS_POST_CONSTRUCT, instanceHandle,
+                        MethodDescriptors.INVOCATION_CONTEXT_POST_CONSTRUCT, instanceHandle,
                         postConstructsHandle, bindingsHandle);
 
                 TryBlock tryCatch = create.tryBlock();
