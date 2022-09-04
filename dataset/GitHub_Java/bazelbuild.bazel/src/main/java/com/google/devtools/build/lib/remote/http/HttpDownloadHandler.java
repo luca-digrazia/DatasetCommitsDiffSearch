@@ -136,7 +136,7 @@ final class HttpDownloadHandler extends AbstractHttpHandler<HttpObject> {
     }
     DownloadCommand cmd = (DownloadCommand) msg;
     out = cmd.out();
-    path = constructPath(cmd.uri(), cmd.hash(), cmd.casDownload());
+    path = constructPath(cmd.uri(), cmd.digest().getHash(), cmd.casDownload());
     HttpRequest request = buildRequest(path, constructHost(cmd.uri()));
     addCredentialHeaders(request, cmd.uri());
     addExtraRemoteHeaders(request);
@@ -165,31 +165,42 @@ final class HttpDownloadHandler extends AbstractHttpHandler<HttpObject> {
     httpRequest.headers().set(HttpHeaderNames.HOST, host);
     httpRequest.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.KEEP_ALIVE);
     httpRequest.headers().set(HttpHeaderNames.ACCEPT, "*/*");
+    httpRequest.headers().set(HttpHeaderNames.ACCEPT_ENCODING, HttpHeaderValues.GZIP);
     return httpRequest;
   }
 
   private void succeedAndReset(ChannelHandlerContext ctx) {
+    // All resets must happen *before* completing the user promise. Otherwise there is a race
+    // condition, where this handler can be reused even though it is closed. In addition, if reset
+    // calls ctx.close(), then that triggers a call to AbstractHttpHandler.channelInactive, which
+    // attempts to close the user promise.
+    ChannelPromise promise = userPromise;
+    userPromise = null;
     try {
-      succeedAndResetUserPromise();
-    } finally {
       reset(ctx);
+    } finally {
+      promise.setSuccess();
     }
   }
 
   @SuppressWarnings("FutureReturnValueIgnored")
   private void failAndClose(Throwable t, ChannelHandlerContext ctx) {
+    ChannelPromise promise = userPromise;
+    userPromise = null;
     try {
-      failAndResetUserPromise(t);
-    } finally {
       ctx.close();
+    } finally {
+      promise.setFailure(t);
     }
   }
 
   private void failAndReset(Throwable t, ChannelHandlerContext ctx) {
+    ChannelPromise promise = userPromise;
+    userPromise = null;
     try {
-      failAndResetUserPromise(t);
-    } finally {
       reset(ctx);
+    } finally {
+      promise.setFailure(t);
     }
   }
 
