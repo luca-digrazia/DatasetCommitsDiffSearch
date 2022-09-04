@@ -21,12 +21,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
-import org.eclipse.microprofile.health.Health;
 import org.eclipse.microprofile.health.spi.HealthCheckResponseProvider;
-import org.jboss.jandex.DotName;
 import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
-import org.jboss.shamrock.arc.deployment.BeanDefiningAnnotationBuildItem;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
 import org.jboss.shamrock.deployment.annotations.BuildStep;
 import org.jboss.shamrock.deployment.annotations.ExecutionTime;
 import org.jboss.shamrock.deployment.annotations.Record;
@@ -42,8 +38,6 @@ import org.jboss.shamrock.undertow.ServletBuildItem;
 import io.smallrye.health.SmallRyeHealthReporter;
 
 class SmallRyeHealthProcessor {
-
-    private static final DotName HEALTH = DotName.createSimple(Health.class.getName());
 
     /**
      * The configuration for health checking.
@@ -68,9 +62,7 @@ class SmallRyeHealthProcessor {
     }
 
     @BuildStep
-    List<AdditionalBeanBuildItem> additionalBeans(BuildProducer<BeanDefiningAnnotationBuildItem> beanDefiningAnnotation) {
-        beanDefiningAnnotation.produce(new BeanDefiningAnnotationBuildItem(HEALTH));
-
+    List<AdditionalBeanBuildItem> additionalBeans() {
         return Arrays.asList(
                 new AdditionalBeanBuildItem(SmallRyeHealthReporter.class),
                 new AdditionalBeanBuildItem(SmallRyeHealthServlet.class));
