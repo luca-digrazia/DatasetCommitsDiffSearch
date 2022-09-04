@@ -244,7 +244,7 @@ public class BootstrapMavenContext {
         try {
             return LocalProject.loadWorkspace(this);
         } catch (BootstrapException e) {
-            throw new AppModelResolverException("Failed to load current project at " + getCurrentProjectPomOrNull(), e);
+            throw new AppModelResolverException("Failed to load current project at " + getCurrentProjectPomOrNull());
         }
     }
 
@@ -635,7 +635,11 @@ public class BootstrapMavenContext {
         if (alternatePomName != null) {
             alternatePom = Paths.get(alternatePomName);
             if (alternatePom.isAbsolute()) {
-                return pomXmlOrNull(alternatePom);
+                Path pom = alternatePom;
+                if (Files.isDirectory(pom)) {
+                    pom = pom.resolve("pom.xml");
+                }
+                return Files.exists(pom) ? pom : null;
             }
         }
 
@@ -680,23 +684,24 @@ public class BootstrapMavenContext {
 
         // we are not in the context of a Maven build
         if (alternatePom != null && alternatePom.isAbsolute()) {
-            return pomXmlOrNull(alternatePom);
+            return alternatePom;
         }
 
         // trying the current dir as the basedir
         final Path basedir = Paths.get("").normalize().toAbsolutePath();
         if (alternatePom != null) {
-            return pomXmlOrNull(basedir.resolve(alternatePom));
+            Path pom = basedir.resolve(alternatePom);
+            if (Files.exists(pom)) {
+                if (Files.isDirectory(pom)) {
+                    pom = pom.resolve("pom.xml");
+                    return Files.exists(pom) ? pom : null;
+                }
+                return pom;
+            }
+            return null;
         }
         final Path pom = basedir.resolve("pom.xml");
         return Files.exists(pom) ? pom : null;
-    }
-
-    private static Path pomXmlOrNull(Path path) {
-        if (Files.isDirectory(path)) {
-            path = path.resolve("pom.xml");
-        }
-        return Files.exists(path) ? path : null;
     }
 
     public Path getCurrentProjectBaseDir() {
