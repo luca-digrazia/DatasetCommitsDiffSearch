@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpUtils;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
@@ -406,7 +407,7 @@ public class SkylarkRepositoryContext {
         .setDirectory(outputDirectory.getPathFile())
         .addEnvironmentVariables(environment)
         .setTimeout(timeout.longValue() * 1000)
-        .setQuiet(quiet)
+        .setOutErr(quiet ? null : Reporter.outErrForReporter(env.getListener()))
         .execute();
   }
 
@@ -713,17 +714,13 @@ public class SkylarkRepositoryContext {
     if (fileValue == null) {
       throw RepositoryFunction.restart();
     }
-    if (!fileValue.isFile() || fileValue.isSpecialFile()) {
-      throw new EvalException(
-          Location.BUILTIN, "Not a regular file: " + rootedPath.asPath().getPathString());
+    if (!fileValue.isFile()) {
+      throw new EvalException(Location.BUILTIN,
+          "Not a file: " + rootedPath.asPath().getPathString());
     }
 
-    // A label does not contains space so it safe to use as a key.
-    try {
-      markerData.put("FILE:" + label, RepositoryFunction.fileValueToMarkerValue(fileValue));
-    } catch (IOException e) {
-      throw new EvalException(Location.BUILTIN, e);
-    }
+    // A label do not contains space so it safe to use as a key.
+    markerData.put("FILE:" + label, Integer.toString(fileValue.realFileStateValue().hashCode()));
     return new SkylarkPath(rootedPath.asPath());
   }
 
