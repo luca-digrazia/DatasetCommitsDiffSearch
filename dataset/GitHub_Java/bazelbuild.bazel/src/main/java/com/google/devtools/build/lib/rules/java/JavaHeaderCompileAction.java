@@ -372,7 +372,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
         } else {
           classpath = classpathEntries;
           // Transitive classpath actions may exceed the command line length limit.
-          builder.alwaysUseParameterFile(ParameterFileType.UNQUOTED);
+          builder.alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED);
         }
         CustomCommandLine.Builder commandLine =
             baseCommandLine(CustomCommandLine.builder(), classpath);

@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Map;
 import java.util.Set;
@@ -27,17 +26,15 @@ import java.util.TreeSet;
  * Environment variables for build or test actions.
  *
  * <p>The action environment consists of two parts.
- *
  * <ol>
  *   <li>All the environment variables with a fixed value, stored in a map.
  *   <li>All the environment variables inherited from the client environment, stored in a set.
  * </ol>
  *
- * <p>Inherited environment variables must be declared in the Action interface (see {@link
- * Action#getClientEnvironmentVariables}), so that the dependency on the client environment is known
- * to the execution framework for correct incremental builds.
+ * <p>Inherited environment variables must be declared in the Action interface
+ * (see {@link Action#getClientEnvironmentVariables}), so that the dependency on the client
+ * environment is known to the execution framework for correct incremental builds.
  */
-@AutoCodec
 public final class ActionEnvironment {
   /**
    * An empty environment, mainly for testing. Production code should never use this, but instead
@@ -66,16 +63,15 @@ public final class ActionEnvironment {
         inheritedEnv.add(key);
       }
     }
-    return create(ImmutableMap.copyOf(fixedEnv), ImmutableSet.copyOf(inheritedEnv));
+    return create(fixedEnv, inheritedEnv);
   }
 
   private final ImmutableMap<String, String> fixedEnv;
   private final ImmutableSet<String> inheritedEnv;
 
-  private ActionEnvironment(
-      ImmutableMap<String, String> fixedEnv, ImmutableSet<String> inheritedEnv) {
-    this.fixedEnv = fixedEnv;
-    this.inheritedEnv = inheritedEnv;
+  private ActionEnvironment(Map<String, String> fixedEnv, Set<String> inheritedEnv) {
+    this.fixedEnv = ImmutableMap.copyOf(fixedEnv);
+    this.inheritedEnv = ImmutableSet.copyOf(inheritedEnv);
   }
 
   /**
@@ -83,9 +79,7 @@ public final class ActionEnvironment {
    * undefined, so callers need to take care that the key set of the {@code fixedEnv} map and the
    * set of {@code inheritedEnv} elements are disjoint.
    */
-  @AutoCodec.Instantiator
-  public static ActionEnvironment create(
-      ImmutableMap<String, String> fixedEnv, ImmutableSet<String> inheritedEnv) {
+  public static ActionEnvironment create(Map<String, String> fixedEnv, Set<String> inheritedEnv) {
     if (fixedEnv.isEmpty() && inheritedEnv.isEmpty()) {
       return EMPTY;
     }
@@ -93,7 +87,7 @@ public final class ActionEnvironment {
   }
 
   public static ActionEnvironment create(Map<String, String> fixedEnv) {
-    return new ActionEnvironment(ImmutableMap.copyOf(fixedEnv), ImmutableSet.of());
+    return new ActionEnvironment(fixedEnv, ImmutableSet.of());
   }
 
   public ImmutableMap<String, String> getFixedEnv() {

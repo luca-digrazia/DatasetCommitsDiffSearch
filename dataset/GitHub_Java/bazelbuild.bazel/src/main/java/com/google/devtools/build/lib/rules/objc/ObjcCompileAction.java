@@ -116,7 +116,7 @@ public class ObjcCompileAction extends SpawnAction {
       boolean isShellCommand,
       ActionEnvironment env,
       ImmutableMap<String, String> executionInfo,
-      CharSequence progressMessage,
+      String progressMessage,
       RunfilesSupplier runfilesSupplier,
       String mnemonic,
       boolean executeUnconditionally,
@@ -442,7 +442,7 @@ public class ObjcCompileAction extends SpawnAction {
         boolean isShellCommand,
         ActionEnvironment env,
         ImmutableMap<String, String> executionInfo,
-        CharSequence progressMessage,
+        String progressMessage,
         RunfilesSupplier runfilesSupplier,
         String mnemonic) {
       return new ObjcCompileAction(
