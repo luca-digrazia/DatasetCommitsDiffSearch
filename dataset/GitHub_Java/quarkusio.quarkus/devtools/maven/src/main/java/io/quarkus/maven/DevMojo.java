@@ -251,15 +251,6 @@ public class DevMojo extends AbstractMojo {
                 } else {
                     localProject = LocalProject.loadWorkspace(outputDirectory.toPath());
                     for (LocalProject project : localProject.getSelfWithLocalDeps()) {
-                        if (project.getClassesDir() != null) {
-                            //if this project also contains Quarkus extensions we do no want to include these in the discovery
-                            //a bit of an edge case, but if you try and include a sample project with your extension you will
-                            //run into problems without this
-                            if (Files.exists(project.getClassesDir().resolve("META-INF/quarkus-extension.properties")) ||
-                                    Files.exists(project.getClassesDir().resolve("META-INF/quarkus-build-steps.list"))) {
-                                continue;
-                            }
-                        }
                         addProject(devModeContext, project);
                     }
                 }
@@ -289,8 +280,12 @@ public class DevMojo extends AbstractMojo {
             }
 
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
+            //wiring devmode is used for CDI beans that are not part of the user application (i.e. beans in 3rd party jars)
+            //we need this because these beans cannot be loaded by the runtime class loader, they must be loaded by the platform
+            //class loader
             File wiringClassesDirectory = new File(buildDir, "wiring-devmode");
             wiringClassesDirectory.mkdirs();
+
             addToClassPaths(classPathManifest, devModeContext, wiringClassesDirectory);
 
             //we also want to add the maven plugin jar to the class path
