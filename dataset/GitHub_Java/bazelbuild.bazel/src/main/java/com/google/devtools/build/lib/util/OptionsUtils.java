@@ -43,7 +43,7 @@ public final class OptionsUtils {
       if (result.length() != 0) {
         result.append(' ');
       }
-      String value = option.getUnconvertedValue();
+      String value = option.getUnparsedValue();
       if (option.isBooleanOption()) {
         boolean isEnabled = false;
         try {
@@ -51,11 +51,9 @@ public final class OptionsUtils {
         } catch (OptionsParsingException e) {
           throw new RuntimeException("Unexpected parsing exception", e);
         }
-        result
-            .append(isEnabled ? "--" : "--no")
-            .append(option.getOptionDefinition().getOptionName());
+        result.append(isEnabled ? "--" : "--no").append(option.getName());
       } else {
-        result.append("--").append(option.getOptionDefinition().getOptionName());
+        result.append("--").append(option.getName());
         if (value != null) { // Can be null for Void options.
           result.append("=").append(ShellEscaper.escapeString(value));
         }
@@ -82,7 +80,7 @@ public final class OptionsUtils {
       if (option.isHidden()) {
         continue;
       }
-      String value = option.getUnconvertedValue();
+      String value = option.getUnparsedValue();
       if (option.isBooleanOption()) {
         boolean isEnabled = false;
         try {
@@ -90,9 +88,9 @@ public final class OptionsUtils {
         } catch (OptionsParsingException e) {
           throw new RuntimeException("Unexpected parsing exception", e);
         }
-        builder.add((isEnabled ? "--" : "--no") + option.getOptionDefinition().getOptionName());
+        builder.add((isEnabled ? "--" : "--no") + option.getName());
       } else {
-        String optionString = "--" + option.getOptionDefinition().getOptionName();
+        String optionString = "--" + option.getName();
         if (value != null) { // Can be null for Void options.
           optionString += "=" + value;
         }

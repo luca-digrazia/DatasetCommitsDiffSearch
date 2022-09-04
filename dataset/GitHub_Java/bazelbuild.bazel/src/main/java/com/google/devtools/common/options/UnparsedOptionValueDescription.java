@@ -18,39 +18,37 @@ import com.google.common.collect.ImmutableList;
 import javax.annotation.Nullable;
 
 /**
- * The value of an option with additional metadata describing its origin.
+ * The name and unparsed value of an option with additional metadata describing its priority,
+ * source, whether it was set via an implicit dependency, and if so, by which other option.
  *
- * <p>This class represents an option as the parser received it, which is distinct from the final
- * value of an option, as these values may be overridden or combined in some way.
- *
- * <p>The origin includes the value it was set to, its priority, a message about where it came
- * from, and whether it was set explicitly or expanded/implied by other flags.
+ * <p>Note that the unparsed value and the source parameters can both be null.
  */
 public final class UnparsedOptionValueDescription {
+
   private final OptionDefinition optionDefinition;
-  @Nullable private final String unconvertedValue;
+  @Nullable private final String unparsedValue;
   private final OptionPriority priority;
   @Nullable private final String source;
-
-  // Whether this flag was explicitly given, as opposed to having been added by an expansion flag
-  // or an implicit dependency. Notice that this does NOT mean it was explicitly given by the
-  // user, for that to be true, it needs the right combination of explicit & priority.
   private final boolean explicit;
 
   public UnparsedOptionValueDescription(
       OptionDefinition optionDefinition,
-      @Nullable String unconvertedValue,
+      @Nullable String unparsedValue,
       OptionPriority priority,
       @Nullable String source,
       boolean explicit) {
     this.optionDefinition = optionDefinition;
-    this.unconvertedValue = unconvertedValue;
+    this.unparsedValue = unparsedValue;
     this.priority = priority;
     this.source = source;
     this.explicit = explicit;
   }
 
-  public OptionDefinition getOptionDefinition() {
+  public String getName() {
+    return optionDefinition.getOptionName();
+  }
+
+  OptionDefinition getOptionDefinition() {
     return optionDefinition;
   }
 
@@ -83,8 +81,8 @@ public final class UnparsedOptionValueDescription {
     return optionDefinition.getImplicitRequirements().length > 0;
   }
 
-  public String getUnconvertedValue() {
-    return unconvertedValue;
+  public String getUnparsedValue() {
+    return unparsedValue;
   }
 
   OptionPriority getPriority() {
@@ -103,7 +101,7 @@ public final class UnparsedOptionValueDescription {
   public String toString() {
     StringBuilder result = new StringBuilder();
     result.append("option '").append(optionDefinition.getOptionName()).append("' ");
-    result.append("set to '").append(unconvertedValue).append("' ");
+    result.append("set to '").append(unparsedValue).append("' ");
     result.append("with priority ").append(priority);
     if (source != null) {
       result.append(" and source '").append(source).append("'");
@@ -111,3 +109,4 @@ public final class UnparsedOptionValueDescription {
     return result.toString();
   }
 }
+
