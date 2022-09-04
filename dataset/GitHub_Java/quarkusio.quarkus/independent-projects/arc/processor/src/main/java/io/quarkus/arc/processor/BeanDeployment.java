@@ -182,10 +182,6 @@ public class BeanDeployment {
         return qualifiers.get(name);
     }
 
-    public Collection<ClassInfo> getQualifiers() {
-        return Collections.unmodifiableCollection(qualifiers.values());
-    }
-
     ClassInfo getInterceptorBinding(DotName name) {
         return interceptorBindings.get(name);
     }
