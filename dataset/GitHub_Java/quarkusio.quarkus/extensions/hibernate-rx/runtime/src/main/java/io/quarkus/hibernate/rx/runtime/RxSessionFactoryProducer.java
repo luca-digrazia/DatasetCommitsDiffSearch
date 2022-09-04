@@ -2,6 +2,7 @@ package io.quarkus.hibernate.rx.runtime;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
+import javax.enterprise.inject.Typed;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.persistence.EntityManagerFactory;
@@ -9,24 +10,20 @@ import javax.persistence.PersistenceUnit;
 
 import org.hibernate.rx.RxSessionFactory;
 
+import io.quarkus.arc.DefaultBean;
+
 @ApplicationScoped
 public class RxSessionFactoryProducer {
 
-    //    private volatile RxSessionFactory rxSessionFactory;
-    //
-    //    void initialize(RxSessionFactory rxSessionFactory) {
-    //        this.rxSessionFactory = rxSessionFactory;
-    //    }
-
     @Inject
     @PersistenceUnit
-    private EntityManagerFactory emf;
+    EntityManagerFactory emf;
 
     @Produces
-    @RxSession
     @Singleton
+    @DefaultBean
+    @Typed(RxSessionFactory.class)
     public RxSessionFactory rxSessionFactory() {
-        System.out.println("@AGG producing RxSessionFactory emf=" + emf);
         return emf.unwrap(RxSessionFactory.class);
     }
 

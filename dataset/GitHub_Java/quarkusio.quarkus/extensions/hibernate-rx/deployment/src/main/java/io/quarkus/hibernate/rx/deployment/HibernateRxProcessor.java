@@ -11,13 +11,15 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.hibernate.orm.deployment.JpaEntitiesBuildItem;
 import io.quarkus.hibernate.orm.deployment.NonJpaModelBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
 import io.quarkus.hibernate.rx.runtime.HibernateRxRecorder;
 import io.quarkus.hibernate.rx.runtime.RxSessionFactoryProducer;
-import io.quarkus.reactive.pg.client.deployment.PgPoolBuildItem;
+import io.quarkus.hibernate.rx.runtime.RxSessionProducer;
+import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 
 public final class HibernateRxProcessor {
 
@@ -25,19 +27,30 @@ public final class HibernateRxProcessor {
 
     @BuildStep
     FeatureBuildItem feature() {
-        System.out.println("@AGG in HibernateRxProcessor.feature()");
         return new FeatureBuildItem(FeatureBuildItem.HIBERNATE_RX);
     }
 
     @BuildStep
     CapabilityBuildItem capability() {
-        System.out.println("@AGG in HibernateRxProcessor.capability()");
         return new CapabilityBuildItem(Capabilities.HIBERNATE_RX);
     }
 
     @BuildStep
-    AdditionalBeanBuildItem registerBean() {
-        return AdditionalBeanBuildItem.unremovableOf(RxSessionFactoryProducer.class);
+    void registerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+        additionalBeans.produce(AdditionalBeanBuildItem.builder()
+                .addBeanClass(RxSessionFactoryProducer.class)
+                .addBeanClass(RxSessionProducer.class)
+                .build());
+        //        additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(RxSessionFactoryProducer.class));
+        //        additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(RxSessionProducer.class));
+    }
+
+    @BuildStep
+    void reflections(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+        String[] classes = {
+                "org.hibernate.rx.persister.entity.impl.RxSingleTableEntityPersister" // TODO see if we can eliminate this
+        };
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, classes));
     }
 
     @BuildStep
@@ -46,19 +59,16 @@ public final class HibernateRxProcessor {
             HibernateRxRecorder recorder,
             JpaEntitiesBuildItem jpaEntities,
             List<NonJpaModelBuildItem> nonJpaModels) {
-        System.out.println("@AGG in HibernateRxProcessor.build()");
-
         final boolean enableRx = hasEntities(jpaEntities, nonJpaModels);
         recorder.callHibernateRxFeatureInit(enableRx);
     }
 
     @BuildStep
     void waitForVertxPool(
-            PgPoolBuildItem pgPool, // TODO @AGG: make this a generic pool build item so we don't need to depend on an impl
+            List<VertxPoolBuildItem> vertxPool,
             BuildProducer<HibernateOrmIntegrationRuntimeConfiguredBuildItem> runtimeConfigured) {
-        // Define a dependency on PgPoolBuildItem to ensure that any Pool instances are available
+        // Define a dependency on VertxPoolBuildItem to ensure that any Pool instances are available
         // when HibernateORM starts its persistence units
-        System.out.println("@AGG HibernateRX processor is configured with pool=" + pgPool.getPgPool());
         runtimeConfigured.produce(new HibernateOrmIntegrationRuntimeConfiguredBuildItem(HIBERNATE_RX));
     }
 
