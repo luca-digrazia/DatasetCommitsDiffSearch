@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -123,7 +123,7 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
   }
 
   @Test
-  public void testPersistentCache_modifyingInputCausesActionReexecution() throws Exception {
+  public void testPersistentCache_ModifyingInputCausesActionReexecution() throws Exception {
     // /hello -> [action] -> /goodbye
     Artifact hello = createSourceArtifact("hello");
     BlazeTestUtils.makeEmptyFile(hello.getPath());
@@ -316,7 +316,7 @@ public class TimestampBuilderMediumTest extends TimestampBuilderTestCase {
   }
 
   @Test
-  public void testPersistentCache_modifyingOutputCausesActionReexecution() throws Exception {
+  public void testPersistentCache_ModifyingOutputCausesActionReexecution() throws Exception {
     // [action] -> /hello
     Artifact hello = createDerivedArtifact("hello");
     Button button = createActionButton(emptyNestedSet, ImmutableSet.of(hello));
