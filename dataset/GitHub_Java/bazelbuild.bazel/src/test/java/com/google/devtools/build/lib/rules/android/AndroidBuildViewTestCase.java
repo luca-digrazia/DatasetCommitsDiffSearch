@@ -33,9 +33,7 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -124,16 +122,14 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   }
 
   protected void assertNativeLibrariesCopiedNotLinked(
-      ConfiguredTarget target, BuildConfiguration targetConfiguration, String... expectedLibNames) {
+      ConfiguredTarget target, String... expectedLibNames) {
     Iterable<Artifact> copiedLibs = getNativeLibrariesInApk(target);
     for (Artifact copiedLib : copiedLibs) {
       assertWithMessage("Native libraries were linked to produce " + copiedLib)
           .that(getGeneratingLabelForArtifact(copiedLib))
           .isNotEqualTo(target.getLabel());
     }
-    assertThat(
-            AnalysisTestUtil.artifactsToStrings(
-                targetConfiguration, getHostConfiguration(), copiedLibs))
+    assertThat(artifactsToStrings(copiedLibs))
         .containsAtLeastElementsIn(ImmutableSet.copyOf(Arrays.asList(expectedLibNames)));
   }
 
@@ -203,11 +199,11 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         JavaInfo.getProvider(JavaRuleOutputJarsProvider.class, target.getConfiguredTarget());
     assertThat(jarProvider).isNotNull();
     return Iterables.find(
-            jarProvider.getJavaOutputs(),
-            javaOutput -> {
-              assertThat(javaOutput).isNotNull();
-              assertThat(javaOutput.getClassJar()).isNotNull();
-              return javaOutput
+            jarProvider.getOutputJars(),
+            outputJar -> {
+              assertThat(outputJar).isNotNull();
+              assertThat(outputJar.getClassJar()).isNotNull();
+              return outputJar
                   .getClassJar()
                   .getFilename()
                   .equals(target.getTarget().getName() + "_resources.jar");
@@ -384,13 +380,14 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
   }
 
   protected void checkProguardUse(
-      ConfiguredTarget binary,
+      String target,
       String artifact,
       boolean expectMapping,
       @Nullable Integer passes,
       boolean splitOptimizationPass,
       String... expectedlibraryJars)
       throws Exception {
+    ConfiguredTarget binary = getConfiguredTarget(target);
     assertProguardUsed(binary);
     assertProguardGenerated(binary);
 
