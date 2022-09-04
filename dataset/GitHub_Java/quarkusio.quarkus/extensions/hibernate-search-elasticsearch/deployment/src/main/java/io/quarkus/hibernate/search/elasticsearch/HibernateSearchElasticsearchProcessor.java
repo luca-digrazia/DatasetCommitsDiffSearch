@@ -1,8 +1,8 @@
 package io.quarkus.hibernate.search.elasticsearch;
 
-import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.GSON_CLASSES;
 import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.INDEXED;
 import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.PROPERTY_MAPPING_META_ANNOTATION;
+import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.SCHEMA_MAPPING_CLASSES;
 import static io.quarkus.hibernate.search.elasticsearch.HibernateSearchClasses.TYPE_MAPPING_META_ANNOTATION;
 
 import java.util.ArrayList;
@@ -10,6 +10,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -52,8 +54,7 @@ class HibernateSearchElasticsearchProcessor {
 
     @BuildStep
     void setupLogFilters(BuildProducer<LogCleanupFilterBuildItem> filters) {
-        filters.produce(new LogCleanupFilterBuildItem(
-                "org.hibernate.search.mapper.orm.bootstrap.impl.HibernateSearchIntegrator", "HSEARCH000034"));
+        filters.produce(new LogCleanupFilterBuildItem("org.hibernate.search.engine.Version", "HSEARCH000034"));
     }
 
     @BuildStep
@@ -135,6 +136,10 @@ class HibernateSearchElasticsearchProcessor {
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy) {
         Set<DotName> reflectiveClassCollector = new HashSet<>();
 
+        // TODO remove this when upgrading to Beta4 (when https://hibernate.atlassian.net/browse/HSEARCH-3795 is solved)
+        reflectiveClass.produce(
+                new ReflectiveClassBuildItem(false, false, org.hibernate.search.engine.logging.impl.Log_$logger.class));
+
         if (buildTimeConfig.defaultBackend.analysis.configurer.isPresent()) {
             reflectiveClass.produce(
                     new ReflectiveClassBuildItem(true, false, buildTimeConfig.defaultBackend.analysis.configurer.get()));
@@ -175,15 +180,9 @@ class HibernateSearchElasticsearchProcessor {
             }
         }
 
-        for (Class<?> gsonClass : GSON_CLASSES) {
-            Class<?> currentClass = gsonClass;
-            while (currentClass != Object.class) {
-                reflectiveClassCollector.add(DotName.createSimple(currentClass.getName()));
-                currentClass = currentClass.getSuperclass();
-            }
-        }
-
-        String[] reflectiveClasses = reflectiveClassCollector.stream().map(DotName::toString).toArray(String[]::new);
+        String[] reflectiveClasses = Stream
+                .of(reflectiveClassCollector.stream(), SCHEMA_MAPPING_CLASSES.stream())
+                .flatMap(Function.identity()).map(c -> c.toString()).toArray(String[]::new);
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, reflectiveClasses));
 
         for (Type reflectiveHierarchyType : reflectiveHierarchyCollector) {
@@ -208,7 +207,6 @@ class HibernateSearchElasticsearchProcessor {
 
         Type superClassType = classInfo.superClassType();
         while (superClassType != null && !superClassType.name().toString().equals("java.lang.Object")) {
-            reflectiveClassCollector.add(superClassType.name());
             if (superClassType instanceof ClassType) {
                 superClassType = index.getClassByName(superClassType.name()).superClassType();
             } else if (superClassType instanceof ParameterizedType) {
