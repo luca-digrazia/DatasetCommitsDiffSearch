@@ -417,7 +417,7 @@ public class BFGS {
      *      f(x+stp*s) - f(x) - ftol*stp*(gradf(x)'s).
      * }</pre>
      * If a step is obtained for which the modified function
-     * has a nonpositive function value and non-negative derivative,
+     * has a nonpositive function value and nonnegative derivative,
      * then the interval of uncertainty is chosen so that it
      * contains a minimizer of {@code f(x+stp*s)}.
      * <p>
@@ -857,7 +857,7 @@ public class BFGS {
             r[i] = g[fi] + (cauchy[fi] - x[fi]) * theta - wmc[fi];
         }
 
-        Matrix WZ = W.rows(freeVar);
+        Matrix WZ = W.row(freeVar);
         double[] v  = M.mv(WZ.tv(r));
         Matrix N = WZ.ata().mul(-thetaInverse);
         N = M.mm(N);
