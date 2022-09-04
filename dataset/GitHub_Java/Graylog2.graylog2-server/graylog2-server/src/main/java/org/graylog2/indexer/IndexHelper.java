@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,21 +15,21 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.indexer;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import java.util.List;
+import java.util.Set;
+import com.google.common.collect.Lists;
 import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.FilterBuilders;
+import org.graylog2.Core;
 import org.graylog2.indexer.ranges.IndexRange;
-import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.searches.timeranges.*;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
-
-import java.util.List;
-import java.util.Set;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -105,19 +105,16 @@ public class IndexHelper {
         return r;
     }
 
-    public static Set<String> determineAffectedIndices(Indexer indexer,
-                                                       IndexRangeService indexRangeService,
-                                                       Deflector deflector,
-                                                       TimeRange range) {
+    public static Set<String> determineAffectedIndices(Core core, TimeRange range) {
         Set<String> indices = Sets.newHashSet();
 
-        for (IndexRange indexRange : indexRangeService.getFrom((int) (range.getFrom().getMillis() / 1000))) {
+        for (IndexRange indexRange : IndexRange.getFrom(core, (int) (range.getFrom().getMillis()/1000))) {
             indices.add(indexRange.getIndexName());
         }
 
         // Always include the most recent index in some cases.
         if (indices.isEmpty() || !(range instanceof FromToRange)) {
-            indices.add(deflector.getCurrentActualTargetIndex(indexer));
+            indices.add(core.getDeflector().getCurrentActualTargetIndex());
         }
 
         return indices;
