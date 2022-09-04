@@ -151,15 +151,13 @@ class AgroalProcessor {
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    DataSourceInitializedBuildItem configureRuntimeProperties(AgroalTemplate template) {
+    void configureRuntimeProperties(AgroalTemplate template) {
         // TODO @dmlloyd
         // Here we have the first issue:
         // - things are working well for the default database
         // - we have the datasource1 and datasource2 elements in the map but the values are not injected
         // - as mentioned above, it doesn't seem to be an issue for the build time config I use in the above method...
         template.configureRuntimeProperties(agroalRuntimeConfig);
-
-        return new DataSourceInitializedBuildItem();
     }
 
     @BuildStep
