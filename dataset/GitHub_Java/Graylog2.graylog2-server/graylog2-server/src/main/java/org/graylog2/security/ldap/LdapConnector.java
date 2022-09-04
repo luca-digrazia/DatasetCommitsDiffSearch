@@ -20,18 +20,9 @@ package org.graylog2.security.ldap;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.Maps;
-import org.apache.directory.api.ldap.model.cursor.CursorException;
-import org.apache.directory.api.ldap.model.cursor.EntryCursor;
-import org.apache.directory.api.ldap.model.entry.Attribute;
-import org.apache.directory.api.ldap.model.entry.Entry;
-import org.apache.directory.api.ldap.model.exception.LdapException;
-import org.apache.directory.api.ldap.model.message.BindRequestImpl;
-import org.apache.directory.api.ldap.model.message.BindResponse;
-import org.apache.directory.api.ldap.model.message.ResultCodeEnum;
-import org.apache.directory.api.ldap.model.message.SearchScope;
-import org.apache.directory.ldap.client.api.LdapConnectionConfig;
-import org.apache.directory.ldap.client.api.LdapNetworkConnection;
+import org.apache.shiro.realm.ldap.JndiLdapContextFactory;
 import org.graylog2.Core;
+import org.graylog2.rest.resources.system.requests.LdapTestLoginRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,22 +32,75 @@ import javax.naming.directory.Attributes;
 import javax.naming.directory.SearchControls;
 import javax.naming.directory.SearchResult;
 import javax.naming.ldap.LdapContext;
-import java.text.MessageFormat;
+import java.net.URI;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 public class LdapConnector {
     private static final Logger log = LoggerFactory.getLogger(LdapConnector.class);
-
     private final Core core;
 
     public LdapConnector(Core core) {
         this.core = core;
     }
 
-    public Map<String, String> _searchPrincipal(
+    public Map<String, String> checkCredentials(
+            URI ldapUri, String username, String password,
+            String searchBase,
+            String principalSearchPattern,
+            String usernameAttribute,
+            String principal,
+            String credential) throws NamingException {
+        try {
+            final Map<String, String> entry = loadAccount(
+                    ldapUri,
+                    username,
+                    password,
+                    searchBase,
+                    principalSearchPattern,
+                    principal);
+
+            if (credential != null) {
+                final String ldapPassword = entry.get("userPassword");
+                // UGGGHHH!
+                if (ldapPassword.equals(credential)) {
+                    return entry;
+                } else {
+                    throw new NamingException("Password mismatch!");
+                }
+            }
+            return entry;
+        } catch (NamingException e) {
+            log.info("Unable to load account from LDAP server", e);
+            throw e;
+        }
+    }
+
+    public Map<String, String> loadAccount(
+            URI ldapUri, String username, String password,
+            String searchBase,
+            String principalSearchPattern,
+            String principal) throws NamingException {
+
+        LdapContext context = connect(ldapUri, username, password);
+        return searchPrincipal(context, searchBase, principalSearchPattern, principal);
+    }
+
+    public LdapContext connect(URI ldapUri, String username, String password) throws NamingException {
+        JndiLdapContextFactory defaultFactory = new JndiLdapContextFactory();
+        defaultFactory.setUrl(ldapUri.toString());
+        defaultFactory.setSystemUsername(username);
+        defaultFactory.setSystemPassword(password);
+        try {
+            return defaultFactory.getSystemLdapContext();
+        } catch (NamingException e) {
+            log.error("Unable to connect to LDAP server {} with username {} using password: {}",
+                      new Object[]{ldapUri.toString(), username, password != null});
+            throw e;
+        }
+    }
+
+    public Map<String, String> searchPrincipal(
             LdapContext context,
             String searchBase,
             String principalSearchPattern,
@@ -88,65 +132,38 @@ public class LdapConnector {
         return entry;
     }
 
-    public LdapNetworkConnection connect(LdapConnectionConfig config) throws LdapException {
-        final LdapNetworkConnection connection = new LdapNetworkConnection(config);
-        connection.setTimeOut(TimeUnit.SECONDS.toMillis(5));
+    public Map<String, String> testLogin(LdapTestLoginRequest request) throws NamingException {
+        JndiLdapContextFactory defaultFactory = new JndiLdapContextFactory();
+        defaultFactory.setUrl(request.ldapUri.toString());
+        defaultFactory.setSystemUsername(request.systemUsername);
+        defaultFactory.setSystemPassword(request.systemPassword);
+        defaultFactory.setPoolingEnabled(false);
 
-        if (log.isTraceEnabled()) {
-            log.trace("Connecting to LDAP server {}:{}, binding with user {}", new Object[] {config.getLdapHost(), config.getLdapPort(), config.getName()});
-        }
-        // this will perform an anonymous bind if there were no system credentials
-        connection.bind();
-        return connection;
-    }
+        final HashMap<String, String> attributes = Maps.newHashMap();
+        final LdapContext context = defaultFactory.getSystemLdapContext();
 
-    public LdapEntry search(LdapNetworkConnection connection, String searchBase, String searchPattern, String principal, boolean activeDirectory) throws LdapException, CursorException {
-        final LdapEntry ldapEntry = new LdapEntry();
-        final HashMap<String, String> entry = Maps.newHashMap();
+        final SearchControls cons = new SearchControls();
+        cons.setSearchScope(SearchControls.SUBTREE_SCOPE);
 
-        final String filter = MessageFormat.format(searchPattern, principal);
-        if (log.isTraceEnabled()) {
-            log.trace("Search {} for {}, starting at {}", new Object[] {activeDirectory ? "ActiveDirectory" : "LDAP", filter, searchBase});
-        }
-        final EntryCursor entryCursor = connection.search(searchBase,
-                                                          filter,
-                                                          SearchScope.SUBTREE,
-                                                          "*");
-        final Iterator<Entry> it = entryCursor.iterator();
-        if (it.hasNext()) {
-            final Entry e = it.next();
-            // for generic LDAP use the dn of the entry for the subsequent bind, active directory needs the userPrincipalName attribute (set below)
-            if (!activeDirectory) {
-                ldapEntry.setDn(e.getDn().getName());
+        final NamingEnumeration<SearchResult> results;
+        results = context.search(request.searchBase,
+                                 request.principalSearchPattern,
+                                 new Object[]{request.testUsername},
+                                 cons);
+
+        if (results.hasMore()) {
+            final SearchResult next = results.next();
+            final Attributes attrs = next.getAttributes();
+            final NamingEnumeration<String> iDs = attrs.getIDs();
+            while (iDs.hasMore()) {
+                final String key = iDs.next();
+                if (key.equals("userPassword")) continue;
+                attributes.put(key, attrs.get(key).get().toString());
             }
-
-            for (Attribute attribute : e.getAttributes()) {
-                if (activeDirectory && attribute.getId().equalsIgnoreCase("userPrincipalName")) {
-                    ldapEntry.setDn(attribute.getString());
-                }
-                if (attribute.isHumanReadable()) {
-                    ldapEntry.put(attribute.getId(),attribute.getString());
-                }
-            }
-        } else {
-            log.trace("No LDAP entry found for filter {}", filter);
-            return null;
         }
-        log.trace("LDAP search found entry for DN {} with search filter {}", ldapEntry.getDn(), filter);
-        return ldapEntry;
+        context.close();
+
+        return attributes;
     }
 
-    public boolean authenticate(LdapNetworkConnection connection, String principal, String credentials) throws LdapException {
-        final BindRequestImpl bindRequest = new BindRequestImpl();
-        bindRequest.setName(principal);
-        bindRequest.setCredentials(credentials);
-        log.trace("Re-binding with DN {} using password", principal);
-        final BindResponse bind = connection.bind(bindRequest);
-        if (!bind.getLdapResult().getResultCode().equals(ResultCodeEnum.SUCCESS)) {
-            log.trace("Re-binding DN {} failed", principal);
-            throw new RuntimeException(bind.toString());
-        }
-        log.trace("Binding DN {} did not throw, connection authenticated: {}", principal, connection.isAuthenticated());
-        return connection.isAuthenticated();
-    }
 }
