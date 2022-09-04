@@ -63,7 +63,7 @@ import java.util.concurrent.TimeUnit;
 public final class Main {
 
     private static final Logger LOG = Logger.getLogger(Main.class);
-    private static final String GRAYLOG2_VERSION = "0.9.7-dev";
+    private static final String GRAYLOG2_VERSION = "0.9.6-beta";
 
     public static RulesEngine drools = null;
     private static final int SCHEDULED_THREADS_POOL_SIZE = 7;
@@ -154,7 +154,7 @@ public final class Main {
 
         initializeMongoConnection(configuration);
         initializeRulesEngine(configuration.getDroolsRulesFile());
-        initializeSyslogServer(configuration.getSyslogProtocol(), configuration.getSyslogListenPort(), configuration.getSyslogListenAddress());
+        initializeSyslogServer(configuration.getSyslogProtocol(), configuration.getSyslogListenPort());
         initializeHostCounterCache(scheduler);
 
         // Start message counter thread.
@@ -240,10 +240,10 @@ public final class Main {
         LOG.info("GELF threads started");
     }
 
-    private static void initializeSyslogServer(String syslogProtocol, int syslogPort, String syslogHost) {
+    private static void initializeSyslogServer(String syslogProtocol, int syslogPort) {
 
         // Start the Syslog thread that accepts syslog packages.
-        SyslogServerThread syslogServerThread = new SyslogServerThread(syslogProtocol, syslogPort, syslogHost);
+        SyslogServerThread syslogServerThread = new SyslogServerThread(syslogProtocol, syslogPort);
         syslogServerThread.start();
 
         // Check if the thread started up completely.
