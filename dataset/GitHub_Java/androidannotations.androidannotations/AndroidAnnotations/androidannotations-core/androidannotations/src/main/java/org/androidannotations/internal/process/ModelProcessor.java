@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -79,9 +79,6 @@ public class ModelProcessor {
 		LOGGER.info("Processing enclosed elements");
 
 		for (AnnotationHandler annotationHandler : environment.getDecoratingHandlers()) {
-			if (!annotationHandler.isEnabled()) {
-				continue;
-			}
 			String annotationName = annotationHandler.getTarget();
 
 			/*
@@ -170,9 +167,6 @@ public class ModelProcessor {
 	private boolean generateElements(AnnotationElements validatedModel, ProcessHolder processHolder) throws Exception {
 		boolean isElementRemaining = false;
 		for (GeneratingAnnotationHandler generatingAnnotationHandler : environment.getGeneratingHandlers()) {
-			if (!generatingAnnotationHandler.isEnabled()) {
-				continue;
-			}
 			String annotationName = generatingAnnotationHandler.getTarget();
 			Set<? extends Element> annotatedElements = validatedModel.getRootAnnotatedElements(annotationName);
 
