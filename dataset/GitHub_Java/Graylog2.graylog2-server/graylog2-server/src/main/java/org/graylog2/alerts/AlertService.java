@@ -16,7 +16,6 @@
  */
 package org.graylog2.alerts;
 
-import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.PersistedService;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.streams.Stream;
@@ -39,10 +38,10 @@ public interface AlertService extends PersistedService {
     long totalCount();
     long totalCountForStream(String streamId);
 
-    AlertCondition fromPersisted(Map<String, Object> conditionFields, Stream stream);
-    AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream, String userId);
+    AlertCondition fromPersisted(Map<String, Object> conditionFields, Stream stream) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
+    AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream, String userId) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
 
-    AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr);
+    AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr) throws AbstractAlertCondition.NoSuchAlertConditionTypeException;
 
     boolean inGracePeriod(AlertCondition alertCondition);
 
@@ -53,5 +52,4 @@ public interface AlertService extends PersistedService {
     Map<String, Object> asMap(final AlertCondition alertCondition);
 
     List<Alert> listForStreamId(String streamId, int skip, int limit);
-    Alert load(String alertId, String streamId) throws NotFoundException;
 }
