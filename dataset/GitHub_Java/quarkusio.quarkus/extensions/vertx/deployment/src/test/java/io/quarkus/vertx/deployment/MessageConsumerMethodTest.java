@@ -21,9 +21,10 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.arc.Arc;
 import io.quarkus.test.QuarkusUnitTest;
 import io.quarkus.vertx.ConsumeEvent;
+import io.smallrye.common.annotation.Blocking;
+import io.smallrye.mutiny.Uni;
 import io.vertx.core.Context;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
@@ -37,9 +38,11 @@ public class MessageConsumerMethodTest {
     @Inject
     SimpleBean simpleBean;
 
+    @Inject
+    EventBus eventBus;
+
     @Test
     public void testSend() throws InterruptedException {
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
         eventBus.request("foo", "hello", ar -> {
             if (ar.succeeded()) {
@@ -57,7 +60,6 @@ public class MessageConsumerMethodTest {
 
     @Test
     public void testSendAsync() throws InterruptedException {
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
         eventBus.request("foo-async", "hello", ar -> {
             if (ar.succeeded()) {
@@ -74,8 +76,24 @@ public class MessageConsumerMethodTest {
     }
 
     @Test
+    public void testSendAsyncUni() throws InterruptedException {
+        BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
+        eventBus.request("foo-async-uni", "hello-uni", ar -> {
+            if (ar.succeeded()) {
+                try {
+                    synchronizer.put(ar.result().body());
+                } catch (InterruptedException e) {
+                    fail(e);
+                }
+            } else {
+                fail(ar.cause());
+            }
+        });
+        assertEquals("inu-olleh", synchronizer.poll(2, TimeUnit.SECONDS));
+    }
+
+    @Test
     public void testSendDefaultAddress() throws InterruptedException {
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
         eventBus.request("io.quarkus.vertx.deployment.MessageConsumerMethodTest$SimpleBean", "Hello", ar -> {
             if (ar.succeeded()) {
@@ -93,7 +111,6 @@ public class MessageConsumerMethodTest {
 
     @Test
     public void testRequestContext() throws InterruptedException {
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
         eventBus.request("request", "Martin", ar -> {
             if (ar.succeeded()) {
@@ -110,9 +127,25 @@ public class MessageConsumerMethodTest {
     }
 
     @Test
+    public void testBlockingRequestContext() throws InterruptedException {
+        BlockingQueue<Object> synchronizer = new LinkedBlockingQueue<>();
+        eventBus.request("blocking-request", "Lu", ar -> {
+            if (ar.succeeded()) {
+                try {
+                    synchronizer.put(ar.result().body());
+                } catch (InterruptedException e) {
+                    fail(e);
+                }
+            } else {
+                fail(ar.cause());
+            }
+        });
+        assertEquals("Lu", synchronizer.poll(2, TimeUnit.SECONDS));
+    }
+
+    @Test
     public void testPublish() throws InterruptedException {
         SimpleBean.MESSAGES.clear();
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         SimpleBean.latch = new CountDownLatch(2);
         eventBus.publish("pub", "Hello");
         SimpleBean.latch.await(2, TimeUnit.SECONDS);
@@ -123,7 +156,6 @@ public class MessageConsumerMethodTest {
     @Test
     public void testBlockingConsumer() throws InterruptedException {
         SimpleBean.MESSAGES.clear();
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         SimpleBean.latch = new CountDownLatch(1);
         eventBus.publish("blocking", "Hello");
         SimpleBean.latch.await(2, TimeUnit.SECONDS);
@@ -135,7 +167,6 @@ public class MessageConsumerMethodTest {
     @Test
     public void testPublishRx() throws InterruptedException {
         SimpleBean.MESSAGES.clear();
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         SimpleBean.latch = new CountDownLatch(1);
         eventBus.publish("pub-rx", "Hello");
         SimpleBean.latch.await(2, TimeUnit.SECONDS);
@@ -145,7 +176,6 @@ public class MessageConsumerMethodTest {
     @Test
     public void testPublishAxle() throws InterruptedException {
         SimpleBean.MESSAGES.clear();
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         SimpleBean.latch = new CountDownLatch(1);
         eventBus.publish("pub-axle", "Hello");
         SimpleBean.latch.await(2, TimeUnit.SECONDS);
@@ -155,11 +185,21 @@ public class MessageConsumerMethodTest {
     @Test
     public void testPublishMutiny() throws InterruptedException {
         SimpleBean.MESSAGES.clear();
-        EventBus eventBus = Arc.container().instance(EventBus.class).get();
         SimpleBean.latch = new CountDownLatch(1);
         eventBus.publish("pub-mutiny", "Hello");
         SimpleBean.latch.await(2, TimeUnit.SECONDS);
         assertTrue(SimpleBean.MESSAGES.contains("HELLO"));
+    }
+
+    @Test
+    public void testBlockingConsumerUsingSmallRyeBlocking() throws InterruptedException {
+        SimpleBean.MESSAGES.clear();
+        SimpleBean.latch = new CountDownLatch(1);
+        eventBus.publish("worker", "Hello");
+        SimpleBean.latch.await(2, TimeUnit.SECONDS);
+        assertEquals(1, SimpleBean.MESSAGES.size());
+        String message = SimpleBean.MESSAGES.get(0);
+        assertTrue(message.contains("hello::true"));
     }
 
     static class SimpleBean {
@@ -198,6 +238,11 @@ public class MessageConsumerMethodTest {
             return CompletableFuture.completedFuture(new StringBuilder(message).reverse().toString());
         }
 
+        @ConsumeEvent("foo-async-uni")
+        Uni<String> replyAsyncUni(String message) {
+            return Uni.createFrom().item(new StringBuilder(message).reverse().toString());
+        }
+
         @ConsumeEvent(value = "blocking", blocking = true)
         void consumeBlocking(String message) {
             MESSAGES.add(message.toLowerCase() + "::" + Context.isOnWorkerThread());
@@ -224,6 +269,19 @@ public class MessageConsumerMethodTest {
 
         @ConsumeEvent("request")
         String requestContextActive(String message) {
+            return transformer.transform(message);
+        }
+
+        @ConsumeEvent(value = "worker")
+        @Blocking
+        void consumeBlockingUsingRunOnWorkerThread(String message) {
+            MESSAGES.add(message.toLowerCase() + "::" + Context.isOnWorkerThread());
+            latch.countDown();
+        }
+
+        @Blocking
+        @ConsumeEvent("blocking-request")
+        String blockingRequestContextActive(String message) {
             return transformer.transform(message);
         }
     }
