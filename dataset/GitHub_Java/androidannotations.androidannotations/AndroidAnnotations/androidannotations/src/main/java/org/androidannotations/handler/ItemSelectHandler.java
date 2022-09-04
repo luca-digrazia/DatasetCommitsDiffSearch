@@ -59,10 +59,7 @@ public class ItemSelectHandler extends AbstractViewListenerHandler {
 
 		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
-		validatorHelper.param.inOrder() //
-				.primitiveOrWrapper(TypeKind.BOOLEAN) //
-				.anyType().optional() //
-				.validate(executableElement, valid);
+		validatorHelper.param.hasOneOrTwoParametersAndFirstIsBoolean(executableElement, valid);
 	}
 
 	@Override
