@@ -1,6 +1,7 @@
 package io.dropwizard.jersey.params;
 
 
+import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import org.junit.Test;
@@ -16,7 +17,7 @@ public class NonEmptyStringParamProviderTest extends AbstractJerseyTest {
 
     @Override
     protected Application configure() {
-        return DropwizardResourceConfig.forTesting()
+        return DropwizardResourceConfig.forTesting(new MetricRegistry())
                 .register(NonEmptyStringParamResource.class);
     }
 

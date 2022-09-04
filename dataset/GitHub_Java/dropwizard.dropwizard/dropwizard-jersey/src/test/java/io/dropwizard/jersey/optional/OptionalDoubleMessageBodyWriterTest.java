@@ -1,5 +1,6 @@
 package io.dropwizard.jersey.optional;
 
+import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
 import org.junit.Test;
@@ -23,7 +24,7 @@ public class OptionalDoubleMessageBodyWriterTest extends AbstractJerseyTest {
 
     @Override
     protected Application configure() {
-        return DropwizardResourceConfig.forTesting()
+        return DropwizardResourceConfig.forTesting(new MetricRegistry())
                     .register(new EmptyOptionalExceptionMapper())
                     .register(OptionalDoubleReturnResource.class);
     }
