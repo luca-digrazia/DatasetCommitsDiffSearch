@@ -2,6 +2,7 @@ package org.jboss.shamrock.maven;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -26,7 +27,6 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.jar.Attributes;
@@ -280,11 +280,16 @@ public class BuildMojo extends AbstractMojo {
 //                                if (!pathName.isEmpty()) {
 //                                    out.putNextEntry(new ZipEntry(pathName + "/"));
 //                                }
-                                } else if (pathName.endsWith(".class") && !buildTimeGenerator.getByteCodeTransformers().isEmpty()) {
+                                } else if (pathName.endsWith(".class") && !buildTimeGenerator.getBytecodeTransformers().isEmpty()) {
                                     String className = pathName.substring(0, pathName.length() - 6).replace("/", ".");
-                                    List<BiFunction<String, ClassVisitor, ClassVisitor>> visitors = buildTimeGenerator.getByteCodeTransformers().get(className);
-
-                                    if (visitors == null || visitors.isEmpty()) {
+                                    List<Function<ClassVisitor, ClassVisitor>> visitors = new ArrayList<>();
+                                    for (Function<String, Function<ClassVisitor, ClassVisitor>> t : buildTimeGenerator.getBytecodeTransformers()) {
+                                        Function<ClassVisitor, ClassVisitor> visitor = t.apply(className);
+                                        if (visitor != null) {
+                                            visitors.add(visitor);
+                                        }
+                                    }
+                                    if (visitors.isEmpty()) {
                                         runner.putNextEntry(new ZipEntry(pathName));
                                         try (FileInputStream in = new FileInputStream(path.toFile())) {
                                             doCopy(runner, in);
@@ -297,8 +302,8 @@ public class BuildMojo extends AbstractMojo {
                                                 ClassReader cr = new ClassReader(fileContent);
                                                 ClassWriter writer = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
                                                 ClassVisitor visitor = writer;
-                                                for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
-                                                    visitor = i.apply(className, visitor);
+                                                for (Function<ClassVisitor, ClassVisitor> i : visitors) {
+                                                    visitor = i.apply(visitor);
                                                 }
                                                 cr.accept(visitor, 0);
                                                 return new FutureEntry(writer.toByteArray(), pathName);
