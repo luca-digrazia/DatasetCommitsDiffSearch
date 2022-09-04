@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.objc.AppleBinary.BinaryType;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -66,9 +67,6 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
       }
       if (!alreadyAdded.contains("platform_type")) {
         attributes.add("platform_type = 'ios'");
-      }
-      if (!alreadyAdded.contains("binary_type")) {
-        attributes.add("binary_type = 'executable'");
       }
       return attributes.build();
     }
@@ -115,7 +113,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testMandatoryMinimumOsVersionUnset() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'watchos'");
     useConfiguration("--experimental_apple_mandatory_minimum_version");
     reporter.removeHandler(failFastHandler);
@@ -125,7 +123,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testMandatoryMinimumOsVersionSet() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "minimum_os_version", "'8.0'",
         "platform_type", "'watchos'");
     useConfiguration("--experimental_apple_mandatory_minimum_version");
@@ -134,7 +132,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLipoActionEnv() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'watchos'");
 
     useConfiguration("--watchos_cpus=i386,armv7k", "--xcode_version=7.3",
@@ -148,7 +146,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testSymlinkInsteadOfLipoSingleArch() throws Exception {
-    getRuleType().scratchTarget(scratch);
+    RULE_TYPE.scratchTarget(scratch);
 
     SymlinkAction action = (SymlinkAction) lipoBinAction("//x:x");
     CommandAction linkAction = linkAction("//x:x");
@@ -159,7 +157,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLipoActionEnv_sdkVersionPadding() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'watchos'");
 
     useConfiguration("--watchos_cpus=i386,armv7k",
@@ -171,7 +169,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCcDependencyLinkoptsArePropagatedToLinkAction() throws Exception {
-    checkCcDependencyLinkoptsArePropagatedToLinkAction(getRuleType());
+    checkCcDependencyLinkoptsArePropagatedToLinkAction(RULE_TYPE);
   }
 
   @Test
@@ -263,7 +261,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
           "  name = 'low_level_framework',",
           "  deps = [':apple_low_level_binary'],",
           "  binary = ':apple_low_level_binary')");
-      getRuleType().scratchTarget(
+      RULE_TYPE.scratchTarget(
           scratch,
           "binary_type",
           "'executable'",
@@ -282,7 +280,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
           "    platform_type = 'ios',",
           "    binary_type = 'executable',",
           ")");
-      getRuleType().scratchTarget(
+      RULE_TYPE.scratchTarget(
           scratch,
           "binary_type",
           "'loadable_bundle'",
@@ -393,7 +391,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
           "  name = 'low_level_framework',",
           "  deps = [':apple_low_level_binary'],",
           "  binary = ':apple_low_level_binary')");
-      getRuleType().scratchTarget(
+      RULE_TYPE.scratchTarget(
           scratch,
           "binary_type",
           "'executable'",
@@ -412,7 +410,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
           "    platform_type = 'ios',",
           "    binary_type = 'executable',",
           ")");
-      getRuleType().scratchTarget(
+      RULE_TYPE.scratchTarget(
           scratch,
           "binary_type",
           "'loadable_bundle'",
@@ -433,7 +431,6 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
     Artifact bin = Iterables.getOnlyElement(linkAction("//x:x").getOutputs());
     ImmutableList<Artifact> binObjectFiles = getAllObjectFilesLinkedInBin(bin);
-
     assertThat(getFirstArtifactEndingWith(binObjectFiles, "DataA.pbobjc.o")).isNull();
     assertThat(getFirstArtifactEndingWith(binObjectFiles, "DataB.pbobjc.o")).isNull();
     assertThat(getFirstArtifactEndingWith(binObjectFiles, "DataC.pbobjc.o")).isNotNull();
@@ -520,7 +517,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
           "  name = 'low_level_framework',",
           "  deps = [':apple_low_level_binary'],",
           "  binary = ':apple_low_level_binary')");
-      getRuleType().scratchTarget(
+      RULE_TYPE.scratchTarget(
           scratch,
           "binary_type",
           "'executable'",
@@ -539,7 +536,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
           "    platform_type = 'ios',",
           "    binary_type = 'executable',",
           ")");
-      getRuleType().scratchTarget(
+      RULE_TYPE.scratchTarget(
           scratch,
           "binary_type",
           "'loadable_bundle'",
@@ -570,23 +567,23 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testProtoBundlingWithTargetsWithNoDeps() throws Exception {
-    checkProtoBundlingWithTargetsWithNoDeps(getRuleType());
+    checkProtoBundlingWithTargetsWithNoDeps(RULE_TYPE);
   }
 
   @Test
   public void testProtoBundlingDoesNotHappen() throws Exception {
     useConfiguration("--noenable_apple_binary_native_protos");
-    checkProtoBundlingDoesNotHappen(getRuleType());
+    checkProtoBundlingDoesNotHappen(RULE_TYPE);
   }
 
   @Test
   public void testAvoidDepsObjectsWithCrosstool() throws Exception {
-    checkAvoidDepsObjectsWithCrosstool(getRuleType());
+    checkAvoidDepsObjectsWithCrosstool(RULE_TYPE);
   }
 
   @Test
   public void testBundleLoaderCantBeSetWithoutBundleBinaryType() throws Exception {
-    getRuleType().scratchTarget(scratch);
+    RULE_TYPE.scratchTarget(scratch);
     checkError(
         "bundle", "bundle", AppleBinary.BUNDLE_LOADER_NOT_IN_BUNDLE_ERROR,
         "apple_binary(",
@@ -642,7 +639,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "apple_binary(",
         "    name = 'bin',",
         "    deps = [':lib'],",
@@ -691,7 +688,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "apple_binary(",
         "    name = 'bin',",
         "    deps = [':lib'],",
@@ -739,7 +736,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "apple_binary(",
         "    name = 'bin',",
         "    deps = ['lib'],",
@@ -767,7 +764,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testDuplicateLinkopts() throws Exception {
-    getRuleType().scratchTarget(scratch, "linkopts", "['-foo', 'bar', '-foo', 'baz']");
+    RULE_TYPE.scratchTarget(scratch, "linkopts", "['-foo', 'bar', '-foo', 'baz']");
 
     CommandAction linkAction = linkAction("//x:x");
     String linkArgs = Joiner.on(" ").join(linkAction.getArguments());
@@ -777,31 +774,32 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCanUseCrosstool_singleArch() throws Exception {
-    checkLinkingRuleCanUseCrosstool_singleArch(getRuleType());
+    checkLinkingRuleCanUseCrosstool_singleArch(RULE_TYPE);
   }
 
   @Test
   public void testCanUseCrosstool_multiArch() throws Exception {
-    checkLinkingRuleCanUseCrosstool_multiArch(getRuleType());
+    checkLinkingRuleCanUseCrosstool_multiArch(RULE_TYPE);
   }
 
   @Test
   public void testAppleSdkIphoneosPlatformEnv() throws Exception {
-    checkAppleSdkIphoneosPlatformEnv(getRuleType());
+    checkAppleSdkIphoneosPlatformEnv(RULE_TYPE);
   }
 
   @Test
   public void testXcodeVersionEnv() throws Exception {
-    checkXcodeVersionEnv(getRuleType());
+    checkXcodeVersionEnv(RULE_TYPE);
   }
 
   @Test
   public void testLinksImplicitFrameworksWithCrosstoolIos() throws Exception {
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--ios_multi_cpus=x86_64",
         "--ios_sdk_version=10.0",
         "--ios_minimum_os=8.0");
-    getRuleType().scratchTarget(scratch, "platform_type", "'ios'");
+    RULE_TYPE.scratchTarget(scratch, "platform_type", "'ios'");
 
     Action lipoAction = actionProducingArtifact("//x:x", "_lipobin");
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
@@ -813,10 +811,11 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testLinksImplicitFrameworksWithCrosstoolWatchos() throws Exception {
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--watchos_cpus=i386",
         "--watchos_sdk_version=3.0",
         "--watchos_minimum_os=2.0");
-    getRuleType().scratchTarget(scratch, "platform_type", "'watchos'");
+    RULE_TYPE.scratchTarget(scratch, "platform_type", "'watchos'");
 
     Action lipoAction = actionProducingArtifact("//x:x", "_lipobin");
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
@@ -828,10 +827,11 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testLinksImplicitFrameworksWithCrosstoolTvos() throws Exception {
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--tvos_cpus=x86_64",
         "--tvos_sdk_version=10.1",
         "--tvos_minimum_os=10.0");
-    getRuleType().scratchTarget(scratch, "platform_type", "'tvos'");
+    RULE_TYPE.scratchTarget(scratch, "platform_type", "'tvos'");
 
     Action lipoAction = actionProducingArtifact("//x:x", "_lipobin");
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
@@ -843,10 +843,11 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testLinksImplicitFrameworksWithCrosstoolMacos() throws Exception {
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--macos_cpus=x86_64",
         "--macos_sdk_version=10.11",
         "--macos_minimum_os=10.11");
-    getRuleType().scratchTarget(scratch, "platform_type", "'macos'");
+    RULE_TYPE.scratchTarget(scratch, "platform_type", "'macos'");
 
     Action lipoAction = actionProducingArtifact("//x:x", "_lipobin");
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
@@ -860,10 +861,11 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   @Test
   public void testLinkCocoaFeatureWithCrosstoolMacos() throws Exception {
     useConfiguration(
+        ObjcCrosstoolMode.ALL,
         "--macos_cpus=x86_64",
         "--macos_sdk_version=10.11",
         "--macos_minimum_os=10.11");
-    getRuleType().scratchTarget(
+    RULE_TYPE.scratchTarget(
         scratch, "platform_type", "'macos'", "features", "['link_cocoa']");
 
     Action lipoAction = actionProducingArtifact("//x:x", "_lipobin");
@@ -877,52 +879,52 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAliasedLinkoptsThroughObjcLibrary() throws Exception {
-    checkAliasedLinkoptsThroughObjcLibrary(getRuleType());
+    checkAliasedLinkoptsThroughObjcLibrary(RULE_TYPE);
   }
 
   @Test
   public void testObjcProviderLinkInputsInLinkAction() throws Exception {
-    checkObjcProviderLinkInputsInLinkAction(getRuleType());
+    checkObjcProviderLinkInputsInLinkAction(RULE_TYPE);
   }
 
   @Test
   public void testAppleSdkVersionEnv() throws Exception {
-    checkAppleSdkVersionEnv(getRuleType());
+    checkAppleSdkVersionEnv(RULE_TYPE);
   }
 
   @Test
   public void testNonDefaultAppleSdkVersionEnv() throws Exception {
-    checkNonDefaultAppleSdkVersionEnv(getRuleType());
+    checkNonDefaultAppleSdkVersionEnv(RULE_TYPE);
   }
 
   @Test
   public void testAppleSdkDefaultPlatformEnv() throws Exception {
-    checkAppleSdkDefaultPlatformEnv(getRuleType());
+    checkAppleSdkDefaultPlatformEnv(RULE_TYPE);
   }
 
   @Test
   public void testAvoidDepsThroughDylib() throws Exception {
-    checkAvoidDepsThroughDylib(getRuleType());
+    checkAvoidDepsThroughDylib(RULE_TYPE);
   }
 
   @Test
   public void testAvoidDepsObjects_avoidViaCcLibrary() throws Exception {
-    checkAvoidDepsObjects_avoidViaCcLibrary(getRuleType());
+    checkAvoidDepsObjects_avoidViaCcLibrary(RULE_TYPE);
   }
 
   @Test
   public void testBundleLoaderIsCorrectlyPassedToTheLinker() throws Exception {
-    checkBundleLoaderIsCorrectlyPassedToTheLinker(getRuleType());
+    checkBundleLoaderIsCorrectlyPassedToTheLinker(RULE_TYPE);
   }
 
   @Test
   public void testLipoBinaryAction() throws Exception {
-    checkLipoBinaryAction(getRuleType());
+    checkLipoBinaryAction(RULE_TYPE);
   }
 
   @Test
   public void testLinkActionHasCorrectIosSimulatorMinVersion() throws Exception {
-    getRuleType().scratchTarget(scratch, "platform_type", "'ios'");
+    RULE_TYPE.scratchTarget(scratch, "platform_type", "'ios'");
     useConfiguration("--ios_multi_cpus=x86_64", "--ios_sdk_version=10.0", "--ios_minimum_os=8.0");
     checkLinkMinimumOSVersion(
         ConfigurationDistinguisher.APPLEBIN_IOS, "x86_64", "-mios-simulator-version-min=8.0");
@@ -930,7 +932,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionHasCorrectIosMinVersion() throws Exception {
-    getRuleType().scratchTarget(scratch, "platform_type", "'ios'");
+    RULE_TYPE.scratchTarget(scratch, "platform_type", "'ios'");
     useConfiguration("--ios_multi_cpus=arm64", "--ios_sdk_version=10.0", "--ios_minimum_os=8.0");
     checkLinkMinimumOSVersion(
         ConfigurationDistinguisher.APPLEBIN_IOS, "arm64", "-miphoneos-version-min=8.0");
@@ -938,12 +940,12 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testWatchSimulatorDepCompile() throws Exception {
-    checkWatchSimulatorDepCompile(getRuleType());
+    checkWatchSimulatorDepCompile(RULE_TYPE);
   }
 
   @Test
   public void testDylibBinaryType() throws Exception {
-    getRuleType().scratchTarget(scratch, "binary_type", "'dylib'");
+    RULE_TYPE.scratchTarget(scratch, "binary_type", "'dylib'");
 
     CommandAction linkAction = linkAction("//x:x");
     assertThat(Joiner.on(" ").join(linkAction.getArguments())).contains("-dynamiclib");
@@ -951,7 +953,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testBinaryTypeIsCorrectlySetToBundle() throws Exception {
-    getRuleType().scratchTarget(scratch, "binary_type", "'loadable_bundle'");
+    RULE_TYPE.scratchTarget(scratch, "binary_type", "'loadable_bundle'");
 
     CommandAction linkAction = linkAction("//x:x");
     assertThat(Joiner.on(" ").join(linkAction.getArguments())).contains("-bundle");
@@ -959,47 +961,47 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testMultiarchCcDep() throws Exception {
-    checkMultiarchCcDep(getRuleType());
+    checkMultiarchCcDep(RULE_TYPE);
   }
 
   @Test
   public void testWatchSimulatorLipoAction() throws Exception {
-    checkWatchSimulatorLipoAction(getRuleType());
+    checkWatchSimulatorLipoAction(RULE_TYPE);
   }
 
   @Test
   public void testFrameworkDepLinkFlags() throws Exception {
-    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs());
+    checkFrameworkDepLinkFlags(RULE_TYPE, new ExtraLinkArgs());
   }
 
   @Test
   public void testDylibDependencies() throws Exception {
-    checkDylibDependencies(getRuleType(), new ExtraLinkArgs());
+    checkDylibDependencies(RULE_TYPE, new ExtraLinkArgs());
   }
 
   @Test
   public void testMinimumOs() throws Exception {
-    checkMinimumOsLinkAndCompileArg(getRuleType());
+    checkMinimumOsLinkAndCompileArg(RULE_TYPE);
   }
 
   @Test
   public void testMinimumOs_watchos() throws Exception {
-    checkMinimumOsLinkAndCompileArg_watchos(getRuleType());
+    checkMinimumOsLinkAndCompileArg_watchos(RULE_TYPE);
   }
 
   @Test
   public void testMinimumOs_invalid_nonVersion() throws Exception {
-    checkMinimumOs_invalid_nonVersion(getRuleType());
+    checkMinimumOs_invalid_nonVersion(RULE_TYPE);
   }
 
   @Test
   public void testMinimumOs_invalid_containsAlphabetic() throws Exception {
-    checkMinimumOs_invalid_containsAlphabetic(getRuleType());
+    checkMinimumOs_invalid_containsAlphabetic(RULE_TYPE);
   }
 
   @Test
   public void testMinimumOs_invalid_tooManyComponents() throws Exception {
-    checkMinimumOs_invalid_tooManyComponents(getRuleType());
+    checkMinimumOs_invalid_tooManyComponents(RULE_TYPE);
   }
 
   @Test
@@ -1171,7 +1173,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file(
         "examples/apple_skylark/BUILD",
         "package(default_visibility = ['//visibility:public'])",
-        "load('//examples/rule:apple_rules.bzl', 'test_rule')",
+        "load('/examples/rule/apple_rules', 'test_rule')",
         "apple_binary(",
         "    name = 'bin',",
         "    deps = [':lib'],",
@@ -1297,27 +1299,27 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testAppleSdkWatchsimulatorPlatformEnv() throws Exception {
-    checkAppleSdkWatchsimulatorPlatformEnv(getRuleType());
+    checkAppleSdkWatchsimulatorPlatformEnv(RULE_TYPE);
   }
 
   @Test
   public void testAppleSdkWatchosPlatformEnv() throws Exception {
-    checkAppleSdkWatchosPlatformEnv(getRuleType());
+    checkAppleSdkWatchosPlatformEnv(RULE_TYPE);
   }
 
   @Test
   public void testAppleSdkTvsimulatorPlatformEnv() throws Exception {
-    checkAppleSdkTvsimulatorPlatformEnv(getRuleType());
+    checkAppleSdkTvsimulatorPlatformEnv(RULE_TYPE);
   }
 
   @Test
   public void testAppleSdkTvosPlatformEnv() throws Exception {
-    checkAppleSdkTvosPlatformEnv(getRuleType());
+    checkAppleSdkTvosPlatformEnv(RULE_TYPE);
   }
 
   @Test
   public void testLinkActionHasCorrectWatchosSimulatorMinVersion() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'watchos'");
     useConfiguration(
         "--watchos_cpus=i386", "--watchos_sdk_version=3.0", "--watchos_minimum_os=2.0");
@@ -1327,7 +1329,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionHasCorrectWatchosMinVersion() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'watchos'");
     useConfiguration(
         "--watchos_cpus=armv7k", "--watchos_sdk_version=3.0", "--watchos_minimum_os=2.0");
@@ -1337,7 +1339,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionHasCorrectTvosSimulatorMinVersion() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'tvos'");
     useConfiguration(
         "--tvos_cpus=x86_64", "--tvos_sdk_version=10.1", "--tvos_minimum_os=10.0");
@@ -1347,7 +1349,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testLinkActionHasCorrectTvosMinVersion() throws Exception {
-    getRuleType().scratchTarget(scratch,
+    RULE_TYPE.scratchTarget(scratch,
         "platform_type", "'tvos'");
     useConfiguration(
         "--tvos_cpus=arm64", "--tvos_sdk_version=10.1", "--tvos_minimum_os=10.0");
@@ -1357,17 +1359,17 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testWatchSimulatorLinkAction() throws Exception {
-    checkWatchSimulatorLinkAction(getRuleType());
+    checkWatchSimulatorLinkAction(RULE_TYPE);
   }
 
   @Test
   public void testProtoBundlingAndLinking() throws Exception {
-    checkProtoBundlingAndLinking(getRuleType());
+    checkProtoBundlingAndLinking(RULE_TYPE);
   }
 
   @Test
   public void testAvoidDepsObjects() throws Exception {
-    checkAvoidDepsObjects(getRuleType());
+    checkAvoidDepsObjects(RULE_TYPE);
   }
 
   @Test
@@ -1460,12 +1462,12 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testCustomModuleMap() throws Exception {
-    checkCustomModuleMap(getRuleType());
+    checkCustomModuleMap(RULE_TYPE);
   }
 
   @Test
   public void testMinimumOsDifferentTargets() throws Exception {
-    checkMinimumOsDifferentTargets(getRuleType(), "_lipobin", "_bin");
+    checkMinimumOsDifferentTargets(RULE_TYPE, "_lipobin", "_bin");
   }
 
   @Test
@@ -1497,101 +1499,6 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   @Test
   public void testDrops32BitArchitecture() throws Exception {
-    verifyDrops32BitArchitecture(getRuleType());
-  }
-
-  @Test
-  public void testFeatureFlags_offByDefault() throws Exception {
-    scratchFeatureFlagTestLib();
-    scratch.file(
-        "test/BUILD",
-        "apple_binary(",
-        "    name = 'bin',",
-        "    deps = ['//lib:objcLib'],",
-        "    platform_type = 'ios',",
-        ")");
-
-    CommandAction linkAction = linkAction("//test:bin");
-    CommandAction objcLibArchiveAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(linkAction.getInputs(), "libobjcLib.a"));
-
-    CommandAction flag1offCompileAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(objcLibArchiveAction.getInputs(), "flag1off.o"));
-    CommandAction flag2offCompileAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(objcLibArchiveAction.getInputs(), "flag2off.o"));
-
-    String compileArgs1 = Joiner.on(" ").join(flag1offCompileAction.getArguments());
-    String compileArgs2 = Joiner.on(" ").join(flag2offCompileAction.getArguments());
-    assertThat(compileArgs1).contains("FLAG_1_OFF");
-    assertThat(compileArgs1).contains("FLAG_2_OFF");
-    assertThat(compileArgs2).contains("FLAG_1_OFF");
-    assertThat(compileArgs2).contains("FLAG_2_OFF");
-  }
-
-  @Test
-  public void testFeatureFlags_oneFlagOn() throws Exception {
-    scratchFeatureFlagTestLib();
-    scratch.file(
-        "test/BUILD",
-        "apple_binary(",
-        "    name = 'bin',",
-        "    deps = ['//lib:objcLib'],",
-        "    platform_type = 'ios',",
-        "    feature_flags = {",
-        "      '//lib:flag2': 'on',",
-        "    }",
-        ")");
-
-    CommandAction linkAction = linkAction("//test:bin");
-    CommandAction objcLibArchiveAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(linkAction.getInputs(), "libobjcLib.a"));
-
-    CommandAction flag1offCompileAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(objcLibArchiveAction.getInputs(), "flag1off.o"));
-    CommandAction flag2onCompileAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(objcLibArchiveAction.getInputs(), "flag2on.o"));
-
-    String compileArgs1 = Joiner.on(" ").join(flag1offCompileAction.getArguments());
-    String compileArgs2 = Joiner.on(" ").join(flag2onCompileAction.getArguments());
-    assertThat(compileArgs1).contains("FLAG_1_OFF");
-    assertThat(compileArgs1).contains("FLAG_2_ON");
-    assertThat(compileArgs2).contains("FLAG_1_OFF");
-    assertThat(compileArgs2).contains("FLAG_2_ON");
-  }
-
-  @Test
-  public void testFeatureFlags_allFlagsOn() throws Exception {
-    scratchFeatureFlagTestLib();
-    scratch.file(
-        "test/BUILD",
-        "apple_binary(",
-        "    name = 'bin',",
-        "    deps = ['//lib:objcLib'],",
-        "    platform_type = 'ios',",
-        "    feature_flags = {",
-        "      '//lib:flag1': 'on',",
-        "      '//lib:flag2': 'on',",
-        "    }",
-        ")");
-
-    CommandAction linkAction = linkAction("//test:bin");
-    CommandAction objcLibArchiveAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(linkAction.getInputs(), "libobjcLib.a"));
-
-    CommandAction flag1onCompileAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(objcLibArchiveAction.getInputs(), "flag1on.o"));
-    CommandAction flag2onCompileAction = (CommandAction) getGeneratingAction(
-        getFirstArtifactEndingWith(objcLibArchiveAction.getInputs(), "flag2on.o"));
-
-    String compileArgs1 = Joiner.on(" ").join(flag1onCompileAction.getArguments());
-    String compileArgs2 = Joiner.on(" ").join(flag2onCompileAction.getArguments());
-    assertThat(compileArgs1).contains("FLAG_1_ON");
-    assertThat(compileArgs1).contains("FLAG_2_ON");
-    assertThat(compileArgs2).contains("FLAG_1_ON");
-    assertThat(compileArgs2).contains("FLAG_2_ON");
-  }
-
-  protected RuleType getRuleType() {
-    return RULE_TYPE;
+    verifyDrops32BitArchitecture(RULE_TYPE);
   }
 }

@@ -311,12 +311,18 @@ public final class RuleContext extends TargetContext
     return attributes;
   }
 
-  @Override
+  /**
+   * Returns whether this instance is known to have errors at this point during analysis. Do not
+   * call this method after the initializationHook has returned.
+   */
   public boolean hasErrors() {
     return getAnalysisEnvironment().hasErrors();
   }
 
-  @Override
+  /**
+   * No-op if {@link #hasErrors} is false, throws {@link RuleErrorException} if it is true.
+   * This provides a convenience to early-exit of configured target creation if there are errors.
+   */
   public void assertNoErrors() throws RuleErrorException {
     if (hasErrors()) {
       throw new RuleErrorException();
@@ -446,8 +452,13 @@ public final class RuleContext extends TargetContext
     reporter.ruleError(message);
   }
 
-  @Override
-  public RuleErrorException throwWithRuleError(String message) throws RuleErrorException {
+  /**
+   * Convenience function to report non-attribute-specific errors in the current rule and then
+   * throw a {@link RuleErrorException}, immediately exiting the build invocation. Alternatively,
+   * invoke {@link #ruleError} instead to collect additional error information before ending the
+   * invocation.
+   */
+  public void throwWithRuleError(String message) throws RuleErrorException {
     reporter.ruleError(message);
     throw new RuleErrorException();
   }
@@ -473,7 +484,15 @@ public final class RuleContext extends TargetContext
     reporter.attributeError(attrName, message);
   }
 
-  @Override
+  /**
+   * Convenience function to report attribute-specific errors in the current rule, and then throw a
+   * {@link RuleErrorException}, immediately exiting the build invocation. Alternatively, invoke
+   * {@link #attributeError} instead to collect additional error information before ending the
+   * invocation.
+   *
+   * <p>If the name of the attribute starts with <code>$</code>
+   * it is replaced with a string <code>(an implicit dependency)</code>.
+   */
   public RuleErrorException throwWithAttributeError(String attrName, String message)
       throws RuleErrorException {
     reporter.attributeError(attrName, message);
@@ -1579,27 +1598,6 @@ public final class RuleContext extends TargetContext
       reporter.attributeWarning(attrName, message);
     }
 
-    @Override
-    public RuleErrorException throwWithRuleError(String message) throws RuleErrorException {
-      throw reporter.throwWithRuleError(message);
-    }
-
-    @Override
-    public RuleErrorException throwWithAttributeError(String attrName, String message)
-        throws RuleErrorException {
-      throw reporter.throwWithAttributeError(attrName, message);
-    }
-
-    @Override
-    public boolean hasErrors() {
-      return reporter.hasErrors();
-    }
-
-    @Override
-    public void assertNoErrors() throws RuleErrorException {
-      reporter.assertNoErrors();
-    }
-
     private String badPrerequisiteMessage(String targetKind, ConfiguredTarget prerequisite,
         String reason, boolean isWarning) {
       String msgPrefix = targetKind != null ? targetKind + " " : "";
@@ -1879,31 +1877,6 @@ public final class RuleContext extends TargetContext
     @Override
     public void attributeError(String attrName, String message) {
       reportError(rule.getAttributeLocation(attrName), completeAttributeMessage(attrName, message));
-    }
-
-    @Override
-    public RuleErrorException throwWithRuleError(String message) throws RuleErrorException {
-      ruleError(message);
-      throw new RuleErrorException();
-    }
-
-    @Override
-    public RuleErrorException throwWithAttributeError(String attrName, String message)
-        throws RuleErrorException {
-      attributeError(attrName, message);
-      throw new RuleErrorException();
-    }
-
-    @Override
-    public boolean hasErrors() {
-      return env.hasErrors();
-    }
-
-    @Override
-    public void assertNoErrors() throws RuleErrorException {
-      if (hasErrors()) {
-        throw new RuleErrorException();
-      }
     }
 
     public void reportWarning(Location location, String message) {

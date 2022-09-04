@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeConfigRule;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
@@ -176,18 +175,17 @@ public class ObjcRuleClasses {
    * which contain information about the target and host architectures.
    */
   static SpawnAction.Builder spawnAppleEnvActionBuilder(
-      XcodeConfigProvider xcodeConfigProvider, ApplePlatform targetPlatform) {
+      AppleConfiguration appleConfiguration, ApplePlatform targetPlatform) {
     return spawnOnDarwinActionBuilder()
-        .setEnvironment(appleToolchainEnvironment(xcodeConfigProvider, targetPlatform));
+        .setEnvironment(appleToolchainEnvironment(appleConfiguration, targetPlatform));
   }
 
   /** Returns apple environment variables that are typically needed by the apple toolchain. */
   static ImmutableMap<String, String> appleToolchainEnvironment(
-      XcodeConfigProvider xcodeConfigProvider, ApplePlatform targetPlatform) {
+      AppleConfiguration appleConfiguration, ApplePlatform targetPlatform) {
     return ImmutableMap.<String, String>builder()
-        .putAll(AppleConfiguration.appleTargetPlatformEnv(
-            targetPlatform, xcodeConfigProvider.getSdkVersionForPlatform(targetPlatform)))
-        .putAll(AppleConfiguration.getXcodeVersionEnv(xcodeConfigProvider.getXcodeVersion()))
+        .putAll(appleConfiguration.getTargetAppleEnvironment(targetPlatform))
+        .putAll(appleConfiguration.getAppleHostSystemEnv())
         .build();
   }
 
@@ -280,12 +278,14 @@ public class ObjcRuleClasses {
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
           /* <!-- #BLAZE_RULE($objc_sdk_frameworks_depender_rule).ATTRIBUTE(sdk_frameworks) -->
-          Names of SDK frameworks to link with (e.g. "AddressBook", "QuartzCore"). "UIKit" and
-          "Foundation" are always included when building for the iOS, tvOS and watchOS platforms.
-          For macOS, only "Foundation" is always included.
+          Names of SDK frameworks to link with.
+          For instance, "XCTest" or "Cocoa". "UIKit" and "Foundation" are always
+          included and do not mean anything if you include them.
 
-          <p> When linking a top level binary (e.g. apple_binary), all SDK frameworks listed in that
-          binary's transitive dependency graph are linked.
+          <p>When linking a library, only those frameworks named in that library's
+          sdk_frameworks attribute are linked in. When linking a binary, all
+          SDK frameworks named in that binary's transitive dependency graph are
+          used.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("sdk_frameworks", STRING_LIST))
           /* <!-- #BLAZE_RULE($objc_sdk_frameworks_depender_rule).ATTRIBUTE(weak_sdk_frameworks) -->
