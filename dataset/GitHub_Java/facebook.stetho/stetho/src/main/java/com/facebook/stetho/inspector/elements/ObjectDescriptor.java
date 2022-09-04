@@ -9,8 +9,6 @@
 
 package com.facebook.stetho.inspector.elements;
 
-import com.facebook.stetho.common.Accumulator;
-
 public final class ObjectDescriptor extends Descriptor {
   @Override
   public void hook(Object element) {
@@ -41,11 +39,17 @@ public final class ObjectDescriptor extends Descriptor {
   }
 
   @Override
-  public void getChildren(Object element, Accumulator<Object> children) {
+  public int getChildCount(Object element) {
+    return 0;
   }
 
   @Override
-  public void getAttributes(Object element, AttributeAccumulator attributes) {
+  public Object getChildAt(Object element, int index) {
+    throw new IndexOutOfBoundsException();
+  }
+
+  @Override
+  public void copyAttributes(Object element, AttributeAccumulator attributes) {
   }
 
   @Override

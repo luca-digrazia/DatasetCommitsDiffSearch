@@ -37,8 +37,6 @@ public interface DOMProvider extends ThreadBound {
   }
 
   public static interface Listener {
-    public void onPossiblyChanged();
-
     public void onAttributeModified(
         Object element,
         String name,
@@ -47,6 +45,15 @@ public interface DOMProvider extends ThreadBound {
     public void onAttributeRemoved(
         Object element,
         String name);
+
+    public void onChildInserted(
+        Object parentElement,
+        @Nullable Object previousElement,
+        Object childElement);
+
+    public void onChildRemoved(
+        Object parentElement,
+        Object childElement);
 
     public void onInspectRequested(
         Object element);

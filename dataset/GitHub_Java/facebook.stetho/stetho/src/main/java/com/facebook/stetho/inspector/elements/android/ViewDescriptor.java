@@ -41,10 +41,10 @@ final class ViewDescriptor extends ChainedDescriptor<View> implements Highlighta
   }
 
   @Override
-  protected void onGetAttributes(View element, AttributeAccumulator attributes) {
+  protected void onCopyAttributes(View element, AttributeAccumulator attributes) {
     String id = getIdAttribute(element);
     if (id != null) {
-      attributes.store(ID_ATTRIBUTE_NAME, id);
+      attributes.add(ID_ATTRIBUTE_NAME, id);
     }
   }
 

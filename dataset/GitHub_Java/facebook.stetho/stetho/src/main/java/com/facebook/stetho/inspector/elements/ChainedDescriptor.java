@@ -9,7 +9,6 @@
 
 package com.facebook.stetho.inspector.elements;
 
-import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.common.ThreadBound;
 import com.facebook.stetho.common.Util;
 
@@ -82,7 +81,7 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
   public final void hook(Object element) {
     verifyThreadAccess();
     mSuper.hook(element);
-    onHook((E) element);
+    onHook((E)element);
   }
 
   protected void onHook(E element) {
@@ -92,7 +91,7 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
   @SuppressWarnings("unchecked")
   public final void unhook(Object element) {
     verifyThreadAccess();
-    onUnhook((E) element);
+    onUnhook((E)element);
     mSuper.unhook(element);
   }
 
@@ -102,7 +101,7 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
   @Override
   @SuppressWarnings("unchecked")
   public final NodeType getNodeType(Object element) {
-    return onGetNodeType((E) element);
+    return onGetNodeType((E)element);
   }
 
   protected NodeType onGetNodeType(E element) {
@@ -112,7 +111,7 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
   @Override
   @SuppressWarnings("unchecked")
   public final String getNodeName(Object element) {
-    return onGetNodeName((E) element);
+    return onGetNodeName((E)element);
   }
 
   protected String onGetNodeName(E element) {
@@ -122,7 +121,7 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
   @Override
   @SuppressWarnings("unchecked")
   public final String getLocalName(Object element) {
-    return onGetLocalName((E) element);
+    return onGetLocalName((E)element);
   }
 
   protected String onGetLocalName(E element) {
@@ -132,7 +131,7 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
   @Override
   @SuppressWarnings("unchecked")
   public final String getNodeValue(Object element) {
-    return onGetNodeValue((E) element);
+    return onGetNodeValue((E)element);
   }
 
   @Nullable
@@ -142,28 +141,55 @@ public abstract class ChainedDescriptor<E> extends Descriptor {
 
   @Override
   @SuppressWarnings("unchecked")
-  public final void getChildren(Object element, Accumulator<Object> children) {
-    mSuper.getChildren(element, children);
-    onGetChildren((E) element, children);
+  public final int getChildCount(Object element) {
+    int superCount = mSuper.getChildCount(element);
+    int derivedCount = onGetChildCount((E) element);
+    return superCount + derivedCount;
   }
 
-  protected void onGetChildren(E element, Accumulator<Object> children) {
+  protected int onGetChildCount(E element) {
+    return 0;
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public final void getAttributes(Object element, AttributeAccumulator attributes) {
-    mSuper.getAttributes(element, attributes);
-    onGetAttributes((E) element, attributes);
+  public final Object getChildAt(Object element, int index) {
+    if (index < 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    int superCount = mSuper.getChildCount(element);
+    if (index < superCount) {
+      return mSuper.getChildAt(element, index);
+    }
+
+    int thisCount = onGetChildCount((E)element);
+    int thisIndex = index - superCount;
+    if (thisIndex < 0 || thisIndex >= thisCount) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    return onGetChildAt((E)element, thisIndex);
   }
 
-  protected void onGetAttributes(E element, AttributeAccumulator attributes) {
+  protected Object onGetChildAt(E element, int index) {
+    throw new IndexOutOfBoundsException();
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final void copyAttributes(Object element, AttributeAccumulator attributes) {
+    mSuper.copyAttributes(element, attributes);
+    onCopyAttributes((E)element, attributes);
+  }
+
+  protected void onCopyAttributes(E element, AttributeAccumulator attributes) {
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public final void setAttributesAsText(Object element, String text) {
-    onSetAttributesAsText((E) element, text);
+    onSetAttributesAsText((E)element, text);
   }
 
   protected void onSetAttributesAsText(E element, String text) {

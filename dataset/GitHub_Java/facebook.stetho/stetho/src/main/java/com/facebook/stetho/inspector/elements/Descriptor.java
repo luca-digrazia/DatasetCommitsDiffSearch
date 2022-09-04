@@ -57,16 +57,6 @@ public abstract class Descriptor implements NodeDescriptor {
     getHost().postAndWait(r);
   }
 
-  @Override
-  public final void postDelayed(Runnable r, long delayMillis) {
-    getHost().postDelayed(r, delayMillis);
-  }
-
-  @Override
-  public final void removeCallbacks(Runnable r) {
-    getHost().removeCallbacks(r);
-  }
-
   /**
    * Parses the text argument text from DOM.setAttributeAsText()
    * Text will be in the format "attribute1=\"Value 1\" attribute2=\"Value2\""
@@ -114,5 +104,14 @@ public abstract class Descriptor implements NodeDescriptor {
     public void onAttributeRemoved(
         Object element,
         String name);
+
+    public void onChildInserted(
+        Object parentElement,
+        @Nullable Object previousElement,
+        Object childElement);
+
+    public void onChildRemoved(
+        Object parentElement,
+        Object childElement);
   }
 }
