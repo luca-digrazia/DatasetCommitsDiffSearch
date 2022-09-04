@@ -15,10 +15,6 @@
  */
 package com.googlecode.androidannotations.processing;
 
-import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr.invoke;
-
 import java.lang.annotation.Annotation;
 import java.util.List;
 
@@ -34,6 +30,8 @@ import com.googlecode.androidannotations.rclass.IRClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -75,10 +73,10 @@ public class ClickProcessor implements ElementProcessor {
 
 		JDefinedClass onClickListenerClass = codeModel.anonymousClass(classes.VIEW_ON_CLICK_LISTENER);
 		JMethod onClickMethod = onClickListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onClick");
-		onClickMethod.annotate(Override.class);
 		JVar onClickViewParam = onClickMethod.param(classes.VIEW, "view");
 
-		JInvocation clickCall = onClickMethod.body().invoke(methodName);
+		JExpression activityRef = holder.eBean.staticRef("this");
+		JInvocation clickCall = onClickMethod.body().invoke(activityRef, methodName);
 
 		if (hasViewParameter) {
 			clickCall.arg(onClickViewParam);
@@ -87,9 +85,9 @@ public class ClickProcessor implements ElementProcessor {
 		for (JFieldRef idRef : idsRefs) {
 			JBlock block = holder.afterSetContentView.body().block();
 
-			JInvocation findViewById = invoke("findViewById");
+			JInvocation findViewById = JExpr.invoke("findViewById");
 			JVar view = block.decl(classes.VIEW, "view", findViewById.arg(idRef));
-			block._if(view.ne(_null()))._then().invoke(view, "setOnClickListener").arg(_new(onClickListenerClass));
+			block._if(view.ne(JExpr._null()))._then().invoke(view, "setOnClickListener").arg(JExpr._new(onClickListenerClass));
 		}
 
 	}
