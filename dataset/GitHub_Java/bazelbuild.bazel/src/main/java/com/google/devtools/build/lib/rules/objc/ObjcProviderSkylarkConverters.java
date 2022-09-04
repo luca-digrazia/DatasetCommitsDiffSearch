@@ -22,9 +22,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -58,13 +58,16 @@ public class ObjcProviderSkylarkConverters {
     return CONVERTERS.get(javaKey.getType()).valueForJava(javaKey, skylarkValue);
   }
 
-  /** Converts {@link PathFragment}s into a skylark-compatible nested set of path strings. */
-  public static Depset convertPathFragmentsToSkylark(Iterable<PathFragment> pathFragments) {
+  /**
+   * Converts {@link PathFragment}s into a skylark-compatible nested set of path strings.
+   */
+  public static SkylarkNestedSet convertPathFragmentsToSkylark(
+      Iterable<PathFragment> pathFragments) {
     NestedSetBuilder<String> result = NestedSetBuilder.stableOrder();
     for (PathFragment path : pathFragments) {
       result.add(path.getSafePathString());
     }
-    return Depset.of(SkylarkType.STRING, result.build());
+    return SkylarkNestedSet.of(String.class, result.build());
   }
 
   /** A converter for ObjcProvider values. */
@@ -84,7 +87,7 @@ public class ObjcProviderSkylarkConverters {
     @Override
     public Object valueForSkylark(Key<?> javaKey, NestedSet<?> javaValue) {
       SkylarkType type = SkylarkType.of(javaKey.getType());
-      return Depset.of(type, javaValue);
+      return SkylarkNestedSet.of(type, javaValue);
     }
 
     @Override
@@ -128,7 +131,7 @@ public class ObjcProviderSkylarkConverters {
       for (SdkFramework framework : (Iterable<SdkFramework>) javaValue) {
         result.add(framework.getName());
       }
-      return Depset.of(SkylarkType.STRING, result.build());
+      return SkylarkNestedSet.of(String.class, result.build());
     }
 
     @Override
@@ -146,11 +149,11 @@ public class ObjcProviderSkylarkConverters {
   /** Throws an error if the given object is not a nested set of the given type. */
   private static <T> NestedSet<T> nestedSetWithType(
       Object toCheck, Class<T> expectedSetType, String keyName) throws EvalException {
-    if (toCheck instanceof Depset) {
-      Depset sns = (Depset) toCheck;
+    if (toCheck instanceof SkylarkNestedSet) {
+      SkylarkNestedSet sns = (SkylarkNestedSet) toCheck;
       try {
         return sns.getSet(expectedSetType);
-      } catch (Depset.TypeException exception) {
+      } catch (SkylarkNestedSet.TypeException exception) {
         throw new EvalException(
             null,
             String.format(

@@ -23,10 +23,10 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.skylarkbuildapi.python.PyInfoApi;
-import com.google.devtools.build.lib.syntax.Depset;
-import com.google.devtools.build.lib.syntax.Depset.TypeException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet.TypeException;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.Objects;
@@ -44,7 +44,7 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
    * order.
    */
   private static boolean depsetHasTypeAndCompatibleOrder(
-      Depset depset, SkylarkType type, Order order) {
+      SkylarkNestedSet depset, SkylarkType type, Order order) {
     // Work around #7266 by special-casing the empty set in the type check.
     boolean typeOk = depset.isEmpty() || depset.getContentType().equals(type);
     boolean orderOk = depset.getOrder().isCompatible(order);
@@ -58,26 +58,26 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
    */
   private static String describeType(Object value) {
     String typeName = EvalUtils.getDataTypeName(value, /*fullDetails=*/ true);
-    if (value instanceof Depset) {
-      return ((Depset) value).getOrder().getSkylarkName() + "-ordered " + typeName;
+    if (value instanceof SkylarkNestedSet) {
+      return ((SkylarkNestedSet) value).getOrder().getSkylarkName() + "-ordered " + typeName;
     } else {
       return typeName;
     }
   }
 
   // Verified on initialization to contain Artifact.
-  private final Depset transitiveSources;
+  private final SkylarkNestedSet transitiveSources;
   private final boolean usesSharedLibraries;
   // Verified on initialization to contain String.
-  private final Depset imports;
+  private final SkylarkNestedSet imports;
   private final boolean hasPy2OnlySources;
   private final boolean hasPy3OnlySources;
 
   private PyInfo(
       @Nullable Location location,
-      Depset transitiveSources,
+      SkylarkNestedSet transitiveSources,
       boolean usesSharedLibraries,
-      Depset imports,
+      SkylarkNestedSet imports,
       boolean hasPy2OnlySources,
       boolean hasPy3OnlySources) {
     super(PROVIDER, location);
@@ -122,7 +122,7 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
   }
 
   @Override
-  public Depset getTransitiveSources() {
+  public SkylarkNestedSet getTransitiveSources() {
     return transitiveSources;
   }
 
@@ -141,7 +141,7 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
   }
 
   @Override
-  public Depset getImports() {
+  public SkylarkNestedSet getImports() {
     return imports;
   }
 
@@ -174,17 +174,17 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
 
     @Override
     public PyInfo constructor(
-        Depset transitiveSources,
+        SkylarkNestedSet transitiveSources,
         boolean usesSharedLibraries,
         Object importsUncast,
         boolean hasPy2OnlySources,
         boolean hasPy3OnlySources,
         Location loc)
         throws EvalException {
-      Depset imports =
+      SkylarkNestedSet imports =
           importsUncast.equals(Starlark.UNBOUND)
-              ? Depset.of(SkylarkType.STRING, NestedSetBuilder.emptySet(Order.COMPILE_ORDER))
-              : (Depset) importsUncast;
+              ? SkylarkNestedSet.of(String.class, NestedSetBuilder.emptySet(Order.COMPILE_ORDER))
+              : (SkylarkNestedSet) importsUncast;
 
       if (!depsetHasTypeAndCompatibleOrder(transitiveSources, Artifact.TYPE, Order.COMPILE_ORDER)) {
         throw new EvalException(
@@ -265,9 +265,9 @@ public class PyInfo extends Info implements PyInfoApi<Artifact> {
       Preconditions.checkNotNull(transitiveSources);
       return new PyInfo(
           location,
-          Depset.of(Artifact.TYPE, transitiveSources),
+          SkylarkNestedSet.of(Artifact.class, transitiveSources),
           usesSharedLibraries,
-          Depset.of(SkylarkType.STRING, imports),
+          SkylarkNestedSet.of(String.class, imports),
           hasPy2OnlySources,
           hasPy3OnlySources);
     }
