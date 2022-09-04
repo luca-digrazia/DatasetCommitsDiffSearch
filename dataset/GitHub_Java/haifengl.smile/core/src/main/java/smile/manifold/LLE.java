@@ -17,15 +17,18 @@ package smile.manifold;
 
 import java.util.Arrays;
 import java.util.Comparator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import smile.graph.AdjacencyList;
 import smile.graph.Graph;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.distance.EuclideanDistance;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.SparseMatrix;
 import smile.math.matrix.LU;
 import smile.math.matrix.EVD;
+import smile.math.matrix.Lanczos;
 import smile.neighbor.CoverTree;
 import smile.neighbor.KDTree;
 import smile.neighbor.KNNSearch;
@@ -55,7 +58,7 @@ import smile.neighbor.Neighbor;
  * @author Haifeng Li
  */
 public class LLE {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(LLE.class);
+    private static final Logger logger = LoggerFactory.getLogger(LLE.class);
 
     /**
      * The original sample index.
@@ -176,7 +179,7 @@ public class LLE {
             LU lu = C.lu(true);
             lu.solve(b);
 
-            double sum = MathEx.sum(b);
+            double sum = Math.sum(b);
             for (int p = 0; p < k; p++) {
                 w[m * k + p] = b[p] / sum;
                 rowIndex[m * k + p] = newIndex[N[i][p]];

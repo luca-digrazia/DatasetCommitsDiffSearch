@@ -16,7 +16,7 @@
 
 package smile.math.matrix;
 
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * An abstract interface of dense matrix.
@@ -41,9 +41,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
      *
      * @return the leading dimension
      */
-    default int ld() {
-        return nrows();
-    }
+    int ld();
 
     /**
      * Set the entry value at row i and column j.
@@ -225,7 +223,7 @@ public interface DenseMatrix extends Matrix, MatrixMultiplication<DenseMatrix, D
             }
         }
 
-        return MathEx.max(f);
+        return Math.max(f);
     }
 
     /**

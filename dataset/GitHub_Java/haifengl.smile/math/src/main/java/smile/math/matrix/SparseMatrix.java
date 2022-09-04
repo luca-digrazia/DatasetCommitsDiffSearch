@@ -15,10 +15,8 @@
  *******************************************************************************/
 package smile.math.matrix;
 
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.Scanner;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * A sparse matrix is a matrix populated primarily with zeros. Conceptually,
@@ -42,7 +40,6 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, SparseMatrix> {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SparseMatrix.class);
     private static final long serialVersionUID = 1L;
 
     /**
@@ -105,7 +102,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * @param D a dense matrix to converted into sparse matrix format.
      */
     public SparseMatrix(double[][] D) {
-        this(D, 100 * MathEx.EPSILON);
+        this(D, 100 * Math.EPSILON);
     }
 
     /**
@@ -167,7 +164,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     /**
      * Returns the number of nonzero values.
      */
-    public int length() {
+    public int size() {
         return colIndex[ncols];
     }
 
@@ -310,7 +307,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         }
 
         int m = nrows;
-        int anz = length();
+        int anz = size();
         int n = B.ncols;
         int[] Bp = B.colIndex;
         int[] Bi = B.rowIndex;
@@ -391,11 +388,6 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
     public SparseMatrix atbmm(SparseMatrix B) {
         SparseMatrix AT = transpose();
         return AT.abmm(B);
-    }
-
-    @Override
-    public SparseMatrix atbtmm(SparseMatrix B) {
-        return B.abmm(this).transpose();
     }
 
     @Override
@@ -490,7 +482,7 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
 
     @Override
     public double[] diag() {
-        int n = Math.min(nrows(), ncols());
+        int n = smile.math.Math.min(nrows(), ncols());
         double[] d = new double[n];
 
         for (int i = 0; i < n; i++) {
@@ -503,127 +495,5 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
         }
 
         return d;
-    }
-
-    /**
-     * Reads a sparse matrix from a Harwell-Boeing Exchange Format file.
-     * For details, see
-     * <a href="http://people.sc.fsu.edu/~jburkardt/data/hb/hb.html">http://people.sc.fsu.edu/~jburkardt/data/hb/hb.html</a>.
-     *
-     * Note that our implementation supports only real-valued matrix and we ignore
-     * the optional supplementary data (e.g. right hand side vectors).
-     *
-     * @param path the input file path.
-     *
-     * @author Haifeng Li
-     */
-    public static SparseMatrix harwell(java.nio.file.Path path) throws IOException {
-        logger.info("Reads Harwell-Boeing file '{}'", path.toAbsolutePath());
-        try (java.io.InputStream stream = java.nio.file.Files.newInputStream(path);
-             Scanner scanner = new Scanner(stream)) {
-
-            // Ignore the title line.
-            String line = scanner.nextLine();
-            logger.info(line);
-
-            line = scanner.nextLine().trim();
-            logger.info(line);
-            String[] tokens = line.split("\\s+");
-            int RHSCRD = Integer.parseInt(tokens[4]);
-
-            line = scanner.nextLine().trim();
-            logger.info(line);
-            if (!line.startsWith("R")) {
-                throw new UnsupportedOperationException("SparseMatrix supports only real-valued matrix.");
-            }
-
-            tokens = line.split("\\s+");
-            int nrows = Integer.parseInt(tokens[1]);
-            int ncols = Integer.parseInt(tokens[2]);
-            int nz = Integer.parseInt(tokens[3]);
-
-            line = scanner.nextLine();
-            logger.info(line);
-            if (RHSCRD > 0) {
-                line = scanner.nextLine();
-                logger.info(line);
-            }
-
-            int[] colIndex = new int[ncols + 1];
-            int[] rowIndex = new int[nz];
-            double[] data = new double[nz];
-            for (int i = 0; i <= ncols; i++) {
-                colIndex[i] = scanner.nextInt() - 1;
-            }
-            for (int i = 0; i < nz; i++) {
-                rowIndex[i] = scanner.nextInt() - 1;
-            }
-            for (int i = 0; i < nz; i++) {
-                data[i] = scanner.nextDouble();
-            }
-
-            return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
-        }
-    }
-
-    /**
-     * Reads a sparse matrix from a Rutherford-Boeing Exchange Format file.
-     * The Rutherford Boeing format is an updated more flexible version of the
-     * Harwell Boeing format.
-     * For details, see
-     * <a href="http://people.sc.fsu.edu/~jburkardt/data/rb/rb.html">http://people.sc.fsu.edu/~jburkardt/data/rb/rb.html</a>.
-     * Especially, the supplementary data in the form of right-hand sides,
-     * estimates or solutions are treated as separate files.
-     *
-     * Note that our implementation supports only real-valued matrix and we ignore
-     * the optional supplementary data (e.g. right hand side vectors).
-     *
-     * @param path the input file path.
-     *
-     * @author Haifeng Li
-     */
-    public static SparseMatrix rutherford(java.nio.file.Path path) throws IOException {
-        // As we ignore the supplementary data, the parsing process
-        // is same as Harwell.
-        return harwell(path);
-    }
-
-    /**
-     * Reads a sparse matrix from a text file.
-     * The first line contains three integers, which are the number of rows,
-     * the number of columns, and the number of nonzero entries in the matrix.
-     * <p>
-     * Following the first line, there are m + 1 integers that are the indices of
-     * columns, where m is the number of columns. Then there are n integers that
-     * are the row indices of nonzero entries, where n is the number of nonzero
-     * entries. Finally, there are n float numbers that are the values of nonzero
-     * entries.
-     *
-     * @param path the input file path.
-     *
-     * @author Haifeng Li
-     */
-    public static SparseMatrix text(java.nio.file.Path path) throws IOException {
-        try (java.io.InputStream stream = java.nio.file.Files.newInputStream(path);
-             Scanner scanner = new Scanner(stream)) {
-            int nrows = scanner.nextInt();
-            int ncols = scanner.nextInt();
-            int nz = scanner.nextInt();
-
-            int[] colIndex = new int[ncols + 1];
-            int[] rowIndex = new int[nz];
-            double[] data = new double[nz];
-            for (int i = 0; i <= ncols; i++) {
-                colIndex[i] = scanner.nextInt() - 1;
-            }
-            for (int i = 0; i < nz; i++) {
-                rowIndex[i] = scanner.nextInt() - 1;
-            }
-            for (int i = 0; i < nz; i++) {
-                data[i] = scanner.nextDouble();
-            }
-
-            return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
-        }
     }
 }

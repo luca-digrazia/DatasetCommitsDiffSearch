@@ -91,11 +91,6 @@ public class NDMatrix implements DenseMatrix {
     }
 
     @Override
-    public String toString() {
-        return toString(false);
-    }
-
-    @Override
     public boolean isSymmetric() {
         return symmetric;
     }
