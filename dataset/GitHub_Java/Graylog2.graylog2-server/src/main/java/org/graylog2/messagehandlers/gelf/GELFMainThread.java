@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@socketfeed.coms>
+ * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
  *
  * This file is part of Graylog2.
  *
@@ -18,53 +18,41 @@
  *
  */
 
+/**
+ * GELFMainThread.java: Lennart Koopmann <lennart@scopeport.org> | Jun 23, 2010 6:43:21 PM
+ */
+
 package org.graylog2.messagehandlers.gelf;
 
-import java.io.IOException;
-import java.net.DatagramPacket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.graylog2.Log;
 
-/**
- * GELFMainThread.java: Jun 23, 2010 6:43:21 PM
- *
- * Thread responsible for listening for GELF messages.
- *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
- */
 public class GELFMainThread extends Thread {
 
     private int port = 0;
 
     ExecutorService threadPool = Executors.newCachedThreadPool();
 
-    /**
-     * Thread responsible for listening for GELF messages.
-     *
-     * @param port The TCP port to listen on
-     */
     public GELFMainThread(int port) {
         this.port = port;
     }
 
-    /**
-     * Run the thread. Runs forever!
-     */
     @Override public void run() {
         GELFServer server = new GELFServer();
         if (!server.create(this.port)) {
-            throw new RuntimeException("Could not start GELF server. Do you have permissions to listen on UDP port " + this.port + "?");
+            System.out.println("Could not start GELF server. Do you have permissions to listen on UDP port " + this.port + "?");
+            System.exit(1); // Exit with error.
         }
 
         // Run forever.
         while (true) {
             try {
                 // Listen on socket.
-                DatagramPacket receivedGelfSentence = server.listen();
+                String receivedGelfSentence = server.listen();
 
                 // Skip empty sentences.
-                if (receivedGelfSentence.getLength() == 0) {
+                if (receivedGelfSentence.length() == 0) {
                     continue;
                 }
 

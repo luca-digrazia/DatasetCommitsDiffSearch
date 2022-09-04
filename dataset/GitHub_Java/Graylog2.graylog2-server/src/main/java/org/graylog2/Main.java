@@ -1,5 +1,5 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
  * 
  * This file is part of Graylog2.
  *
@@ -33,23 +33,21 @@ import java.util.List;
 import java.util.Properties;
 import org.graylog2.periodical.RRDThread;
 
+// TODO: indizes richtig setzen
+
 /**
- * Main class of Graylog2.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@scopeport.org>
  */
 public class Main {
 
-    /**
-     * Controlled by parameter "debug". Enabled more verbose output.
-     */
     public static boolean debugMode = false;
 
-    /**
-     * This holds the configuration from /etc/graylog2.conf
-     */
+    // This holds the configuration from /etc/graylog2.conf
     public static Properties masterConfig = null;
-    
+
+    public static Thread syslogCoreThread = null;
+
     /**
      * @param args the command line arguments
      */
@@ -148,7 +146,7 @@ public class Main {
 
         // Check if the thread started up completely.
         try { Thread.sleep(1000); } catch(InterruptedException e) {}
-        if(syslogServerThread.getCoreThread().isAlive()) {
+        if(syslogCoreThread.isAlive()) {
             System.out.println("[x] Syslog server thread is up.");
         } else {
             System.out.println("Could not start syslog server core thread. Do you have permissions to listen on port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
