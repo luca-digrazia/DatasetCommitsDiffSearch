@@ -189,9 +189,7 @@ public class Aapt2ResourcePackagingAction {
               .link(compiled);
       profiler.recordEndOf("link");
 
-      if (options.packagePath != null) {
-        copy(packagedResources.apk(), options.packagePath);
-      }
+      copy(packagedResources.apk(), options.packagePath);
       if (options.proguardOutput != null) {
         copy(packagedResources.proguardConfig(), options.proguardOutput);
       }
