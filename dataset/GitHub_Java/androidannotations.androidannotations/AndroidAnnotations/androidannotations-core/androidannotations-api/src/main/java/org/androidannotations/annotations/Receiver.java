@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -143,8 +143,6 @@ public @interface Receiver {
 		OnResumeOnPause, //
 		/**
 		 * Register in the onAttach method, unregister in the onDetach method.
-		 * Except for View which will register in the onAttachedToWindow and
-		 * unregister in the onDetachedFromWindow.
 		 */
 		OnAttachOnDetach
 	}
