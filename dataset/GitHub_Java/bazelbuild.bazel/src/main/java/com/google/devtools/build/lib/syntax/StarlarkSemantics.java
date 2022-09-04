@@ -123,6 +123,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalEnableAndroidMigrationApis();
 
+  public abstract boolean experimentalEnableRepoMapping();
+
   public abstract ImmutableList<String> experimentalJavaCommonCreateProviderEnabledPackages();
 
   public abstract boolean experimentalPlatformsApi();
@@ -136,8 +138,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleDepsetIsNotIterable();
 
   public abstract boolean incompatibleDepsetUnion();
-
-  public abstract boolean incompatibleDisableThirdPartyLicenseChecking();
 
   public abstract boolean incompatibleDisableDeprecatedAttrParams();
 
@@ -206,6 +206,7 @@ public abstract class StarlarkSemantics {
           .experimentalBuildSettingApi(false)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalEnableAndroidMigrationApis(false)
+          .experimentalEnableRepoMapping(false)
           .experimentalJavaCommonCreateProviderEnabledPackages(ImmutableList.of())
           .experimentalPlatformsApi(false)
           .experimentalStarlarkConfigTransitions(false)
@@ -214,7 +215,6 @@ public abstract class StarlarkSemantics {
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
-          .incompatibleDisableThirdPartyLicenseChecking(false)
           .incompatibleDisableDeprecatedAttrParams(false)
           .incompatibleDisableObjcProviderResources(false)
           .incompatibleDisallowDataTransition(true)
@@ -253,6 +253,8 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder experimentalEnableAndroidMigrationApis(boolean value);
 
+    public abstract Builder experimentalEnableRepoMapping(boolean value);
+
     public abstract Builder experimentalJavaCommonCreateProviderEnabledPackages(List<String> value);
 
     public abstract Builder experimentalPlatformsApi(boolean value);
@@ -266,8 +268,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
 
     public abstract Builder incompatibleDepsetUnion(boolean value);
-
-    public abstract Builder incompatibleDisableThirdPartyLicenseChecking(boolean value);
 
     public abstract Builder incompatibleDisableDeprecatedAttrParams(boolean value);
 

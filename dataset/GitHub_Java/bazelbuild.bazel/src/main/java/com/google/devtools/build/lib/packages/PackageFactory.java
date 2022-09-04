@@ -20,6 +20,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -28,7 +29,6 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
@@ -84,8 +84,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -339,7 +341,7 @@ public final class PackageFactory {
 
   private AtomicReference<? extends UnixGlob.FilesystemCalls> syscalls;
 
-  private ForkJoinPool executor;
+  private final ThreadPoolExecutor threadPool;
 
   private int maxDirectoriesToEagerlyVisitInGlobbing;
 
@@ -394,7 +396,16 @@ public final class PackageFactory {
     this.ruleFactory = new RuleFactory(ruleClassProvider, attributeContainerFactory);
     this.ruleFunctions = buildRuleFunctions(ruleFactory);
     this.ruleClassProvider = ruleClassProvider;
-    setGlobbingThreads(100);
+    threadPool =
+        new ThreadPoolExecutor(
+            100,
+            Integer.MAX_VALUE,
+            15L,
+            TimeUnit.SECONDS,
+            new LinkedBlockingQueue<Runnable>(),
+            new ThreadFactoryBuilder().setNameFormat("Legacy globber %d").setDaemon(true).build());
+    // Do not consume threads when not in use.
+    threadPool.allowCoreThreadTimeOut(true);
     this.environmentExtensions = ImmutableList.copyOf(environmentExtensions);
     this.packageArguments = createPackageArguments();
     this.nativeModule = newNativeModule();
@@ -413,9 +424,7 @@ public final class PackageFactory {
    * Sets the max number of threads to use for globbing.
    */
   public void setGlobbingThreads(int globbingThreads) {
-    if (executor == null || executor.getParallelism() != globbingThreads) {
-      executor = NamedForkJoinPool.newNamedPool("globbing pool", globbingThreads);
-    }
+    threadPool.setCorePoolSize(globbingThreads);
   }
 
   /**
@@ -1415,7 +1424,7 @@ public final class PackageFactory {
             packageId,
             locator,
             syscalls,
-            executor,
+            threadPool,
             maxDirectoriesToEagerlyVisitInGlobbing));
   }
 
@@ -1439,7 +1448,7 @@ public final class PackageFactory {
             packageId,
             locator,
             syscalls,
-            executor,
+            threadPool,
             maxDirectoriesToEagerlyVisitInGlobbing),
         /*sort=*/ false);
   }

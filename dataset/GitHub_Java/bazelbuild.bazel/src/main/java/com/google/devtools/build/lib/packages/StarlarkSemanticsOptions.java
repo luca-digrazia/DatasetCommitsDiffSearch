@@ -60,10 +60,8 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   // <== Add new options here in alphabetic order ==>
 
-  /**
-   * This can be overridden by {@link RuleClass.Builder.ThirdPartyLicenseExistencePolicy} and {@link
-   * #incompatibleDisableThirdPartyLicenseChecking}.
-   */
+  // TODO(gregce): remove license checking completely from Bazel. aiuto@ is working on replacing
+  // this with a new and more useful model.
   @Option(
       name = "check_third_party_targets_have_licenses",
       defaultValue = "true",
@@ -101,6 +99,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       effectTags = OptionEffectTag.BUILD_FILE_SEMANTICS,
       help = "If set to true, enables the APIs required to support the Android Starlark migration.")
   public boolean experimentalEnableAndroidMigrationApis;
+
+  @Option(
+      name = "experimental_enable_repo_mapping",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = OptionEffectTag.NO_OP,
+      deprecationWarning =
+          "This behavior is on by default and the flag is a no-op. You can remove its usage",
+      help =
+          "This flag is a no-op. The use of the `repo_mapping` attribute in repository rules "
+              + "is enabled by default.")
+  public boolean experimentalEnableRepoMapping;
 
   // This flag is declared in StarlarkSemanticsOptions instead of JavaOptions because there is no
   // way to retrieve the java configuration from the Java implementation of
@@ -233,36 +243,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, disallow use of deprecated resource fields on the Objc provider.")
   public boolean incompatibleDisableObjcProviderResources;
-
-  // Once this migration is complete, instead of removing this flag we need to make it a no-op.
-  // This is because we'll need to keep it around for a while so Google's migration can complete
-  // after Bazel's. This is an example of Bazel's Google roots being methodically torn out:
-  // because this functionality was introduced for Google before Bazel existed, Google's
-  // dependency on it is deeper. We don't want this to add unnecessary baggage to Bazel or slow
-  // down Bazel's development. So this approach, while slightly awkward, relieves Bazel of
-  // Google's technical debt (which shouldn't be Bazel's problem). This means you as a Bazel
-  // user are getting better code than Google has! (for a while, at least)
-  //
-  // Track migration at https://github.com/bazelbuild/bazel/issues/7444. When we're ready to
-  // remove Bazel support, instead of removing the flag we should do these things:
-  //
-  // 1) BazelRuleClassProvider: set the third party license existence policy to NEVER_CHECK (see
-  //    the related TODO(gregce) comment in that file).
-  // 2) Remove LicenseCheckingModule.
-  // 3) Remove --check_third_party_targets_have_licenses.
-  @Option(
-      name = "incompatible_disable_third_party_license_checking",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = OptionEffectTag.BUILD_FILE_SEMANTICS,
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If true, disables all license checking logic. This overrides "
-              + "--check_third_party_targets_have_licenses")
-  public boolean incompatibleDisableThirdPartyLicenseChecking;
 
   @Option(
       name = "incompatible_disallow_data_transition",
@@ -548,6 +528,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .experimentalBuildSettingApi(experimentalBuildSettingApi)
         .experimentalCcSkylarkApiEnabledPackages(experimentalCcSkylarkApiEnabledPackages)
         .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
+        .experimentalEnableRepoMapping(experimentalEnableRepoMapping)
         .experimentalJavaCommonCreateProviderEnabledPackages(
             experimentalJavaCommonCreateProviderEnabledPackages)
         .experimentalPlatformsApi(experimentalPlatformsApi)
@@ -556,7 +537,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
-        .incompatibleDisableThirdPartyLicenseChecking(incompatibleDisableThirdPartyLicenseChecking)
         .incompatibleDisableDeprecatedAttrParams(incompatibleDisableDeprecatedAttrParams)
         .incompatibleDisableObjcProviderResources(incompatibleDisableObjcProviderResources)
         .incompatibleDisallowDataTransition(incompatibleDisallowDataTransition)
