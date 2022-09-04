@@ -18,9 +18,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -49,6 +47,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import javax.annotation.Nullable;
 
 /**
@@ -82,6 +81,22 @@ public final class Runfiles implements RunfilesApi {
 
   @AutoCodec @AutoCodec.VisibleForSerialization
   static final EmptyFilesSupplier DUMMY_EMPTY_FILES_SUPPLIER = new DummyEmptyFilesSupplier();
+
+  private static final Function<Artifact, PathFragment> GET_ROOT_RELATIVE_PATH =
+      new Function<Artifact, PathFragment>() {
+        @Override
+        public PathFragment apply(Artifact input) {
+          return input.getRootRelativePath();
+        }
+      };
+
+  private static final Function<PathFragment, String> PATH_FRAGMENT_TO_STRING =
+      new Function<PathFragment, String>() {
+        @Override
+        public String apply(PathFragment input) {
+          return input.toString();
+        }
+      };
 
   /**
    * An entry in the runfiles map.
@@ -345,18 +360,12 @@ public final class Runfiles implements RunfilesApi {
 
   @Override
   public NestedSet<String> getEmptyFilenames() {
-    Set<PathFragment> manifestKeys =
-        Streams.concat(
-                Streams.stream(symlinks).map(SymlinkEntry::getPath),
-                Streams.stream(getArtifacts()).map(Artifact::getRootRelativePath))
-            .collect(ImmutableSet.toImmutableSet());
-    Iterable<PathFragment> emptyKeys = emptyFilesSupplier.getExtraPaths(manifestKeys);
-    return NestedSetBuilder.<String>stableOrder()
-        .addAll(
-            Streams.stream(emptyKeys)
-                .map(PathFragment::toString)
-                .collect(ImmutableList.toImmutableList()))
-        .build();
+    Set<PathFragment> manifest = new TreeSet<>();
+    Iterables.addAll(
+        manifest, Iterables.transform(getArtifacts().toCollection(), GET_ROOT_RELATIVE_PATH));
+    return NestedSetBuilder.wrap(
+        Order.STABLE_ORDER,
+        Iterables.transform(emptyFilesSupplier.getExtraPaths(manifest), PATH_FRAGMENT_TO_STRING));
   }
 
   /**
