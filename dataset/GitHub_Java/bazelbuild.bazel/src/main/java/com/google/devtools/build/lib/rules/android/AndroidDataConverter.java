@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineItem.ParametrizedMapFn;
+import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -25,7 +26,6 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
 
 /**
  * Factory for functions to convert a {@code T} to a commandline argument. Uses a certain convention
@@ -42,7 +42,7 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
           .withRoots(MergableAndroidData::getResourceRoots)
           .withRoots(MergableAndroidData::getAssetRoots)
           .withLabel(MergableAndroidData::getLabel)
-          .maybeWithArtifact(MergableAndroidData::getSymbols)
+          .withArtifact(MergableAndroidData::getSymbols)
           .build();
 
   /** Indicates the type of joiner between options expected by the command line. */
@@ -119,6 +119,14 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
     return new Builder<>(joinerType);
   }
 
+  public void addDepsToCommandLine(
+      CustomCommandLine.Builder cmdBuilder,
+      NestedSet<? extends T> direct,
+      NestedSet<? extends T> transitive) {
+    cmdBuilder.addAll("--data", getVectorArg(transitive));
+    cmdBuilder.addAll("--directData", getVectorArg(direct));
+  }
+
   public VectorArg<String> getVectorArg(NestedSet<? extends T> values) {
     return VectorArg.join(joinerType.listSeparator).each(values).mapped(this);
   }
@@ -137,24 +145,31 @@ public class AndroidDataConverter<T> extends ParametrizedMapFn<T> {
     }
 
     Builder<T> withRoots(Function<T, ImmutableList<PathFragment>> rootsFunction) {
-      return with(t -> rootsToString(rootsFunction.apply(t)));
+      return with(new Function<T, String>() {
+        @Override
+        public String apply(T t) {
+          return rootsToString(rootsFunction.apply(t));
+        }
+      });
     }
 
     Builder<T> withArtifact(Function<T, Artifact> artifactFunction) {
-      return with(t -> artifactFunction.apply(t).getExecPathString());
-    }
-
-    Builder<T> maybeWithArtifact(Function<T, Artifact> nullableArtifactFunction) {
-      return with(
-          t -> {
-            @Nullable Artifact artifact = nullableArtifactFunction.apply(t);
-            return artifact == null ? "" : artifact.getExecPathString();
-          });
+      return with(new Function<T, String>() {
+        @Override
+        public String apply(T t) {
+          return artifactFunction.apply(t).getExecPathString();
+        }
+      });
     }
 
     Builder<T> withLabel(Function<T, Label> labelFunction) {
       // Escape labels, since they are known to contain separating characters (specifically, ':').
-      return with(t -> joinerType.escape(labelFunction.apply(t).toString()));
+      return with(new Function<T, String>() {
+        @Override
+        public String apply(T t) {
+          return joinerType.escape(labelFunction.apply(t).toString());
+        }
+      });
     }
 
     Builder<T> with(Function<T, String> stringFunction) {
