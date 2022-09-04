@@ -167,7 +167,7 @@ public abstract class FunctionSignature implements Serializable {
 
   /** Intern a list of names */
   public static ImmutableList<String> names(String... names) {
-    return names(ImmutableList.copyOf(names));
+    return names(ImmutableList.<String>copyOf(names));
   }
 
   // Interner
@@ -363,15 +363,15 @@ public abstract class FunctionSignature implements Serializable {
         params.add(starStar);
         types.add(starStarType);
       }
-      return WithValues.create(
+      return WithValues.<V, T>create(
           FunctionSignature.create(
               Shape.create(
                   mandatoryPositionals, optionalPositionals,
                   mandatoryNamedOnly, optionalNamedOnly,
                   star != null, starStar != null),
-              ImmutableList.copyOf(params)),
-          FunctionSignature.valueListOrNull(defaults),
-          FunctionSignature.valueListOrNull(types));
+              ImmutableList.<String>copyOf(params)),
+          FunctionSignature.<V>valueListOrNull(defaults),
+          FunctionSignature.<T>valueListOrNull(types));
     }
 
     public StringBuilder toStringBuilder(final StringBuilder sb) {
@@ -384,7 +384,8 @@ public abstract class FunctionSignature implements Serializable {
      * @param sb Output StringBuffer
      * @param showDefaults Determines whether the default values of arguments should be printed (if
      *     present)
-     * @param showTypes Determines whether parameter type information should be shown
+     * @param skipMissingTypeNames Determines whether missing type names should be omitted (true) or
+     *     replaced with "object" (false).
      * @param skipFirstMandatory Determines whether the first mandatory parameter should be omitted.
      */
     public StringBuilder toStringBuilder(
@@ -527,7 +528,7 @@ public abstract class FunctionSignature implements Serializable {
         names.length - (kwArg ? 1 : 0) - (starArg ? 1 : 0)
             - numMandatoryPositionals - numOptionalPositionals - numMandatoryNamedOnly,
         starArg, kwArg),
-        ImmutableList.copyOf(names));
+        ImmutableList.<String>copyOf(names));
   }
 
   /**

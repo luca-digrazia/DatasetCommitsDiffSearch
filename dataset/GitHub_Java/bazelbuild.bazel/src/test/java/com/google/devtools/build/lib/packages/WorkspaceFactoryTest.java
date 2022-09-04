@@ -24,10 +24,8 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.util.List;
@@ -84,33 +82,6 @@ public class WorkspaceFactoryTest {
         false, "workspace(name = 'foo')");
     assertThat(helper.getParserError()).contains(
         "workspace() function should be used only at the top of the WORKSPACE file");
-  }
-
-  @Test
-  public void testRegisterExecutionPlatforms() throws Exception {
-    WorkspaceFactoryHelper helper = parse("register_execution_platforms('//platform:ep1')");
-    assertThat(helper.getPackage().getRegisteredExecutionPlatformLabels())
-        .containsExactly(Label.parseAbsolute("//platform:ep1"));
-  }
-
-  @Test
-  public void testRegisterExecutionPlatforms_multipleLabels() throws Exception {
-    WorkspaceFactoryHelper helper =
-        parse("register_execution_platforms(", "  '//platform:ep1',", "  '//platform:ep2')");
-    assertThat(helper.getPackage().getRegisteredExecutionPlatformLabels())
-        .containsExactly(
-            Label.parseAbsolute("//platform:ep1"), Label.parseAbsolute("//platform:ep2"));
-  }
-
-  @Test
-  public void testRegisterExecutionPlatforms_multipleCalls() throws Exception {
-    WorkspaceFactoryHelper helper =
-        parse(
-            "register_execution_platforms('//platform:ep1')",
-            "register_execution_platforms('//platform:ep2')");
-    assertThat(helper.getPackage().getRegisteredExecutionPlatformLabels())
-        .containsExactly(
-            Label.parseAbsolute("//platform:ep1"), Label.parseAbsolute("//platform:ep2"));
   }
 
   @Test
@@ -178,13 +149,7 @@ public class WorkspaceFactoryTest {
           root);
       Exception exception = null;
       try {
-        byte[] bytes =
-            FileSystemUtils.readWithKnownFileSize(
-                workspaceFilePath, workspaceFilePath.getFileSize());
-        factory.parse(
-            ParserInputSource.create(bytes, workspaceFilePath.asFragment()),
-            SkylarkSemantics.DEFAULT_SEMANTICS,
-            eventHandler);
+        factory.parse(ParserInputSource.create(workspaceFilePath), eventHandler);
       } catch (BuildFileContainsErrorsException e) {
         exception = e;
       } catch (IOException | InterruptedException e) {
@@ -194,7 +159,7 @@ public class WorkspaceFactoryTest {
       this.exception = exception;
     }
 
-    public Package getPackage() throws InterruptedException, NoSuchPackageException {
+    public Package getPackage() throws InterruptedException {
       return builder.build();
     }
 
