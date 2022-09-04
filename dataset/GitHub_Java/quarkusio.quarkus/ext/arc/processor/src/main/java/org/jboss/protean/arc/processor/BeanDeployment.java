@@ -64,7 +64,7 @@ public class BeanDeployment {
         LOGGER.infof("Build deployment created in %s ms", System.currentTimeMillis() - start);
     }
 
-    public Collection<BeanInfo> getBeans() {
+    Collection<BeanInfo> getBeans() {
         return beans;
     }
 

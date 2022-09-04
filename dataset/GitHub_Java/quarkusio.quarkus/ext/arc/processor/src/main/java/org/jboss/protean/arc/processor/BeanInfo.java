@@ -47,10 +47,8 @@ class BeanInfo {
     private Map<MethodInfo, List<InterceptorInfo>> interceptedMethods;
 
     private Map<InterceptionType, List<InterceptorInfo>> lifecycleInterceptors;
-
+    
     private final Integer alternativePriority;
-
-    private final List<StereotypeInfo> stereotypes;
 
     /**
      *
@@ -64,10 +62,9 @@ class BeanInfo {
      * @param declaringBean
      * @param disposer
      * @param alternativePriority
-     * @param stereotypes
      */
     BeanInfo(AnnotationTarget target, BeanDeployment beanDeployment, ScopeInfo scope, Set<Type> types, Set<AnnotationInstance> qualifiers,
-            List<Injection> injections, BeanInfo declaringBean, DisposerInfo disposer, Integer alternativePriority, List<StereotypeInfo> stereotypes) {
+            List<Injection> injections, BeanInfo declaringBean, DisposerInfo disposer, Integer alternativePriority) {
         this.target = target;
         this.beanDeployment = beanDeployment;
         this.scope = scope != null ? scope : ScopeInfo.DEPENDENT;
@@ -81,7 +78,6 @@ class BeanInfo {
         this.declaringBean = declaringBean;
         this.disposer = disposer;
         this.alternativePriority = alternativePriority;
-        this.stereotypes = stereotypes;
     }
 
     AnnotationTarget getTarget() {
@@ -181,7 +177,7 @@ class BeanInfo {
         }
         if (isClassBean()) {
             return getLifecycleInterceptors(InterceptionType.PRE_DESTROY).isEmpty()
-                    && Beans.getCallbacks(target.asClass(), DotNames.PRE_DESTROY, beanDeployment.getIndex()).isEmpty();
+                    && target.asClass().methods().stream().noneMatch(m -> m.hasAnnotation(DotNames.PRE_DESTROY));
         } else {
             return disposer == null;
         }
@@ -205,17 +201,13 @@ class BeanInfo {
     DisposerInfo getDisposer() {
         return disposer;
     }
-
+    
     boolean isAlternative() {
         return alternativePriority != null;
     }
-
+    
     Integer getAlternativePriority() {
         return alternativePriority;
-    }
-
-    List<StereotypeInfo> getStereotypes() {
-        return stereotypes;
     }
 
     void init() {
@@ -244,17 +236,11 @@ class BeanInfo {
     private Map<MethodInfo, List<InterceptorInfo>> initInterceptedMethods() {
         if (!isInterceptor() && isClassBean()) {
             Map<MethodInfo, List<InterceptorInfo>> interceptedMethods = new HashMap<>();
+
             Map<MethodKey, Set<AnnotationInstance>> candidates = new HashMap<>();
             // TODO interceptor bindings are transitive!!!
-
             List<AnnotationInstance> classLevelBindings = new ArrayList<>();
             addClassLevelBindings(target.asClass(), classLevelBindings);
-            if (!stereotypes.isEmpty()) {
-                for (StereotypeInfo stereotype : stereotypes) {
-                    addClassLevelBindings(stereotype.getTarget(), classLevelBindings);
-                }
-            }
-
             Methods.addInterceptedMethodCandidates(beanDeployment, target.asClass(), candidates, classLevelBindings);
 
             for (Entry<MethodKey, Set<AnnotationInstance>> entry : candidates.entrySet()) {
@@ -292,7 +278,7 @@ class BeanInfo {
     }
 
     private void addClassLevelBindings(ClassInfo classInfo, Collection<AnnotationInstance> bindings) {
-        beanDeployment.getAnnotations(classInfo).stream()
+        classInfo.classAnnotations().stream()
                 .filter(a -> beanDeployment.getInterceptorBinding(a.name()) != null && bindings.stream().noneMatch(e -> e.name().equals(a.name())))
                 .forEach(a -> bindings.add(a));
         if (classInfo.superClassType() != null && !classInfo.superClassType().name().equals(DotNames.OBJECT)) {

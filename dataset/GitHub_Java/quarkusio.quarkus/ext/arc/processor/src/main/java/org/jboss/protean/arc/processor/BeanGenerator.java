@@ -49,7 +49,6 @@ import org.jboss.protean.arc.Subclass;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource.SpecialType;
 import org.jboss.protean.gizmo.BytecodeCreator;
-import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.ClassOutput;
 import org.jboss.protean.gizmo.ExceptionTable;
@@ -84,18 +83,18 @@ public class BeanGenerator extends AbstractGenerator {
      * @param annotationLiterals
      * @return a collection of resources
      */
-    Collection<Resource> generate(BeanInfo bean, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generate(BeanInfo bean, AnnotationLiteralProcessor annotationLiterals) {
         if (Kind.CLASS.equals(bean.getTarget().kind())) {
-            return generateClassBean(bean, bean.getTarget().asClass(), annotationLiterals, reflectionRegistration);
+            return generateClassBean(bean, bean.getTarget().asClass(), annotationLiterals);
         } else if (Kind.METHOD.equals(bean.getTarget().kind())) {
-            return generateProducerMethodBean(bean, bean.getTarget().asMethod(), annotationLiterals, reflectionRegistration);
+            return generateProducerMethodBean(bean, bean.getTarget().asMethod(), annotationLiterals);
         } else if (Kind.FIELD.equals(bean.getTarget().kind())) {
-            return generateProducerFieldBean(bean, bean.getTarget().asField(), annotationLiterals, reflectionRegistration);
+            return generateProducerFieldBean(bean, bean.getTarget().asField(), annotationLiterals);
         }
         throw new IllegalArgumentException("Unsupported bean type");
     }
 
-    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generateClassBean(BeanInfo bean, ClassInfo beanClass, AnnotationLiteralProcessor annotationLiterals) {
 
         String baseName;
         if (beanClass.enclosingClass() != null) {
@@ -132,9 +131,9 @@ public class BeanGenerator extends AbstractGenerator {
         createConstructor(classOutput, beanCreator, bean, baseName, injectionPointToProviderField, interceptorToProviderField, annotationLiterals);
 
         if (!bean.hasDefaultDestroy()) {
-            createDestroy(bean, beanCreator, providerTypeName, injectionPointToProviderField, reflectionRegistration);
+            createDestroy(bean, beanCreator, providerTypeName, injectionPointToProviderField);
         }
-        createCreate(beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField, reflectionRegistration);
+        createCreate(beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, interceptorToProviderField);
         createGet(bean, beanCreator, providerTypeName);
 
         createGetTypes(beanCreator, beanTypes.getFieldDescriptor());
@@ -152,7 +151,7 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generateProducerMethodBean(BeanInfo bean, MethodInfo producerMethod, AnnotationLiteralProcessor annotationLiterals) {
 
         ClassInfo declaringClass = producerMethod.declaringClass();
         String declaringClassBase;
@@ -192,9 +191,9 @@ public class BeanGenerator extends AbstractGenerator {
         createConstructor(classOutput, beanCreator, bean, baseName, injectionPointToProviderField, Collections.emptyMap(), annotationLiterals);
 
         if (!bean.hasDefaultDestroy()) {
-            createDestroy(bean, beanCreator, providerTypeName, injectionPointToProviderField, reflectionRegistration);
+            createDestroy(bean, beanCreator, providerTypeName, injectionPointToProviderField);
         }
-        createCreate(beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, Collections.emptyMap(), reflectionRegistration);
+        createCreate(beanCreator, bean, providerTypeName, baseName, injectionPointToProviderField, Collections.emptyMap());
         createGet(bean, beanCreator, providerTypeName);
 
         createGetTypes(beanCreator, beanTypes.getFieldDescriptor());
@@ -210,7 +209,7 @@ public class BeanGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generateProducerFieldBean(BeanInfo bean, FieldInfo producerField, AnnotationLiteralProcessor annotationLiterals) {
 
         ClassInfo declaringClass = producerField.declaringClass();
         String declaringClassBase;
@@ -247,9 +246,9 @@ public class BeanGenerator extends AbstractGenerator {
 
         if (!bean.hasDefaultDestroy()) {
             // FIXME!!!
-            createDestroy(bean, beanCreator, providerTypeName, null, reflectionRegistration);
+            createDestroy(bean, beanCreator, providerTypeName, null);
         }
-        createCreate(beanCreator, bean, providerTypeName, baseName, Collections.emptyMap(), Collections.emptyMap(), reflectionRegistration);
+        createCreate(beanCreator, bean, providerTypeName, baseName, Collections.emptyMap(), Collections.emptyMap());
         createGet(bean, beanCreator, providerTypeName);
 
         createGetTypes(beanCreator, beanTypes.getFieldDescriptor());
@@ -445,7 +444,7 @@ public class BeanGenerator extends AbstractGenerator {
     }
 
     protected void createDestroy(BeanInfo bean, ClassCreator beanCreator, String providerTypeName,
-            Map<InjectionPointInfo, String> injectionPointToProviderField, ReflectionRegistration reflectionRegistration) {
+            Map<InjectionPointInfo, String> injectionPointToProviderField) {
 
         MethodCreator destroy = beanCreator.getMethodCreator("destroy", void.class, providerTypeName, CreationalContext.class).setModifiers(ACC_PUBLIC);
 
@@ -502,7 +501,6 @@ public class BeanGenerator extends AbstractGenerator {
                     destroy.writeArrayValue(paramTypesArray, destroy.load(i), destroy.loadClass(disposerMethod.parameters().get(i).name().toString()));
                     destroy.writeArrayValue(argsArray, destroy.load(i), referenceHandles[i]);
                 }
-                reflectionRegistration.registerMethod(disposerMethod);
                 destroy.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, destroy.loadClass(disposerMethod.declaringClass().name().toString()),
                         destroy.load(disposerMethod.name()), paramTypesArray, declaringProviderInstanceHandle, argsArray);
             } else {
@@ -534,10 +532,10 @@ public class BeanGenerator extends AbstractGenerator {
      * @param baseName
      * @param injectionPointToProviderField
      * @param interceptorToProviderField
-     * @see Contextual#create(CreationalContext)
+     * @see Contextual#create()
      */
     protected void createCreate(ClassCreator beanCreator, BeanInfo bean, String providerTypeName, String baseName,
-            Map<InjectionPointInfo, String> injectionPointToProviderField, Map<InterceptorInfo, String> interceptorToProviderField, ReflectionRegistration reflectionRegistration) {
+            Map<InjectionPointInfo, String> injectionPointToProviderField, Map<InterceptorInfo, String> interceptorToProviderField) {
 
         MethodCreator create = beanCreator.getMethodCreator("create", providerTypeName, CreationalContext.class).setModifiers(ACC_PUBLIC);
         ResultHandle instanceHandle = null;
@@ -632,7 +630,7 @@ public class BeanGenerator extends AbstractGenerator {
                 // Supplier<Object> forward = () -> new SimpleBean_Subclass(ctx,lifecycleInterceptorProvider1)
                 FunctionCreator func = create.createFunction(Supplier.class);
                 BytecodeCreator funcBytecode = func.getBytecode();
-                ResultHandle retHandle = newInstanceHandle(bean, beanCreator, funcBytecode, create, providerTypeName, baseName, providerHandles, reflectionRegistration);
+                ResultHandle retHandle = newInstanceHandle(bean, beanCreator, funcBytecode, create, providerTypeName, baseName, providerHandles);
                 funcBytecode.returnValue(retHandle);
 
                 // InvocationContextImpl.aroundConstruct(constructor,aroundConstructs,forward).proceed()
@@ -640,17 +638,17 @@ public class BeanGenerator extends AbstractGenerator {
                         InvocationContextImpl.class, Constructor.class, List.class, Supplier.class), constructorHandle, aroundConstructsHandle,
                         func.getInstance());
                 ExceptionTable tryCatch = create.addTryCatch();
-                CatchBlockCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
+                BytecodeCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
                 // throw new RuntimeException(e)
                 // TODO existing exception param
-                exceptionCatch.throwException(RuntimeException.class, "Error invoking aroundConstructs", exceptionCatch.getCaughtException());
+                exceptionCatch.throwException(RuntimeException.class, "Error invoking aroundConstructs", exceptionCatch.getMethodParam(0));
                 instanceHandle = create.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class),
                         invocationContextHandle);
                 tryCatch.complete();
 
             } else {
                 instanceHandle = newInstanceHandle(bean, beanCreator, create, create, providerTypeName, baseName,
-                        newProviderHandles(bean, beanCreator, create, injectionPointToProviderField, interceptorToProviderField, interceptorToWrap), reflectionRegistration);
+                        newProviderHandles(bean, beanCreator, create, injectionPointToProviderField, interceptorToProviderField, interceptorToWrap));
             }
 
             // Perform field and initializer injections
@@ -663,7 +661,6 @@ public class BeanGenerator extends AbstractGenerator {
                 if (Modifier.isPrivate(fieldInjection.target.asField().flags())) {
                     LOGGER.infof("@Inject %s#%s is private - Arc users are encouraged to avoid using private injection fields",
                             fieldInjection.target.asField().declaringClass().name(), fieldInjection.target.asField().name());
-                    reflectionRegistration.registerField(fieldInjection.target.asField());
                     create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_WRITE_FIELD, create.loadClass(providerTypeName),
                             create.load(fieldInjection.target.asField().name()), instanceHandle, referenceHandle);
                 } else {
@@ -694,10 +691,10 @@ public class BeanGenerator extends AbstractGenerator {
                         instanceHandle, postConstructsHandle);
 
                 ExceptionTable tryCatch = create.addTryCatch();
-                CatchBlockCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
+                BytecodeCreator exceptionCatch = tryCatch.addCatchClause(Exception.class);
                 // throw new RuntimeException(e)
                 // TODO existing exception param
-                exceptionCatch.throwException(RuntimeException.class, "Error invoking postConstructs", exceptionCatch.getCaughtException());
+                exceptionCatch.throwException(RuntimeException.class, "Error invoking postConstructs", exceptionCatch.getMethodParam(0));
                 create.invokeInterfaceMethod(MethodDescriptor.ofMethod(InvocationContext.class, "proceed", Object.class), invocationContextHandle);
                 tryCatch.complete();
             }
@@ -746,7 +743,6 @@ public class BeanGenerator extends AbstractGenerator {
                     create.writeArrayValue(paramTypesArray, create.load(i), create.loadClass(producerMethod.parameters().get(i).name().toString()));
                     create.writeArrayValue(argsArray, create.load(i), referenceHandles[i]);
                 }
-                reflectionRegistration.registerMethod(producerMethod);
                 instanceHandle = create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
                         create.loadClass(producerMethod.declaringClass().name().toString()), create.load(producerMethod.name()), paramTypesArray,
                         declaringProviderInstanceHandle, argsArray);
@@ -779,7 +775,6 @@ public class BeanGenerator extends AbstractGenerator {
             if (Modifier.isPrivate(producerField.flags())) {
                 LOGGER.infof("Producer %s#%s is private - Arc users are encouraged to avoid using private producers", producerField.declaringClass().name(),
                         producerField.name());
-                reflectionRegistration.registerField(producerField);
                 instanceHandle = create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_READ_FIELD,
                         create.loadClass(producerField.declaringClass().name().toString()), create.load(producerField.name()), declaringProviderInstanceHandle);
             } else {
@@ -830,7 +825,7 @@ public class BeanGenerator extends AbstractGenerator {
     }
 
     private ResultHandle newInstanceHandle(BeanInfo bean, ClassCreator beanCreator, BytecodeCreator creator, MethodCreator createMethod,
-            String providerTypeName, String baseName, List<ResultHandle> providerHandles, ReflectionRegistration registration) {
+            String providerTypeName, String baseName, List<ResultHandle> providerHandles) {
 
         Optional<Injection> constructorInjection = bean.getConstructorInjection();
         MethodInfo constructor = constructorInjection.isPresent() ? constructorInjection.get().target.asMethod() : null;
@@ -873,7 +868,6 @@ public class BeanGenerator extends AbstractGenerator {
                     creator.writeArrayValue(paramTypesArray, creator.load(i), creator.loadClass(injectionPoints.get(i).requiredType.name().toString()));
                     creator.writeArrayValue(argsArray, creator.load(i), providerHandles.get(i));
                 }
-                registration.registerMethod(constructor);
                 return creator.invokeStaticMethod(MethodDescriptors.REFLECTIONS_NEW_INSTANCE, creator.loadClass(constructor.declaringClass().name().toString()),
                         paramTypesArray, argsArray);
             } else {
@@ -890,8 +884,6 @@ public class BeanGenerator extends AbstractGenerator {
                         noArgsConstructor.declaringClass().name());
                 ResultHandle paramTypesArray = creator.newArray(Class.class, creator.load(0));
                 ResultHandle argsArray = creator.newArray(Object.class, creator.load(0));
-
-                registration.registerMethod(noArgsConstructor);
                 return creator.invokeStaticMethod(MethodDescriptors.REFLECTIONS_NEW_INSTANCE,
                         creator.loadClass(noArgsConstructor.declaringClass().name().toString()), paramTypesArray, argsArray);
             } else {
@@ -906,7 +898,7 @@ public class BeanGenerator extends AbstractGenerator {
      * @param bean
      * @param beanCreator
      * @param providerTypeName
-     * @see InjectableReferenceProvider#get(CreationalContext)
+     * @see InjectableReferenceProvider#get()
      */
     protected void createGet(BeanInfo bean, ClassCreator beanCreator, String providerTypeName) {
 
