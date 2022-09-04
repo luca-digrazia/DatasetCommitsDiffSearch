@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.python;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static com.google.devtools.build.lib.rules.python.PythonTestUtils.assumesDefaultIsPY2;
+import static com.google.devtools.build.lib.rules.python.PythonTestUtils.ensureDefaultIsPY2;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -42,7 +42,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
    *
    * <p>This serves as a drop-in replacement for {@link #getConfiguredTarget} that will also catch
    * unexpected deferred failures (e.g. {@code srcs_versions} validation failures) in {@code
-   * py_binary} and {@code py_test} targets.
+   * py_binary} and {@code py_library} targets.
    */
   protected ConfiguredTarget getOkPyTarget(String label) throws Exception {
     ConfiguredTarget target = getConfiguredTarget(label);
@@ -63,7 +63,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
 
   /**
    * Gets the configured target for an executable Python rule (generally {@code py_binary} or {@code
-   * py_test}) and asserts that it produces a deferred error via {@link FailAction}.
+   * py_library}) and asserts that it produces a deferred error via {@link FailAction}.
    *
    * @return the deferred error string
    */
@@ -107,7 +107,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
     }
   }
 
-  private static String join(String... lines) {
+  private String join(String... lines) {
     return String.join("\n", lines);
   }
 
@@ -130,20 +130,8 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
   }
 
   @Test
-  public void pyRuntimeInfoIsPresent() throws Exception {
-    useConfiguration("--incompatible_use_python_toolchains=true");
-    scratch.file(
-        "pkg/BUILD", //
-        ruleName + "(",
-        "    name = 'foo',",
-        "    srcs = [':foo.py'],",
-        ")");
-    assertThat(getConfiguredTarget("//pkg:foo").get(PyRuntimeInfo.PROVIDER)).isNotNull();
-  }
-
-  @Test
   public void oldVersionAttr_UnknownValue() throws Exception {
-    useConfiguration("--incompatible_remove_old_python_version_api=false");
+    useConfiguration("--experimental_remove_old_python_version_api=false");
     checkError(
         "pkg",
         "foo",
@@ -168,7 +156,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
 
   @Test
   public void oldVersionAttr_BadValue() throws Exception {
-    useConfiguration("--incompatible_remove_old_python_version_api=false");
+    useConfiguration("--experimental_remove_old_python_version_api=false");
     checkError(
         "pkg",
         "foo",
@@ -193,7 +181,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
 
   @Test
   public void oldVersionAttr_GoodValue() throws Exception {
-    useConfiguration("--incompatible_remove_old_python_version_api=false");
+    useConfiguration("--experimental_remove_old_python_version_api=false");
     scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY2"));
     getOkPyTarget("//pkg:foo");
     assertNoEvents();
@@ -208,13 +196,13 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
 
   @Test
   public void cannotUseOldVersionAttrWithRemovalFlag() throws Exception {
-    useConfiguration("--incompatible_remove_old_python_version_api=true");
+    useConfiguration("--experimental_remove_old_python_version_api=true");
     checkError(
         "pkg",
         "foo",
         // error:
         "the 'default_python_version' attribute is disabled by the "
-            + "'--incompatible_remove_old_python_version_api' flag",
+            + "'--experimental_remove_old_python_version_api' flag",
         // build file:
         ruleDeclWithDefaultPyVersionAttr("foo", "PY2"));
   }
@@ -228,7 +216,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
    */
   @Test
   public void canCopyTargetWhenOldAttrDisallowed() throws Exception {
-    useConfiguration("--incompatible_remove_old_python_version_api=true");
+    useConfiguration("--experimental_remove_old_python_version_api=true");
     scratch.file(
         "pkg/rules.bzl",
         "def copy_target(rulefunc, src, dest):",
@@ -255,46 +243,6 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
   }
 
   @Test
-  public void py3IsDefaultFlag_SetsDefaultPythonVersion() throws Exception {
-    scratch.file( //
-        "pkg/BUILD", //
-        ruleName + "(", //
-        "    name = 'foo',", //
-        "    srcs = ['foo.py'],", //
-        ")");
-    // --incompatible_py3_is_default requires --incompatible_allow_python_version_transitions
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo",
-        PythonVersion.PY2,
-        "--incompatible_allow_python_version_transitions=true",
-        "--incompatible_py3_is_default=false");
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo",
-        PythonVersion.PY3,
-        "--incompatible_allow_python_version_transitions=true",
-        "--incompatible_py3_is_default=true",
-        // Keep the host Python as PY2, because we don't want to drag any implicit dependencies on
-        // tools into PY3 for this test. (Doing so may require setting extra options to get it to
-        // pass analysis.)
-        "--host_force_python=PY2");
-  }
-
-  @Test
-  public void py3IsDefaultFlag_DoesntOverrideExplicitVersion() throws Exception {
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY2"));
-    // --incompatible_py3_is_default requires --incompatible_allow_python_version_transitions
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo",
-        PythonVersion.PY2,
-        "--incompatible_allow_python_version_transitions=true",
-        "--incompatible_py3_is_default=true",
-        // Keep the host Python as PY2, because we don't want to drag any implicit dependencies on
-        // tools into PY3 for this test. (Doing so may require setting extra options to get it to
-        // pass analysis.)
-        "--host_force_python=PY2");
-  }
-
-  @Test
   public void newVersionAttrTakesPrecedenceOverOld() throws Exception {
     scratch.file(
         "pkg/BUILD",
@@ -305,90 +253,90 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
         "    python_version = 'PY3',",
         ")");
     assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo", PythonVersion.PY3, "--incompatible_remove_old_python_version_api=false");
+        "//pkg:foo", PythonVersion.PY3, "--experimental_remove_old_python_version_api=false");
   }
 
   @Test
   public void versionAttrWorksUnderOldAndNewSemantics_WhenNotDefaultValue() throws Exception {
-    assumesDefaultIsPY2();
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY3"));
+    ensureDefaultIsPY2();
+    scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY3"));
 
     assertPythonVersionIs_UnderNewConfigs(
         "//pkg:foo",
         PythonVersion.PY3,
-        new String[] {"--incompatible_allow_python_version_transitions=false"},
-        new String[] {"--incompatible_allow_python_version_transitions=true"});
+        new String[] {"--experimental_allow_python_version_transitions=false"},
+        new String[] {"--experimental_allow_python_version_transitions=true"});
   }
 
   @Test
   public void versionAttrWorksUnderOldAndNewSemantics_WhenSameAsDefaultValue() throws Exception {
-    assumesDefaultIsPY2();
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY2"));
+    ensureDefaultIsPY2();
+    scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY2"));
 
     assertPythonVersionIs_UnderNewConfigs(
         "//pkg:foo",
         PythonVersion.PY2,
-        new String[] {"--incompatible_allow_python_version_transitions=false"},
-        new String[] {"--incompatible_allow_python_version_transitions=true"});
+        new String[] {"--experimental_allow_python_version_transitions=false"},
+        new String[] {"--experimental_allow_python_version_transitions=true"});
   }
 
   @Test
   public void flagTakesPrecedenceUnderOldSemantics_NonDefaultValue() throws Exception {
-    assumesDefaultIsPY2();
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY2"));
+    ensureDefaultIsPY2();
+    scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY2"));
     assertPythonVersionIs_UnderNewConfig(
         "//pkg:foo",
         PythonVersion.PY3,
-        "--incompatible_allow_python_version_transitions=false",
-        "--python_version=PY3");
+        "--experimental_allow_python_version_transitions=false",
+        "--force_python=PY3");
   }
 
   @Test
   public void flagTakesPrecedenceUnderOldSemantics_DefaultValue() throws Exception {
-    assumesDefaultIsPY2();
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY3"));
+    ensureDefaultIsPY2();
+    scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY3"));
     assertPythonVersionIs_UnderNewConfig(
         "//pkg:foo",
         PythonVersion.PY2,
-        "--incompatible_allow_python_version_transitions=false",
-        "--python_version=PY2");
+        "--experimental_allow_python_version_transitions=false",
+        "--force_python=PY2");
   }
 
   @Test
   public void versionAttrTakesPrecedenceUnderNewSemantics_NonDefaultValue() throws Exception {
-    assumesDefaultIsPY2();
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY3"));
+    ensureDefaultIsPY2();
+    scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY3"));
 
     // Test against both flags.
     assertPythonVersionIs_UnderNewConfigs(
         "//pkg:foo",
         PythonVersion.PY3,
         new String[] {
-          "--incompatible_allow_python_version_transitions=true",
-          "--incompatible_remove_old_python_version_api=false",
+          "--experimental_allow_python_version_transitions=true",
+          "--experimental_remove_old_python_version_api=false",
           "--force_python=PY2"
         },
         new String[] {
-          "--incompatible_allow_python_version_transitions=true", "--python_version=PY2"
+          "--experimental_allow_python_version_transitions=true", "--python_version=PY2"
         });
   }
 
   @Test
   public void versionAttrTakesPrecedenceUnderNewSemantics_DefaultValue() throws Exception {
-    assumesDefaultIsPY2();
-    scratch.file("pkg/BUILD", ruleDeclWithPyVersionAttr("foo", "PY2"));
+    ensureDefaultIsPY2();
+    scratch.file("pkg/BUILD", ruleDeclWithDefaultPyVersionAttr("foo", "PY2"));
 
     // Test against both flags.
     assertPythonVersionIs_UnderNewConfigs(
         "//pkg:foo",
         PythonVersion.PY2,
         new String[] {
-          "--incompatible_allow_python_version_transitions=true",
-          "--incompatible_remove_old_python_version_api=false",
+          "--experimental_allow_python_version_transitions=true",
+          "--experimental_remove_old_python_version_api=false",
           "--force_python=PY3"
         },
         new String[] {
-          "--incompatible_allow_python_version_transitions=true", "--python_version=PY3"
+          "--experimental_allow_python_version_transitions=true", "--python_version=PY3"
         });
   }
 
@@ -396,66 +344,50 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
   public void canBuildWithDifferentVersionAttrs_UnderOldAndNewSemantics() throws Exception {
     scratch.file(
         "pkg/BUILD",
-        ruleDeclWithPyVersionAttr("foo_v2", "PY2"),
-        ruleDeclWithPyVersionAttr("foo_v3", "PY3"));
+        ruleDeclWithDefaultPyVersionAttr("foo_v2", "PY2"),
+        ruleDeclWithDefaultPyVersionAttr("foo_v3", "PY3"));
 
     assertPythonVersionIs_UnderNewConfigs(
         "//pkg:foo_v2",
         PythonVersion.PY2,
-        new String[] {"--incompatible_allow_python_version_transitions=false"},
-        new String[] {"--incompatible_allow_python_version_transitions=true"});
+        new String[] {"--experimental_allow_python_version_transitions=false"},
+        new String[] {"--experimental_allow_python_version_transitions=true"});
     assertPythonVersionIs_UnderNewConfigs(
         "//pkg:foo_v3",
         PythonVersion.PY3,
-        new String[] {"--incompatible_allow_python_version_transitions=false"},
-        new String[] {"--incompatible_allow_python_version_transitions=true"});
+        new String[] {"--experimental_allow_python_version_transitions=false"},
+        new String[] {"--experimental_allow_python_version_transitions=true"});
   }
 
   @Test
   public void canBuildWithDifferentVersionAttrs_UnderOldSemantics_FlagSetToDefault()
       throws Exception {
-    assumesDefaultIsPY2();
+    ensureDefaultIsPY2();
     scratch.file(
         "pkg/BUILD",
-        ruleDeclWithPyVersionAttr("foo_v2", "PY2"),
-        ruleDeclWithPyVersionAttr("foo_v3", "PY3"));
+        ruleDeclWithDefaultPyVersionAttr("foo_v2", "PY2"),
+        ruleDeclWithDefaultPyVersionAttr("foo_v3", "PY3"));
 
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo_v2",
-        PythonVersion.PY2,
-        "--incompatible_allow_python_version_transitions=false",
-        "--python_version=PY2");
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo_v3",
-        PythonVersion.PY2,
-        "--incompatible_allow_python_version_transitions=false",
-        "--python_version=PY2");
+    assertPythonVersionIs_UnderNewConfig("//pkg:foo_v2", PythonVersion.PY2, "--force_python=PY2");
+    assertPythonVersionIs_UnderNewConfig("//pkg:foo_v3", PythonVersion.PY2, "--force_python=PY2");
   }
 
   @Test
   public void canBuildWithDifferentVersionAttrs_UnderOldSemantics_FlagSetToNonDefault()
       throws Exception {
-    assumesDefaultIsPY2();
+    ensureDefaultIsPY2();
     scratch.file(
         "pkg/BUILD",
-        ruleDeclWithPyVersionAttr("foo_v2", "PY2"),
-        ruleDeclWithPyVersionAttr("foo_v3", "PY3"));
+        ruleDeclWithDefaultPyVersionAttr("foo_v2", "PY2"),
+        ruleDeclWithDefaultPyVersionAttr("foo_v3", "PY3"));
 
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo_v2",
-        PythonVersion.PY3,
-        "--incompatible_allow_python_version_transitions=false",
-        "--python_version=PY3");
-    assertPythonVersionIs_UnderNewConfig(
-        "//pkg:foo_v3",
-        PythonVersion.PY3,
-        "--incompatible_allow_python_version_transitions=false",
-        "--python_version=PY3");
+    assertPythonVersionIs_UnderNewConfig("//pkg:foo_v2", PythonVersion.PY3, "--force_python=PY3");
+    assertPythonVersionIs_UnderNewConfig("//pkg:foo_v3", PythonVersion.PY3, "--force_python=PY3");
   }
 
   @Test
   public void incompatibleSrcsVersion_OldSemantics() throws Exception {
-    useConfiguration("--incompatible_allow_python_version_transitions=false");
+    useConfiguration("--experimental_allow_python_version_transitions=false");
     checkError(
         "pkg",
         "foo",
@@ -472,7 +404,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
   @Test
   public void incompatibleSrcsVersion_NewSemantics() throws Exception {
     reporter.removeHandler(failFastHandler); // We assert below that we don't fail at analysis.
-    useConfiguration("--incompatible_allow_python_version_transitions=true");
+    useConfiguration("--experimental_allow_python_version_transitions=true");
     scratch.file(
         "pkg/BUILD",
         // build file:
@@ -480,7 +412,7 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
         "    name = 'foo',",
         "    srcs = [':foo.py'],",
         "    srcs_version = 'PY2ONLY',",
-        "    python_version = 'PY3')");
+        "    default_python_version = 'PY3')");
     // Under the new semantics, this is an execution-time error, not an analysis-time one. We fail
     // by setting the generating action to FailAction.
     assertNoEvents();
@@ -490,10 +422,10 @@ public abstract class PyExecutableConfiguredTargetTestBase extends PyBaseConfigu
 
   @Test
   public void incompatibleSrcsVersion_DueToVersionAttrDefault() throws Exception {
-    assumesDefaultIsPY2(); // When changed to PY3, flip srcs_version below to be PY2ONLY.
+    ensureDefaultIsPY2(); // When changed to PY3, flip srcs_version below to be PY2ONLY.
 
     // This test doesn't care whether we use old and new semantics, but it affects how we assert.
-    useConfiguration("--incompatible_allow_python_version_transitions=false");
+    useConfiguration("--experimental_allow_python_version_transitions=false");
 
     // Fails because default_python_version is PY2 by default, so the config is set to PY2
     // regardless of srcs_version.
