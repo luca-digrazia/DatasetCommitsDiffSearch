@@ -28,7 +28,7 @@ import lib.ExclusiveInputException;
 import lib.metrics.Metric;
 import models.api.requests.InputLaunchRequest;
 import models.api.responses.BuffersResponse;
-import models.api.responses.cluster.NodeSummaryResponse;
+import models.api.responses.NodeSummaryResponse;
 import models.api.responses.SystemOverviewResponse;
 import models.api.responses.metrics.MetricsListResponse;
 import models.api.responses.system.*;
@@ -42,6 +42,7 @@ import play.mvc.Http;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -50,7 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class Node extends ClusterEntity {
+public class Node {
 
     public interface Factory {
         Node fromSummaryResponse(NodeSummaryResponse r);
@@ -86,7 +87,7 @@ public class Node extends ClusterEntity {
 
         transportAddress = normalizeUriPath(r.transportAddress);
         lastSeen = new DateTime(r.lastSeen);
-        nodeId = r.id;
+        nodeId = r.nodeId;
         shortNodeId = r.shortNodeId;
         isMaster = r.isMaster;
         fromConfiguration = false;
@@ -103,6 +104,27 @@ public class Node extends ClusterEntity {
         shortNodeId = "unresolved";
         isMaster = false;
         fromConfiguration = true;
+    }
+
+    private URI normalizeUriPath(String address) {
+        final URI uri = URI.create(address);
+        return normalizeUriPath(uri);
+    }
+
+    private URI normalizeUriPath(URI uri) {
+        if (uri.getPath() == null || uri.getPath().isEmpty()) {
+            return uri;
+        }
+        if (uri.getPath().equals("/")) {
+            try {
+                return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), uri.getPort(), "", uri.getQuery(), uri.getFragment());
+            } catch (URISyntaxException e) { // sigh exception.
+                log.error("Could not process transportAddress {}, invalid URI syntax", uri.toASCIIString());
+                return uri;
+            }
+        }
+        log.info("Could not normalize path on node transport address, it contained some unrecognized path: {}", uri.toASCIIString());
+        return uri;
     }
 
     public BufferInfo getBufferInfo() {
@@ -238,7 +260,6 @@ public class Node extends ClusterEntity {
         }
     }
 
-    @Override
     public String getTransportAddress() {
         return transportAddress.toASCIIString();
     }
@@ -277,12 +298,12 @@ public class Node extends ClusterEntity {
         return systemInfo.isProcessing;
     }
 
-    public Map<String, Metric> getMetrics(String namespace) throws APIException, IOException {
+    public List<Metric> getMetrics(String namespace) throws APIException, IOException {
         MetricsListResponse response = api.get(MetricsListResponse.class)
-                .node(this)
                 .path("/system/metrics/namespace/{0}", namespace)
                 .expect(200, 404)
                 .execute();
+
 
         return response.getMetrics();
     }
@@ -329,7 +350,6 @@ public class Node extends ClusterEntity {
         return fromConfiguration;
     }
 
-    @Override
     public void markFailure() {
         failureCount.incrementAndGet();
         setActive(false);
@@ -353,7 +373,6 @@ public class Node extends ClusterEntity {
         this.setActive(updatedNode.isActive());
     }
 
-    @Override
     public void touch() {
         this.lastContact = DateTime.now(DateTimeZone.UTC);
         setActive(true);
