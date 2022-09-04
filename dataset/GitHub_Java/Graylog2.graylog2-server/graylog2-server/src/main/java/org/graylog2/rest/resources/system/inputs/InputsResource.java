@@ -16,10 +16,8 @@
  */
 package org.graylog2.rest.resources.system.inputs;
 
-import com.beust.jcommander.internal.Sets;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.wordnik.swagger.annotations.Api;
@@ -39,7 +37,6 @@ import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.resources.RestResource;
-import org.graylog2.rest.resources.system.inputs.responses.*;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.inputs.InputDescription;
 import org.graylog2.shared.inputs.InputRegistry;
@@ -66,7 +63,10 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RequiresAuthentication
 @Api(value = "System/Inputs", description = "Message inputs of this node")
@@ -112,34 +112,17 @@ public class InputsResource extends RestResource {
     @Timed
     @ApiOperation(value = "Get all inputs of this node")
     @Produces(MediaType.APPLICATION_JSON)
-    public InputsList list() {
-        final ImmutableSet.Builder<InputStateSummary> inputStates = ImmutableSet.builder();
+    public Map<String, Object> list() {
+        List<IOState<MessageInput>> inputStates = Lists.newArrayList();
+        Map<String, Object> result = Maps.newHashMap();
         for (IOState<MessageInput> inputState : inputRegistry.getInputStates()) {
-            if (!isPermitted(RestPermissions.INPUTS_READ, inputState.getStoppable().getId()))
-                continue;
-            final MessageInput messageInput = inputState.getStoppable();
-            inputStates.add(InputStateSummary.create(
-                    inputState.getId(),
-                    inputState.getState().toString(),
-                    inputState.getStartedAt(),
-                    inputState.getDetailedMessage(),
-                    InputSummary.create(
-                            messageInput.getTitle(),
-                            messageInput.getPersistId(),
-                            messageInput.getGlobal(),
-                            messageInput.getName(),
-                            messageInput.getContentPack(),
-                            messageInput.getId(),
-                            messageInput.getCreatedAt(),
-                            messageInput.getClass().getCanonicalName(),
-                            messageInput.getCreatorUserId(),
-                            messageInput.getAttributesWithMaskedPasswords(),
-                            messageInput.getStaticFields()
-                    )
-            ));
+            checkPermission(RestPermissions.INPUTS_READ, inputState.getStoppable().getId());
+            inputStates.add(inputState);
         }
 
-        return InputsList.create(inputStates.build());
+        return ImmutableMap.of(
+                "inputs", inputStates,
+                "total", inputStates.size());
     }
 
     @POST
@@ -229,11 +212,11 @@ public class InputsResource extends RestResource {
     @Path("/types")
     @ApiOperation(value = "Get all available input types of this node")
     @Produces(MediaType.APPLICATION_JSON)
-    public InputTypesSummary types() {
+    public Map<String, Map<String, String>> types() {
         Map<String, String> types = new HashMap<>();
         for (Map.Entry<String, InputDescription> entry : inputRegistry.getAvailableInputs().entrySet())
             types.put(entry.getKey(), entry.getValue().getName());
-        return InputTypesSummary.create(types);
+        return ImmutableMap.of("types", types);
     }
 
     @DELETE
@@ -362,7 +345,7 @@ public class InputsResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such input type registered.")
     })
-    public InputTypeInfo info(@ApiParam(name = "inputType", required = true) @PathParam("inputType") String inputType) {
+    public Map<String, Object> info(@ApiParam(name = "inputType", required = true) @PathParam("inputType") String inputType) {
         final InputDescription description = inputRegistry.getAvailableInputs().get(inputType);
         if (description == null) {
             final String message = "Unknown input type " + inputType + " requested.";
@@ -370,6 +353,11 @@ public class InputsResource extends RestResource {
             throw new NotFoundException(message);
         }
 
-        return InputTypeInfo.create(inputType, description);
+        return ImmutableMap.of(
+                "type", inputType,
+                "name", description.getName(),
+                "is_exclusive", description.isExclusive(),
+                "requested_configuration", description.getRequestedConfiguration(),
+                "link_to_docs", description.getLinkToDocs());
     }
 }
