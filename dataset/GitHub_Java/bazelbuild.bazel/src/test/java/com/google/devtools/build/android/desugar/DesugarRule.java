@@ -17,6 +17,7 @@
 package com.google.devtools.build.android.desugar;
 
 import com.google.auto.value.AutoValue;
+import com.google.auto.value.extension.memoized.Memoized;
 import com.google.common.annotations.UsedReflectively;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
@@ -26,6 +27,7 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.runtime.RunfilesPaths;
 import com.google.errorprone.annotations.FormatMethod;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -51,11 +53,16 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runner.RunWith;
 import org.junit.runners.model.Statement;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.tree.ClassNode;
 
 /** A JUnit4 Rule that desugars an input jar file and load the transformed jar to JVM. */
 public class DesugarRule implements TestRule {
@@ -72,11 +79,11 @@ public class DesugarRule implements TestRule {
    *   &#064;Rule
    *   public final DesugarRule desugarRule =
    *       DesugarRule.builder(this, MethodHandles.lookup())
-   *           .addRuntimeInputs("MyJar.jar")
+   *           .addRuntimeInputs("path/to/my_jar.jar")
    *           .build();
    *
    *   &#064;LoadClass("my.package.ClassToDesugar")
-   *   private Class<?> classToDesugarClass;f
+   *   private Class<?> classToDesugarClass;
    *
    *   // ... Test methods ...
    * }
@@ -93,6 +100,84 @@ public class DesugarRule implements TestRule {
      * Class#getName}.
      */
     String value();
+
+    /** The round during which its associated jar is being used. */
+    int round() default 1;
+  }
+
+  /**
+   * Identifies injectable {@link ZipEntry} fields with a zip entry path. The desugar rule resolves
+   * the requested zip entry at runtime and assign it to the annotated field. An injectable {@link
+   * ZipEntry} field may have any access modifier (private, package-private, protected, public).
+   * Sample usage:
+   *
+   * <pre><code>
+   * &#064;RunWith(JUnit4.class)
+   * public class DesugarRuleTest {
+   *
+   *   &#064;Rule
+   *   public final DesugarRule desugarRule =
+   *       DesugarRule.builder(this, MethodHandles.lookup())
+   *           .addRuntimeInputs("path/to/my_jar.jar")
+   *           .build();
+   *
+   *   &#064;LoadZipEntry("my/package/ClassToDesugar.class")
+   *   private ZipEntry classToDesugarClassFile;
+   *
+   *   // ... Test methods ...
+   * }
+   * </code></pre>
+   */
+  @UsedReflectively
+  @Documented
+  @Target(ElementType.FIELD)
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface LoadZipEntry {
+
+    /** The requested zip entry path name within a zip file. */
+    String value();
+
+    /** The round during which its associated jar is being used. */
+    int round() default 1;
+  }
+
+  /**
+   * Identifies injectable {@link ClassNode} fields with a qualified class name. The desugar rule
+   * resolves the requested class at runtime, parse it into a {@link ClassNode} and assign parsed
+   * class node to the annotated field. An injectable {@link ClassNode} field may have any access
+   * modifier (private, package-private, protected, public). Sample usage:
+   *
+   * <pre><code>
+   * &#064;RunWith(JUnit4.class)
+   * public class DesugarRuleTest {
+   *
+   *   &#064;Rule
+   *   public final DesugarRule desugarRule =
+   *       DesugarRule.builder(this, MethodHandles.lookup())
+   *           .addRuntimeInputs("path/to/my_jar.jar")
+   *           .build();
+   *
+   *   &#064;LoadClassNode("my.package.ClassToDesugar")
+   *   private ClassNode classToDesugarClassFile;
+   *
+   *   // ... Test methods ...
+   * }
+   * </code></pre>
+   */
+  @UsedReflectively
+  @Documented
+  @Target(ElementType.FIELD)
+  @Retention(RetentionPolicy.RUNTIME)
+  public @interface LoadClassNode {
+
+    /**
+     * The fully-qualified class name of the class to load. The format agrees with {@link
+     * Class#getName}.
+     */
+    String value();
+
+    /** The round during which its associated jar is being used. */
+    int round() default 1;
   }
 
   private static final Path ANDROID_RUNTIME_JAR_PATH =
@@ -104,12 +189,12 @@ public class DesugarRule implements TestRule {
 
   private static final String DEFAULT_OUTPUT_ROOT_PREFIX = "desugared_dump";
 
+  private static final ClassLoader BASE_CLASS_LOADER =
+      ClassLoader.getSystemClassLoader().getParent();
+
   /** The transformation record that describes the desugaring of a jar. */
   @AutoValue
   abstract static class JarTransformationRecord {
-
-    private static final ClassLoader baseClassLoader =
-        ClassLoader.getSystemClassLoader().getParent();
 
     /**
      * The full runtime path of a pre-transformationRecord jar.
@@ -155,12 +240,13 @@ public class DesugarRule implements TestRule {
       return args.build();
     }
 
-    final ClassLoader getOutputClassLoader() throws MalformedURLException {
+    @Memoized
+    ClassLoader getOutputClassLoader() throws MalformedURLException {
       List<URL> urls = new ArrayList<>();
       for (Path path : Iterables.concat(outputJars(), classPathEntries(), bootClassPathEntries())) {
         urls.add(path.toUri().toURL());
       }
-      return URLClassLoader.newInstance(urls.toArray(new URL[0]), baseClassLoader);
+      return URLClassLoader.newInstance(urls.toArray(new URL[0]), BASE_CLASS_LOADER);
     }
   }
 
@@ -169,11 +255,20 @@ public class DesugarRule implements TestRule {
 
   private final Object testInstance;
   private final MethodHandles.Lookup testInstanceLookup;
+
+  /** The maximum number of desugar operations, used for testing idempotency. */
+  private final int maxNumOfTransformations;
+
+  private final List<JarTransformationRecord> jarTransformationRecords;
+
   private final ImmutableList<Path> inputs;
   private final ImmutableList<Path> classPathEntries;
   private final ImmutableList<Path> bootClassPathEntries;
-  private final ImmutableList<Field> fieldForDynamicClassLoading;
   private final ImmutableListMultimap<String, String> extraCustomCommandOptions;
+
+  private final ImmutableList<Field> injectableClassLiterals;
+  private final ImmutableList<Field> injectableAstClassNodes;
+  private final ImmutableList<Field> injectableZipEntries;
 
   /** The state of the already-created directories to avoid directory re-creation. */
   private final Map<String, Path> tempDirs = new HashMap<>();
@@ -190,20 +285,31 @@ public class DesugarRule implements TestRule {
   }
 
   private DesugarRule(
-      DesugarRuleBuilder desugarRuleBuilder,
-      MethodHandles.Lookup testInstanceLookup,
+      Object testInstance,
+      Lookup testInstanceLookup,
+      int maxNumOfTransformations,
+      List<JarTransformationRecord> jarTransformationRecords,
+      ImmutableList<Path> bootClassPathEntries,
+      ImmutableListMultimap<String, String> customCommandOptions,
       ImmutableList<Path> inputJars,
       ImmutableList<Path> classPathEntries,
-      ImmutableList<Path> bootClassPathEntries) {
-    this.testInstance = desugarRuleBuilder.testInstance;
+      ImmutableList<Field> injectableClassLiterals,
+      ImmutableList<Field> injectableAstClassNodes,
+      ImmutableList<Field> injectableZipEntries) {
+    this.testInstance = testInstance;
     this.testInstanceLookup = testInstanceLookup;
+
+    this.maxNumOfTransformations = maxNumOfTransformations;
+    this.jarTransformationRecords = jarTransformationRecords;
+
     this.inputs = inputJars;
     this.classPathEntries = classPathEntries;
     this.bootClassPathEntries = bootClassPathEntries;
-    this.extraCustomCommandOptions =
-        ImmutableListMultimap.copyOf(desugarRuleBuilder.customCommandOptions);
-    this.fieldForDynamicClassLoading =
-        findAllFieldsWithAnnotation(testInstance.getClass(), LoadClass.class);
+    this.extraCustomCommandOptions = customCommandOptions;
+
+    this.injectableClassLiterals = injectableClassLiterals;
+    this.injectableAstClassNodes = injectableAstClassNodes;
+    this.injectableZipEntries = injectableZipEntries;
   }
 
   @Override
@@ -212,21 +318,51 @@ public class DesugarRule implements TestRule {
         new Statement() {
           @Override
           public void evaluate() throws Throwable {
-            JarTransformationRecord transformationRecord =
-                JarTransformationRecord.create(
-                    inputs,
-                    getRuntimeOutputPaths(inputs, temporaryFolder, tempDirs),
-                    classPathEntries,
-                    bootClassPathEntries,
-                    extraCustomCommandOptions);
-            Desugar.main(transformationRecord.getDesugarFlags().toArray(new String[0]));
+            ImmutableList<Path> transInputs = inputs;
+            for (int round = 1; round <= maxNumOfTransformations; round++) {
+              ImmutableList<Path> transOutputs =
+                  getRuntimeOutputPaths(
+                      transInputs,
+                      temporaryFolder,
+                      tempDirs,
+                      /* outputRootPrefix= */ DEFAULT_OUTPUT_ROOT_PREFIX + "_" + round);
+              JarTransformationRecord transformationRecord =
+                  JarTransformationRecord.create(
+                      transInputs,
+                      transOutputs,
+                      classPathEntries,
+                      bootClassPathEntries,
+                      extraCustomCommandOptions);
+              Desugar.main(transformationRecord.getDesugarFlags().toArray(new String[0]));
 
-            ClassLoader outputJarClassLoader = transformationRecord.getOutputClassLoader();
-            for (Field field : fieldForDynamicClassLoading) {
-              String qualifiedClassName = field.getDeclaredAnnotation(LoadClass.class).value();
-              Class<?> classLiteral = outputJarClassLoader.loadClass(qualifiedClassName);
+              jarTransformationRecords.add(transformationRecord);
+              transInputs = transOutputs;
+            }
+
+            for (Field field : injectableClassLiterals) {
+              Class<?> classLiteral =
+                  getClassLiteral(
+                      field.getDeclaredAnnotation(LoadClass.class),
+                      getInputClassLoader(),
+                      jarTransformationRecords);
               MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
               fieldSetter.invoke(testInstance, classLiteral);
+            }
+
+            for (Field field : injectableAstClassNodes) {
+              ClassNode classNode =
+                  getAstClassNode(
+                      field.getDeclaredAnnotation(LoadClassNode.class),
+                      inputs,
+                      jarTransformationRecords);
+              MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
+              fieldSetter.invoke(testInstance, classNode);
+            }
+
+            for (Field field : injectableZipEntries) {
+              ZipEntry zipEntry = getZipEntry(field.getDeclaredAnnotation(LoadZipEntry.class));
+              MethodHandle fieldSetter = testInstanceLookup.unreflectSetter(field);
+              fieldSetter.invoke(testInstance, zipEntry);
             }
             base.evaluate();
           }
@@ -234,12 +370,87 @@ public class DesugarRule implements TestRule {
         description);
   }
 
+  private static Class<?> getClassLiteral(
+      LoadClass classLiteralRequestInfo,
+      ClassLoader initialInputClassLoader,
+      List<JarTransformationRecord> jarTransformationRecords)
+      throws Throwable {
+    String qualifiedClassName = classLiteralRequestInfo.value();
+    int round = classLiteralRequestInfo.round();
+    ClassLoader outputJarClassLoader =
+        round == 0
+            ? initialInputClassLoader
+            : jarTransformationRecords.get(round - 1).getOutputClassLoader();
+    return outputJarClassLoader.loadClass(qualifiedClassName);
+  }
+
+  private static ClassNode getAstClassNode(
+      LoadClassNode astNodeRequestInfo,
+      ImmutableList<Path> initialInputs,
+      List<JarTransformationRecord> jarTransformationRecords)
+      throws IOException, ClassNotFoundException {
+    String qualifiedClassName = astNodeRequestInfo.value();
+    String classFileName = qualifiedClassName.replace('.', '/') + ".class";
+    int round = astNodeRequestInfo.round();
+    ImmutableList<Path> jars =
+        round == 0 ? initialInputs : jarTransformationRecords.get(round - 1).outputJars();
+    ClassNode classNode = findClassNode(classFileName, jars);
+    if (classNode == null) {
+      throw new ClassNotFoundException(qualifiedClassName);
+    }
+    return classNode;
+  }
+
+  private ZipEntry getZipEntry(LoadZipEntry zipEntryRequestInfo) throws IOException {
+    String zipEntryPathName = zipEntryRequestInfo.value();
+    int round = zipEntryRequestInfo.round();
+    ImmutableList<Path> jars =
+        round == 0 ? inputs : jarTransformationRecords.get(round - 1).outputJars();
+    for (Path jar : jars) {
+      ZipFile zipFile = new ZipFile(jar.toFile());
+      ZipEntry zipEntry = zipFile.getEntry(zipEntryPathName);
+      if (zipEntry != null) {
+        return zipEntry;
+      }
+    }
+    throw new IllegalStateException(
+        String.format("Expected zip entry of (%s) present.", zipEntryPathName));
+  }
+
+  private static ClassNode findClassNode(String zipEntryPathName, ImmutableList<Path> jars)
+      throws IOException {
+    for (Path jar : jars) {
+      ZipFile zipFile = new ZipFile(jar.toFile());
+      ZipEntry zipEntry = zipFile.getEntry(zipEntryPathName);
+      if (zipEntry != null) {
+        try (InputStream inputStream = zipFile.getInputStream(zipEntry)) {
+          ClassReader cr = new ClassReader(inputStream);
+          ClassNode classNode = new ClassNode(Opcodes.ASM7);
+          cr.accept(classNode, 0);
+          return classNode;
+        }
+      }
+    }
+    return null;
+  }
+
+  private ClassLoader getInputClassLoader() throws MalformedURLException {
+    List<URL> urls = new ArrayList<>();
+    for (Path path : Iterables.concat(inputs, classPathEntries, bootClassPathEntries)) {
+      urls.add(path.toUri().toURL());
+    }
+    return URLClassLoader.newInstance(urls.toArray(new URL[0]), BASE_CLASS_LOADER);
+  }
+
   private static ImmutableList<Path> getRuntimeOutputPaths(
-      ImmutableList<Path> inputs, TemporaryFolder temporaryFolder, Map<String, Path> tempDirs)
+      ImmutableList<Path> inputs,
+      TemporaryFolder temporaryFolder,
+      Map<String, Path> tempDirs,
+      String outputRootPrefix)
       throws IOException {
     ImmutableList.Builder<Path> outputRuntimePathsBuilder = ImmutableList.builder();
     for (Path path : inputs) {
-      String targetDirKey = Paths.get(DEFAULT_OUTPUT_ROOT_PREFIX) + "/" + path.getParent();
+      String targetDirKey = Paths.get(outputRootPrefix) + "/" + path.getParent();
       final Path outputDirPath;
       if (tempDirs.containsKey(targetDirKey)) {
         outputDirPath = tempDirs.get(targetDirKey);
@@ -258,7 +469,7 @@ public class DesugarRule implements TestRule {
     for (Class<?> currentClass = testClass;
         currentClass != null;
         currentClass = currentClass.getSuperclass()) {
-      for (Field field : testClass.getDeclaredFields()) {
+      for (Field field : currentClass.getDeclaredFields()) {
         if (field.isAnnotationPresent(annotationClass)) {
           fields.add(field);
         }
@@ -272,6 +483,10 @@ public class DesugarRule implements TestRule {
 
     private final Object testInstance;
     private final MethodHandles.Lookup testInstanceLookup;
+    private final ImmutableList<Field> injectableClassLiterals;
+    private final ImmutableList<Field> injectableAstClassNodes;
+    private final ImmutableList<Field> injectableJarFileEntries;
+    private int maxNumOfTransformations = 1;
     private final List<Path> inputs = new ArrayList<>();
     private final List<Path> classPathEntries = new ArrayList<>();
     private final List<Path> bootClassPathEntries = new ArrayList<>();
@@ -293,15 +508,14 @@ public class DesugarRule implements TestRule {
             "Expected a test instance whose class is annotated with @RunWith. %s", testClass);
       }
 
-      for (Field field : findAllFieldsWithAnnotation(testClass, LoadClass.class)) {
-        if (Modifier.isStatic(field.getModifiers())) {
-          errorMessenger.addError("Expected to be non-static for field (%s)", field);
-        }
+      injectableClassLiterals = findAllFieldsWithAnnotation(testClass, LoadClass.class);
+      injectableAstClassNodes = findAllFieldsWithAnnotation(testClass, LoadClassNode.class);
+      injectableJarFileEntries = findAllFieldsWithAnnotation(testClass, LoadZipEntry.class);
+    }
 
-        if (field.getType() != Class.class) {
-          errorMessenger.addError("Expected a class literal type (Class<?>) for field (%s)", field);
-        }
-      }
+    public DesugarRuleBuilder enableIterativeTransformation(int maxNumOfTransformations) {
+      this.maxNumOfTransformations = maxNumOfTransformations;
+      return this;
     }
 
     public DesugarRuleBuilder addRuntimeInputs(String... inputJars) {
@@ -350,25 +564,100 @@ public class DesugarRule implements TestRule {
 
     public DesugarRule build() {
       checkJVMOptions();
+      checkInjectableClassLiterals();
+      checkInjectableClassNodes();
+      checkInjectableZipEntries();
+
       if (bootClassPathEntries.isEmpty()
           && !customCommandOptions.containsKey("allow_empty_bootclasspath")) {
         addCommandOptions("bootclasspath_entry", ANDROID_RUNTIME_JAR_PATH.toString());
       }
 
-      if (errorMessenger.anyError()) {
+      if (errorMessenger.containsAnyError()) {
         throw new IllegalStateException(
             String.format(
-                "Invalid Desugar configurations:\n%s\n", errorMessenger.getAllMessages()));
+                "Invalid Desugar configurations:\n%s\n",
+                String.join("\n", errorMessenger.getAllMessages())));
       }
 
       addClasspathEntries(JACOCO_RUNTIME_PATH);
 
       return new DesugarRule(
-          this,
+          testInstance,
           testInstanceLookup,
+          maxNumOfTransformations,
+          new ArrayList<>(maxNumOfTransformations),
+          ImmutableList.copyOf(bootClassPathEntries),
+          ImmutableListMultimap.copyOf(customCommandOptions),
           ImmutableList.copyOf(inputs),
           ImmutableList.copyOf(classPathEntries),
-          ImmutableList.copyOf(bootClassPathEntries));
+          injectableClassLiterals,
+          injectableAstClassNodes,
+          injectableJarFileEntries);
+    }
+
+    private void checkInjectableClassLiterals() {
+      for (Field field : injectableClassLiterals) {
+        if (Modifier.isStatic(field.getModifiers())) {
+          errorMessenger.addError("Expected to be non-static for field (%s)", field);
+        }
+
+        if (field.getType() != Class.class) {
+          errorMessenger.addError("Expected a class literal type (Class<?>) for field (%s)", field);
+        }
+
+        LoadClass loadClassAnnotation = field.getDeclaredAnnotation(LoadClass.class);
+        int round = loadClassAnnotation.round();
+        if (round < 0 || round > maxNumOfTransformations) {
+          errorMessenger.addError(
+              "Expected the round (Actual:%d) of desugar transformation within [0, %d], where 0"
+                  + " indicates no transformation is applied.",
+              round, maxNumOfTransformations);
+        }
+      }
+    }
+
+    private void checkInjectableClassNodes() {
+      for (Field field : injectableAstClassNodes) {
+        if (Modifier.isStatic(field.getModifiers())) {
+          errorMessenger.addError("Expected to be non-static for field (%s)", field);
+        }
+
+        if (field.getType() != ClassNode.class) {
+          errorMessenger.addError(
+              "Expected a field with Type: (%s) but gets (%s)", ClassNode.class.getName(), field);
+        }
+
+        LoadClassNode astClassNodeInfo = field.getDeclaredAnnotation(LoadClassNode.class);
+        int round = astClassNodeInfo.round();
+        if (round < 0 || round > maxNumOfTransformations) {
+          errorMessenger.addError(
+              "Expected the round (actual:%d) of desugar transformation within [0, %d], where 0"
+                  + " indicates no transformation is used.",
+              round, maxNumOfTransformations);
+        }
+      }
+    }
+
+    private void checkInjectableZipEntries() {
+      for (Field field : injectableJarFileEntries) {
+        if (Modifier.isStatic(field.getModifiers())) {
+          errorMessenger.addError("Expected to be non-static for field (%s)", field);
+        }
+
+        if (field.getType() != ZipEntry.class) {
+          errorMessenger.addError(
+              "Expected a field with Type: (%s) but gets (%s)", ZipEntry.class.getName(), field);
+        }
+
+        LoadZipEntry zipEntryInfo = field.getDeclaredAnnotation(LoadZipEntry.class);
+        if (zipEntryInfo.round() < 0 || zipEntryInfo.round() > maxNumOfTransformations) {
+          errorMessenger.addError(
+              "Expected the round of desugar transformation within [0, %d], where 0 indicates no"
+                  + " transformation is used.",
+              maxNumOfTransformations);
+        }
+      }
     }
   }
 
@@ -383,7 +672,7 @@ public class DesugarRule implements TestRule {
       return this;
     }
 
-    boolean anyError() {
+    boolean containsAnyError() {
       return !errorMessages.isEmpty();
     }
 
