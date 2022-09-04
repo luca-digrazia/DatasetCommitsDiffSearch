@@ -24,6 +24,8 @@ import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.vfs.OsPathPolicy;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -35,7 +37,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SortedMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
 
 /**
@@ -53,6 +55,15 @@ public final class Actions {
       .addEscape('\\', "_B")
       .addEscape(':', "_C")
       .build();
+
+  /** Flag used to limit the number of warnings about shared actions to one per build. */
+  private static final AtomicBoolean issuedWarningForSharedActionsWithTreeArtifactInput =
+      new AtomicBoolean();
+
+  // TODO(b/160181927): Remove the warning once we move shared actions detection to execution phase.
+  public static void clearSharedActionsWarningFlag() {
+    issuedWarningForSharedActionsWithTreeArtifactInput.set(false);
+  }
 
   /**
    * Checks if the two actions are equivalent. This method exists to support sharing actions between
@@ -98,14 +109,15 @@ public final class Actions {
   }
 
   /**
-   * Checks whether provided actions are equivalent and adds a log line in case we may be overly
+   * Checks whether provided actions are equivalent and issues a warning in case we may be overly
    * permissive in the result. Returned result is the same as for {@link
    * #canBeShared(ActionKeyContext, ActionAnalysisMetadata, ActionAnalysisMetadata)}.
    *
-   * <p>TODO(b/160181927): Remove the logging once we move shared actions detection to execution
+   * <p>TODO(b/160181927): Remove the warning once we move shared actions detection to execution
    * phase.
    */
-  static boolean canBeSharedLogForPotentialFalsePositives(
+  static boolean canBeSharedWarnForPotentialFalsePositives(
+      EventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       ActionAnalysisMetadata actionA,
       ActionAnalysisMetadata actionB) {
@@ -116,12 +128,21 @@ public final class Actions {
               .filter(Artifact::isTreeArtifact)
               .findFirst();
       treeArtifactInput.ifPresent(
-          treeArtifact ->
-              logger.atInfo().atMostEvery(5, TimeUnit.MINUTES).log(
-                  "Shared action: %s has a tree artifact input: %s -- shared actions"
-                      + " detection is overly permissive in this case and may allow"
-                      + " sharing of different actions",
-                  actionA, treeArtifact));
+          treeArtifact -> {
+            if (issuedWarningForSharedActionsWithTreeArtifactInput.compareAndSet(false, true)) {
+              eventHandler.handle(
+                  Event.warn(
+                      "Detected shared actions with tree artifact input -- detection is overly"
+                          + " permissive in this case and may allow sharing of different"
+                          + " actions."));
+            }
+
+            logger.atInfo().log(
+                "Shared action: %s has a tree artifact input: %s -- shared actions"
+                    + " detection is overly permissive in this case and may allow"
+                    + " sharing of different actions",
+                actionA, treeArtifact);
+          });
     }
     return canBeShared;
   }
@@ -162,11 +183,13 @@ public final class Actions {
    * @throws ActionConflictException iff there are two actions generate the same output
    */
   public static GeneratingActions assignOwnersAndFindAndThrowActionConflict(
+      EventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       ImmutableList<ActionAnalysisMetadata> actions,
       ActionLookupValue.ActionLookupKey actionLookupKey)
       throws ActionConflictException {
     return Actions.assignOwnersAndMaybeFilterSharedActionsAndThrowIfConflict(
+        eventHandler,
         actionKeyContext,
         actions,
         actionLookupKey,
@@ -188,12 +211,14 @@ public final class Actions {
    *     output
    */
   public static GeneratingActions assignOwnersAndFilterSharedActionsAndThrowActionConflict(
+      EventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       ImmutableList<ActionAnalysisMetadata> actions,
       ActionLookupKey actionLookupKey,
       @Nullable Collection<OutputFile> outputFiles)
       throws ActionConflictException {
     return Actions.assignOwnersAndMaybeFilterSharedActionsAndThrowIfConflict(
+        eventHandler,
         actionKeyContext,
         actions,
         actionLookupKey,
@@ -202,6 +227,7 @@ public final class Actions {
   }
 
   private static void verifyGeneratingActionKeys(
+      EventHandler eventHandler,
       Artifact.DerivedArtifact output,
       ActionLookupData otherKey,
       boolean allowSharedAction,
@@ -219,8 +245,11 @@ public final class Actions {
     int otherIndex = otherKey.getActionIndex();
     if (actionIndex != otherIndex
         && (!allowSharedAction
-            || !Actions.canBeSharedLogForPotentialFalsePositives(
-                actionKeyContext, actions.get(actionIndex), actions.get(otherIndex)))) {
+            || !Actions.canBeSharedWarnForPotentialFalsePositives(
+                eventHandler,
+                actionKeyContext,
+                actions.get(actionIndex),
+                actions.get(otherIndex)))) {
       throw new ActionConflictException(
           actionKeyContext, output, actions.get(actionIndex), actions.get(otherIndex));
     }
@@ -238,6 +267,7 @@ public final class Actions {
    * associated rule configured target.
    */
   private static GeneratingActions assignOwnersAndMaybeFilterSharedActionsAndThrowIfConflict(
+      EventHandler eventHandler,
       ActionKeyContext actionKeyContext,
       ImmutableList<ActionAnalysisMetadata> actions,
       ActionLookupKey actionLookupKey,
@@ -281,6 +311,7 @@ public final class Actions {
         if (equalOutput != null) {
           // Yes: assert that its generating action and this artifact's are compatible.
           verifyGeneratingActionKeys(
+              eventHandler,
               equalOutput,
               generatingActionKey,
               allowSharedAction,
@@ -305,6 +336,7 @@ public final class Actions {
         } else {
           // Key is already set: verify that the generating action and this action are compatible.
           verifyGeneratingActionKeys(
+              eventHandler,
               output,
               generatingActionKey,
               allowSharedAction,
