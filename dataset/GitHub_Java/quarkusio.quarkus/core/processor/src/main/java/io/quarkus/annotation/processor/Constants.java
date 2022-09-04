@@ -3,7 +3,6 @@ package io.quarkus.annotation.processor;
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -29,7 +28,6 @@ final public class Constants {
     public static final String RUNTIME = "runtime";
     public static final String DEPLOYMENT = "deployment";
 
-    public static final Pattern CLASS_NAME_PATTERN = Pattern.compile("^.+[\\.$](\\w+)$");
     public static final Pattern CONFIG_ROOT_PATTERN = Pattern.compile("^(\\w+)Config(uration)?");
     public static final Pattern PKG_PATTERN = Pattern.compile("^io\\.quarkus\\.(\\w+)\\.?(\\w+)?\\.?(\\w+)?");
 
@@ -44,7 +42,7 @@ final public class Constants {
     public static final String QUARKUS = "quarkus";
 
     public static final Set<String> SUPPORTED_ANNOTATIONS_TYPES = new HashSet<>();
-    public static final Map<String, String> ALIASED_TYPES = new HashMap<>();
+    public static final Map<String, String> OPTIONAL_NUMBER_TYPES = new HashMap<>();
     public static final String DOCS_SRC_MAIN_ASCIIDOC_GENERATED = "/docs/src/main/asciidoc/generated/";
     public static final Path GENERATED_DOCS_PATH = Paths
             .get(System.getProperties().getProperty("maven.multiModuleProjectDirectory")
@@ -53,22 +51,15 @@ final public class Constants {
     public static final File ALL_CR_GENERATED_DOC = GENERATED_DOCS_PATH
             .resolve("all-configuration-roots-generated-doc.properties").toFile();
 
-    public static final String DURATION_NOTE_ANCHOR = "duration-note-anchor";
-    public static final String MEMORY_SIZE_NOTE_ANCHOR = "memory-size-note-anchor";
-    public static final String MORE_INFO_ABOUT_TYPE_FORMAT = "+++\n<a href=\"#%s\" title=\"More information about the %s format\">ℹ️</a>\n+++";
-    public static final String DURATION_INFORMATION = String.format(Constants.MORE_INFO_ABOUT_TYPE_FORMAT,
-            Constants.DURATION_NOTE_ANCHOR, Duration.class.getSimpleName());
-    public static final String MEMORY_SIZE_INFORMATION = String.format(Constants.MORE_INFO_ABOUT_TYPE_FORMAT,
-            Constants.MEMORY_SIZE_NOTE_ANCHOR, "MemorySize");
+    public static final String SEE_NOTE_BELOW = " - _see note below_";
 
     public static final String CONFIG_PHASE_RUNTIME_ILLUSTRATION = "⚙️";
     public static final String CONFIG_PHASE_BUILD_TIME_ILLUSTRATION = "\uD83D\uDCE6";
     public static final String CONFIG_PHASE_LEGEND = String.format(
-            "\n%s Configuration property fixed at build time - %s️ Configuration property overridable at runtime \n",
+            "\n%s Configuration property fixed at build time - %s️ Configuration property overridable at runtime \n\n",
             CONFIG_PHASE_BUILD_TIME_ILLUSTRATION, CONFIG_PHASE_RUNTIME_ILLUSTRATION);
 
-    public static final String DURATION_FORMAT_NOTE = "\n[NOTE]" +
-            "\n[[" + DURATION_NOTE_ANCHOR + "]]\n" +
+    public static final String DURATION_FORMAT_NOTE = "\n[NOTE]\n" +
             ".About the Duration format\n" +
             "====\n" +
             "The format for durations uses the standard `java.time.Duration` format.\n" +
@@ -80,8 +71,7 @@ final public class Constants {
             "Otherwise, `PT` is implicitly appended to the value to obtain a standard `java.time.Duration` format.\n" +
             "====\n";
 
-    public static final String MEMORY_SIZE_FORMAT_NOTE = "\n[NOTE]" +
-            "\n[[" + MEMORY_SIZE_NOTE_ANCHOR + "]]\n" +
+    public static final String MEMORY_SIZE_FORMAT_NOTE = "\n[NOTE]\n" +
             ".About the MemorySize format\n" +
             "====\n" +
             "A size configuration option recognises string in this format (shown as a regular expression): `[0-9]+[KkMmGgTtPpEeZzYy]?`.\n"
@@ -90,10 +80,9 @@ final public class Constants {
             "====\n";
 
     static {
-        ALIASED_TYPES.put(OptionalLong.class.getName(), Long.class.getName());
-        ALIASED_TYPES.put(OptionalInt.class.getName(), Integer.class.getName());
-        ALIASED_TYPES.put(OptionalDouble.class.getName(), Double.class.getName());
-        ALIASED_TYPES.put("java.lang.Class<?>", "class name");
+        OPTIONAL_NUMBER_TYPES.put(OptionalLong.class.getName(), Long.class.getName());
+        OPTIONAL_NUMBER_TYPES.put(OptionalInt.class.getName(), Integer.class.getName());
+        OPTIONAL_NUMBER_TYPES.put(OptionalDouble.class.getName(), Double.class.getName());
         SUPPORTED_ANNOTATIONS_TYPES.add(ANNOTATION_BUILD_STEP);
         SUPPORTED_ANNOTATIONS_TYPES.add(ANNOTATION_CONFIG_GROUP);
         SUPPORTED_ANNOTATIONS_TYPES.add(ANNOTATION_CONFIG_ROOT);
