@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -16,72 +16,29 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.periodical;
 
 import org.cliffc.high_scale_lib.Counter;
-import org.graylog2.plugin.periodical.Periodical;
-import org.graylog2.shared.stats.ThroughputStats;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
 
-import javax.inject.Inject;
 import java.util.HashMap;
 import java.util.Map;
 
-public class StreamThroughputCounterManagerThread extends Periodical {
-    private static final Logger LOG = LoggerFactory.getLogger(StreamThroughputCounterManagerThread.class);
-    private final ThroughputStats throughputStats;
+public class StreamThroughputCounterManagerThread implements Runnable {
 
-    @Inject
-    public StreamThroughputCounterManagerThread(ThroughputStats throughputStats) {
-        this.throughputStats = throughputStats;
+    public static final int INITIAL_DELAY = 0;
+    public static final int PERIOD = 1;
+
+    private final Core server;
+
+    public StreamThroughputCounterManagerThread(Core server) {
+        this.server = server;
     }
 
     @Override
-    public void doRun() {
+    public void run() {
         // cycleStreamThroughput clears the map already.
-        final Map<String,Counter> stringCounterMap = throughputStats.cycleStreamThroughput();
-        throughputStats.setCurrentStreamThroughput(new HashMap<>(stringCounterMap));
-    }
-
-    @Override
-    protected Logger getLogger() {
-        return LOG;
-    }
-
-    @Override
-    public boolean runsForever() {
-        return false;
-    }
-
-    @Override
-    public boolean stopOnGracefulShutdown() {
-        return false;
-    }
-
-    @Override
-    public boolean masterOnly() {
-        return false;
-    }
-
-    @Override
-    public boolean startOnThisNode() {
-        return true;
-    }
-
-    @Override
-    public boolean isDaemon() {
-        return true;
-    }
-
-    @Override
-    public int getInitialDelaySeconds() {
-        return 0;
-    }
-
-    @Override
-    public int getPeriodSeconds() {
-        return 1;
+        final Map<String,Counter> stringCounterMap = server.cycleStreamThroughput();
+        server.setCurrentStreamThroughput(new HashMap<String, Counter>(stringCounterMap));
     }
 }

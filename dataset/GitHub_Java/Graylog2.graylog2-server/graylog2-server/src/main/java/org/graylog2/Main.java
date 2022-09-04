@@ -197,10 +197,9 @@ public final class Main {
                 server.getActivityWriter().write(new Activity(what, Main.class));
 
                 // Write a notification.
-                Notification.buildNow(server)
-                        .addType(Notification.Type.MULTI_MASTER)
-                        .addSeverity(Notification.Severity.URGENT)
-                        .publishIfFirst();
+                if (Notification.isFirst(server, Notification.Type.MULTI_MASTER)) {
+                    Notification.publish(server, Notification.Type.MULTI_MASTER, Notification.Severity.URGENT);
+                }
 
                 configuration.setIsMaster(false);
             } else {

@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.filters;
@@ -28,7 +29,6 @@ import org.graylog2.streams.StreamRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.List;
 
 /**
@@ -38,18 +38,12 @@ public class StreamMatcherFilter implements MessageFilter {
 
     private static final Logger LOG = LoggerFactory.getLogger(StreamMatcherFilter.class);
 
-    private final StreamRouter streamRouter;
-
-    @Inject
-    public StreamMatcherFilter(StreamRouter streamRouter) {
-        this.streamRouter = streamRouter;
-    }
+    private static final StreamRouter ROUTER = new StreamRouter();
 
     @Override
     public boolean filter(Message msg, GraylogServer server) {
         Core core = (Core) server;
-
-        List<Stream> streams = streamRouter.route(msg);
+        List<Stream> streams = ROUTER.route(core, msg);
 
         for (Stream stream : streams) {
             core.incrementStreamThroughput(stream.getId());

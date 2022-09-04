@@ -66,7 +66,6 @@ import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.system.NodeId;
 import org.graylog2.plugins.PluginLoader;
-import org.graylog2.rest.CORSFilter;
 import org.graylog2.rest.ObjectMapperProvider;
 import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
@@ -383,13 +382,6 @@ public class Core implements GraylogServer, InputHost {
                 .register(ObjectMapperProvider.class)
                 .register(JacksonJsonProvider.class)
                 .registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));
-
-        if (configuration.isRestEnableCors()) {
-            LOG.info("Enabling CORS for REST API");
-            rc.register(CORSFilter.class);
-        }
-
-        /*rc = rc.registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources"}, true));*/
 
         final NettyContainer jerseyHandler = ContainerFactory.createContainer(NettyContainer.class, rc);
         jerseyHandler.setSecurityContextFactory(new ShiroSecurityContextFactory(this));

@@ -210,6 +210,7 @@ public class StreamResource extends RestResource {
         StreamImpl stream;
         try {
             stream = StreamImpl.load(loadObjectId(streamId), core);
+            stream.destroy();
         } catch (NotFoundException e) {
             throw new WebApplicationException(404);
         }
