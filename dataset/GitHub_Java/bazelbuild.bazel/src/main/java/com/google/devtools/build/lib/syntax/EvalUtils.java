@@ -301,7 +301,8 @@ public final class EvalUtils {
     return obj;
   }
 
-  public static Collection<?> toCollection(Object o, Location loc) throws EvalException {
+  public static Collection<?> toCollection(Object o, Location loc, @Nullable StarlarkThread thread)
+      throws EvalException {
     if (o instanceof Collection) {
       return (Collection<?>) o;
     } else if (o instanceof Sequence) {
@@ -352,11 +353,12 @@ public final class EvalUtils {
     }
   }
 
-  public static Iterable<?> toIterable(Object o, Location loc) throws EvalException {
+  public static Iterable<?> toIterable(Object o, Location loc, @Nullable StarlarkThread thread)
+      throws EvalException {
     if (o instanceof Iterable) {
       return (Iterable<?>) o;
     } else if (o instanceof Map) {
-      return toCollection(o, loc);
+      return toCollection(o, loc, thread);
     } else {
       throw new EvalException(loc,
           "type '" + getDataTypeName(o) + "' is not iterable");

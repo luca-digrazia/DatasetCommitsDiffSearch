@@ -62,10 +62,11 @@ class MethodLibrary {
               + "min([5, 6, 3]) == 3</pre>",
       extraPositionals =
           @Param(name = "args", type = Sequence.class, doc = "The elements to be checked."),
-      useLocation = true)
-  public Object min(Sequence<?> args, Location loc) throws EvalException {
+      useLocation = true,
+      useStarlarkThread = true)
+  public Object min(Sequence<?> args, Location loc, StarlarkThread thread) throws EvalException {
     try {
-      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR.reverse(), loc);
+      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR.reverse(), loc, thread);
     } catch (ComparisonException e) {
       throw new EvalException(loc, e);
     }
@@ -81,22 +82,25 @@ class MethodLibrary {
               + "max([5, 6, 3]) == 6</pre>",
       extraPositionals =
           @Param(name = "args", type = Sequence.class, doc = "The elements to be checked."),
-      useLocation = true)
-  public Object max(Sequence<?> args, Location loc) throws EvalException {
+      useLocation = true,
+      useStarlarkThread = true)
+  public Object max(Sequence<?> args, Location loc, StarlarkThread thread) throws EvalException {
     try {
-      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR, loc);
+      return findExtreme(args, EvalUtils.SKYLARK_COMPARATOR, loc, thread);
     } catch (ComparisonException e) {
       throw new EvalException(loc, e);
     }
   }
 
   /** Returns the maximum element from this list, as determined by maxOrdering. */
-  private static Object findExtreme(Sequence<?> args, Ordering<Object> maxOrdering, Location loc)
+  private static Object findExtreme(
+      Sequence<?> args, Ordering<Object> maxOrdering, Location loc, StarlarkThread thread)
       throws EvalException {
     // Args can either be a list of items to compare, or a singleton list whose element is an
     // iterable of items to compare. In either case, there must be at least one item to compare.
     try {
-      Iterable<?> items = (args.size() == 1) ? EvalUtils.toIterable(args.get(0), loc) : args;
+      Iterable<?> items =
+          (args.size() == 1) ? EvalUtils.toIterable(args.get(0), loc, thread) : args;
       return maxOrdering.max(items);
     } catch (NoSuchElementException ex) {
       throw new EvalException(loc, "expected at least one item", ex);
@@ -119,9 +123,10 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
       },
-      useLocation = true)
-  public Boolean all(Object collection, Location loc) throws EvalException {
-    return !hasElementWithBooleanValue(collection, false, loc);
+      useLocation = true,
+      useStarlarkThread = true)
+  public Boolean all(Object collection, Location loc, StarlarkThread thread) throws EvalException {
+    return !hasElementWithBooleanValue(collection, false, loc, thread);
   }
 
   @SkylarkCallable(
@@ -140,14 +145,15 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
       },
-      useLocation = true)
-  public Boolean any(Object collection, Location loc) throws EvalException {
-    return hasElementWithBooleanValue(collection, true, loc);
+      useLocation = true,
+      useStarlarkThread = true)
+  public Boolean any(Object collection, Location loc, StarlarkThread thread) throws EvalException {
+    return hasElementWithBooleanValue(collection, true, loc, thread);
   }
 
-  private static boolean hasElementWithBooleanValue(Object collection, boolean value, Location loc)
-      throws EvalException {
-    Iterable<?> iterable = EvalUtils.toIterable(collection, loc);
+  private static boolean hasElementWithBooleanValue(
+      Object collection, boolean value, Location loc, StarlarkThread thread) throws EvalException {
+    Iterable<?> iterable = EvalUtils.toIterable(collection, loc, thread);
     for (Object obj : iterable) {
       if (Starlark.truth(obj) == value) {
         return true;
@@ -195,7 +201,7 @@ class MethodLibrary {
       final StarlarkThread thread)
       throws EvalException, InterruptedException {
 
-    Object[] array = EvalUtils.toCollection(iterable, loc).toArray();
+    Object[] array = EvalUtils.toCollection(iterable, loc, thread).toArray();
     if (key == Starlark.NONE) {
       try {
         Arrays.sort(array, EvalUtils.SKYLARK_COMPARATOR);
@@ -275,7 +281,7 @@ class MethodLibrary {
       throw new EvalException(loc, "Argument to reversed() must be a sequence, not a dictionary.");
     }
     ArrayDeque<Object> tmpList = new ArrayDeque<>();
-    for (Object element : EvalUtils.toIterable(sequence, loc)) {
+    for (Object element : EvalUtils.toIterable(sequence, loc, thread)) {
       tmpList.addFirst(element);
     }
     return StarlarkList.copyOf(thread.mutability(), tmpList);
@@ -296,9 +302,10 @@ class MethodLibrary {
             // TODO(cparsons): This parameter should be positional-only.
             legacyNamed = true)
       },
-      useLocation = true)
-  public Tuple<?> tuple(Object x, Location loc) throws EvalException {
-    return Tuple.copyOf(EvalUtils.toCollection(x, loc));
+      useLocation = true,
+      useStarlarkThread = true)
+  public Tuple<?> tuple(Object x, Location loc, StarlarkThread thread) throws EvalException {
+    return Tuple.copyOf(EvalUtils.toCollection(x, loc, thread));
   }
 
   @SkylarkCallable(
@@ -319,7 +326,7 @@ class MethodLibrary {
       useLocation = true,
       useStarlarkThread = true)
   public StarlarkList<?> list(Object x, Location loc, StarlarkThread thread) throws EvalException {
-    return StarlarkList.copyOf(thread.mutability(), EvalUtils.toCollection(x, loc));
+    return StarlarkList.copyOf(thread.mutability(), EvalUtils.toCollection(x, loc, thread));
   }
 
   @SkylarkCallable(
@@ -622,7 +629,7 @@ class MethodLibrary {
       useLocation = true)
   public StarlarkList<?> enumerate(Object input, Integer start, Location loc, StarlarkThread thread)
       throws EvalException {
-    Collection<?> src = EvalUtils.toCollection(input, loc);
+    Collection<?> src = EvalUtils.toCollection(input, loc, thread);
     Object[] array = new Object[src.size()];
     int i = 0;
     for (Object x : src) {
@@ -1176,7 +1183,7 @@ class MethodLibrary {
       throws EvalException {
     Iterator<?>[] iterators = new Iterator<?>[args.size()];
     for (int i = 0; i < args.size(); i++) {
-      iterators[i] = EvalUtils.toIterable(args.get(i), loc).iterator();
+      iterators[i] = EvalUtils.toIterable(args.get(i), loc, thread).iterator();
     }
     ArrayList<Tuple<?>> result = new ArrayList<>();
     boolean allHasNext;
