@@ -14,6 +14,9 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
+
+import com.google.common.base.Function;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -38,6 +41,14 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 final class ProtocolBuffers2Support {
 
   private static final String UNIQUE_DIRECTORY_NAME = "_generated_protos";
+
+  private static final Function<Artifact, PathFragment> PARENT_PATHFRAGMENT =
+      new Function<Artifact, PathFragment>() {
+        @Override
+        public PathFragment apply(Artifact input) {
+          return input.getExecPath().getParentDirectory();
+        }
+      };
 
   private final RuleContext ruleContext;
   private final ProtoAttributes attributes;
@@ -106,6 +117,21 @@ final class ProtocolBuffers2Support {
   /** Returns the ObjcProvider for this target. */
   public ObjcProvider getObjcProvider() {
     return getCommon().getObjcProvider();
+  }
+
+  /** Returns the XcodeProvider for this target. */
+  public XcodeProvider getXcodeProvider() {
+    XcodeProvider.Builder xcodeProviderBuilder =
+        new XcodeProvider.Builder()
+            .addUserHeaderSearchPaths(getIncludes())
+            .setCompilationArtifacts(getCompilationArtifacts());
+
+    new XcodeSupport(ruleContext)
+        .addXcodeSettings(xcodeProviderBuilder, getCommon().getObjcProvider(), LIBRARY_STATIC)
+        .addDependencies(
+            xcodeProviderBuilder, new Attribute(ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET));
+
+    return xcodeProviderBuilder.build();
   }
 
   private String getHeaderExtension() {
@@ -186,8 +212,7 @@ final class ProtocolBuffers2Support {
           .add(generatedProtoDir)
           .addAll(
               Iterables.transform(
-                  getGeneratedProtoOutputs(getHeaderExtension()),
-                  input -> input.getExecPath().getParentDirectory()));
+                  getGeneratedProtoOutputs(getHeaderExtension()), PARENT_PATHFRAGMENT));
     }
 
     return searchPathEntriesBuilder.build();

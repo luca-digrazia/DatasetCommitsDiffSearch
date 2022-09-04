@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
 
-import com.google.common.base.Function;
-import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -75,7 +73,6 @@ final class ProtobufSupport {
   private final IntermediateArtifacts intermediateArtifacts;
   private final Set<Artifact> dylibHandledProtos;
   private final Iterable<ObjcProtoProvider> objcProtoProviders;
-  private final NestedSet<Artifact> portableProtoFilters;
 
   // Each entry of this map represents a generation action and a compilation action. The input set
   // are dependencies of the output set. The output set is always a subset of, or the same set as,
@@ -109,15 +106,13 @@ final class ProtobufSupport {
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       Iterable<ProtoSourcesProvider> protoProviders,
-      Iterable<ObjcProtoProvider> objcProtoProviders,
-      NestedSet<Artifact> portableProtoFilters) {
+      Iterable<ObjcProtoProvider> objcProtoProviders) {
     this(
         ruleContext,
         buildConfiguration,
         NestedSetBuilder.<Artifact>stableOrder().build(),
         protoProviders,
-        objcProtoProviders,
-        portableProtoFilters);
+        objcProtoProviders);
   }
 
   /**
@@ -140,14 +135,12 @@ final class ProtobufSupport {
       BuildConfiguration buildConfiguration,
       NestedSet<Artifact> dylibHandledProtos,
       Iterable<ProtoSourcesProvider> protoProviders,
-      Iterable<ObjcProtoProvider> objcProtoProviders,
-      NestedSet<Artifact> portableProtoFilters) {
+      Iterable<ObjcProtoProvider> objcProtoProviders) {
     this.ruleContext = ruleContext;
     this.buildConfiguration = buildConfiguration;
     this.attributes = new ProtoAttributes(ruleContext);
     this.dylibHandledProtos = dylibHandledProtos.toSet();
     this.objcProtoProviders = objcProtoProviders;
-    this.portableProtoFilters = portableProtoFilters;
     this.intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext, buildConfiguration);
     this.inputsToOutputsMap = getInputsToOutputsMap(attributes, protoProviders, objcProtoProviders);
@@ -324,6 +317,15 @@ final class ProtobufSupport {
     }
 
     return Optional.of(xcodeProviderBuilder.build());
+  }
+
+  private NestedSet<Artifact> getPortableProtoFilters() {
+    NestedSetBuilder<Artifact> portableProtoFilters = NestedSetBuilder.stableOrder();
+    for (ObjcProtoProvider objcProtoProvider : objcProtoProviders) {
+      portableProtoFilters.addTransitive(objcProtoProvider.getPortableProtoFilters());
+    }
+    portableProtoFilters.addAll(attributes.getPortableProtoFilters());
+    return portableProtoFilters.build();
   }
 
   private NestedSet<Artifact> getProtobufHeaders() {
@@ -509,7 +511,7 @@ final class ProtobufSupport {
             .setMnemonic("GenObjcBundledProtos")
             .addInput(attributes.getProtoCompiler())
             .addInputs(attributes.getProtoCompilerSupport())
-            .addTransitiveInputs(portableProtoFilters)
+            .addTransitiveInputs(getPortableProtoFilters())
             .addInput(protoInputsFile)
             .addInputs(inputProtos)
             .addOutputs(getGeneratedProtoOutputs(outputProtos, HEADER_SUFFIX))
@@ -544,7 +546,7 @@ final class ProtobufSupport {
         .add(getGenfilesPathString())
         .add("--proto-root-dir")
         .add(".")
-        .addBeforeEachExecPath("--config", portableProtoFilters)
+        .addBeforeEachExecPath("--config", getPortableProtoFilters())
         .build();
   }
 
@@ -586,75 +588,8 @@ final class ProtobufSupport {
   }
 
   private boolean isLinkingTarget() {
-    // Since this is the ProtobufSupport helper class, check whether the current target has
-    // configured the protobuf attributes. If not, it's not an objc_proto_library rule, so it must
-    // be a linking rule (e.g. apple_binary).
-    return !attributes.requiresProtobuf();
+    return !ruleContext
+        .attributes()
+        .isAttributeValueExplicitlySpecified(ObjcProtoLibraryRule.PORTABLE_PROTO_FILTERS_ATTR);
   }
-
-  /**
-   * Returns the transitive portable proto filter files from a list of ObjcProtoProviders.
-   */
-  public static NestedSet<Artifact> getTransitivePortableProtoFilters(
-      Iterable<ObjcProtoProvider> objcProtoProviders) {
-    NestedSetBuilder<Artifact> portableProtoFilters = NestedSetBuilder.stableOrder();
-    for (ObjcProtoProvider objcProtoProvider : objcProtoProviders) {
-      portableProtoFilters.addTransitive(objcProtoProvider.getPortableProtoFilters());
-    }
-    return portableProtoFilters.build();
-  }
-
-  /**
-   * Returns a target specific generated artifact that represents a portable filter file.
-   */
-  public static Artifact getGeneratedPortableFilter(RuleContext ruleContext) {
-    return ruleContext.getUniqueDirectoryArtifact(
-        "_proto_filters",
-        "generated_filter_file.pbascii",
-        ruleContext.getConfiguration().getGenfilesDirectory());
-  }
-
-  /**
-   * Registers a FileWriteAction what writes a filter file into the given artifact. The contents
-   * of this file is a portable filter that allows all the transitive proto files contained in the
-   * given {@link ProtoSourcesProvider} providers.
-   */
-  public static void registerPortableFilterGenerationAction(
-      RuleContext ruleContext,
-      Artifact generatedPortableFilter,
-      Iterable<ProtoSourcesProvider> protoProviders) {
-    ruleContext.registerAction(
-        FileWriteAction.create(
-            ruleContext,
-            generatedPortableFilter,
-            getGeneratedPortableFilterContents(ruleContext, protoProviders),
-            false));
-  }
-
-  private static String getGeneratedPortableFilterContents(
-      RuleContext ruleContext, Iterable<ProtoSourcesProvider> protoProviders) {
-    NestedSetBuilder<Artifact> protoFilesBuilder = NestedSetBuilder.stableOrder();
-    for (ProtoSourcesProvider protoProvider : protoProviders) {
-      protoFilesBuilder.addTransitive(protoProvider.getTransitiveProtoSources());
-    }
-
-    Iterable<String> protoFilePaths =
-        Artifact.toRootRelativePaths(
-            Ordering.natural().immutableSortedCopy(protoFilesBuilder.build()));
-
-    Iterable<String> filterLines =
-        Iterables.transform(
-            protoFilePaths,
-            new Function<String, String>() {
-              @Override
-              public String apply(String protoFilePath) {
-                return String.format("allowed_file: \"%s\"", protoFilePath);
-              }
-            });
-
-    return String.format(
-            "# Generated portable filter for %s\n\n", ruleContext.getLabel().getCanonicalForm())
-        + Joiner.on("\n").join(filterLines);
-  }
-
 }

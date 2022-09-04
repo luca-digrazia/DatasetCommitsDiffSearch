@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
+
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -45,6 +47,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
                 ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
             .build();
 
+    XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
     CompilationAttributes compilationAttributes =
@@ -55,17 +58,27 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     Iterable<Artifact> publicHeaders = compilationAttributes.hdrs();
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
 
-    new CompilationSupport.Builder()
-        .setRuleContext(ruleContext)
-        .build()
+    CompilationSupport compilationSupport =
+        new CompilationSupport.Builder().setRuleContext(ruleContext).build();
+
+    compilationSupport
         .registerGenerateModuleMapAction(moduleMap, publicHeaders)
+        .addXcodeSettings(xcodeProviderBuilder, common)
         .validateAttributes();
 
-    new ResourceSupport(ruleContext).validateAttributes();
+    new ResourceSupport(ruleContext)
+        .validateAttributes()
+        .addXcodeSettings(xcodeProviderBuilder);
+
+    new XcodeSupport(ruleContext)
+        .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), LIBRARY_STATIC)
+        .addDependencies(xcodeProviderBuilder, new Attribute("bundles", Mode.TARGET))
+        .registerActions(xcodeProviderBuilder.build())
+        .addFilesToBuild(filesToBuild);
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
+        .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
         .addProvider(ObjcProvider.class, common.getObjcProvider())
-        .addNativeDeclaredProvider(common.getObjcProvider())
         .build();
   }
 }

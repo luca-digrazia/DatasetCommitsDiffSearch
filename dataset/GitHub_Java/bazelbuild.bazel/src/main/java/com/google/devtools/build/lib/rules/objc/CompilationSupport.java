@@ -76,7 +76,6 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
-import com.google.devtools.build.lib.rules.cpp.UmbrellaHeaderAction;
 import com.google.devtools.build.lib.rules.objc.ObjcCommandLineOptions.ObjcCrosstoolMode;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
@@ -352,7 +351,6 @@ public abstract class CompilationSupport {
     private CompilationAttributes compilationAttributes;
     private boolean useDeps = true;
     private Map<String, NestedSet<Artifact>> outputGroupCollector;
-    private boolean isObjcLibrary = false;
 
     /** Sets the {@link RuleContext} for the calling target. */
     public Builder setRuleContext(RuleContext ruleContext) {
@@ -384,15 +382,6 @@ public abstract class CompilationSupport {
      */
     public Builder doNotUseDeps() {
       this.useDeps = false;
-      return this;
-    }
-
-    /**
-     * Indicates that this CompilationSupport is for use in an objc_library target. This will cause
-     * CrosstoolCompilationSupport to be used if --experimental_objc_crosstool=library
-     */
-    public Builder isObjcLibrary() {
-      this.isObjcLibrary = true;
       return this;
     }
 
@@ -434,26 +423,22 @@ public abstract class CompilationSupport {
         outputGroupCollector = new TreeMap<>();
       }
 
-      ObjcCrosstoolMode objcCrosstoolMode =
-          buildConfiguration.getFragment(ObjcConfiguration.class).getObjcCrosstoolMode();
-      if (objcCrosstoolMode == ObjcCrosstoolMode.ALL
-          || (isObjcLibrary && objcCrosstoolMode == ObjcCrosstoolMode.LIBRARY)) {
-        return new CrosstoolCompilationSupport(
-            ruleContext,
-            buildConfiguration,
-            intermediateArtifacts,
-            compilationAttributes,
-            useDeps,
-            outputGroupCollector);
-      } else {
-        return new LegacyCompilationSupport(
-            ruleContext,
-            buildConfiguration,
-            intermediateArtifacts,
-            compilationAttributes,
-            useDeps,
-            outputGroupCollector);
-      }
+      return buildConfiguration.getFragment(ObjcConfiguration.class).getObjcCrosstoolMode()
+              == ObjcCrosstoolMode.ALL
+          ? new CrosstoolCompilationSupport(
+              ruleContext,
+              buildConfiguration,
+              intermediateArtifacts,
+              compilationAttributes,
+              useDeps,
+              outputGroupCollector)
+          : new LegacyCompilationSupport(
+              ruleContext,
+              buildConfiguration,
+              intermediateArtifacts,
+              compilationAttributes,
+              useDeps,
+              outputGroupCollector);
     }
   }
 
@@ -656,11 +641,6 @@ public abstract class CompilationSupport {
       publicHeaders = Iterables.concat(publicHeaders, compilationArtifacts.getAdditionalHdrs());
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
     registerGenerateModuleMapAction(moduleMap, publicHeaders);
-
-    Optional<Artifact> umbrellaHeader = moduleMap.getUmbrellaHeader();
-    if (umbrellaHeader.isPresent()) {
-      registerGenerateUmbrellaHeaderAction(umbrellaHeader.get(), publicHeaders);
-    }
 
     return this;
   }
@@ -1239,18 +1219,6 @@ public abstract class CompilationSupport {
     } else {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
-  }
-
-  CompilationSupport registerGenerateUmbrellaHeaderAction(
-      Artifact umbrellaHeader, Iterable<Artifact> publicHeaders) {
-     ruleContext.registerAction(
-        new UmbrellaHeaderAction(
-            ruleContext.getActionOwner(),
-            umbrellaHeader,
-            publicHeaders,
-            ImmutableList.<PathFragment>of()));
- 
-    return this;
   }
 
   /**

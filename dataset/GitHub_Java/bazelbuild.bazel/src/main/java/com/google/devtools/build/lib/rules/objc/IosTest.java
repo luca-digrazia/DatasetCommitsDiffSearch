@@ -93,11 +93,11 @@ public final class IosTest implements RuleConfiguredTargetFactory {
                 ruleContext,
                 ruleContext.getConfiguration(),
                 ImmutableList.<ProtoSourcesProvider>of(),
-                objcProtoProviders,
-                ProtobufSupport.getTransitivePortableProtoFilters(objcProtoProviders))
+                objcProtoProviders)
             .registerGenerationActions()
             .registerCompilationActions();
     Optional<ObjcProvider> protosObjcProvider = protoSupport.getObjcProvider();
+    Optional<XcodeProvider> protosXcodeProvider = protoSupport.getXcodeProvider();
 
     ObjcCommon common = common(ruleContext, protosObjcProvider);
 
@@ -109,9 +109,13 @@ public final class IosTest implements RuleConfiguredTargetFactory {
       ruleContext.ruleError(NO_MULTI_CPUS_ERROR);
     }
 
+    XcodeProvider.Builder xcodeProviderBuilder =
+        new XcodeProvider.Builder().addPropagatedDependencies(protosXcodeProvider.asSet());
+
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
     addResourceFilesToBuild(ruleContext, common.getObjcProvider(), filesToBuild);
 
+    XcodeProductType productType = getProductType(ruleContext);
     ExtraLinkArgs extraLinkArgs;
     Iterable<Artifact> extraLinkInputs;
     String bundleFormat;
@@ -120,6 +124,14 @@ public final class IosTest implements RuleConfiguredTargetFactory {
       extraLinkInputs = ImmutableList.of();
       bundleFormat = ReleaseBundlingSupport.APP_BUNDLE_DIR_FORMAT;
     } else {
+      xcodeProviderBuilder.setProductType(productType);
+
+      XcodeProvider appIpaXcodeProvider =
+          ruleContext.getPrerequisite(XCTEST_APP_ATTR, Mode.TARGET, XcodeProvider.class);
+      if (appIpaXcodeProvider != null) {
+        xcodeProviderBuilder.setTestHost(appIpaXcodeProvider);
+      }
+
       XcTestAppProvider testApp = xcTestAppProvider(ruleContext);
       Artifact bundleLoader = testApp.getBundleLoader();
 
@@ -156,7 +168,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
             .build();
 
     CompilationSupport compilationSupport =
-        new CompilationSupport.Builder().setRuleContext(ruleContext).setIsTestRule().build();
+        new CompilationSupport.Builder().setRuleContext(ruleContext).build();
 
     compilationSupport
         .registerLinkActions(
@@ -170,6 +182,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
         .registerFullyLinkAction(
             common.getObjcProvider(),
             ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB))
+        .addXcodeSettings(xcodeProviderBuilder, common)
         .validateAttributes();
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
@@ -181,12 +194,23 @@ public final class IosTest implements RuleConfiguredTargetFactory {
             appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS),
             appleConfiguration.getMultiArchPlatform(PlatformType.IOS))
         .registerActions(DsymOutputType.TEST)
+        .addXcodeSettings(xcodeProviderBuilder)
         .addFilesToBuild(filesToBuild, Optional.of(DsymOutputType.TEST))
         .validateResources()
         .validateAttributes();
 
-    new ResourceSupport(ruleContext).validateAttributes();
+    new ResourceSupport(ruleContext).validateAttributes().addXcodeSettings(xcodeProviderBuilder);
 
+    new XcodeSupport(ruleContext)
+        .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), productType)
+        .addDependencies(xcodeProviderBuilder, new Attribute("bundles", Mode.TARGET))
+        .addDependencies(xcodeProviderBuilder, new Attribute("deps", Mode.TARGET))
+        .addNonPropagatedDependencies(
+            xcodeProviderBuilder, new Attribute("non_propagated_deps", Mode.TARGET))
+        .addFilesToBuild(filesToBuild)
+        .registerActions(xcodeProviderBuilder.build());
+
+    XcodeProvider xcodeProvider = xcodeProviderBuilder.build();
     NestedSet<Artifact> filesToBuildSet = filesToBuild.build();
 
     Runfiles.Builder runfilesBuilder =
@@ -224,12 +248,21 @@ public final class IosTest implements RuleConfiguredTargetFactory {
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(filesToBuildBuilder.build())
+        .addProvider(xcodeProvider)
         .addProvider(RunfilesProvider.simple(runfiles))
         .addNativeDeclaredProvider(new ExecutionInfoProvider(execInfoMapBuilder.build()))
         .addNativeDeclaredProviders(testSupport.getExtraProviders())
         .addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
         .setRunfilesSupport(runfilesSupport, executable)
         .build();
+  }
+
+  private XcodeProductType getProductType(RuleContext ruleContext) {
+    if (isXcTest(ruleContext)) {
+      return XcodeProductType.UNIT_TEST;
+    } else {
+      return XcodeProductType.APPLICATION;
+    }
   }
 
   private void addResourceFilesToBuild(
