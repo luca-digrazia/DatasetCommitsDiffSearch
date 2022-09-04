@@ -67,7 +67,8 @@ public class HttpDownloadHandlerTest extends AbstractHttpHandlerTest {
 
     HttpRequest request = ch.readOutbound();
     assertThat(request.method()).isEqualTo(HttpMethod.GET);
-    assertThat(request.headers().get(HttpHeaderNames.HOST)).isEqualTo(CACHE_URI.getHost());
+    assertThat(request.headers().get(HttpHeaderNames.HOST))
+        .isEqualTo(CACHE_URI.getHost() + ":" + CACHE_URI.getPort());
     if (casDownload) {
       assertThat(request.uri()).isEqualTo("/cache-bucket/cas/abcdef");
     } else {
