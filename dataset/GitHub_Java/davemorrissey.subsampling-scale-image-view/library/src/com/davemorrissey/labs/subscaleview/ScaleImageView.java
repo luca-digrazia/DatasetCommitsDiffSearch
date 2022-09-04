@@ -1,5 +1,5 @@
 /*
-Copyright 2013-2015 David Morrissey
+Copyright 2014 David Morrissey
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Message;
-import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.FloatMath;
@@ -187,9 +186,6 @@ public class ScaleImageView extends View {
     // Whether a ready notification has been sent to subclasses
     private boolean readySent = false;
 
-    // Event listener
-    private OnImageEventListener onImageEventListener;
-
     // Long click listener
     private OnLongClickListener onLongClickListener;
 
@@ -201,11 +197,6 @@ public class ScaleImageView extends View {
     private Paint bitmapPaint;
     private Paint debugPaint;
     private Paint tileBgPaint;
-
-    // Volatile fields used to reduce object creation
-    private ScaleAndTranslate satTemp;
-    private Matrix matrix;
-    private RectF sRect;
 
     public ScaleImageView(Context context, AttributeSet attr) {
         super(context, attr);
@@ -247,7 +238,6 @@ public class ScaleImageView extends View {
             if (typedAttr.hasValue(styleable.SubsamplingScaleImageView_tileBackgroundColor)) {
                 setTileBackgroundColor(typedAttr.getColor(styleable.SubsamplingScaleImageView_tileBackgroundColor, Color.argb(0, 0, 0, 0)));
             }
-            typedAttr.recycle();
         }
 
         quickScaleThreshold = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20, context.getResources().getDisplayMetrics());
@@ -314,11 +304,6 @@ public class ScaleImageView extends View {
         this.sHeight = bitmap.getHeight();
         invalidate();
         requestLayout();
-        readySent = true;
-        onImageReady();
-        if (onImageEventListener != null) {
-            onImageEventListener.onImageReady();
-        }
     }
 
     /**
@@ -337,7 +322,7 @@ public class ScaleImageView extends View {
      * @param state State to be restored. Nullable.
      */
     public final void setImageResource(int resId, ImageViewState state) {
-        setImageUri(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getContext().getPackageName() + "/" + resId, state);
+        setImageUri(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getContext().getPackageName() + "/" + resId);
     }
 
     /**
@@ -356,7 +341,8 @@ public class ScaleImageView extends View {
      * @param state State to be restored. Nullable.
      */
     public final void setImageAsset(String assetName, ImageViewState state) {
-        setImageUri(ASSET_SCHEME + assetName, state);
+        setImageUri(ASSET_SCHEME + assetName);
+
     }
 
     /**
@@ -443,9 +429,6 @@ public class ScaleImageView extends View {
         quickScaleLastPoint = null;
         quickScaleMoved = false;
         anim = null;
-        satTemp = null;
-        matrix = null;
-        sRect = null;
         if (newImage) {
             sWidth = 0;
             sHeight = 0;
@@ -501,7 +484,7 @@ public class ScaleImageView extends View {
                     float doubleTapZoomScale = Math.min(maxScale, ScaleImageView.this.doubleTapZoomScale);
                     boolean zoomIn = scale <= doubleTapZoomScale * 0.9;
                     float targetScale = zoomIn ? doubleTapZoomScale : minScale();
-                    PointF targetSCenter = viewToSourceCoord(e.getX(), e.getY());
+                    PointF targetSCenter = viewToSourceCoord(new PointF(e.getX(), e.getY()));
                     if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER_IMMEDIATE) {
                         setScaleAndCenter(targetScale, targetSCenter);
                     } else if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER || !zoomIn) {
@@ -564,8 +547,10 @@ public class ScaleImageView extends View {
     /**
      * Handle touch events. One finger pans, and two finger pinch and zoom plus panning.
      */
-    @Override @SuppressWarnings("deprecation")
-    public boolean onTouchEvent(@NonNull MotionEvent event) {
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        PointF vCenterEnd;
+        float vDistEnd;
         // During non-interruptible anims, ignore all touch events
         if (anim != null && !anim.interruptible) {
             getParent().requestDisallowInterceptTouchEvent(true);
@@ -586,9 +571,6 @@ public class ScaleImageView extends View {
             return true;
         }
 
-        if (vTranslateStart == null) { vTranslateStart = new PointF(0, 0); }
-        if (vCenterStart == null) { vCenterStart = new PointF(0, 0); }
-
         int touchCount = event.getPointerCount();
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
@@ -603,8 +585,8 @@ public class ScaleImageView extends View {
                         float distance = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1));
                         scaleStart = scale;
                         vDistStart = distance;
-                        vTranslateStart.set(vTranslate.x, vTranslate.y);
-                        vCenterStart.set((event.getX(0) + event.getX(1))/2, (event.getY(0) + event.getY(1))/2);
+                        vTranslateStart = new PointF(vTranslate.x, vTranslate.y);
+                        vCenterStart = new PointF((event.getX(0) + event.getX(1))/2, (event.getY(0) + event.getY(1))/2);
                     } else {
                         // Abort all gestures on second touch
                         maxTouchCount = 0;
@@ -613,8 +595,8 @@ public class ScaleImageView extends View {
                     handler.removeMessages(MESSAGE_LONG_CLICK);
                 } else if (!isQuickScaling) {
                     // Start one-finger pan
-                    vTranslateStart.set(vTranslate.x, vTranslate.y);
-                    vCenterStart.set(event.getX(), event.getY());
+                    vTranslateStart = new PointF(vTranslate.x, vTranslate.y);
+                    vCenterStart = new PointF(event.getX(), event.getY());
 
                     // Start long click timer
                     handler.sendEmptyMessageDelayed(MESSAGE_LONG_CLICK, 600);
@@ -625,11 +607,10 @@ public class ScaleImageView extends View {
                 if (maxTouchCount > 0) {
                     if (touchCount >= 2) {
                         // Calculate new distance between touch points, to scale and pan relative to start values.
-                        float vDistEnd = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1));
-                        float vCenterEndX = (event.getX(0) + event.getX(1))/2;
-                        float vCenterEndY = (event.getY(0) + event.getY(1))/2;
+                        vDistEnd = distance(event.getX(0), event.getX(1), event.getY(0), event.getY(1));
+                        vCenterEnd = new PointF((event.getX(0) + event.getX(1))/2, (event.getY(0) + event.getY(1))/2);
 
-                        if (zoomEnabled && (distance(vCenterStart.x, vCenterEndX, vCenterStart.y, vCenterEndY) > 5 || Math.abs(vDistEnd - vDistStart) > 5 || isPanning)) {
+                        if (zoomEnabled && (distance(vCenterStart.x, vCenterEnd.x, vCenterStart.y, vCenterEnd.y) > 5 || Math.abs(vDistEnd - vDistStart) > 5 || isPanning)) {
                             isZooming = true;
                             isPanning = true;
                             consumed = true;
@@ -640,8 +621,8 @@ public class ScaleImageView extends View {
                                 // Minimum scale reached so don't pan. Adjust start settings so any expand will zoom in.
                                 vDistStart = vDistEnd;
                                 scaleStart = minScale();
-                                vCenterStart.set(vCenterEndX, vCenterEndY);
-                                vTranslateStart.set(vTranslate);
+                                vCenterStart = vCenterEnd;
+                                vTranslateStart = vTranslate;
                             } else if (panEnabled) {
                                 // Translate to place the source image coordinate that was at the center of the pinch at the start
                                 // at the center of the pinch now, to give simultaneous pan + zoom.
@@ -649,8 +630,8 @@ public class ScaleImageView extends View {
                                 float vTopStart = vCenterStart.y - vTranslateStart.y;
                                 float vLeftNow = vLeftStart * (scale/scaleStart);
                                 float vTopNow = vTopStart * (scale/scaleStart);
-                                vTranslate.x = vCenterEndX - vLeftNow;
-                                vTranslate.y = vCenterEndY - vTopNow;
+                                vTranslate.x = vCenterEnd.x - vLeftNow;
+                                vTranslate.y = vCenterEnd.y - vTopNow;
                             } else if (sRequestedCenter != null) {
                                 // With a center specified from code, zoom around that point.
                                 vTranslate.x = (getWidth()/2) - (scale * sRequestedCenter.x);
@@ -770,11 +751,11 @@ public class ScaleImageView extends View {
                     if (isZooming && touchCount == 2) {
                         // Convert from zoom to pan with remaining touch
                         isPanning = true;
-                        vTranslateStart.set(vTranslate.x, vTranslate.y);
+                        vTranslateStart = new PointF(vTranslate.x, vTranslate.y);
                         if (event.getActionIndex() == 1) {
-                            vCenterStart.set(event.getX(0), event.getY(0));
+                            vCenterStart = new PointF(event.getX(0), event.getY(0));
                         } else {
-                            vCenterStart.set(event.getX(1), event.getY(1));
+                            vCenterStart = new PointF(event.getX(1), event.getY(1));
                         }
                     }
                     if (touchCount < 3) {
@@ -798,6 +779,11 @@ public class ScaleImageView extends View {
         return super.onTouchEvent(event);
     }
 
+    @Override
+    public void setOnLongClickListener(OnLongClickListener onLongClickListener) {
+        this.onLongClickListener = onLongClickListener;
+    }
+
     /**
      * Draw method should not be called until the view has dimensions so the first calls are used as triggers to calculate
      * the scale and center.
@@ -812,8 +798,31 @@ public class ScaleImageView extends View {
             return;
         }
 
-        // Set scale and translate before draw.
-        preDraw();
+        // If waiting to translate to new center position, set translate now
+        if (sPendingCenter != null && pendingScale != null) {
+            if (vTranslate == null) {
+                vTranslate = new PointF(0, 0);
+            }
+            scale = pendingScale;
+            vTranslate.x = (getWidth()/2) - (scale * sPendingCenter.x);
+            vTranslate.y = (getHeight()/2) - (scale * sPendingCenter.y);
+            sPendingCenter = null;
+            pendingScale = null;
+            fitToBounds(true);
+        }
+
+        // On first display of base image set up position, and in other cases make sure scale is correct.
+        fitToBounds(false);
+
+        // Everything is set up and coordinates are valid. Inform subclasses.
+        if (!readySent) {
+            readySent = true;
+            new Thread(new Runnable() {
+                public void run() {
+                    onImageReady();
+                }
+            }).start();
+        }
 
         // If animating scale, calculate current scale and center with easing equations
         if (anim != null) {
@@ -826,8 +835,9 @@ public class ScaleImageView extends View {
             float vFocusNowX = ease(anim.easing, scaleElapsed, anim.vFocusStart.x, anim.vFocusEnd.x - anim.vFocusStart.x, anim.duration);
             float vFocusNowY = ease(anim.easing, scaleElapsed, anim.vFocusStart.y, anim.vFocusEnd.y - anim.vFocusStart.y, anim.duration);
             // Find out where the focal point is at this scale and adjust its position to follow the animation path
-            vTranslate.x -= sourceToViewX(anim.sCenterEnd.x) - vFocusNowX;
-            vTranslate.y -= sourceToViewY(anim.sCenterEnd.y) - vFocusNowY;
+            PointF vFocus = sourceToViewCoord(anim.sCenterEnd);
+            vTranslate.x -= vFocus.x - vFocusNowX;
+            vTranslate.y -= vFocus.y - vFocusNowY;
 
             // For translate anims, showing the image non-centered is never allowed, for scaling anims it is during the animation.
             fitToBounds(finished || (anim.scaleStart == anim.scaleEnd));
@@ -839,8 +849,7 @@ public class ScaleImageView extends View {
 
         // Render the bitmap.
 
-        if (matrix == null) { matrix = new Matrix(); }
-        matrix.reset();
+        Matrix matrix = new Matrix();
         matrix.postScale(scale, scale);
         matrix.postRotate(getOrientation());
         matrix.postTranslate(vTranslate.x, vTranslate.y);
@@ -854,8 +863,7 @@ public class ScaleImageView extends View {
         }
 
         if (tileBgPaint != null) {
-            if (sRect == null) { sRect = new RectF(); }
-            sRect.set(0f, 0f, sWidth, sHeight);
+            RectF sRect = new RectF(0f, 0f, sWidth, sHeight);
             matrix.mapRect(sRect);
             canvas.drawRect(sRect, tileBgPaint);
         }
@@ -898,41 +906,19 @@ public class ScaleImageView extends View {
     }
 
     /**
-     * Sets scale and translate ready for the next draw.
-     */
-    private void preDraw() {
-        // If waiting to translate to new center position, set translate now
-        if (sPendingCenter != null && pendingScale != null) {
-            if (vTranslate == null) {
-                vTranslate = new PointF(0, 0);
-            }
-            scale = pendingScale;
-            vTranslate.x = (getWidth()/2) - (scale * sPendingCenter.x);
-            vTranslate.y = (getHeight()/2) - (scale * sPendingCenter.y);
-            sPendingCenter = null;
-            pendingScale = null;
-            fitToBounds(true);
-        }
-
-        // On first display of base image set up position, and in other cases make sure scale is correct.
-        fitToBounds(false);
-    }
-
-
-    /**
      * Adjusts hypothetical future scale and translate values to keep scale within the allowed range and the image on screen. Minimum scale
      * is set so one dimension fills the view and the image is centered on the other dimension. Used to calculate what the target of an
      * animation should be.
      * @param center Whether the image should be centered in the dimension it's too small to fill. While animating this can be false to avoid changes in direction as bounds are reached.
-     * @param sat The scale we want and the translation we're aiming for. The values are adjusted to be valid.
+     * @param scaleAndTranslate The scale we want and the translation we're aiming for. The values are adjusted to be valid.
      */
-    private void fitToBounds(boolean center, ScaleAndTranslate sat) {
+    private void fitToBounds(boolean center, ScaleAndTranslate scaleAndTranslate) {
         if (panLimit == PAN_LIMIT_OUTSIDE && isImageReady()) {
             center = false;
         }
 
-        PointF vTranslate = sat.vTranslate;
-        float scale = limitedScale(sat.scale);
+        PointF vTranslate = scaleAndTranslate.translate;
+        float scale = limitedScale(scaleAndTranslate.scale);
         float scaleWidth = scale * sWidth();
         float scaleHeight = scale * sHeight();
 
@@ -967,7 +953,7 @@ public class ScaleImageView extends View {
         vTranslate.x = Math.min(vTranslate.x, maxTx);
         vTranslate.y = Math.min(vTranslate.y, maxTy);
 
-        sat.scale = scale;
+        scaleAndTranslate.scale = scale;
     }
 
     /**
@@ -981,16 +967,11 @@ public class ScaleImageView extends View {
             init = true;
             vTranslate = new PointF(0, 0);
         }
-        if (satTemp == null) {
-            satTemp = new ScaleAndTranslate(0, new PointF(0, 0));
-        }
-        satTemp.scale = scale;
-        satTemp.vTranslate.set(vTranslate);
-        fitToBounds(center, satTemp);
-        scale = satTemp.scale;
-        vTranslate.set(satTemp.vTranslate);
+        ScaleAndTranslate input = new ScaleAndTranslate(scale, vTranslate);
+        fitToBounds(center, input);
+        scale = input.scale;
         if (init) {
-            vTranslate.set(vTranslateForSCenter(sWidth()/2, sHeight()/2, scale));
+            vTranslate = vTranslateForSCenter(new PointF(sWidth()/2, sHeight()/2), scale);
         }
     }
 
@@ -1005,16 +986,6 @@ public class ScaleImageView extends View {
         forceCenterOnNextDraw();
         requestLayout();
         invalidate();
-
-        // Inform subclasses that the image is ready and scale and translate are set.
-        if (!readySent) {
-            preDraw();
-            readySent = true;
-            onImageReady();
-            if (onImageEventListener != null) {
-                onImageEventListener.onImageReady();
-            }
-        }
     }
 
     /**
@@ -1026,7 +997,6 @@ public class ScaleImageView extends View {
         private final WeakReference<Class<? extends ImageDecoder>> decoderClassRef;
         private final Uri source;
         private Bitmap bitmap;
-        private Exception exception;
 
         public BitmapInitTask(ScaleImageView view, Context context, Class<? extends ImageDecoder> decoderClass, Uri source) {
             this.viewRef = new WeakReference<ScaleImageView>(view);
@@ -1067,19 +1037,16 @@ public class ScaleImageView extends View {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Failed to initialise bitmap decoder", e);
-                this.exception = e;
             }
             return null;
         }
 
         @Override
         protected void onPostExecute(int[] xyo) {
-            final ScaleImageView scaleImageView = viewRef.get();
-            if (scaleImageView != null) {
-                if (bitmap != null && xyo != null && xyo.length == 3) {
+            if (bitmap != null) {
+                final ScaleImageView scaleImageView = viewRef.get();
+                if (scaleImageView != null && bitmap != null && xyo != null && xyo.length == 3) {
                     scaleImageView.onImageInited(bitmap, xyo[0], xyo[1], xyo[2]);
-                } else if (exception != null && scaleImageView.onImageEventListener != null) {
-                    scaleImageView.onImageEventListener.onInitialisationError(exception);
                 }
             }
         }
@@ -1102,12 +1069,12 @@ public class ScaleImageView extends View {
     }
 
     private static class ScaleAndTranslate {
-        private ScaleAndTranslate(float scale, PointF vTranslate) {
+        private ScaleAndTranslate(float scale, PointF translate) {
             this.scale = scale;
-            this.vTranslate = vTranslate;
+            this.translate = translate;
         }
         private float scale;
-        private PointF vTranslate;
+        private PointF translate;
     }
 
     /**
@@ -1134,7 +1101,6 @@ public class ScaleImageView extends View {
     /**
      * Get source width taking rotation into account.
      */
-    @SuppressWarnings("SuspiciousNameCombination")
     private int sWidth() {
         int rotation = getRequiredRotation();
         if (rotation == 90 || rotation == 270) {
@@ -1147,7 +1113,6 @@ public class ScaleImageView extends View {
     /**
      * Get source height taking rotation into account.
      */
-    @SuppressWarnings("SuspiciousNameCombination")
     private int sHeight() {
         int rotation = getRequiredRotation();
         if (rotation == 90 || rotation == 270) {
@@ -1190,112 +1155,50 @@ public class ScaleImageView extends View {
     }
 
     /**
-     * Convert screen to source x coordinate.
-     */
-    private float viewToSourceX(float vx) {
-        if (vTranslate == null) { return Float.NaN; }
-        return (vx - vTranslate.x)/scale;
-    }
-
-    /**
-     * Convert screen to source y coordinate.
-     */
-    private float viewToSourceY(float vy) {
-        if (vTranslate == null) { return Float.NaN; }
-        return (vy - vTranslate.y)/scale;
-    }
-
-    /**
      * Convert screen coordinate to source coordinate.
      */
     public final PointF viewToSourceCoord(PointF vxy) {
-        return viewToSourceCoord(vxy.x, vxy.y, new PointF());
+        return viewToSourceCoord(vxy.x, vxy.y);
     }
 
     /**
      * Convert screen coordinate to source coordinate.
      */
     public final PointF viewToSourceCoord(float vx, float vy) {
-        return viewToSourceCoord(vx, vy, new PointF());
-    }
-
-    /**
-     * Convert screen coordinate to source coordinate.
-     */
-    public final PointF viewToSourceCoord(PointF vxy, PointF sTarget) {
-        return viewToSourceCoord(vxy.x, vxy.y, sTarget);
-    }
-
-    /**
-     * Convert screen coordinate to source coordinate.
-     */
-    public final PointF viewToSourceCoord(float vx, float vy, PointF sTarget) {
         if (vTranslate == null) {
             return null;
         }
-        sTarget.set(viewToSourceX(vx), viewToSourceY(vy));
-        return sTarget;
-    }
-
-    /**
-     * Convert source to screen x coordinate.
-     */
-    private float sourceToViewX(float sx) {
-        if (vTranslate == null) { return Float.NaN; }
-        return (sx * scale) + vTranslate.x;
-    }
-
-    /**
-     * Convert source to screen y coordinate.
-     */
-    private float sourceToViewY(float sy) {
-        if (vTranslate == null) { return Float.NaN; }
-        return (sy * scale) + vTranslate.y;
+        float sx = (vx - vTranslate.x)/scale;
+        float sy = (vy - vTranslate.y)/scale;
+        return new PointF(sx, sy);
     }
 
     /**
      * Convert source coordinate to screen coordinate.
      */
     public final PointF sourceToViewCoord(PointF sxy) {
-        return sourceToViewCoord(sxy.x, sxy.y, new PointF());
+        return sourceToViewCoord(sxy.x, sxy.y);
     }
 
     /**
      * Convert source coordinate to screen coordinate.
      */
     public final PointF sourceToViewCoord(float sx, float sy) {
-        return sourceToViewCoord(sx, sy, new PointF());
-    }
-
-    /**
-     * Convert source coordinate to screen coordinate.
-     */
-    public final PointF sourceToViewCoord(PointF sxy, PointF vTarget) {
-        return sourceToViewCoord(sxy.x, sxy.y, vTarget);
-    }
-
-    /**
-     * Convert source coordinate to screen coordinate.
-     */
-    public final PointF sourceToViewCoord(float sx, float sy, PointF vTarget) {
         if (vTranslate == null) {
             return null;
         }
-        vTarget.set(sourceToViewX(sx), sourceToViewY(sy));
-        return vTarget;
+        float vx = (sx * scale) + vTranslate.x;
+        float vy = (sy * scale) + vTranslate.y;
+        return new PointF(vx, vy);
     }
 
     /**
-     * Convert source rect to screen rect, integer values.
+     * Convert source rect to screen rect.
      */
-    private Rect sourceToViewRect(Rect sRect, Rect vTarget) {
-        vTarget.set(
-            (int)sourceToViewX(sRect.left),
-            (int)sourceToViewY(sRect.top),
-            (int)sourceToViewX(sRect.right),
-            (int)sourceToViewY(sRect.bottom)
-        );
-        return vTarget;
+    private RectF sourceToViewRect(RectF sRect) {
+        PointF vLT = sourceToViewCoord(new PointF(sRect.left, sRect.top));
+        PointF vRB = sourceToViewCoord(new PointF(sRect.right, sRect.bottom));
+        return new RectF(vLT.x, vLT.y, vRB.x, vRB.y);
     }
 
     /**
@@ -1303,30 +1206,26 @@ public class ScaleImageView extends View {
      * adjusted for asymmetric padding. Accepts the desired scale as an argument, so this is independent of current
      * translate and scale. The result is fitted to bounds, putting the image point as near to the screen center as permitted.
      */
-    private PointF vTranslateForSCenter(float sCenterX, float sCenterY, float scale) {
+    private PointF vTranslateForSCenter(PointF sCenter, float scale) {
         int vxCenter = getPaddingLeft() + (getWidth() - getPaddingRight() - getPaddingLeft())/2;
         int vyCenter = getPaddingTop() + (getHeight() - getPaddingBottom() - getPaddingTop())/2;
-        if (satTemp == null) {
-            satTemp = new ScaleAndTranslate(0, new PointF(0, 0));
-        }
-        satTemp.scale = scale;
-        satTemp.vTranslate.set(vxCenter - (sCenterX * scale), vyCenter - (sCenterY * scale));
-        fitToBounds(true, satTemp);
-        return satTemp.vTranslate;
+        PointF vTranslate = new PointF(vxCenter - (sCenter.x * scale), vyCenter - (sCenter.y * scale));
+        ScaleAndTranslate sat = new ScaleAndTranslate(scale, vTranslate);
+        fitToBounds(true, sat);
+        return vTranslate;
     }
 
     /**
      * Given a requested source center and scale, calculate what the actual center will have to be to keep the image in
      * pan limits, keeping the requested center as near to the middle of the screen as allowed.
      */
-    private PointF limitedSCenter(float sCenterX, float sCenterY, float scale, PointF sTarget) {
-        PointF vTranslate = vTranslateForSCenter(sCenterX, sCenterY, scale);
+    private PointF limitedSCenter(PointF sCenter, float scale) {
+        PointF vTranslate = vTranslateForSCenter(sCenter, scale);
         int vxCenter = getPaddingLeft() + (getWidth() - getPaddingRight() - getPaddingLeft())/2;
         int vyCenter = getPaddingTop() + (getHeight() - getPaddingBottom() - getPaddingTop())/2;
         float sx = (vxCenter - vTranslate.x)/scale;
         float sy = (vyCenter - vTranslate.y)/scale;
-        sTarget.set(sx, sy);
-        return sTarget;
+        return new PointF(sx, sy);
     }
 
     /**
@@ -1546,8 +1445,7 @@ public class ScaleImageView extends View {
 
     /**
      * Subclasses can override this method to be informed when the view is set up and ready for rendering, so they can
-     * skip their own rendering until the base layer (and its scale and translate) are known. You can also use an
-     * {@link OnImageEventListener} to receive notification of this events.
+     * skip their own rendering until the base layer (and its scale and translate) are known.
      */
     protected void onImageReady() {
 
@@ -1708,27 +1606,12 @@ public class ScaleImageView extends View {
     }
 
     /**
-     * {@inheritDoc}
-     */
-    @Override
-    public void setOnLongClickListener(OnLongClickListener onLongClickListener) {
-        this.onLongClickListener = onLongClickListener;
-    }
-
-    /**
-     * Add a listener allowing notification of load and error events.
-     */
-    public void setOnImageEventListener(OnImageEventListener onImageEventListener) {
-        this.onImageEventListener = onImageEventListener;
-    }
-
-    /**
      * Creates a panning animation builder, that when started will animate the image to place the given coordinates of
      * the image in the center of the screen. If doing this would move the image beyond the edges of the screen, the
      * image is instead animated to move the center point as near to the center of the screen as is allowed - it's
      * guaranteed to be on screen.
      * @param sCenter Target center point
-     * @return {@link AnimationBuilder} instance. Call {@link ScaleImageView.AnimationBuilder#start()} to start the anim.
+     * @return {@link AnimationBuilder} instance. Call {@link com.davemorrissey.labs.subscaleview.ScaleImageView.AnimationBuilder#start()} to start the anim.
      */
     public AnimationBuilder animateCenter(PointF sCenter) {
         if (!isImageReady()) {
@@ -1741,7 +1624,7 @@ public class ScaleImageView extends View {
      * Creates a scale animation builder, that when started will animate a zoom in or out. If this would move the image
      * beyond the panning limits, the image is automatically panned during the animation.
      * @param scale Target scale.
-     * @return {@link AnimationBuilder} instance. Call {@link ScaleImageView.AnimationBuilder#start()} to start the anim.
+     * @return {@link AnimationBuilder} instance. Call {@link com.davemorrissey.labs.subscaleview.ScaleImageView.AnimationBuilder#start()} to start the anim.
      */
     public AnimationBuilder animateScale(float scale) {
         if (!isImageReady()) {
@@ -1754,7 +1637,7 @@ public class ScaleImageView extends View {
      * Creates a scale animation builder, that when started will animate a zoom in or out. If this would move the image
      * beyond the panning limits, the image is automatically panned during the animation.
      * @param scale Target scale.
-     * @return {@link AnimationBuilder} instance. Call {@link ScaleImageView.AnimationBuilder#start()} to start the anim.
+     * @return {@link AnimationBuilder} instance. Call {@link com.davemorrissey.labs.subscaleview.ScaleImageView.AnimationBuilder#start()} to start the anim.
      */
     public AnimationBuilder animateScaleAndCenter(float scale, PointF sCenter) {
         if (!isImageReady()) {
@@ -1852,7 +1735,7 @@ public class ScaleImageView extends View {
             int vxCenter = getPaddingLeft() + (getWidth() - getPaddingRight() - getPaddingLeft())/2;
             int vyCenter = getPaddingTop() + (getHeight() - getPaddingBottom() - getPaddingTop())/2;
             float targetScale = limitedScale(this.targetScale);
-            PointF targetSCenter = panLimited ? limitedSCenter(this.targetSCenter.x, this.targetSCenter.y, targetScale, new PointF()) : this.targetSCenter;
+            PointF targetSCenter = panLimited ? limitedSCenter(this.targetSCenter, targetScale) : this.targetSCenter;
             anim = new Anim();
             anim.scaleStart = scale;
             anim.scaleEnd = targetScale;
@@ -1879,8 +1762,8 @@ public class ScaleImageView extends View {
                 fitToBounds(true, satEnd);
                 // Adjust the position of the focus point at end so image will be in bounds
                 anim.vFocusEnd = new PointF(
-                        vFocus.x + (satEnd.vTranslate.x - vTranslateXEnd),
-                        vFocus.y + (satEnd.vTranslate.y - vTranslateYEnd)
+                        vFocus.x + (satEnd.translate.x - vTranslateXEnd),
+                        vFocus.y + (satEnd.translate.y - vTranslateYEnd)
                 );
             }
 
@@ -1888,36 +1771,4 @@ public class ScaleImageView extends View {
         }
 
     }
-
-    /**
-     * An event listener, allowing subclasses and activities to be notified of significant events.
-     */
-    public interface OnImageEventListener {
-
-        /**
-         * Called when the dimensions of the image are known and the bitmap has been loaded ready for
-         * rendering in the next draw.
-         */
-        void onImageReady();
-
-        /**
-         * Called when the image file could not be loaded. This method cannot be relied upon; certain
-         * encoding types of supported image formats can result in corrupt or blank images being loaded
-         * and displayed with no detectable error.
-         * @param e The exception thrown. This error is also logged by the view.
-         */
-        void onInitialisationError(Exception e);
-
-    }
-
-    /**
-     * Default implementation of {@link OnImageEventListener} for extension. This does nothing in any method.
-     */
-    public class DefaultOnImageEventListener implements OnImageEventListener {
-
-        @Override public void onImageReady() { }
-        @Override public void onInitialisationError(Exception e) { }
-
-    }
-
 }
