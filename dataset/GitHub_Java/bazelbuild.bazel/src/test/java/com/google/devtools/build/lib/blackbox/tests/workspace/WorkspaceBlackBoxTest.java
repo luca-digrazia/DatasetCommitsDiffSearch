@@ -16,11 +16,11 @@ package com.google.devtools.build.lib.blackbox.tests.workspace;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.devtools.build.lib.blackbox.framework.BlackBoxTestEnvironment;
 import com.google.devtools.build.lib.blackbox.framework.BuilderRunner;
 import com.google.devtools.build.lib.blackbox.framework.PathUtils;
 import com.google.devtools.build.lib.blackbox.framework.ProcessResult;
 import com.google.devtools.build.lib.blackbox.junit.AbstractBlackBoxTest;
+import com.google.devtools.build.lib.util.OS;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -241,7 +241,6 @@ public class WorkspaceBlackBoxTest extends AbstractBlackBoxTest {
     PathUtils.writeFile(
         tempWorkspace,
         "workspace(name = 'abc')",
-        BlackBoxTestEnvironment.getWorkspaceWithDefaultRepos(),
         String.format(
             "local_repository(name = 'ext', path = '%s',)", PathUtils.pathForStarlarkFile(repo)));
     Files.createSymbolicLink(workspaceFile, tempWorkspace);
@@ -252,16 +251,10 @@ public class WorkspaceBlackBoxTest extends AbstractBlackBoxTest {
     // At this point, there is already some cache workspace file/file state value.
     bazel.build("@ext//:all");
   }
+
+  private boolean isWindows() {
+    return OS.WINDOWS.equals(OS.getCurrent());
+  }
   // TODO(ichern) move other tests from workspace_test.sh here.
 
-  @Test
-  public void testBadRepoName() throws Exception {
-    context().write(WORKSPACE, "local_repository(name = '@a', path = 'abc')");
-    context().write("BUILD");
-    ProcessResult result = context().bazel().shouldFail().build("//...");
-    assertThat(result.errString())
-        .contains(
-            "invalid repository name '@@a': workspace names may contain only "
-                + "A-Z, a-z, 0-9, '-', '_' and '.'");
-  }
 }
