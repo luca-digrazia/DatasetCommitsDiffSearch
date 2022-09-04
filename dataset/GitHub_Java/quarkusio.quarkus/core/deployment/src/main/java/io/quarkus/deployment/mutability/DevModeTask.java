@@ -3,7 +3,6 @@ package io.quarkus.deployment.mutability;
 import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.BUILD_SYSTEM_PROPERTIES;
 import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.DEPLOYMENT_LIB;
 import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.LIB;
-import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.QUARKUS;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -15,6 +14,7 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -43,7 +43,7 @@ public class DevModeTask {
                 Files.newInputStream(appRoot.resolve(LIB).resolve(DEPLOYMENT_LIB).resolve(JarResultBuildStep.APPMODEL_DAT)))) {
             Properties buildSystemProperties = new Properties();
             try (InputStream buildIn = Files
-                    .newInputStream(appRoot.resolve(QUARKUS).resolve(BUILD_SYSTEM_PROPERTIES))) {
+                    .newInputStream(appRoot.resolve(LIB).resolve(DEPLOYMENT_LIB).resolve(BUILD_SYSTEM_PROPERTIES))) {
                 buildSystemProperties.load(buildIn);
             }
 
@@ -80,11 +80,12 @@ public class DevModeTask {
             public void run(AppArtifact dep, Path moduleClasses, boolean appArtifact) {
 
                 dep.setPath(moduleClasses);
-                DevModeContext.ModuleInfo module = new DevModeContext.ModuleInfo.Builder().setAppArtifactKey(dep.getKey())
-                        .setName(dep.getArtifactId())
-                        .setClassesPath(moduleClasses.toAbsolutePath().toString())
-                        .setResourcesOutputPath(moduleClasses.toAbsolutePath().toString())
-                        .build();
+
+                DevModeContext.ModuleInfo module = new DevModeContext.ModuleInfo(dep.getKey(), dep.getArtifactId(), null,
+                        Collections.emptySet(),
+                        moduleClasses.toAbsolutePath().toString(), null, moduleClasses.toAbsolutePath().toString(),
+                        // the last three params are for code generation, in remote dev it happens on the "dev" side
+                        null, null, null);
 
                 if (appArtifact) {
                     context.setApplicationRoot(module);

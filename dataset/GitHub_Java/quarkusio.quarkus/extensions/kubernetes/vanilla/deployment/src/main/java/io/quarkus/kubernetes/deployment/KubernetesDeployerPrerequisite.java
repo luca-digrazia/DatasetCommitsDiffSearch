@@ -1,38 +1,36 @@
 package io.quarkus.kubernetes.deployment;
 
-import javax.inject.Inject;
-
-import org.jboss.logging.Logger;
+import java.util.Optional;
 
 import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImagePushRequestBuildItem;
+import io.quarkus.deployment.IsNormalNotRemoteDev;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 
 public class KubernetesDeployerPrerequisite {
 
-    private final Logger LOGGER = Logger.getLogger(KubernetesDeploy.class);
+    @BuildStep(onlyIf = IsNormalNotRemoteDev.class)
+    public void prepare(ContainerImageInfoBuildItem containerImage,
+            Optional<SelectedKubernetesDeploymentTargetBuildItem> selectedDeploymentTarget,
+            BuildProducer<ContainerImageBuildRequestBuildItem> buildRequestProducer,
+            BuildProducer<ContainerImagePushRequestBuildItem> pushRequestProducer) {
 
-    @Inject
-    BuildProducer<ContainerImageBuildRequestBuildItem> buildRequestProducer;
+        // we don't want to throw an exception at this step and fail the build because it could prevent
+        // the Kubernetes resources from being generated
+        if (!KubernetesDeploy.INSTANCE.checkSilently() || !selectedDeploymentTarget.isPresent()) {
+            return;
+        }
 
-    @Inject
-    BuildProducer<ContainerImagePushRequestBuildItem> pushRequestProducer;
-
-    @BuildStep(onlyIf = KubernetesDeploy.class)
-    public void prepare(ContainerImageInfoBuildItem containerImage) {
         //Let's communicate to the container-image plugin that we need an image build and an image push.
         buildRequestProducer.produce(new ContainerImageBuildRequestBuildItem());
-        if (containerImage.getRegistry().isPresent()) {
+        // When a registry is present, we want to push the image
+        // However we need to make sure we don't push to the registry when deploying to Minikube
+        // since all updates are meant to find the image from the docker daemon
+        if (containerImage.getRegistry().isPresent() &&
+                !selectedDeploymentTarget.get().getEntry().getName().equals(Constants.MINIKUBE)) {
             pushRequestProducer.produce(new ContainerImagePushRequestBuildItem());
-        } else {
-            LOGGER.warn(
-                    "A Kubernetes deployment was requested, but the container image to be built will not be pushed to any registry"
-                            +
-                            " because \"quarkus.container-image.registry\" has not been set. The Kubernetes deployment will only work properly"
-                            +
-                            " if the cluster is using the local Docker daemon.");
         }
     }
 }

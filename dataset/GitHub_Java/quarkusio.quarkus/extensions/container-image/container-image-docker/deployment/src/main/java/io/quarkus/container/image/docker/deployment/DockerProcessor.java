@@ -345,7 +345,7 @@ public class DockerProcessor {
             }
             Path effectiveDockerfilePath = dockerfilePath.isAbsolute() ? dockerfilePath
                     : mainSourcesRoot.getValue().resolve(dockerfilePath);
-            if (!effectiveDockerfilePath.toFile().exists()) {
+            if (!dockerfilePath.toFile().exists()) {
                 throw new IllegalArgumentException(
                         "Specified Dockerfile path " + effectiveDockerfilePath.toAbsolutePath().toString() + " does not exist");
             }

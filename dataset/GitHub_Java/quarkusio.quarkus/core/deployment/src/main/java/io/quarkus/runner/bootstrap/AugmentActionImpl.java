@@ -1,14 +1,9 @@
 package io.quarkus.runner.bootstrap;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +13,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -53,7 +47,6 @@ import io.quarkus.deployment.builditem.RawCommandLineArgumentsBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.TransformedClassesBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
-import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
 import io.quarkus.dev.spi.DevModeType;
@@ -140,55 +133,6 @@ public class AugmentActionImpl implements AugmentAction {
     }
 
     @Override
-    public void performCustomBuild(String resultHandler, Object context, String... finalOutputs) {
-        ClassLoader classLoader = curatedApplication.createDeploymentClassLoader();
-        Class<? extends BuildItem>[] targets = Arrays.stream(finalOutputs)
-                .map(new Function<String, Class<? extends BuildItem>>() {
-                    @Override
-                    public Class<? extends BuildItem> apply(String s) {
-                        try {
-                            return (Class<? extends BuildItem>) Class.forName(s, false, classLoader);
-                        } catch (ClassNotFoundException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                }).toArray(Class[]::new);
-        BuildResult result = runAugment(true, Collections.emptySet(), null, classLoader, targets);
-
-        String debugSourcesDir = BootstrapDebug.DEBUG_SOURCES_DIR;
-        if (debugSourcesDir != null) {
-            for (GeneratedClassBuildItem i : result.consumeMulti(GeneratedClassBuildItem.class)) {
-                try {
-                    if (i.getSource() != null) {
-                        File debugPath = new File(debugSourcesDir);
-                        if (!debugPath.exists()) {
-                            debugPath.mkdir();
-                        }
-                        File sourceFile = new File(debugPath, i.getName() + ".zig");
-                        sourceFile.getParentFile().mkdirs();
-                        Files.write(sourceFile.toPath(), i.getSource().getBytes(StandardCharsets.UTF_8),
-                                StandardOpenOption.CREATE);
-                        log.infof("Wrote source: %s", sourceFile.getAbsolutePath());
-                    } else {
-                        log.infof("Source not available: %s", i.getName());
-                    }
-                } catch (Exception t) {
-                    log.errorf(t, "Failed to write debug source file: %s", i.getName());
-                }
-            }
-        }
-        try {
-            BiConsumer<Object, BuildResult> consumer = (BiConsumer<Object, BuildResult>) Class
-                    .forName(resultHandler, false, classLoader)
-                    .getConstructor().newInstance();
-            consumer.accept(context, result);
-        } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | ClassNotFoundException
-                | InvocationTargetException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
     public AugmentResult createProductionApplication() {
         if (launchMode != LaunchMode.NORMAL) {
             throw new IllegalStateException("Can only create a production application when using NORMAL launch mode");
@@ -221,42 +165,11 @@ public class AugmentActionImpl implements AugmentAction {
 
         JarBuildItem jarBuildItem = result.consumeOptional(JarBuildItem.class);
         NativeImageBuildItem nativeImageBuildItem = result.consumeOptional(NativeImageBuildItem.class);
-        List<ArtifactResultBuildItem> artifactResultBuildItems = result.consumeMulti(ArtifactResultBuildItem.class);
-        BuildSystemTargetBuildItem buildSystemTargetBuildItem = result.consume(BuildSystemTargetBuildItem.class);
-
-        // this depends on the fact that the order in which we can obtain MultiBuildItems is the same as they are produced
-        // we want to write result of the final artifact created
-        ArtifactResultBuildItem lastResult = artifactResultBuildItems.get(artifactResultBuildItems.size() - 1);
-        writeArtifactResultMetadataFile(buildSystemTargetBuildItem, lastResult);
-
-        return new AugmentResult(artifactResultBuildItems.stream()
+        return new AugmentResult(result.consumeMulti(ArtifactResultBuildItem.class).stream()
                 .map(a -> new ArtifactResult(a.getPath(), a.getType(), a.getMetadata()))
                 .collect(Collectors.toList()),
                 jarBuildItem != null ? jarBuildItem.toJarResult() : null,
                 nativeImageBuildItem != null ? nativeImageBuildItem.getPath() : null);
-    }
-
-    private void writeArtifactResultMetadataFile(BuildSystemTargetBuildItem outputTargetBuildItem,
-            ArtifactResultBuildItem lastResult) {
-        Path quarkusArtifactMetadataPath = outputTargetBuildItem.getOutputDirectory().resolve("quarkus-artifact.properties");
-        Properties properties = new Properties();
-        properties.put("type", lastResult.getType());
-        if (lastResult.getPath() != null) {
-            properties.put("path", outputTargetBuildItem.getOutputDirectory().relativize(lastResult.getPath()).toString());
-        }
-        Map<String, Object> metadata = lastResult.getMetadata();
-        if (metadata != null) {
-            for (Map.Entry<String, Object> entry : metadata.entrySet()) {
-                if (entry.getValue() instanceof String) {
-                    properties.put("metadata." + entry.getKey(), entry.getValue());
-                }
-            }
-        }
-        try (FileOutputStream fos = new FileOutputStream(quarkusArtifactMetadataPath.toFile())) {
-            properties.store(fos, "Generated by Quarkus - Do not edit manually");
-        } catch (IOException e) {
-            log.debug("Unable to write artifact result metadata file", e);
-        }
     }
 
     @Override
@@ -365,7 +278,6 @@ public class AugmentActionImpl implements AugmentAction {
             }
 
             builder.setLaunchMode(launchMode);
-            builder.setDevModeType(devModeType);
             builder.setRebuild(quarkusBootstrap.isRebuild());
             if (firstRun) {
                 builder.setLiveReloadState(

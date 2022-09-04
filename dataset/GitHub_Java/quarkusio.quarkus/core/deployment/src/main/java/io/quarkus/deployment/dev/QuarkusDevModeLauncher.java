@@ -231,9 +231,7 @@ public abstract class QuarkusDevModeLauncher {
         }
 
         public B debugHost(String host) {
-            if ((null != host) && !host.isEmpty()) {
-                debugHost = host;
-            }
+            debugHost = host;
             return (B) this;
         }
 
