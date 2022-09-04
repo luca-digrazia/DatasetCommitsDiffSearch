@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.SequenceBuilder;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -66,6 +66,8 @@ public enum LinkBuildVariables {
   LEGACY_LINK_FLAGS("legacy_link_flags"),
   /** Linker flags coming from the --linkopt or linkopts attribute. */
   USER_LINK_FLAGS("user_link_flags"),
+  /** Path to which to write symbol counts. */
+  SYMBOL_COUNTS_OUTPUT("symbol_counts_output"),
   /** A build variable giving linkstamp paths. */
   LINKSTAMP_PATHS("linkstamp_paths"),
   /** Presence of this variable indicates that PIC code should be generated. */
@@ -99,6 +101,7 @@ public enum LinkBuildVariables {
       String thinltoParamFile,
       String thinltoMergedObjectFile,
       boolean mustKeepDebug,
+      Artifact symbolCounts,
       CcToolchainProvider ccToolchainProvider,
       FeatureConfiguration featureConfiguration,
       boolean useTestOnlyFlags,
@@ -108,7 +111,7 @@ public enum LinkBuildVariables {
       String interfaceLibraryOutput,
       PathFragment ltoOutputRootPrefix,
       String defFile,
-      FdoContext fdoContext,
+      FdoProvider fdoProvider,
       Iterable<String> runtimeLibrarySearchDirectories,
       SequenceBuilder librariesToLink,
       Iterable<String> librarySearchDirectories,
@@ -118,6 +121,12 @@ public enum LinkBuildVariables {
       throws EvalException {
     CcToolchainVariables.Builder buildVariables =
         new CcToolchainVariables.Builder(ccToolchainProvider.getBuildVariables());
+
+    // symbol counting
+    if (symbolCounts != null) {
+      buildVariables.addStringVariable(
+          SYMBOL_COUNTS_OUTPUT.getVariableName(), symbolCounts.getExecPathString());
+    }
 
     // pic
     if (ccToolchainProvider.getForcePic()) {
@@ -221,10 +230,7 @@ public enum LinkBuildVariables {
     }
 
     if (featureConfiguration.isEnabled(CppRuleClasses.FDO_INSTRUMENT)) {
-      Preconditions.checkArgument(fdoContext.getBranchFdoProfile() == null);
-      String fdoInstrument = ccToolchainProvider.getCppConfiguration().getFdoInstrument();
-      Preconditions.checkNotNull(fdoInstrument);
-      buildVariables.addStringVariable("fdo_instrument_path", fdoInstrument);
+      buildVariables.addStringVariable("fdo_instrument_path", fdoProvider.getFdoInstrument());
     }
 
     Iterable<String> userLinkFlagsWithLtoIndexingIfNeeded;
@@ -311,6 +317,10 @@ public enum LinkBuildVariables {
     // Extra test-specific link options.
     if (useTestOnlyFlags) {
       result.addAll(ccToolchainProvider.getTestOnlyLinkOptions());
+    }
+
+    if (!cppConfiguration.enableLinkoptsInUserLinkFlags()) {
+      result.addAll(cppConfiguration.getLinkopts());
     }
 
     // -pie is not compatible with shared and should be

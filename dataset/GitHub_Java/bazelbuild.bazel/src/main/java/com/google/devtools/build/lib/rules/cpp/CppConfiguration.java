@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import javax.annotation.Nullable;
 
 /**
@@ -171,6 +172,13 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public static final String FDO_STAMP_MACRO = "BUILD_FDO_TYPE";
 
   private final Label crosstoolTop;
+  /**
+   * cc_toolchain_suite allows to override CROSSTOOL by using proto attribute. This attribute value
+   * is stored here so cc_toolchain can access it in the analysis. Don't use this for anything, it
+   * will be removed when b/113849758 is fixed. If you do, I'll send bubo to take your keyboard
+   * away.
+   */
+  @Deprecated private final CrosstoolRelease crosstoolFromCcToolchainProtoAttribute;
 
   private final String transformedCpuFromOptions;
   private final String compilerFromOptions;
@@ -227,6 +235,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
     return new CppConfiguration(
         params.crosstoolTop,
+        params.crosstoolFromCcToolchainProtoAttribute,
         params.transformedCpu,
         params.compiler,
         Preconditions.checkNotNull(params.commonOptions.cpu),
@@ -248,6 +257,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   private CppConfiguration(
       Label crosstoolTop,
+      CrosstoolRelease crosstoolFromCcToolchainProtoAttribute,
       String transformedCpuFromOptions,
       String compilerFromOptions,
       String desiredCpu,
@@ -264,6 +274,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       CompilationMode compilationMode,
       CppToolchainInfo cppToolchainInfo) {
     this.crosstoolTop = crosstoolTop;
+    this.crosstoolFromCcToolchainProtoAttribute = crosstoolFromCcToolchainProtoAttribute;
     this.transformedCpuFromOptions = transformedCpuFromOptions;
     this.compilerFromOptions = compilerFromOptions;
     this.desiredCpu = desiredCpu;
@@ -656,6 +667,17 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean disableLinkingModeFlags() {
     return cppOptions.disableLinkingModeFlags;
+  }
+
+  /**
+   * cc_toolchain_suite allows to override CROSSTOOL by using proto attribute. This attribute value
+   * is stored here so cc_toolchain can access it in the analysis. Don't use this for anything, it
+   * will be removed when b/113849758 is fixed. If you do, I'll send bubo to take your keyboard
+   * away.
+   */
+  @Deprecated
+  public CrosstoolRelease getCrosstoolFromCcToolchainProtoAttribute() {
+    return crosstoolFromCcToolchainProtoAttribute;
   }
 
   public boolean enableLinkoptsInUserLinkFlags() {

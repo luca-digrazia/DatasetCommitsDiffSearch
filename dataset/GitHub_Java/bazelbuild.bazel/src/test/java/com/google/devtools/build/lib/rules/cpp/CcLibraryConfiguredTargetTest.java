@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
@@ -30,6 +31,7 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -122,7 +124,6 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
   public void checkWrongExtensionInArtifactNamePattern(
       String categoryName, ImmutableList<String> correctExtensions) throws Exception {
-    reporter.removeHandler(failFastHandler);
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(
@@ -137,15 +138,20 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
                 + "   prefix: ''"
                 + "   extension: '.wrong_ext'"
                 + "}");
-    useConfiguration();
-    getConfiguredTarget(
-        ruleClassProvider.getToolsRepository() + "//tools/cpp:current_cc_toolchain");
-    assertContainsEvent(
-        String.format(
-            "Unrecognized file extension '.wrong_ext', allowed "
-                + "extensions are %s, please check artifact_name_pattern configuration for "
-                + "%s in your CROSSTOOL.",
-            StringUtil.joinEnglishList(correctExtensions, "or", "'"), categoryName));
+
+    try {
+      useConfiguration();
+      fail("Should fail");
+    } catch (InvalidConfigurationException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains(
+              String.format(
+                  "Unrecognized file extension '.wrong_ext', allowed "
+                      + "extensions are %s, please check artifact_name_pattern configuration for "
+                      + "%s in your CROSSTOOL.",
+                  StringUtil.joinEnglishList(correctExtensions, "or", "'"), categoryName));
+    }
   }
 
   @Test
@@ -222,12 +228,10 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   public void testFilesToBuildWithoutDSO() throws Exception {
     CrosstoolConfig.CrosstoolRelease.Builder release = CrosstoolConfig.CrosstoolRelease.newBuilder()
         .mergeFrom(CrosstoolConfigurationHelper.simpleCompleteToolchainProto());
-    release
-        .getToolchainBuilder(0)
+    release.getToolchainBuilder(0)
         .setTargetCpu("k8")
         .setCompiler("compiler")
-        // To remove "supports_dynamic_linker" feature
-        .clearFeature();
+        .clearLinkingModeFlags();
 
     scratch.file("crosstool/BUILD",
         "cc_toolchain_suite(",
@@ -246,6 +250,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         "    linker_files = ':empty',",
         "    strip_files = ':empty',",
         "    objcopy_files = ':empty',",
+        "    static_runtime_libs = [':empty'],",
+        "    dynamic_runtime_libs = [':empty'],",
         "    all_files = ':empty',",
         "    licenses = ['unencumbered'])");
     scratch.file("crosstool/CROSSTOOL", TextFormat.printToString(release));

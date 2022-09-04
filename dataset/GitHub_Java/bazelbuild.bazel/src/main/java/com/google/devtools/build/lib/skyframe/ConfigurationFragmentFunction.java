@@ -17,13 +17,23 @@ import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.ConfigurationFragmentValue.ConfigurationFragmentKey;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.io.IOException;
 
 /**
  * A builder for {@link ConfigurationFragmentValue}s.
@@ -38,14 +48,27 @@ public final class ConfigurationFragmentFunction implements SkyFunction {
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
-      throws ConfigurationFragmentFunctionException {
+      throws ConfigurationFragmentFunctionException, InterruptedException {
     ConfigurationFragmentKey configurationFragmentKey = 
         (ConfigurationFragmentKey) skyKey.argument();
     BuildOptions buildOptions = configurationFragmentKey.getBuildOptions();
     ConfigurationFragmentFactory factory = getFactory(configurationFragmentKey.getFragmentType());
     try {
-      return new ConfigurationFragmentValue(factory.create(buildOptions));
+      PackageProviderForConfigurations packageProvider =
+          new SkyframePackageLoaderWithValueEnvironment(env);
+      ConfigurationEnvironment confEnv = new ConfigurationBuilderEnvironment(packageProvider);
+      Fragment fragment = factory.create(confEnv, buildOptions);
+
+      if (env.valuesMissing()) {
+        return null;
+      }
+      return new ConfigurationFragmentValue(fragment);
     } catch (InvalidConfigurationException e) {
+      // TODO(bazel-team): Rework the control-flow here so that we're not actually throwing this
+      // exception with missing Skyframe dependencies.
+      if (env.valuesMissing()) {
+        return null;
+      }
       throw new ConfigurationFragmentFunctionException(e);
     }
   }
@@ -63,6 +86,32 @@ public final class ConfigurationFragmentFunction implements SkyFunction {
   @Override
   public String extractTag(SkyKey skyKey) {
     return null;
+  }
+
+  /** A {@link ConfigurationEnvironment} implementation that can create dependencies on files. */
+  private static final class ConfigurationBuilderEnvironment implements ConfigurationEnvironment {
+    private final PackageProviderForConfigurations packageProvider;
+
+    ConfigurationBuilderEnvironment(PackageProviderForConfigurations packageProvider) {
+      this.packageProvider = packageProvider;
+    }
+
+    @Override
+    public Target getTarget(Label label)
+        throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+      return packageProvider.getTarget(label);
+    }
+
+    @Override
+    public Path getPath(Package pkg, String fileName) throws InterruptedException {
+      Path result = pkg.getPackageDirectory().getRelative(fileName);
+      try {
+        packageProvider.addDependency(pkg, fileName);
+      } catch (IOException | LabelSyntaxException e) {
+        return null;
+      }
+      return result;
+    }
   }
 
   /**
