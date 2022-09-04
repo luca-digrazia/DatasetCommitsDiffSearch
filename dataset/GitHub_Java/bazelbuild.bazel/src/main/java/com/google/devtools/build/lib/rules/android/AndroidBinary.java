@@ -431,7 +431,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext.getExecutablePrerequisite("$resource_extractor", Mode.HOST);
 
     Artifact finalClassesDex;
-    ImmutableList<Artifact> finalShardDexZips = dexingOutput.shardDexZips;
     if (AndroidCommon.getAndroidConfig(ruleContext).desugarJava8Libs()
         && dexPostprocessingOutput.classesDexZip().getFilename().endsWith(".zip")) {
       Artifact java8LegacyDex;
@@ -479,8 +478,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
                   .addExecPath("--output_zip", finalClassesDex)
                   .build())
               .build(ruleContext));
-      finalShardDexZips =
-          ImmutableList.<Artifact>builder().addAll(finalShardDexZips).add(java8LegacyDex).build();
     } else {
       finalClassesDex = dexPostprocessingOutput.classesDexZip();
     }
@@ -580,8 +577,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       AndroidBinaryMobileInstall.addMobileInstall(
           ruleContext,
           builder,
-          dexingOutput.javaResourceJar,
-          finalShardDexZips,
+          dexingOutput,
           javaSemantics,
           nativeLibs,
           resourceApk,
