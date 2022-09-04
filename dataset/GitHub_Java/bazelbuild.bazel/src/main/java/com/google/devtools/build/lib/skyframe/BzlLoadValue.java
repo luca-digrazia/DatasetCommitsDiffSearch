@@ -20,35 +20,32 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Objects;
+import net.starlark.java.eval.Module;
 
 /**
- * A value that represents a Starlark load result. The lookup value corresponds to exactly one
- * Starlark file, identified by an absolute {@link Label} {@link SkyKey} argument. The Label should
- * not reference the special {@code external} package.
+ * A value that represents the .bzl module loaded by a Starlark {@code load()} statement.
+ *
+ * <p>The key consists of an absolute {@link Label} and the context in which the load occurs. The
+ * Label should not reference the special {@code external} package.
+ *
+ * <p>This value is also used to represent the special prelude file that may be implicitly loaded
+ * and sourced by BUILD files. The prelude file need not end in ".bzl".
  */
 public class BzlLoadValue implements SkyValue {
 
-  private final Module module; // .bzl module
+  private final Module module; // .bzl module (and indirectly, the entire load DAG)
   private final byte[] transitiveDigest; // of .bzl file and load dependencies
 
-  /**
-   * The immediate Starlark file dependency descriptor class corresponding to this value. Using this
-   * reference it's possible to reach the transitive closure of Starlark files on which this
-   * Starlark file depends.
-   */
-  private final StarlarkFileDependency dependency;
-
   @VisibleForTesting
-  public BzlLoadValue(Module module, byte[] transitiveDigest, StarlarkFileDependency dependency) {
+  public BzlLoadValue(Module module, byte[] transitiveDigest) {
     this.module = Preconditions.checkNotNull(module);
     this.transitiveDigest = Preconditions.checkNotNull(transitiveDigest);
-    this.dependency = Preconditions.checkNotNull(dependency);
   }
 
   /** Returns the .bzl module. */
@@ -61,18 +58,29 @@ public class BzlLoadValue implements SkyValue {
     return transitiveDigest;
   }
 
-  /** Returns the immediate Starlark file dependency corresponding to this load value. */
-  public StarlarkFileDependency getDependency() {
-    return dependency;
-  }
-
   private static final Interner<Key> keyInterner = BlazeInterners.newWeakInterner();
 
   /** SkyKey for a Starlark load. */
   abstract static class Key implements SkyKey {
 
-    /** Returns the label of the .bzl file to be loaded. */
+    /**
+     * Returns the absolute label of the .bzl file to be loaded.
+     *
+     * <p>For {@link KeyForBuiltins}, it must begin with {@code @_builtins//:}. (It is legal for
+     * other keys to use {@code @_builtins}, but since no real repo by that name may be defined,
+     * they won't evaluate to a successful result.)
+     */
     abstract Label getLabel();
+
+    /** Returns true if this is a request for the special BUILD prelude file. */
+    boolean isBuildPrelude() {
+      return false;
+    }
+
+    /** Returns true if this is a request for a builtins bzl file. */
+    boolean isBuiltins() {
+      return false;
+    }
 
     /**
      * Constructs a new key suitable for evaluating a {@code load()} dependency of this key's .bzl
@@ -84,6 +92,12 @@ public class BzlLoadValue implements SkyValue {
      */
     abstract Key getKeyForLoad(Label loadLabel);
 
+    /**
+     * Constructs an BzlCompileValue key suitable for retrieving the Starlark code for this .bzl,
+     * given the Root in which to find its file.
+     */
+    abstract BzlCompileValue.Key getCompileKey(Root root);
+
     @Override
     public SkyFunctionName functionName() {
       return SkyFunctions.BZL_LOAD;
@@ -93,12 +107,19 @@ public class BzlLoadValue implements SkyValue {
   /** A key for loading a .bzl during package loading (BUILD evaluation). */
   @Immutable
   @AutoCodec.VisibleForSerialization
-  static final class PackageBzlKey extends Key {
+  static final class KeyForBuild extends Key {
 
     private final Label label;
 
-    private PackageBzlKey(Label label) {
+    /**
+     * True if this is the special prelude file, whose declarations are implicitly loaded by all
+     * BUILD files.
+     */
+    private final boolean isBuildPrelude;
+
+    private KeyForBuild(Label label, boolean isBuildPrelude) {
       this.label = Preconditions.checkNotNull(label);
+      this.isBuildPrelude = isBuildPrelude;
     }
 
     @Override
@@ -107,10 +128,30 @@ public class BzlLoadValue implements SkyValue {
     }
 
     @Override
-    Key getKeyForLoad(Label loadLabel) {
-      return packageBzlKey(loadLabel);
+    boolean isBuildPrelude() {
+      return isBuildPrelude;
     }
 
+    @Override
+    Key getKeyForLoad(Label loadLabel) {
+      // Note that the returned key always has !isBuildPrelude. I.e., if the prelude file loads
+      // another .bzl, the loaded .bzl is processed as normal with no special prelude magic. This is
+      // because 1) only the prelude file, not its dependencies, should automatically re-export its
+      // loaded symbols; and 2) we don't want prelude-loaded modules to end up cloned if they're
+      // also loaded through normal means.
+      return keyForBuild(loadLabel);
+    }
+
+    @Override
+    BzlCompileValue.Key getCompileKey(Root root) {
+      if (isBuildPrelude) {
+        return BzlCompileValue.keyForBuildPrelude(root, label);
+      } else {
+        return BzlCompileValue.key(root, label);
+      }
+    }
+
+    // TODO(brandjon): Use something more similar to AbstractSkyKey's stringification (same below).
     @Override
     public String toString() {
       return label.toString();
@@ -121,15 +162,16 @@ public class BzlLoadValue implements SkyValue {
       if (this == obj) {
         return true;
       }
-      if (!(obj instanceof PackageBzlKey)) {
+      if (!(obj instanceof KeyForBuild)) {
         return false;
       }
-      return this.label.equals(((PackageBzlKey) obj).label);
+      KeyForBuild other = (KeyForBuild) obj;
+      return this.label.equals(other.label) && this.isBuildPrelude == other.isBuildPrelude;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(PackageBzlKey.class, label);
+      return Objects.hash(KeyForBuild.class, label, isBuildPrelude);
     }
   }
 
@@ -147,13 +189,13 @@ public class BzlLoadValue implements SkyValue {
   // if not broken.
   @Immutable
   @AutoCodec.VisibleForSerialization
-  static final class WorkspaceBzlKey extends Key {
+  static final class KeyForWorkspace extends Key {
 
     private final Label label;
     private final int workspaceChunk;
     private final RootedPath workspacePath;
 
-    private WorkspaceBzlKey(Label label, int workspaceChunk, RootedPath workspacePath) {
+    private KeyForWorkspace(Label label, int workspaceChunk, RootedPath workspacePath) {
       this.label = Preconditions.checkNotNull(label);
       this.workspaceChunk = workspaceChunk;
       this.workspacePath = Preconditions.checkNotNull(workspacePath);
@@ -174,7 +216,12 @@ public class BzlLoadValue implements SkyValue {
 
     @Override
     Key getKeyForLoad(Label loadLabel) {
-      return workspaceBzlKey(loadLabel, workspaceChunk, workspacePath);
+      return keyForWorkspace(loadLabel, workspaceChunk, workspacePath);
+    }
+
+    @Override
+    BzlCompileValue.Key getCompileKey(Root root) {
+      return BzlCompileValue.key(root, label);
     }
 
     @Override
@@ -187,10 +234,10 @@ public class BzlLoadValue implements SkyValue {
       if (this == obj) {
         return true;
       }
-      if (!(obj instanceof WorkspaceBzlKey)) {
+      if (!(obj instanceof KeyForWorkspace)) {
         return false;
       }
-      WorkspaceBzlKey other = (WorkspaceBzlKey) obj;
+      KeyForWorkspace other = (KeyForWorkspace) obj;
       return label.equals(other.label)
           && workspaceChunk == other.workspaceChunk
           && workspacePath.equals(other.workspacePath);
@@ -198,13 +245,79 @@ public class BzlLoadValue implements SkyValue {
 
     @Override
     public int hashCode() {
-      return Objects.hash(WorkspaceBzlKey.class, label, workspaceChunk, workspacePath);
+      return Objects.hash(KeyForWorkspace.class, label, workspaceChunk, workspacePath);
+    }
+  }
+
+  /**
+   * A key for loading a .bzl during {@code @_builtins} evaluation.
+   *
+   * <p>This kind of key is only requested by {@link StarlarkBuiltinsFunction} and its transitively
+   * loaded {@link BzlLoadFunction} calls.
+   *
+   * <p>The label must have {@link StarlarkBuiltinsValue#BUILTINS_REPO} as its repository component.
+   * (It is valid for other key types to use that repo name, but since it is not a real repository
+   * and cannot be fetched, any attempt to resolve such a key would fail.)
+   */
+  // TODO(#11437): Prevent users from trying to declare a repo named "@_builtins".
+  @Immutable
+  @AutoCodec.VisibleForSerialization
+  static final class KeyForBuiltins extends Key {
+
+    private final Label label;
+
+    private KeyForBuiltins(Label label) {
+      this.label = Preconditions.checkNotNull(label);
+      if (!StarlarkBuiltinsValue.isBuiltinsRepo(label.getRepository())) {
+        throw new IllegalArgumentException("repository name for builtins key must be '@_builtins'");
+      }
+    }
+
+    @Override
+    Label getLabel() {
+      return label;
+    }
+
+    @Override
+    boolean isBuiltins() {
+      return true;
+    }
+
+    @Override
+    Key getKeyForLoad(Label label) {
+      return keyForBuiltins(label);
+    }
+
+    @Override
+    BzlCompileValue.Key getCompileKey(Root root) {
+      return BzlCompileValue.keyForBuiltins(root, label);
+    }
+
+    @Override
+    public String toString() {
+      return label.toString();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) {
+        return true;
+      }
+      if (!(obj instanceof KeyForBuiltins)) {
+        return false;
+      }
+      return this.label.equals(((KeyForBuiltins) obj).label);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(KeyForBuiltins.class, label);
     }
   }
 
   /** Constructs a key for loading a regular (non-workspace) .bzl file, from the .bzl's label. */
-  static Key packageBzlKey(Label label) {
-    return keyInterner.intern(new PackageBzlKey(label));
+  static Key keyForBuild(Label label) {
+    return keyInterner.intern(new KeyForBuild(label, /*isBuildPrelude=*/ false));
   }
 
   /**
@@ -215,7 +328,17 @@ public class BzlLoadValue implements SkyValue {
    *     file is loaded more than once, this is the chunk that it was first loaded from
    * @param workspacePath the path of the workspace file for the project
    */
-  static Key workspaceBzlKey(Label label, int workspaceChunk, RootedPath workspacePath) {
-    return keyInterner.intern(new WorkspaceBzlKey(label, workspaceChunk, workspacePath));
+  static Key keyForWorkspace(Label label, int workspaceChunk, RootedPath workspacePath) {
+    return keyInterner.intern(new KeyForWorkspace(label, workspaceChunk, workspacePath));
+  }
+
+  /** Constructs a key for loading a .bzl file within the {@code @_builtins} pseudo-repository. */
+  static Key keyForBuiltins(Label label) {
+    return keyInterner.intern(new KeyForBuiltins(label));
+  }
+
+  /** Constructs a key for loading the special prelude .bzl. */
+  static Key keyForBuildPrelude(Label label) {
+    return keyInterner.intern(new KeyForBuild(label, /*isBuildPrelude=*/ true));
   }
 }
