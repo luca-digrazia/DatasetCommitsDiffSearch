@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,21 +20,29 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import com.googlecode.androidannotations.annotations.AfterViews;
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.ViewById;
 
 @EActivity(R.layout.views_injected)
-public class ViewsInjectedActivity extends Activity{
-	
+public class ViewsInjectedActivity extends Activity {
+
+	int counter;
+
 	View unboundView;
-	
+
 	@ViewById
 	Button myButton;
-	
-	@ViewById(R.id.myTextView)
+
+	@ViewById(R.id.my_text_view)
 	TextView someView;
-	
+
 	@ViewById
 	TextView myTextView;
+
+	@AfterViews
+	void incrementCounter() {
+		counter++;
+	}
 
 }
