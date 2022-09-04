@@ -175,8 +175,11 @@ public abstract class StarlarkDefinedConfigTransition implements ConfigurationTr
     return outputsCanonicalizedToGiven;
   }
 
-  /** Returns the location of the Starlark code defining the transition. */
-  public Location getLocation() {
+  /**
+   * Returns the location of the Starlark code responsible for determining the transition's changed
+   * settings for purposes of error reporting.
+   */
+  public Location getLocationForErrorReporting() {
     return location;
   }
 

@@ -66,11 +66,6 @@ public abstract class StarlarkTransition implements ConfigurationTransition {
     this.starlarkDefinedConfigTransition = starlarkDefinedConfigTransition;
   }
 
-  @Override
-  public String getName() {
-    return "Starlark transition:" + starlarkDefinedConfigTransition.getLocation();
-  }
-
   // Get the inputs of the starlark transition as a list of canonicalized labels strings.
   private List<String> getInputs() {
     return starlarkDefinedConfigTransition.getInputsCanonicalizedToGiven().keySet().asList();

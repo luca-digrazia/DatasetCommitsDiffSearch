@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CommandLines;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineAndParamFileInfo;
-import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
@@ -65,11 +64,9 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.DependencyResolver.Failure;
 import com.google.devtools.build.lib.analysis.ExtraActionArtifactsProvider;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -96,7 +93,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTa
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.analysis.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
@@ -669,9 +665,14 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * the action graph.
    */
   protected final Collection<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget target)
-      throws TransitionException, InvalidConfigurationException, InconsistentAspectOrderException,
-          Failure, InterruptedException {
+      throws Exception {
     return view.getDirectPrerequisitesForTesting(reporter, target, masterConfig);
+  }
+
+  protected final Collection<ConfiguredTargetAndData> getDirectPrerequisites(
+      ConfiguredTargetAndData ctad) throws Exception {
+    return view.getConfiguredTargetAndDataDirectPrerequisitesForTesting(
+        reporter, ctad, masterConfig);
   }
 
   protected final ConfiguredTarget getDirectPrerequisite(ConfiguredTarget target, String label)
@@ -689,12 +690,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected final ConfiguredTargetAndData getConfiguredTargetAndDataDirectPrerequisite(
       ConfiguredTargetAndData ctad, String label) throws Exception {
     Label candidateLabel = Label.parseAbsolute(label, ImmutableMap.of());
-    for (ConfiguredTargetAndData candidate :
-        view.getConfiguredTargetAndDataDirectPrerequisitesForTesting(
-            reporter,
-            ctad.getConfiguredTarget(),
-            ctad.getConfiguredTarget().getConfigurationKey(),
-            masterConfig)) {
+    for (ConfiguredTargetAndData candidate : getDirectPrerequisites(ctad)) {
       if (candidate.getConfiguredTarget().getLabel().equals(candidateLabel)) {
         return candidate;
       }
@@ -2373,7 +2369,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     private MetadataProvider actionInputFileCache = null;
     private TreeMap<String, String> clientEnv = new TreeMap<>();
     private ArtifactExpander artifactExpander = null;
-    private Executor executor = new DummyExecutor(fileSystem, getExecRoot());
 
     public ActionExecutionContextBuilder setMetadataProvider(
         MetadataProvider actionInputFileCache) {
@@ -2386,14 +2381,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       return this;
     }
 
-    public ActionExecutionContextBuilder setExecutor(Executor executor) {
-      this.executor = executor;
-      return this;
-    }
-
     public ActionExecutionContext build() {
       return new ActionExecutionContext(
-          executor,
+          new DummyExecutor(fileSystem, getExecRoot()),
           actionInputFileCache,
           /*actionInputPrefetcher=*/ null,
           actionKeyContext,
