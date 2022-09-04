@@ -1,8 +1,6 @@
 package io.quarkus.elytron.security.runtime;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -43,8 +41,6 @@ import io.quarkus.runtime.annotations.Recorder;
 @Recorder
 public class ElytronPropertiesFileRecorder {
     static final Logger log = Logger.getLogger(ElytronPropertiesFileRecorder.class);
-
-    private static final Provider[] PROVIDERS = new Provider[] { new WildFlyElytronProvider() };
 
     /**
      * Load the user.properties and roles.properties files into the {@linkplain SecurityRealm}
@@ -88,11 +84,9 @@ public class ElytronPropertiesFileRecorder {
                         throw new IllegalStateException(msg);
                     }
                     LegacyPropertiesSecurityRealm propsRealm = (LegacyPropertiesSecurityRealm) secRealm;
-                    try (InputStream usersStream = users.openStream(); InputStream rolesStream = roles.openStream()) {
-                        propsRealm.load(usersStream, rolesStream);
-                    }
+                    propsRealm.load(users.openStream(), roles.openStream());
                 } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                    throw new RuntimeException(e);
                 }
             }
         };
@@ -174,7 +168,7 @@ public class ElytronPropertiesFileRecorder {
                 .setProviders(new Supplier<Provider[]>() {
                     @Override
                     public Provider[] get() {
-                        return PROVIDERS;
+                        return new Provider[] { new WildFlyElytronProvider() };
                     }
                 })
                 .setPlainText(config.plainText)
@@ -195,7 +189,7 @@ public class ElytronPropertiesFileRecorder {
         Supplier<Provider[]> providers = new Supplier<Provider[]>() {
             @Override
             public Provider[] get() {
-                return PROVIDERS;
+                return new Provider[] { new WildFlyElytronProvider() };
             }
         };
         SecurityRealm realm = new SimpleMapBackedSecurityRealm(NameRewriter.IDENTITY_REWRITER, providers);
