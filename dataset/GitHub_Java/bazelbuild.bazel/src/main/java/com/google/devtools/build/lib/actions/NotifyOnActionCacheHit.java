@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.Path;
 
 /**
@@ -29,12 +28,6 @@ public interface NotifyOnActionCacheHit extends Action {
    * A custom interface similar to {@link ActionExecutionContext}, but specific to cache hits.
    */
   public interface ActionCachedContext {
-    /**
-     * An event listener to report messages to. Errors that signal a action failure should
-     * use ActionExecutionException.
-     */
-    EventHandler getEventHandler();
-
     /** The EventBus for the current build. */
     EventBus getEventBus();
 

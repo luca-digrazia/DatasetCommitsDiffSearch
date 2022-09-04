@@ -14,24 +14,23 @@
 
 package com.google.devtools.build.lib.sandbox;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.exec.SpawnInputExpander;
-import com.google.devtools.build.lib.exec.apple.XCodeLocalEnvProvider;
-import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -51,7 +50,6 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
   private final boolean verboseFailures;
   private final String productName;
   private final SpawnInputExpander spawnInputExpander;
-  private final LocalEnvProvider localEnvProvider;
 
   ProcessWrapperSandboxedStrategy(
       CommandEnvironment cmdEnv,
@@ -70,9 +68,6 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
     this.verboseFailures = verboseFailures;
     this.productName = productName;
     this.spawnInputExpander = new SpawnInputExpander(false);
-    this.localEnvProvider = OS.getCurrent() == OS.DARWIN
-        ? new XCodeLocalEnvProvider()
-        : LocalEnvProvider.UNMODIFIED;
   }
 
   @Override
@@ -81,19 +76,20 @@ public class ProcessWrapperSandboxedStrategy extends SandboxStrategy {
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException, IOException {
-    actionExecutionContext
+    Executor executor = actionExecutionContext.getExecutor();
+    executor
         .getEventBus()
         .post(
             ActionStatusMessage.runningStrategy(
                 spawn.getResourceOwner(), "processwrapper-sandbox"));
-    SandboxHelpers.reportSubcommand(actionExecutionContext, spawn);
+    SandboxHelpers.reportSubcommand(executor, spawn);
 
     // Each invocation of "exec" gets its own sandbox.
     Path sandboxPath = getSandboxRoot();
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
 
-    Map<String, String> spawnEnvironment =
-        localEnvProvider.rewriteLocalEnv(spawn.getEnvironment(), execRoot, productName);
+    ImmutableMap<String, String> spawnEnvironment =
+        StandaloneSpawnStrategy.locallyDeterminedEnv(execRoot, productName, spawn.getEnvironment());
 
     Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
     SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);

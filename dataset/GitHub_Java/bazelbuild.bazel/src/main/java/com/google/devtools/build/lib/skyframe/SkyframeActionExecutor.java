@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -490,11 +489,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       if (action instanceof NotifyOnActionCacheHit) {
         NotifyOnActionCacheHit notify = (NotifyOnActionCacheHit) action;
         ActionCachedContext context = new ActionCachedContext() {
-          @Override
-          public EventHandler getEventHandler() {
-            return executorEngine.getEventHandler();
-          }
-
           @Override
           public EventBus getEventBus() {
             return executorEngine.getEventBus();
