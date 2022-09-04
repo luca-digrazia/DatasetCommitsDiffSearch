@@ -56,9 +56,9 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContext.HeaderInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext.Reply;
+import com.google.devtools.build.lib.rules.cpp.CppHelper.PregreppedHeader;
 import com.google.devtools.build.lib.skyframe.ActionExecutionValue;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -73,6 +73,8 @@ import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -398,9 +400,9 @@ public class CppCompileAction extends AbstractAction
       // usedHeadersAndModules only contains headers now, so we can pass it to getUsedModules()
       // (and even if it contained other things, it's only used to check for the presence of headers
       // so it would not matter)
-      for (HeaderInfo usedModule :
+      for (CcCompilationContext.TransitiveModuleHeaders usedModule :
           ccCompilationContext.getUsedModules(usePic, usedHeadersAndModules)) {
-        usedModules.add(usedModule.getModule(usePic));
+        usedModules.add(usedModule.getModule());
       }
       usedHeadersAndModules.addAll(usedModules);
     }
@@ -462,7 +464,19 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public Map<Artifact, Artifact> getLegalGeneratedScannerFileMap() {
-    return ccCompilationContext.createLegalGeneratedScannerFileMap();
+    Map<Artifact, Artifact> legalOuts = new HashMap<>();
+
+    for (Artifact a : ccCompilationContext.getDeclaredIncludeSrcs()) {
+      if (!a.isSourceArtifact()) {
+        legalOuts.put(a, null);
+      }
+    }
+    for (PregreppedHeader pregreppedSrcs : ccCompilationContext.getPregreppedHeaders()) {
+      Artifact hdr = pregreppedSrcs.originalHeader();
+      Preconditions.checkState(!hdr.isSourceArtifact(), hdr);
+      legalOuts.put(hdr, pregreppedSrcs.greppedHeader());
+    }
+    return Collections.unmodifiableMap(legalOuts);
   }
 
   @Override
