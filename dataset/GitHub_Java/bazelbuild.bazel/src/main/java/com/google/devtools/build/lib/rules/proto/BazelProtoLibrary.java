@@ -62,9 +62,7 @@ public class BazelProtoLibrary implements RuleConfiguredTargetFactory {
             protoPathFlags,
             protoSourceRoot,
             directProtoSourceRoots,
-            !protoSources.isEmpty(),
-            /* protosInExports= */ null,
-            /* exportedProtoSourceRoots= */ null);
+            !protoSources.isEmpty());
 
     Artifact descriptorSetOutput =
         ruleContext.getGenfilesArtifact(

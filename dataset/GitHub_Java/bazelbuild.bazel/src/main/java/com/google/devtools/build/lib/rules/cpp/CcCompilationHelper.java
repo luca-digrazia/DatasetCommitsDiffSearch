@@ -1396,6 +1396,7 @@ public final class CcCompilationHelper {
         setupCompileBuildVariables(
             builder,
             /* sourceLabel= */ null,
+            /* outputName= */ null,
             usePic,
             /* ccRelativeName= */ null,
             ccCompilationContext.getCppModuleMap(),
@@ -1445,6 +1446,7 @@ public final class CcCompilationHelper {
   private CcToolchainVariables setupCompileBuildVariables(
       CppCompileActionBuilder builder,
       Label sourceLabel,
+      String outputName,
       boolean usePic,
       PathFragment ccRelativeName,
       CppModuleMap cppModuleMap,
@@ -1472,6 +1474,8 @@ public final class CcCompilationHelper {
               .configureCompilation(
                   builder,
                   ruleContext,
+                  PathFragment.create(outputName),
+                  usePic,
                   featureConfiguration,
                   fdoSupport));
     }
@@ -1559,6 +1563,7 @@ public final class CcCompilationHelper {
         setupCompileBuildVariables(
             builder,
             sourceLabel,
+            outputName,
             /* usePic= */ pic,
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
@@ -1608,6 +1613,7 @@ public final class CcCompilationHelper {
         setupCompileBuildVariables(
             builder,
             sourceLabel,
+            /* outputName= */ null,
             generatePicAction,
             /* ccRelativeName= */ null,
             ccCompilationContext.getCppModuleMap(),
@@ -1705,6 +1711,7 @@ public final class CcCompilationHelper {
             setupCompileBuildVariables(
                 picBuilder,
                 sourceLabel,
+                outputName,
                 /* usePic= */ true,
                 ccRelativeName,
                 ccCompilationContext.getCppModuleMap(),
@@ -1770,6 +1777,7 @@ public final class CcCompilationHelper {
             setupCompileBuildVariables(
                 builder,
                 sourceLabel,
+                outputName,
                 /* usePic= */ false,
                 ccRelativeName,
                 cppModuleMap,
@@ -1869,6 +1877,7 @@ public final class CcCompilationHelper {
         setupCompileBuildVariables(
             builder,
             sourceLabel,
+            outputName,
             usePic,
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
@@ -1980,6 +1989,7 @@ public final class CcCompilationHelper {
         setupCompileBuildVariables(
             dBuilder,
             sourceLabel,
+            outputName,
             usePic,
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
@@ -2000,6 +2010,7 @@ public final class CcCompilationHelper {
         setupCompileBuildVariables(
             sdBuilder,
             sourceLabel,
+            outputName,
             usePic,
             ccRelativeName,
             ccCompilationContext.getCppModuleMap(),

@@ -351,10 +351,8 @@ public class ProtoCompileActionBuilder {
             protosToCompile,
             transitiveSources,
             protosInDirectDeps,
-            /* protosInExports= */ null,
             protoSourceRoots,
             directProtoSourceRoots,
-            /* exportedProtoSourceRoots= */ null,
             ruleContext.getLabel(),
             ImmutableList.of(output),
             "Descriptor Set",
@@ -383,34 +381,6 @@ public class ProtoCompileActionBuilder {
         outReplacement);
   }
 
-  public static void registerActions(
-      RuleContext ruleContext,
-      List<ToolchainInvocation> toolchainInvocations,
-      Iterable<Artifact> protosToCompile,
-      NestedSet<Artifact> transitiveSources,
-      NestedSet<Artifact> protosInDirectDeps,
-      NestedSet<String> protoSourceRoots,
-      NestedSet<String> directProtoSourceRoots,
-      Label ruleLabel,
-      Iterable<Artifact> outputs,
-      String flavorName,
-      boolean allowServices) {
-    registerActions(
-        ruleContext,
-        toolchainInvocations,
-        protosToCompile,
-        transitiveSources,
-        protosInDirectDeps,
-        protoSourceRoots,
-        directProtoSourceRoots,
-        ruleLabel,
-        outputs,
-        flavorName,
-        allowServices,
-        /* protosInExports= */ null,
-        /* exportedProtoSourceRoots= */ null);
-  }
-
   /**
    * Registers actions to generate code from .proto files.
    *
@@ -434,9 +404,7 @@ public class ProtoCompileActionBuilder {
       Label ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
-      boolean allowServices,
-      NestedSet<Artifact> protosInExports,
-      NestedSet<String> exportedProtoSourceRoots) {
+      boolean allowServices) {
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
@@ -444,10 +412,8 @@ public class ProtoCompileActionBuilder {
             protosToCompile,
             transitiveSources,
             protosInDirectDeps,
-            protosInExports,
             protoSourceRoots,
             directProtoSourceRoots,
-            exportedProtoSourceRoots,
             ruleLabel,
             outputs,
             flavorName,
@@ -464,10 +430,8 @@ public class ProtoCompileActionBuilder {
       Iterable<Artifact> protosToCompile,
       NestedSet<Artifact> transitiveSources,
       @Nullable NestedSet<Artifact> protosInDirectDeps,
-      @Nullable NestedSet<Artifact> protosInExports,
       NestedSet<String> protoSourceRoots,
       NestedSet<String> directProtoSourceRoots,
-      @Nullable NestedSet<String> exportedProtoSourceRoots,
       Label ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
@@ -504,9 +468,7 @@ public class ProtoCompileActionBuilder {
                 transitiveSources,
                 protoSourceRoots,
                 directProtoSourceRoots,
-                exportedProtoSourceRoots,
                 areDepsStrict(ruleContext) ? protosInDirectDeps : null,
-                arePublicImportsStrict(ruleContext) ? protosInExports : null,
                 ruleLabel,
                 allowServices,
                 ruleContext.getFragment(ProtoConfiguration.class).protocOpts()),
@@ -515,10 +477,6 @@ public class ProtoCompileActionBuilder {
         .setMnemonic(MNEMONIC);
 
     return result;
-  }
-
-  public static boolean arePublicImportsStrict(RuleContext ruleContext) {
-    return ruleContext.getFragment(ProtoConfiguration.class).strictPublicImports();
   }
 
   /**
@@ -548,9 +506,7 @@ public class ProtoCompileActionBuilder {
       NestedSet<Artifact> transitiveSources,
       NestedSet<String> transitiveProtoPathFlags,
       NestedSet<String> directProtoSourceRoots,
-      NestedSet<String> exportedProtoSourceRoots,
       @Nullable NestedSet<Artifact> protosInDirectDeps,
-      @Nullable NestedSet<Artifact> protosInExports,
       Label ruleLabel,
       boolean allowServices,
       ImmutableList<String> protocOpts) {
@@ -596,19 +552,6 @@ public class ProtoCompileActionBuilder {
 
     if (protosInDirectDeps != null) {
       cmdLine.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleLabel);
-    }
-
-    if (protosInExports != null) {
-      if (protosInExports.isEmpty()) {
-        // This line is necessary to trigger the check.
-        cmdLine.add("--allowed_public_imports=");
-      } else {
-        cmdLine.addAll(
-            "--allowed_public_imports",
-            VectorArg.join(":")
-                .each(protosInExports)
-                .mapped(new ExpandToPathFn(exportedProtoSourceRoots)));
-      }
     }
 
     for (Artifact src : protosToCompile) {
