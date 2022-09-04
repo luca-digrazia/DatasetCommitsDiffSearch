@@ -24,7 +24,6 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
@@ -59,7 +58,7 @@ public abstract class OptionValueDescription {
    * @return a bundle containing arguments that need to be parsed further.
    */
   abstract ExpansionBundle addOptionInstance(
-      ParsedOptionDescription parsedOption, Set<String> warnings) throws OptionsParsingException;
+      ParsedOptionDescription parsedOption, List<String> warnings) throws OptionsParsingException;
 
   /**
    * Grouping of convenience for the options that expand to other options, to attach an
@@ -130,7 +129,7 @@ public abstract class OptionValueDescription {
     }
 
     @Override
-    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, Set<String> warnings) {
+    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, List<String> warnings) {
       throw new IllegalStateException(
           "Cannot add values to the default option value. Create a modifiable "
               + "OptionValueDescription using createOptionValueDescription() instead.");
@@ -174,7 +173,7 @@ public abstract class OptionValueDescription {
 
     // Warnings should not end with a '.' because the internal reporter adds one automatically.
     @Override
-    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, Set<String> warnings)
+    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, List<String> warnings)
         throws OptionsParsingException {
       // This might be the first value, in that case, just store it!
       if (effectiveOptionInstance == null) {
@@ -302,7 +301,7 @@ public abstract class OptionValueDescription {
     }
 
     @Override
-    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, Set<String> warnings)
+    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, List<String> warnings)
         throws OptionsParsingException {
       // For repeatable options, we allow flags that take both single values and multiple values,
       // potentially collapsing them down.
@@ -361,7 +360,7 @@ public abstract class OptionValueDescription {
     }
 
     @Override
-    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, Set<String> warnings) {
+    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, List<String> warnings) {
       if (parsedOption.getUnconvertedValue() != null
           && !parsedOption.getUnconvertedValue().isEmpty()) {
         warnings.add(
@@ -401,7 +400,7 @@ public abstract class OptionValueDescription {
     }
 
     @Override
-    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, Set<String> warnings)
+    ExpansionBundle addOptionInstance(ParsedOptionDescription parsedOption, List<String> warnings)
         throws OptionsParsingException {
       // This is a valued flag, its value is handled the same way as a normal
       // SingleOptionValueDescription. (We check at compile time that these flags aren't
