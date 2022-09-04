@@ -218,7 +218,7 @@ public class CppCompileActionBuilder {
         ruleErrorConsumer.ruleError(errorMessage);
       }
 
-      throw new RuleErrorException(errorMessages.get(0));
+      throw new RuleErrorException();
     }
 
     return result;
