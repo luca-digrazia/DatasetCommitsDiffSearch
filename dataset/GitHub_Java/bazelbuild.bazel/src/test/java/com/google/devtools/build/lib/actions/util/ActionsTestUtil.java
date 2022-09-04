@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
@@ -55,6 +54,7 @@ import com.google.devtools.build.lib.actions.FileArtifactValue.RemoteFileArtifac
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
+import com.google.devtools.build.lib.actions.cache.Md5Digest;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissDetail;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
@@ -64,8 +64,6 @@ import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate.Output
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
@@ -155,11 +153,10 @@ public final class ActionsTestUtil {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         metadataHandler,
-        LostInputsCheck.NONE,
         fileOutErr,
         eventHandler,
         ImmutableMap.copyOf(clientEnv),
-        /*topLevelFilesets=*/ ImmutableMap.of(),
+        ImmutableMap.of(),
         actionGraph == null
             ? createDummyArtifactExpander()
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph),
@@ -171,15 +168,14 @@ public final class ActionsTestUtil {
     DummyExecutor dummyExecutor = new DummyExecutor();
     return new ActionExecutionContext(
         dummyExecutor,
-        /*actionInputFileCache=*/ null,
+        null,
         ActionInputPrefetcher.NONE,
         new ActionKeyContext(),
-        /*metadataHandler=*/ null,
-        LostInputsCheck.NONE,
-        /*fileOutErr=*/ null,
+        null,
+        null,
         eventHandler,
-        /*clientEnv=*/ ImmutableMap.of(),
-        /*topLevelFilesets=*/ ImmutableMap.of(),
+        ImmutableMap.of(),
+        ImmutableMap.of(),
         createDummyArtifactExpander(),
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null);
@@ -199,7 +195,6 @@ public final class ActionsTestUtil {
         ActionInputPrefetcher.NONE,
         actionKeyContext,
         metadataHandler,
-        LostInputsCheck.NONE,
         fileOutErr,
         eventHandler,
         ImmutableMap.of(),
@@ -351,7 +346,6 @@ public final class ActionsTestUtil {
           "dummy-configuration",
           null,
           null,
-          ImmutableMap.<String, String>of(),
           null);
 
   @AutoCodec
@@ -371,28 +365,19 @@ public final class ActionsTestUtil {
   public static class NullAction extends AbstractAction {
 
     public NullAction() {
-      super(
-          NULL_ACTION_OWNER,
-          NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-          ImmutableList.of(DUMMY_ARTIFACT));
+      super(NULL_ACTION_OWNER, Artifact.NO_ARTIFACTS, ImmutableList.of(DUMMY_ARTIFACT));
     }
 
     public NullAction(ActionOwner owner, Artifact... outputs) {
-      super(owner, NestedSetBuilder.emptySet(Order.STABLE_ORDER), ImmutableList.copyOf(outputs));
+      super(owner, Artifact.NO_ARTIFACTS, ImmutableList.copyOf(outputs));
     }
 
     public NullAction(Artifact... outputs) {
-      super(
-          NULL_ACTION_OWNER,
-          NestedSetBuilder.emptySet(Order.STABLE_ORDER),
-          ImmutableList.copyOf(outputs));
+      super(NULL_ACTION_OWNER, Artifact.NO_ARTIFACTS, ImmutableList.copyOf(outputs));
     }
 
     public NullAction(List<Artifact> inputs, Artifact... outputs) {
-      super(
-          NULL_ACTION_OWNER,
-          NestedSetBuilder.wrap(Order.STABLE_ORDER, inputs),
-          ImmutableList.copyOf(outputs));
+      super(NULL_ACTION_OWNER, inputs, ImmutableList.copyOf(outputs));
     }
 
     @Override
@@ -807,7 +792,7 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public void setDigestForVirtualArtifact(Artifact artifact, byte[] digest) {
+    public void setDigestForVirtualArtifact(Artifact artifact, Md5Digest md5Digest) {
       throw new UnsupportedOperationException();
     }
 
