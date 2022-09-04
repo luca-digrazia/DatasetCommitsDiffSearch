@@ -16,24 +16,39 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableList.Builder;
-import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
+import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.regex.Pattern;
+import javax.annotation.Nullable;
 
 /** Handles creation of CppCompileAction used to compile linkstamp sources. */
 public class CppLinkstampCompileHelper {
 
-  /** Creates {@link CppCompileAction} to compile linkstamp source */
+  /**
+   * Creates {@link CppCompileAction} to compile linkstamp source
+   *
+   * @param inputsForInvalidation: see {@link CppCompileAction#inputsForInvalidation}
+   */
   public static CppCompileAction createLinkstampCompileAction(
-      RuleContext ruleContext,
+      RuleErrorConsumer ruleErrorConsumer,
+      ActionConstructionContext actionConstructionContext,
+      @Nullable Artifact grepIncludes,
+      BuildConfiguration configuration,
       Artifact sourceFile,
       Artifact outputFile,
-      Iterable<Artifact> compilationInputs,
-      ImmutableSet<Artifact> nonCodeInputs,
+      NestedSet<Artifact> compilationInputs,
+      NestedSet<Artifact> nonCodeInputs,
+      NestedSet<Artifact> inputsForInvalidation,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<String> additionalLinkstampDefines,
       CcToolchainProvider ccToolchainProvider,
@@ -46,10 +61,12 @@ public class CppLinkstampCompileHelper {
       String outputReplacement,
       CppSemantics semantics) {
     CppCompileActionBuilder builder =
-        new CppCompileActionBuilder(ruleContext, ccToolchainProvider)
+        new CppCompileActionBuilder(
+                actionConstructionContext, grepIncludes, ccToolchainProvider, configuration)
             .addMandatoryInputs(compilationInputs)
             .setVariables(
                 getVariables(
+                    ruleErrorConsumer,
                     sourceFile,
                     outputFile,
                     labelReplacement,
@@ -57,6 +74,7 @@ public class CppLinkstampCompileHelper {
                     additionalLinkstampDefines,
                     buildInfoHeaderArtifacts,
                     featureConfiguration,
+                    configuration.getOptions(),
                     cppConfiguration,
                     ccToolchainProvider,
                     needsPic,
@@ -66,36 +84,36 @@ public class CppLinkstampCompileHelper {
             .setSourceFile(sourceFile)
             .setSemantics(semantics)
             .setOutputs(outputFile, null)
+            .setInputsForInvalidation(inputsForInvalidation)
             .setBuiltinIncludeFiles(buildInfoHeaderArtifacts)
             .addMandatoryInputs(nonCodeInputs)
-            .setCppConfiguration(cppConfiguration)
-            .setActionName(CppCompileAction.LINKSTAMP_COMPILE);
-    semantics.finalizeCompileActionBuilder(ruleContext, builder);
+            .setShareable(true)
+            .setShouldScanIncludes(false)
+            .setActionName(CppActionNames.LINKSTAMP_COMPILE);
+    semantics.finalizeCompileActionBuilder(
+        configuration, featureConfiguration, builder, ruleErrorConsumer);
     return builder.buildOrThrowIllegalStateException();
   }
 
-  private static ImmutableList<String> computeAllLinkstampDefines(
+  private static Iterable<String> computeAllLinkstampDefines(
       String labelReplacement,
       String outputReplacement,
       Iterable<String> additionalLinkstampDefines,
-      CppConfiguration cppConfiguration,
+      CcToolchainProvider ccToolchainProvider,
       String fdoBuildStamp,
       boolean codeCoverageEnabled) {
     String labelPattern = Pattern.quote("${LABEL}");
     String outputPathPattern = Pattern.quote("${OUTPUT_PATH}");
-    Builder<String> defines =
+    ImmutableList.Builder<String> defines =
         ImmutableList.<String>builder()
-            .add("GPLATFORM=\"" + cppConfiguration + "\"")
+            .add("GPLATFORM=\"" + ccToolchainProvider.getToolchainIdentifier() + "\"")
             .add("BUILD_COVERAGE_ENABLED=" + (codeCoverageEnabled ? "1" : "0"))
-            .add(CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoBuildStamp + "\"")
-            // G3_VERSION_INFO and G3_TARGET_NAME are C string literals that normally
-            // contain the label of the target being linked.  However, they are set
-            // differently when using shared native deps. In that case, a single .so file
-            // is shared by multiple targets, and its contents cannot depend on which
-            // target(s) were specified on the command line.  So in that case we have
-            // to use the (obscure) name of the .so file instead, or more precisely
-            // the path of the .so file relative to the workspace root.
-            .add("G3_VERSION_INFO=\"${LABEL}\"")
+            // G3_TARGET_NAME is a C string literal that normally contain the label of the target
+            // being linked.  However, they are set differently when using shared native deps. In
+            // that case, a single .so file is shared by multiple targets, and its contents cannot
+            // depend on which target(s) were specified on the command line.  So in that case we
+            // have to use the (obscure) name of the .so file instead, or more precisely the path of
+            // the .so file relative to the workspace root.
             .add("G3_TARGET_NAME=\"${LABEL}\"")
             // G3_BUILD_TARGET is a C string literal containing the output of this
             // link.  (An undocumented and untested invariant is that G3_BUILD_TARGET is the
@@ -108,18 +126,16 @@ public class CppLinkstampCompileHelper {
       defines.add(CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoBuildStamp + "\"");
     }
 
-    return defines
-        .build()
-        .stream()
-        .map(
-            define ->
-                define
-                    .replaceAll(labelPattern, labelReplacement)
-                    .replaceAll(outputPathPattern, outputReplacement))
-        .collect(ImmutableList.toImmutableList());
+    return Iterables.transform(
+        defines.build(),
+        define ->
+            define
+                .replaceAll(labelPattern, labelReplacement)
+                .replaceAll(outputPathPattern, outputReplacement));
   }
 
-  private static Variables getVariables(
+  private static CcToolchainVariables getVariables(
+      RuleErrorConsumer ruleErrorConsumer,
       Artifact sourceFile,
       Artifact outputFile,
       String labelReplacement,
@@ -127,6 +143,7 @@ public class CppLinkstampCompileHelper {
       Iterable<String> additionalLinkstampDefines,
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       FeatureConfiguration featureConfiguration,
+      BuildOptions buildOptions,
       CppConfiguration cppConfiguration,
       CcToolchainProvider ccToolchainProvider,
       boolean needsPic,
@@ -134,53 +151,42 @@ public class CppLinkstampCompileHelper {
       boolean codeCoverageEnabled) {
     // TODO(b/34761650): Remove all this hardcoding by separating a full blown compile action.
     Preconditions.checkArgument(
-        featureConfiguration.actionIsConfigured(CppCompileAction.LINKSTAMP_COMPILE));
+        featureConfiguration.actionIsConfigured(CppActionNames.LINKSTAMP_COMPILE));
 
-    Variables.Builder variables = new Variables.Builder(ccToolchainProvider.getBuildVariables());
-    // We need to force inclusion of build_info headers
-    variables.addStringSequenceVariable(
-        CppModel.INCLUDES_VARIABLE_NAME,
-        buildInfoHeaderArtifacts
-            .stream()
+    return CompileBuildVariables.setupVariablesOrReportRuleError(
+        ruleErrorConsumer,
+        featureConfiguration,
+        ccToolchainProvider,
+        buildOptions,
+        cppConfiguration,
+        sourceFile.getExecPathString(),
+        outputFile.getExecPathString(),
+        /* gcnoFile= */ null,
+        /* isUsingFission= */ false,
+        /* dwoFile= */ null,
+        /* ltoIndexingFile= */ null,
+        buildInfoHeaderArtifacts.stream()
             .map(Artifact::getExecPathString)
-            .collect(ImmutableList.toImmutableList()));
-    // Input/Output files.
-    variables.addStringVariable(CppModel.SOURCE_FILE_VARIABLE_NAME, sourceFile.getExecPathString());
-    variables.addStringVariable(CppModel.OUTPUT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
-    variables.addStringVariable(
-        CppModel.OUTPUT_OBJECT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
-    // Include directories for (normal includes with ".", empty quote- and system- includes).
-    variables.addStringSequenceVariable(
-        CppModel.INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of("."));
-    variables.addStringSequenceVariable(
-        CppModel.QUOTE_INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of());
-    variables.addStringSequenceVariable(
-        CppModel.SYSTEM_INCLUDE_PATHS_VARIABLE_NAME, ImmutableList.of());
-    // Legacy flags coming from fields such as compiler_flag
-    variables.addLazyStringSequenceVariable(
-        CppModel.LEGACY_COMPILE_FLAGS_VARIABLE_NAME,
-        CppModel.getLegacyCompileFlagsSupplier(
-            cppConfiguration, sourceFile.getExecPathString(), ImmutableSet.of()));
-    // Unfilterable flags coming from unfiltered_cxx_flag fields
-    variables.addLazyStringSequenceVariable(
-        CppModel.UNFILTERED_COMPILE_FLAGS_VARIABLE_NAME,
-        CppModel.getUnfilteredCompileFlagsSupplier(ccToolchainProvider, ImmutableSet.of()));
-    // Collect all preprocessor defines, and in each replace ${LABEL} by labelReplacements, and
-    // ${OUTPUT_PATH} with outputPathReplacement.
-    variables.addStringSequenceVariable(
-        CppModel.PREPROCESSOR_DEFINES_VARIABLE_NAME,
+            .collect(ImmutableList.toImmutableList()),
+        CcCompilationHelper.getCoptsFromOptions(cppConfiguration, sourceFile.getExecPathString()),
+        /* cppModuleMap= */ null,
+        needsPic,
+        fdoBuildStamp,
+        /* dotdFileExecPath= */ null,
+        /* variablesExtensions= */ ImmutableList.of(),
+        /* additionalBuildVariables= */ ImmutableMap.of(),
+        /* directModuleMaps= */ ImmutableList.of(),
+        /* includeDirs= */ NestedSetBuilder.create(Order.STABLE_ORDER, PathFragment.create(".")),
+        /* quoteIncludeDirs= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        /* systemIncludeDirs= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
+        /* frameworkIncludeDirs= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
         computeAllLinkstampDefines(
             labelReplacement,
             outputReplacement,
             additionalLinkstampDefines,
-            cppConfiguration,
+            ccToolchainProvider,
             fdoBuildStamp,
-            codeCoverageEnabled));
-    // For dynamic libraries, produce position independent code.
-    if (needsPic) {
-      variables.addStringVariable(CppModel.PIC_VARIABLE_NAME, "");
-    }
-
-    return variables.build();
+            codeCoverageEnabled),
+        /* localDefines= */ ImmutableList.of());
   }
 }
