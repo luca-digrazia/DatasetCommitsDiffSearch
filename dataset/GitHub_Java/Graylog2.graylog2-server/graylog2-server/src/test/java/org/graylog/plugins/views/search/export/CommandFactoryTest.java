@@ -23,7 +23,6 @@ import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
 import org.graylog.plugins.views.search.filter.AndFilter;
 import org.graylog.plugins.views.search.filter.StreamFilter;
 import org.graylog.plugins.views.search.searchtypes.MessageList;
-import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog2.decorators.Decorator;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
@@ -36,7 +35,6 @@ import java.util.Arrays;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.graylog.plugins.views.search.export.ExportMessagesCommand.DEFAULT_FIELDS;
 import static org.graylog.plugins.views.search.export.ExportMessagesCommand.defaultTimeRange;
 import static org.graylog.plugins.views.search.export.TestData.relativeRange;
@@ -75,28 +73,6 @@ class CommandFactoryTest {
     }
 
     @Test
-    void throwsIfSearchTypeIsNotMessageList() {
-        Pivot p = Pivot.builder().id("pivot-id").series(newArrayList()).rollup(false).build();
-
-        Query q = org.graylog.plugins.views.search.TestData.validQueryBuilder().searchTypes(ImmutableSet.of(p)).build();
-
-        Search s = searchWithQueries(q);
-
-        assertThatExceptionOfType(ExportException.class)
-                .isThrownBy(() -> sut.buildWithMessageList(s, p.id(), ResultFormat.builder().build()))
-                .withMessageContaining("supported");
-    }
-
-    @Test
-    void searchWithMultipleQueriesLeadsToExceptionIfNoSearchTypeProvided() {
-        Search s = searchWithQueries(org.graylog.plugins.views.search.TestData.validQueryBuilder().build(), org.graylog.plugins.views.search.TestData.validQueryBuilder().build());
-
-        assertThatExceptionOfType(ExportException.class)
-                .isThrownBy(() -> sut.buildWithSearchOnly(s, ResultFormat.builder().build()))
-                .withMessageContaining("multiple queries");
-    }
-
-    @Test
     void convertsTimeRangeToAbsolute() {
         RelativeRange relative = relativeRange(100);
         MessagesRequest request = MessagesRequest.builder().timeRange(relative).build();
@@ -114,7 +90,7 @@ class CommandFactoryTest {
                 .build();
         Search s = searchWithQueries(query);
 
-        ExportMessagesCommand command = buildFrom(s);
+        ExportMessagesCommand command = buildFrom(s, query);
 
         assertThat(command.timeRange()).isEqualTo(query.timerange());
         assertThat(command.queryString()).isEqualTo(query.query());
@@ -131,7 +107,7 @@ class CommandFactoryTest {
                 .limit(100)
                 .build();
 
-        ExportMessagesCommand command = buildFrom(s, resultFormat);
+        ExportMessagesCommand command = buildFrom(s, query, resultFormat);
 
         assertThat(command.fieldsInOrder()).isEqualTo(resultFormat.fieldsInOrder());
         assertThat(command.limit()).isEqualTo(resultFormat.limit());
@@ -145,7 +121,7 @@ class CommandFactoryTest {
         ResultFormat resultFormat = ResultFormat.builder()
                 .build();
 
-        ExportMessagesCommand command = buildFrom(s, resultFormat);
+        ExportMessagesCommand command = buildFrom(s, query, resultFormat);
 
         assertThat(command.fieldsInOrder()).isEqualTo(DEFAULT_FIELDS);
     }
@@ -159,7 +135,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         assertThat(command.streams()).isEqualTo(ml.effectiveStreams());
     }
@@ -172,7 +148,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         assertThat(command.streams()).isEqualTo(q.usedStreamIds());
     }
@@ -186,7 +162,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         //noinspection OptionalGetWithoutIsPresent
         assertThat(command.queryString()).isEqualTo(ml.query().get());
@@ -202,7 +178,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         assertThat(command.queryString()).isEqualTo(q.query());
     }
@@ -218,7 +194,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         ElasticsearchQueryString combined = ElasticsearchQueryString.builder()
                 .queryString("from-query AND from-messagelist").build();
@@ -236,7 +212,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         assertThat(command.timeRange()).isEqualTo(messageListTimeRange);
     }
@@ -249,7 +225,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         assertThat(command.timeRange()).isEqualTo(q.timerange());
     }
@@ -264,7 +240,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id());
+        ExportMessagesCommand command = buildFrom(s, q, ml);
 
         assertThat(command.decorators()).containsExactly(decorator);
     }
@@ -278,7 +254,7 @@ class CommandFactoryTest {
 
         ResultFormat resultFormat = ResultFormat.builder().fieldsInOrder("field-1", "field-2").build();
 
-        ExportMessagesCommand command = buildFrom(s, ml.id(), resultFormat);
+        ExportMessagesCommand command = buildFrom(s, q, ml, resultFormat);
 
         assertThat(command.fieldsInOrder()).isEqualTo(resultFormat.fieldsInOrder());
     }
@@ -291,7 +267,7 @@ class CommandFactoryTest {
 
         Search s = searchWithQueries(q);
 
-        ExportMessagesCommand command = buildFrom(s, ml.id(), ResultFormat.builder().build());
+        ExportMessagesCommand command = buildFrom(s, q, ml, ResultFormat.builder().build());
 
         assertThat(command.fieldsInOrder()).isEqualTo(DEFAULT_FIELDS);
     }
@@ -303,25 +279,25 @@ class CommandFactoryTest {
 
         when(queryStringDecorator.decorateQueryString("undecorated", s, q)).thenReturn("decorated");
 
-        ExportMessagesCommand command = buildFrom(s);
+        ExportMessagesCommand command = buildFrom(s, q);
 
         assertThat(command.queryString()).isEqualTo(ElasticsearchQueryString.builder().queryString("decorated").build());
     }
 
-    private ExportMessagesCommand buildFrom(Search s) {
-        return buildFrom(s, ResultFormat.builder().build());
+    private ExportMessagesCommand buildFrom(Search s, Query query) {
+        return buildFrom(s, query, ResultFormat.builder().build());
     }
 
-    private ExportMessagesCommand buildFrom(Search s, ResultFormat resultFormat) {
-        return sut.buildWithSearchOnly(s, resultFormat);
+    private ExportMessagesCommand buildFrom(Search s, Query query, ResultFormat resultFormat) {
+        return sut.buildWithSearchOnly(s, query, resultFormat);
     }
 
-    private ExportMessagesCommand buildFrom(Search search, String messageListId) {
-        return buildFrom(search, messageListId, ResultFormat.builder().build());
+    private ExportMessagesCommand buildFrom(Search search, Query query, MessageList messageList) {
+        return buildFrom(search, query, messageList, ResultFormat.builder().build());
     }
 
-    private ExportMessagesCommand buildFrom(Search search, String messageListId, ResultFormat resultFormat) {
-        return sut.buildWithMessageList(search, messageListId, resultFormat);
+    private ExportMessagesCommand buildFrom(Search search, Query query, MessageList messageList, ResultFormat resultFormat) {
+        return sut.buildWithMessageList(search, query, messageList, resultFormat);
     }
 
     private AndFilter streamFilter(String... streamIds) {

@@ -17,7 +17,6 @@
 package org.graylog2.indexer.cluster.jest;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.google.common.collect.ImmutableList;
 import io.searchbox.action.Action;
 import io.searchbox.client.JestClient;
 import io.searchbox.client.JestResult;
@@ -29,10 +28,13 @@ import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.QueryParsingException;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 
 public class JestUtils {
@@ -63,25 +65,39 @@ public class JestUtils {
         return execute(client, null, request, errorMessage);
     }
 
+    public static <T extends JestResult> T execute(JestClient client, RequestConfig requestConfig,
+                                                   Action<T> request) throws IOException {
+        if (client instanceof JestHttpClient) {
+            return ((JestHttpClient) client).execute(request, requestConfig);
+        } else {
+            return client.execute(request);
+        }
+    }
+
     public static ElasticsearchException specificException(Supplier<String> errorMessage, JsonNode errorNode) {
-        final List<JsonNode> rootCauses = extractRootCauses(errorNode);
-        final List<String> reasons = extractReasons(rootCauses);
+        final JsonNode rootCauses = errorNode.path("root_cause");
+        final List<String> reasons = new ArrayList<>(rootCauses.size());
 
         for (JsonNode rootCause : rootCauses) {
-            final String type = rootCause.path("type").asText(null);
-            if (type == null) {
+            final JsonNode reason = rootCause.path("reason");
+            if (reason.isTextual()) {
+                reasons.add(reason.asText());
+            }
+
+            final JsonNode type = rootCause.path("type");
+            if (!type.isTextual()) {
                 continue;
             }
-            switch(type) {
+            switch(type.asText()) {
                 case "query_parsing_exception":
                     return buildQueryParsingException(errorMessage, rootCause, reasons);
                 case "index_not_found_exception":
                     final String indexName = rootCause.path("resource.id").asText();
                     return buildIndexNotFoundException(errorMessage, indexName);
                 case "illegal_argument_exception":
-                    final String reason = rootCause.path("reason").asText();
-                    if (reason.startsWith("Expected numeric type on field")) {
-                        return buildFieldTypeException(errorMessage, reason);
+                    final String reasonText = reason.asText();
+                    if (reasonText.startsWith("Expected numeric type on field")) {
+                        return buildFieldTypeException(errorMessage, reasonText);
                     }
                     break;
             }
@@ -91,21 +107,15 @@ public class JestUtils {
             return new ElasticsearchException(errorMessage.get(), Collections.singletonList(errorNode.toString()));
         }
 
-        return new ElasticsearchException(errorMessage.get(), reasons);
+        return new ElasticsearchException(errorMessage.get(), deduplicateErrors(reasons));
+    }
+
+    public static List<String> deduplicateErrors(List<String> errors) {
+        return errors.stream().distinct().collect(Collectors.toList());
     }
 
     private static FieldTypeException buildFieldTypeException(Supplier<String> errorMessage, String reason) {
         return new FieldTypeException(errorMessage.get(), reason);
-    }
-
-    private static List<String> extractReasons(List<JsonNode> rootCauses) {
-        return rootCauses.stream()
-                .map(rootCause -> rootCause.path("reason").asText(null))
-                .collect(Collectors.toList());
-    }
-
-    private static List<JsonNode> extractRootCauses(JsonNode jsonObject) {
-        return ImmutableList.copyOf(jsonObject.path("root_cause").iterator());
     }
 
     private static QueryParsingException buildQueryParsingException(Supplier<String> errorMessage,
@@ -122,5 +132,32 @@ public class JestUtils {
 
     private static IndexNotFoundException buildIndexNotFoundException(Supplier<String> errorMessage, String index) {
         return new IndexNotFoundException(errorMessage.get(), Collections.singletonList("Index not found for query: " + index + ". Try recalculating your index ranges."));
+    }
+
+    public static Optional<ElasticsearchException> checkForFailedShards(JestResult result) {
+        // unwrap shard failure due to non-numeric mapping. this happens when searching across index sets
+        // if at least one of the index sets comes back with a result, the overall result will have the aggregation
+        // but not considered failed entirely. however, if one shard has the error, we will refuse to respond
+        // otherwise we would be showing empty graphs for non-numeric fields.
+        final JsonNode shards = result.getJsonObject().path("_shards");
+        final double failedShards = shards.path("failed").asDouble();
+
+        if (failedShards > 0) {
+            final List<String> errors = StreamSupport.stream(shards.path("failures").spliterator(), false)
+                    .map(failure -> failure.path("reason").path("reason").asText())
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+
+            final List<String> nonNumericFieldErrors = errors.stream()
+                    .filter(error -> error.startsWith("Expected numeric type on field"))
+                    .collect(Collectors.toList());
+            if (!nonNumericFieldErrors.isEmpty()) {
+                return Optional.of(new FieldTypeException("Unable to perform search query: ", deduplicateErrors(nonNumericFieldErrors)));
+            }
+
+            return Optional.of(new ElasticsearchException("Unable to perform search query: ", deduplicateErrors(errors)));
+        }
+
+        return Optional.empty();
     }
 }
