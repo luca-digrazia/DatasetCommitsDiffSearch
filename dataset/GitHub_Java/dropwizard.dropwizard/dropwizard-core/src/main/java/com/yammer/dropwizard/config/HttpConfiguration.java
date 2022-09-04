@@ -86,11 +86,11 @@ public class HttpConfiguration {
 
     @NotNull
     @JsonProperty
-    private Size requestBufferSize = Size.kilobytes(16);
+    private Size requestBufferSize = Size.kilobytes(32);
 
     @NotNull
     @JsonProperty
-    private Size requestHeaderBufferSize = Size.kilobytes(6);
+    private Size requestHeaderBufferSize = Size.kilobytes(3);
 
     @NotNull
     @JsonProperty
