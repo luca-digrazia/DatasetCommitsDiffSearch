@@ -35,7 +35,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -568,13 +567,14 @@ public final class UnixGlob {
       pendingOps.incrementAndGet();
       try {
         for (String[] splitPattern : splitPatterns) {
-          int numRecursivePatterns = 0;
+          boolean containsRecursivePattern = false;
           for (String pattern : splitPattern) {
             if (isRecursivePattern(pattern)) {
-              ++numRecursivePatterns;
+              containsRecursivePattern = true;
+              break;
             }
           }
-          GlobTaskContext context = numRecursivePatterns > 1
+          GlobTaskContext context = containsRecursivePattern
               ? new RecursiveGlobTaskContext(splitPattern, excludeDirectories, dirPred, syscalls)
               : new GlobTaskContext(splitPattern, excludeDirectories, dirPred, syscalls);
           context.queueGlob(base, baseStat.isDirectory(), 0);
@@ -602,31 +602,32 @@ public final class UnixGlob {
     /** Should only be called by link {@GlobTaskContext}. */
     private void queueGlob(final Path base, final boolean baseIsDir, final int idx,
         final GlobTaskContext context) {
-      enqueue(
-          new Runnable() {
-            @Override
-            public void run() {
-              try (SilentCloseable c =
-                  Profiler.instance().profile(ProfilerTask.VFS_GLOB, base.getPathString())) {
-                reallyGlob(base, baseIsDir, idx, context);
-              } catch (IOException e) {
-                ioException.set(e);
-              } catch (RuntimeException e) {
-                runtimeException.set(e);
-              } catch (Error e) {
-                error.set(e);
-              }
-            }
+      enqueue(new Runnable() {
+        @Override
+        public void run() {
+          Profiler.instance().startTask(ProfilerTask.VFS_GLOB, this);
+          try {
+            reallyGlob(base, baseIsDir, idx, context);
+          } catch (IOException e) {
+            ioException.set(e);
+          } catch (RuntimeException e) {
+            runtimeException.set(e);
+          } catch (Error e) {
+            error.set(e);
+          } finally {
+            Profiler.instance().completeTask(ProfilerTask.VFS_GLOB);
+          }
+        }
 
-            @Override
-            public String toString() {
-              return String.format(
+        @Override
+        public String toString() {
+          return String.format(
                   "%s glob(include=[%s], exclude_directories=%s)",
                   base.getPathString(),
                   "\"" + Joiner.on("\", \"").join(context.patternParts) + "\"",
                   context.excludeDirectories);
-            }
-          });
+        }
+      });
     }
 
     protected void enqueue(final Runnable r) {
@@ -818,18 +819,20 @@ public final class UnixGlob {
         }
         boolean childIsDir = (type == Dirent.Type.DIRECTORY);
         String text = dent.getName();
+        // Optimize allocations for the case where the pattern doesn't match the dirent.
+        Path child = null;
 
         if (isRecursivePattern) {
-          Path child = base.getChild(text);
-          // Recurse without shifting the pattern. The case where we shifting the pattern is
-          // already handled by the special case above.
+          // Recurse without shifting the pattern.
           if (childIsDir) {
+            child = base.getChild(text);
             context.queueGlob(child, childIsDir, idx);
-          } else if (idx + 1 == context.patternParts.length) {
-            results.add(child);
           }
-        } else if (matches(pattern, text, cache)) {
-          Path child = base.getChild(text);
+        }
+        if (matches(pattern, text, cache)) {
+          if (child == null) {
+            child = base.getChild(text);
+          }
 
           // Recurse and consume one segment of the pattern.
           if (childIsDir) {
