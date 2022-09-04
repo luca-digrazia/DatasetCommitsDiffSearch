@@ -15,8 +15,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
-import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.EqualsTester;
@@ -269,15 +269,9 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
   public void testRegisteredExecutionPlatformsValue_equalsAndHashCode()
       throws ConstraintCollection.DuplicateConstraintException {
     ConfiguredTargetKey executionPlatformKey1 =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//test:executionPlatform1"))
-            .setConfigurationKey(null)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//test:executionPlatform1"), null, false);
     ConfiguredTargetKey executionPlatformKey2 =
-        ConfiguredTargetKey.builder()
-            .setLabel(makeLabel("//test:executionPlatform2"))
-            .setConfigurationKey(null)
-            .build();
+        ConfiguredTargetKey.of(makeLabel("//test:executionPlatform2"), null, false);
 
     new EqualsTester()
         .addEqualityGroup(
