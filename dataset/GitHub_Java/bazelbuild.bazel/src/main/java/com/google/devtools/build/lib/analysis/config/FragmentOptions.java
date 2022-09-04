@@ -17,9 +17,12 @@ package com.google.devtools.build.lib.analysis.config;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsBase;
+
 import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -49,6 +52,14 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
    * prefer {@code getDefaultsLabels()} to this.
    */
   public ImmutableList<String> getDefaultsRules() {
+    return ImmutableList.of();
+  }
+
+  /**
+   * Returns a list of potential split configuration transitions for this fragment. Split
+   * configurations usually need to be explicitly enabled by passing in an option.
+   */
+  public List<SplitTransition<BuildOptions>> getPotentialSplitTransitions() {
     return ImmutableList.of();
   }
 
@@ -83,9 +94,11 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
 
   /**
    * Creates a new FragmentOptions instance with flags adjusted to host platform.
+   *
+   * @param fallback see {@code BuildOptions.createHostOptions}
    */
   @SuppressWarnings("unused")
-  public FragmentOptions getHost() {
+  public FragmentOptions getHost(boolean fallback) {
     return getDefault();
   }
 }
