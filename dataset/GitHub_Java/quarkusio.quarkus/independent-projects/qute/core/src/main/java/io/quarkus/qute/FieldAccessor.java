@@ -1,6 +1,7 @@
 package io.quarkus.qute;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -23,7 +24,7 @@ class FieldAccessor implements ValueAccessor, AccessorCandidate {
             if (ret instanceof CompletionStage) {
                 return (CompletionStage<Object>) ret;
             } else {
-                return CompletedStage.of(ret);
+                return CompletableFuture.completedFuture(ret);
             }
         } catch (Exception e) {
             throw new IllegalStateException("Reflection invocation error", e);

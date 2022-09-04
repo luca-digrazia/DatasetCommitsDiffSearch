@@ -740,15 +740,9 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
             return;
         }
         final Node node = rootDeployment.expectedDeploymentNodes.get(key);
-
-        if (node != null) {
-            if (!node.present) {
-                node.present = true;
-                --rootDeployment.deploymentDepsTotal;
-                if (rootDeployment.allRtDeps.contains(key)) {
-                    rootDeployment.deploymentsOnRtCp.add(key);
-                }
-            }
+        if (node != null && !node.present) {
+            node.present = true;
+            --rootDeployment.deploymentDepsTotal;
         } else if (!rootDeployment.allRtDeps.contains(key)) {
             final AppArtifactKey deployment = getDeploymentKey(artifact);
             if (deployment != null) {
@@ -1025,8 +1019,7 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
         }
 
         boolean hasErrors() {
-            return deploymentDepsTotal != 0 || runtimeCp != 0 || !unexpectedDeploymentDeps.isEmpty()
-                    || !deploymentsOnRtCp.isEmpty();
+            return deploymentDepsTotal != 0 || runtimeCp != 0 || !unexpectedDeploymentDeps.isEmpty();
         }
     }
 
