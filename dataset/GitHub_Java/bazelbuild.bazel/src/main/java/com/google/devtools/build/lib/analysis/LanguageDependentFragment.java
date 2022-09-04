@@ -52,7 +52,7 @@ public final class LanguageDependentFragment implements TransitiveInfoProvider {
 
     private final String displayName;
 
-    @AutoCodec.Instantiator
+    @AutoCodec.Constructor
     public LibraryLanguage(String displayName) {
       this.displayName = displayName;
     }
@@ -80,7 +80,7 @@ public final class LanguageDependentFragment implements TransitiveInfoProvider {
   private final Label label;
   private final ImmutableSet<LibraryLanguage> languages;
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   public LanguageDependentFragment(Label label, ImmutableSet<LibraryLanguage> languages) {
     this.label = label;
     this.languages = languages;
