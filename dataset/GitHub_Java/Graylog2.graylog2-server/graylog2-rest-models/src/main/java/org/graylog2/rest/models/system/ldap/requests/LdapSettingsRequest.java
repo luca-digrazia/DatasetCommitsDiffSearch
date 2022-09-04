@@ -24,7 +24,6 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import javax.annotation.Nullable;
 import java.net.URI;
-import java.util.List;
 import java.util.Map;
 
 @JsonAutoDetect
@@ -75,10 +74,6 @@ public abstract class LdapSettingsRequest {
     @Nullable
     public abstract String groupIdAttribute();
 
-    @JsonProperty
-    @Nullable
-    public abstract List<String> additionalDefaultGroups();
-
     @JsonCreator
     public static LdapSettingsRequest create(@JsonProperty("enabled") boolean enabled,
                                              @JsonProperty("system_username") @NotEmpty String systemUsername,
@@ -93,8 +88,7 @@ public abstract class LdapSettingsRequest {
                                              @JsonProperty("default_group") @NotEmpty String defaultGroup,
                                              @JsonProperty("group_mapping") @Nullable Map<String, String> groupMapping,
                                              @JsonProperty("group_search_base") @Nullable String groupSearchBase,
-                                             @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute,
-                                             @JsonProperty("group_id_attribute") @Nullable List<String> additionalDefaultGroups) {
+                                             @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute) {
         return new AutoValue_LdapSettingsRequest(enabled,
                                                  systemUsername,
                                                  systemPassword,
@@ -108,7 +102,6 @@ public abstract class LdapSettingsRequest {
                                                  defaultGroup,
                                                  groupMapping,
                                                  groupSearchBase,
-                                                 groupIdAttribute,
-                                                 additionalDefaultGroups);
+                                                 groupIdAttribute);
     }
 }

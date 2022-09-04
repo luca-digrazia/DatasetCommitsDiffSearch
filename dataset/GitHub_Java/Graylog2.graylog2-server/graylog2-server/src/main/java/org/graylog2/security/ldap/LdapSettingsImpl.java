@@ -38,7 +38,6 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.net.URI;
 import java.security.SecureRandom;
-import java.util.Collections;
 import java.util.Map;
 
 @CollectionName("ldap_settings")
@@ -258,7 +257,7 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
         final Map<String, String> groupMapping = (Map<String, String>) fields.get(GROUP_MAPPING);
 
         if (groupMapping == null || groupMapping.isEmpty()) {
-            return Collections.emptyMap();
+            return Maps.newHashMap();
         }
         else {
             // we store role ids, but the outside world uses role names to identify them
@@ -267,7 +266,7 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
                 return Maps.newHashMap(Maps.transformValues(groupMapping, new Role.RoleIdToNameFunction(idToRole)));
             } catch (NotFoundException e) {
                 LOG.error("Unable to load role mapping");
-                return Collections.emptyMap();
+                return Maps.newHashMap();
             }
         }
     }
@@ -276,7 +275,7 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
     public void setGroupMapping(Map<String, String> mapping) {
         Map<String, String> internal;
         if (mapping == null) {
-            internal = Collections.emptyMap();
+            internal = Maps.newHashMap();
         } else {
             // we store ids internally but external users use the group names
             try {
@@ -294,7 +293,7 @@ public class LdapSettingsImpl extends PersistedImpl implements LdapSettings {
                 }));
             } catch (NotFoundException e) {
                 LOG.error("Unable to convert group names to ids", e);
-                throw new IllegalStateException("Unable to convert group names to ids", e);
+                internal = Maps.newHashMap();
             }
         }
 

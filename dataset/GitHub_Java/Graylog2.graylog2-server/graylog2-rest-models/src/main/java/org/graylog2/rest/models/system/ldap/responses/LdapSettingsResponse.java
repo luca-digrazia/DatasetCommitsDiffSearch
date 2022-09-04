@@ -24,7 +24,6 @@ import com.google.auto.value.AutoValue;
 import javax.annotation.Nullable;
 import java.net.URI;
 import java.util.Map;
-import java.util.Set;
 
 @JsonAutoDetect
 @AutoValue
@@ -74,11 +73,6 @@ public abstract class LdapSettingsResponse {
     @Nullable
     public abstract String groupIdAttribute();
 
-    @JsonProperty
-    @Nullable
-    public abstract Set<String> additionalDefaultGroups();
-
-
     @JsonCreator
     public static LdapSettingsResponse create(@JsonProperty("enabled") boolean enabled,
                                               @JsonProperty("system_username") String systemUsername,
@@ -91,10 +85,9 @@ public abstract class LdapSettingsResponse {
                                               @JsonProperty("search_pattern") String searchPattern,
                                               @JsonProperty("display_name_attributes") String displayNameAttribute,
                                               @JsonProperty("default_group") String defaultGroup,
-                                              @JsonProperty("group_mapping") @Nullable Map<String, String> groupMapping,
+                                              @JsonProperty("groupMapping") @Nullable Map<String, String> groupMapping,
                                               @JsonProperty("group_search_base") @Nullable String groupSearchBase,
-                                              @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute,
-                                              @JsonProperty("additional_default_groups") @Nullable Set<String> additionalDefaultGroups) {
+                                              @JsonProperty("group_id_attribute") @Nullable String groupIdAttribute) {
         return new AutoValue_LdapSettingsResponse(enabled,
                                                   systemUsername,
                                                   systemPassword,
@@ -108,7 +101,6 @@ public abstract class LdapSettingsResponse {
                                                   defaultGroup,
                                                   groupMapping,
                                                   groupSearchBase,
-                                                  groupIdAttribute,
-                                                  additionalDefaultGroups);
+                                                  groupIdAttribute);
     }
 }
