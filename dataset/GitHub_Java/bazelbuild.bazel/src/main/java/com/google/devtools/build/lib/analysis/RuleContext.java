@@ -1664,13 +1664,12 @@ public final class RuleContext extends TargetContext
       return mapBuilder.build();
     }
 
-    /**
-     * Post a raw event to the analysis environment's event handler. This circumvents normal
-     * error and warning reporting functionality to post events, and should only be used
-     * in rare cases where a custom event needs to be handled.
-     */
     public void post(Postable event) {
-      env.getEventHandler().post(event);
+      reporter.post(event);
+    }
+
+    public void reportError(Location location, String message) {
+      reporter.reportError(location, message);
     }
 
     @Override
@@ -1989,13 +1988,19 @@ public final class RuleContext extends TargetContext
   }
 
   /** Helper class for reporting errors and warnings. */
-  private static final class ErrorReporter extends EventHandlingErrorReporter
+  public static final class ErrorReporter extends EventHandlingErrorReporter
       implements RuleErrorConsumer {
+    private final AnalysisEnvironment env;
     private final Rule rule;
 
     ErrorReporter(AnalysisEnvironment env, Rule rule, String ruleClassNameForLogging) {
       super(ruleClassNameForLogging, env);
+      this.env = env;
       this.rule = rule;
+    }
+
+    public void post(Postable event) {
+      env.getEventHandler().post(event);
     }
 
     @Override
