@@ -521,15 +521,20 @@ public final class CcLinkingHelper {
               .build();
     }
 
+    Runfiles cppStaticRunfiles = collectCppRunfiles(ccLinkingOutputs, true);
+    Runfiles cppSharedRunfiles = collectCppRunfiles(ccLinkingOutputs, false);
+
+    // By very careful when adding new providers here - it can potentially affect a lot of rules.
+    // We should consider merging most of these providers into a single provider.
+    TransitiveInfoProviderMapBuilder providers =
+        new TransitiveInfoProviderMapBuilder()
+            .put(new CcRunfilesInfo(cppStaticRunfiles, cppSharedRunfiles));
+
     Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
 
     if (shouldAddLinkerOutputArtifacts(ruleContext, ccOutputs)) {
       addLinkerOutputArtifacts(outputGroups, ccOutputs);
     }
-
-    // Be very careful when adding new providers here - it can potentially affect a lot of rules.
-    // We should consider merging most of these providers into a single provider.
-    TransitiveInfoProviderMapBuilder providers = new TransitiveInfoProviderMapBuilder();
 
     // TODO(bazel-team): Maybe we can infer these from other data at the places where they are
     // used.
@@ -539,13 +544,6 @@ public final class CcLinkingHelper {
     providers.put(
         collectExecutionDynamicLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
 
-    Runfiles cppStaticRunfiles = collectCppRunfiles(ccLinkingOutputs, true);
-    Runfiles cppSharedRunfiles = collectCppRunfiles(ccLinkingOutputs, false);
-
-    CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    ccLinkingInfoBuilder.setCcRunfilesInfo(
-        new CcRunfilesInfo(cppStaticRunfiles, cppSharedRunfiles));
-
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     boolean forcePic = cppConfiguration.forcePic();
     if (emitCcSpecificLinkParamsProvider) {
@@ -553,11 +551,12 @@ public final class CcLinkingHelper {
           new CcSpecificLinkParamsProvider(
               createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContextInfo, forcePic)));
     } else {
+      CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
       ccLinkingInfoBuilder.setCcLinkParamsInfo(
           new CcLinkParamsInfo(
               createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContextInfo, forcePic)));
+      providers.put(ccLinkingInfoBuilder.build());
     }
-    providers.put(ccLinkingInfoBuilder.build());
     return new LinkingInfo(
         providers.build(), outputGroups, ccLinkingOutputs, originalLinkingOutputs);
   }

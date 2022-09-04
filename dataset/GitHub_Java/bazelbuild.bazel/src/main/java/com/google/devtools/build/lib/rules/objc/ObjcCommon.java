@@ -156,7 +156,6 @@ public final class ObjcCommon {
     private Iterable<Artifact> staticFrameworkImports = ImmutableList.of();
     private Iterable<Artifact> dynamicFrameworkImports = ImmutableList.of();
     private Optional<CompilationArtifacts> compilationArtifacts = Optional.absent();
-    private ImmutableSet.Builder<Artifact> textualHeaders = ImmutableSet.builder();
     private Iterable<ObjcProvider> depObjcProviders = ImmutableList.of();
     private Iterable<ObjcProvider> directDepObjcProviders = ImmutableList.of();
     private Iterable<ObjcProvider> runtimeDepObjcProviders = ImmutableList.of();
@@ -462,7 +461,6 @@ public final class ObjcCommon {
         // probably shouldn't.
         objcProvider.addAll(INCLUDE_SYSTEM, headerProvider.getSystemIncludeDirs());
         objcProvider.addAll(DEFINE, headerProvider.getDefines());
-        textualHeaders.addAll(headerProvider.getTextualHdrs());
       }
       for (CcLinkParamsInfo linkProvider : depCcLinkProviders) {
         CcLinkParams params = linkProvider.getCcLinkParams(true, false);
@@ -609,7 +607,7 @@ public final class ObjcCommon {
             .add(DEBUG_SYMBOLS_PLIST, intermediateArtifacts.dsymPlist(dsymOutputType));
       }
 
-      return new ObjcCommon(objcProvider.build(), compilationArtifacts, textualHeaders.build());
+      return new ObjcCommon(objcProvider.build(), compilationArtifacts);
     }
 
     private static boolean useStrictObjcModuleMaps(RuleContext context) {
@@ -655,15 +653,11 @@ public final class ObjcCommon {
   private final ObjcProvider objcProvider;
 
   private final Optional<CompilationArtifacts> compilationArtifacts;
-  private final ImmutableSet<Artifact> textualHdrs;
 
   private ObjcCommon(
-      ObjcProvider objcProvider,
-      Optional<CompilationArtifacts> compilationArtifacts,
-      ImmutableSet<Artifact> textualHdrs) {
+      ObjcProvider objcProvider, Optional<CompilationArtifacts> compilationArtifacts) {
     this.objcProvider = Preconditions.checkNotNull(objcProvider);
     this.compilationArtifacts = Preconditions.checkNotNull(compilationArtifacts);
-    this.textualHdrs = textualHdrs;
   }
 
   public ObjcProvider getObjcProvider() {
@@ -672,10 +666,6 @@ public final class ObjcCommon {
 
   public Optional<CompilationArtifacts> getCompilationArtifacts() {
     return compilationArtifacts;
-  }
-
-  public ImmutableSet<Artifact> getTextualHdrs() {
-    return textualHdrs;
   }
 
   /**
