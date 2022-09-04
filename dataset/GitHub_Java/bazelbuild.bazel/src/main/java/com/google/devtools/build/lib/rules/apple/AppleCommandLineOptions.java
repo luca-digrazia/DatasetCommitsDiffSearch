@@ -14,6 +14,10 @@
 
 package com.google.devtools.build.lib.rules.apple;
 
+import static com.google.devtools.build.lib.skyframe.serialization.SerializationCommonUtils.STRING_LIST_CODEC;
+import static com.google.devtools.build.lib.skyframe.serialization.SerializationCommonUtils.deserializeNullable;
+import static com.google.devtools.build.lib.skyframe.serialization.SerializationCommonUtils.serializeNullable;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -21,15 +25,13 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.DefaultL
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelCodec;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.EnumCodec;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.strings.StringCodecs;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
@@ -46,10 +48,7 @@ import java.io.IOException;
 import java.util.List;
 
 /** Command-line options for building for Apple platforms. */
-@AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
 public class AppleCommandLineOptions extends FragmentOptions {
-  public static final ObjectCodec<AppleCommandLineOptions> CODEC =
-      new AppleCommandLineOptions_AutoCodec();
 
   @Option(
     name = "experimental_apple_mandatory_minimum_version",
@@ -510,14 +509,63 @@ public class AppleCommandLineOptions extends FragmentOptions {
     return host;
   }
 
-  void serialize(SerializationContext context, CodedOutputStream out)
-      throws IOException, SerializationException {
-    CODEC.serialize(context, this, out);
+  void serialize(CodedOutputStream out) throws IOException, SerializationException {
+    out.writeBoolNoTag(mandatoryMinimumVersion);
+    out.writeBoolNoTag(objcProviderFromLinked);
+    serializeNullable(xcodeVersion, out, StringCodecs.asciiOptimized());
+    serializeNullable(iosSdkVersion, out, DottedVersion.CODEC);
+    serializeNullable(watchOsSdkVersion, out, DottedVersion.CODEC);
+    serializeNullable(tvOsSdkVersion, out, DottedVersion.CODEC);
+    serializeNullable(macOsSdkVersion, out, DottedVersion.CODEC);
+    serializeNullable(iosMinimumOs, out, DottedVersion.CODEC);
+    serializeNullable(watchosMinimumOs, out, DottedVersion.CODEC);
+    serializeNullable(tvosMinimumOs, out, DottedVersion.CODEC);
+    serializeNullable(macosMinimumOs, out, DottedVersion.CODEC);
+    StringCodecs.asciiOptimized().serialize(iosCpu, out);
+    LabelCodec.INSTANCE.serialize(appleCrosstoolTop, out);
+    PlatformType.CODEC.serialize(applePlatformType, out);
+    StringCodecs.asciiOptimized().serialize(appleSplitCpu, out);
+    ConfigurationDistinguisher.CODEC.serialize(configurationDistinguisher, out);
+    STRING_LIST_CODEC.serialize((ImmutableList<String>) iosMultiCpus, out);
+    STRING_LIST_CODEC.serialize((ImmutableList<String>) watchosCpus, out);
+    STRING_LIST_CODEC.serialize((ImmutableList<String>) tvosCpus, out);
+    STRING_LIST_CODEC.serialize((ImmutableList<String>) macosCpus, out);
+    LabelCodec.INSTANCE.serialize(defaultProvisioningProfile, out);
+    LabelCodec.INSTANCE.serialize(xcodeVersionConfig, out);
+    AppleBitcodeMode.CODEC.serialize(appleBitcodeMode, out);
+    out.writeBoolNoTag(enableAppleCrosstoolTransition);
+    out.writeBoolNoTag(targetUsesAppleCrosstool);
   }
 
-  static AppleCommandLineOptions deserialize(DeserializationContext context, CodedInputStream in)
+  static AppleCommandLineOptions deserialize(CodedInputStream in)
       throws IOException, SerializationException {
-    return CODEC.deserialize(context, in);
+    AppleCommandLineOptions result = new AppleCommandLineOptions();
+    result.mandatoryMinimumVersion = in.readBool();
+    result.objcProviderFromLinked = in.readBool();
+    result.xcodeVersion = deserializeNullable(in, StringCodecs.asciiOptimized());
+    result.iosSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
+    result.watchOsSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
+    result.tvOsSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
+    result.macOsSdkVersion = deserializeNullable(in, DottedVersion.CODEC);
+    result.iosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
+    result.watchosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
+    result.tvosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
+    result.macosMinimumOs = deserializeNullable(in, DottedVersion.CODEC);
+    result.iosCpu = StringCodecs.asciiOptimized().deserialize(in);
+    result.appleCrosstoolTop = LabelCodec.INSTANCE.deserialize(in);
+    result.applePlatformType = PlatformType.CODEC.deserialize(in);
+    result.appleSplitCpu = StringCodecs.asciiOptimized().deserialize(in);
+    result.configurationDistinguisher = ConfigurationDistinguisher.CODEC.deserialize(in);
+    result.iosMultiCpus = STRING_LIST_CODEC.deserialize(in);
+    result.watchosCpus = STRING_LIST_CODEC.deserialize(in);
+    result.tvosCpus = STRING_LIST_CODEC.deserialize(in);
+    result.macosCpus = STRING_LIST_CODEC.deserialize(in);
+    result.defaultProvisioningProfile = LabelCodec.INSTANCE.deserialize(in);
+    result.xcodeVersionConfig = LabelCodec.INSTANCE.deserialize(in);
+    result.appleBitcodeMode = AppleBitcodeMode.CODEC.deserialize(in);
+    result.enableAppleCrosstoolTransition = in.readBool();
+    result.targetUsesAppleCrosstool = in.readBool();
+    return result;
   }
 
   /** Converter for the Apple configuration distinguisher. */
