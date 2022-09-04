@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,7 +21,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Use it on Context fields in {@link EBean} classes
+ * Use it on Context fields in {@link Enhanced} classes
  * 
  * The field MUST be of a type that extends android.content.Context.
  * 
@@ -31,7 +31,7 @@ import java.lang.annotation.Target;
  * on a field that extends Activity, this field will be null at runtime.
  * 
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.FIELD)
 public @interface RootContext {
 }

@@ -273,7 +273,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		return true;
 	}
 
-	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws Exception {
+	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws IOException {
 
 		if (nothingToDo(annotations, roundEnv)) {
 			return;
@@ -403,7 +403,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		}
 	}
 
-	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws Exception {
+	private JCodeModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
 		timeStats.start("Process Annotations");
 		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices, androidManifest);
 		JCodeModel codeModel = modelProcessor.process(validatedModel);

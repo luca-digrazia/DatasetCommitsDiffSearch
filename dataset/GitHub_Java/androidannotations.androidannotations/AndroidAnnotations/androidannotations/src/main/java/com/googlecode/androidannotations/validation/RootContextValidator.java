@@ -44,7 +44,7 @@ public class RootContextValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEnhancedAnnotation(element, validatedElements, valid);
+		validatorHelper.enclosingElementHasEnhanced(element, validatedElements, valid);
 
 		validatorHelper.extendsContext(element, valid);
 
