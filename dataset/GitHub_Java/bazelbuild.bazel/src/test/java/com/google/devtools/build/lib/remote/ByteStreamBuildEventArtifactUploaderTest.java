@@ -118,7 +118,7 @@ public class ByteStreamBuildEventArtifactUploaderTest {
     // on different threads than the setUp.
     prevContext = withEmptyMetadata.attach();
 
-    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, false, "out");
+    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, "out");
     outputRoot.getRoot().asPath().createDirectoryAndParents();
 
     retryService = MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
@@ -181,7 +181,7 @@ public class ByteStreamBuildEventArtifactUploaderTest {
           .isEqualTo("bytestream://localhost/instance/blobs/" + hash + "/" + size);
     }
 
-    artifactUploader.release();
+    artifactUploader.shutdown();
 
     assertThat(uploader.refCnt()).isEqualTo(0);
     assertThat(refCntChannel.isShutdown()).isTrue();
@@ -198,7 +198,7 @@ public class ByteStreamBuildEventArtifactUploaderTest {
 
     PathConverter pathConverter = artifactUploader.upload(filesToUpload).get();
     assertThat(pathConverter.apply(dir)).isNull();
-    artifactUploader.release();
+    artifactUploader.shutdown();
   }
 
   @Test
@@ -267,7 +267,7 @@ public class ByteStreamBuildEventArtifactUploaderTest {
     assertThat(e.getCause().getCause()).isInstanceOf(StatusRuntimeException.class);
     assertThat(Status.fromThrowable(e).getCode()).isEqualTo(Status.CANCELLED.getCode());
 
-    artifactUploader.release();
+    artifactUploader.shutdown();
 
     assertThat(uploader.refCnt()).isEqualTo(0);
     assertThat(refCntChannel.isShutdown()).isTrue();
