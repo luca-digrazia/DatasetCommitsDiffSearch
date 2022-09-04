@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskCallable;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -83,9 +84,10 @@ public abstract class AbstractQueryEnvironment<T> implements QueryEnvironment<T>
 
     @Override
     public T getIfSuccessful() {
+      Preconditions.checkState(delegate.isDone());
       try {
-        return Futures.getDone(delegate);
-      } catch (CancellationException | ExecutionException e) {
+        return delegate.get();
+      } catch (CancellationException | InterruptedException | ExecutionException e) {
         throw new IllegalStateException(e);
       }
     }
