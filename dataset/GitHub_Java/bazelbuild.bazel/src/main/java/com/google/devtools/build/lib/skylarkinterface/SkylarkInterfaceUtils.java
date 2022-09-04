@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.skylarkinterface;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import javax.annotation.Nullable;
 
@@ -23,32 +22,30 @@ import javax.annotation.Nullable;
  */
 public class SkylarkInterfaceUtils {
 
-  private static final class ClassWithAnnotation<T extends Annotation> {
+  private static final class ClassAndSkylarkModule {
     final Class<?> klass;
-    final T annotation;
+    final SkylarkModule skylarkModule;
 
-    ClassWithAnnotation(Class<?> klass, T annotation) {
+    ClassAndSkylarkModule(Class<?> klass, SkylarkModule skylarkModule) {
       this.klass = klass;
-      this.annotation = annotation;
+      this.skylarkModule = skylarkModule;
     }
   }
 
   @Nullable
-  private static <T extends Annotation> ClassWithAnnotation<T> searchForClassAnnotation(
-      Class<?> classObj,
-      Class<T> annotationClass) {
-    if (classObj.isAnnotationPresent(annotationClass)) {
-      return new ClassWithAnnotation<T>(classObj, classObj.getAnnotation(annotationClass));
+  private static ClassAndSkylarkModule searchForSkylarkModule(Class<?> classObj) {
+    if (classObj.isAnnotationPresent(SkylarkModule.class)) {
+      return new ClassAndSkylarkModule(classObj, classObj.getAnnotation(SkylarkModule.class));
     }
     Class<?> superclass = classObj.getSuperclass();
     if (superclass != null) {
-      ClassWithAnnotation<T> result = searchForClassAnnotation(superclass, annotationClass);
+      ClassAndSkylarkModule result = searchForSkylarkModule(superclass);
       if (result != null) {
         return result;
       }
     }
     for (Class<?> interfaceObj : classObj.getInterfaces()) {
-      ClassWithAnnotation<T> result = searchForClassAnnotation(interfaceObj, annotationClass);
+      ClassAndSkylarkModule result = searchForSkylarkModule(interfaceObj);
       if (result != null) {
         return result;
       }
@@ -63,9 +60,8 @@ public class SkylarkInterfaceUtils {
    */
   @Nullable
   public static SkylarkModule getSkylarkModule(Class<?> classObj) {
-    ClassWithAnnotation<SkylarkModule> result =
-        searchForClassAnnotation(classObj, SkylarkModule.class);
-    return result == null ? null : result.annotation;
+    ClassAndSkylarkModule result = searchForSkylarkModule(classObj);
+    return result == null ? null : result.skylarkModule;
   }
 
   /**
@@ -75,36 +71,23 @@ public class SkylarkInterfaceUtils {
    */
   @Nullable
   public static Class<?> getParentWithSkylarkModule(Class<?> classObj) {
-    ClassWithAnnotation<SkylarkModule> result =
-        searchForClassAnnotation(classObj, SkylarkModule.class);
+    ClassAndSkylarkModule result = searchForSkylarkModule(classObj);
     return result == null ? null : result.klass;
-  }
-
-  /**
-   * Searches {@code classObj}'s class hierarchy and for a superclass or interface that
-   * is annotated with {@link SkylarkGlobalLibrary} (including possibly {@code classObj} itself),
-   * and returns true if one is found.
-   */
-  public static boolean hasSkylarkGlobalLibrary(Class<?> classObj) {
-    ClassWithAnnotation<SkylarkGlobalLibrary> result =
-        searchForClassAnnotation(classObj, SkylarkGlobalLibrary.class);
-    return result != null;
   }
 
   /**
    * Returns the {@link SkylarkCallable} annotation for the given method, if it exists, and
    * null otherwise. The first annotation of an overridden version of the method that is found
    * will be returned, starting with {@code classObj} and following its base classes and
-   * interfaces recursively. This skips any method annotated inside a class that is not
-   * marked {@link SkylarkModule} or is not a subclass of a class or interface marked
+   * interfaces recursively, skipping any annotation inside a class not marked
    * {@link SkylarkModule}.
    */
   @Nullable
   public static SkylarkCallable getSkylarkCallable(Class<?> classObj, Method method) {
     try {
       Method superMethod = classObj.getMethod(method.getName(), method.getParameterTypes());
-      boolean classAnnotatedForCallables = getParentWithSkylarkModule(classObj) != null
-          || hasSkylarkGlobalLibrary(classObj);
+      boolean classAnnotatedForCallables = classObj.isAnnotationPresent(SkylarkModule.class)
+          || classObj.isAnnotationPresent(SkylarkGlobalLibrary.class);
       if (classAnnotatedForCallables
           && superMethod.isAnnotationPresent(SkylarkCallable.class)) {
         return superMethod.getAnnotation(SkylarkCallable.class);

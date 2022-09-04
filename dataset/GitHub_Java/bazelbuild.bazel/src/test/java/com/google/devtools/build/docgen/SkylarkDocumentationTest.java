@@ -16,6 +16,7 @@ package com.google.devtools.build.docgen;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.docgen.skylark.SkylarkBuiltinMethodDoc;
@@ -42,6 +43,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import org.junit.Before;
@@ -87,11 +89,10 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
     Map<String, SkylarkModuleDoc> modules = SkylarkDocumentationCollector.collectModules();
     SkylarkModuleDoc topLevel =
         modules.remove(SkylarkDocumentationCollector.getTopLevelModule().name());
-    for (Map.Entry<String, SkylarkBuiltinMethodDoc> entry :
-        topLevel.getBuiltinMethods().entrySet()) {
+    for (Entry<String, SkylarkBuiltinMethodDoc> entry : topLevel.getBuiltinMethods().entrySet()) {
       docMap.put(entry.getKey(), entry.getValue().getDocumentation());
     }
-    for (Map.Entry<String, SkylarkModuleDoc> entry : modules.entrySet()) {
+    for (Entry<String, SkylarkModuleDoc> entry : modules.entrySet()) {
       docMap.put(entry.getKey(), entry.getValue().getDocumentation());
     }
 
@@ -119,7 +120,7 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   /** MockClassA */
   @SkylarkModule(name = "MockClassA", doc = "MockClassA")
   private static class MockClassA {
-    @SkylarkCallable(name = "get", doc = "MockClassA#get")
+    @SkylarkCallable(doc = "MockClassA#get")
     public Integer get() {
       return 0;
     }
@@ -128,7 +129,7 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   /** MockClassB */
   @SkylarkModule(name = "MockClassB", doc = "MockClassB")
   private static class MockClassB {
-    @SkylarkCallable(name = "get", doc = "MockClassB#get")
+    @SkylarkCallable(doc = "MockClassB#get")
     public MockClassA get() {
       return new MockClassA();
     }
@@ -137,7 +138,7 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   /** MockClassC */
   @SkylarkModule(name = "MockClassC", doc = "MockClassC")
   private static class MockClassC extends MockClassA {
-    @SkylarkCallable(name = "get2", doc = "MockClassC#get2")
+    @SkylarkCallable(doc = "MockClassC#get2")
     public Integer get2() {
       return 0;
     }
@@ -147,7 +148,6 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   @SkylarkModule(name = "MockClassD", doc = "MockClassD")
   private static class MockClassD {
     @SkylarkCallable(
-      name = "test",
       doc = "MockClassD#test",
       mandatoryPositionals = 1,
       parameters = {
@@ -174,7 +174,6 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   @SkylarkModule(name = "MockClassF", doc = "MockClassF")
   private static class MockClassF {
     @SkylarkCallable(
-      name = "test",
       doc = "MockClassF#test",
       parameters = {
         @Param(name = "a", named = false, positional = true),
@@ -193,7 +192,6 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   @SkylarkModule(name = "MockClassG", doc = "MockClassG")
   private static class MockClassG {
     @SkylarkCallable(
-      name = "test",
       doc = "MockClassG#test",
       parameters = {
         @Param(name = "a", named = false, positional = true),
@@ -212,7 +210,6 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
   @SkylarkModule(name = "MockClassH", doc = "MockClassH")
   private static class MockClassH {
     @SkylarkCallable(
-      name = "test",
       doc = "MockClassH#test",
       parameters = {
         @Param(name = "a", named = false, positional = true),
@@ -439,11 +436,13 @@ public class SkylarkDocumentationTest extends SkylarkTestCase {
                 + "MockClassWithContainerReturnValues.skylark()");
   }
 
-  private Iterable<Method> extractMethods(Collection<SkylarkMethodDoc> methods) {
-    return methods.stream()
-        .filter(methodDoc -> methodDoc instanceof SkylarkJavaMethodDoc)
-        .map(methodDoc -> ((SkylarkJavaMethodDoc) methodDoc).getMethod())
-        .collect(Collectors.toList());
+  private Iterable<Method> extractMethods(Collection<SkylarkJavaMethodDoc> methods) {
+    return Iterables.transform(methods, new Function<SkylarkJavaMethodDoc, Method>() {
+      @Override
+      public Method apply(SkylarkJavaMethodDoc input) {
+        return input.getMethod();
+      }
+    });
   }
 
   private Map<String, SkylarkModuleDoc> collect(Class<?> classObject) {

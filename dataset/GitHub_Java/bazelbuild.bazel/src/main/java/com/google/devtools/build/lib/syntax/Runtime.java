@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
@@ -138,16 +136,14 @@ public final class Runtime {
   )
   public static final String REPOSITORY_NAME = "REPOSITORY_NAME";
 
-  /** Adds bindings for False/True/None constants to the given map builder. */
-  public static void addConstantsToBuilder(ImmutableMap.Builder<String, Object> builder) {
+  /**
+   * Set up a given environment for supported class methods.
+   */
+  static Environment setupConstants(Environment env) {
     // In Python 2.x, True and False are global values and can be redefined by the user.
-    // In Python 3.x, they are keywords. We implement them as values. Currently they can't be
-    // redefined because builtins can't be overridden. In the future we should permit shadowing of
-    // most builtins but still prevent shadowing of these constants.
-    builder
-        .put("False", FALSE)
-        .put("True", TRUE)
-        .put("None", NONE);
+    // In Python 3.x, they are keywords. We implement them as values, for the sake of
+    // simplicity. We define them as Boolean objects.
+    return env.setup("False", FALSE).setup("True", TRUE).setup("None", NONE);
   }
 
 
@@ -341,19 +337,14 @@ public final class Runtime {
    *       callables.</li>
    * </ul>
    *
-   * <p>On collisions, this method throws an {@link AssertionError}. Collisions may occur if
-   * multiple global libraries have functions of the same name, two modules of the same name
-   * are given, or if two subclasses of the same module are given.
-   *
    * @param env the Environment into which to register fields.
    * @param moduleClass the Class object containing globals.
    */
   public static void setupModuleGlobals(Environment env, Class<?> moduleClass) {
     try {
-      SkylarkModule skylarkModule = SkylarkInterfaceUtils.getSkylarkModule(moduleClass);
-      if (skylarkModule != null) {
+      if (moduleClass.isAnnotationPresent(SkylarkModule.class)) {
         env.setup(
-            skylarkModule.name(),
+            moduleClass.getAnnotation(SkylarkModule.class).name(),
             moduleClass.getConstructor().newInstance());
       }
       for (Field field : moduleClass.getDeclaredFields()) {
@@ -371,7 +362,7 @@ public final class Runtime {
           }
         }
       }
-      if (SkylarkInterfaceUtils.hasSkylarkGlobalLibrary(moduleClass)) {
+      if (moduleClass.isAnnotationPresent(SkylarkGlobalLibrary.class)) {
         Object moduleInstance = moduleClass.getConstructor().newInstance();
         for (String methodName : FuncallExpression.getMethodNames(moduleClass)) {
           env.setup(methodName, FuncallExpression.getBuiltinCallable(moduleInstance, methodName));
@@ -379,6 +370,25 @@ public final class Runtime {
       }
     } catch (ReflectiveOperationException e) {
       throw new AssertionError(e);
+    }
+  }
+
+  /**
+   * Registers global fields with SkylarkSignature into the specified Environment. Alias for
+   * {@link #setupModuleGlobals}.
+   *
+   * @deprecated Use {@link #setupModuleGlobals} instead.
+   */
+  @Deprecated
+  // TODO(bazel-team): Remove after all callers updated.
+  public static void registerModuleGlobals(Environment env, Class<?> moduleClass) {
+    setupModuleGlobals(env, moduleClass);
+  }
+
+  static void setupMethodEnvironment(
+      Environment env, Iterable<BaseFunction> functions) {
+    for (BaseFunction function : functions) {
+      env.setup(function.getName(), function);
     }
   }
 }
