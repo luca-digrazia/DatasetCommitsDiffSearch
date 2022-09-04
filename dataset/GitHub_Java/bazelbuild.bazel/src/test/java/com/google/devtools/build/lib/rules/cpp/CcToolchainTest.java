@@ -48,6 +48,8 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class CcToolchainTest extends BuildViewTestCase {
+  private static final String CPP_TOOLCHAIN_TYPE =
+      TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain_type";
 
   @Test
   public void testFilesToBuild() throws Exception {
@@ -633,7 +635,7 @@ public class CcToolchainTest extends BuildViewTestCase {
             .setAbiVersion("orange")
             .buildPartial());
 
-    useConfiguration("--incompatible_enable_cc_toolchain_resolution");
+    useConfiguration("--enabled_toolchain_types=" + CPP_TOOLCHAIN_TYPE);
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
     CcToolchainProvider toolchainProvider =
