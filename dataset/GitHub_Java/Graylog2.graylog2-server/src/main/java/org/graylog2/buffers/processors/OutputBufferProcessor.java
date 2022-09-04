@@ -20,6 +20,19 @@
 
 package org.graylog2.buffers.processors;
 
+import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.lmax.disruptor.EventHandler;
+import com.yammer.metrics.Metrics;
+import com.yammer.metrics.core.Histogram;
+import com.yammer.metrics.core.Meter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
+import org.graylog2.buffers.LogMessageEvent;
+import org.graylog2.plugin.outputs.MessageOutput;
+import org.graylog2.plugin.logmessage.LogMessage;
+
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -27,32 +40,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-
 import org.bson.types.ObjectId;
 import org.elasticsearch.common.collect.Maps;
-import org.graylog2.Core;
-import org.graylog2.buffers.MessageEvent;
+import org.graylog2.outputs.ElasticSearchOutput;
 import org.graylog2.outputs.OutputRouter;
 import org.graylog2.outputs.OutputStreamConfigurationImpl;
-import org.graylog2.plugin.Message;
-import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.OutputStreamConfiguration;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamImpl;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.lmax.disruptor.EventHandler;
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.Histogram;
-import com.yammer.metrics.core.Meter;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class OutputBufferProcessor implements EventHandler<MessageEvent> {
+public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
 
     private static final Logger LOG = LoggerFactory.getLogger(OutputBufferProcessor.class);
 
@@ -60,7 +60,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
     
     private Core server;
 
-    private List<Message> buffer = Lists.newArrayList();
+    private List<LogMessage> buffer = Lists.newArrayList();
     private final Meter incomingMessages = Metrics.newMeter(OutputBufferProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS);
     
     private final Histogram batchSize = Metrics.newHistogram(OutputBufferProcessor.class, "BatchSize");
@@ -84,7 +84,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
     }
 
     @Override
-    public void onEvent(MessageEvent event, long sequence, boolean endOfBatch) throws Exception {
+    public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
         // Because Trisha said so. (http://code.google.com/p/disruptor/wiki/FrequentlyAskedQuestions)
         if ((sequence % numberOfConsumers) != ordinal) {
             return;
@@ -93,7 +93,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
         server.outputBufferWatermark().decrementAndGet();
         incomingMessages.mark();
 
-        Message msg = event.getMessage();
+        LogMessage msg = event.getMessage();
         LOG.debug("Processing message <{}> from OutputBuffer.", msg.getId());
 
         buffer.add(msg);
@@ -106,7 +106,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
 
                 try {
                     // We must copy the buffer for this output, because it may be cleared before all messages are handled.
-                    final List<Message> myBuffer = Lists.newArrayList(buffer);
+                    final List<LogMessage> myBuffer = Lists.newArrayList(buffer);
 
                     LOG.debug("Writing message batch to [{}]. Size <{}>", output.getName(), buffer.size());
 
@@ -150,11 +150,11 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
         LOG.debug("Wrote message <{}> to all outputs. Finished handling.", msg.getId());
     }
 
-    private OutputStreamConfiguration buildStreamConfigs(List<Message> messages, String className) {
+    private OutputStreamConfiguration buildStreamConfigs(List<LogMessage> messages, String className) {
         OutputStreamConfiguration configs = new OutputStreamConfigurationImpl();
         Map<ObjectId, Stream> distinctStreams = Maps.newHashMap();
         
-        for (Message message : messages) {
+        for (LogMessage message : messages) {
             for (Stream stream : message.getStreams()) {
                 distinctStreams.put(stream.getId(), stream);
             }

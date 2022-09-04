@@ -27,7 +27,9 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
-import org.graylog2.inputs.gelf.GELFMessageChunk;
+import org.graylog2.buffers.LogMessageEvent;
+import org.graylog2.gelf.GELFMessageChunk;
+import org.graylog2.plugin.logmessage.LogMessage;
 
 public class TestHelper {
 
@@ -47,7 +49,7 @@ public class TestHelper {
 
     public static byte[] gzipCompress(String what) throws IOException {
         // GZIP compress message.
-        ByteArrayInputStream compressMe = new ByteArrayInputStream(what.getBytes());
+        ByteArrayInputStream compressMe = new ByteArrayInputStream(what.getBytes("UTF-8"));
         ByteArrayOutputStream compressedMessage = new ByteArrayOutputStream();
         GZIPOutputStream out = new GZIPOutputStream(compressedMessage);
         for (int c = compressMe.read(); c != -1; c = compressMe.read()) {
@@ -84,6 +86,14 @@ public class TestHelper {
 
     public static String toHex(String arg) throws UnsupportedEncodingException {
         return String.format("%x", new BigInteger(arg.getBytes("UTF-8")));
+    }
+    
+    public static LogMessage simpleLogMessage() {
+        LogMessage m = new LogMessage();
+        m.setHost("foo");
+        m.setShortMessage("bar");
+        
+        return m;
     }
 
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright 2011, 2012, 2013 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2011 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -20,24 +20,6 @@
 
 package org.graylog2.streams;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import org.bson.types.ObjectId;
-import org.elasticsearch.common.collect.Maps;
-import org.graylog2.Core;
-import org.graylog2.alarms.AlarmReceiverImpl;
-import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.alarms.AlarmReceiver;
-import org.graylog2.plugin.streams.Stream;
-import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.users.User;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.mongodb.BasicDBList;
@@ -45,6 +27,24 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
+import org.bson.types.ObjectId;
+import org.elasticsearch.common.collect.Maps;
+import org.graylog2.Core;
+import org.graylog2.plugin.Tools;
+import org.graylog2.alarms.AlarmReceiverImpl;
+import org.graylog2.plugin.GraylogServer;
+import org.graylog2.plugin.alarms.AlarmReceiver;
+import org.graylog2.plugin.streams.Stream;
+import org.graylog2.plugin.streams.StreamRule;
+import org.graylog2.users.User;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.graylog2.plugin.outputs.MessageOutput;
 
 /**
  * Representing a single stream from the streams collection. Also provides method
@@ -191,7 +191,7 @@ public class StreamImpl implements Stream {
         }
         
         Set<String> callbacks = Sets.newTreeSet();
-        BasicDBList objs = (BasicDBList) this.mongoObject.get("alarm_callbacks");
+        List objs = (BasicDBList) this.mongoObject.get("alarm_callbacks");
         
         if (objs != null) {
             for (Object obj : objs) {
@@ -325,7 +325,7 @@ public class StreamImpl implements Stream {
     private Map<String, Set<Map<String, String>>> buildOutputsFromMongoDoc(DBObject stream) {
         Map<String, Set<Map<String, String>>> o = Maps.newHashMap();
         
-        BasicDBList objs = (BasicDBList) stream.get("outputs");
+        List objs = (BasicDBList) stream.get("outputs");
         
         if (objs == null || objs.isEmpty()) {
             return o;
