@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
-import static java.util.Comparator.naturalOrder;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
@@ -85,7 +84,6 @@ import com.google.devtools.build.lib.starlarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.util.DependencySet;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -103,6 +101,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -125,8 +124,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   private static final boolean VALIDATION_DEBUG_WARN = false;
 
-  @VisibleForTesting public static final String CPP_COMPILE_MNEMONIC = "CppCompile";
-  @VisibleForTesting public static final String OBJC_COMPILE_MNEMONIC = "ObjcCompile";
+  private static final String CPP_COMPILE_MNEMONIC = "CppCompile";
+  private static final String OBJC_COMPILE_MNEMONIC = "ObjcCompile";
 
   protected final Artifact outputFile;
   private final Artifact sourceFile;
@@ -416,7 +415,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           return null;
         }
 
-        includes.sort(naturalOrder());
+        Collections.sort(includes, Artifact.EXEC_PATH_COMPARATOR);
         return NestedSetBuilder.wrap(Order.STABLE_ORDER, includes);
       } catch (IORuntimeException e) {
         throw new EnvironmentalExecException(
@@ -1295,24 +1294,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     return ccCompilationContext.getDeclaredIncludeSrcs();
   }
 
-  /**
-   * Estimates resource consumption when this action is executed locally. During investigation we
-   * found linear dependency between used memory by action and number of inputs. For memory
-   * estimation we are using form C + K * inputs, where C and K selected in such way, that more than
-   * 95% of actions used less than C + K * inputs MB of memory during execution.
-   */
-  public static ResourceSet estimateResourceConsumptionLocal(String mnemonic, OS os, int inputs) {
-    if (!CPP_COMPILE_MNEMONIC.equals(mnemonic)) {
-      return AbstractAction.DEFAULT_RESOURCE_SET;
-    }
-
-    switch (os) {
-      case DARWIN:
-      case LINUX:
-        return ResourceSet.createWithRamCpu(/* memoryMb= */ 80 + 0.7 * inputs, /* cpuUsage= */ 1);
-      default:
-        return AbstractAction.DEFAULT_RESOURCE_SET;
-    }
+  /** Estimates resource consumption when this action is executed locally. */
+  public ResourceSet estimateResourceConsumptionLocal() {
+    return AbstractAction.DEFAULT_RESOURCE_SET;
   }
 
   @Override
@@ -1535,8 +1519,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
           executionInfo.build(),
           inputs,
           getOutputs(),
-          estimateResourceConsumptionLocal(
-              getMnemonic(), OS.getCurrent(), inputs.memoizedFlattenAndGetSize()));
+          estimateResourceConsumptionLocal());
     } catch (CommandLineExpansionException e) {
       String message =
           String.format(

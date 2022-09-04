@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.util;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
@@ -681,11 +680,13 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected final ConfiguredTarget getDirectPrerequisite(ConfiguredTarget target, String label)
       throws Exception {
     Label candidateLabel = Label.parseAbsolute(label, ImmutableMap.of());
-    Optional<ConfiguredTarget> prereq =
-        getDirectPrerequisites(target).stream()
-            .filter(candidate -> candidate.getOriginalLabel().equals(candidateLabel))
-            .findFirst();
-    return prereq.orElse(null);
+    for (ConfiguredTarget candidate : getDirectPrerequisites(target)) {
+      if (candidate.getLabel().equals(candidateLabel)) {
+        return candidate;
+      }
+    }
+
+    return null;
   }
 
   protected final ConfiguredTargetAndData getConfiguredTargetAndDataDirectPrerequisite(
@@ -1308,14 +1309,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Set<String> artifactsToStrings(Iterable<? extends Artifact> artifacts) {
     return AnalysisTestUtil.artifactsToStrings(masterConfig, artifacts);
-  }
-
-  /**
-   * Given a list of PathFragments, returns a corresponding list of strings. Such strings make
-   * assertions easier to write.
-   */
-  protected List<String> pathfragmentsToStrings(List<PathFragment> pathFragments) {
-    return pathFragments.stream().map(PathFragment::toString).collect(toImmutableList());
   }
 
   /**

@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionContext.LostInputsCheck;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupData;
@@ -43,7 +44,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
@@ -79,7 +79,6 @@ import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue;
 import com.google.devtools.build.lib.skyframe.ActionTemplateExpansionValue.ActionTemplateExpansionKey;
 import com.google.devtools.build.lib.skyframe.TreeArtifactValue;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationConstant;
-import com.google.devtools.build.lib.testing.actions.ArtifactExpanderHelper;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ResourceUsage;
@@ -175,7 +174,7 @@ public final class ActionsTestUtil {
         /*topLevelFilesets=*/ ImmutableMap.of(),
         actionGraph == null
             ? (artifact, output) -> {}
-            : ArtifactExpanderHelper.actionGraphArtifactExpander(actionGraph),
+            : ActionInputHelper.actionGraphArtifactExpander(actionGraph),
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null,
         NestedSetExpander.DEFAULT,
@@ -781,15 +780,6 @@ public final class ActionsTestUtil {
       Iterable<? extends Artifact> artifacts, String suffix) {
     return getFirstArtifactMatching(
         artifacts, artifact -> artifact.getExecPath().getPathString().endsWith(suffix));
-  }
-
-  public static Artifact getFirstDerivedArtifactEndingWith(
-      NestedSet<? extends Artifact> artifacts, String suffix) {
-    return getFirstArtifactMatching(
-        artifacts.toList(),
-        artifact ->
-            artifact instanceof DerivedArtifact
-                && artifact.getExecPath().getPathString().endsWith(suffix));
   }
 
   /** Returns the first Artifact in the provided Iterable that matches the specified predicate. */
