@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -65,6 +64,7 @@ import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.output.QueryOutputUtils;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -305,9 +305,12 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       // behavior of the query engine in these two use cases.
       settings.add(Setting.NO_NODEP_DEPS);
 
-      formatter =
-          OutputFormatter.getFormatter(
-              OutputFormatter.getDefaultFormatters(), queryOptions.outputFormat);
+      ImmutableList<OutputFormatter> outputFormatters = QUERY_OUTPUT_FORMATTERS.get(
+          ruleContext.getAnalysisEnvironment().getSkyframeEnv());
+      // This is a precomputed value so it should have been injected by the rules module by the
+      // time we get there.
+      formatter = OutputFormatter.getFormatter(
+          Preconditions.checkNotNull(outputFormatters), queryOptions.outputFormat);
       // All the packages are already loaded at this point, so there is no need
       // to start up many threads. 4 are started up to make good use of multiple
       // cores.
