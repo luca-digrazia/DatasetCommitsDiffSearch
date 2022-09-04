@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.sandbox;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
@@ -85,9 +85,12 @@ public class AbstractContainerizingSandboxedSpawnTest {
     assertThat(outputsDir.getRelative("very/output.link").resolveSymbolicLinks())
         .isEqualTo(outputsDir.getRelative("very/output.txt"));
     assertThat(outputsDir.getRelative("very/output.dangling").isSymbolicLink()).isTrue();
-    assertThrows(
-        IOException.class,
-        () -> outputsDir.getRelative("very/output.dangling").resolveSymbolicLinks());
+    try {
+      outputsDir.getRelative("very/output.dangling").resolveSymbolicLinks();
+      fail("expected IOException");
+    } catch (IOException e) {
+      // Ignored.
+    }
     assertThat(outputsDir.getRelative("very/output.dir").isDirectory(Symlinks.NOFOLLOW)).isTrue();
     assertThat(outputsDir.getRelative("very/output.dir/test.txt").isFile(Symlinks.NOFOLLOW))
         .isTrue();
@@ -113,7 +116,7 @@ public class AbstractContainerizingSandboxedSpawnTest {
   }
 
   @Test
-  public void testMoveOutputs_warnOnceIfCopyHappened() throws Exception {
+  public void testMoveOutputs_WarnOnceIfCopyHappened() throws Exception {
     class MultipleDeviceFS extends InMemoryFileSystem {
       @Override
       public void renameTo(Path source, Path target) throws IOException {

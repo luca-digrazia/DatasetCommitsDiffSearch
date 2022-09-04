@@ -467,12 +467,8 @@ public class FileSystemUtilsTest {
       copyFile(originalFile, aDir);
       fail();
     } catch (IOException ex) {
-      assertThat(ex)
-          .hasMessageThat()
-          .isEqualTo(
-              "error copying file: couldn't delete destination: "
-                  + aDir
-                  + " (Directory not empty)");
+      assertThat(ex).hasMessage(
+          "error copying file: couldn't delete destination: " + aDir + " (Directory not empty)");
     }
   }
 
@@ -519,9 +515,7 @@ public class FileSystemUtilsTest {
       FileSystemUtils.copyTreesBelow(topDir, aDir, Symlinks.FOLLOW);
       fail("Should not be able to copy a directory to a subdir");
     } catch (IllegalArgumentException expected) {
-      assertThat(expected)
-          .hasMessageThat()
-          .isEqualTo("/top-dir/a-dir is a subdirectory of /top-dir");
+      assertThat(expected).hasMessage("/top-dir/a-dir is a subdirectory of /top-dir");
     }
   }
 
@@ -532,7 +526,7 @@ public class FileSystemUtilsTest {
       FileSystemUtils.copyTreesBelow(file1, aDir, Symlinks.FOLLOW);
       fail("Should not be able to copy a file with copyDirectory method");
     } catch (IOException expected) {
-      assertThat(expected).hasMessageThat().isEqualTo("/top-dir/file-1 (Not a directory)");
+      assertThat(expected).hasMessage("/top-dir/file-1 (Not a directory)");
     }
   }
 
@@ -546,7 +540,7 @@ public class FileSystemUtilsTest {
       FileSystemUtils.copyTreesBelow(copyDir, file4, Symlinks.FOLLOW);
       fail("Should not be able to copy a directory to a file");
     } catch (IOException expected) {
-      assertThat(expected).hasMessageThat().isEqualTo("/file-4 (Not a directory)");
+      assertThat(expected).hasMessage("/file-4 (Not a directory)");
     }
   }
 
@@ -559,9 +553,7 @@ public class FileSystemUtilsTest {
       FileSystemUtils.copyTreesBelow(unexistingDir, aDir, Symlinks.FOLLOW);
       fail("Should not be able to copy from an unexisting path");
     } catch (FileNotFoundException expected) {
-      assertThat(expected)
-          .hasMessageThat()
-          .isEqualTo("/unexisting-dir (No such file or directory)");
+      assertThat(expected).hasMessage("/unexisting-dir (No such file or directory)");
     }
   }
 
