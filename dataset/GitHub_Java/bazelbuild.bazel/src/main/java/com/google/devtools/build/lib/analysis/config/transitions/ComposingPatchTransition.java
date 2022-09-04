@@ -49,7 +49,7 @@ public class ComposingPatchTransition implements PatchTransition {
   }
 
   @Override
-  public BuildOptions patch(BuildOptions options) {
+  public BuildOptions apply(BuildOptions options) {
     return Iterables.getOnlyElement(delegate.split(options));
   }
 
