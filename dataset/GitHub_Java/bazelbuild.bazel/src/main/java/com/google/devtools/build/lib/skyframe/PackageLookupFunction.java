@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.RepositoryFetchException;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -74,6 +73,12 @@ public class PackageLookupFunction implements SkyFunction {
 
     PackageIdentifier packageKey = (PackageIdentifier) skyKey.argument();
 
+    if (!packageKey.getRepository().isMain()) {
+      return computeExternalPackageLookupValue(skyKey, env, packageKey);
+    } else if (packageKey.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
+      return computeWorkspacePackageLookupValue(env, pkgLocator.getPathEntries());
+    }
+
     String packageNameErrorMsg = LabelValidator.validatePackageName(
         packageKey.getPackageFragment().getPathString());
     if (packageNameErrorMsg != null) {
@@ -85,21 +90,17 @@ public class PackageLookupFunction implements SkyFunction {
       return PackageLookupValue.DELETED_PACKAGE_VALUE;
     }
 
-    if (!packageKey.getRepository().isMain()) {
-      return computeExternalPackageLookupValue(skyKey, env, packageKey);
-    } else if (packageKey.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
-      return computeWorkspacePackageLookupValue(env, pkgLocator.getPathEntries());
-    }
-
-    // Check .bazelignore file under main repository.
     BlacklistedPackagePrefixesValue blacklistedPatternsValue =
         (BlacklistedPackagePrefixesValue) env.getValue(BlacklistedPackagePrefixesValue.key());
     if (blacklistedPatternsValue == null) {
       return null;
     }
 
-    if (isPackageIgnored(packageKey, blacklistedPatternsValue)) {
-      return PackageLookupValue.DELETED_PACKAGE_VALUE;
+    PathFragment buildFileFragment = packageKey.getPackageFragment();
+    for (PathFragment pattern : blacklistedPatternsValue.getPatterns()) {
+      if (buildFileFragment.startsWith(pattern)) {
+        return PackageLookupValue.DELETED_PACKAGE_VALUE;
+      }
     }
 
     return findPackageByBuildFile(env, pkgLocator, packageKey);
@@ -184,6 +185,8 @@ public class PackageLookupFunction implements SkyFunction {
               + fileRootedPath.asPath()),
           Transience.PERSISTENT);
     } catch (IOException e) {
+      // TODO(bazel-team): throw an IOException here and let PackageFunction wrap that into a
+      // BuildFileNotFoundException.
       throw new PackageLookupFunctionException(new BuildFileNotFoundException(packageIdentifier,
           "IO errors while looking for " + basename + " file reading "
               + fileRootedPath.asPath() + ": " + e.getMessage(), e),
@@ -251,18 +254,12 @@ public class PackageLookupFunction implements SkyFunction {
             Transience.PERSISTENT);
       }
 
-      StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
-      if (starlarkSemantics == null) {
-        return null;
-      }
-
       if (localRepository.exists()
           && !localRepository.getRepository().equals(packageIdentifier.getRepository())) {
         // There is a repository mismatch, this is an error.
         // The correct package path is the one originally given, minus the part that is the local
         // repository.
-        PathFragment pathToRequestedPackage =
-            packageIdentifier.getExecPath(starlarkSemantics.experimentalSiblingRepositoryLayout());
+        PathFragment pathToRequestedPackage = packageIdentifier.getPathUnderExecRoot();
         PathFragment localRepositoryPath = localRepository.getPath();
         if (localRepositoryPath.isAbsolute()) {
           // We need the package path to also be absolute.
@@ -295,43 +292,20 @@ public class PackageLookupFunction implements SkyFunction {
     return PackageLookupValue.NO_BUILD_FILE_VALUE;
   }
 
-  private static boolean isPackageIgnored(
-      PackageIdentifier id, BlacklistedPackagePrefixesValue blacklistedPatternsValue) {
-    PathFragment packageFragment = id.getPackageFragment();
-    for (PathFragment pattern : blacklistedPatternsValue.getPatterns()) {
-      if (packageFragment.startsWith(pattern)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
   private PackageLookupValue computeWorkspacePackageLookupValue(
       Environment env, ImmutableList<Root> packagePathEntries)
       throws PackageLookupFunctionException, InterruptedException {
-    PackageLookupValue resultForWorkspaceDotBazel =
-        getPackageLookupValue(
-            env,
-            packagePathEntries,
-            LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
-            BuildFileName.WORKSPACE_DOT_BAZEL);
-    if (resultForWorkspaceDotBazel == null) {
-      return null;
-    }
-    if (resultForWorkspaceDotBazel.packageExists()) {
-      return resultForWorkspaceDotBazel;
-    }
-    PackageLookupValue resultForWorkspace =
+    PackageLookupValue result =
         getPackageLookupValue(
             env,
             packagePathEntries,
             LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
             BuildFileName.WORKSPACE);
-    if (resultForWorkspace == null) {
+    if (result == null) {
       return null;
     }
-    if (resultForWorkspace.packageExists()) {
-      return resultForWorkspace;
+    if (result.packageExists()) {
+      return result;
     }
     // Fall back on the last package path entry if there were any and nothing else worked.
     // TODO(kchodorow): get rid of this, the semantics are wrong (successful package lookup should
@@ -381,18 +355,6 @@ public class PackageLookupFunction implements SkyFunction {
     if (!repositoryValue.repositoryExists()) {
       // TODO(ulfjack): Maybe propagate the error message from the repository delegator function?
       return new PackageLookupValue.NoRepositoryPackageLookupValue(id.getRepository().getName());
-    }
-
-    // Check .bazelignore file after fetching the external repository.
-    BlacklistedPackagePrefixesValue blacklistedPatternsValue =
-        (BlacklistedPackagePrefixesValue)
-            env.getValue(BlacklistedPackagePrefixesValue.key(id.getRepository()));
-    if (blacklistedPatternsValue == null) {
-      return null;
-    }
-
-    if (isPackageIgnored(id, blacklistedPatternsValue)) {
-      return PackageLookupValue.DELETED_PACKAGE_VALUE;
     }
 
     // This checks for the build file names in the correct precedence order.

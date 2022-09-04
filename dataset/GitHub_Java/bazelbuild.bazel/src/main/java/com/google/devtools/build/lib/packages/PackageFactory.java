@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -62,7 +63,7 @@ import com.google.devtools.build.lib.syntax.ListExpression;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Node;
 import com.google.devtools.build.lib.syntax.NodeVisitor;
-import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -362,6 +363,8 @@ public final class PackageFactory {
   public abstract static class BuilderForTesting {
     protected final String version = "test";
     protected Iterable<EnvironmentExtension> environmentExtensions = ImmutableList.of();
+    protected Function<RuleClass, AttributeContainer> attributeContainerFactory =
+        AttributeContainer::new;
     protected boolean doChecksForTesting = true;
 
     public BuilderForTesting setEnvironmentExtensions(
@@ -394,10 +397,11 @@ public final class PackageFactory {
    */
   public PackageFactory(
       RuleClassProvider ruleClassProvider,
+      Function<RuleClass, AttributeContainer> attributeContainerFactory,
       Iterable<EnvironmentExtension> environmentExtensions,
       String version,
       Package.Builder.Helper packageBuilderHelper) {
-    this.ruleFactory = new RuleFactory(ruleClassProvider);
+    this.ruleFactory = new RuleFactory(ruleClassProvider, attributeContainerFactory);
     this.ruleFunctions = buildRuleFunctions(ruleFactory);
     this.ruleClassProvider = ruleClassProvider;
     setGlobbingThreads(100);
@@ -1279,12 +1283,13 @@ public final class PackageFactory {
    */
   private static class BuiltinRuleFunction extends BuiltinFunction implements RuleFunction {
     private final String ruleClassName;
+    private final RuleFactory ruleFactory;
     private final RuleClass ruleClass;
 
     BuiltinRuleFunction(String ruleClassName, RuleFactory ruleFactory) {
-      super(ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_LOC_ENV, /*isRule=*/ true);
+      super(ruleClassName, FunctionSignature.KWARGS, BuiltinFunction.USE_AST_ENV, /*isRule=*/ true);
       this.ruleClassName = ruleClassName;
-      Preconditions.checkNotNull(ruleFactory, "ruleFactory was null");
+      this.ruleFactory = Preconditions.checkNotNull(ruleFactory, "ruleFactory was null");
       this.ruleClass = Preconditions.checkNotNull(
           ruleFactory.getRuleClass(ruleClassName),
           "No such rule class: %s",
@@ -1292,25 +1297,30 @@ public final class PackageFactory {
     }
 
     @SuppressWarnings({"unchecked", "unused"})
-    public Runtime.NoneType invoke(Map<String, Object> kwargs, Location loc, Environment env)
+    public Runtime.NoneType invoke(
+        Map<String, Object> kwargs, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException {
-      SkylarkUtils.checkLoadingOrWorkspacePhase(env, ruleClassName, loc);
+      SkylarkUtils.checkLoadingOrWorkspacePhase(env, ruleClassName, ast.getLocation());
       try {
-        addRule(getContext(env, loc), kwargs, loc, env);
+        addRule(getContext(env, ast.getLocation()), kwargs, ast, env);
       } catch (RuleFactory.InvalidRuleException | Package.NameConflictException e) {
-        throw new EvalException(loc, e.getMessage());
+        throw new EvalException(ast.getLocation(), e.getMessage());
       }
       return Runtime.NONE;
     }
 
     private void addRule(
-        PackageContext context, Map<String, Object> kwargs, Location loc, Environment env)
-        throws RuleFactory.InvalidRuleException, Package.NameConflictException,
-            InterruptedException {
+        PackageContext context,
+        Map<String, Object> kwargs,
+        FuncallExpression ast,
+        Environment env)
+            throws RuleFactory.InvalidRuleException, Package.NameConflictException,
+                InterruptedException {
       BuildLangTypedAttributeValuesMap attributeValues =
           new BuildLangTypedAttributeValuesMap(kwargs);
+      AttributeContainer attributeContainer = ruleFactory.getAttributeContainer(ruleClass);
       RuleFactory.createAndAddRule(
-          context, ruleClass, attributeValues, loc, env, new AttributeContainer(ruleClass));
+          context, ruleClass, attributeValues, ast, env, attributeContainer);
     }
 
     @Override
@@ -1337,7 +1347,7 @@ public final class PackageFactory {
       String workspaceName,
       PackageIdentifier packageId,
       RootedPath buildFile,
-      ParserInput input,
+      ParserInputSource input,
       List<Statement> preludeStatements,
       Map<String, Extension> imports,
       ImmutableList<Label> skylarkFileDependencies,
@@ -1372,7 +1382,7 @@ public final class PackageFactory {
 
   public static BuildFileAST parseBuildFile(
       PackageIdentifier packageId,
-      ParserInput input,
+      ParserInputSource input,
       List<Statement> preludeStatements,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
       ExtendedEventHandler eventHandler) {
@@ -1482,8 +1492,8 @@ public final class PackageFactory {
 
     Globber globber =
         createLegacyGlobber(buildFile.asPath().getParentDirectory(), packageId, locator);
-    ParserInput input =
-        ParserInput.create(
+    ParserInputSource input =
+        ParserInputSource.create(
             FileSystemUtils.convertFromLatin1(buildFileBytes), buildFile.asPath().asFragment());
 
     Package result =
@@ -1569,13 +1579,18 @@ public final class PackageFactory {
     final Package.Builder pkgBuilder;
     final Globber globber;
     final ExtendedEventHandler eventHandler;
+    private final Function<RuleClass, AttributeContainer> attributeContainerFactory;
 
     @VisibleForTesting
     public PackageContext(
-        Package.Builder pkgBuilder, Globber globber, ExtendedEventHandler eventHandler) {
+        Package.Builder pkgBuilder,
+        Globber globber,
+        ExtendedEventHandler eventHandler,
+        Function<RuleClass, AttributeContainer> attributeContainerFactory) {
       this.pkgBuilder = pkgBuilder;
       this.eventHandler = eventHandler;
       this.globber = globber;
+      this.attributeContainerFactory = attributeContainerFactory;
     }
 
     /**
@@ -1597,6 +1612,10 @@ public final class PackageFactory {
      */
     public Package.Builder getBuilder() {
       return pkgBuilder;
+    }
+
+    public Function<RuleClass, AttributeContainer> getAttributeContainerFactory() {
+      return attributeContainerFactory;
     }
   }
 
@@ -1743,7 +1762,9 @@ public final class PackageFactory {
       }
 
       // Stuff that closes over the package context:
-      PackageContext context = new PackageContext(pkgBuilder, globber, eventHandler);
+      PackageContext context =
+          new PackageContext(
+              pkgBuilder, globber, eventHandler, ruleFactory.getAttributeContainerFactory());
       buildPkgEnv(pkgEnv, context);
 
       if (!validatePackageIdentifier(packageId, file.getLocation(), eventHandler)) {
