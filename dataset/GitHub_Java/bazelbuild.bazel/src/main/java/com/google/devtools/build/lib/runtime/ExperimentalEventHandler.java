@@ -242,7 +242,7 @@ public class ExperimentalEventHandler implements EventHandler {
   }
 
   private synchronized void maybeAddDate() {
-    if (!showTimestamp || dateShown || buildComplete) {
+    if (!showTimestamp || dateShown) {
       return;
     }
     dateShown = true;
