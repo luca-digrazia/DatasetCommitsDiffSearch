@@ -2,6 +2,7 @@ package com.codahale.dropwizard.db;
 
 import com.codahale.dropwizard.util.Duration;
 import com.codahale.dropwizard.validation.MinDuration;
+import com.codahale.dropwizard.validation.OneOf;
 import com.codahale.dropwizard.validation.ValidationMethod;
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -244,26 +245,6 @@ import java.util.concurrent.TimeUnit;
  * </table>
  */
 public class DataSourceFactory {
-    @SuppressWarnings("UnusedDeclaration")
-    public enum TransactionIsolation {
-        NONE(Connection.TRANSACTION_NONE),
-        DEFAULT(org.apache.tomcat.jdbc.pool.DataSourceFactory.UNKNOWN_TRANSACTIONISOLATION),
-        READ_UNCOMMITTED(Connection.TRANSACTION_READ_UNCOMMITTED),
-        READ_COMMITTED(Connection.TRANSACTION_READ_COMMITTED),
-        REPEATABLE_READ(Connection.TRANSACTION_REPEATABLE_READ),
-        SERIALIZABLE(Connection.TRANSACTION_SERIALIZABLE);
-
-        private final int value;
-
-        private TransactionIsolation(int value) {
-            this.value = value;
-        }
-
-        public int get() {
-            return value;
-        }
-    }
-
     @NotNull
     private String driverClass = null;
 
@@ -293,7 +274,12 @@ public class DataSourceFactory {
     private String defaultCatalog;
 
     @NotNull
-    private TransactionIsolation defaultTransactionIsolation = TransactionIsolation.DEFAULT;
+    @OneOf(
+            value = {"none", "default", "read-uncommitted", "read-committed", "repeatable-read", "serializable"},
+            ignoreCase = true,
+            ignoreWhitespace = true
+    )
+    private String defaultTransactionIsolation = "default";
 
     private boolean useFairQueue = true;
 
@@ -545,12 +531,12 @@ public class DataSourceFactory {
     }
 
     @JsonProperty
-    public TransactionIsolation getDefaultTransactionIsolation() {
+    public String getDefaultTransactionIsolation() {
         return defaultTransactionIsolation;
     }
 
     @JsonProperty
-    public void setDefaultTransactionIsolation(TransactionIsolation isolation) {
+    public void setDefaultTransactionIsolation(String isolation) {
         this.defaultTransactionIsolation = isolation;
     }
 
@@ -689,7 +675,7 @@ public class DataSourceFactory {
         poolConfig.setDefaultAutoCommit(autoCommitByDefault);
         poolConfig.setDefaultCatalog(defaultCatalog);
         poolConfig.setDefaultReadOnly(readOnlyByDefault);
-        poolConfig.setDefaultTransactionIsolation(defaultTransactionIsolation.get());
+        poolConfig.setDefaultTransactionIsolation(getIsolation());
         poolConfig.setDriverClassName(driverClass);
         poolConfig.setFairQueue(useFairQueue);
         poolConfig.setInitialSize(initialSize);
@@ -719,5 +705,22 @@ public class DataSourceFactory {
         poolConfig.setValidationInterval(validationInterval.toMilliseconds());
 
         return new ManagedPooledDataSource(poolConfig, metricRegistry);
+    }
+
+    private int getIsolation() {
+        switch (defaultTransactionIsolation.toLowerCase()) {
+            case "none":
+                return Connection.TRANSACTION_NONE;
+            case "read-uncommitted":
+                return Connection.TRANSACTION_READ_UNCOMMITTED;
+            case "read-committed":
+                return Connection.TRANSACTION_READ_COMMITTED;
+            case "repeatable-read":
+                return Connection.TRANSACTION_REPEATABLE_READ;
+            case "serializable":
+                return Connection.TRANSACTION_SERIALIZABLE;
+            default:
+                return org.apache.tomcat.jdbc.pool.DataSourceFactory.UNKNOWN_TRANSACTIONISOLATION;
+        }
     }
 }
