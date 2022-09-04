@@ -24,7 +24,7 @@ import smile.data.parser.DelimitedTextParser;
 import smile.plot.Palette;
 import smile.plot.PlotCanvas;
 import smile.manifold.TSNE;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.projection.PCA;
 
 /**
@@ -84,12 +84,12 @@ public class TSNEDemo extends JPanel implements Runnable, ActionListener {
         pca.setProjection(50);
         double[][] X = pca.project(data);
         long clock = System.currentTimeMillis();
-        TSNE tsne = new TSNE(X, 2, perplexity, 200, 1000);
+        TSNE tsne = new TSNE(X, 2, perplexity, 500, 1000);
         System.out.format("Learn t-SNE from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
         double[][] y = tsne.getCoordinates();
 
-        PlotCanvas plot = new PlotCanvas(MathEx.colMin(y), MathEx.colMax(y));
+        PlotCanvas plot = new PlotCanvas(Math.colMin(y), Math.colMax(y));
 
         for (int i = 0; i < y.length; i++) {
             plot.point(pointLegend, Palette.COLORS[labels[i]], y[i]);
