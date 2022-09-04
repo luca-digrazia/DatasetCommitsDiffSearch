@@ -1586,7 +1586,7 @@ public class Package {
      * integrate with RuleClass.checkForDuplicateLabels.
      */
     private static boolean hasDuplicateLabels(
-        List<Label> labels,
+        Collection<Label> labels,
         String owner,
         String attrName,
         Location location,
