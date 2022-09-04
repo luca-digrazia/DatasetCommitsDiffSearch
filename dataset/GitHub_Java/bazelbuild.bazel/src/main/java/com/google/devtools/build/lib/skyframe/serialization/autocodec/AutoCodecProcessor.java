@@ -164,7 +164,8 @@ public class AutoCodecProcessor extends AbstractProcessor {
 
     initializeUnsafeOffsets(codecClassBuilder, encodedType, parameters.fields);
 
-    codecClassBuilder.addMethod(buildSerializeMethodWithConstructor(encodedType, parameters));
+    codecClassBuilder.addMethod(
+        buildSerializeMethodWithConstructor(encodedType, parameters.fields));
 
     MethodSpec.Builder deserializeBuilder =
         AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, parameters.dependency);
@@ -232,10 +233,10 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithConstructor(
-      TypeElement encodedType, PartitionedParameters parameters) {
+      TypeElement encodedType, List<? extends VariableElement> parameters) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, parameters.dependency);
-    for (VariableElement parameter : parameters.fields) {
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
+    for (VariableElement parameter : parameters) {
       VariableElement field = getFieldByName(encodedType, parameter.getSimpleName().toString());
       TypeKind typeKind = field.asType().getKind();
       switch (typeKind) {
@@ -281,8 +282,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
             .stream()
             .filter(this::isPublicField)
             .collect(toImmutableList());
-    codecClassBuilder.addMethod(
-        buildSerializeMethodWithPublicFields(encodedType, publicFields, dependency));
+    codecClassBuilder.addMethod(buildSerializeMethodWithPublicFields(encodedType, publicFields));
     MethodSpec.Builder deserializeBuilder =
         AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, dependency);
     buildDeserializeBody(deserializeBuilder, publicFields);
@@ -300,11 +300,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private MethodSpec buildSerializeMethodWithPublicFields(
-      TypeElement encodedType,
-      List<? extends VariableElement> parameters,
-      @Nullable TypeElement dependency) {
+      TypeElement encodedType, List<? extends VariableElement> parameters) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, dependency);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
     for (VariableElement parameter : parameters) {
       String paramAccessor = "input." + parameter.getSimpleName();
       TypeKind typeKind = parameter.asType().getKind();
@@ -478,23 +476,14 @@ public class AutoCodecProcessor extends AbstractProcessor {
     }
     TypeSpec.Builder codecClassBuilder =
         AutoCodecUtil.initializeCodecClassBuilder(encodedType, dependency);
-    codecClassBuilder.addMethod(buildPolymorphicSerializeMethod(encodedType, dependency));
+    codecClassBuilder.addMethod(buildPolymorphicSerializeMethod(encodedType));
     codecClassBuilder.addMethod(buildPolymorphicDeserializeMethod(encodedType, dependency));
     return codecClassBuilder;
   }
 
-  private static MethodSpec buildPolymorphicSerializeMethod(
-      TypeElement encodedType, @Nullable TypeElement dependency) {
-    MethodSpec.Builder builder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, dependency);
-    if (dependency == null) {
-      builder.addStatement("$T.serialize(input, codedOut, null)", PolymorphicHelper.class);
-    } else {
-      builder.addStatement(
-          "$T.serialize(input, codedOut, $T.ofNullable(dependency))",
-          PolymorphicHelper.class,
-          Optional.class);
-    }
+  private static MethodSpec buildPolymorphicSerializeMethod(TypeElement encodedType) {
+    MethodSpec.Builder builder = AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
+    builder.addStatement("$T.serialize(input, codedOut)", PolymorphicHelper.class);
     return builder.build();
   }
 

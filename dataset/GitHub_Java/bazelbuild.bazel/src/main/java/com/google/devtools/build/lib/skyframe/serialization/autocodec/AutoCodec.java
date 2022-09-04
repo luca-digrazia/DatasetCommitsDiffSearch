@@ -38,7 +38,7 @@ public @interface AutoCodec {
    *
    * <p>Specific strategies are described below.
    */
-  enum Strategy {
+  public static enum Strategy {
     /**
      * Uses a constructor of the class to synthesize a codec.
      *
@@ -76,7 +76,7 @@ public @interface AutoCodec {
    * constructors are thus tagged.
    */
   @Target(ElementType.CONSTRUCTOR)
-  @interface Constructor {}
+  public static @interface Constructor {}
 
   /**
    * Marks a specific constructor parameter as a dependency.
@@ -95,7 +95,7 @@ public @interface AutoCodec {
    * {@code @Dependency} annotation or if the annotation itself has a dependency element.
    */
   @Target(ElementType.PARAMETER)
-  @interface Dependency {}
+  public static @interface Dependency {}
 
   Strategy strategy() default Strategy.CONSTRUCTOR;
   /**
@@ -109,13 +109,4 @@ public @interface AutoCodec {
    * <p>It is an error to use this in conjunction with {@code @AutoCodec.Dependency}.
    */
   Class<?> dependency() default Void.class;
-
-  /**
-   * Signals that the annotated element is only visible for use by serialization. It should not be
-   * used by other callers.
-   *
-   * <p>TODO(janakr): Add an ErrorProne checker to enforce this.
-   */
-  @Target({ElementType.TYPE, ElementType.METHOD, ElementType.CONSTRUCTOR})
-  @interface VisibleForSerialization {}
 }
