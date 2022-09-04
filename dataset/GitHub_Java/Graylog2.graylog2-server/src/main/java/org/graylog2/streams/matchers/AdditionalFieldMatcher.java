@@ -20,16 +20,19 @@
 
 package org.graylog2.streams.matchers;
 
-import org.graylog2.logmessage.LogMessage;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.graylog2.streams.StreamRule;
 
 /**
+ * AdditionalFieldMatcher.java: Mar 27, 2011 5:50:53 PM
+ *
+ * [description]
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class AdditionalFieldMatcher implements StreamRuleMatcher {
+public class AdditionalFieldMatcher implements StreamRuleMatcherIF {
 
-    @Override
-    public boolean match(LogMessage msg, StreamRule rule) {
+    public boolean match(GELFMessage msg, StreamRule rule) {
         String[] parts = rule.getValue().split("=");
         String key = "_" + parts[0];
         String value = parts[1];
