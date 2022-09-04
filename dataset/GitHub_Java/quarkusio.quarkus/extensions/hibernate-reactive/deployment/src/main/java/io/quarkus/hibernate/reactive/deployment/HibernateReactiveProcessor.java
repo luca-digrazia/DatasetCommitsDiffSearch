@@ -54,7 +54,6 @@ import io.quarkus.hibernate.orm.deployment.PersistenceUnitDescriptorBuildItem;
 import io.quarkus.hibernate.orm.deployment.PersistenceXmlDescriptorBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
 import io.quarkus.hibernate.orm.runtime.HibernateOrmRuntimeConfig;
-import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
 import io.quarkus.hibernate.reactive.runtime.FastBootHibernateReactivePersistenceProvider;
 import io.quarkus.hibernate.reactive.runtime.HibernateReactiveRecorder;
 import io.quarkus.hibernate.reactive.runtime.ReactiveSessionFactoryProducer;
@@ -207,14 +206,13 @@ public final class HibernateReactiveProcessor {
         HibernateOrmConfigPersistenceUnit persistenceUnitConfig = hibernateOrmConfig.defaultPersistenceUnit;
 
         //we have no persistence.xml so we will create a default one
-        String persistenceUnitConfigName = PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME;
 
         Optional<String> explicitDialect = persistenceUnitConfig.dialect.dialect;
         String dialect;
         if (explicitDialect.isPresent()) {
             dialect = explicitDialect.get();
         } else {
-            dialect = Dialects.guessDialect(persistenceUnitConfigName, dbKind);
+            dialect = Dialects.guessDialect(dbKind);
         }
 
         // we found one
@@ -302,8 +300,7 @@ public final class HibernateReactiveProcessor {
             } else if (persistenceUnitConfig.sqlLoadScript.isPresent()) {
                 //raise exception if explicit file is not present (i.e. not the default)
                 throw new ConfigurationError(
-                        "Unable to find file referenced in '"
-                                + HibernateOrmConfig.puPropertyKey(persistenceUnitConfigName, "sql-load-script") + "="
+                        "Unable to find file referenced in '" + HibernateOrmProcessor.HIBERNATE_ORM_CONFIG_PREFIX
                                 + "sql-load-script="
                                 + persistenceUnitConfig.sqlLoadScript.get() + "'. Remove property or add file to your path.");
             }
