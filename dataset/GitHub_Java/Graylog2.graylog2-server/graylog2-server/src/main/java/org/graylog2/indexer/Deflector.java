@@ -194,12 +194,8 @@ public class Deflector { // extends Ablenkblech
 
     public String[] getAllDeflectorIndexNames(final Indexer indexer) {
         final Indices indices = indexer.indices();
-
-        if(null == indices) {
-            return new String[0];
-        }
-
         final List<String> result = Lists.newArrayListWithExpectedSize(indices.getAll().size());
+
         for (String indexName : indices.getAll().keySet()) {
             if (isGraylog2Index(indexName)) {
                 result.add(indexName);
