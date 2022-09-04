@@ -3,11 +3,12 @@ package io.dropwizard.logging;
 import ch.qos.logback.classic.AsyncAppender;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.filter.ThresholdFilter;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.AsyncAppenderBase;
 import ch.qos.logback.core.Context;
-import ch.qos.logback.core.pattern.PatternLayoutBase;
-import ch.qos.logback.core.spi.DeferredProcessingAware;
+import ch.qos.logback.core.spi.FilterAttachable;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Strings;
 
@@ -37,14 +38,6 @@ import java.util.TimeZone;
  *         <td>An appender-specific log format.</td>
  *     </tr>
  *     <tr>
- *         <td>{@code timeZone}</td>
- *         <td>{@code UTC}</td>
- *         <td>
- *             The time zone to which event timestamps will be converted.
- *             Ignored if logFormat is supplied.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code queueSize}</td>
  *         <td>{@link AsyncAppenderBase}</td>
  *         <td>The maximum capacity of the blocking queue.</td>
@@ -68,41 +61,17 @@ import java.util.TimeZone;
  *     </tr>
  * </table>
  */
-public abstract class AbstractAppenderFactory<E extends DeferredProcessingAware> implements AppenderFactory<E> {
-
+public abstract class AbstractAppenderFactory implements AppenderFactory {
     @NotNull
     protected Level threshold = Level.ALL;
 
     protected String logFormat;
-
-    @NotNull
-    protected TimeZone timeZone = TimeZone.getTimeZone("UTC");
 
     @Min(1)
     @Max(Integer.MAX_VALUE)
     private int queueSize = AsyncAppenderBase.DEFAULT_QUEUE_SIZE;
 
     private int discardingThreshold = -1;
-
-    @JsonProperty
-    public String getLogFormat() {
-        return logFormat;
-    }
-
-    @JsonProperty
-    public void setLogFormat(String logFormat) {
-        this.logFormat = logFormat;
-    }
-
-    @JsonProperty
-    public TimeZone getTimeZone() {
-        return timeZone;
-    }
-
-    @JsonProperty
-    public void setTimeZone(TimeZone timeZone) {
-        this.timeZone = timeZone;
-    }
 
     private boolean includeCallerData = false;
 
@@ -137,6 +106,16 @@ public abstract class AbstractAppenderFactory<E extends DeferredProcessingAware>
     }
 
     @JsonProperty
+    public String getLogFormat() {
+        return logFormat;
+    }
+
+    @JsonProperty
+    public void setLogFormat(String logFormat) {
+        this.logFormat = logFormat;
+    }
+
+    @JsonProperty
     public boolean isIncludeCallerData() {
         return includeCallerData;
     }
@@ -146,15 +125,13 @@ public abstract class AbstractAppenderFactory<E extends DeferredProcessingAware>
         this.includeCallerData = includeCallerData;
     }
 
-    protected Appender<E> wrapAsync(Appender<E> appender, AsyncAppenderFactory<E> asyncAppenderFactory) {
-        return wrapAsync(appender, asyncAppenderFactory, appender.getContext());
+    protected Appender<ILoggingEvent> wrapAsync(Appender<ILoggingEvent> appender) {
+        return wrapAsync(appender, appender.getContext());
     }
 
-    protected Appender<E> wrapAsync(Appender<E> appender, AsyncAppenderFactory<E> asyncAppenderFactory, Context context) {
-        final AsyncAppenderBase<E> asyncAppender = asyncAppenderFactory.build();
-        if (asyncAppender instanceof AsyncAppender) {
-            ((AsyncAppender) asyncAppender).setIncludeCallerData(includeCallerData);
-        }
+    protected Appender<ILoggingEvent> wrapAsync(Appender<ILoggingEvent> appender, Context context) {
+        final AsyncAppender asyncAppender = new AsyncAppender();
+        asyncAppender.setIncludeCallerData(includeCallerData);
         asyncAppender.setQueueSize(queueSize);
         asyncAppender.setDiscardingThreshold(discardingThreshold);
         asyncAppender.setContext(context);
@@ -164,8 +141,15 @@ public abstract class AbstractAppenderFactory<E extends DeferredProcessingAware>
         return asyncAppender;
     }
 
-    protected PatternLayoutBase<E> buildLayout(LoggerContext context, LayoutFactory<E> layoutFactory) {
-        final PatternLayoutBase<E> formatter = layoutFactory.build(context, timeZone);
+    protected void addThresholdFilter(FilterAttachable<ILoggingEvent> appender, Level threshold) {
+        final ThresholdFilter filter = new ThresholdFilter();
+        filter.setLevel(threshold.toString());
+        filter.start();
+        appender.addFilter(filter);
+    }
+
+    protected DropwizardLayout buildLayout(LoggerContext context, TimeZone timeZone) {
+        final DropwizardLayout formatter = new DropwizardLayout(context, timeZone);
         if (!Strings.isNullOrEmpty(logFormat)) {
             formatter.setPattern(logFormat);
         }
