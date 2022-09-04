@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 
 /**
  * Info object representing a value for a constraint setting that can be used to define a platform.
@@ -37,14 +36,12 @@ public interface ConstraintValueInfoApi extends StructApi {
       doc =
           "The <a href=\"ConstraintSettingInfo.html\">ConstraintSettingInfo</a> this value can be "
               + "applied to.",
-      structField = true,
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+      structField = true)
   ConstraintSettingInfoApi constraint();
 
   @SkylarkCallable(
       name = "label",
       doc = "The label of the target that created this constraint value.",
-      structField = true,
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+      structField = true)
   Label label();
 }
