@@ -22,9 +22,6 @@ class GreetingResourceTest {
                 "    options{\n" +
                 "       message\n" +
                 "    }\n" +
-                "    options2{\n" +
-                "       message\n" +
-                "    }\n" +
                 "  }\n" +
                 "  farewell:farewell{\n" +
                 "    type\n" +

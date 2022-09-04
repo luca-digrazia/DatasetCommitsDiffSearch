@@ -14,7 +14,6 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -49,7 +48,6 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
-import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.deployment.util.IoUtil;
@@ -73,8 +71,8 @@ import io.smallrye.graphql.schema.model.InterfaceType;
 import io.smallrye.graphql.schema.model.Operation;
 import io.smallrye.graphql.schema.model.Schema;
 import io.smallrye.graphql.schema.model.Type;
-import io.smallrye.graphql.spi.EventingService;
 import io.smallrye.graphql.spi.LookupService;
+import io.smallrye.graphql.spi.SchemaBuildingExtensionService;
 import io.vertx.core.Handler;
 import io.vertx.ext.web.RoutingContext;
 
@@ -132,15 +130,14 @@ public class SmallRyeGraphQLProcessor {
         serviceProvider.produce(
                 new ServiceProviderBuildItem(LookupService.class.getName(), lookupImplementations.toArray(new String[0])));
 
-        // Eventing Service (We use the one from the CDI Module)
-        String eventingService = SPI_PATH + EventingService.class.getName();
-        Set<String> eventingServiceImplementations = ServiceUtil.classNamesNamedIn(
+        // Schema Extension Service (We use the one from the CDI Module)
+        String schemaExtensionService = SPI_PATH + SchemaBuildingExtensionService.class.getName();
+        Set<String> schemaExtensionImplementations = ServiceUtil.classNamesNamedIn(
                 Thread.currentThread().getContextClassLoader(),
-                eventingService);
-        for (String eventingServiceImplementation : eventingServiceImplementations) {
-            serviceProvider.produce(
-                    new ServiceProviderBuildItem(EventingService.class.getName(), eventingServiceImplementation));
-        }
+                schemaExtensionService);
+        serviceProvider.produce(
+                new ServiceProviderBuildItem(SchemaBuildingExtensionService.class.getName(),
+                        schemaExtensionImplementations.toArray(new String[0])));
     }
 
     @Record(ExecutionTime.STATIC_INIT)
@@ -166,16 +163,19 @@ public class SmallRyeGraphQLProcessor {
 
     @BuildStep
     void activateMetrics(Capabilities capabilities,
-            Optional<MetricsCapabilityBuildItem> metricsCapability,
             SmallRyeGraphQLConfig smallRyeGraphQLConfig,
             BuildProducer<UnremovableBeanBuildItem> unremovableBeans,
             BuildProducer<SystemPropertyBuildItem> systemProperties) {
         if (smallRyeGraphQLConfig.metricsEnabled) {
-            if (metricsCapability.isPresent()) {
+            if (capabilities.isPresent(Capability.METRICS)) {
+                unremovableBeans.produce(new UnremovableBeanBuildItem(
+                        new UnremovableBeanBuildItem.BeanClassNameExclusion("io.smallrye.metrics.MetricsRegistryImpl")));
+                unremovableBeans.produce(new UnremovableBeanBuildItem(
+                        new UnremovableBeanBuildItem.BeanClassNameExclusion("io.smallrye.metrics.MetricRegistries")));
                 systemProperties.produce(new SystemPropertyBuildItem("smallrye.graphql.metrics.enabled", "true"));
             } else {
-                LOG.info("The quarkus.smallrye-graphql.metrics.enabled property is true, but a metrics " +
-                        "extension is not present. SmallRye GraphQL Metrics will be disabled.");
+                LOG.warn("The quarkus.smallrye-graphql.metrics.enabled property is true, but the quarkus-smallrye-metrics " +
+                        "dependency is not present.");
                 systemProperties.produce(new SystemPropertyBuildItem("smallrye.graphql.metrics.enabled", "false"));
             }
         } else {
