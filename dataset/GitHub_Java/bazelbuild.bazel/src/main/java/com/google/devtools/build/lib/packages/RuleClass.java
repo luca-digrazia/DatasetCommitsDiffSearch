@@ -32,7 +32,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -51,6 +50,7 @@ import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.Type;
@@ -896,21 +896,23 @@ public class RuleClass {
     /**
      * Applies the given transition to all incoming edges for this rule class.
      *
-     * <p>This cannot be a {@link SplitTransition} because that requires coordination with the
-     * rule's parent: use {@link Attribute.Builder#cfg(ConfigurationTransition)} on the parent to
-     * declare splits.
-     *
      * <p>If you need the transition to depend on the rule it's being applied to, use
      * {@link #cfg(RuleTransitionFactory)}.
      */
     public Builder cfg(PatchTransition transition) {
-      return cfg(new FixedTransitionFactory(transition));
+      Preconditions.checkState(type != RuleClassType.ABSTRACT,
+          "Setting not inherited property (cfg) of abstract rule class '%s'", name);
+      Preconditions.checkState(this.transitionFactory == null,
+          "Property cfg has already been set");
+      Preconditions.checkNotNull(transition);
+      this.transitionFactory = new FixedTransitionFactory(transition);
+      return this;
     }
 
     /**
      * Applies the given transition factory to all incoming edges for this rule class.
      *
-     * <p>Unlike{@link #cfg(PatchTransition)}, the factory can examine the rule when
+     * <p>Unlike{@link #cfg(ConfigurationTransition)}, the factory can examine the rule when
      * deciding what transition to use.
      */
     public Builder cfg(RuleTransitionFactory transitionFactory) {
@@ -977,11 +979,10 @@ public class RuleClass {
       return this;
     }
 
-    public Builder addAttribute(Attribute attribute) {
+    private void addAttribute(Attribute attribute) {
       Preconditions.checkState(!attributes.containsKey(attribute.getName()),
           "An attribute with the name '%s' already exists.", attribute.getName());
       attributes.put(attribute.getName(), attribute);
-      return this;
     }
 
     private void overrideAttribute(Attribute attribute) {
@@ -1974,11 +1975,11 @@ public class RuleClass {
 
   /**
    * Converts the build-language-typed {@code buildLangValue} to a native value via {@link
-   * BuildType#selectableConvert}. Canonicalizes the value's order if it is a {@link List} type and
-   * {@code attr.isOrderIndependent()} returns {@code true}.
+   * BuildType#selectableConvert}. Canonicalizes the value's order if it is a {@link List} type
+   * (but not a {@link GlobList}) and {@code attr.isOrderIndependent()} returns {@code true}.
    *
-   * <p>Throws {@link ConversionException} if the conversion fails, or if {@code buildLangValue} is
-   * a selector expression but {@code attr.isConfigurable()} is {@code false}.
+   * <p>Throws {@link ConversionException} if the conversion fails, or if {@code buildLangValue}
+   * is a selector expression but {@code attr.isConfigurable()} is {@code false}.
    */
   private static Object convertFromBuildLangType(Rule rule, Attribute attr, Object buildLangValue)
       throws ConversionException {
@@ -1993,7 +1994,7 @@ public class RuleClass {
           String.format("attribute \"%s\" is not configurable", attr.getName()));
     }
 
-    if (converted instanceof List<?>) {
+    if ((converted instanceof List<?>) && !(converted instanceof GlobList<?>)) {
       if (attr.isOrderIndependent()) {
         @SuppressWarnings("unchecked")
         List<? extends Comparable<?>> list = (List<? extends Comparable<?>>) converted;
