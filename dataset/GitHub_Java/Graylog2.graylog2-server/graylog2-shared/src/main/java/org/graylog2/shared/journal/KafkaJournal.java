@@ -189,13 +189,13 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                         // maxMessageSize: The maximum size of a message in the log
                         Integer.MAX_VALUE,
                         // maxIndexSize: The maximum size of an index file
-                        Ints.saturatedCast(megabytes(1L).toBytes()),
+                        Ints.saturatedCast(megabytes(1l).toBytes()),
                         // indexInterval: The approximate number of bytes between index entries
                         4096,
                         // fileDeleteDelayMs: The time to wait before deleting a file from the filesystem
-                        MINUTES.toMillis(1L),
+                        MINUTES.toMillis(1l),
                         // deleteRetentionMs: The time to retain delete markers in the log. Only applicable for logs that are being compacted.
-                        DAYS.toMillis(1L),
+                        DAYS.toMillis(1l),
                         // minCleanableRatio: The ratio of bytes that are available for cleaning to the bytes already cleaned
                         0.5,
                         // compact: Should old segments in this log be deleted or de-duplicated?
@@ -212,12 +212,12 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
         final CleanerConfig cleanerConfig =
                 new CleanerConfig(
                         1,
-                        megabytes(4L).toBytes(),
+                        megabytes(4l).toBytes(),
                         0.9d,
-                        Ints.saturatedCast(megabytes(1L).toBytes()),
-                        Ints.saturatedCast(megabytes(32L).toBytes()),
-                        Ints.saturatedCast(megabytes(5L).toBytes()),
-                        SECONDS.toMillis(15L),
+                        Ints.saturatedCast(megabytes(1l).toBytes()),
+                        Ints.saturatedCast(megabytes(32l).toBytes()),
+                        Ints.saturatedCast(megabytes(5l).toBytes()),
+                        SECONDS.toMillis(15l),
                         false,
                         "MD5");
 
@@ -256,9 +256,9 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                     defaultConfig,
                     cleanerConfig,
                     NUM_IO_THREADS,
-                    SECONDS.toMillis(60L),
-                    SECONDS.toMillis(60L),
-                    SECONDS.toMillis(60L),
+                    SECONDS.toMillis(60l),
+                    SECONDS.toMillis(60l),
+                    SECONDS.toMillis(60l),
                     kafkaScheduler, // Broker state
                     brokerState,
                     JODA_TIME);
