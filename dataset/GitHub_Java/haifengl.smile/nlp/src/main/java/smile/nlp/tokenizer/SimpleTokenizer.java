@@ -85,16 +85,16 @@ public class SimpleTokenizer implements Tokenizer {
 
     private static final Pattern[] DELIMITERS = {
         // Separate most punctuation
-        Pattern.compile("((?U)[^\\w\\.\\'\\-\\/,&])"),
+        Pattern.compile("([^\\p{L}\\p{N}\\p{M}\\p{Sk}‌‍‌‍‌‍‌‍\u200C\u200D\\.\\'\\-\\/,&])"),
         // Separate commas if they're followed by space (e.g., don't separate 2,500)
-        Pattern.compile("(?U)(,\\s)"),
+        Pattern.compile("(,\\s)"),
         // Separate single quotes if they're followed by a space.
-        Pattern.compile("(?U)('\\s)"),
+        Pattern.compile("('\\s)"),
         // Separate periods that come before newline or end of string.
-        Pattern.compile("(?U)\\. *(\\n|$)")
+        Pattern.compile("\\. *(\\n|$)")
     };
 
-    private static final Pattern WHITESPACE = Pattern.compile("(?U)\\s+");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     private boolean splitContraction;
     /**
