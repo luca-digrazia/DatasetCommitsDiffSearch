@@ -38,7 +38,11 @@ public class Logger {
 	}
 
 	public void info(String message, Object... args) {
-		log(Level.INFO, message, null, null, null, args);
+		info(message, null, args);
+	}
+
+	public void info(String message, Element element, Object... args) {
+		log(Level.INFO, message, element, null, null, args);
 	}
 
 	public void warn(String message, Object... args) {
