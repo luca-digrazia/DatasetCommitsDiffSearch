@@ -29,29 +29,15 @@ public class OrderedClassFileResourceProvider implements ClassFileResourceProvid
   private final Set<String> descriptors = Sets.newHashSet();
   private final Map<String, ClassFileResourceProvider> descriptorToProvider = new HashMap<>();
 
-  public OrderedClassFileResourceProvider(
-      ImmutableList<ClassFileResourceProvider> bootclasspathProviders,
-      ImmutableList<ClassFileResourceProvider> classfileProviders) {
-    final Set<String> bootclasspathDescriptors = Sets.newHashSet();
-    for (ClassFileResourceProvider provider : classfileProviders) {
-      // Collect all descriptors provided and the first provider providing each.
-      bootclasspathProviders.forEach(p -> bootclasspathDescriptors.addAll(p.getClassDescriptors()));
+  public OrderedClassFileResourceProvider(ImmutableList<ClassFileResourceProvider> providers) {
+    // Collect all descriptors provided and the first provider providing each.
+    for (ClassFileResourceProvider provider : providers) {
       for (String descriptor : provider.getClassDescriptors()) {
-        // Pick first definition of classpath class and filter out platform classes
-        // from classpath if present.
-        if (!bootclasspathDescriptors.contains(descriptor)
-            && !isPlatformDescriptor(descriptor)
-            && descriptors.add(descriptor)) {
+        if (descriptors.add(descriptor)) {
           descriptorToProvider.put(descriptor, provider);
         }
       }
     }
-  }
-
-  private static boolean isPlatformDescriptor(String descriptor) {
-    // See b/153106333.
-    return descriptor.startsWith("Landroid/car/content/")
-        && !descriptor.startsWith("Landroid/car/test/");
   }
 
   @Override
