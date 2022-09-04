@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.AndroidNdkCrosstools;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.AndroidNdkCrosstools.NdkCrosstoolsException;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.ApiLevel;
-import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkMajorRevision;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkPaths;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.NdkRelease;
 import com.google.devtools.build.lib.bazel.rules.android.ndkcrosstools.StlImpl;
@@ -64,7 +63,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
   private static final PathFragment PLATFORMS_DIR = new PathFragment("platforms");
 
   private static final Iterable<String> PATH_ENV_VAR_AS_LIST = ImmutableList.of(PATH_ENV_VAR);
-
+  
   private static final class CrosstoolStlPair {
 
     private final CrosstoolRelease crosstoolRelease;
@@ -96,18 +95,14 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
   public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
       BlazeDirectories directories, Environment env, Map<String, String> markerData)
       throws InterruptedException, RepositoryFunctionException {
-    Map<String, String> environ =
-        declareEnvironmentDependencies(markerData, env, PATH_ENV_VAR_AS_LIST);
-    if (environ == null) {
-      return null;
-    }
+    declareEnvironmentDependencies(markerData, env, PATH_ENV_VAR_AS_LIST);
     prepareLocalRepositorySymlinkTree(rule, outputDirectory);
     WorkspaceAttributeMapper attributes = WorkspaceAttributeMapper.of(rule);
     PathFragment pathFragment;
     if (attributes.isAttributeValueExplicitlySpecified("path")) {
       pathFragment = getTargetPath(rule, directories.getWorkspace());
-    } else if (environ.containsKey(PATH_ENV_VAR)) {
-      pathFragment = getAndroidNdkHomeEnvironmentVar(directories.getWorkspace(), environ);
+    } else if (clientEnvironment.containsKey(PATH_ENV_VAR)) {
+      pathFragment = getAndroidNdkHomeEnvironmentVar(directories.getWorkspace(), clientEnvironment);
     } else {
       throw new RepositoryFunctionException(
           new EvalException(
@@ -170,36 +165,26 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       apiLevelString = apiLevels.first().toString();
     }
 
-    // NDK minor revisions should be backwards compatible within a major revision, the crosstools
-    // we generate don't care about the minor revision.
-    NdkMajorRevision ndkMajorRevision;
+    ApiLevel apiLevel;
+    apiLevel =
+        AndroidNdkCrosstools.KNOWN_NDK_MAJOR_REVISIONS
+            .get(ndkRelease.majorRevision)
+            .apiLevel(env.getListener(), ruleName, apiLevelString);
+
     if (!ndkRelease.isValid) {
-      String warningMessage =
-          String.format(
-              "The revision of the Android NDK referenced by android_ndk_repository rule '%s' "
-                  + "could not be determined (the revision string found is '%s'). Defaulting to "
-                  + "revision %s.",
-              ruleName, ndkRelease.rawRelease, AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getKey());
-      env.getListener().handle(Event.warn(warningMessage));
-      ndkMajorRevision = AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getValue();
-    } else if (!AndroidNdkCrosstools.isKnownNDKRevision(ndkRelease)) {
-      String warningMessage =
-          String.format(
-              "The major revision of the Android NDK referenced by android_ndk_repository rule "
-                  + "'%s' is %s. The major revisions supported by Bazel are %s. Defaulting to "
-                  + "revision %s.",
-              ruleName,
-              ndkRelease.majorRevision,
-              AndroidNdkCrosstools.KNOWN_NDK_MAJOR_REVISIONS.keySet(),
-              AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getKey());
-      env.getListener().handle(Event.warn(warningMessage));
-      ndkMajorRevision = AndroidNdkCrosstools.LATEST_KNOWN_REVISION.getValue();
-    } else {
-      ndkMajorRevision =
-          AndroidNdkCrosstools.KNOWN_NDK_MAJOR_REVISIONS.get(ndkRelease.majorRevision);
+      env.getListener().handle(Event.warn(String.format(
+          "The revision of the Android NDK given in android_ndk_repository rule '%s' could not be "
+          + "determined (the revision string found is '%s'). "
+          + "Defaulting to Android NDK revision %s", ruleName, ndkRelease.rawRelease,
+          AndroidNdkCrosstools.LATEST_KNOWN_REVISION)));
     }
 
-    ApiLevel apiLevel = ndkMajorRevision.apiLevel(env.getListener(), ruleName, apiLevelString);
+    if (!AndroidNdkCrosstools.isKnownNDKRevision(ndkRelease)) {
+      env.getListener().handle(Event.warn(String.format(
+          "Bazel Android NDK crosstools are based on Android NDK revision %s. "
+          + "The revision of the Android NDK given in android_ndk_repository rule '%s' is '%s'",
+          AndroidNdkCrosstools.LATEST_KNOWN_REVISION, ruleName, ndkRelease.rawRelease)));
+    }
 
     ImmutableList.Builder<CrosstoolStlPair> crosstoolsAndStls = ImmutableList.builder();
     try {
@@ -208,8 +193,13 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       NdkPaths ndkPaths = new NdkPaths(ruleName, hostPlatform, apiLevel);
 
       for (StlImpl stlImpl : StlImpls.get(ndkPaths)) {
-        CrosstoolRelease crosstoolRelease =
-            ndkMajorRevision.crosstoolRelease(ndkPaths, stlImpl, hostPlatform);
+
+        CrosstoolRelease crosstoolRelease = AndroidNdkCrosstools.create(
+            ndkRelease,
+            ndkPaths,
+            stlImpl,
+            hostPlatform);
+
         crosstoolsAndStls.add(new CrosstoolStlPair(crosstoolRelease, stlImpl));
       }
 
@@ -256,7 +246,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       }
 
       String toolchainName = createToolchainName(crosstoolStlPair.stlImpl.getName());
-
+      
       ccToolchainSuites.append(ccToolchainSuiteTemplate
           .replace("%toolchainName%", toolchainName)
           .replace("%toolchainMap%", toolchainMap.toString().trim())
@@ -287,7 +277,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
   static String createToolchainName(String stlName) {
     return TOOLCHAIN_NAME_PREFIX + stlName;
   }
-
+  
   private static String createCcToolchainRule(String ccToolchainTemplate, CToolchain toolchain) {
 
     // TODO(bazel-team): It's unfortunate to have to extract data from a CToolchain proto like this.
@@ -355,7 +345,7 @@ public class AndroidNdkRepositoryFunction extends RepositoryFunction {
       // For NDK r10e
       releaseFilePath = directory.getRelative("RELEASE.TXT");
     }
-
+    
     SkyKey releaseFileKey = FileValue.key(RootedPath.toRootedPath(directory, releaseFilePath));
 
     String releaseFileContent;

@@ -82,20 +82,16 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
   public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
       BlazeDirectories directories, Environment env, Map<String, String> markerData)
       throws SkyFunctionException, InterruptedException {
-    Map<String, String> environ =
-        declareEnvironmentDependencies(markerData, env, PATH_ENV_VAR_AS_LIST);
-    if (environ == null) {
-      return null;
-    }
+    declareEnvironmentDependencies(markerData, env, PATH_ENV_VAR_AS_LIST);
     prepareLocalRepositorySymlinkTree(rule, outputDirectory);
     WorkspaceAttributeMapper attributes = WorkspaceAttributeMapper.of(rule);
     FileSystem fs = directories.getOutputBase().getFileSystem();
     Path androidSdkPath;
     if (attributes.isAttributeValueExplicitlySpecified("path")) {
       androidSdkPath = fs.getPath(getTargetPath(rule, directories.getWorkspace()));
-    } else if (environ.containsKey(PATH_ENV_VAR)){
+    } else if (clientEnvironment.containsKey(PATH_ENV_VAR)){
       androidSdkPath =
-          fs.getPath(getAndroidHomeEnvironmentVar(directories.getWorkspace(), environ));
+          fs.getPath(getAndroidHomeEnvironmentVar(directories.getWorkspace(), clientEnvironment));
     } else {
       throw new RepositoryFunctionException(
           new EvalException(
@@ -127,31 +123,17 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
           Transience.PERSISTENT);
     }
 
-    Integer defaultApiLevel;
+    String defaultApiLevel;
     if (attributes.isAttributeValueExplicitlySpecified("api_level")) {
       try {
-        defaultApiLevel = attributes.get("api_level", Type.INTEGER);
+        defaultApiLevel = attributes.get("api_level", Type.INTEGER).toString();
       } catch (EvalException e) {
         throw new RepositoryFunctionException(e, Transience.PERSISTENT);
-      }
-      if (!apiLevels.contains(defaultApiLevel)) {
-        throw new RepositoryFunctionException(
-            new EvalException(
-                rule.getLocation(),
-                String.format(
-                    "Android SDK api level %s was requested but it is not installed in the Android "
-                        + "SDK at %s. The api levels found were %s. Please choose an available api "
-                        + "level or install api level %s from the Android SDK Manager.",
-                    defaultApiLevel,
-                    androidSdkPath,
-                    apiLevels.toString(),
-                    defaultApiLevel)),
-            Transience.PERSISTENT);
       }
     } else {
       // If the api_level attribute is not explicitly set, we select the highest api level that is
       // available in the SDK.
-      defaultApiLevel = apiLevels.first();
+      defaultApiLevel = String.valueOf(apiLevels.first());
     }
 
     String buildToolsDirectory;
@@ -216,7 +198,7 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
         .replace("%build_tools_version%", buildToolsVersion)
         .replace("%build_tools_directory%", buildToolsDirectory)
         .replace("%api_levels%", Iterables.toString(apiLevels))
-        .replace("%default_api_level%", String.valueOf(defaultApiLevel))
+        .replace("%default_api_level%", defaultApiLevel)
         .replace("%system_image_dirs%", systemImageDirsList);
 
     // All local maven repositories that are shipped in the Android SDK.
