@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
@@ -22,6 +21,7 @@ import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CTool
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CrosstoolRelease;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import javax.annotation.Nullable;
 
 /**
@@ -126,12 +126,7 @@ public class CToolchainSelectionUtils {
     }
     if (selectedToolchain == null) {
       throw new InvalidConfigurationException(
-          String.format(
-                  "Toolchain identifier '%s' was not found, valid identifiers are %s",
-                  toolchainIdentifier,
-                  proto.getToolchainList().stream()
-                      .map(CToolchain::getToolchainIdentifier)
-                      .collect(ImmutableList.toImmutableList())));
+          String.format("Toolchain identifier '%s' was not found", toolchainIdentifier));
     }
     return selectedToolchain;
   }
@@ -201,14 +196,45 @@ public class CToolchainSelectionUtils {
           }
       }
     }
+    String selectedIdentifier = null;
+    for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
+      if (selector.getCpu().equals(config.getCpu())) {
+        selectedIdentifier = selector.getToolchainIdentifier();
+        break;
+      }
+    }
 
-    StringBuilder errorMessageBuilder = new StringBuilder();
-    errorMessageBuilder
-        .append("No toolchain found for cpu '")
-        .append(config.getCpu())
-        .append("'. Valid toolchains are: ");
-    describeToolchainList(errorMessageBuilder, release.getToolchainList());
-    throw new InvalidConfigurationException(errorMessageBuilder.toString());
+    if (selectedIdentifier == null) {
+      HashSet<String> seenCpus = new HashSet<>();
+      StringBuilder errorMessageBuilder = new StringBuilder();
+      errorMessageBuilder
+          .append("No toolchain found for cpu '")
+          .append(config.getCpu())
+          .append("'. Valid cpus from default_toolchain entries are: [\n");
+      for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
+        if (seenCpus.add(selector.getCpu())) {
+          errorMessageBuilder.append("  ").append(selector.getCpu()).append(",\n");
+        }
+      }
+      errorMessageBuilder.append("]. Valid toolchains are: ");
+      describeToolchainList(errorMessageBuilder, release.getToolchainList());
+      throw new InvalidConfigurationException(errorMessageBuilder.toString());
+    }
+    checkToolchain(selectedIdentifier);
+
+    for (CToolchain toolchain : release.getToolchainList()) {
+      if (toolchain.getToolchainIdentifier().equals(selectedIdentifier)) {
+        return toolchain;
+      }
+    }
+
+    throw new InvalidConfigurationException(
+        "Inconsistent crosstool configuration; no toolchain "
+            + "corresponding to '"
+            + selectedIdentifier
+            + "' found for cpu '"
+            + config.getCpu()
+            + "'");
   }
 
   /**

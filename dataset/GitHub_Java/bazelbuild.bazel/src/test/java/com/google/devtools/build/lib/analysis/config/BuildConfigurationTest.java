@@ -106,13 +106,13 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
     BuildConfigurationCollection configs = createCollection("--cpu=piii");
     BuildConfiguration config = Iterables.getOnlyElement(configs.getTargetConfigurations());
-    assertThat(config.getFragment(CppConfiguration.class).getRuleProvidingCcToolchainProvider())
+    assertThat(config.getFragment(CppConfiguration.class).getCcToolchainRuleLabel())
         .isEqualTo(
             Label.parseAbsoluteUnchecked(
                 "//third_party/crosstool/mock:cc-compiler-piii-gcc-4.4.0"));
 
     BuildConfiguration hostConfig = configs.getHostConfiguration();
-    assertThat(hostConfig.getFragment(CppConfiguration.class).getRuleProvidingCcToolchainProvider())
+    assertThat(hostConfig.getFragment(CppConfiguration.class).getCcToolchainRuleLabel())
         .isEqualTo(
             Label.parseAbsoluteUnchecked("//third_party/crosstool/mock:cc-compiler-k8-gcc-4.4.0"));
   }
