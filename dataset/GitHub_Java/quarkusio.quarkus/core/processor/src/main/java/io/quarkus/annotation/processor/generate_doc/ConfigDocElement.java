@@ -1,5 +1,7 @@
 package io.quarkus.annotation.processor.generate_doc;
 
+import static io.quarkus.annotation.processor.generate_doc.ConfigPhase.COMPARATOR;
+
 import java.io.IOException;
 import java.io.Writer;
 
@@ -10,6 +12,8 @@ public interface ConfigDocElement {
 
     boolean isWithinAMap();
 
+    String getTopLevelGrouping();
+
     /**
      *
      * Map config will be at the end of generated doc.
@@ -19,18 +23,13 @@ public interface ConfigDocElement {
     default int compare(ConfigDocElement item) {
         if (isWithinAMap()) {
             if (item.isWithinAMap()) {
-                return 0;
+                return COMPARATOR.compare(getConfigPhase(), item.getConfigPhase());
             }
             return 1;
         } else if (item.isWithinAMap()) {
             return -1;
         }
 
-        int phaseComparison = ConfigPhase.COMPARATOR.compare(getConfigPhase(), item.getConfigPhase());
-        if (phaseComparison == 0) {
-            return 0;
-        }
-
-        return phaseComparison;
+        return COMPARATOR.compare(getConfigPhase(), item.getConfigPhase());
     }
 }
