@@ -25,15 +25,15 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -92,23 +92,6 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "    outs = ['a/b', 'c/d'],",
         "    cmd = 'echo hi | tee $(@D)/a/b $(@D)/c/d',",
         ")");
-  }
-
-  @Override
-  protected ConfiguredRuleClassProvider getRuleClassProvider() {
-    ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
-    TestRuleClassProvider.addStandardRules(builder);
-    return builder.addRuleDefinition(new TestRuleClassProvider.MakeVariableTesterRule()).build();
-  }
-
-  @Test
-  public void testToolchainMakeVariableExpansion() throws Exception {
-    scratch.file("a/BUILD",
-        "genrule(name='gr', srcs=[], outs=['out'], cmd='$(TEST_VARIABLE)', toolchains=[':v'])",
-        "make_variable_tester(name='v')");
-
-    String cmd = getCommand("//a:gr");
-    assertThat(cmd).endsWith("FOOBAR");
   }
 
   @Test
@@ -352,13 +335,18 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
     Artifact javaOutput = getFileConfiguredTarget("//foo:java.txt").getArtifact();
     Artifact javabaseOutput = getFileConfiguredTarget("//foo:javabase.txt").getArtifact();
 
-    String javaCommand =
-        ((SpawnAction) getGeneratingAction(javaOutput)).getArguments().get(2);
-    assertThat(javaCommand).containsMatch("jdk/bin/java(.exe)? >");
+    String expectedPattern = "echo %s > %s";
 
-    String javabaseCommand =
-        ((SpawnAction) getGeneratingAction(javabaseOutput)).getArguments().get(2);
-    assertThat(javabaseCommand).contains("jdk >");
+    BuildConfiguration hostConfig = getHostConfiguration();
+    String expectedJava = hostConfig.getFragment(Jvm.class).getJavaExecutable().getPathString();
+    String expectedJavabase = hostConfig.getFragment(Jvm.class).getJavaHome().getPathString();
+
+    assertCommandEquals(
+        String.format(expectedPattern, expectedJava, javaOutput.getExecPathString()),
+        ((SpawnAction) getGeneratingAction(javaOutput)).getArguments().get(2));
+    assertCommandEquals(
+        String.format(expectedPattern, expectedJavabase, javabaseOutput.getExecPathString()),
+        ((SpawnAction) getGeneratingAction(javabaseOutput)).getArguments().get(2));
   }
 
   // Returns the expansion of 'cmd' for the specified genrule.

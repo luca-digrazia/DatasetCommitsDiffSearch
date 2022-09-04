@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.collect.ImmutableMap.Builder;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -42,7 +41,7 @@ public final class Jvm extends BuildConfiguration.Fragment {
   private final Label jvmLabel;
   private final PathFragment java;
 
-  public static final String BIN_JAVA = "bin/java" + OsUtils.executableExtension();
+  private static final String BIN_JAVA = "bin/java" + OsUtils.executableExtension();
 
   /**
    * Creates a Jvm instance. Either the {@code javaHome} parameter is absolute,
@@ -57,11 +56,15 @@ public final class Jvm extends BuildConfiguration.Fragment {
   }
 
   /**
+   * Returns a path fragment that determines the path to the installation
+   * directory. It is either absolute or relative to the execution root.
+   */
+  public PathFragment getJavaHome() {
+    return javaHome;
+  }
+
+  /**
    * Returns the path to the java binary.
-   *
-   * <p>Don't use this method because it relies on package loading during configuration creation.
-   * Use {@link JavaCommon#getHostJavaExecutable(RuleContext)} and
-   * {@link JavaCommon#getJavaExecutable(RuleContext)} instead.
    */
   @SkylarkCallable(name = "java_executable", structField = true,
       doc = "The java executable, i.e. bin/java relative to the Java home.")
@@ -78,10 +81,6 @@ public final class Jvm extends BuildConfiguration.Fragment {
    */
   public Label getJvmLabel() {
     return jvmLabel;
-  }
-
-  public PathFragment getJavaHome() {
-    return javaHome;
   }
 
   @Override

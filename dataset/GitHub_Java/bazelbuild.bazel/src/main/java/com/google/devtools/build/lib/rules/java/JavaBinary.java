@@ -232,6 +232,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext)
             .getDynamicRuntimeLinkInputs();
 
+    JavaRuntimeProvider javaRuntime = JavaHelper.getJavaRuntime(ruleContext);
+
     Iterables.addAll(jvmFlags,
         semantics.getJvmFlags(ruleContext, common.getSrcsArtifacts(), userJvmFlags));
     if (ruleContext.hasErrors()) {
@@ -248,7 +250,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
               jvmFlags,
               executableForRunfiles,
               mainClass,
-              JavaCommon.getJavaBinSubstitution(ruleContext, launcher));
+              JavaCommon.getJavaBinSubstitution(ruleContext, javaRuntime, launcher));
       if (!executableToRun.equals(executableForRunfiles)) {
         filesBuilder.add(executableToRun);
         runfilesBuilder.addArtifact(executableToRun);
@@ -509,7 +511,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     TransitiveInfoCollection javabaseTarget = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
     JavaRuntimeProvider javaRuntime = null;
     if (javabaseTarget != null) {
-      javaRuntime = javabaseTarget.get(JavaRuntimeProvider.SKYLARK_CONSTRUCTOR);
+      javaRuntime = javabaseTarget.getProvider(JavaRuntimeProvider.class);
       builder.addTransitiveArtifacts(javaRuntime.javaBaseInputs());
 
       // Add symlinks to the C++ runtime libraries under a path that can be built

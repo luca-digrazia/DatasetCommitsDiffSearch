@@ -26,14 +26,12 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration.Configuratio
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
-import com.google.devtools.common.options.proto.OptionFilters.OptionMetadataTag;
 import java.util.List;
 
 /**
@@ -191,8 +189,9 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "apple_platform_type",
     defaultValue = "IOS",
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     converter = PlatformTypeConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Don't set this value from the command line - it is derived from other flags and "
@@ -203,7 +202,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "apple_split_cpu",
     defaultValue = "",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Don't set this value from the command line - it is derived from other flags and "
@@ -221,9 +221,9 @@ public class AppleCommandLineOptions extends FragmentOptions {
     name = "apple configuration distinguisher",
     defaultValue = "UNKNOWN",
     converter = ConfigurationDistinguisherConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INTERNAL}
+    optionUsageRestrictions = OptionUsageRestrictions.INTERNAL
   )
   public ConfigurationDistinguisher configurationDistinguisher;
 
@@ -276,7 +276,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "default_ios_provisioning_profile",
     defaultValue = "",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     converter = DefaultProvisioningProfileConverter.class
   )
@@ -285,8 +286,9 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "xcode_version_config",
     defaultValue = "@local_config_xcode//:host_xcodes",
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     converter = LabelConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "The label of the xcode_config rule to be used for selecting the Xcode version "
@@ -339,7 +341,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "apple_crosstool_transition",
     defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help = "If true, the apple crosstool is used for all apple rules."
   )
@@ -348,7 +351,8 @@ public class AppleCommandLineOptions extends FragmentOptions {
   @Option(
     name = "target_uses_apple_crosstool",
     defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
     help = "If true, this target uses the apple crosstool.  Do not set this flag manually."
   )
@@ -408,7 +412,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
             + "\"embedded\", and \"embedded_markers\""
   )
   @Immutable
-  public enum AppleBitcodeMode implements SkylarkValue {
+  public enum AppleBitcodeMode {
 
     /** Do not compile bitcode. */
     NONE("none", ImmutableList.<String>of()),
@@ -435,11 +439,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
     @Override
     public String toString() {
       return mode;
-    }
-
-    @Override
-    public void repr(SkylarkPrinter printer) {
-      printer.append(mode);
     }
 
     /** Returns the names of any crosstool features that correspond to this bitcode mode. */

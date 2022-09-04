@@ -92,9 +92,7 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
       if (javaHomeTarget instanceof Rule) {
         if (!((Rule) javaHomeTarget).getRuleClass().equals("java_runtime_suite")) {
           throw new InvalidConfigurationException(
-              "Unexpected javabase rule kind '"
-                  + ((Rule) javaHomeTarget).getRuleClass()
-                  + "'. Expected java_runtime_suite");
+              "Unexpected javabase rule kind '" + ((Rule) javaHomeTarget).getRuleClass() + "'");
         }
         return createFromRuntimeSuite(lookup, (Rule) javaHomeTarget, cpu);
       }

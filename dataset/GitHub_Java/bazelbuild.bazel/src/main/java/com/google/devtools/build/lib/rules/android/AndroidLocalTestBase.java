@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.rules.android;
 
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
+import static com.google.devtools.build.lib.vfs.FileSystemUtils.replaceExtension;
 import static java.util.stream.Collectors.toCollection;
 
 import com.google.common.collect.ImmutableList;
@@ -24,7 +25,6 @@ import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
-import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.OneVersionCheckActionBuilder;
 import com.google.devtools.build.lib.rules.java.SingleJarActionBuilder;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
@@ -187,26 +186,32 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
         getJvmFlags(ruleContext, testClass),
         executable,
         mainClass,
-        JavaCommon.getJavaBinSubstitution(ruleContext, launcher));
+        JavaCommon.getJavaBinSubstitution(
+            ruleContext, JavaHelper.getJavaRuntime(ruleContext), launcher));
 
     Artifact deployJar =
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_DEPLOY_JAR);
 
-    Artifact oneVersionOutputArtifact = null;
     OneVersionEnforcementLevel oneVersionEnforcementLevel =
         ruleContext.getFragment(JavaConfiguration.class).oneVersionEnforcementLevel();
     if (oneVersionEnforcementLevel != OneVersionEnforcementLevel.OFF) {
-      oneVersionOutputArtifact =
-          OneVersionCheckActionBuilder.newBuilder()
-              .withEnforcementLevel(oneVersionEnforcementLevel)
-              .outputArtifact(
-                  ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_ONE_VERSION_ARTIFACT))
-              .useToolchain(JavaToolchainProvider.fromRuleContext(ruleContext))
-              .checkJars(
-                  NestedSetBuilder.fromNestedSet(helper.getAttributes().getRuntimeClassPath())
-                      .add(classJar)
-                      .build())
-              .build(ruleContext);
+      Artifact oneVersionOutput =
+          ruleContext
+              .getAnalysisEnvironment()
+              .getDerivedArtifact(
+                  replaceExtension(classJar.getRootRelativePath(), "-one-version.txt"),
+                  classJar.getRoot());
+      filesToBuildBuilder.add(oneVersionOutput);
+
+      NestedSet<Artifact> transitiveDependencies =
+          NestedSetBuilder.fromNestedSet(helper.getAttributes().getRuntimeClassPath())
+              .add(classJar)
+              .build();
+      OneVersionCheckActionBuilder.build(
+          ruleContext,
+          transitiveDependencies,
+          oneVersionOutput,
+          oneVersionEnforcementLevel);
     }
 
     NestedSet<Artifact> filesToBuild = filesToBuildBuilder.build();
@@ -293,10 +298,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     // No need to use the flag map here - just confirming that dynamic configurations are in use.
     // TODO(mstaib): remove when static configurations are removed.
     AndroidFeatureFlagSetProvider.getAndValidateFlagMapFromRuleContext(ruleContext);
-
-    if (oneVersionOutputArtifact != null) {
-      builder.addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, oneVersionOutputArtifact);
-    }
 
     return builder
         .setFilesToBuild(filesToBuild)
