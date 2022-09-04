@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.bson.Document;
@@ -100,8 +101,7 @@ public class MongoWithReplicasTestBase {
 
             // Check replica set status before to proceed
             await()
-                    .pollInterval(100, TimeUnit.MILLISECONDS)
-                    .atMost(1, TimeUnit.MINUTES)
+                    .pollDelay(1, TimeUnit.SECONDS)
                     .until(() -> {
                         Document result = mongoAdminDB.runCommand(new Document("replSetGetStatus", 1));
                         LOGGER.infof("replSetGetStatus: %s", result);
@@ -142,6 +142,15 @@ public class MongoWithReplicasTestBase {
             }
         }
         return true;
+    }
+
+    private List<IMongodConfig> buildMongodConfiguration(Map<String, Integer> urls, final boolean configureReplicaSet)
+            throws IOException {
+        final List<IMongodConfig> configs = new ArrayList<>(urls.size());
+        for (Map.Entry<String, Integer> url : urls.entrySet()) {
+            configs.add(buildMongodConfiguration(url.getKey(), url.getValue(), configureReplicaSet));
+        }
+        return configs;
     }
 
     private static IMongodConfig buildMongodConfiguration(String url, int port, final boolean configureReplicaSet)
