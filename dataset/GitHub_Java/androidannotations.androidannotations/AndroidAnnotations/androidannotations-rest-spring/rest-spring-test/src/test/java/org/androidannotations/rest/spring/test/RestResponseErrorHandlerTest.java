@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,8 +19,8 @@ import static org.fest.assertions.api.Assertions.assertThat;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 import org.springframework.web.client.ResponseErrorHandler;
 
 @RunWith(RobolectricTestRunner.class)
@@ -29,16 +28,16 @@ public class RestResponseErrorHandlerTest {
 
 	@Test
 	public void testSameAsSingletonBeanResponseErrorHandler() {
-		RestWithSingletonBeanResponseErrorHandler restClient = new RestWithSingletonBeanResponseErrorHandler_(RuntimeEnvironment.application);
+		RestWithSingletonBeanResponseErrorHandler restClient = new RestWithSingletonBeanResponseErrorHandler_(Robolectric.application);
 		ResponseErrorHandler errorHandler = restClient.getRestTemplate().getErrorHandler();
-		MyResponseErrorHandlerBean errorHandlerBean = MyResponseErrorHandlerBean_.getInstance_(RuntimeEnvironment.application);
+		MyResponseErrorHandlerBean errorHandlerBean = MyResponseErrorHandlerBean_.getInstance_(Robolectric.application);
 
 		assertThat(errorHandler).isSameAs(errorHandlerBean);
 	}
 
 	@Test
 	public void testInstanceCreatedFromNonBeanClassAsResponseErrorHandler() {
-		new RestWithSimpleClassResponseErrorHandler_(RuntimeEnvironment.application);
+		new RestWithSimpleClassResponseErrorHandler_(Robolectric.application);
 
 		assertThat(MyResponseErrorHandler.instanceCreated).isTrue();
 	}
