@@ -36,16 +36,11 @@ public class PythonConfigurationLoader implements ConfigurationFragmentFactory {
     PythonVersion pythonVersion = pythonOptions.getPythonVersion();
     return new PythonConfiguration(
         pythonVersion,
-        pythonOptions.getDefaultPythonVersion(),
         pythonOptions.buildPythonZip,
         pythonOptions.buildTransitiveRunfilesTrees,
-        /*oldPyVersionApiAllowed=*/ !pythonOptions.incompatibleRemoveOldPythonVersionApi,
-        /*useNewPyVersionSemantics=*/ pythonOptions.incompatibleAllowPythonVersionTransitions,
-        /*py2OutputsAreSuffixed=*/ pythonOptions.incompatiblePy2OutputsAreSuffixed,
-        /*disallowLegacyPyProvider=*/ pythonOptions.incompatibleDisallowLegacyPyProvider,
-        /*useToolchains=*/ pythonOptions.incompatibleUsePythonToolchains,
-        /*loadPythonRulesFromBzl=*/ pythonOptions.loadPythonRulesFromBzl,
-        /*defaultToExplicitInitPy=*/ pythonOptions.incompatibleDefaultToExplicitInitPy);
+        /*oldPyVersionApiAllowed=*/ !pythonOptions.experimentalRemoveOldPythonVersionApi,
+        /*useNewPyVersionSemantics=*/ pythonOptions.experimentalAllowPythonVersionTransitions,
+        /*disallowLegacyPyProvider=*/ pythonOptions.incompatibleDisallowLegacyPyProvider);
   }
 
   @Override
