@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,6 +22,8 @@ import static com.sun.codemodel.JMod.STATIC;
 import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 
 import javax.lang.model.element.Element;
@@ -31,6 +33,8 @@ import javax.lang.model.element.VariableElement;
 
 import org.androidannotations.process.ProcessHolder;
 
+import com.sun.codemodel.JAnnotationArrayMember;
+import com.sun.codemodel.JAnnotationUse;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JExpr;
@@ -46,13 +50,15 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 			+ "The mAlreadyInflated_ hack is needed because of an Android bug\n" // +
 			+ "which leads to infinite calls of onFinishInflate()\n" //
 			+ "when inflating a layout with a parent and using\n" //
-			+ "the <merge /> tag.";
+			+ "the <merge /> tag." //
+	;
 
 	private static final String SUPPRESS_WARNING_COMMENT = "" //
 			+ "We use @SuppressWarning here because our java code\n" //
 			+ "generator doesn't know that there is no need\n" //
 			+ "to import OnXXXListeners from View as we already\n" //
-			+ "are in a View.";
+			+ "are in a View." //
+	;
 
 	protected JBlock initBody;
 	protected JMethod onFinishInflate;
@@ -67,7 +73,19 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 	private void addSuppressWarning() {
 		generatedClass.javadoc().append(SUPPRESS_WARNING_COMMENT);
 
-		codeModelHelper.addSuppressWarnings(getGeneratedClass(), "unused");
+		Collection<JAnnotationUse> annotations = getGeneratedClass().annotations();
+		for (JAnnotationUse annotationUse : annotations) {
+			if (annotationUse.getAnnotationClass().fullName().equals(SuppressWarnings.class.getCanonicalName())) {
+				if (!Arrays.asList(getAnnotatedElement().getAnnotation(SuppressWarnings.class).value()).contains("unused")) {
+					JAnnotationArrayMember value = (JAnnotationArrayMember) annotationUse.getAnnotationMembers().get("value");
+					value.param("unused");
+				}
+
+				return;
+			}
+		}
+
+		generatedClass.annotate(SuppressWarnings.class).param("value", "unused");
 	}
 
 	private void createConstructorAndBuilder() {
