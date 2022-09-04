@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -36,7 +37,7 @@ import javax.annotation.Nullable;
  *
  * <p>These objects are intended to be short-lived, never stored in Skyframe, since they pair three
  * heavyweight objects, a {@link ConfiguredTarget}, a {@link Target} (which holds a {@link
- * com.google.devtools.build.lib.packages.Package}), and a {@link BuildConfiguration}.
+ * Package}), and a {@link BuildConfiguration}.
  */
 public class ConfiguredTargetAndData {
   private final ConfiguredTarget configuredTarget;

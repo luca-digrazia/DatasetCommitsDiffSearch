@@ -32,6 +32,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
@@ -64,6 +65,7 @@ import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -93,7 +95,6 @@ import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.packages.Type.LabelClass;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OS;
@@ -114,10 +115,10 @@ import javax.annotation.Nullable;
 /**
  * The totality of data available during the analysis of a rule.
  *
- * <p>These objects should not outlast the analysis phase. Do not pass them to {@link
- * com.google.devtools.build.lib.actions.Action} objects or other persistent objects. There are
- * internal tests to ensure that RuleContext objects are not persisted that check the name of this
- * class, so update those tests if you change this class's name.
+ * <p>These objects should not outlast the analysis phase. Do not pass them to {@link Action}
+ * objects or other persistent objects. There are internal tests to ensure that RuleContext objects
+ * are not persisted that check the name of this class, so update those tests if you change this
+ * class's name.
  *
  * @see com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory
  */
@@ -907,8 +908,7 @@ public final class RuleContext extends TargetContext
                         .executionPlatform(getToolchainContext().executionPlatform().label())
                         .build());
     BuildOptions fromOptions = getConfiguration().getOptions();
-    Map<String, BuildOptions> splitOptions =
-        transition.split(fromOptions, getAnalysisEnvironment().getEventHandler());
+    Map<String, BuildOptions> splitOptions = transition.split(fromOptions);
     List<ConfiguredTargetAndData> deps = getConfiguredTargetAndTargetDeps(attributeName);
 
     if (SplitTransition.equals(fromOptions, splitOptions.values())) {
