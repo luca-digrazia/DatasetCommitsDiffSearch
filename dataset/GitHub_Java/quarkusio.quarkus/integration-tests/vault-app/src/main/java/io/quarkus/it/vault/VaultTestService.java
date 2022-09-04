@@ -12,15 +12,17 @@ import javax.transaction.Transactional;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.jboss.logging.Logger;
 
 import io.quarkus.vault.VaultKVSecretEngine;
+import io.quarkus.vault.VaultTransitSecretEngine;
+import io.quarkus.vault.transit.ClearData;
+import io.quarkus.vault.transit.SigningInput;
 
 @ApplicationScoped
 public class VaultTestService {
 
-    private static final Logger log = LoggerFactory.getLogger(VaultTestService.class);
+    private static final Logger log = Logger.getLogger(VaultTestService.class);
 
     @Inject
     EntityManager entityManager;
@@ -31,6 +33,9 @@ public class VaultTestService {
     @Inject
     VaultKVSecretEngine kv;
 
+    @Inject
+    VaultTransitSecretEngine transit;
+
     @Transactional
     public String test() {
 
@@ -39,7 +44,7 @@ public class VaultTestService {
             return "someSecret=" + someSecret + "; expected: " + expectedPassword;
         }
         String password = ConfigProviderResolver.instance().getConfig().getValue("password", String.class);
-        if (!expectedPassword.equals(someSecret)) {
+        if (!expectedPassword.equals(password)) {
             return "password=" + password + "; expected: " + expectedPassword;
         }
 
@@ -59,6 +64,28 @@ public class VaultTestService {
             e.printStackTrace(printWriter);
             return sw.toString();
         }
+
+        String coucou = "coucou";
+        SigningInput input = new SigningInput(coucou);
+        String keyName = "my-encryption-key";
+        String ciphertext = transit.encrypt(keyName, coucou);
+        ClearData decrypted = transit.decrypt(keyName, ciphertext);
+        if (!coucou.equals(decrypted.asString())) {
+            return "decrypted=" + password + "; expected: " + coucou;
+        }
+
+        String rewraped = transit.rewrap(keyName, ciphertext, null);
+        decrypted = transit.decrypt(keyName, rewraped);
+        if (!coucou.equals(decrypted.asString())) {
+            return "decrypted=" + password + "; expected: " + coucou;
+        }
+
+        String signature = transit.sign("my-sign-key", input, null);
+        if (!signature.startsWith("vault:v1:")) {
+            return "invalid signature " + signature;
+        }
+
+        transit.verifySignature("my-sign-key", signature, input, null);
 
         return "OK";
     }

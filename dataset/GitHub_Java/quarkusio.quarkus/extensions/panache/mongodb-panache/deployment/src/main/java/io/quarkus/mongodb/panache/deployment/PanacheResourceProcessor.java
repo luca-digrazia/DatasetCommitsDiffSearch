@@ -45,16 +45,10 @@ import io.quarkus.mongodb.panache.PanacheMongoRecorder;
 import io.quarkus.mongodb.panache.PanacheMongoRepository;
 import io.quarkus.mongodb.panache.PanacheMongoRepositoryBase;
 import io.quarkus.mongodb.panache.ProjectionFor;
-import io.quarkus.mongodb.panache.reactive.ReactivePanacheMongoEntity;
-import io.quarkus.mongodb.panache.reactive.ReactivePanacheMongoEntityBase;
-import io.quarkus.mongodb.panache.reactive.ReactivePanacheMongoRepository;
-import io.quarkus.mongodb.panache.reactive.ReactivePanacheMongoRepositoryBase;
-import io.quarkus.panache.common.deployment.PanacheEntityClassesBuildItem;
 import io.quarkus.panache.common.deployment.PanacheFieldAccessEnhancer;
 import io.quarkus.panache.common.deployment.PanacheRepositoryEnhancer;
 
 public class PanacheResourceProcessor {
-    // blocking types
     static final DotName DOTNAME_PANACHE_REPOSITORY_BASE = DotName.createSimple(PanacheMongoRepositoryBase.class.getName());
     private static final DotName DOTNAME_PANACHE_REPOSITORY = DotName.createSimple(PanacheMongoRepository.class.getName());
     static final DotName DOTNAME_PANACHE_ENTITY_BASE = DotName.createSimple(PanacheMongoEntityBase.class.getName());
@@ -62,16 +56,6 @@ public class PanacheResourceProcessor {
 
     private static final DotName DOTNAME_PROJECTION_FOR = DotName.createSimple(ProjectionFor.class.getName());
     private static final DotName DOTNAME_BSON_PROPERTY = DotName.createSimple(BsonProperty.class.getName());
-
-    // reactive types (Mutiny)
-    static final DotName DOTNAME_MUTINY_PANACHE_REPOSITORY_BASE = DotName
-            .createSimple(ReactivePanacheMongoRepositoryBase.class.getName());
-    private static final DotName DOTNAME_MUTINY_PANACHE_REPOSITORY = DotName
-            .createSimple(ReactivePanacheMongoRepository.class.getName());
-    static final DotName DOTNAME_MUTINY_PANACHE_ENTITY_BASE = DotName
-            .createSimple(ReactivePanacheMongoEntityBase.class.getName());
-    private static final DotName DOTNAME_MUTINY_PANACHE_ENTITY = DotName
-            .createSimple(ReactivePanacheMongoEntity.class.getName());
 
     private static final DotName DOTNAME_OBJECT_ID = DotName.createSimple(ObjectId.class.getName());
 
@@ -117,6 +101,8 @@ public class PanacheResourceProcessor {
         return new ReflectiveHierarchyBuildItem(type, compositeIndex);
     }
 
+    public static final DotName MONGOCLIENT_INTERFACE = DotName.createSimple("com.mongodb.client.MongoClient");
+
     @BuildStep
     void unremovableProducers(BuildProducer<UnremovableBeanBuildItem> unremovable,
             BeanArchiveIndexBuildItem beanArchiveIndex) {
@@ -132,8 +118,7 @@ public class PanacheResourceProcessor {
             ApplicationIndexBuildItem applicationIndex,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
-            BuildProducer<PanacheEntityClassesBuildItem> entityClasses) throws Exception {
+            BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass) throws Exception {
 
         PanacheMongoRepositoryEnhancer daoEnhancer = new PanacheMongoRepositoryEnhancer(index.getIndex());
         Set<String> daoClasses = new HashSet<>();
@@ -191,9 +176,6 @@ public class PanacheResourceProcessor {
 
             // Register for building the property mapping cache
             propertyMappingClass.produce(new PropertyMappingClassBuildStep(modelClass));
-        }
-        if (!modelClasses.isEmpty()) {
-            entityClasses.produce(new PanacheEntityClassesBuildItem(modelClasses));
         }
 
         if (!modelEnhancer.entities.isEmpty()) {
@@ -295,76 +277,6 @@ public class PanacheResourceProcessor {
             Type superType = target.superClassType();
             ClassInfo superClass = index.getIndex().getClassByName(superType.name());
             extractMappings(classPropertyMapping, superClass, index);
-        }
-    }
-
-    @BuildStep
-    void buildMutiny(CombinedIndexBuildItem index,
-            ApplicationIndexBuildItem applicationIndex,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            BuildProducer<BytecodeTransformerBuildItem> transformers) throws Exception {
-
-        ReactivePanacheMongoRepositoryEnhancer daoEnhancer = new ReactivePanacheMongoRepositoryEnhancer(index.getIndex());
-        Set<String> daoClasses = new HashSet<>();
-        Set<Type> daoTypeParameters = new HashSet<>();
-        for (ClassInfo classInfo : index.getIndex().getAllKnownImplementors(DOTNAME_MUTINY_PANACHE_REPOSITORY_BASE)) {
-            // Skip PanacheRepository
-            if (classInfo.name().equals(DOTNAME_MUTINY_PANACHE_REPOSITORY))
-                continue;
-            if (PanacheRepositoryEnhancer.skipRepository(classInfo))
-                continue;
-            daoClasses.add(classInfo.name().toString());
-            daoTypeParameters.addAll(
-                    JandexUtil.resolveTypeParameters(classInfo.name(), DOTNAME_PANACHE_REPOSITORY_BASE, index.getIndex()));
-        }
-        for (ClassInfo classInfo : index.getIndex().getAllKnownImplementors(DOTNAME_MUTINY_PANACHE_REPOSITORY)) {
-            if (PanacheRepositoryEnhancer.skipRepository(classInfo))
-                continue;
-            daoClasses.add(classInfo.name().toString());
-            daoTypeParameters.addAll(
-                    JandexUtil.resolveTypeParameters(classInfo.name(), DOTNAME_PANACHE_REPOSITORY_BASE, index.getIndex()));
-        }
-        for (String daoClass : daoClasses) {
-            transformers.produce(new BytecodeTransformerBuildItem(daoClass, daoEnhancer));
-        }
-
-        for (Type parameterType : daoTypeParameters) {
-            // Register for reflection the type parameters of the repository: this should be the entity class and the ID class
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, parameterType.name().toString()));
-        }
-
-        ReactivePanacheMongoEntityEnhancer modelEnhancer = new ReactivePanacheMongoEntityEnhancer(index.getIndex());
-        Set<String> modelClasses = new HashSet<>();
-        // Note that we do this in two passes because for some reason Jandex does not give us subtypes
-        // of PanacheMongoEntity if we ask for subtypes of PanacheMongoEntityBase
-        for (ClassInfo classInfo : index.getIndex().getAllKnownSubclasses(DOTNAME_MUTINY_PANACHE_ENTITY_BASE)) {
-            if (classInfo.name().equals(DOTNAME_MUTINY_PANACHE_ENTITY))
-                continue;
-            if (modelClasses.add(classInfo.name().toString()))
-                modelEnhancer.collectFields(classInfo);
-        }
-        for (ClassInfo classInfo : index.getIndex().getAllKnownSubclasses(DOTNAME_MUTINY_PANACHE_ENTITY)) {
-            if (modelClasses.add(classInfo.name().toString()))
-                modelEnhancer.collectFields(classInfo);
-        }
-
-        // iterate over all the entity classes
-        for (String modelClass : modelClasses) {
-            transformers.produce(new BytecodeTransformerBuildItem(modelClass, modelEnhancer));
-
-            //register for reflection entity classes
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, modelClass));
-        }
-
-        if (!modelEnhancer.entities.isEmpty()) {
-            PanacheFieldAccessEnhancer panacheFieldAccessEnhancer = new PanacheFieldAccessEnhancer(
-                    modelEnhancer.getModelInfo());
-            for (ClassInfo classInfo : applicationIndex.getIndex().getKnownClasses()) {
-                String className = classInfo.name().toString();
-                if (!modelClasses.contains(className)) {
-                    transformers.produce(new BytecodeTransformerBuildItem(className, panacheFieldAccessEnhancer));
-                }
-            }
         }
     }
 }
