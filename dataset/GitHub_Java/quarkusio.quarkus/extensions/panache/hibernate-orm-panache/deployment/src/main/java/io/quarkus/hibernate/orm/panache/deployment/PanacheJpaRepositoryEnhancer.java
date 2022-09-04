@@ -1,16 +1,13 @@
 package io.quarkus.hibernate.orm.panache.deployment;
 
 import static io.quarkus.hibernate.orm.panache.deployment.PanacheJpaEntityEnhancer.JPA_OPERATIONS_BINARY_NAME;
+import static io.quarkus.hibernate.orm.panache.deployment.PanacheJpaEntityEnhancer.PARAMETERS_SIGNATURE;
+import static io.quarkus.hibernate.orm.panache.deployment.PanacheJpaEntityEnhancer.QUERY_BINARY_NAME;
+import static io.quarkus.hibernate.orm.panache.deployment.PanacheJpaEntityEnhancer.QUERY_SIGNATURE;
+import static io.quarkus.hibernate.orm.panache.deployment.PanacheJpaEntityEnhancer.SORT_SIGNATURE;
 
-import java.util.List;
 import java.util.function.BiFunction;
 
-import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationValue;
-import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
-import org.jboss.jandex.Type.Kind;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -19,7 +16,6 @@ import org.objectweb.asm.signature.SignatureReader;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import io.quarkus.panache.common.deployment.JandexUtil;
 
 public class PanacheJpaRepositoryEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
 
@@ -28,15 +24,10 @@ public class PanacheJpaRepositoryEnhancer implements BiFunction<String, ClassVis
 
     public final static String PANACHE_REPOSITORY_NAME = PanacheRepository.class.getName();
     public final static String PANACHE_REPOSITORY_BINARY_NAME = PANACHE_REPOSITORY_NAME.replace('.', '/');
-    private final ClassInfo panacheRepositoryBaseClassInfo;
-
-    public PanacheJpaRepositoryEnhancer(IndexView index) {
-        panacheRepositoryBaseClassInfo = index.getClassByName(PanacheResourceProcessor.DOTNAME_PANACHE_REPOSITORY_BASE);
-    }
 
     @Override
     public ClassVisitor apply(String className, ClassVisitor outputClassVisitor) {
-        return new DaoEnhancingClassVisitor(className, outputClassVisitor, panacheRepositoryBaseClassInfo);
+        return new DaoEnhancingClassVisitor(className, outputClassVisitor);
     }
 
     static class DaoEnhancingClassVisitor extends ClassVisitor {
@@ -45,13 +36,10 @@ public class PanacheJpaRepositoryEnhancer implements BiFunction<String, ClassVis
         private String entitySignature;
         private String entityBinaryType;
         private String daoBinaryName;
-        private ClassInfo panacheRepositoryBaseClassInfo;
 
-        public DaoEnhancingClassVisitor(String className, ClassVisitor outputClassVisitor,
-                ClassInfo panacheRepositoryBaseClassInfo) {
+        public DaoEnhancingClassVisitor(String className, ClassVisitor outputClassVisitor) {
             super(Opcodes.ASM6, outputClassVisitor);
             daoBinaryName = className.replace('.', '/');
-            this.panacheRepositoryBaseClassInfo = panacheRepositoryBaseClassInfo;
         }
 
         @Override
@@ -96,43 +84,189 @@ public class PanacheJpaRepositoryEnhancer implements BiFunction<String, ClassVis
             mv.visitMaxs(0, 0);
             mv.visitEnd();
 
-            for (MethodInfo method : panacheRepositoryBaseClassInfo.methods()) {
-                AnnotationInstance bridge = method.annotation(JandexUtil.DOTNAME_GENERATE_BRIDGE);
-                if (bridge != null)
-                    generateMethod(method, bridge.value("targetReturnTypeErased"));
-            }
+            generateMethod("findById",
+                    "(Ljava/lang/Object;)" + entitySignature,
+                    null,
+                    Opcodes.ARETURN, entityBinaryType, "id");
+
+            // find String Sort? Map|Object[]|Parameters?
+
+            generateMethod("find",
+                    "(Ljava/lang/String;[Ljava/lang/Object;)" + QUERY_SIGNATURE,
+                    "(Ljava/lang/String;[Ljava/lang/Object;)L" + QUERY_BINARY_NAME + "<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("find",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "[Ljava/lang/Object;)" + QUERY_SIGNATURE,
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "[Ljava/lang/Object;)L" + QUERY_BINARY_NAME + "<" + entitySignature
+                            + ">;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            generateMethod("find",
+                    "(Ljava/lang/String;Ljava/util/Map;)" + QUERY_SIGNATURE,
+                    "(Ljava/lang/String;Ljava/util/Map<Ljava/lang/String;Ljava/lang/Object;>;)L" + QUERY_BINARY_NAME + "<"
+                            + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("find",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "Ljava/util/Map;)" + QUERY_SIGNATURE,
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "Ljava/util/Map<Ljava/lang/String;Ljava/lang/Object;>;)L"
+                            + QUERY_BINARY_NAME + "<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            generateMethod("find",
+                    "(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")" + QUERY_SIGNATURE,
+                    "(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")L" + QUERY_BINARY_NAME + "<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("find",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + PARAMETERS_SIGNATURE + ")" + QUERY_SIGNATURE,
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + PARAMETERS_SIGNATURE + ")L" + QUERY_BINARY_NAME + "<"
+                            + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            // list String Sort? Map|Object[]|Parameters?
+
+            generateMethod("list",
+                    "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/util/List;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;[Ljava/lang/Object;)Ljava/util/List<TT;>;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("list",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "[Ljava/lang/Object;)Ljava/util/List;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + SORT_SIGNATURE
+                            + "[Ljava/lang/Object;)Ljava/util/List<TT;>;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            generateMethod("list",
+                    "(Ljava/lang/String;Ljava/util/Map;)Ljava/util/List;",
+                    "<T:" + entitySignature
+                            + ">(Ljava/lang/String;Ljava/util/Map<Ljava/lang/String;Ljava/lang/Object;>;)Ljava/util/List<TT;>;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("list",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "Ljava/util/Map;)Ljava/util/List;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + SORT_SIGNATURE
+                            + "Ljava/util/Map<Ljava/lang/String;Ljava/lang/Object;>;)Ljava/util/List<TT;>;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            generateMethod("list",
+                    "(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")Ljava/util/List;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")Ljava/util/List<TT;>;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("list",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + PARAMETERS_SIGNATURE + ")Ljava/util/List;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + SORT_SIGNATURE + PARAMETERS_SIGNATURE
+                            + ")Ljava/util/List<TT;>;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            // stream String Sort? Map|Object[]|Parameters?
+
+            generateMethod("stream",
+                    "(Ljava/lang/String;[Ljava/lang/Object;)Ljava/util/stream/Stream;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;[Ljava/lang/Object;)Ljava/util/stream/Stream<TT;>;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("stream",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "[Ljava/lang/Object;)Ljava/util/stream/Stream;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + SORT_SIGNATURE
+                            + "[Ljava/lang/Object;)Ljava/util/stream/Stream<TT;>;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            generateMethod("stream",
+                    "(Ljava/lang/String;Ljava/util/Map;)Ljava/util/stream/Stream;",
+                    "<T:" + entitySignature
+                            + ">(Ljava/lang/String;Ljava/util/Map<Ljava/lang/String;Ljava/lang/Object;>;)Ljava/util/stream/Stream<TT;>;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("stream",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + "Ljava/util/Map;)Ljava/util/stream/Stream;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + SORT_SIGNATURE
+                            + "Ljava/util/Map<Ljava/lang/String;Ljava/lang/Object;>;)Ljava/util/stream/Stream<TT;>;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            generateMethod("stream",
+                    "(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")Ljava/util/stream/Stream;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")Ljava/util/stream/Stream<TT;>;",
+                    Opcodes.ARETURN, null, "query", "params");
+
+            generateMethod("stream",
+                    "(Ljava/lang/String;" + SORT_SIGNATURE + PARAMETERS_SIGNATURE + ")Ljava/util/stream/Stream;",
+                    "<T:" + entitySignature + ">(Ljava/lang/String;" + SORT_SIGNATURE + PARAMETERS_SIGNATURE
+                            + ")Ljava/util/stream/Stream<TT;>;",
+                    Opcodes.ARETURN, null, "query", "sort", "params");
+
+            // findAll Sort?
+
+            generateMethod("findAll",
+                    "()" + QUERY_SIGNATURE,
+                    "()L" + QUERY_BINARY_NAME + "<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null);
+
+            generateMethod("findAll",
+                    "(" + SORT_SIGNATURE + ")" + QUERY_SIGNATURE,
+                    "(" + SORT_SIGNATURE + ")L" + QUERY_BINARY_NAME + "<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "sort");
+
+            // listAll Sort?
+
+            generateMethod("listAll",
+                    "()Ljava/util/List;",
+                    "()Ljava/util/List<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null);
+
+            generateMethod("listAll",
+                    "(" + SORT_SIGNATURE + ")Ljava/util/List;",
+                    "(" + SORT_SIGNATURE + ")Ljava/util/List<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "sort");
+
+            // streamAll Sort?
+
+            generateMethod("streamAll",
+                    "()Ljava/util/stream/Stream;",
+                    "()Ljava/util/stream/Stream<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null);
+
+            generateMethod("streamAll",
+                    "(" + SORT_SIGNATURE + ")Ljava/util/stream/Stream;",
+                    "(" + SORT_SIGNATURE + ")Ljava/util/stream/Stream<" + entitySignature + ">;",
+                    Opcodes.ARETURN, null, "sort");
+
+            // count [String, Map|Object[]|Parameters?]?
+
+            generateMethod("count", "(Ljava/lang/String;[Ljava/lang/Object;)J", null, Opcodes.LRETURN, null, "query", "params");
+            generateMethod("count", "(Ljava/lang/String;Ljava/util/Map;)J", null, Opcodes.LRETURN, null, "query", "params");
+            generateMethod("count", "(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")J", null, Opcodes.LRETURN, null, "query",
+                    "params");
+            generateMethod("count", "()J", null, Opcodes.LRETURN, null);
+
+            // delete [String, Map|Object[]|Parameters?]?
+
+            generateMethod("delete", "(Ljava/lang/String;[Ljava/lang/Object;)J", null, Opcodes.LRETURN, null, "query",
+                    "params");
+            generateMethod("delete", "(Ljava/lang/String;Ljava/util/Map;)J", null, Opcodes.LRETURN, null, "query", "params");
+            generateMethod("delete", "(Ljava/lang/String;" + PARAMETERS_SIGNATURE + ")J", null, Opcodes.LRETURN, null, "query",
+                    "params");
+            generateMethod("deleteAll", "()J", null, Opcodes.LRETURN, null);
 
             super.visitEnd();
         }
 
-        private void generateMethod(MethodInfo method, AnnotationValue targetReturnTypeErased) {
-            String descriptor = JandexUtil.getDescriptor(method, name -> name.equals("Entity") ? entitySignature : null);
-            String signature = JandexUtil.getSignature(method, name -> name.equals("Entity") ? entitySignature : null);
-            List<org.jboss.jandex.Type> parameters = method.parameters();
-
-            String castTo = null;
-            if (targetReturnTypeErased != null && targetReturnTypeErased.asBoolean()) {
-                org.jboss.jandex.Type type = method.returnType();
-                if (type.kind() == Kind.TYPE_VARIABLE) {
-                    if (type.asTypeVariable().identifier().equals("Entity"))
-                        castTo = entityBinaryType;
-                }
-                if (castTo == null)
-                    castTo = type.name().toString('/');
-            }
-
+        private void generateMethod(String name, String descriptor, String signature, int returnOpCode, String castTo,
+                String... params) {
             MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC,
-                    method.name(),
+                    name,
                     descriptor,
                     signature,
                     null);
-            for (int i = 0; i < parameters.size(); i++) {
-                mv.visitParameter(method.parameterName(i), 0 /* modifiers */);
+            for (int i = 0; i < params.length; i++) {
+                mv.visitParameter(params[i], 0 /* modifiers */);
             }
             mv.visitCode();
             // inject Class
             mv.visitLdcInsn(entityType);
-            for (int i = 0; i < parameters.size(); i++) {
+            for (int i = 0; i < params.length; i++) {
                 mv.visitIntInsn(Opcodes.ALOAD, i + 1);
             }
             // inject Class
@@ -144,12 +278,11 @@ public class PanacheJpaRepositoryEnhancer implements BiFunction<String, ClassVis
             }
             mv.visitMethodInsn(Opcodes.INVOKESTATIC,
                     JPA_OPERATIONS_BINARY_NAME,
-                    method.name(),
+                    name,
                     forwardingDescriptor, false);
             if (castTo != null)
                 mv.visitTypeInsn(Opcodes.CHECKCAST, castTo);
-            String returnTypeDescriptor = descriptor.substring(descriptor.lastIndexOf(")") + 1);
-            mv.visitInsn(JandexUtil.getReturnInstruction(returnTypeDescriptor));
+            mv.visitInsn(returnOpCode);
             mv.visitMaxs(0, 0);
             mv.visitEnd();
         }

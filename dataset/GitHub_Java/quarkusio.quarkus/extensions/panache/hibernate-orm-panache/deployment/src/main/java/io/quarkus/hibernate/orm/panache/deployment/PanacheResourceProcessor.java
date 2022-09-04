@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.hibernate.orm.panache.deployment;
 
 import java.util.Collections;
@@ -19,32 +35,22 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.hibernate.orm.deployment.AdditionalJpaModelBuildItem;
 import io.quarkus.hibernate.orm.deployment.HibernateEnhancersRegisteredBuildItem;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
-import io.quarkus.panache.common.deployment.EntityField;
-import io.quarkus.panache.common.deployment.EntityModel;
-import io.quarkus.panache.common.deployment.MetamodelInfo;
-import io.quarkus.panache.common.deployment.PanacheFieldAccessEnhancer;
 
 public final class PanacheResourceProcessor {
 
-    static final DotName DOTNAME_PANACHE_REPOSITORY_BASE = DotName.createSimple(PanacheRepositoryBase.class.getName());
+    private static final DotName DOTNAME_PANACHE_REPOSITORY_BASE = DotName.createSimple(PanacheRepositoryBase.class.getName());
     private static final DotName DOTNAME_PANACHE_REPOSITORY = DotName.createSimple(PanacheRepository.class.getName());
-    static final DotName DOTNAME_PANACHE_ENTITY_BASE = DotName.createSimple(PanacheEntityBase.class.getName());
+    private static final DotName DOTNAME_PANACHE_ENTITY_BASE = DotName.createSimple(PanacheEntityBase.class.getName());
     private static final DotName DOTNAME_PANACHE_ENTITY = DotName.createSimple(PanacheEntity.class.getName());
 
     private static final Set<DotName> UNREMOVABLE_BEANS = Collections.singleton(
             DotName.createSimple(EntityManager.class.getName()));
-
-    @BuildStep
-    FeatureBuildItem featureBuildItem() {
-        return new FeatureBuildItem(FeatureBuildItem.HIBERNATE_ORM_PANACHE);
-    }
 
     @BuildStep
     List<AdditionalJpaModelBuildItem> produceModel() {
@@ -76,7 +82,7 @@ public final class PanacheResourceProcessor {
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             HibernateEnhancersRegisteredBuildItem hibernateMarker) throws Exception {
 
-        PanacheJpaRepositoryEnhancer daoEnhancer = new PanacheJpaRepositoryEnhancer(index.getIndex());
+        PanacheJpaRepositoryEnhancer daoEnhancer = new PanacheJpaRepositoryEnhancer();
         Set<String> daoClasses = new HashSet<>();
         for (ClassInfo classInfo : index.getIndex().getAllKnownImplementors(DOTNAME_PANACHE_REPOSITORY_BASE)) {
             // Skip PanacheRepository
@@ -91,7 +97,7 @@ public final class PanacheResourceProcessor {
             transformers.produce(new BytecodeTransformerBuildItem(daoClass, daoEnhancer));
         }
 
-        PanacheJpaEntityEnhancer modelEnhancer = new PanacheJpaEntityEnhancer(index.getIndex());
+        PanacheJpaEntityEnhancer modelEnhancer = new PanacheJpaEntityEnhancer();
         Set<String> modelClasses = new HashSet<>();
         // Note that we do this in two passes because for some reason Jandex does not give us subtypes
         // of PanacheEntity if we ask for subtypes of PanacheEntityBase
@@ -110,9 +116,8 @@ public final class PanacheResourceProcessor {
             transformers.produce(new BytecodeTransformerBuildItem(modelClass, modelEnhancer));
         }
 
-        MetamodelInfo<EntityModel<EntityField>> modelInfo = modelEnhancer.getModelInfo();
-        if (modelInfo.hasEntities()) {
-            PanacheFieldAccessEnhancer panacheFieldAccessEnhancer = new PanacheFieldAccessEnhancer(modelInfo);
+        if (!modelEnhancer.entities.isEmpty()) {
+            PanacheFieldAccessEnhancer panacheFieldAccessEnhancer = new PanacheFieldAccessEnhancer(modelEnhancer.entities);
             for (ClassInfo classInfo : applicationIndex.getIndex().getKnownClasses()) {
                 String className = classInfo.name().toString();
                 if (!modelClasses.contains(className)) {

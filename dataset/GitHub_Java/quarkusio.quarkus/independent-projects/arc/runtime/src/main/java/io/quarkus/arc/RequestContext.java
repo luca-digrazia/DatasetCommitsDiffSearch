@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
@@ -16,7 +32,6 @@ import javax.enterprise.context.RequestScoped;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.Any;
-import org.jboss.logging.Logger;
 
 /**
  * The built-in context for {@link RequestScoped}.
@@ -24,8 +39,6 @@ import org.jboss.logging.Logger;
  * @author Martin Kouba
  */
 class RequestContext implements ManagedContext {
-
-    private static final Logger LOGGER = Logger.getLogger(RequestContext.class.getPackage().getName());
 
     // It's a normal scope so there may be no more than one mapped instance per contextual type per thread
     private final ThreadLocal<Map<Contextual<?>, ContextInstanceHandle<?>>> currentContext = new ThreadLocal<>();
@@ -102,7 +115,7 @@ class RequestContext implements ManagedContext {
     }
 
     private void fireIfNotEmpty(LazyValue<EventImpl.Notifier<Object>> value) {
-        EventImpl.Notifier<Object> notifier = value.get();
+        EventImpl.Notifier notifier = value.get();
         if (!notifier.isEmpty()) {
             notifier.notify(toString());
         }
@@ -135,11 +148,7 @@ class RequestContext implements ManagedContext {
         if (ctx != null) {
             synchronized (ctx) {
                 // Fire an event with qualifier @BeforeDestroyed(RequestScoped.class) if there are any observers for it
-                try {
-                    fireIfNotEmpty(beforeDestroyedNotifier);
-                } catch (Exception e) {
-                    LOGGER.warn("An error occured during delivery of the @BeforeDestroyed(RequestScoped.class) event", e);
-                }
+                fireIfNotEmpty(beforeDestroyedNotifier);
                 for (InstanceHandle<?> instance : ctx.values()) {
                     try {
                         instance.destroy();
@@ -148,11 +157,7 @@ class RequestContext implements ManagedContext {
                     }
                 }
                 // Fire an event with qualifier @Destroyed(RequestScoped.class) if there are any observers for it
-                try {
-                    fireIfNotEmpty(destroyedNotifier);
-                } catch (Exception e) {
-                    LOGGER.warn("An error occured during delivery of the @Destroyed(RequestScoped.class) event", e);
-                }
+                fireIfNotEmpty(destroyedNotifier);
                 ctx.clear();
             }
         }
