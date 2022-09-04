@@ -1,9 +1,24 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.deployment.steps;
 
 import static io.quarkus.gizmo.MethodDescriptor.ofConstructor;
 import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
-import java.io.File;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Optional;
@@ -11,8 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageInfo;
+import org.jboss.builder.Version;
 
-import io.quarkus.builder.Version;
 import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -126,22 +141,32 @@ class MainClassBuildStep {
 
         // Set the SSL system properties
         if (!javaLibraryPathAdditionalPaths.isEmpty()) {
-            ResultHandle javaLibraryPath = mv.newInstance(ofConstructor(StringBuilder.class, String.class),
+            // FIXME: this is the code we should use but I couldn't get GraalVM to work with a java.library.path containing multiple paths.
+            // We need to dig further but for now, we need this to work.
+            // ResultHandle javaLibraryPath = mv.newInstance(ofConstructor(StringBuilder.class, String.class),
+            //         mv.invokeStaticMethod(ofMethod(System.class, "getProperty", String.class, String.class), mv.load(JAVA_LIBRARY_PATH)));
+            // for (JavaLibraryPathAdditionalPathBuildItem javaLibraryPathAdditionalPath : javaLibraryPathAdditionalPaths) {
+            //     ResultHandle javaLibraryPathLength = mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "length", int.class), javaLibraryPath);
+            //     mv.ifNonZero(javaLibraryPathLength).trueBranch()
+            //             .invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), javaLibraryPath, mv.load(File.pathSeparator));
+            //     mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class), javaLibraryPath,
+            //             mv.load(javaLibraryPathAdditionalPath.getPath()));
+            // }
+            // mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class),
+            //         mv.load(JAVA_LIBRARY_PATH), mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "toString", String.class), javaLibraryPath));
+
+            ResultHandle isJavaLibraryPathEmpty = mv.invokeVirtualMethod(ofMethod(String.class, "isEmpty", boolean.class),
                     mv.invokeStaticMethod(ofMethod(System.class, "getProperty", String.class, String.class),
                             mv.load(JAVA_LIBRARY_PATH)));
-            for (JavaLibraryPathAdditionalPathBuildItem javaLibraryPathAdditionalPath : javaLibraryPathAdditionalPaths) {
-                ResultHandle javaLibraryPathLength = mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "length", int.class),
-                        javaLibraryPath);
-                mv.ifNonZero(javaLibraryPathLength).trueBranch()
-                        .invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class),
-                                javaLibraryPath, mv.load(File.pathSeparator));
-                mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "append", StringBuilder.class, String.class),
-                        javaLibraryPath,
-                        mv.load(javaLibraryPathAdditionalPath.getPath()));
-            }
-            mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class),
-                    mv.load(JAVA_LIBRARY_PATH),
-                    mv.invokeVirtualMethod(ofMethod(StringBuilder.class, "toString", String.class), javaLibraryPath));
+
+            BytecodeCreator inGraalVMCode = mv
+                    .ifNonZero(mv.invokeStaticMethod(ofMethod(ImageInfo.class, "inImageRuntimeCode", boolean.class)))
+                    .trueBranch();
+
+            inGraalVMCode.ifNonZero(isJavaLibraryPathEmpty).trueBranch().invokeStaticMethod(
+                    ofMethod(System.class, "setProperty", String.class, String.class, String.class),
+                    inGraalVMCode.load(JAVA_LIBRARY_PATH),
+                    inGraalVMCode.load(javaLibraryPathAdditionalPaths.iterator().next().getPath()));
         }
 
         if (sslTrustStoreSystemProperty.isPresent()) {
