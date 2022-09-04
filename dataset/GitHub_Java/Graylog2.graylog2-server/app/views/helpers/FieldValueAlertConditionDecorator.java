@@ -4,7 +4,7 @@ import controllers.routes;
 import org.graylog2.restclient.models.Stream;
 import org.graylog2.restclient.models.alerts.AlertCondition;
 import play.api.mvc.Call;
-import play.api.templates.Html;
+import play.twirl.api.Html;
 
 import java.text.DecimalFormat;
 
@@ -43,7 +43,7 @@ public class FieldValueAlertConditionDecorator extends AlertConditionDecorator {
     }
 
     public int getTime() {
-        return (int) ((Double) getParameter("time", 0.0)).longValue();
+        return (int) getParameter("time", 0);
     }
 
     public String getThreshold() {
