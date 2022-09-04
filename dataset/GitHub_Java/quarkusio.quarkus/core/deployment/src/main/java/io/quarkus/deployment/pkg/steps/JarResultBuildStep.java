@@ -27,7 +27,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -136,7 +135,6 @@ public class JarResultBuildStep {
     public static final String DEPLOYMENT_LIB = "deployment";
     public static final String APPMODEL_DAT = "appmodel.dat";
     public static final String QUARKUS_RUN_JAR = "quarkus-run.jar";
-    public static final String QUARKUS_APP_DEPS = "quarkus-app-dependencies.txt";
     public static final String BOOT_LIB = "boot";
     public static final String LIB = "lib";
     public static final String MAIN = "main";
@@ -183,13 +181,19 @@ public class JarResultBuildStep {
         if (appCDS.isPresent()) {
             handleAppCDSSupportFileGeneration(transformedClasses, generatedClasses, appCDS.get());
         }
+        if (!(packageConfig.type.equalsIgnoreCase(PackageConfig.JAR) ||
+                packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR))
+                && packageConfig.uberJar) {
+            throw new RuntimeException(
+                    "Cannot set quarkus.package.uber-jar=true and quarkus.package.type, if you want an uber-jar set quarkus.package.type=uber-jar.");
+        }
 
         if (!uberJarRequired.isEmpty() && !legacyJarRequired.isEmpty()) {
             throw new RuntimeException(
                     "Extensions with conflicting package types. One extension requires uber-jar another requires legacy format");
         }
 
-        if (legacyJarRequired.isEmpty() && (!uberJarRequired.isEmpty()
+        if (legacyJarRequired.isEmpty() && (!uberJarRequired.isEmpty() || packageConfig.uberJar
                 || packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR))) {
             return buildUberJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses, applicationArchivesBuildItem,
                     packageConfig, applicationInfo, generatedClasses, generatedResources, closeablesBuildItem,
@@ -426,8 +430,7 @@ public class JarResultBuildStep {
         }
         runnerJar.toFile().setReadable(true, false);
 
-        return new JarBuildItem(runnerJar, null, libDir, PackageConfig.LEGACY_JAR,
-                suffixToClassifier(packageConfig.runnerSuffix));
+        return new JarBuildItem(runnerJar, null, libDir, PackageConfig.LEGACY, suffixToClassifier(packageConfig.runnerSuffix));
     }
 
     private JarBuildItem buildThinJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -642,16 +645,6 @@ public class JarResultBuildStep {
                     outputTargetBuildItem.getBuildSystemProperties().store(out, "The original build properties");
                 }
             }
-
-            if (packageConfig.includeDependencyList) {
-                Path deplist = buildDir.resolve(QUARKUS_APP_DEPS);
-                List<String> lines = new ArrayList<>();
-                for (AppDependency i : curateOutcomeBuildItem.getEffectiveModel().getUserDependencies()) {
-                    lines.add(i.getArtifact().toString());
-                }
-                lines.sort(Comparator.naturalOrder());
-                Files.write(deplist, lines);
-            }
         } else {
             //if it is a rebuild we might have classes
 
@@ -680,46 +673,48 @@ public class JarResultBuildStep {
             return;
         }
         for (Path resolvedDep : depArtifact.getPaths()) {
-            final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
-            final Path targetPath;
-
-            if (allowParentFirst && curateOutcomeBuildItem.getEffectiveModel().getRunnerParentFirstArtifacts()
-                    .contains(depArtifact.getKey())) {
-                targetPath = baseLib.resolve(fileName);
-                classPath.append(" ").append(LIB).append("/").append(BOOT_LIB).append("/").append(fileName);
+            if (!Files.isDirectory(resolvedDep)) {
+                if (allowParentFirst && curateOutcomeBuildItem.getEffectiveModel().getRunnerParentFirstArtifacts()
+                        .contains(depArtifact.getKey())) {
+                    final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
+                    final Path targetPath = baseLib.resolve(fileName);
+                    Files.copy(resolvedDep, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    classPath.append(" ").append(LIB).append("/").append(BOOT_LIB).append("/").append(fileName);
+                    runtimeArtifacts.computeIfAbsent(depArtifact.getKey(), (s) -> new ArrayList<>()).add(targetPath);
+                } else {
+                    final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
+                    final Path targetPath = libDir.resolve(fileName);
+                    Files.copy(resolvedDep, targetPath, StandardCopyOption.REPLACE_EXISTING);
+                    jars.add(targetPath);
+                    runtimeArtifacts.computeIfAbsent(depArtifact.getKey(), (s) -> new ArrayList<>()).add(targetPath);
+                }
             } else {
-                targetPath = libDir.resolve(fileName);
-                jars.add(targetPath);
-            }
-            runtimeArtifacts.computeIfAbsent(depArtifact.getKey(), (s) -> new ArrayList<>(1)).add(targetPath);
-
-            if (Files.isDirectory(resolvedDep)) {
                 // This case can happen when we are building a jar from inside the Quarkus repository
                 // and Quarkus Bootstrap's localProjectDiscovery has been set to true. In such a case
                 // the non-jar dependencies are the Quarkus dependencies picked up on the file system
-                packageClasses(resolvedDep, targetPath);
-            } else {
-                Files.copy(resolvedDep, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            }
-        }
-    }
+                // these should never be parent first
 
-    private void packageClasses(Path resolvedDep, final Path targetPath) throws IOException {
-        try (FileSystem runnerZipFs = ZipUtils.newZip(targetPath)) {
-            Files.walkFileTree(resolvedDep, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
-                    new SimpleFileVisitor<Path>() {
-                        @Override
-                        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
-                                throws IOException {
-                            final Path relativePath = resolvedDep.relativize(file);
-                            final Path targetPath = runnerZipFs.getPath(relativePath.toString());
-                            if (targetPath.getParent() != null) {
-                                Files.createDirectories(targetPath.getParent());
-                            }
-                            Files.copy(file, targetPath, StandardCopyOption.REPLACE_EXISTING); //replace only needed for testing
-                            return FileVisitResult.CONTINUE;
-                        }
-                    });
+                final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
+                final Path targetPath = libDir.resolve(fileName);
+                runtimeArtifacts.computeIfAbsent(depArtifact.getKey(), (s) -> new ArrayList<>()).add(targetPath);
+                jars.add(targetPath);
+                try (FileSystem runnerZipFs = ZipUtils.newZip(targetPath)) {
+                    Files.walkFileTree(resolvedDep, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE,
+                            new SimpleFileVisitor<Path>() {
+                                @Override
+                                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                                        throws IOException {
+                                    final Path relativePath = resolvedDep.relativize(file);
+                                    final Path targetPath = runnerZipFs.getPath(relativePath.toString());
+                                    if (targetPath.getParent() != null) {
+                                        Files.createDirectories(targetPath.getParent());
+                                    }
+                                    Files.copy(file, targetPath, StandardCopyOption.REPLACE_EXISTING); //replace only needed for testing
+                                    return FileVisitResult.CONTINUE;
+                                }
+                            });
+                }
+            }
         }
     }
 
