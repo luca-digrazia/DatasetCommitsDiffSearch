@@ -4,21 +4,17 @@ import static io.quarkus.maven.it.ApplicationNameAndVersionTestUtil.assertApplic
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -27,6 +23,8 @@ import java.util.zip.ZipOutputStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.maven.shared.invoker.MavenInvocationException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import io.quarkus.maven.it.verifier.MavenProcessInvocationResult;
 import io.quarkus.maven.it.verifier.RunningInvoker;
@@ -236,23 +234,6 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/openapi").contains("hello"));
-    }
-
-    @Test
-    public void testProjectWithExtension() throws MavenInvocationException, IOException {
-        testDir = getTargetDir("projects/project-with-extension");
-        runAndCheck();
-
-        final List<String> extDepWarnings = Files.readAllLines(testDir.toPath().resolve("build-project-with-extension.log"))
-                .stream().filter(s -> s.startsWith("[WARNING] Local Quarkus extension dependency "))
-                .collect(Collectors.toList());
-        assertTrue(extDepWarnings
-                .contains("[WARNING] Local Quarkus extension dependency org.acme:acme-quarkus-ext will not be hot-reloadable"));
-        assertTrue(extDepWarnings
-                .contains("[WARNING] Local Quarkus extension dependency org.acme:acme-common will not be hot-reloadable"));
-        assertTrue(extDepWarnings.contains(
-                "[WARNING] Local Quarkus extension dependency org.acme:acme-common-transitive will not be hot-reloadable"));
-        assertEquals(3, extDepWarnings.size());
     }
 
     @Test
@@ -810,6 +791,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         assertThat(running.log()).doesNotContain("skipping quarkus:dev as this is assumed to be a support library");
     }
 
+    @DisabledOnOs(OS.WINDOWS) // need to figure this out...
     @Test
     public void testResourcesFromClasspath() throws MavenInvocationException, IOException, InterruptedException {
         testDir = initProject("projects/multimodule-classpath", "projects/multimodule-resources-classpath");
@@ -834,11 +816,5 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // test that we don't get multiple instances of a resource when loading from the ClassLoader
         assertThat(DevModeTestUtils.getHttpResponse("/cp/resourcesCount")).isEqualTo("1");
-    }
-
-    @Test
-    public void testThatDependencyInParentIsEvaluated() throws IOException, MavenInvocationException {
-        testDir = initProject("projects/multimodule-parent-dep");
-        runAndCheck();
     }
 }
