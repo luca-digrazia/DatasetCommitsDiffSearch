@@ -72,10 +72,8 @@ import io.vertx.ext.web.RoutingContext;
  * <p>
  * If both {@link #path()} and {@link #regex()} are set the regular expression is used for matching.
  * <p>
- * If neither {@link #path()} nor {@link #regex()} is specified and the handler type is not {@link HandlerType#FAILURE} then the
- * route will match a path derived from the name of the method. This is done by de-camel-casing the name and then joining the
- * segments
- * with hyphens.
+ * If neither {@link #path()} nor {@link #regex()} is set the route will match a path derived from the name of the
+ * method. This is done by de-camel-casing the name and then joining the segments with hyphens.
  */
 @Repeatable(Routes.class)
 @Retention(RetentionPolicy.RUNTIME)
@@ -141,7 +139,7 @@ public @interface Route {
     enum HandlerType {
 
         /**
-         * A non-blocking request handler.
+         * A request handler.
          *
          * @see io.vertx.ext.web.Route#handler(Handler)
          */
@@ -153,35 +151,11 @@ public @interface Route {
          */
         BLOCKING,
         /**
-         * A failure handler can declare a single method parameter whose type extends {@link Throwable}. The type of the
-         * parameter is used to match the result of {@link RoutingContext#failure()}.
-         * 
-         * <pre>
-         * <code>
-         *  class Routes {
-         *     {@literal @Route(type = HandlerType.FAILURE)}
-         *     void unsupported(UnsupportedOperationException e, HttpServerResponse response) {
-         *        response.setStatusCode(501).end(e.getMessage());
-         *     }
-         *  }
-         *  </code>
-         * </pre>
-         * 
-         * <p>
-         * If a failure handler declares neither a path nor a regex then the route matches all requests.
-         * 
+         * A failure handler.
+         *
          * @see io.vertx.ext.web.Route#failureHandler(Handler)
          */
-        FAILURE;
-
-        public static HandlerType from(String value) {
-            for (HandlerType handlerType : values()) {
-                if (handlerType.toString().equals(value)) {
-                    return handlerType;
-                }
-            }
-            return null;
-        }
+        FAILURE
 
     }
 

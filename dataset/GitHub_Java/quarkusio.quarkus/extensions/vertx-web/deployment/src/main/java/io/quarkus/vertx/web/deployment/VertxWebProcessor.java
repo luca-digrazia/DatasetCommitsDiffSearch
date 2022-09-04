@@ -1,6 +1,5 @@
 package io.quarkus.vertx.web.deployment;
 
-import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.vertx.web.deployment.DotNames.PARAM;
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
 import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
@@ -21,10 +20,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.context.spi.Contextual;
+import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
@@ -40,8 +39,9 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableContext;
-import io.quarkus.arc.deployment.AutoAddScopeBuildItem;
+import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
+import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
 import io.quarkus.arc.deployment.TransformedAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
@@ -49,21 +49,18 @@ import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildIt
 import io.quarkus.arc.impl.CreationalContextImpl;
 import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.Annotations;
+import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
-import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
-import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
-import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
@@ -77,15 +74,10 @@ import io.quarkus.gizmo.FunctionCreator;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.util.HashUtil;
 import io.quarkus.vertx.http.deployment.FilterBuildItem;
-import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RequireBodyHandlerBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
-import io.quarkus.vertx.http.deployment.VertxWebRouterBuildItem;
-import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
-import io.quarkus.vertx.http.deployment.devmode.RouteDescriptionBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
 import io.quarkus.vertx.web.Header;
 import io.quarkus.vertx.web.Param;
@@ -95,7 +87,6 @@ import io.quarkus.vertx.web.runtime.RouteMatcher;
 import io.quarkus.vertx.web.runtime.RoutingExchangeImpl;
 import io.quarkus.vertx.web.runtime.UniFailureCallback;
 import io.quarkus.vertx.web.runtime.VertxWebRecorder;
-import io.quarkus.vertx.web.runtime.devmode.ResourceNotFoundRecorder;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
@@ -207,9 +198,7 @@ class VertxWebProcessor {
             List<RequireBodyHandlerBuildItem> bodyHandlerRequired,
             BeanArchiveIndexBuildItem beanArchive,
             TransformedAnnotationsBuildItem transformedAnnotations,
-            ShutdownContextBuildItem shutdown,
-            LaunchModeBuildItem launchMode,
-            BuildProducer<RouteDescriptionBuildItem> descriptions) throws IOException {
+            ShutdownContextBuildItem shutdown) throws IOException {
 
         ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
         IndexView index = beanArchive.getIndex();
@@ -323,19 +312,6 @@ class VertxWebProcessor {
                     }
                 }
                 routeProducer.produce(new RouteBuildItem(routeFunction, routeHandler, handlerType));
-
-                if (launchMode.getLaunchMode().equals(LaunchMode.DEVELOPMENT)) {
-                    if (methods.length == 0) {
-                        // No explicit method declared - match all methods
-                        methods = HttpMethod.values();
-                    }
-                    descriptions.produce(new RouteDescriptionBuildItem(
-                            businessMethod.getMethod().declaringClass().name().withoutPackagePrefix() + "#"
-                                    + businessMethod.getMethod().name() + "()",
-                            regex != null ? regex : path,
-                            Arrays.stream(methods).map(Object::toString).collect(Collectors.joining(", ")), produces,
-                            consumes));
-                }
             }
         }
 
@@ -355,29 +331,31 @@ class VertxWebProcessor {
         recorder.clearCacheOnShutdown(shutdown);
     }
 
-    @BuildStep(onlyIf = IsDevelopment.class)
-    @Record(RUNTIME_INIT)
-    void routeNotFound(Capabilities capabilities, ResourceNotFoundRecorder recorder, VertxWebRouterBuildItem router,
-            List<RouteDescriptionBuildItem> descriptions,
-            HttpRootPathBuildItem httpRoot,
-            List<NotFoundPageDisplayableEndpointBuildItem> additionalEndpoints) {
-        if (capabilities.isMissing(Capability.RESTEASY)) {
-            // Register a special error handler if JAX-RS not available
-            recorder.registerNotFoundHandler(router.getRouter(), httpRoot.getRootPath(),
-                    descriptions.stream().map(RouteDescriptionBuildItem::getDescription).collect(Collectors.toList()),
-                    additionalEndpoints.stream().map(NotFoundPageDisplayableEndpointBuildItem::getEndpoint)
-                            .collect(Collectors.toList()));
-        }
-    }
-
     @BuildStep
-    AutoAddScopeBuildItem autoAddScope() {
-        return AutoAddScopeBuildItem.builder()
-                .containsAnnotations(io.quarkus.vertx.web.deployment.DotNames.ROUTE,
-                        io.quarkus.vertx.web.deployment.DotNames.ROUTES,
-                        io.quarkus.vertx.web.deployment.DotNames.ROUTE_FILTER)
-                .defaultScope(BuiltinScope.SINGLETON)
-                .reason("Found route handler business methods").build();
+    AnnotationsTransformerBuildItem annotationTransformer(CustomScopeAnnotationsBuildItem scopes) {
+        return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
+
+            @Override
+            public boolean appliesTo(org.jboss.jandex.AnnotationTarget.Kind kind) {
+                return kind == org.jboss.jandex.AnnotationTarget.Kind.CLASS;
+            }
+
+            @Override
+            public void transform(TransformationContext context) {
+                if (!scopes.isScopeIn(context.getAnnotations())) {
+                    // Class with no scope annotation but with a method annotated with @Route, @RouteFilter
+                    ClassInfo target = context.getTarget().asClass();
+                    if (target.annotations().containsKey(io.quarkus.vertx.web.deployment.DotNames.ROUTE)
+                            || target.annotations().containsKey(io.quarkus.vertx.web.deployment.DotNames.ROUTES)
+                            || target.annotations().containsKey(io.quarkus.vertx.web.deployment.DotNames.ROUTE_FILTER)) {
+                        LOGGER.debugf(
+                                "Found route handler business methods on a class %s with no scope annotation - adding @Singleton",
+                                context.getTarget());
+                        context.transform().add(Singleton.class).done();
+                    }
+                }
+            }
+        });
     }
 
     private void validateRouteFilterMethod(BeanInfo bean, MethodInfo method) {
@@ -645,12 +623,8 @@ class VertxWebProcessor {
         if (TYPES_IGNORED_FOR_REFLECTION.contains(contentType.name())) {
             return;
         }
-        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem.Builder()
-                .type(contentType)
-                .ignoreTypePredicate(ReflectiveHierarchyBuildItem.DefaultIgnoreTypePredicate.INSTANCE
-                        .or(TYPES_IGNORED_FOR_REFLECTION::contains))
-                .source(VertxWebProcessor.class.getSimpleName() + " > " + contentType)
-                .build());
+        reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem(contentType,
+                ReflectiveHierarchyBuildItem.DefaultIgnorePredicate.INSTANCE.or(TYPES_IGNORED_FOR_REFLECTION::contains)));
     }
 
     private void handleRegularMulti(HandlerDescriptor descriptor, BytecodeCreator writer, ResultHandle rc,
@@ -733,13 +707,13 @@ class VertxWebProcessor {
      * Generates the following function depending on the payload type
      *
      * If the method returns a {@code Uni<Void>}
-     *
+     * 
      * <pre>
      *     item -> rc.response().setStatusCode(204).end();
      * </pre>
      *
      * If the method returns a {@code Uni<Buffer>}:
-     *
+     * 
      * <pre>
      *     item -> {
      *       if (item != null) {
@@ -752,7 +726,7 @@ class VertxWebProcessor {
      * </pre>
      *
      * If the method returns a {@code Uni<String>} :
-     *
+     * 
      * <pre>
      *     item -> {
      *       if (item != null) {
@@ -764,7 +738,7 @@ class VertxWebProcessor {
      * </pre>
      *
      * If the method returns a {@code Uni<T>} :
-     *
+     * 
      * <pre>
      *     item -> {
      *       if (item != null) {
@@ -853,7 +827,7 @@ class VertxWebProcessor {
         if (matchers.isEmpty()) {
             return;
         }
-        // First we need to group matchers that could potentially match the same request
+        // First we need to group matchers that could potentially match the same request 
         Set<LinkedHashSet<RouteMatcher>> groups = new HashSet<>();
         for (Iterator<Entry<RouteMatcher, MethodInfo>> iterator = matchers.entrySet().iterator(); iterator
                 .hasNext();) {
