@@ -25,6 +25,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
+import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
@@ -34,11 +35,15 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
+import com.google.devtools.build.lib.vfs.Path;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -182,16 +187,6 @@ abstract class FileTransport implements BuildEventTransport {
       if (closeFuture.isDone()) {
         return closeFuture;
       }
-
-      // Close abruptly if the closing future is cancelled.
-      closeFuture.addListener(
-          () -> {
-            if (closeFuture.isCancelled()) {
-              closeNow();
-            }
-          },
-          MoreExecutors.directExecutor());
-
       try {
         pendingWrites.put(CLOSE);
       } catch (InterruptedException e) {
@@ -230,7 +225,7 @@ abstract class FileTransport implements BuildEventTransport {
     checkNotNull(event);
 
     return Futures.transform(
-        uploader.uploadReferencedLocalFiles(event.referencedLocalFiles()),
+        uploadReferencedFiles(event.referencedLocalFiles()),
         pathConverter -> {
           BuildEventContext context =
               new BuildEventContext() {
@@ -252,6 +247,22 @@ abstract class FileTransport implements BuildEventTransport {
           return event.asStreamProto(context);
         },
         MoreExecutors.directExecutor());
+  }
+
+  /**
+   * Returns a {@link PathConverter} for the uploaded files, or {@code null} when the uploaded
+   * failed.
+   */
+  private ListenableFuture<PathConverter> uploadReferencedFiles(Collection<LocalFile> localFiles) {
+    checkNotNull(localFiles);
+    Map<Path, LocalFile> localFileMap = new HashMap<>(localFiles.size());
+    for (LocalFile localFile : localFiles) {
+      // It is possible for targets to have duplicate artifacts (same path but different owners)
+      // in their output groups. Since they didn't trigger an artifact conflict they are the
+      // same file, so just skip either one
+      localFileMap.putIfAbsent(localFile.path, localFile);
+    }
+    return uploader.upload(localFileMap);
   }
 
   @Override
