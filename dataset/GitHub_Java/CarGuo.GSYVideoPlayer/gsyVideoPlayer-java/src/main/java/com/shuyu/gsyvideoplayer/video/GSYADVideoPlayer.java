@@ -9,6 +9,7 @@ import android.view.Window;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import com.danikula.videocache.HttpProxyCacheServer;
 import com.shuyu.gsyvideoplayer.GSYVideoADManager;
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
@@ -73,7 +74,6 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
 
     @Override
     public GSYVideoViewBridge getGSYVideoManager() {
-        GSYVideoADManager.instance().initContext(getContext().getApplicationContext());
         return GSYVideoADManager.instance();
     }
 
@@ -86,6 +86,12 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     protected void releaseVideos() {
         GSYVideoADManager.releaseAllVideos();
     }
+
+    @Override
+    protected HttpProxyCacheServer getProxy(Context context, File file) {
+        return GSYVideoADManager.getProxy(context, file);
+    }
+
 
     @Override
     protected int getFullId() {
@@ -105,27 +111,16 @@ public class GSYADVideoPlayer extends StandardGSYVideoPlayer {
     }
 
     @Override
-    public void onClick(View v) {
-        if (v.getId() == R.id.start) {
-            if (mCurrentState == CURRENT_STATE_ERROR) {
-                clickStartIcon();
-            }
-        } else {
-            super.onClick(v);
-        }
-    }
-
-    @Override
     protected void updateStartImage() {
         if (mStartButton != null) {
             if (mStartButton instanceof ImageView) {
                 ImageView imageView = (ImageView) mStartButton;
                 if (mCurrentState == CURRENT_STATE_PLAYING) {
-                    imageView.setImageResource(R.drawable.empty_drawable);
+                    imageView.setImageResource(R.drawable.video_click_pause_selector);
                 } else if (mCurrentState == CURRENT_STATE_ERROR) {
-                    imageView.setImageResource(R.drawable.video_click_error_selector);
+                    imageView.setImageResource(R.drawable.video_click_play_selector);
                 } else {
-                    imageView.setImageResource(R.drawable.empty_drawable);
+                    imageView.setImageResource(R.drawable.video_click_play_selector);
                 }
             }
         }
