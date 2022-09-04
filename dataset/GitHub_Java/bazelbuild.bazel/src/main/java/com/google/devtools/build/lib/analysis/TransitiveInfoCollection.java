@@ -47,7 +47,8 @@ public interface TransitiveInfoCollection
    */
   default boolean satisfies(RequiredProviders providers) {
     return providers.isSatisfiedBy(
-        aClass -> getProvider(aClass) != null, id -> this.get(id) != null);
+        aClass -> getProvider(aClass.asSubclass(TransitiveInfoProvider.class)) != null,
+        id -> this.get(id) != null);
   }
 
   /**

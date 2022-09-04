@@ -70,7 +70,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Integration tests for Starlark. */
+/**
+ * Integration tests for Skylark.
+ */
 @RunWith(JUnit4.class)
 public class SkylarkIntegrationTest extends BuildViewTestCase {
   protected boolean keepGoing() {
@@ -1932,8 +1934,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "    environments = ['default', 'other'])",
         "environment(name = 'default')",
         "environment(name = 'other')");
-    // The example Starlark rule explicitly provides the MyProvider provider as a regression test
-    // for a bug where a Starlark rule with unsatisfied constraints but explicit providers would
+    // The example skylark rule explicitly provides the MyProvider provider as a regression test
+    // for a bug where a skylark rule with unsatisfied constraints but explicit providers would
     // result in Bazel throwing a null pointer exception.
     scratch.file(
         "test/skylark/extension.bzl",
@@ -2967,7 +2969,9 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertContainsEvent("'command' must be of type string");
   }
 
-  /** Starlark integration test that forces inlining. */
+  /**
+   * Skylark integration test that forces inlining.
+   */
   @RunWith(JUnit4.class)
   public static class SkylarkIntegrationTestsWithInlineCalls extends SkylarkIntegrationTest {
 
@@ -2977,11 +2981,11 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
           ((InMemoryMemoizingEvaluator) getSkyframeExecutor().getEvaluatorForTesting())
               .getSkyFunctionsForTesting();
       StarlarkImportLookupFunction starlarkImportLookupFunction =
-          StarlarkImportLookupFunction.createForInliningSelfForPackageAndWorkspaceNodes(
+          new StarlarkImportLookupFunction(
               this.getRuleClassProvider(),
               this.getPackageFactory(),
               /*starlarkImportLookupValueCacheSize=*/ 2);
-      starlarkImportLookupFunction.resetSelfInliningCache();
+      starlarkImportLookupFunction.resetCache();
       ((PackageFunction) skyFunctions.get(SkyFunctions.PACKAGE))
           .setStarlarkImportLookupFunctionForInliningForTesting(starlarkImportLookupFunction);
     }
