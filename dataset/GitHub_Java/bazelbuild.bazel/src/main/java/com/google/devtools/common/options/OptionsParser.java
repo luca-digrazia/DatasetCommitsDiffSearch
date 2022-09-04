@@ -235,12 +235,12 @@ public class OptionsParser implements OptionsProvider {
 
     private final OptionDefinition optionDefinition;
     private final OptionsData.ExpansionData expansionData;
-    private final ImmutableList<ParsedOptionDescription> implicitRequirements;
+    private final ImmutableList<UnparsedOptionValueDescription> implicitRequirements;
 
     OptionDescription(
         OptionDefinition definition,
         OptionsData.ExpansionData expansionData,
-        ImmutableList<ParsedOptionDescription> implicitRequirements) {
+        ImmutableList<UnparsedOptionValueDescription> implicitRequirements) {
       this.optionDefinition = definition;
       this.expansionData = expansionData;
       this.implicitRequirements = implicitRequirements;
@@ -250,7 +250,7 @@ public class OptionsParser implements OptionsProvider {
       return optionDefinition;
     }
 
-    public ImmutableList<ParsedOptionDescription> getImplicitRequirements() {
+    public ImmutableList<UnparsedOptionValueDescription> getImplicitRequirements() {
       return implicitRequirements;
     }
 
@@ -417,7 +417,7 @@ public class OptionsParser implements OptionsProvider {
    * @return The {@link com.google.devtools.common.options.OptionValueDescription>} for the option,
    *     or null if there is no option by the given name.
    */
-  ImmutableList<ParsedOptionDescription> getExpansionOptionValueDescriptions(
+  ImmutableList<UnparsedOptionValueDescription> getExpansionOptionValueDescriptions(
       OptionDefinition option, @Nullable String optionValue, OptionPriority priority, String source)
       throws OptionsParsingException {
     return impl.getExpansionOptionValueDescriptions(option, optionValue, priority, source);
@@ -524,12 +524,12 @@ public class OptionsParser implements OptionsProvider {
   }
 
   @Override
-  public List<ParsedOptionDescription> asCompleteListOfParsedOptions() {
-    return impl.asCompleteListOfParsedOptions();
+  public List<UnparsedOptionValueDescription> asListOfUnparsedOptions() {
+    return impl.asListOfUnparsedOptions();
   }
 
   @Override
-  public List<ParsedOptionDescription> asListOfExplicitOptions() {
+  public List<UnparsedOptionValueDescription> asListOfExplicitOptions() {
     return impl.asListOfExplicitOptions();
   }
 
