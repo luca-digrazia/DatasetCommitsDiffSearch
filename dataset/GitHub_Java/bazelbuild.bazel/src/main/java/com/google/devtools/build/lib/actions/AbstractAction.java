@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
@@ -293,20 +294,16 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   public abstract String getMnemonic();
 
   /**
-   * See the javadoc for {@link com.google.devtools.build.lib.actions.Action} and {@link
-   * com.google.devtools.build.lib.actions.ActionExecutionMetadata#getKey()} for the contract for
-   * {@link #computeKey()}.
+   * See the javadoc for {@link com.google.devtools.build.lib.actions.Action} and
+   * {@link com.google.devtools.build.lib.actions.ActionExecutionMetadata#getKey()} for the contract
+   * for {@link #computeKey()}.
    */
-  protected abstract String computeKey() throws CommandLineExpansionException;
+  protected abstract String computeKey();
 
   @Override
   public final synchronized String getKey() {
     if (cachedKey == null) {
-      try {
-        cachedKey = computeKey();
-      } catch (CommandLineExpansionException e) {
-        cachedKey = KEY_ERROR;
-      }
+      cachedKey = computeKey();
     }
     return cachedKey;
   }
@@ -419,7 +416,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
    * checking, this method must be called.
    */
   protected void checkInputsForDirectories(
-      EventHandler eventHandler, ActionInputFileCache metadataHandler) throws ExecException {
+      EventHandler eventHandler, MetadataHandler metadataHandler) throws ExecException {
     // Report "directory dependency checking" warning only for non-generated directories (generated
     // ones will be reported earlier).
     for (Artifact input : getMandatoryInputs()) {
@@ -486,7 +483,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo() throws CommandLineExpansionException {
+  public ExtraActionInfo.Builder getExtraActionInfo() {
     ActionOwner owner = getOwner();
     ExtraActionInfo.Builder result =
         ExtraActionInfo.newBuilder()
@@ -534,7 +531,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
    * correctly when run remotely. This is at least the normal inputs of the action, but may include
    * other files as well. For example C(++) compilation may perform include file header scanning.
    * This needs to be mirrored by the extra_action rule. Called by
-   * {@link com.google.devtools.build.lib.analysis.extra.ExtraAction} at execution time for actions
+   * {@link com.google.devtools.build.lib.rules.extra.ExtraAction} at execution time for actions
    * that return true for {link #discoversInputs()}.
    *
    * @param actionExecutionContext Services in the scope of the action, like the Out/Err streams.
@@ -568,17 +565,15 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   }
 
   @SkylarkCallable(
-    name = "argv",
-    doc =
-        "For actions created by <a href=\"actions.html#run\">ctx.actions.run()</a> "
-            + "or <a href=\"actions.html#run_shell\">ctx.actions.run_shell()</a>  an immutable "
-            + "list of the arguments for the command line to be executed. Note that "
-            + "for shell actions the first two arguments will be the shell path "
-            + "and <code>\"-c\"</code>.",
-    structField = true,
-    allowReturnNones = true
-  )
-  public SkylarkList<String> getSkylarkArgv() throws CommandLineExpansionException {
+      name = "argv",
+      doc = "For actions created by <a href=\"actions.html#run\">ctx.actions.run()</a> "
+          + "or <a href=\"actions.html#run_shell\">ctx.actions.run_shell()</a>  an immutable "
+          + "list of the arguments for the command line to be executed. Note that "
+          + "for shell actions the first two arguments will be the shell path "
+          + "and <code>\"-c\"</code>.",
+      structField = true,
+      allowReturnNones = true)
+  public SkylarkList<String> getSkylarkArgv() {
     return null;
   }
 

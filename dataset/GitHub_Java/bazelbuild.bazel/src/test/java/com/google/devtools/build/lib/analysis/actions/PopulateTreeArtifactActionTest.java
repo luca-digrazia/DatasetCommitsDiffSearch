@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
-import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
@@ -167,9 +166,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     ArrayList<Artifact> treefileArtifacts = new ArrayList<Artifact>();
     PopulateTreeArtifactAction action = createPopulateTreeArtifactAction();
     ActionExecutionContext executionContext = actionExecutionContext(treefileArtifacts);
-    ActionResult actionResult = action.execute(executionContext);
-
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(executionContext);
 
     assertThat(Artifact.toExecPaths(treefileArtifacts)).containsExactly(
         "test/archive_member/archive_members/1.class",
@@ -219,9 +216,8 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     ArrayList<Artifact> treeFileArtifacts = new ArrayList<Artifact>();
     ActionExecutionContext executionContext = actionExecutionContext(treeFileArtifacts);
 
-    ActionResult actionResult = action.execute(executionContext);
+    action.execute(executionContext);
 
-    assertThat(actionResult.spawnResults()).isEmpty();
     assertThat(treeFileArtifacts).isEmpty();
   }
 
@@ -235,9 +231,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
 
     ArrayList<Artifact> treeFileArtifacts = new ArrayList<Artifact>();
     ActionExecutionContext executionContext = actionExecutionContext(treeFileArtifacts);
-    ActionResult actionResult = action.execute(executionContext);
-
-    assertThat(actionResult.spawnResults()).isEmpty();
+    action.execute(executionContext);
 
     // We check whether the parent directory structures of output TreeFileArtifacts exist even
     // though the spawn is not executed (the SpawnActionContext is mocked out).
