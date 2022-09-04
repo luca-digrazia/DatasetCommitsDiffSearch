@@ -61,7 +61,7 @@ import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaOptimizationMode;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
-import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
+import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
@@ -1482,7 +1482,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               JavaCommon.getHostJavaExecutable(ruleContext),
               singleJar,
               JavaToolchainProvider.from(ruleContext).getJvmOptions())
-          .addTransitiveInputs(JavaRuntimeInfo.forHost(ruleContext).javaBaseInputsMiddleman());
+          .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
     } else {
       builder.setExecutable(singleJar);
     }
@@ -1598,7 +1598,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     return mainDexList;
   }
 
-  public static Artifact createMainDexProguardSpec(RuleContext ruleContext) {
+  private static Artifact createMainDexProguardSpec(RuleContext ruleContext) {
     return ProguardHelper.getProguardConfigArtifact(ruleContext, "main_dex");
   }
 
