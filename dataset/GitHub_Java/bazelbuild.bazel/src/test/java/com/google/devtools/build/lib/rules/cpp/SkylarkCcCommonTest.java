@@ -20,7 +20,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -28,8 +27,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTa
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.packages.SkylarkInfo;
-import com.google.devtools.build.lib.packages.StructImpl;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.packages.util.ResourceLoader;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ActionConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ArtifactNamePattern;
@@ -52,13 +49,6 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CompilationModeFlags;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingMode;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingModeFlags;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.MakeVariable;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
-import com.google.protobuf.TextFormat;
 import java.io.IOException;
 import java.util.List;
 import org.junit.Before;
@@ -1063,8 +1053,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  @Deprecated
-  // TODO(118663806): Libraries won't be created this way from Skylark after removing CcLinkParams.
   public void testLibraryLinkerInputs() throws Exception {
     scratch.file("a/BUILD", "load('//tools/build_defs/cc:rule.bzl', 'crule')", "crule(name='r')");
     scratch.file("a/lib.a", "");
@@ -1120,8 +1108,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  @Deprecated
-  // TODO(118663806): Artifact category won't be part of API.
   public void testLibraryLinkerInputArtifactCategoryError() throws Exception {
     scratch.file("a/BUILD", "load('//tools/build_defs/cc:rule.bzl', 'crule')", "crule(name='r')");
     scratch.file("a/lib.a", "");
@@ -1161,14 +1147,14 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testOldCcLinkingProvider() throws Exception {
+  public void testCcLinkingProvider() throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCrosstool(
             mockToolsConfig,
             "supports_interface_shared_objects: false");
     useConfiguration();
-    setUpOldCcLinkingProviderParamsTest();
+    setUpCcLinkingProviderParamsTest();
     ConfiguredTarget r = getConfiguredTarget("//a:r");
 
     List<String> staticSharedLinkopts =
@@ -1256,7 +1242,7 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         .containsAllOf("lib.so", "liba_Slibdep1.so", "liba_Slibdep2.so");
   }
 
-  private void setUpOldCcLinkingProviderParamsTest() throws Exception {
+  private void setUpCcLinkingProviderParamsTest() throws Exception {
     scratch.file(
         "a/BUILD",
         "load('//tools/build_defs/cc:rule.bzl', 'crule')",
@@ -1323,165 +1309,6 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
         "    'liba': attr.label(default='//a:lib.a', allow_single_file=True),",
         "    'libso': attr.label(default='//a:lib.so', allow_single_file=True),",
         "    '_deps': attr.label_list(default=['//a:dep1', '//a:dep2']),",
-        "  },",
-        "  fragments = ['cpp'],",
-        ");");
-  }
-
-  @Test
-  public void testCcLinkingContext() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(
-            mockToolsConfig,
-            MockCcSupport.PIC_FEATURE,
-            "supports_interface_shared_objects: false",
-            "needsPic: true");
-    useConfiguration();
-    setUpCcLinkingContextTest();
-    ConfiguredTarget a = getConfiguredTarget("//a:a");
-
-    StructImpl info = ((StructImpl) a.get("info"));
-    @SuppressWarnings("unchecked")
-    SkylarkList<String> userLinkFlags =
-        (SkylarkList<String>) info.getValue("user_link_flags", SkylarkList.class);
-    assertThat(userLinkFlags.getImmutableList())
-        .containsExactly("-la", "-lc2", "-DEP2_LINKOPT", "-lc1", "-lc2", "-DEP1_LINKOPT");
-    @SuppressWarnings("unchecked")
-    SkylarkList<LibraryToLinkWrapper> librariesToLink =
-        (SkylarkList<LibraryToLinkWrapper>) info.getValue("libraries_to_link", SkylarkList.class);
-    assertThat(
-            librariesToLink.stream()
-                .filter(x -> x.getStaticLibrary() != null)
-                .map(x -> x.getStaticLibrary().getFilename())
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly("a.a", "b.a", "c.a", "d.a");
-    assertThat(
-            librariesToLink.stream()
-                .filter(x -> x.getPicStaticLibrary() != null)
-                .map(x -> x.getPicStaticLibrary().getFilename())
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly("a.pic.a", "libdep2.a", "b.pic.a", "c.pic.a", "e.pic.a", "libdep1.a");
-    assertThat(
-            librariesToLink.stream()
-                .filter(x -> x.getDynamicLibrary() != null)
-                .map(x -> x.getDynamicLibrary().getFilename())
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly("a.so", "liba_Slibdep2.so", "b.so", "e.so", "liba_Slibdep1.so");
-    assertThat(
-            librariesToLink.stream()
-                .filter(x -> x.getInterfaceLibrary() != null)
-                .map(x -> x.getInterfaceLibrary().getFilename())
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly("a.ifso");
-    Artifact staticLibrary = info.getValue("static_library", Artifact.class);
-    assertThat(staticLibrary.getFilename()).isEqualTo("a.a");
-    Artifact picStaticLibrary = info.getValue("pic_static_library", Artifact.class);
-    assertThat(picStaticLibrary.getFilename()).isEqualTo("a.pic.a");
-    Artifact dynamicLibrary = info.getValue("dynamic_library", Artifact.class);
-    assertThat(dynamicLibrary.getFilename()).isEqualTo("a.so");
-    Artifact interfaceLibrary = info.getValue("interface_library", Artifact.class);
-    assertThat(interfaceLibrary.getFilename()).isEqualTo("a.ifso");
-
-    ConfiguredTarget bin = getConfiguredTarget("//a:bin");
-    assertThat(bin).isNotNull();
-  }
-
-  private void setUpCcLinkingContextTest() throws Exception {
-    scratch.file(
-        "a/BUILD",
-        "load('//tools/build_defs/cc:rule.bzl', 'crule')",
-        "cc_binary(name='bin',",
-        "   deps = [':a'],",
-        ")",
-        "crule(name='a',",
-        "   static_library = 'a.a',",
-        "   pic_static_library = 'a.pic.a',",
-        "   dynamic_library = 'a.so',",
-        "   interface_library = 'a.ifso',",
-        "   user_link_flags = ['-la', '-lc2'],",
-        "   deps = [':c', ':dep2', ':b'],",
-        ")",
-        "crule(name='b',",
-        "   static_library = 'b.a',",
-        "   pic_static_library = 'b.pic.a',",
-        "   dynamic_library = 'b.so',",
-        "   deps = [':c', ':d'],",
-        ")",
-        "crule(name='c',",
-        "   static_library = 'c.a',",
-        "   pic_static_library = 'c.pic.a',",
-        "   user_link_flags = ['-lc1', '-lc2'],",
-        ")",
-        "crule(name='d',",
-        "   static_library = 'd.a',",
-        "   deps = [':e'],",
-        ")",
-        "crule(name='e',",
-        "   pic_static_library = 'e.pic.a',",
-        "   dynamic_library = 'e.so',",
-        "   deps = [':dep1'],",
-        ")",
-        "cc_toolchain_alias(name='alias')",
-        "cc_library(",
-        "    name = 'dep1',",
-        "    srcs = ['dep1.cc'],",
-        "    hdrs = ['dep1.h'],",
-        "    linkopts = ['-DEP1_LINKOPT'],",
-        ")",
-        "cc_library(",
-        "    name = 'dep2',",
-        "    srcs = ['dep2.cc'],",
-        "    hdrs = ['dep2.h'],",
-        "    linkopts = ['-DEP2_LINKOPT'],",
-        ")");
-    scratch.file("a/lib.a", "");
-    scratch.file("a/lib.so", "");
-    scratch.file("tools/build_defs/cc/BUILD", "");
-    scratch.file(
-        "tools/build_defs/cc/rule.bzl",
-        "def _create(ctx, feature_configuration, static_library, pic_static_library,",
-        "  dynamic_library, interface_library, alwayslink):",
-        "  return cc_common.create_library_to_link(",
-        "    actions=ctx.actions, feature_configuration=feature_configuration, ",
-        "    cc_toolchain = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo], ",
-        "    static_library=static_library, pic_static_library=pic_static_library,",
-        "    dynamic_library=dynamic_library, interface_library=interface_library,",
-        "    alwayslink=alwayslink)",
-        "def _impl(ctx):",
-        "  toolchain = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
-        "  feature_configuration = cc_common.configure_features(cc_toolchain = toolchain)",
-        "  library_to_link = _create(ctx, feature_configuration, ctx.file.static_library, ",
-        "     ctx.file.pic_static_library, ctx.file.dynamic_library, ctx.file.interface_library,",
-        "     ctx.attr.alwayslink)",
-        "  linking_context = cc_common.create_linking_context(libraries_to_link=[library_to_link],",
-        "     user_link_flags=ctx.attr.user_link_flags)",
-        "  cc_infos = [CcInfo(linking_context=linking_context)]",
-        "  for dep in ctx.attr.deps:",
-        "      cc_infos.append(dep[CcInfo])",
-        "  merged_cc_info = cc_common.merge_cc_infos(cc_infos=cc_infos)",
-        "  return struct(",
-        "     info = struct(",
-        "       cc_info = merged_cc_info,",
-        "       user_link_flags = merged_cc_info.linking_context.user_link_flags,",
-        "       libraries_to_link = merged_cc_info.linking_context.libraries_to_link,",
-        "       static_library = library_to_link.static_library,",
-        "       pic_static_library = library_to_link.pic_static_library,",
-        "       dynamic_library = library_to_link.dynamic_library,",
-        "       interface_library = library_to_link.interface_library),",
-        "     providers = [merged_cc_info]",
-        "  )",
-        "crule = rule(",
-        "  _impl,",
-        "  attrs = { ",
-        "    'user_link_flags' : attr.string_list(),",
-        "    'static_library': attr.label(allow_single_file=True),",
-        "    'pic_static_library': attr.label(allow_single_file=True),",
-        "    'dynamic_library': attr.label(allow_single_file=True),",
-        "    'interface_library': attr.label(allow_single_file=True),",
-        "    'alwayslink': attr.bool(),",
-        "    '_cc_toolchain': attr.label(default=Label('//a:alias')),",
-        "    'deps': attr.label_list(),",
         "  },",
         "  fragments = ['cpp'],",
         ");");
@@ -4435,408 +4262,5 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
     // assemble is one of the action_configs added as a legacy behavior, therefore it needs to be
     // prepended to the action configs defined by the user.
     assertThat(actionConfigNames).containsAllOf("assemble", "custom-action").inOrder();
-  }
-
-  @Test
-  public void testCcToolchainInfoToProto() throws Exception {
-    loadCcToolchainConfigLib();
-    scratch.file(
-        "foo/crosstool.bzl",
-        "load('//tools/cpp:cc_toolchain_config_lib.bzl',",
-        "        'feature',",
-        "        'action_config',",
-        "        'artifact_name_pattern',",
-        "        'env_entry',",
-        "        'variable_with_value',",
-        "        'make_variable',",
-        "        'feature_set',",
-        "        'with_feature_set',",
-        "        'env_set',",
-        "        'flag_group',",
-        "        'flag_set',",
-        "        'tool_path',",
-        "        'tool')",
-        "",
-        "def _impl(ctx):",
-        "    return cc_common.create_cc_toolchain_config_info(",
-        "                ctx = ctx,",
-        "                features = [",
-        "                    feature(name = 'featureone', enabled = True),",
-        "                    feature(name = 'sysroot',",
-        "                        flag_sets = [",
-        "                            flag_set(",
-        "                                actions = ['assemble', 'preprocess-assemble'],",
-        "                                flag_groups = [",
-        "                                    flag_group(",
-        "                                        expand_if_available= 'available',",
-        "                                        expand_if_not_available= 'notavailable',",
-        "                                        expand_if_true = 'true',",
-        "                                        expand_if_false = 'false',",
-        "                                        expand_if_equal = variable_with_value(",
-        "                                            name = 'variable', value = 'value'),",
-        "                                        iterate_over = 'iterate_over',",
-        "                                        flag_groups = [",
-        "                                            flag_group(flags = ",
-        "                                                ['foo%{libraries_to_link}bar',",
-        "                                                 '-D__DATE__=\"redacted\"'])],",
-        "                                    ),",
-        "                                    flag_group(flags = ['a', 'b'])],",
-        "                        )],",
-        "                        implies = ['imply2', 'imply1'],",
-        "                        provides = ['provides2', 'provides1'],",
-        "                        requires = [feature_set(features = ['r1', 'r2']),",
-        "                                    feature_set(features = ['r3'])],",
-        "                        env_sets = [",
-        "                             env_set(actions = ['a1', 'a2'],",
-        "                                     env_entries = [",
-        "                                         env_entry(key = 'k1', value = 'v1'),",
-        "                                         env_entry(key = 'k2', value = 'v2')],",
-        "                                     with_features = [",
-        "                                         with_feature_set(",
-        "                                             features = ['f1', 'f2'],",
-        "                                             not_features = ['nf1', 'nf2'])]),",
-        "                             env_set(actions = ['a1', 'a2'])]",
-        "                )],",
-        "                action_configs = [",
-        "                    action_config(action_name = 'action_one', enabled=True),",
-        "                    action_config(",
-        "                        action_name = 'action_two',",
-        "                        tools = [tool(path = 'fake/path',",
-        "                                      with_features = [",
-        "                                          with_feature_set(features = ['a'],",
-        "                                                           not_features=['b', 'c']),",
-        "                                          with_feature_set(features=['b'])],",
-        "                                      execution_requirements = ['a', 'b', 'c'])],",
-        "                        implies = ['compiler_input_flags', 'compiler_output_flags'])],",
-        "                artifact_name_patterns = [artifact_name_pattern(",
-        "                   category_name = 'static_library',",
-        "                   prefix = 'prefix',",
-        "                   extension = '.a')],",
-        "                cxx_builtin_include_directories = ['dir1', 'dir2', 'dir3'],",
-        "                toolchain_identifier = 'toolchain',",
-        "                host_system_name = 'host',",
-        "                target_system_name = 'target',",
-        "                target_cpu = 'cpu',",
-        "                target_libc = 'libc',",
-        "                compiler = 'compiler',",
-        "                abi_libc_version = 'abi_libc',",
-        "                abi_version = 'abi',",
-        "                supports_gold_linker = True,",
-        "                supports_start_end_lib = True,",
-        "                supports_interface_shared_objects = True,",
-        "                supports_embedded_runtimes = True,",
-        "                static_runtime_filegroup = 'static',",
-        "                dynamic_runtime_filegroup = 'dynamic',",
-        "                supports_fission = True,",
-        "                supports_dsym = True,",
-        "                needs_pic = True,",
-        "                tool_paths = [tool_path(name = 'name1', path = 'path1')],",
-        "                compiler_flags = ['flag1', 'flag2', 'flag3'],",
-        "                cxx_flags = ['cxx1', 'cxx2'],",
-        "                unfiltered_cxx_flags = ['ucxx1', 'ucxx2'],",
-        "                linker_flags = ['l2', 'l1'],",
-        "                dynamic_library_linker_flags = ['dll1', 'dll2'],",
-        "                test_only_linker_flags = ['t1', 't2'],",
-        "                objcopy_embed_flags = ['o1', 'o2'],",
-        "                ld_embed_flags = ['ld1', 'ld2'],",
-        "                compilation_mode_compiler_flags = {",
-        "                    'OPT' : ['opt1', 'opt2'],",
-        "                    'FASTBUILD' : ['fbd1', 'fbd2'],",
-        "                    'DBG' : ['dbg1', 'dbg2'] },",
-        "                compilation_mode_cxx_flags = {",
-        "                    'OPT' : ['optcxx1', 'optcxx2'],",
-        "                    'FASTBUILD' : ['fbdcxx1', 'fbdcxx2'],",
-        "                    'DBG' : ['dbgcxx1', 'dbgcxx2'] },",
-        "                compilation_mode_linker_flags = {",
-        "                    'OPT' : ['optl1', 'optl2'],",
-        "                    'FASTBUILD' : ['fbdl1', 'fbdl2'],",
-        "                    'DBG' : ['dbgl1', 'dbgl2'] },",
-        "                mostly_static_linking_mode_flags = ['ms1', 'ms2'],",
-        "                dynamic_linking_mode_flags = ['d1', 'd2'],",
-        "                fully_static_linking_mode_flags = ['fs1', 'fs2'],",
-        "                mostly_static_libraries_linking_mode_flags = ['msl1', 'msl2'],",
-        "                make_variables = [make_variable(name = 'variable', value = '--a -b -c')],",
-        "                builtin_sysroot = 'sysroot',",
-        "                default_libc_top = 'libc_top',",
-        "                cc_target_os = 'os',",
-        "        )",
-        "cc_toolchain_config_rule = rule(",
-        "    implementation = _impl,",
-        "    attrs = {},",
-        "    provides = [CcToolchainConfigInfo], ",
-        ")");
-
-    scratch.file(
-        "foo/BUILD",
-        "load(':crosstool.bzl', 'cc_toolchain_config_rule')",
-        "cc_toolchain_alias(name='alias')",
-        "cc_toolchain_config_rule(name='r')");
-
-    useConfiguration("--experimental_enable_cc_toolchain_config_info");
-    ConfiguredTarget target = getConfiguredTarget("//foo:r");
-    assertThat(target).isNotNull();
-    CcToolchainConfigInfo ccToolchainConfigInfo =
-        (CcToolchainConfigInfo) target.get(CcToolchainConfigInfo.PROVIDER.getKey());
-    assertThat(ccToolchainConfigInfo).isNotNull();
-    CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
-    TextFormat.merge(ccToolchainConfigInfo.getProto(), toolchainBuilder);
-    CToolchain toolchain = toolchainBuilder.build();
-
-    assertThat(toolchain.getCxxBuiltinIncludeDirectoryList())
-        .containsExactly("dir1", "dir2", "dir3");
-    assertThat(toolchain.getToolchainIdentifier()).isEqualTo("toolchain");
-    assertThat(toolchain.getHostSystemName()).isEqualTo("host");
-    assertThat(toolchain.getTargetSystemName()).isEqualTo("target");
-    assertThat(toolchain.getTargetCpu()).isEqualTo("cpu");
-    assertThat(toolchain.getTargetLibc()).isEqualTo("libc");
-    assertThat(toolchain.getCompiler()).isEqualTo("compiler");
-    assertThat(toolchain.getAbiLibcVersion()).isEqualTo("abi_libc");
-    assertThat(toolchain.getAbiVersion()).isEqualTo("abi");
-    assertThat(toolchain.getSupportsGoldLinker()).isTrue();
-    assertThat(toolchain.getSupportsStartEndLib()).isTrue();
-    assertThat(toolchain.getSupportsInterfaceSharedObjects()).isTrue();
-    assertThat(toolchain.getSupportsEmbeddedRuntimes()).isTrue();
-    assertThat(toolchain.getStaticRuntimesFilegroup()).isEqualTo("static");
-    assertThat(toolchain.getDynamicRuntimesFilegroup()).isEqualTo("dynamic");
-    assertThat(toolchain.getSupportsFission()).isTrue();
-    assertThat(toolchain.getSupportsDsym()).isTrue();
-    assertThat(toolchain.getNeedsPic()).isTrue();
-    ToolPath toolPath = Iterables.getOnlyElement(toolchain.getToolPathList());
-    assertThat(toolPath.getName()).isEqualTo("name1");
-    assertThat(toolPath.getPath()).isEqualTo("path1");
-    assertThat(toolchain.getCompilerFlagList())
-        .containsExactly("flag1", "flag2", "flag3")
-        .inOrder();
-    assertThat(toolchain.getCxxFlagList()).containsExactly("cxx1", "cxx2").inOrder();
-    assertThat(toolchain.getUnfilteredCxxFlagList()).containsExactly("ucxx1", "ucxx2").inOrder();
-    assertThat(toolchain.getLinkerFlagList()).containsExactly("l2", "l1").inOrder();
-    assertThat(toolchain.getTestOnlyLinkerFlagList()).containsExactly("t1", "t2");
-    assertThat(toolchain.getObjcopyEmbedFlagList()).containsExactly("o1", "o2").inOrder();
-    assertThat(toolchain.getLdEmbedFlagList()).containsExactly("ld1", "ld2").inOrder();
-    assertThat(toolchain.getCompilationModeFlagsCount()).isEqualTo(3);
-    for (CompilationModeFlags compilationModeFlags : toolchain.getCompilationModeFlagsList()) {
-      switch (compilationModeFlags.getMode()) {
-        case OPT:
-          assertThat(compilationModeFlags.getCompilerFlagList())
-              .containsExactly("opt1", "opt2")
-              .inOrder();
-          assertThat(compilationModeFlags.getCxxFlagList())
-              .containsExactly("optcxx1", "optcxx2")
-              .inOrder();
-          assertThat(compilationModeFlags.getLinkerFlagList())
-              .containsExactly("optl1", "optl2")
-              .inOrder();
-          break;
-        case FASTBUILD:
-          assertThat(compilationModeFlags.getCompilerFlagList())
-              .containsExactly("fbd1", "fbd2")
-              .inOrder();
-          assertThat(compilationModeFlags.getCxxFlagList())
-              .containsExactly("fbdcxx1", "fbdcxx2")
-              .inOrder();
-          assertThat(compilationModeFlags.getLinkerFlagList())
-              .containsExactly("fbdl1", "fbdl2")
-              .inOrder();
-          break;
-        case DBG:
-          assertThat(compilationModeFlags.getCompilerFlagList())
-              .containsExactly("dbg1", "dbg2")
-              .inOrder();
-          assertThat(compilationModeFlags.getCxxFlagList())
-              .containsExactly("dbgcxx1", "dbgcxx2")
-              .inOrder();
-          assertThat(compilationModeFlags.getLinkerFlagList())
-              .containsExactly("dbgl1", "dbgl2")
-              .inOrder();
-          break;
-        default:
-          // COVERAGE mode is ignored
-      }
-    }
-    assertThat(toolchain.getLinkingModeFlagsCount()).isEqualTo(4);
-    for (LinkingModeFlags linkingModeFlags : toolchain.getLinkingModeFlagsList()) {
-      switch (linkingModeFlags.getMode()) {
-        case MOSTLY_STATIC:
-          assertThat(linkingModeFlags.getLinkerFlagList()).containsExactly("ms1", "ms2").inOrder();
-          break;
-        case DYNAMIC:
-          assertThat(linkingModeFlags.getLinkerFlagList()).containsExactly("d1", "d2").inOrder();
-          break;
-        case FULLY_STATIC:
-          assertThat(linkingModeFlags.getLinkerFlagList()).containsExactly("fs1", "fs2").inOrder();
-          break;
-        case MOSTLY_STATIC_LIBRARIES:
-          assertThat(linkingModeFlags.getLinkerFlagList())
-              .containsExactly("msl1", "msl2")
-              .inOrder();
-          break;
-      }
-    }
-    MakeVariable makeVariable = Iterables.getOnlyElement(toolchain.getMakeVariableList());
-    assertThat(makeVariable.getName()).isEqualTo("variable");
-    assertThat(makeVariable.getValue()).isEqualTo("--a -b -c");
-    assertThat(toolchain.getBuiltinSysroot()).isEqualTo("sysroot");
-    assertThat(toolchain.getCcTargetOs()).isEqualTo("os");
-    assertThat(
-            toolchain.getFeatureList().stream()
-                .map(feature -> feature.getName())
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly("featureone", "sysroot")
-        .inOrder();
-
-    CToolchain.Feature feature = toolchain.getFeature(1);
-    assertThat(feature.getName()).isEqualTo("sysroot");
-    assertThat(feature.getImpliesList()).containsExactly("imply2", "imply1").inOrder();
-    assertThat(feature.getProvidesList()).containsExactly("provides2", "provides1").inOrder();
-    assertThat(feature.getRequires(0).getFeatureList()).containsExactly("r1", "r2");
-    assertThat(feature.getRequires(1).getFeatureList()).containsExactly("r3");
-    assertThat(feature.getEnvSetCount()).isEqualTo(2);
-    CToolchain.EnvSet envSet = feature.getEnvSet(0);
-    assertThat(envSet.getActionList()).containsExactly("a1", "a2");
-    assertThat(envSet.getEnvEntry(0).getKey()).isEqualTo("k1");
-    assertThat(envSet.getEnvEntry(0).getValue()).isEqualTo("v1");
-    assertThat(Iterables.getOnlyElement(envSet.getWithFeatureList()).getFeatureList())
-        .containsExactly("f1", "f2");
-    assertThat(Iterables.getOnlyElement(envSet.getWithFeatureList()).getNotFeatureList())
-        .containsExactly("nf1", "nf2");
-    CToolchain.FlagSet flagSet = Iterables.getOnlyElement(feature.getFlagSetList());
-    assertThat(flagSet.getActionList()).containsExactly("assemble", "preprocess-assemble");
-    assertThat(flagSet.getFlagGroupCount()).isEqualTo(2);
-    CToolchain.FlagGroup flagGroup = flagSet.getFlagGroup(0);
-    assertThat(flagGroup.getExpandIfAllAvailableList()).containsExactly("available");
-    assertThat(flagGroup.getExpandIfNoneAvailableList()).containsExactly("notavailable");
-    assertThat(flagGroup.getIterateOver()).isEqualTo("iterate_over");
-    assertThat(flagGroup.getExpandIfTrue()).isEqualTo("true");
-    assertThat(flagGroup.getExpandIfFalse()).isEqualTo("false");
-    CToolchain.VariableWithValue variableWithValue = flagGroup.getExpandIfEqual();
-    assertThat(variableWithValue.getVariable()).isEqualTo("variable");
-    assertThat(variableWithValue.getValue()).isEqualTo("value");
-    assertThat(flagGroup.getFlagGroup(0).getFlagList())
-        .containsExactly("foo%{libraries_to_link}bar", "-D__DATE__=\"redacted\"")
-        .inOrder();
-
-    assertThat(
-            toolchain.getActionConfigList().stream()
-                .map(actionConfig -> actionConfig.getActionName())
-                .collect(ImmutableList.toImmutableList()))
-        .containsExactly("action_one", "action_two")
-        .inOrder();
-    CToolchain.ActionConfig actionConfig = toolchain.getActionConfig(1);
-    assertThat(actionConfig.getImpliesList())
-        .containsExactly("compiler_input_flags", "compiler_output_flags")
-        .inOrder();
-    CToolchain.Tool tool = Iterables.getOnlyElement(actionConfig.getToolList());
-    assertThat(tool.getToolPath()).isEqualTo("fake/path");
-    assertThat(tool.getExecutionRequirementList()).containsExactly("a", "b", "c");
-    assertThat(tool.getWithFeature(0).getFeatureList()).containsExactly("a");
-    assertThat(tool.getWithFeature(0).getNotFeatureList()).containsExactly("b", "c");
-
-    assertThat(Iterables.getOnlyElement(toolchain.getArtifactNamePatternList()))
-        .isEqualTo(
-            CToolchain.ArtifactNamePattern.newBuilder()
-                .setCategoryName("static_library")
-                .setPrefix("prefix")
-                .setExtension(".a")
-                .build());
-  }
-
-  // Tests that default None values in non-required fields do not cause trouble while building
-  // the CToolchain
-  @Test
-  public void testCcToolchainInfoToProtoBareMinimum() throws Exception {
-    loadCcToolchainConfigLib();
-    scratch.file(
-        "foo/crosstool.bzl",
-        "def _impl(ctx):",
-        "    return cc_common.create_cc_toolchain_config_info(",
-        "                ctx = ctx,",
-        "                toolchain_identifier = 'toolchain',",
-        "                host_system_name = 'host',",
-        "                target_system_name = 'target',",
-        "                target_cpu = 'cpu',",
-        "                target_libc = 'libc',",
-        "                compiler = 'compiler',",
-        "                abi_libc_version = 'abi_libc',",
-        "                abi_version = 'abi',",
-        "        )",
-        "cc_toolchain_config_rule = rule(",
-        "    implementation = _impl,",
-        "    attrs = {},",
-        "    provides = [CcToolchainConfigInfo], ",
-        ")");
-
-    scratch.file(
-        "foo/BUILD",
-        "load(':crosstool.bzl', 'cc_toolchain_config_rule')",
-        "cc_toolchain_alias(name='alias')",
-        "cc_toolchain_config_rule(name='r')");
-
-    useConfiguration("--experimental_enable_cc_toolchain_config_info");
-    ConfiguredTarget target = getConfiguredTarget("//foo:r");
-    assertThat(target).isNotNull();
-    CcToolchainConfigInfo ccToolchainConfigInfo =
-        (CcToolchainConfigInfo) target.get(CcToolchainConfigInfo.PROVIDER.getKey());
-    assertThat(ccToolchainConfigInfo).isNotNull();
-    CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
-    TextFormat.merge(ccToolchainConfigInfo.getProto(), toolchainBuilder);
-    CToolchain toolchain = toolchainBuilder.build();
-
-    // Our generated CToolchain must not have a LinkingModeFlags entry with DYNAMIC mode, even
-    // if the list of flags for that entry is empty.
-    assertThat(
-            toolchain.getLinkingModeFlagsList().stream()
-                .noneMatch(
-                    linkingModeFlags -> linkingModeFlags.getMode().equals(LinkingMode.DYNAMIC)))
-        .isTrue();
-  }
-
-  @Test
-  public void testCcToolchainInfoToProtoDynamicLinkingModeEnabledWithEmptyList() throws Exception {
-    loadCcToolchainConfigLib();
-    scratch.file(
-        "foo/crosstool.bzl",
-        "def _impl(ctx):",
-        "    return cc_common.create_cc_toolchain_config_info(",
-        "                ctx = ctx,",
-        "                toolchain_identifier = 'toolchain',",
-        "                host_system_name = 'host',",
-        "                target_system_name = 'target',",
-        "                target_cpu = 'cpu',",
-        "                target_libc = 'libc',",
-        "                compiler = 'compiler',",
-        "                abi_libc_version = 'abi_libc',",
-        "                abi_version = 'abi',",
-        "                dynamic_linking_mode_flags = [],",
-        "        )",
-        "cc_toolchain_config_rule = rule(",
-        "    implementation = _impl,",
-        "    attrs = {},",
-        "    provides = [CcToolchainConfigInfo], ",
-        ")");
-
-    scratch.file(
-        "foo/BUILD",
-        "load(':crosstool.bzl', 'cc_toolchain_config_rule')",
-        "cc_toolchain_alias(name='alias')",
-        "cc_toolchain_config_rule(name='r')");
-
-    useConfiguration("--experimental_enable_cc_toolchain_config_info");
-    ConfiguredTarget target = getConfiguredTarget("//foo:r");
-    assertThat(target).isNotNull();
-    CcToolchainConfigInfo ccToolchainConfigInfo =
-        (CcToolchainConfigInfo) target.get(CcToolchainConfigInfo.PROVIDER.getKey());
-    assertThat(ccToolchainConfigInfo).isNotNull();
-    CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
-    TextFormat.merge(ccToolchainConfigInfo.getProto(), toolchainBuilder);
-    CToolchain toolchain = toolchainBuilder.build();
-
-    // If parameter dynamic_linking_mode_flags is passed to the create_cc_toolchain_config_info
-    // method, the corresponding CToolchain should have an entry in its linking_mode_flags list
-    // that has dynamic linking mode.
-    assertThat(
-            toolchain.getLinkingModeFlagsList().stream()
-                .filter(linkingModeFlags -> linkingModeFlags.getMode().equals(LinkingMode.DYNAMIC))
-                .count())
-        .isEqualTo(1);
   }
 }

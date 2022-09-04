@@ -663,18 +663,11 @@ public class CcModule
             .setNeverLink(neverLink);
     try {
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-      ImmutableList.Builder<LibraryToLinkWrapper> libraryToLinkWrapperBuilder =
-          ImmutableList.builder();
       if (!ccCompilationOutputs.isEmpty()) {
         ccLinkingOutputs = helper.link(ccCompilationOutputs);
-        if (!neverLink) {
-          libraryToLinkWrapperBuilder.add(
-              LibraryToLinkWrapper.convertLinkOutputsToLibraryToLinkWrapper(ccLinkingOutputs));
-        }
       }
       CcLinkingInfo ccLinkingInfo =
-          helper.buildCcLinkingInfoFromLibraryToLinkWrappers(
-              libraryToLinkWrapperBuilder.build(), CcCompilationContext.EMPTY);
+          helper.buildCcLinkingInfo(ccLinkingOutputs, CcCompilationContext.EMPTY);
       return new LinkingInfo(ccLinkingInfo, ccLinkingOutputs);
     } catch (RuleErrorException e) {
       throw new EvalException(ruleContext.getRule().getLocation(), e);
