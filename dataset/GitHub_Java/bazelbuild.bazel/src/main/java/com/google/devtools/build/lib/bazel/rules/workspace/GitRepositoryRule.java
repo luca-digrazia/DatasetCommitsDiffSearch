@@ -85,9 +85,9 @@ public class GitRepositoryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = git_repository, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
 
-<strong><p>Warning: this rule has several limitations. We recommend using
+<em><p>Warning: this rule has several limitations. We recommend using
 <a href="#http_archive"><code>http_archive</code></a> instead for more robust and secure
-performance.</p></strong>
+performance.</p>
 
 <p><code>git_repository</code> has several issues:
 
@@ -121,15 +121,15 @@ a directory when the tarball is extracted. For example the Apple Build Rules are
 <pre>
 http_archive(
     name = "build_bazel_rules_apple",
-    strip_prefix = "rules_apple-0.4.0",
-    urls = ["https://github.com/bazelbuild/rules_apple/archive/0.4.0.tar.gz"],
+    strip_prefix = "rules_apple-0.1.0",
+    urls = ["https://github.com/bazelbuild/rules_apple/archive/0.1.0.tar.gz"],
 )
 </pre>
 
 If you are using a private repository, prefer the
 <a href="https://github.com/bazelbuild/bazel/blob/master/tools/build_defs/repo/git.bzl">Skylark git
 repository rules</a>, which will use your system's git install (instead of jGit). These rules
-are built into Bazel and have the same API as the native rules.</p>
+are built into Bazel and have the same API as the native rules.</p></em>
 
 <p>Clones a Git repository, checks out the specified tag, or commit, and makes its targets
 available for binding.</p>
