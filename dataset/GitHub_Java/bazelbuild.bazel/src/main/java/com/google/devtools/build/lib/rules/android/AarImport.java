@@ -60,15 +60,11 @@ public class AarImport implements RuleConfiguredTargetFactory {
   private static final String MERGED_JAR = "classes_and_libs_merged.jar";
 
   private final JavaSemantics javaSemantics;
-  private final AndroidSemantics androidSemantics;
   private final AndroidMigrationSemantics androidMigrationSemantics;
 
   protected AarImport(
-      JavaSemantics javaSemantics,
-      AndroidSemantics androidSemantics,
-      AndroidMigrationSemantics androidMigrationSemantics) {
+      JavaSemantics javaSemantics, AndroidMigrationSemantics androidMigrationSemantics) {
     this.javaSemantics = javaSemantics;
-    this.androidSemantics = androidSemantics;
     this.androidMigrationSemantics = androidMigrationSemantics;
   }
 
@@ -97,19 +93,16 @@ public class AarImport implements RuleConfiguredTargetFactory {
     ruleContext.registerAction(
         createAarResourcesExtractorActions(ruleContext, aar, resources, assets));
 
-    final AndroidDataContext dataContext = androidSemantics.makeContextForNative(ruleContext);
     final ResourceApk resourceApk;
-    if (AndroidResources.decoupleDataProcessing(dataContext)) {
+    if (AndroidResources.decoupleDataProcessing(ruleContext)) {
       StampedAndroidManifest manifest =
           AndroidManifest.forAarImport(androidManifestArtifact);
 
       boolean neverlink = JavaCommon.isNeverLink(ruleContext);
       ValidatedAndroidResources validatedResources =
-          AndroidResources.forAarImport(resources)
-              .process(ruleContext, dataContext, manifest, neverlink);
+          AndroidResources.forAarImport(resources).process(ruleContext, manifest, neverlink);
       MergedAndroidAssets mergedAssets =
-          AndroidAssets.forAarImport(assets)
-              .process(dataContext, AssetDependencies.fromRuleDeps(ruleContext, neverlink));
+          AndroidAssets.forAarImport(assets).process(ruleContext, neverlink);
 
       resourceApk = ResourceApk.of(validatedResources, mergedAssets, null, null);
     } else {
