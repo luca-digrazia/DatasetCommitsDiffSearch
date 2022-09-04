@@ -53,7 +53,7 @@ public interface AndroidPreDexJarProviderApi<FileT extends FileApi> extends Stru
               type = FileApi.class),
         },
         selfCall = true)
-    @SkylarkConstructor(objectType = AndroidPreDexJarProviderApi.class, receiverNameForDoc = NAME)
+    @SkylarkConstructor(objectType = AndroidPreDexJarProviderApi.class)
     public AndroidPreDexJarProviderApi<FileT> createInfo(FileT preDexJar) throws EvalException;
   }
 }
