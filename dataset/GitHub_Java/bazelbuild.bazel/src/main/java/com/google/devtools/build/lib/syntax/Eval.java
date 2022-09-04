@@ -94,10 +94,13 @@ public class Eval {
       }
     }
 
-    // TODO(laurentlb): Could be moved to the Parser or the ValidationEnvironment?
     FunctionSignature sig = node.getSignature().getSignature();
-    if (sig.getShape().getMandatoryNamedOnly() > 0) {
-      throw new EvalException(node.getLocation(), "Keyword-only argument is forbidden.");
+    if (env.getSemantics().incompatibleDisallowKeywordOnlyArgs()
+        && sig.getShape().getMandatoryNamedOnly() > 0) {
+      throw new EvalException(
+          node.getLocation(),
+          "Keyword-only argument is forbidden. You can temporarily disable this "
+              + "error using the flag --incompatible_disallow_keyword_only_args=false");
     }
 
     env.update(
@@ -111,10 +114,7 @@ public class Eval {
   }
 
   void execIf(IfStatement node) throws EvalException, InterruptedException {
-    ImmutableList<IfStatement.ConditionalStatements> thenBlocks = node.getThenBlocks();
-    // Avoid iterator overhead - most of the time there will be one or few "if"s.
-    for (int i = 0; i < thenBlocks.size(); i++) {
-      IfStatement.ConditionalStatements stmt = thenBlocks.get(i);
+    for (IfStatement.ConditionalStatements stmt : node.getThenBlocks()) {
       if (EvalUtils.toBoolean(stmt.getCondition().eval(env))) {
         exec(stmt);
         return;

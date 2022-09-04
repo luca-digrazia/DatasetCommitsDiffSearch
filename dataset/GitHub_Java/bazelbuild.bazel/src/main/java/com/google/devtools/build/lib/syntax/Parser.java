@@ -1167,10 +1167,10 @@ public class Parser {
       Operator operator = augmentedAssignmentMethods.get(token.kind);
       nextToken();
       Expression operand = parseExpression();
+      int end = operand.getLocation().getEndOffset();
       return setLocation(
           new AugmentedAssignmentStatement(operator, new LValue(expression), operand),
-          start,
-          operand);
+          start, end);
     } else {
       return setLocation(new ExpressionStatement(expression), start, expression);
     }
@@ -1192,13 +1192,8 @@ public class Parser {
     } else {
       elseBlock = ImmutableList.of();
     }
-    List<Statement> lastBlock =
-        elseBlock.isEmpty() ? Iterables.getLast(thenBlocks).getStatements() : elseBlock;
-    int end =
-        lastBlock.isEmpty()
-            ? token.left
-            : Iterables.getLast(lastBlock).getLocation().getEndOffset();
-    return setLocation(new IfStatement(thenBlocks, elseBlock), start, end);
+    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
+    return setLocation(new IfStatement(thenBlocks, elseBlock), start, token.right);
   }
 
   // cond_stmts ::= [EL]IF expr ':' suite
@@ -1209,11 +1204,8 @@ public class Parser {
     expect(TokenKind.COLON);
     List<Statement> thenBlock = parseSuite();
     ConditionalStatements stmt = new ConditionalStatements(expr, thenBlock);
-    int end =
-        thenBlock.isEmpty()
-            ? token.left
-            : Iterables.getLast(thenBlock).getLocation().getEndOffset();
-    return setLocation(stmt, start, end);
+    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
+    return setLocation(stmt, start, token.right);
   }
 
   // for_stmt ::= FOR IDENTIFIER IN expr ':' suite
@@ -1226,8 +1218,8 @@ public class Parser {
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
     Statement stmt = new ForStatement(new LValue(loopVar), collection, block);
-    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getLocation().getEndOffset();
-    list.add(setLocation(stmt, start, end));
+    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
+    list.add(setLocation(stmt, start, token.right));
   }
 
   // def_stmt ::= DEF IDENTIFIER '(' arguments ')' ':' suite
@@ -1243,8 +1235,8 @@ public class Parser {
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
     FunctionDefStatement stmt = new FunctionDefStatement(ident, params, signature, block);
-    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getLocation().getEndOffset();
-    list.add(setLocation(stmt, start, end));
+    // TODO(skylark-team): the end offset should be the *previous* token, not the current one.
+    list.add(setLocation(stmt, start, token.right));
   }
 
   private FunctionSignature.WithValues<Expression, Expression> functionSignature(
