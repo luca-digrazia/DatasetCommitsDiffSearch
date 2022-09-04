@@ -266,8 +266,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
           ConcurrentMap<ActionAnalysisMetadata, ConflictException> badActionMap)
           throws InterruptedException {
     MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
-    ConcurrentNavigableMap<PathFragment, Artifact> artifactPathMap =
-        new ConcurrentSkipListMap<>(Actions.comparatorForPrefixConflicts());
+    ConcurrentNavigableMap<PathFragment, Artifact> artifactPathMap = new ConcurrentSkipListMap<>();
     // Action graph construction is CPU-bound.
     int numJobs = Runtime.getRuntime().availableProcessors();
     // No great reason for expecting 5000 action lookup values, but not worth counting size of
@@ -496,7 +495,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       long actionStartTime,
       Iterable<Artifact> resolvedCacheArtifacts,
       Map<String, String> clientEnv) {
-    startProfileAction(ProfilerTask.ACTION_CHECK, action);
+    profiler.startTask(ProfilerTask.ACTION_CHECK, action);
     Token token =
         actionCacheChecker.getTokenIfNeedToExecute(
             action, resolvedCacheArtifacts, clientEnv, explain ? reporter : null, metadataHandler);
@@ -641,10 +640,6 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     this.actionInputPrefetcher = actionInputPrefetcher;
   }
 
-  private void startProfileAction(ProfilerTask task, Action action) {
-    profiler.startTask(task, action.describe());
-  }
-
   private class ActionRunner implements Callable<ActionExecutionValue> {
     private final ExtendedEventHandler eventHandler;
     private final Action action;
@@ -670,7 +665,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
 
     @Override
     public ActionExecutionValue call() throws ActionExecutionException, InterruptedException {
-      startProfileAction(ProfilerTask.ACTION, action);
+      profiler.startTask(ProfilerTask.ACTION, action);
       try {
         if (actionCacheChecker.isActionExecutionProhibited(action)) {
           // We can't execute an action (e.g. because --check_???_up_to_date option was used). Fail
@@ -887,7 +882,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       Action action,
       ActionExecutionContext actionExecutionContext)
           throws ActionExecutionException, InterruptedException {
-    startProfileAction(ProfilerTask.ACTION_EXECUTE, action);
+    profiler.startTask(ProfilerTask.ACTION_EXECUTE, action);
     // ActionExecutionExceptions that occur as the thread is interrupted are
     // assumed to be a result of that, so we throw InterruptedException
     // instead.
@@ -926,7 +921,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       Preconditions.checkState(action.inputsDiscovered(),
           "Action %s successfully executed, but inputs still not known", action);
 
-      startProfileAction(ProfilerTask.ACTION_COMPLETE, action);
+      profiler.startTask(ProfilerTask.ACTION_COMPLETE, action);
       try {
         if (!checkOutputs(action, metadataHandler)) {
           reportError("not all outputs were created or valid", null, action,

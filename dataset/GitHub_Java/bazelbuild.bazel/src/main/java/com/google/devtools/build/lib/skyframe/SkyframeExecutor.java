@@ -92,7 +92,6 @@ import com.google.devtools.build.lib.packages.AstParseResult;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -131,7 +130,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.UnixGlob;
 import com.google.devtools.build.skyframe.BuildDriver;
@@ -717,7 +715,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * need to track all loaded packages.
    */
   @Nullable
-  protected Root getForcedSingleSourceRootIfNoExecrootSymlinkCreation() {
+  protected Path getForcedSingleSourceRootIfNoExecrootSymlinkCreation() {
     return null;
   }
 
@@ -912,7 +910,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   @VisibleForTesting
-  ImmutableList<Root> getPathEntries() {
+  ImmutableList<Path> getPathEntries() {
     return pkgLocator.get().getPathEntries();
   }
 
@@ -925,11 +923,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         || (oldType.equals(Dirent.Type.SYMLINK) && newType.equals(FileStateType.SYMLINK));
   }
 
-  protected Differencer.Diff getDiff(
-      TimestampGranularityMonitor tsgm,
-      Iterable<PathFragment> modifiedSourceFiles,
-      final Root pathEntry)
-      throws InterruptedException {
+  protected Differencer.Diff getDiff(TimestampGranularityMonitor tsgm,
+      Iterable<PathFragment> modifiedSourceFiles, final Path pathEntry)
+          throws InterruptedException {
     if (Iterables.isEmpty(modifiedSourceFiles)) {
       return new ImmutableDiff(ImmutableList.<SkyKey>of(), ImmutableMap.<SkyKey, SkyValue>of());
     }
@@ -1268,7 +1264,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Returns the {@link ConfiguredTargetAndTarget}s corresponding to the given keys.
+   * Returns the {@link ConfiguredTarget}s corresponding to the given keys.
    *
    * <p>For use for legacy support and tests calling through {@code BuildView} only.
    *
@@ -1277,7 +1273,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   @ThreadSafety.ThreadSafe
   // TODO(bazel-team): rename this and below methods to something that discourages general use
-  public ImmutableList<ConfiguredTargetAndTarget> getConfiguredTargets(
+  public ImmutableList<ConfiguredTarget> getConfiguredTargets(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
       Iterable<Dependency> keys) {
@@ -1286,8 +1282,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /**
-   * Returns a map from {@link Dependency} inputs to the {@link ConfiguredTargetAndTarget}s
-   * corresponding to those dependencies.
+   * Returns a map from {@link Dependency} inputs to the {@link ConfiguredTarget}s corresponding to
+   * those dependencies.
    *
    * <p>For use for legacy support and tests calling through {@code BuildView} only.
    *
@@ -1295,7 +1291,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * returned list.
    */
   @ThreadSafety.ThreadSafe
-  public ImmutableMultimap<Dependency, ConfiguredTargetAndTarget> getConfiguredTargetMap(
+  public ImmutableMultimap<Dependency, ConfiguredTarget> getConfiguredTargetMap(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
       Iterable<Dependency> keys) {
@@ -1325,7 +1321,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               AspectValue.createAspectKey(key.getLabel(), depConfig, aspectDescriptor, depConfig));
         }
       }
-      skyKeys.add(PackageValue.key(key.getLabel().getPackageIdentifier()));
     }
 
     EvaluationResult<SkyValue> result = evaluateSkyKeys(eventHandler, skyKeys);
@@ -1333,75 +1328,45 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       reportCycles(eventHandler, entry.getValue().getCycleInfo(), entry.getKey());
     }
 
-    ImmutableMultimap.Builder<Dependency, ConfiguredTargetAndTarget> cts =
-        ImmutableMultimap.builder();
+    ImmutableMultimap.Builder<Dependency, ConfiguredTarget> cts =
+        ImmutableMultimap.<Dependency, ConfiguredTarget>builder();
 
-    // Logic copied from ConfiguredTargetFunction#computeDependencies.
-    Set<SkyKey> aliasPackagesToFetch = new HashSet<>();
-    List<Dependency> aliasKeysToRedo = new ArrayList<>();
-    EvaluationResult<SkyValue> aliasPackageValues = null;
-    Iterable<Dependency> keysToProcess = keys;
-    for (int i = 0; i < 2; i++) {
-      DependentNodeLoop:
-      for (Dependency key : keysToProcess) {
-        if (!configs.containsKey(key)) {
-          // If we couldn't compute a configuration for this target, the target was in error (e.g.
-          // it couldn't be loaded). Exclude it from the results.
+  DependentNodeLoop:
+    for (Dependency key : keys) {
+      if (!configs.containsKey(key)) {
+        // If we couldn't compute a configuration for this target, the target was in error (e.g.
+        // it couldn't be loaded). Exclude it from the results.
+        continue;
+      }
+      for (BuildConfiguration depConfig : configs.get(key)) {
+        SkyKey configuredTargetKey = ConfiguredTargetValue.key(
+            key.getLabel(), depConfig);
+        if (result.get(configuredTargetKey) == null) {
           continue;
         }
-        for (BuildConfiguration depConfig : configs.get(key)) {
-          SkyKey configuredTargetKey = ConfiguredTargetValue.key(key.getLabel(), depConfig);
-          if (result.get(configuredTargetKey) == null) {
-            continue;
+
+        ConfiguredTarget configuredTarget =
+            ((ConfiguredTargetValue) result.get(configuredTargetKey)).getConfiguredTarget();
+        List<ConfiguredAspect> configuredAspects = new ArrayList<>();
+
+        for (AspectDescriptor aspectDescriptor : key.getAspects().getAllAspects()) {
+          SkyKey aspectKey =
+              AspectValue.createAspectKey(key.getLabel(), depConfig, aspectDescriptor, depConfig);
+          if (result.get(aspectKey) == null) {
+            continue DependentNodeLoop;
           }
 
-          ConfiguredTarget configuredTarget =
-              ((ConfiguredTargetValue) result.get(configuredTargetKey)).getConfiguredTarget();
-          Label label = configuredTarget.getLabel();
-          SkyKey packageKey = PackageValue.key(label.getPackageIdentifier());
-          PackageValue packageValue;
-          if (i == 0) {
-            packageValue = (PackageValue) result.get(packageKey);
-            if (packageValue == null) {
-              aliasPackagesToFetch.add(packageKey);
-              aliasKeysToRedo.add(key);
-              continue;
-            }
-          } else {
-            packageValue =
-                (PackageValue)
-                    Preconditions.checkNotNull(aliasPackageValues.get(packageKey), packageKey);
-          }
-          List<ConfiguredAspect> configuredAspects = new ArrayList<>();
+          configuredAspects.add(((AspectValue) result.get(aspectKey)).getConfiguredAspect());
+        }
 
-          for (AspectDescriptor aspectDescriptor : key.getAspects().getAllAspects()) {
-            SkyKey aspectKey =
-                AspectValue.createAspectKey(key.getLabel(), depConfig, aspectDescriptor, depConfig);
-            if (result.get(aspectKey) == null) {
-              continue DependentNodeLoop;
-            }
-
-            configuredAspects.add(((AspectValue) result.get(aspectKey)).getConfiguredAspect());
-          }
-
-          try {
-            cts.put(
-                key,
-                new ConfiguredTargetAndTarget(
-                    MergedConfiguredTarget.of(configuredTarget, configuredAspects),
-                    packageValue.getPackage().getTarget(configuredTarget.getLabel().getName())));
-
-          } catch (DuplicateException | NoSuchTargetException e) {
-            throw new IllegalStateException(
-                String.format("Error creating %s", configuredTarget.getLabel()), e);
-          }
+        try {
+          cts.put(key, MergedConfiguredTarget.of(configuredTarget, configuredAspects));
+        } catch (DuplicateException e) {
+          throw new IllegalStateException(
+              String.format("Error creating %s", configuredTarget.getTarget().getLabel()),
+              e);
         }
       }
-      if (aliasKeysToRedo.isEmpty()) {
-        break;
-      }
-      aliasPackageValues = evaluateSkyKeys(eventHandler, aliasPackagesToFetch);
-      keysToProcess = aliasKeysToRedo;
     }
 
     return cts.build();
@@ -1643,20 +1608,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Label label,
       BuildConfiguration configuration,
       Transition transition) {
-    ConfiguredTargetAndTarget configuredTargetAndTarget =
-        Iterables.getFirst(
-            getConfiguredTargets(
-                eventHandler,
-                configuration,
-                ImmutableList.of(
-                    configuration == null
-                        ? Dependency.withNullConfiguration(label)
-                        : Dependency.withTransitionAndAspects(
-                            label, transition, AspectCollection.EMPTY))),
-            null);
-    return configuredTargetAndTarget == null
-        ? null
-        : configuredTargetAndTarget.getConfiguredTarget();
+    return Iterables.getFirst(
+        getConfiguredTargets(
+            eventHandler,
+            configuration,
+            ImmutableList.of(configuration == null
+                ? Dependency.withNullConfiguration(label)
+                : Dependency.withTransitionAndAspects(label, transition, AspectCollection.EMPTY))),
+        null);
   }
 
   /**
@@ -1667,7 +1626,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   @VisibleForTesting
   public abstract void invalidateFilesUnderPathForTesting(
-      ExtendedEventHandler eventHandler, ModifiedFileSet modifiedFileSet, Root pathEntry)
+      ExtendedEventHandler eventHandler, ModifiedFileSet modifiedFileSet, Path pathEntry)
       throws InterruptedException;
 
   /**
