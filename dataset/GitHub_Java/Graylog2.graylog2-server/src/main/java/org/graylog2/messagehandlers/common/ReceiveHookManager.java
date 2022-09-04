@@ -20,14 +20,12 @@
 
 package org.graylog2.messagehandlers.common;
 
-import org.graylog2.messagehandlers.gelf.GELFMessage;
-
 /**
  * ReceiveHookManager.java: Aug 19, 2010 5:57:52 PM
  *
  * Allows to call ReceiveHooks. Called on message events.
  *
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public final class ReceiveHookManager {
 	
@@ -36,10 +34,10 @@ public final class ReceiveHookManager {
     /**
      * @param hook The hook to call.
      */
-    public static void postProcess(MessagePostReceiveHookIF hook, GELFMessage message) {
+    public static void postProcess(MessagePostReceiveHookIF hook, Object message) {
         hook.process(message);
     }
-    public static void preProcess(MessagePreReceiveHookIF hook, GELFMessage message ){
-    	hook.process(message);
+    public static boolean preProcess(MessagePreReceiveHookIF hook, Object message ){
+    	return hook.process(message);
     }
 }

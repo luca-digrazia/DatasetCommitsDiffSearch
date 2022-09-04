@@ -27,7 +27,9 @@ import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.messagehandlers.common.HostUpsertHook;
 import org.graylog2.messagehandlers.common.MessageCounterHook;
+import org.graylog2.messagehandlers.common.MessageFilterHook;
 import org.graylog2.messagehandlers.common.ReceiveHookManager;
+import org.productivity.java.syslog4j.Syslog;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
 import org.productivity.java.syslog4j.server.SyslogServerSessionlessEventHandlerIF;
@@ -51,13 +53,7 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
 
         // Print out debug information.
         if (Main.debugMode) {
-            if (event instanceof GraylogSyslogServerEvent) {
-                GraylogSyslogServerEvent glEvent = (GraylogSyslogServerEvent) event;
-                Log.info("Received syslog message (via AMQP): " + event.getMessage());
-                Log.info("AMQP queue: " + glEvent.getAmqpReceiverQueue());
-            } else {
-                Log.info("Received syslog message: " + event.getMessage());
-            }
+            Log.info("Received message: " + event.getMessage());
             Log.info("Host: " + event.getHost());
             Log.info("Facility: " + event.getFacility() + " (" + Tools.syslogFacilityToReadable(event.getFacility()) + ")");
             Log.info("Level: " + event.getLevel() + " (" + Tools.syslogLevelToReadable(event.getLevel()) + ")");
@@ -70,13 +66,20 @@ public class SyslogEventHandler implements SyslogServerSessionlessEventHandlerIF
             // Connect to database.
             MongoBridge m = new MongoBridge();
 
-            m.insert(event);
+            // Process the message before inserting into the database
+            boolean filterOut = ReceiveHookManager.preProcess(new MessageFilterHook(), event);
+            if( filterOut ) {
+            	Syslog.getInstance("udp").debug("Not inserting event into database.");
+            } else {
+            	m.insert(event);
+                // This is doing the upcounting for statistics.
+                ReceiveHookManager.postProcess(new MessageCounterHook(), event);
 
-            // This is doing the upcounting for statistics.
-            ReceiveHookManager.postProcess(new MessageCounterHook(), event);
+                // Counts up host in hosts collection.
+                ReceiveHookManager.postProcess(new HostUpsertHook(), event);
+            }
 
-            // Counts up host in hosts collection.
-            ReceiveHookManager.postProcess(new HostUpsertHook(), event);
+
         } catch (Exception e) {
             Log.crit("Could not insert syslog event into database: " + e.toString());
         }

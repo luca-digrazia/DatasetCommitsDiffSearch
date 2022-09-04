@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
 import org.graylog2.Main;
 import org.graylog2.messagehandlers.gelf.GELFMessage;
 import org.productivity.java.syslog4j.Syslog;
+import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 
 /**
  * GELFMessageFilterHook.java: Feb 9, 2011 
@@ -47,8 +48,6 @@ public class GELFMessageFilterHook implements MessagePreReceiveHookIF {
     	String regex = null;
     	Pattern pattern = null;
     	Matcher matcher = null;
-    	
-    	System.out.println(msg);
 		 
     	int regex_count = Integer.parseInt(Main.regexConfig.getProperty("filter.out.gelf.count"));
     	
@@ -58,8 +57,7 @@ public class GELFMessageFilterHook implements MessagePreReceiveHookIF {
     		matcher = pattern.matcher(msg);
 
     	   	if(matcher.matches()){
-    	   		if(Main.debugMode)
-    	   			Syslog.getInstance("udp").debug("Message Filtered :" + msg);
+    	   		Syslog.getInstance("udp").debug("Message Filtered :" + msg);
     			return true;
     	   	}
     	}

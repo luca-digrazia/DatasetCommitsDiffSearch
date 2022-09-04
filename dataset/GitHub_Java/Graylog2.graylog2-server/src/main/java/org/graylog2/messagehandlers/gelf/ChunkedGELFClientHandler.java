@@ -25,7 +25,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
 import java.util.zip.DataFormatException;
 import org.graylog2.Log;
-import org.graylog2.Main;
 import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
 import org.graylog2.messagehandlers.common.GELFMessageFilterHook;
@@ -144,11 +143,10 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
             // Log if we are in debug mode.
             Log.info("Got GELF message: " + message.toString());
 
-            // PreProcess message based on filters. Insert message into MongoDB.
+            // Insert message into MongoDB.
             boolean filterOut = ReceiveHookManager.preProcess(new GELFMessageFilterHook(), message);
             if( filterOut ) {
-            	if(Main.debugMode)
-            		Syslog.getInstance("udp").debug("Not inserting event into database.");
+            	Syslog.getInstance("udp").debug("Not inserting event into database.");
             } else {
                 m.insertGelfMessage(message);
                 // This is doing the upcounting for statistics.

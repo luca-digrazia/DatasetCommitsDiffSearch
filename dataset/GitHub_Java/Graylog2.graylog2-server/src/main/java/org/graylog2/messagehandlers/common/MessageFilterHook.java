@@ -20,6 +20,13 @@
 
 package org.graylog2.messagehandlers.common;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.graylog2.Main;
+import org.productivity.java.syslog4j.Syslog;
+import org.productivity.java.syslog4j.server.SyslogServerEventIF;
+
 /**
  * MessageFilterHook.java: Feb 7, 2011 5:56:21 PM
  *
@@ -27,14 +34,32 @@ package org.graylog2.messagehandlers.common;
  *
  * @author: Joshua Spaulding <joshua.spaulding@gmail.com>
  */
-public class MessageFilterHook implements MessagePostReceiveHookIF {
+public class MessageFilterHook implements MessagePreReceiveHookIF {
 
     /**
      * Process the hook.
      */
-    public void process(Object message) {
-	// 1. Get regex filters
-	// 2. Match message against regular expression
-	// 3. Log filter matched or dropped
+    public boolean process(Object message) {
+		/**
+		 * Convert message Object to string for regex match
+		 */
+    	String msg = new String(((SyslogServerEventIF) message).getRaw());
+    	String regex = null;
+    	Pattern pattern = null;
+    	Matcher matcher = null;
+		 
+    	int regex_count = Integer.parseInt(Main.regexConfig.getProperty("filter.out.syslog.count"));
+    	
+    	for( int i = 0; i < regex_count; i++) {
+    		regex = Main.regexConfig.getProperty("filter.out.syslog.regex." + i);
+    		pattern = Pattern.compile(regex);
+    		matcher = pattern.matcher(msg);
+
+    	   	if(matcher.matches()){
+    	   		Syslog.getInstance("udp").debug("Message Filtered :" + msg);
+    	   		return true;
+    	   	}
+    	}
+    	return false;
     }
 }
