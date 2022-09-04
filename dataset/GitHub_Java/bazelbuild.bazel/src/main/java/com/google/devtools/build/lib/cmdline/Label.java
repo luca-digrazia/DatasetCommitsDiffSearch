@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.analysis.actions.CommandLineItem;
 import com.google.devtools.build.lib.cmdline.LabelValidator.BadLabelException;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -28,6 +27,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -53,8 +53,7 @@ import javax.annotation.Nullable;
 )
 @Immutable
 @ThreadSafe
-public final class Label
-    implements Comparable<Label>, Serializable, SkylarkValue, SkyKey, CommandLineItem {
+public final class Label implements Comparable<Label>, Serializable, SkylarkValue, SkyKey {
   public static final PathFragment EXTERNAL_PACKAGE_NAME = PathFragment.create("external");
   public static final PathFragment WORKSPACE_FILE_NAME = PathFragment.create("WORKSPACE");
   public static final String DEFAULT_REPOSITORY_DIRECTORY = "__main__";
@@ -188,7 +187,7 @@ public final class Label
    * arbitrary {@code targetName} inputs
    */
   public static Label createUnvalidated(PackageIdentifier packageId, String targetName) {
-    return LABEL_INTERNER.intern(new Label(packageId, targetName));
+    return LABEL_INTERNER.intern(new Label(packageId, StringCanonicalizer.intern(targetName)));
   }
 
   /**
@@ -344,17 +343,8 @@ public final class Label
     return packageIdentifier.getPackageFragment();
   }
 
-  /**
-   * Returns the label as a path fragment, using the package and the label name.
-   *
-   * <p>Make sure that the label refers to a file. Non-file labels do not necessarily have
-   * PathFragment representations.
-   */
+  /** Returns the label as a path fragment, using the package and the label name. */
   public PathFragment toPathFragment() {
-    // PathFragments are normalized, so if we do this on a non-file target named '.'
-    // then the package would be returned. Detect this and throw.
-    // A target named '.' can never refer to a file.
-    Preconditions.checkArgument(!name.equals("."));
     return packageIdentifier.getPackageFragment().getRelative(name);
   }
 
@@ -581,11 +571,6 @@ public final class Label
   @Override
   public void str(SkylarkPrinter printer) {
     printer.append(getCanonicalForm());
-  }
-
-  @Override
-  public String expandToCommandLine() {
-    return getCanonicalForm();
   }
 
   /**
