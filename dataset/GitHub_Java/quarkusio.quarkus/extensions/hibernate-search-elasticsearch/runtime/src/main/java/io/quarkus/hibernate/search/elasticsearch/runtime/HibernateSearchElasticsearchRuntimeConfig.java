@@ -17,20 +17,19 @@ import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 
-@ConfigRoot(name = "hibernate-search", phase = ConfigPhase.RUN_TIME)
+@ConfigRoot(name = "hibernate-search.elasticsearch", phase = ConfigPhase.RUN_TIME)
 public class HibernateSearchElasticsearchRuntimeConfig {
 
     /**
-     * Default backend
+     * Configuration of the default backend.
      */
-    @ConfigItem(name = "elasticsearch")
-    @ConfigDocSection
+    @ConfigItem(name = ConfigItem.PARENT)
     ElasticsearchBackendRuntimeConfig defaultBackend;
 
     /**
      * Additional backends
      */
-    @ConfigItem(name = "elasticsearch.backends")
+    @ConfigItem(name = "backends")
     @ConfigDocSection
     @ConfigDocMapKey("backend-name")
     Map<String, ElasticsearchBackendRuntimeConfig> additionalBackends;
