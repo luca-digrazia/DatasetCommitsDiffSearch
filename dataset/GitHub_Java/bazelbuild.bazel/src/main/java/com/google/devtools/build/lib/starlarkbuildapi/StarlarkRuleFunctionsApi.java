@@ -334,6 +334,8 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
             named = true,
             defaultValue = "None",
             positional = false,
+            enableOnlyWithFlag = BuildLanguageOptions.EXPERIMENTAL_EXEC_GROUPS,
+            valueWhenDisabled = "None",
             doc =
                 "Dict of execution group name (string) to <a"
                     + " href='globals.html#exec_group'><code>exec_group</code>s</a>. If set,"
@@ -464,14 +466,6 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "<code>BazInfo</code> *and* <code>QuxInfo</code>."),
         @Param(name = "provides", named = true, defaultValue = "[]", doc = PROVIDES_DOC),
         @Param(
-            name = "requires",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkAspectApi.class)},
-            named = true,
-            enableOnlyWithFlag = BuildLanguageOptions.EXPERIMENTAL_REQUIRED_ASPECTS,
-            defaultValue = "[]",
-            valueWhenDisabled = "[]",
-            doc = "(Experimental) List of aspects required to be propagated before this aspect."),
-        @Param(
             name = "fragments",
             allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
             named = true,
@@ -535,7 +529,6 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
       Sequence<?> requiredProvidersArg,
       Sequence<?> requiredAspectProvidersArg,
       Sequence<?> providesArg,
-      Sequence<?> requiredAspects,
       Sequence<?> fragments,
       Sequence<?> hostFragments,
       Sequence<?> toolchains,

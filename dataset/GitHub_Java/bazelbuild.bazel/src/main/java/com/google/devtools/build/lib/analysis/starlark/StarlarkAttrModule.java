@@ -167,7 +167,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
       if (!containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
         throw Starlark.errorf(
             "cfg parameter is mandatory when executable=True is provided. Please see "
-                + "https://www.bazel.build/versions/main/docs/skylark/rules.html#configurations "
+                + "https://www.bazel.build/versions/master/docs/skylark/rules.html#configurations "
                 + "for more details.");
       }
     }
@@ -233,10 +233,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
       } else if (trans instanceof SplitTransition) {
         builder.cfg(TransitionFactories.of((SplitTransition) trans));
       } else if (trans instanceof TransitionFactory) {
-        @SuppressWarnings("unchecked")
-        TransitionFactory<AttributeTransitionData> transitionFactory =
-            (TransitionFactory<AttributeTransitionData>) trans;
-        builder.cfg(transitionFactory);
+        builder.cfg((TransitionFactory<AttributeTransitionData>) trans); // unchecked cast
       } else if (trans instanceof StarlarkDefinedConfigTransition) {
         StarlarkDefinedConfigTransition starlarkDefinedTransition =
             (StarlarkDefinedConfigTransition) trans;
@@ -259,14 +256,7 @@ public final class StarlarkAttrModule implements StarlarkAttrModuleApi {
     if (containsNonNoneKey(arguments, ASPECTS_ARG)) {
       Object obj = arguments.get(ASPECTS_ARG);
       for (StarlarkAspect aspect : Sequence.cast(obj, StarlarkAspect.class, "aspects")) {
-        aspect.attachToAspectsList(
-            /** baseAspectName= */
-            null,
-            builder.getAspectsListBuilder(),
-            /** inheritedRequiredProviders= */
-            ImmutableList.of(),
-            /** inheritedAttributeAspects= */
-            ImmutableList.of());
+        aspect.attachToAttribute(builder);
       }
     }
 
