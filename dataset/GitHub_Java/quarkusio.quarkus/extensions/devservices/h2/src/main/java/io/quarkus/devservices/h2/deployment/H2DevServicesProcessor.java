@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import org.h2.tools.Server;
 
@@ -15,6 +16,7 @@ import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.datasource.deployment.spi.DevServicesDatasourceProvider;
 import io.quarkus.datasource.deployment.spi.DevServicesDatasourceProviderBuildItem;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.runtime.LaunchMode;
 
 public class H2DevServicesProcessor {
 
@@ -23,9 +25,11 @@ public class H2DevServicesProcessor {
         return new DevServicesDatasourceProviderBuildItem(DatabaseKind.H2, new DevServicesDatasourceProvider() {
             @Override
             public RunningDevServicesDatasource startDatabase(Optional<String> username, Optional<String> password,
-                    Optional<String> datasourceName, Optional<String> imageName, Map<String, String> additionalProperties) {
+                    Optional<String> datasourceName, Optional<String> imageName, Map<String, String> additionalProperties,
+                    OptionalInt port, LaunchMode launchMode) {
                 try {
-                    final Server tcpServer = Server.createTcpServer("-tcpPort", "0");
+                    final Server tcpServer = Server.createTcpServer("-tcpPort",
+                            port.isPresent() ? String.valueOf(port.getAsInt()) : "0");
                     tcpServer.start();
 
                     StringBuilder additionalArgs = new StringBuilder();
@@ -47,22 +51,38 @@ public class H2DevServicesProcessor {
                             new Closeable() {
                                 @Override
                                 public void close() throws IOException {
-                                    //make sure the DB is removed on close
-                                    try (Connection connection = DriverManager.getConnection(connectionUrl, "sa", "sa")) {
-                                        try (Statement statement = connection.createStatement()) {
-                                            statement.execute("SET DB_CLOSE_DELAY 0");
+                                    //Test first, to not make too much noise if the Server is dead already
+                                    //(perhaps we failed to start?)
+                                    if (tcpServer.isRunning(false)) {
+                                        //make sure the DB is removed on close
+                                        try (Connection connection = DriverManager.getConnection(
+                                                connectionUrl,
+                                                "sa",
+                                                "sa")) {
+                                            try (Statement statement = connection.createStatement()) {
+                                                statement.execute("SET DB_CLOSE_DELAY 0");
+                                            }
+                                        } catch (SQLException t) {
+                                            t.printStackTrace();
                                         }
-                                    } catch (SQLException t) {
-                                        t.printStackTrace();
+                                        tcpServer.stop();
+                                        System.out.println(
+                                                "[INFO] H2 database was shut down; server status: " + tcpServer.getStatus());
+                                    } else {
+                                        System.out.println(
+                                                "[INFO] H2 database was NOT shut down as it appears it was down already; server status: "
+                                                        + tcpServer.getStatus());
                                     }
-                                    tcpServer.stop();
-                                    System.out.println(
-                                            "[INFO] H2 database was shut down; server status: " + tcpServer.getStatus());
                                 }
                             });
                 } catch (SQLException throwables) {
                     throw new RuntimeException(throwables);
                 }
+            }
+
+            @Override
+            public boolean isDockerRequired() {
+                return false;
             }
         });
     }
