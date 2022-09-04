@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -709,11 +708,12 @@ public final class JavaCompilationHelper {
   }
 
   private void addLibrariesToAttributesInternal(Iterable<? extends TransitiveInfoCollection> deps) {
-    JavaCompilationArgs args =
-        JavaCompilationArgsProvider.legacyFromTargets(deps).getRecursiveJavaCompilationArgs();
+    JavaCompilationArgs args = JavaCompilationArgs.builder()
+        .addTransitiveTargets(deps).build();
 
-    NestedSet<Artifact> directJars =
-        isStrict() ? getNonRecursiveCompileTimeJarsFromCollection(deps) : null;
+    NestedSet<Artifact> directJars = isStrict()
+        ? getNonRecursiveCompileTimeJarsFromCollection(deps)
+        : null;
     addArgsAndJarsToAttributes(args, directJars);
   }
 
@@ -724,10 +724,7 @@ public final class JavaCompilationHelper {
   private NestedSet<Artifact> getNonRecursiveCompileTimeJarsFromCollection(
       Iterable<? extends TransitiveInfoCollection> deps) {
     JavaCompilationArgs.Builder builder = JavaCompilationArgs.builder();
-    builder.addTransitiveCompilationArgs(
-        JavaCompilationArgsProvider.legacyFromTargets(deps),
-        /*recursive=*/ false,
-        ClasspathType.BOTH);
+    builder.addTransitiveTargets(deps, /*recursive=*/false);
     return builder.build().getCompileTimeJars();
   }
 
