@@ -32,7 +32,7 @@ import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
-import org.graylog.security.PermissionAndRoleResolver;
+import org.graylog.security.GrantPermissionResolver;
 import org.graylog.security.permissions.GRNPermission;
 import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
@@ -53,7 +53,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -77,7 +76,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private final InMemoryRolePermissionResolver inMemoryRolePermissionResolver;
     private final EventBus serverEventBus;
     private final GRNRegistry grnRegistry;
-    private final PermissionAndRoleResolver permissionAndRoleResolver;
+    private final GrantPermissionResolver grantPermissionResolver;
 
     @Inject
     public UserServiceImpl(final MongoConnection mongoConnection,
@@ -88,7 +87,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
                            final InMemoryRolePermissionResolver inMemoryRolePermissionResolver,
                            final EventBus serverEventBus,
                            final GRNRegistry grnRegistry,
-                           final PermissionAndRoleResolver permissionAndRoleResolver
+                           final GrantPermissionResolver grantPermissionResolver
     ) {
         super(mongoConnection);
         this.configuration = configuration;
@@ -98,7 +97,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         this.inMemoryRolePermissionResolver = inMemoryRolePermissionResolver;
         this.serverEventBus = serverEventBus;
         this.grnRegistry = grnRegistry;
-        this.permissionAndRoleResolver = permissionAndRoleResolver;
+        this.grantPermissionResolver = grantPermissionResolver;
 
         // ensure that the users' roles array is indexed
         collection(UserImpl.class).createIndex(UserImpl.ROLES);
@@ -118,34 +117,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         }
         final Object userId = userObject.get("_id");
         return userFactory.create((ObjectId) userId, userObject.toMap());
-    }
-
-    @Override
-    public List<User> loadByIds(Collection<String> ids) {
-        final HashSet<String> userIds = new HashSet<>(ids);
-        final List<User> users = new ArrayList<>();
-
-        // special case for the locally defined user, we don't store that in MongoDB.
-        if (!configuration.isRootUserDisabled() && userIds.stream().anyMatch(UserImpl.LocalAdminUser.LOCAL_ADMIN_ID::equals)) {
-            // The local admin ID is not a valid ObjectId so we have to remove it from the query
-            userIds.remove(UserImpl.LocalAdminUser.LOCAL_ADMIN_ID);
-            users.add(userFactory.createLocalAdminUser(roleService.getAdminRoleObjectId()));
-        }
-
-        final DBObject query = new BasicDBObject();
-        query.put("_id", new BasicDBObject("$in", userIds.stream().map(ObjectId::new).collect(Collectors.toSet())));
-
-        final List<DBObject> result = query(UserImpl.class, query);
-        if (result == null || result.isEmpty()) {
-            return users;
-        }
-
-        for (final DBObject dbObject : result) {
-            //noinspection unchecked
-            users.add(userFactory.create((ObjectId) dbObject.get("_id"), dbObject.toMap()));
-        }
-
-        return users;
     }
 
     @Override
@@ -241,20 +212,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         }
         accesstokenService.deleteAllForUser(username);
         deletedUsers.build().forEach(serverEventBus::post);
-        return deleteCount;
-    }
-
-    @Override
-    public int deleteById(final String userId) {
-        final User user = loadById(userId);
-        if (user == null) {
-            return 0;
-        }
-        DBObject query = new BasicDBObject();
-        query.put("_id", new ObjectId(userId));
-        final int deleteCount = destroy(query, UserImpl.COLLECTION_NAME);
-        accesstokenService.deleteAllForUser(user.getName());
-        serverEventBus.post(UserDeletedEvent.create(userId, user.getName()));
         return deleteCount;
     }
 
@@ -377,7 +334,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         final GRN principal = grnRegistry.ofUser(user);
         final ImmutableSet.Builder<Permission> permSet = ImmutableSet.<Permission>builder()
                 .addAll(user.getPermissions().stream().map(WildcardPermission::new).collect(Collectors.toSet()))
-                .addAll(permissionAndRoleResolver.resolvePermissionsForPrincipal(principal))
+                .addAll(grantPermissionResolver.resolvePermissionsForPrincipal(principal))
                 .addAll(getUserPermissionsFromRoles(user).stream().map(WildcardPermission::new).collect(Collectors.toSet()));
 
         return permSet.build().asList();
@@ -402,7 +359,7 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         for (String roleId : user.getRoleIds()) {
             permSet.addAll(inMemoryRolePermissionResolver.resolveStringPermission(roleId));
         }
-        permissionAndRoleResolver.resolveRolesForPrincipal(grnRegistry.ofUser(user)).forEach(roleId ->
+        grantPermissionResolver.resolveRolesForPrincipal(grnRegistry.ofUser(user)).forEach(roleId ->
                 permSet.addAll(inMemoryRolePermissionResolver.resolveStringPermission(roleId))
         );
 
