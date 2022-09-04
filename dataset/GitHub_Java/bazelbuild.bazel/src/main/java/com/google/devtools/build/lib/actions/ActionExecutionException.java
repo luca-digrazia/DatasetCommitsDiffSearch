@@ -45,7 +45,7 @@ public class ActionExecutionException extends Exception {
 
   public ActionExecutionException(String message,
                                   Throwable cause, Action action, boolean catastrophe) {
-    super(message, cause);
+    super(message + ": " + cause.getMessage(), cause);
     this.action = action;
     this.rootCauses = rootCausesFromAction(action);
     this.catastrophe = catastrophe;
@@ -55,7 +55,7 @@ public class ActionExecutionException extends Exception {
   public ActionExecutionException(String message,
                                   Throwable cause, Action action, boolean catastrophe,
                                   ExitCode exitCode) {
-    super(message, cause);
+    super(message + ": " + cause.getMessage(), cause);
     this.action = action;
     this.rootCauses = rootCausesFromAction(action);
     this.catastrophe = catastrophe;
