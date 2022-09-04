@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,8 +20,6 @@ import org.springframework.web.client.RestTemplate;
 /**
  * A @Rest interface implementing this interface will automatically have the
  * implementations of these methods generated.
- * 
- * @see org.androidannotations.annotations.rest.Rest
  */
 public interface RestClientSupport {
 	/**
@@ -34,7 +32,7 @@ public interface RestClientSupport {
 	/**
 	 * Sets the rest template used by the rest service implementation.
 	 * 
-	 * @param rt New {@link RestTemplate}
+	 * @param rt
 	 */
 	void setRestTemplate(RestTemplate rt);
 }
