@@ -11,6 +11,8 @@ import java.util.logging.Logger;
 import org.jboss.logmanager.handlers.AsyncHandler;
 import org.jboss.logmanager.handlers.DelayedHandler;
 import org.jboss.logmanager.handlers.SyslogHandler;
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -18,10 +20,10 @@ import io.quarkus.runtime.logging.InitialConfigurator;
 import io.quarkus.test.QuarkusUnitTest;
 
 public class AsyncSyslogHandlerTest {
-
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .withConfigurationResource("application-async-syslog.properties")
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+                    .addAsResource("application-async-syslog.properties", "application.properties"))
             .setLogFileName("AsyncSyslogHandlerTest.log");
 
     @Test
@@ -37,7 +39,7 @@ public class AsyncSyslogHandlerTest {
                 .filter(h -> (h instanceof AsyncHandler))
                 .findFirst().get();
         assertThat(handler).isNotNull();
-        assertThat(handler.getLevel()).isEqualTo(Level.WARNING);
+        assertThat(handler.getLevel()).isEqualTo(Level.ALL);
 
         AsyncHandler asyncHandler = (AsyncHandler) handler;
         assertThat(asyncHandler.getHandlers()).isNotEmpty();
