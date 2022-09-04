@@ -1,6 +1,5 @@
 package io.quarkus.kogito.deployment;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,17 +12,13 @@ import org.drools.compiler.commons.jci.compilers.CompilationResult;
 import org.drools.compiler.commons.jci.compilers.JavaCompiler;
 import org.drools.compiler.commons.jci.compilers.JavaCompilerSettings;
 import org.drools.compiler.compiler.io.memory.MemoryFileSystem;
-import org.drools.compiler.kproject.models.KieModuleModelImpl;
 import org.drools.modelcompiler.builder.JavaParserCompiler;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.kie.api.builder.model.KieModuleModel;
 import org.kie.kogito.codegen.ApplicationGenerator;
 import org.kie.kogito.codegen.GeneratedFile;
-import org.kie.kogito.codegen.di.CDIDependencyInjectionAnnotator;
 import org.kie.kogito.codegen.process.ProcessCodegen;
-import org.kie.kogito.codegen.rules.IncrementalRuleCodegen;
 import org.kie.kogito.codegen.rules.RuleCodegen;
 
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
@@ -134,19 +129,12 @@ public class KogitoAssetsProcessor {
         String appPackageName = "org.kie.kogito.app";
 
         ApplicationGenerator appGen = new ApplicationGenerator(appPackageName, new File(projectPath.toFile(), "target"))
-                .withDependencyInjection(new CDIDependencyInjectionAnnotator());
+                .withDependencyInjection(true);
 
         if (generateRuleUnits) {
-            Path moduleXmlPath = projectPath.resolve("src/main/resources").resolve(KieModuleModelImpl.KMODULE_JAR_PATH);
-            KieModuleModel kieModuleModel = KieModuleModelImpl.fromXML(
-                    new ByteArrayInputStream(
-                            Files.readAllBytes(moduleXmlPath)));
-
-            appGen.withGenerator(IncrementalRuleCodegen.ofPath(projectPath))
+            appGen.withGenerator(RuleCodegen.ofPath(projectPath, launchMode == LaunchMode.DEVELOPMENT))
                     .withRuleEventListenersConfig(customRuleEventListenerConfigExists(projectPath, appPackageName,
-                            combinedIndexBuildItem.getIndex()))
-                    .withKModule(kieModuleModel)
-                    .withClassLoader(Thread.currentThread().getContextClassLoader());
+                            combinedIndexBuildItem.getIndex()));
         }
 
         if (generateProcesses) {

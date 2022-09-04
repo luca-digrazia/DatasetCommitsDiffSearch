@@ -2,6 +2,7 @@ package io.quarkus.dev;
 
 import java.io.Closeable;
 import java.io.DataInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -15,7 +16,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.LockSupport;
@@ -28,7 +28,6 @@ import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.builditem.LiveReloadBuildItem;
-import io.quarkus.deployment.devmode.HotReplacementSetup;
 import io.quarkus.runner.RuntimeRunner;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.Timing;
@@ -37,43 +36,33 @@ import io.smallrye.config.SmallRyeConfigProviderResolver;
 /**
  * The main entry point for the dev mojo execution
  */
-public class DevModeMain implements Closeable {
+public class DevModeMain {
 
     public static final String DEV_MODE_CONTEXT = "META-INF/dev-mode-context.dat";
     private static final Logger log = Logger.getLogger(DevModeMain.class);
 
     private static volatile ClassLoader currentAppClassLoader;
     private static volatile URLClassLoader runtimeCl;
-    private final DevModeContext context;
+    private static List<File> classesRoots;
+    private static File wiringDir;
+    private static File cacheDir;
+    private static DevModeContext context;
 
     private static Closeable runner;
     static volatile Throwable deploymentProblem;
     static volatile Throwable compileProblem;
     static RuntimeUpdatesProcessor runtimeUpdatesProcessor;
-    private List<HotReplacementSetup> hotReplacement = new ArrayList<>();
 
-    private final Map<Class<?>, Object> liveReloadContext = new ConcurrentHashMap<>();
-
-    public DevModeMain(DevModeContext context) {
-        this.context = context;
-    }
+    static final Map<Class<?>, Object> liveReloadContext = new ConcurrentHashMap<>();
 
     public static void main(String... args) throws Exception {
         Timing.staticInitStarted();
 
         try (InputStream devModeCp = DevModeMain.class.getClassLoader().getResourceAsStream(DEV_MODE_CONTEXT)) {
-            DevModeContext context = (DevModeContext) new ObjectInputStream(new DataInputStream(devModeCp)).readObject();
-            new DevModeMain(context).start();
-
-            LockSupport.park();
+            context = (DevModeContext) new ObjectInputStream(new DataInputStream(devModeCp)).readObject();
         } catch (Exception e) {
             throw new RuntimeException(e);
-        } finally {
-
         }
-    }
-
-    public void start() throws Exception {
         //propagate system props
         for (Map.Entry<String, String> i : context.getSystemProperties().entrySet()) {
             if (!System.getProperties().containsKey(i.getKey())) {
@@ -81,11 +70,17 @@ public class DevModeMain implements Closeable {
             }
         }
 
-        for (HotReplacementSetup service : ServiceLoader.load(HotReplacementSetup.class)) {
-            hotReplacement.add(service);
+        // we can potentially have multiple roots separated by commas
+        final String[] classesRootsParts = args[0].split(",");
+        classesRoots = new ArrayList<>(classesRootsParts.length);
+        for (String classesRootsPart : classesRootsParts) {
+            classesRoots.add(new File(classesRootsPart));
         }
 
-        runtimeUpdatesProcessor = setupRuntimeCompilation(context);
+        wiringDir = new File(args[1]);
+        cacheDir = new File(args[2]);
+
+        runtimeUpdatesProcessor = RuntimeCompilationSetup.setup(context);
         if (runtimeUpdatesProcessor != null) {
             runtimeUpdatesProcessor.checkForChangedClasses();
         }
@@ -93,9 +88,6 @@ public class DevModeMain implements Closeable {
 
         doStart(false, Collections.emptySet());
         if (deploymentProblem != null || compileProblem != null) {
-            if (context.isAbortOnFailedStart()) {
-                throw new RuntimeException(deploymentProblem == null ? compileProblem : deploymentProblem);
-            }
             log.error("Failed to start Quarkus, attempting to start hot replacement endpoint to recover");
             if (runtimeUpdatesProcessor != null) {
                 runtimeUpdatesProcessor.startupFailed();
@@ -123,13 +115,14 @@ public class DevModeMain implements Closeable {
             }
         }, "Quarkus Shutdown Thread"));
 
+        LockSupport.park();
     }
 
-    private synchronized void doStart(boolean liveReload, Set<String> changedResources) {
+    private static synchronized void doStart(boolean liveReload, Set<String> changedResources) {
         try {
-            final URL[] urls = new URL[context.getClassesRoots().size()];
-            for (int i = 0; i < context.getClassesRoots().size(); i++) {
-                urls[i] = context.getClassesRoots().get(i).toURI().toURL();
+            final URL[] urls = new URL[classesRoots.size()];
+            for (int i = 0; i < classesRoots.size(); i++) {
+                urls[i] = classesRoots.get(i).toURI().toURL();
             }
             runtimeCl = new URLClassLoader(urls, ClassLoader.getSystemClassLoader());
             currentAppClassLoader = runtimeCl;
@@ -142,11 +135,9 @@ public class DevModeMain implements Closeable {
                         .setLiveReloadState(new LiveReloadBuildItem(liveReload, changedResources, liveReloadContext))
                         .setClassLoader(runtimeCl)
                         // just use the first item in classesRoot which is where the actual class files are written
-                        .setTarget(context.getClassesRoots().get(0).toPath())
-                        .setTransformerCache(context.getCacheDir().toPath());
-                if (context.getFrameworkClassesDir() != null) {
-                    builder.setFrameworkClassesPath(context.getFrameworkClassesDir().toPath());
-                }
+                        .setTarget(classesRoots.get(0).toPath())
+                        .setFrameworkClassesPath(wiringDir.toPath())
+                        .setTransformerCache(cacheDir.toPath());
 
                 List<Path> addAdditionalHotDeploymentPaths = new ArrayList<>();
                 for (DevModeContext.ModuleInfo i : context.getModules()) {
@@ -189,8 +180,20 @@ public class DevModeMain implements Closeable {
         }
     }
 
-    public synchronized void restartApp(Set<String> changedResources) {
-        stop();
+    public static synchronized void restartApp(Set<String> changedResources) {
+        if (runner != null) {
+            ClassLoader old = Thread.currentThread().getContextClassLoader();
+            Thread.currentThread().setContextClassLoader(runtimeCl);
+            try {
+                runner.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                Thread.currentThread().setContextClassLoader(old);
+            }
+        }
+        SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
+        DevModeMain.runner = null;
         Timing.restart();
         doStart(true, changedResources);
     }
@@ -209,58 +212,5 @@ public class DevModeMain implements Closeable {
             }
         }
         return null;
-    }
-
-    private RuntimeUpdatesProcessor setupRuntimeCompilation(DevModeContext context) throws Exception {
-        if (!context.getModules().isEmpty()) {
-            ServiceLoader<CompilationProvider> serviceLoader = ServiceLoader.load(CompilationProvider.class);
-            List<CompilationProvider> compilationProviders = new ArrayList<>();
-            for (CompilationProvider provider : serviceLoader) {
-                compilationProviders.add(provider);
-                context.getModules().forEach(moduleInfo -> moduleInfo.addSourcePaths(provider.handledSourcePaths()));
-            }
-            ClassLoaderCompiler compiler;
-            try {
-                compiler = new ClassLoaderCompiler(Thread.currentThread().getContextClassLoader(),
-                        compilationProviders, context);
-            } catch (Exception e) {
-                log.error("Failed to create compiler, runtime compilation will be unavailable", e);
-                return null;
-            }
-            RuntimeUpdatesProcessor processor = new RuntimeUpdatesProcessor(context, compiler, this);
-
-            for (HotReplacementSetup service : hotReplacement) {
-                service.setupHotDeployment(processor);
-                processor.addHotReplacementSetup(service);
-            }
-            return processor;
-        }
-        return null;
-    }
-
-    public void stop() {
-        if (runner != null) {
-            ClassLoader old = Thread.currentThread().getContextClassLoader();
-            Thread.currentThread().setContextClassLoader(runtimeCl);
-            try {
-                runner.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                Thread.currentThread().setContextClassLoader(old);
-            }
-        }
-        SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
-        DevModeMain.runner = null;
-    }
-
-    public void close() {
-        try {
-            stop();
-        } finally {
-            for (HotReplacementSetup i : hotReplacement) {
-                i.close();
-            }
-        }
     }
 }
