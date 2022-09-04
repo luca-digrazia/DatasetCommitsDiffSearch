@@ -922,6 +922,10 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     return cppOptions.inmemoryDotdFiles;
   }
 
+  public boolean getPruneCppModules() {
+    return cppOptions.pruneCppModules;
+  }
+
   public boolean getPruneCppInputDiscovery() {
     return cppOptions.pruneCppInputDiscovery;
   }
