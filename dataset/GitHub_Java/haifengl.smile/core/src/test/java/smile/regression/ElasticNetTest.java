@@ -26,7 +26,7 @@ import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
 import smile.data.parser.ArffParser;
 import smile.data.parser.DelimitedTextParser;
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.validation.CrossValidation;
 
 /**
@@ -72,10 +72,10 @@ public class ElasticNetTest {
             CrossValidation cv = new CrossValidation(n, k);
             double rss = 0.0;
             for (int i = 0; i < k; i++) {
-                double[][] trainx = MathEx.slice(datax, cv.train[i]);
-                double[] trainy = MathEx.slice(datay, cv.train[i]);
-                double[][] testx = MathEx.slice(datax, cv.test[i]);
-                double[] testy = MathEx.slice(datay, cv.test[i]);
+                double[][] trainx = Math.slice(datax, cv.train[i]);
+                double[] trainy = Math.slice(datay, cv.train[i]);
+                double[][] testx = Math.slice(datax, cv.test[i]);
+                double[] testy = Math.slice(datay, cv.test[i]);
 
                 ElasticNet elasticnet = new ElasticNet(trainx, trainy, 0.8, 0.2);
 
@@ -185,10 +185,10 @@ public class ElasticNetTest {
             CrossValidation cv = new CrossValidation(n, k);
             double rss = 0.0;
             for (int i = 0; i < k; i++) {
-                double[][] trainx = MathEx.slice(datax, cv.train[i]);
-                double[] trainy = MathEx.slice(datay, cv.train[i]);
-                double[][] testx = MathEx.slice(datax, cv.test[i]);
-                double[] testy = MathEx.slice(datay, cv.test[i]);
+                double[][] trainx = Math.slice(datax, cv.train[i]);
+                double[] trainy = Math.slice(datay, cv.train[i]);
+                double[][] testx = Math.slice(datax, cv.test[i]);
+                double[] testy = Math.slice(datay, cv.test[i]);
 
                 ElasticNet elasticnet = new ElasticNet(trainx, trainy, 0.8, 0.2);
 
