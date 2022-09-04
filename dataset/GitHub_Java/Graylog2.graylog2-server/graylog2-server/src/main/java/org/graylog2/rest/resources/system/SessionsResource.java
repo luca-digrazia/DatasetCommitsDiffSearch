@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.rest.resources.system;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
@@ -52,7 +55,7 @@ import static javax.ws.rs.core.Response.noContent;
 @Path("/system/sessions")
 @Api(value = "System/Sessions", description = "Login for interactive user sessions")
 public class SessionsResource extends RestResource {
-    private static final Logger LOG = LoggerFactory.getLogger(SessionsResource.class);
+    private static final Logger log = LoggerFactory.getLogger(SessionsResource.class);
 
     private final UserService userService;
     private final DefaultSecurityManager securityManager;
@@ -100,7 +103,7 @@ public class SessionsResource extends RestResource {
             ((DefaultSecurityManager) SecurityUtils.getSecurityManager()).getSubjectDAO().save(subject);
 
         } catch (AuthenticationException e) {
-            LOG.warn("Unable to log in user " + createRequest.username, e);
+            log.warn("Unable to log in user " + createRequest.username, e);
         } catch (UnknownSessionException e) {
             subject.logout();
         }

@@ -1,4 +1,6 @@
 /**
+ * Copyright 2013 Kay Roepke <kay@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.security;
 
@@ -29,7 +32,7 @@ import javax.ws.rs.core.SecurityContext;
 import java.io.IOException;
 
 public class ShiroAuthorizationFilter implements ContainerRequestFilter {
-    private static final Logger LOG = LoggerFactory.getLogger(ShiroAuthorizationFilter.class);
+    private static final Logger log = LoggerFactory.getLogger(ShiroAuthorizationFilter.class);
     private final RequiresPermissions annotation;
 
     public ShiroAuthorizationFilter(RequiresPermissions annotation) {
@@ -45,10 +48,10 @@ public class ShiroAuthorizationFilter implements ContainerRequestFilter {
         final ShiroSecurityContext context = (ShiroSecurityContext) securityContext;
         final Subject subject = context.getSubject();
         try {
-            LOG.debug("Checking authorization for user {}, needs permissions {}", subject, annotation.value());
+            log.debug("Checking authorization for user {}, needs permissions {}", subject, annotation.value());
             new ContextAwarePermissionAnnotationHandler(context).assertAuthorized(annotation);
         } catch (AuthorizationException e) {
-            LOG.info("User not authorized.", e);
+            log.info("User not authorized.", e);
             throw new NotAuthorizedException(e, "Basic realm=\"Graylog2 Server\"");
         }
     }
