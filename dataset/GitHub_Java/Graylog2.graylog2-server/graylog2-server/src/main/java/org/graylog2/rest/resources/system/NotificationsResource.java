@@ -58,12 +58,7 @@ public class NotificationsResource extends RestResource {
             notification.put("severity", n.getSeverity().toString().toLowerCase());
             notification.put("type", n.getType().toString().toLowerCase());
 
-            try {
-                notifications.add(notification);
-            } catch(IllegalArgumentException e) {
-                LOG.warn("There is a notification type we can't handle: [" + n.getType() + "]");
-                continue;
-            }
+            notifications.add(notification);
         }
 
         Map<String, Object> result = Maps.newHashMap();
