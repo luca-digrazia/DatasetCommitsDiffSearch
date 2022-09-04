@@ -14,14 +14,13 @@
 package com.google.devtools.build.android.ziputils;
 
 import static com.google.common.truth.Truth.assertWithMessage;
-import static org.junit.Assert.fail;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import static org.junit.Assert.assertThrows;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for {@link ScanUtil}.
@@ -31,18 +30,8 @@ public class ScanUtilTest {
 
   @Test
   public void testScanTo() {
-    try {
-      assertLocation(null, new byte[]{}, -1);
-      fail("No exception on null target");
-    } catch (NullPointerException ex) {
-      // expected
-    }
-    try {
-      assertLocation(new byte[] {}, null, -1);
-      fail("No exception on null domain");
-    } catch (NullPointerException ex) {
-      // expected
-    }
+    assertThrows(NullPointerException.class, () -> assertLocation(null, new byte[] {}, -1));
+    assertThrows(NullPointerException.class, () -> assertLocation(new byte[] {}, null, -1));
     assertLocation(new byte[] {}, new byte[] {}, -1);
     assertLocation(new byte[] {}, new byte[] {1}, 0);
     assertLocation(new byte[] {}, new byte[] {1, 2, 3, 4}, 0);
@@ -64,18 +53,10 @@ public class ScanUtilTest {
 
   @Test
   public void testScanBackwardsTo() {
-    try {
-      assertBackwardsLocation(null, new byte[]{}, -1);
-      fail("No exception on null target");
-    } catch (NullPointerException ex) {
-      // expected
-    }
-    try {
-      assertBackwardsLocation(new byte[]{}, null, -1);
-      fail("No exception on null domain");
-    } catch (NullPointerException ex) {
-      // expected
-    }
+    assertThrows(
+        NullPointerException.class, () -> assertBackwardsLocation(null, new byte[] {}, -1));
+    assertThrows(
+        NullPointerException.class, () -> assertBackwardsLocation(new byte[] {}, null, -1));
     assertBackwardsLocation(new byte[] {}, new byte[] {}, -1);
     assertBackwardsLocation(new byte[] {}, new byte[] {1}, 0);
     assertBackwardsLocation(new byte[] {}, new byte[] {1, 2, 3, 4}, 3);
@@ -99,7 +80,8 @@ public class ScanUtilTest {
   private void assertLocation(byte[] target, byte[] domain, int expected) {
     int pos = ScanUtil.scanTo(target, domain != null ? ByteBuffer.wrap(domain) : null);
     assertWithMessage("Position of " + Arrays.toString(target) + " in " + Arrays.toString(domain))
-        .that(expected).isEqualTo(pos);
+        .that(pos)
+        .isEqualTo(expected);
   }
 
   private void assertBackwardsLocation(byte[] target, byte[] domain, int expected) {
@@ -109,8 +91,16 @@ public class ScanUtilTest {
       buf.position(buf.limit());
     }
     int pos = ScanUtil.scanBackwardsTo(target, buf);
-    assertWithMessage("Position of " + Arrays.toString(target) + " in " + Arrays.toString(domain)
-        + ", " + buf.position() + ", " + buf.limit())
-        .that(expected).isEqualTo(pos);
+    assertWithMessage(
+            "Position of "
+                + Arrays.toString(target)
+                + " in "
+                + Arrays.toString(domain)
+                + ", "
+                + buf.position()
+                + ", "
+                + buf.limit())
+        .that(pos)
+        .isEqualTo(expected);
   }
 }
