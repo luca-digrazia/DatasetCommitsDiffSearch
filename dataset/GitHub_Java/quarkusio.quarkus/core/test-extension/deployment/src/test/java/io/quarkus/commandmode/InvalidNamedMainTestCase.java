@@ -22,7 +22,8 @@ public class InvalidNamedMainTestCase {
 
     @Test
     public void shouldNotBeInvoked() {
-        fail("This method should not be invoked because of invalid main class");
+        // This method should not be invoked
+        fail();
     }
 
 }

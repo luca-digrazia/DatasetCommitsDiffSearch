@@ -52,7 +52,6 @@ import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.RunTimeConfigurationGenerator;
 import io.quarkus.deployment.pkg.PackageConfig;
-import io.quarkus.deployment.pkg.builditem.AppCDSRequestedBuildItem;
 import io.quarkus.deployment.recording.BytecodeRecorderImpl;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
 import io.quarkus.gizmo.BytecodeCreator;
@@ -65,7 +64,6 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.gizmo.TryBlock;
 import io.quarkus.runtime.Application;
-import io.quarkus.runtime.ApplicationLifecycleManager;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.NativeImageRuntimePropertiesRecorder;
 import io.quarkus.runtime.Quarkus;
@@ -73,11 +71,9 @@ import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.StartupContext;
 import io.quarkus.runtime.StartupTask;
 import io.quarkus.runtime.annotations.QuarkusMain;
-import io.quarkus.runtime.appcds.AppCDSUtil;
 import io.quarkus.runtime.configuration.ProfileManager;
-import io.quarkus.runtime.util.StepTiming;
 
-public class MainClassBuildStep {
+class MainClassBuildStep {
 
     static final String MAIN_CLASS = "io.quarkus.runner.GeneratedMain";
     static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
@@ -93,18 +89,8 @@ public class MainClassBuildStep {
             JAVAX_NET_SSL_TRUST_STORE_TYPE, JAVAX_NET_SSL_TRUST_STORE_PROVIDER,
             JAVAX_NET_SSL_TRUST_STORE_PASSWORD));
 
-    public static final String GENERATE_APP_CDS_SYSTEM_PROPERTY = "quarkus.appcds.generate";
-    public static final String PRINT_STARTUP_TIMES_PROPERTY = "quarkus.debug.print-startup-times";
-
     private static final FieldDescriptor STARTUP_CONTEXT_FIELD = FieldDescriptor.of(Application.APP_CLASS_NAME, STARTUP_CONTEXT,
             StartupContext.class);
-
-    public static final MethodDescriptor PRINT_STEP_TIME_METHOD = ofMethod(StepTiming.class.getName(), "printStepTime",
-            void.class, StartupContext.class);
-    public static final MethodDescriptor CONFIGURE_STEP_TIME_ENABLED = ofMethod(StepTiming.class.getName(), "configureEnabled",
-            void.class);
-    public static final MethodDescriptor CONFIGURE_STEP_TIME_START = ofMethod(StepTiming.class.getName(), "configureStart",
-            void.class);
 
     @BuildStep
     void build(List<StaticBytecodeRecorderBuildItem> staticInitTasks,
@@ -118,8 +104,7 @@ public class MainClassBuildStep {
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             LaunchModeBuildItem launchMode,
             LiveReloadBuildItem liveReloadBuildItem,
-            ApplicationInfoBuildItem applicationInfo,
-            Optional<AppCDSRequestedBuildItem> appCDSRequested) {
+            ApplicationInfoBuildItem applicationInfo) {
 
         appClassNameProducer.produce(new ApplicationClassNameBuildItem(Application.APP_CLASS_NAME));
 
@@ -150,8 +135,6 @@ public class MainClassBuildStep {
         mv.invokeStaticMethod(MethodDescriptor.ofMethod(ProfileManager.class, "setLaunchMode", void.class, LaunchMode.class),
                 lm);
 
-        mv.invokeStaticMethod(CONFIGURE_STEP_TIME_ENABLED);
-
         mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class));
 
         // ensure that the config class is initialized
@@ -166,7 +149,6 @@ public class MainClassBuildStep {
         ResultHandle startupContext = mv.newInstance(ofConstructor(StartupContext.class));
         mv.writeStaticField(scField.getFieldDescriptor(), startupContext);
         TryBlock tryBlock = mv.tryBlock();
-        tryBlock.invokeStaticMethod(CONFIGURE_STEP_TIME_START);
         for (StaticBytecodeRecorderBuildItem holder : staticInitTasks) {
             writeRecordedBytecode(holder.getBytecodeRecorder(), null, substitutions, loaders, gizmoOutput, startupContext,
                     tryBlock);
@@ -183,21 +165,6 @@ public class MainClassBuildStep {
 
         mv = file.getMethodCreator("doStart", void.class, String[].class);
         mv.setModifiers(Modifier.PROTECTED | Modifier.FINAL);
-
-        // if AppCDS generation was requested, we ensure that the application simply loads some classes from a file and terminates
-        if (appCDSRequested.isPresent()) {
-            ResultHandle createAppCDsSysProp = mv.invokeStaticMethod(
-                    ofMethod(System.class, "getProperty", String.class, String.class, String.class),
-                    mv.load(GENERATE_APP_CDS_SYSTEM_PROPERTY), mv.load("false"));
-            ResultHandle createAppCDSBool = mv.invokeStaticMethod(
-                    ofMethod(Boolean.class, "parseBoolean", boolean.class, String.class), createAppCDsSysProp);
-            BytecodeCreator createAppCDS = mv.ifTrue(createAppCDSBool).trueBranch();
-
-            createAppCDS.invokeStaticMethod(ofMethod(AppCDSUtil.class, "loadGeneratedClasses", void.class));
-
-            createAppCDS.invokeStaticMethod(ofMethod(ApplicationLifecycleManager.class, "exit", void.class));
-            createAppCDS.returnValue(null);
-        }
 
         // very first thing is to set system props (for run time, which use substitutions for a different
         // storage from build-time)
@@ -255,12 +222,8 @@ public class MainClassBuildStep {
                 MethodDescriptor.ofMethod(StartupContext.class, "setCommandLineArguments", void.class, String[].class),
                 startupContext, mv.getMethodParam(0));
 
-        mv.invokeStaticMethod(CONFIGURE_STEP_TIME_ENABLED);
-        ResultHandle activeProfile = mv
-                .invokeStaticMethod(ofMethod(ProfileManager.class, "getActiveProfile", String.class));
-
         tryBlock = mv.tryBlock();
-        tryBlock.invokeStaticMethod(CONFIGURE_STEP_TIME_START);
+
         for (MainBytecodeRecorderBuildItem holder : mainMethod) {
             writeRecordedBytecode(holder.getBytecodeRecorder(), holder.getGeneratedStartupContextClassName(), substitutions,
                     loaders, gizmoOutput, startupContext, tryBlock);
@@ -276,6 +239,8 @@ public class MainClassBuildStep {
             featureNames.add(feature.getName());
         }
         ResultHandle featuresHandle = tryBlock.load(featureNames.stream().sorted().collect(Collectors.joining(", ")));
+        ResultHandle activeProfile = tryBlock
+                .invokeStaticMethod(ofMethod(ProfileManager.class, "getActiveProfile", String.class));
         tryBlock.invokeStaticMethod(
                 ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class, String.class,
                         String.class, boolean.class),
@@ -286,9 +251,9 @@ public class MainClassBuildStep {
                 activeProfile,
                 tryBlock.load(LaunchMode.DEVELOPMENT.equals(launchMode.getLaunchMode())));
         cb = tryBlock.addCatch(Throwable.class);
-        cb.invokeVirtualMethod(ofMethod(Logger.class, "errorv", void.class, Throwable.class, String.class, Object.class),
-                cb.readStaticField(logField.getFieldDescriptor()), cb.getCaughtException(),
-                cb.load("Failed to start application (with profile {0})"), activeProfile);
+        cb.invokeVirtualMethod(ofMethod(Logger.class, "error", void.class, Object.class, Throwable.class),
+                cb.readStaticField(logField.getFieldDescriptor()), cb.load("Failed to start application"),
+                cb.getCaughtException());
 
         // an exception was thrown before logging was actually setup, we simply dump everything to the console
         ResultHandle delayedHandler = cb
@@ -445,7 +410,6 @@ public class MainClassBuildStep {
                 .newInstance(ofConstructor(recorder != null ? recorder.getClassName() : fallbackGeneratedStartupTaskClassName));
         bytecodeCreator.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup,
                 startupContext);
-        bytecodeCreator.invokeStaticMethod(PRINT_STEP_TIME_METHOD, startupContext);
     }
 
     /**
