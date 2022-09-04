@@ -167,19 +167,6 @@ public class ProtoConfiguration extends Fragment {
     )
     public boolean correctRollupTransitiveProtoRuntimes;
 
-    @Option(
-      name = "jplNonStrictDepsLikePl",
-      defaultValue = "false",
-      category = "rollout",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-      help =
-          "Roll-out flag for changing behavior of non-strict java_xxx_proto_library. "
-              + "See commit description for details. DO NOT USE."
-    )
-    public boolean jplNonStrictDepsLikePl;
-
     @Override
     public FragmentOptions getHost(boolean fallback) {
       Options host = (Options) super.getHost(fallback);
@@ -194,7 +181,6 @@ public class ProtoConfiguration extends Fragment {
       host.ccProtoLibraryHeaderSuffixes = ccProtoLibraryHeaderSuffixes;
       host.ccProtoLibrarySourceSuffixes = ccProtoLibrarySourceSuffixes;
       host.correctRollupTransitiveProtoRuntimes = correctRollupTransitiveProtoRuntimes;
-      host.jplNonStrictDepsLikePl = jplNonStrictDepsLikePl;
       return host;
     }
   }
@@ -275,9 +261,5 @@ public class ProtoConfiguration extends Fragment {
 
   public boolean correctRollupTransitiveProtoRuntimes() {
     return options.correctRollupTransitiveProtoRuntimes;
-  }
-
-  public boolean jplNonStrictDepsLikePl() {
-    return options.jplNonStrictDepsLikePl;
   }
 }
