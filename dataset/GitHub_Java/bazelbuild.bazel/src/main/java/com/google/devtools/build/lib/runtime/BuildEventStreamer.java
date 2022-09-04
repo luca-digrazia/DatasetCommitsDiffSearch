@@ -120,15 +120,6 @@ public class BuildEventStreamer {
       ImmutableMap.of();
 
   /**
-   * Holds the half-close futures for the upload of each transport. The completion of the half-close
-   * indicates that the client has sent all of the data to the server and is just waiting for
-   * acknowledgement. The client must still keep the data buffered locally in case acknowledgement
-   * fails.
-   */
-  private ImmutableMap<BuildEventTransport, ListenableFuture<Void>> halfCloseFuturesMap =
-      ImmutableMap.of();
-
-  /**
    * Provider for stdout and stderr output.
    */
   public interface OutErrProvider {
@@ -350,16 +341,10 @@ public class BuildEventStreamer {
     ImmutableMap.Builder<BuildEventTransport, ListenableFuture<Void>> closeFuturesMapBuilder =
         ImmutableMap.builder();
     for (final BuildEventTransport transport : transports) {
-      closeFuturesMapBuilder.put(transport, transport.close());
+      ListenableFuture<Void> closeFuture = transport.close();
+      closeFuturesMapBuilder.put(transport, closeFuture);
     }
     closeFuturesMap = closeFuturesMapBuilder.build();
-
-    ImmutableMap.Builder<BuildEventTransport, ListenableFuture<Void>> halfCloseFuturesMapBuilder =
-        ImmutableMap.builder();
-    for (final BuildEventTransport transport : transports) {
-      halfCloseFuturesMapBuilder.put(transport, transport.getHalfCloseFuture());
-    }
-    halfCloseFuturesMap = halfCloseFuturesMapBuilder.build();
   }
 
   private void maybeReportArtifactSet(
@@ -698,19 +683,6 @@ public class BuildEventStreamer {
   public synchronized ImmutableMap<BuildEventTransport, ListenableFuture<Void>>
       getCloseFuturesMap() {
     return closeFuturesMap;
-  }
-
-  /**
-   * Returns the map from BEP transports to their corresponding half-close futures.
-   *
-   * <p>Half-close indicates that all client-side data is transmitted but still waiting on
-   * server-side acknowledgement. The client must buffer the information in case the server fails to
-   * acknowledge.
-   *
-   * <p>If this method is called before calling {@link #close()} then it will return an empty map.
-   */
-  public synchronized ImmutableMap<BuildEventTransport, ListenableFuture<Void>> getHalfClosedMap() {
-    return halfCloseFuturesMap;
   }
 
   /** A builder for {@link BuildEventStreamer}. */
