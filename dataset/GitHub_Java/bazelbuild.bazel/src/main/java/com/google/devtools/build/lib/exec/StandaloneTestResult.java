@@ -18,22 +18,18 @@ import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
 import java.util.List;
 
 /** Contains information about the results of test execution. */
 @AutoValue
 public abstract class StandaloneTestResult {
-  public boolean hasPassed() {
-    return testResultDataBuilder().getStatus() == BlazeTestStatus.PASSED;
-  }
 
   /** Returns the SpawnResults created by the test, if any. */
   public abstract List<SpawnResult> spawnResults();
 
   /** Returns the TestResultData for the test. */
-  public abstract TestResultData.Builder testResultDataBuilder();
+  public abstract TestResultData testResultData();
 
   public abstract BuildEventStreamProtos.TestResult.ExecutionInfo executionInfo();
 
@@ -53,7 +49,7 @@ public abstract class StandaloneTestResult {
     public abstract Builder setSpawnResults(List<SpawnResult> spawnResults);
 
     /** Sets the TestResultData for the test. */
-    public abstract Builder setTestResultDataBuilder(TestResultData.Builder testResultDataBuilder);
+    public abstract Builder setTestResultData(TestResultData testResultData);
 
     public abstract Builder setExecutionInfo(
         BuildEventStreamProtos.TestResult.ExecutionInfo executionInfo);

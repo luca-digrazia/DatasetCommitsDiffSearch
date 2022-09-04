@@ -143,7 +143,6 @@ public final class ActionsTestUtil {
         metadataHandler,
         fileOutErr,
         ImmutableMap.copyOf(clientEnv),
-        ImmutableMap.of(),
         actionGraph == null
             ? createDummyArtifactExpander()
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph));
@@ -177,7 +176,6 @@ public final class ActionsTestUtil {
         new ActionKeyContext(),
         null,
         null,
-        ImmutableMap.of(),
         ImmutableMap.of(),
         createDummyArtifactExpander());
   }
@@ -727,12 +725,6 @@ public final class ActionsTestUtil {
 
     @Override
     public void injectDigest(ActionInput output, FileStatus statNoFollow, byte[] digest) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void injectRemoteFile(
-        Artifact output, byte[] digest, long size, long modifiedTime, int locationIndex) {
       throw new UnsupportedOperationException();
     }
 

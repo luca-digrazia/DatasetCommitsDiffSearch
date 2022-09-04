@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.testutil.TestConstants.WORKSPACE_NAM
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.same;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
@@ -136,8 +135,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
             .build();
     when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableList.of(expectedSpawnResult));
 
-    when(actionExecutionContext.getContext(same(SpawnActionContext.class)))
-        .thenReturn(spawnActionContext);
+    when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
     List<SpawnResult> spawnResults =
@@ -223,8 +221,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
         .thenThrow(new SpawnExecException("test failed", failSpawnResult, false))
         .thenReturn(ImmutableList.of(passSpawnResult));
 
-    when(actionExecutionContext.getContext(same(SpawnActionContext.class)))
-        .thenReturn(spawnActionContext);
+    when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
     List<SpawnResult> spawnResults =
@@ -309,8 +306,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
             .build();
     when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableList.of(expectedSpawnResult));
 
-    when(actionExecutionContext.getContext(same(SpawnActionContext.class)))
-        .thenReturn(spawnActionContext);
+    when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
     List<SpawnResult> spawnResults =
@@ -387,8 +383,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
             .build();
     when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableList.of(expectedSpawnResult));
 
-    when(actionExecutionContext.getContext(same(SpawnActionContext.class)))
-        .thenReturn(spawnActionContext);
+    when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
     List<SpawnResult> spawnResults =
@@ -490,8 +485,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
                 expectedSpawnResult,
                 /*forciblyRunRemotely=*/ false,
                 /*catastrophe=*/ false));
-    when(actionExecutionContext.getContext(same(SpawnActionContext.class)))
-        .thenReturn(spawnActionContext);
+    when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
     List<SpawnResult> spawnResults =
@@ -569,8 +563,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     SpawnResult expectedSpawnResult =
         new SpawnResult.Builder().setStatus(Status.SUCCESS).setRunnerName("test").build();
     when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableList.of(expectedSpawnResult));
-    when(actionExecutionContext.getContext(same(SpawnActionContext.class)))
-        .thenReturn(spawnActionContext);
+    when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
     List<SpawnResult> spawnResults =

@@ -86,4 +86,7 @@ public interface Executor {
    * Looks up and returns an action context implementation of the given interface type.
    */
   <T extends ActionContext> T getContext(Class<? extends T> type);
+
+  /** Returns the action context implementation for the given spawn. */
+  SpawnActionContext getSpawnActionContext(Spawn spawn);
 }
