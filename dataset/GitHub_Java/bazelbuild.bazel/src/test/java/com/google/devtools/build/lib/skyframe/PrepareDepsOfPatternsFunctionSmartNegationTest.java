@@ -33,11 +33,11 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -59,8 +59,8 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTestCase {
   private SkyframeExecutor skyframeExecutor;
-  private static final String ADDITIONAL_IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING =
-      "config/ignored.txt";
+  private static final String ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING =
+      "config/blacklist.txt";
 
   private static SkyKey getKeyForLabel(Label label) {
     // Note that these tests used to look for TargetMarker SkyKeys before TargetMarker was
@@ -95,17 +95,17 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
             .setDefaultBuildOptions(
                 DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
             .setExtraSkyFunctions(AnalysisMock.get().getSkyFunctions(directories))
-            .setIgnoredPackagePrefixesFunction(
-                new IgnoredPackagePrefixesFunction(
-                    PathFragment.create(ADDITIONAL_IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING)))
+            .setBlacklistedPackagePrefixesFunction(
+                new BlacklistedPackagePrefixesFunction(
+                    PathFragment.create(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING)))
             .build();
-    SkyframeExecutorTestHelper.process(skyframeExecutor);
+    TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(
             outputBase,
             ImmutableList.of(Root.fromPath(rootDirectory)),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
-        Options.getDefaults(PackageOptions.class),
+        Options.getDefaults(PackageCacheOptions.class),
         Options.getDefaults(StarlarkSemanticsOptions.class),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
@@ -122,7 +122,7 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
-    scratch.file(ADDITIONAL_IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING);
+    scratch.file(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING);
   }
 
   @Test
@@ -162,15 +162,15 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
   }
 
   @Test
-  public void testIgnoredPatternBlocksPatternEvaluation() throws Exception {
+  public void testBlacklistPatternBlocksPatternEvaluation() throws Exception {
     // Given a well-formed package "//foo" and a malformed package "//foo/foo",
     createFooAndFooFoo();
 
     // Given a target pattern sequence consisting of a recursive pattern for "//foo/...",
     ImmutableList<String> patternSequence = ImmutableList.of("//foo/...");
 
-    // and an ignored entry for the malformed package,
-    scratch.overwriteFile(ADDITIONAL_IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING, "foo/foo");
+    // and a blacklist for the malformed package,
+    scratch.overwriteFile(ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING, "foo/foo");
 
     assertSkipsFoo(patternSequence);
   }
@@ -222,7 +222,7 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
         EvaluationContext.newBuilder()
             .setKeepGoing(keepGoing)
             .setNumThreads(100)
-            .setEventHandler(new Reporter(new EventBus(), eventCollector))
+            .setEventHander(new Reporter(new EventBus(), eventCollector))
             .build();
     EvaluationResult<SkyValue> evaluationResult =
         skyframeExecutor.getDriver().evaluate(singletonTargetPattern, evaluationContext);

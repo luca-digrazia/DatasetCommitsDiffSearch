@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Functions;
 import com.google.common.base.Optional;
@@ -135,7 +135,7 @@ public abstract class GlobFunctionTest {
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
-    PrecomputedValue.STARLARK_SEMANTICS.set(differencer, StarlarkSemantics.DEFAULT);
+    PrecomputedValue.STARLARK_SEMANTICS.set(differencer, StarlarkSemantics.DEFAULT_SEMANTICS);
     RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE.set(
         differencer, Optional.<RootedPath>absent());
 
@@ -169,8 +169,7 @@ public abstract class GlobFunctionTest {
         new PackageLookupFunction(
             deletedPackages,
             CrossRepositoryLabelViolationStrategy.ERROR,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-            BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
+            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY));
     skyFunctions.put(
         SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
         BazelSkyframeExecutorConstants.BLACKLISTED_PACKAGE_PREFIXES_FUNCTION);
@@ -198,13 +197,9 @@ public abstract class GlobFunctionTest {
                 .getPackageFactoryBuilderForTesting(directories)
                 .build(ruleClassProvider, fs),
             directories,
-            /*starlarkImportLookupFunctionForInlining=*/ null));
-    skyFunctions.put(
-        SkyFunctions.EXTERNAL_PACKAGE,
-        new ExternalPackageFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
-    skyFunctions.put(
-        SkyFunctions.LOCAL_REPOSITORY_LOOKUP,
-        new LocalRepositoryLookupFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
+            /*skylarkImportLookupFunctionForInlining=*/ null));
+    skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
+    skyFunctions.put(SkyFunctions.LOCAL_REPOSITORY_LOOKUP, new LocalRepositoryLookupFunction());
     return skyFunctions;
   }
 
@@ -440,7 +435,7 @@ public abstract class GlobFunctionTest {
     // directories.
     assertThat(
             Iterables.transform(
-                runGlob(excludeDirs, pattern).getMatches().toList(), Functions.toStringFunction()))
+                runGlob(excludeDirs, pattern).getMatches(), Functions.toStringFunction()))
         .containsExactlyElementsIn(ImmutableList.copyOf(expecteds))
         .inOrder();
   }

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.query2.testutil;
 import static com.google.devtools.build.lib.packages.Rule.ALL_LABELS;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -33,8 +34,8 @@ import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtensio
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
@@ -50,12 +51,11 @@ import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputF
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
-import com.google.devtools.build.lib.skyframe.IgnoredPackagePrefixesFunction;
+import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
-import com.google.devtools.build.lib.testutil.TestPackageFactoryBuilderFactory;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -73,7 +73,6 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -94,7 +93,7 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   private boolean blockUniverseEvaluationErrors;
   protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
-  private final PathFragment ignoredPackagePrefixesFile = PathFragment.create("ignored");
+  private final PathFragment blacklistedPackagePrefixesFile = PathFragment.create("blacklist");
 
   @Override
   public void setUp() throws Exception {
@@ -136,8 +135,8 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   }
 
   @Override
-  public PathFragment getIgnoredPackagePrefixesFile() {
-    return ignoredPackagePrefixesFile;
+  public PathFragment getBlacklistedPackagePrefixesFile() {
+    return blacklistedPackagePrefixesFile;
   }
 
   @Override
@@ -271,18 +270,18 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   protected void initTargetPatternEvaluator(ConfiguredRuleClassProvider ruleClassProvider) {
     this.toolsRepository = ruleClassProvider.getToolsRepository();
     skyframeExecutor = createSkyframeExecutor(ruleClassProvider);
-    PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
-    packageOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = 7;
-    packageOptions.packagePath = ImmutableList.of(rootDirectory.getPathString());
+    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
+    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
+    packageCacheOptions.showLoadingProgress = true;
+    packageCacheOptions.globbingThreads = 7;
+    packageCacheOptions.packagePath = ImmutableList.of(rootDirectory.getPathString());
     PathPackageLocator packageLocator =
         skyframeExecutor.createPackageLocator(
-            getReporter(), packageOptions.packagePath, rootDirectory);
+            getReporter(), packageCacheOptions.packagePath, rootDirectory);
     try {
       skyframeExecutor.sync(
           getReporter(),
-          packageOptions,
+          packageCacheOptions,
           packageLocator,
           Options.getDefaults(StarlarkSemanticsOptions.class),
           UUID.randomUUID(),
@@ -303,7 +302,7 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
 
   protected SkyframeExecutor createSkyframeExecutor(ConfiguredRuleClassProvider ruleClassProvider) {
     PackageFactory pkgFactory =
-        TestPackageFactoryBuilderFactory.getInstance()
+        TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
             .builder(directories)
             .setEnvironmentExtensions(getEnvironmentExtensions())
             .build(ruleClassProvider, fileSystem);
@@ -314,20 +313,20 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
             .setDirectories(directories)
             .setActionKeyContext(actionKeyContext)
             .setDefaultBuildOptions(getDefaultBuildOptions(ruleClassProvider))
-            .setIgnoredPackagePrefixesFunction(
-                new IgnoredPackagePrefixesFunction(ignoredPackagePrefixesFile))
+            .setBlacklistedPackagePrefixesFunction(
+                new BlacklistedPackagePrefixesFunction(blacklistedPackagePrefixesFile))
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
             .build();
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
-    SkyframeExecutorTestHelper.process(skyframeExecutor);
+    TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     return skyframeExecutor;
   }
 

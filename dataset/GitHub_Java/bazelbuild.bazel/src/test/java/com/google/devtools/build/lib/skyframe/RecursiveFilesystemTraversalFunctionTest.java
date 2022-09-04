@@ -22,8 +22,8 @@ import static com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversa
 import static com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFileFactory.regularFile;
 import static com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFileFactory.symlinkToDirectory;
 import static com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFileFactory.symlinkToFile;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -58,7 +58,6 @@ import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFuncti
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.FileOperationException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.TraversalRequest;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TimestampGranularityUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -195,7 +194,6 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(differencer, pkgLocator.get());
-    PrecomputedValue.STARLARK_SEMANTICS.set(differencer, StarlarkSemantics.DEFAULT_SEMANTICS);
   }
 
   private Artifact sourceArtifact(String path) {
@@ -211,7 +209,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
   private SpecialArtifact treeArtifact(String path) {
     SpecialArtifact treeArtifact =
         new SpecialArtifact(
-            ArtifactRoot.asDerivedRoot(rootDirectory, "out"),
+            ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
             PathFragment.create("out/" + path),
             ActionsTestUtil.NULL_ARTIFACT_OWNER,
             SpecialArtifactType.TREE);
@@ -231,7 +229,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     Artifact.DerivedArtifact result =
         (Artifact.DerivedArtifact)
             ActionsTestUtil.createArtifactWithExecPath(
-                ArtifactRoot.asDerivedRoot(rootDirectory, "out"), execPath);
+                ArtifactRoot.asDerivedRoot(rootDirectory, rootDirectory.getRelative("out")),
+                execPath);
     result.setGeneratingActionKey(
         ActionLookupData.create(ActionsTestUtil.NULL_ARTIFACT_OWNER, artifacts.size()));
     artifacts.add(result);
@@ -339,7 +338,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
       TraversalRequest params, ResolvedFile... expectedFilesIgnoringMetadata) throws Exception {
     RecursiveFilesystemTraversalValue result = evalTraversalRequest(params);
     Map<PathFragment, ResolvedFile> nameToActualResolvedFiles = new HashMap<>();
-    for (ResolvedFile act : result.getTransitiveFiles().toList()) {
+    for (ResolvedFile act : result.getTransitiveFiles()) {
       // We can't compare  directly, since metadata would be different, so we compare
       // by comparing the results of public method calls..
       nameToActualResolvedFiles.put(act.getNameInSymlinkTree(), act);
