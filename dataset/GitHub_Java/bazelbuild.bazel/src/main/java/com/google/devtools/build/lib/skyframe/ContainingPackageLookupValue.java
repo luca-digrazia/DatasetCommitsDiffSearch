@@ -24,8 +24,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.skyframe.AbstractSkyKey;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import javax.annotation.Nonnull;
 
 /**
  * A value that represents the result of looking for the existence of a package that owns a
@@ -45,14 +45,6 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
   /** If there is a containing package, returns its package root */
   public abstract Root getContainingPackageRoot();
 
-  /**
-   * If there is not a containing package, returns a reason why (this is usually the reason the
-   * outer-most directory isn't a package).
-   */
-  public String getReasonForNoContainingPackage() {
-    throw new IllegalStateException();
-  }
-
   public static Key key(PackageIdentifier id) {
     Preconditions.checkArgument(!id.getPackageFragment().isAbsolute(), id);
     Preconditions.checkArgument(!id.getRepository().isDefault(), id);
@@ -67,16 +59,10 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
     boolean crossesPackageBoundaryBelow =
         containingPkg.getSourceRoot().startsWith(label.getPackageIdentifier().getSourceRoot());
     PathFragment labelNameFragment = PathFragment.create(label.getName());
-    String message;
-    if (crossesPackageBoundaryBelow) {
-      message =
-          String.format("Label '%s' is invalid because '%s' is a subpackage", label, containingPkg);
-    } else {
-      message =
-          String.format(
-              "Label '%s' is invalid because '%s' is not a package", label, label.getPackageName());
-    }
-
+    String message = String.format("Label '%s' crosses boundary of %spackage '%s'",
+        label,
+        crossesPackageBoundaryBelow ? "sub" : "",
+        containingPkg);
     Root containingRoot = containingPkgLookupValue.getContainingPackageRoot();
     if (pkgRoot.equals(containingRoot)) {
       PathFragment containingPkgFragment = containingPkg.getPackageFragment();
@@ -87,27 +73,19 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
                       - label.getPackageFragment().segmentCount(),
                   labelNameFragment.segmentCount())
               : label.toPathFragment().relativeTo(containingPkgFragment);
-      message += "; perhaps you meant to put the colon here: '";
+      message += " (perhaps you meant to put the colon here: '";
       if (containingPkg.getRepository().isDefault() || containingPkg.getRepository().isMain()) {
         message += "//";
       }
-      message += containingPkg + ":" + labelNameInContainingPackage + "'?";
+      message += containingPkg + ":" + labelNameInContainingPackage + "'?)";
     } else {
-      message +=
-          "; have you deleted "
-              + containingPkg
-              + "/BUILD? "
-              + "If so, use the --deleted_packages="
-              + containingPkg
-              + " option";
+      message += " (have you deleted " + containingPkg + "/BUILD? "
+          + "If so, use the --deleted_packages=" + containingPkg + " option)";
     }
     return message;
   }
 
-  /**
-   * {@link com/google/devtools/build/lib/skyframe/ContainingPackageLookupValue.java used only in
-   * javadoc: com.google.devtools.build.skyframe.SkyKey} for {@code ContainingPackageLookupValue}.
-   */
+  /** {@link SkyKey} for {@code ContainingPackageLookupValue}. */
   @AutoCodec
   public static class Key extends AbstractSkyKey<PackageIdentifier> {
     private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
@@ -134,15 +112,7 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
 
   /** Value indicating there is no containing package. */
   public static class NoContainingPackage extends ContainingPackageLookupValue {
-    private final String reason;
-
-    private NoContainingPackage() {
-      this.reason = null;
-    }
-
-    NoContainingPackage(@Nonnull String reason) {
-      this.reason = reason;
-    }
+    private NoContainingPackage() {}
 
     @Override
     public boolean hasContainingPackage() {
@@ -162,11 +132,6 @@ public abstract class ContainingPackageLookupValue implements SkyValue {
     @Override
     public String toString() {
       return getClass().getName();
-    }
-
-    @Override
-    public String getReasonForNoContainingPackage() {
-      return reason;
     }
   }
 
