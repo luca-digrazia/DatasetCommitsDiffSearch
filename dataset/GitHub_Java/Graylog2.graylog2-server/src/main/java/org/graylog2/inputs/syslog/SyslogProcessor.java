@@ -20,7 +20,6 @@
 
 package org.graylog2.inputs.syslog;
 
-import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.TimerContext;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -34,6 +33,8 @@ import org.graylog2.logmessage.LogMessage;
 import org.productivity.java.syslog4j.server.impl.event.SyslogServerEvent;
 
 /**
+ * SyslogProcessor.java: 30.04.2012 12:16:17
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class SyslogProcessor {
@@ -46,37 +47,32 @@ public class SyslogProcessor {
     }
 
     public void messageReceived(String msg, InetAddress remoteAddress) throws Exception {
-        Metrics.newMeter(SyslogProcessor.class, "IncomingMessages", "messages", TimeUnit.SECONDS).mark();
+        server.getMeter(SyslogProcessor.class, "IncomingMessages", "messages").mark();
 
         // Convert to LogMessage
         LogMessage lm;
         try {
             lm = parse(msg, remoteAddress);
         } catch (Exception e) {
-            Metrics.newMeter(SyslogProcessor.class, "MessageParsingFailures", "failures", TimeUnit.SECONDS).mark();
+            server.getMeter(SyslogProcessor.class, "MessageParsingFailures", "failures").mark();
             LOG.error("Could not parse syslog message. Not further handling.", e);
             return;
         }
 
         if (!lm.isComplete()) {
-            Metrics.newMeter(SyslogProcessor.class, "IncompleteMessages", "messages", TimeUnit.SECONDS).mark();
+            server.getMeter(SyslogProcessor.class, "IncompleteMessages", "messages").mark();
             LOG.debug("Skipping incomplete message.");
             return;
-        }
-        
-        // Possibly remove full message.
-        if (!this.server.getConfiguration().isSyslogStoreFullMessageEnabled()) {
-            lm.setFullMessage(null);
         }
 
         // Add to process buffer.
         LOG.debug("Adding received syslog message <" + lm.getId() +"> to process buffer: " + lm);
-        Metrics.newMeter(SyslogProcessor.class, "ProcessedMessages", "messages", TimeUnit.SECONDS).mark();
+        server.getMeter(SyslogProcessor.class, "ProcessedMessages", "messages").mark();
         server.getProcessBuffer().insert(lm);
     }
 
     private LogMessage parse(String msg, InetAddress remoteAddress) throws UnknownHostException {
-        TimerContext tcx = Metrics.newTimer(SyslogProcessor.class, "SyslogParsedTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
+        TimerContext tcx = server.getTimer(SyslogProcessor.class, "SyslogParsedTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
 
         LogMessage lm = new LogMessage();
 

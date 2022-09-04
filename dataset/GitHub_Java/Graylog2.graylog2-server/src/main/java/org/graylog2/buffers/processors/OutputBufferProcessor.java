@@ -51,6 +51,7 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
     @Override
     public void onEvent(LogMessageEvent event, long sequence, boolean endOfBatch) throws Exception {
         server.getMeter(OutputBufferProcessor.class, "IncomingMessages", "messages").mark();
+        TimerContext tcx = server.getTimer(OutputBufferProcessor.class, "ProcessTime", TimeUnit.MICROSECONDS, TimeUnit.SECONDS).time();
 
         LogMessage msg = event.getMessage();
         LOG.debug("Processing message <" + msg.getId() + "> from OutputBuffer.");
@@ -74,8 +75,9 @@ public class OutputBufferProcessor implements EventHandler<LogMessageEvent> {
                 }
             }
         }
-
+        server.getMeter(OutputBufferProcessor.class, "OutgoingMessages", "messages").mark();
         LOG.debug("Wrote message <" + msg.getId() + "> to all outputs. Finished handling.");
+        tcx.stop();
     }
 
 }

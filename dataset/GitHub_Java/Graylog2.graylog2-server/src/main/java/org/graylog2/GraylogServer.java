@@ -227,24 +227,22 @@ public class GraylogServer implements Runnable {
     }
 
     public Timer getTimer(Class meteredClass, String name, TimeUnit measureUnit, TimeUnit bucketUnit) {
-        String id = name + meteredClass.getSimpleName();
-        if (this.timers.containsKey(id)) {
-            return this.timers.get(id);
+        if (this.timers.containsKey(name)) {
+            return this.timers.get(name);
         } else {
             Timer timer = Metrics.newTimer(meteredClass, name, measureUnit, bucketUnit);
-            this.timers.put(id, timer);
+            this.timers.put(name, timer);
 
             return timer;
         }
     }
 
     public Histogram getHistogram(Class meteredClass, String name) {
-        String id = name + meteredClass.getSimpleName();
-        if (this.histograms.containsKey(id)) {
-            return this.histograms.get(id);
+        if (this.histograms.containsKey(name)) {
+            return this.histograms.get(name);
         } else {
             Histogram histogram = Metrics.newHistogram(meteredClass, name);
-            this.histograms.put(id, histogram);
+            this.histograms.put(name, histogram);
 
             return histogram;
         }

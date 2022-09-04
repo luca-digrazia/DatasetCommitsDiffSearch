@@ -20,9 +20,7 @@
 
 package org.graylog2.inputs.syslog;
 
-import com.yammer.metrics.Metrics;
 import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
 import org.apache.log4j.Logger;
 import org.graylog2.GraylogServer;
 import org.jboss.netty.buffer.ChannelBuffer;
@@ -45,18 +43,14 @@ public class SyslogUDPDispatcher extends SimpleChannelHandler {
     private SyslogProcessor processor;
     private GraylogServer server;
 
-    public String parentInput;
-
-    public SyslogUDPDispatcher(GraylogServer server, String parentInput) {
+    public SyslogUDPDispatcher(GraylogServer server) {
         this.processor = new SyslogProcessor(server);
         this.server = server;
-        this.parentInput = parentInput;
     }
 
     @Override
     public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
-        Metrics.newMeter(SyslogUDPDispatcher.class, "ReceivedMessagesVia" + this.parentInput, "messages", TimeUnit.SECONDS).mark();
-        Metrics.newMeter(SyslogUDPDispatcher.class, "ReceivedMessages", "messages", TimeUnit.SECONDS).mark();
+        server.getMeter(SyslogUDPDispatcher.class, "ReceivedDatagrams", "datagrams").mark();
 
         InetSocketAddress remoteAddress = (InetSocketAddress) e.getRemoteAddress();
 
