@@ -1,7 +1,7 @@
 package io.quarkus.deployment.steps;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -26,13 +26,12 @@ import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.runtime.BannerRecorder;
 import io.quarkus.runtime.BannerRuntimeConfig;
-import io.quarkus.runtime.util.ClassPathUtils;
 
 public class BannerProcessor {
 
     private static final Logger logger = Logger.getLogger(BannerProcessor.class);
 
-    @BuildStep(onlyIfNot = { IsTest.class })
+    @BuildStep(loadsApplicationClasses = true, onlyIfNot = { IsTest.class })
     @Record(ExecutionTime.RUNTIME_INIT)
     public ConsoleFormatterBannerBuildItem recordBanner(BannerRecorder recorder, BannerConfig config,
             BannerRuntimeConfig bannerRuntimeConfig) {
@@ -53,29 +52,24 @@ public class BannerProcessor {
                 logger.warn("Could not locate banner file");
                 return "";
             }
-            return ClassPathUtils.readStream(bannerResourceURL, is -> {
-                try {
-                    byte[] content = FileUtil.readFileContents(is);
-                    String bannerTitle = new String(content, StandardCharsets.UTF_8);
+            try (InputStream is = bannerResourceURL.openStream()) {
+                byte[] content = FileUtil.readFileContents(is);
+                String bannerTitle = new String(content, StandardCharsets.UTF_8);
 
-                    int width = 0;
-                    try (Scanner scanner = new Scanner(bannerTitle)) {
-                        while (scanner.hasNextLine()) {
-                            width = Math.max(width, scanner.nextLine().length());
-                        }
-                    }
-
-                    String tagline = "\n";
-                    Boolean isDefaultBanner = entry.getValue();
-                    if (!isDefaultBanner) {
-                        tagline = String.format("\n%" + width + "s\n", "Powered by Quarkus " + Version.getVersion());
-                    }
-
-                    return bannerTitle + tagline;
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                int width = 0;
+                Scanner scanner = new Scanner(bannerTitle);
+                while (scanner.hasNextLine()) {
+                    width = Math.max(width, scanner.nextLine().length());
                 }
-            });
+
+                String tagline = "\n";
+                Boolean isDefaultBanner = entry.getValue();
+                if (!isDefaultBanner) {
+                    tagline = String.format("\n%" + width + "s\n", "Powered by Quarkus " + Version.getVersion());
+                }
+
+                return bannerTitle + tagline;
+            }
         } catch (IOException e) {
             logger.warn("Unable to read banner file");
             return "";
