@@ -1,9 +1,37 @@
+/*
+ * Copyright 2013 TORCH UG
+ *
+ * This file is part of Graylog2.
+ *
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package lib;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.ning.http.client.*;
+import com.ning.http.client.AsyncHandler;
+import com.ning.http.client.AsyncHttpProvider;
+import com.ning.http.client.FluentCaseInsensitiveStringsMap;
+import com.ning.http.client.HttpResponseBodyPart;
+import com.ning.http.client.HttpResponseHeaders;
+import com.ning.http.client.HttpResponseStatus;
+import com.ning.http.client.ListenableFuture;
+import com.ning.http.client.Request;
+import com.ning.http.client.Response;
+import com.ning.http.client.cookie.Cookie;
 import com.ning.http.client.listenable.AbstractListenableFuture;
+import play.mvc.Http;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,6 +46,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -125,12 +155,24 @@ public class StubHttpProvider implements AsyncHttpProvider {
                 public boolean closeUnderlyingConnection() {
                     return true;
                 }
+
+                @Override
+                public int length() {
+                    return getBodyPartBytes().length;
+                }
             });
             t = handler.onCompleted();
         } catch (Exception e) {
             e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
         }
-        return new ImmediateFuture<>(t);
+        final T finalT = t;
+        final Future<T> futureT = Executors.newSingleThreadExecutor().submit(new Callable<T>() {
+            @Override
+            public T call() throws Exception {
+                return finalT;
+            }
+        });
+        return new ImmediateFuture<>(futureT);
     }
 
     @Override
@@ -193,7 +235,7 @@ public class StubHttpProvider implements AsyncHttpProvider {
 
             @Override
             public String getContentType() {
-                return "application/json";
+                return Http.MimeTypes.JSON;
             }
 
             @Override
@@ -287,14 +329,14 @@ public class StubHttpProvider implements AsyncHttpProvider {
 
     private class ImmediateFuture<V> extends AbstractListenableFuture<V> {
 
-        private final V response;
+        private final Future<V> response;
 
-        public ImmediateFuture(V response) {
+        public ImmediateFuture(Future<V> response) {
             this.response = response;
         }
 
         @Override
-        public void done(Callable callable) {
+        public void done() {
         }
 
         @Override
@@ -336,12 +378,12 @@ public class StubHttpProvider implements AsyncHttpProvider {
 
         @Override
         public V get() throws InterruptedException, ExecutionException {
-            return response;
+            return response.get();
         }
 
         @Override
         public V get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
-            return get();
+            return response.get(timeout, unit);
         }
     }
 }

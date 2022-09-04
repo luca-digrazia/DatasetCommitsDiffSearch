@@ -1,24 +1,25 @@
 /**
- * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 package controllers.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import controllers.AuthenticatedController;
@@ -37,16 +38,7 @@ import org.graylog2.restclient.models.dashboards.widgets.FieldChartWidget;
 import org.graylog2.restclient.models.dashboards.widgets.QuickvaluesWidget;
 import org.graylog2.restclient.models.dashboards.widgets.SearchResultChartWidget;
 import org.graylog2.restclient.models.dashboards.widgets.SearchResultCountWidget;
-import org.graylog2.restclient.models.dashboards.widgets.StatisticalCountWidget;
 import org.graylog2.restclient.models.dashboards.widgets.StreamSearchResultCountWidget;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.joda.time.Days;
-import org.joda.time.Duration;
-import org.joda.time.Hours;
-import org.joda.time.Minutes;
-import org.joda.time.MutableDateTime;
-import org.joda.time.Weeks;
 import play.Logger;
 import play.libs.Json;
 import play.mvc.BodyParser;
@@ -57,6 +49,7 @@ import views.helpers.Permissions;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -141,42 +134,13 @@ public class DashboardsApiController extends AuthenticatedController {
         return ok();
     }
 
-    public Result widget(String dashboardId, String widgetId) {
-        try {
-            Dashboard dashboard = dashboardService.get(dashboardId);
-            DashboardWidget widget = dashboard.getWidget(widgetId);
-
-            Map<String, Object> result = Maps.newHashMap();
-            result.put("type", widget.getType());
-            result.put("id", widget.getId());
-            result.put("dashboard_id", widget.getDashboard().getId());
-            result.put("description", widget.getDescription());
-            result.put("cache_time", widget.getCacheTime());
-            result.put("creator_user_id", widget.getCreatorUserId());
-            result.putAll(widget.getConfig());
-
-            return ok(Json.toJson(result));
-        } catch (APIException e) {
-            String message = "Could not get dashboard. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-    }
-
     public Result widgetValue(String dashboardId, String widgetId, int resolution) {
         try {
             Dashboard dashboard = dashboardService.get(dashboardId);
             DashboardWidget widget = dashboard.getWidget(widgetId);
             DashboardWidgetValueResponse widgetValue = widget.getValue(api());
 
-            Object resultValue;
-            if (widget instanceof SearchResultChartWidget) {
-                resultValue = formatWidgetValueResults(resolution, widget, widgetValue);
-            } else {
-                resultValue = widgetValue.result;
-            }
-
+            Object resultValue = (widget instanceof SearchResultChartWidget) ? filterValuesByResolution(resolution, widgetValue.result) : widgetValue.result;
             Map<String, Object> result = Maps.newHashMap();
             result.put("result", resultValue);
             result.put("took_ms", widgetValue.tookMs);
@@ -192,151 +156,30 @@ public class DashboardsApiController extends AuthenticatedController {
         }
     }
 
-    protected Map<String, Long> formatWidgetValueResults(final int maxDataPoints,
-                                                               final DashboardWidget widget,
-                                                               final DashboardWidgetValueResponse widgetValue) {
-        final Map<String, Object> widgetConfig = widget.getConfig();
-        final String interval = widgetConfig.containsKey("interval") ? (String) widgetConfig.get("interval") : "minute";
-        final boolean allQuery = widgetConfig.get("range_type").equals("relative") && widgetConfig.get("range").equals("0");
-
-        return formatWidgetValueResults(maxDataPoints,
-                widgetValue.result,
-                interval,
-                widgetValue.computationTimeRange,
-                allQuery);
-    }
-
-    // TODO: Extract common parts of this and the similar method on SearchApiController
-    protected Map<String, Long> formatWidgetValueResults(final int maxDataPoints,
-                                                         final Object resultValue,
-                                                         final String interval,
-                                                         final Map<String, Object> timeRange,
-                                                         final boolean allQuery) {
-        final Map<String, Long> points = Maps.newHashMap();
-
-        if (resultValue instanceof Map) {
+    // in case the widget submitted its resolution, make sure we do not deliver more result values than the widget can display for performance reasons
+    private Object filterValuesByResolution(final int resolution, final Object resultValue) {
+        if (resultValue instanceof Map && resolution != -1) {
             final Map<?, ?> resultMap = (Map) resultValue;
-
-            DateTime from;
-            if (allQuery) {
-                String firstTimestamp = (String) resultMap.entrySet().iterator().next().getKey();
-                from = new DateTime(Long.parseLong(firstTimestamp) * 1000, DateTimeZone.UTC);
-            } else {
-                from = DateTime.parse((String) timeRange.get("from")).withZone(DateTimeZone.UTC);
-            }
-            final DateTime to = DateTime.parse((String) timeRange.get("to"));
-            final MutableDateTime currentTime = new MutableDateTime(from);
-
-            final Duration step = estimateIntervalStep(interval);
-            final int dataPoints = (int) ((to.getMillis() - from.getMillis()) / step.getMillis());
-
-            // using the absolute value guarantees, that there will always be enough values for the given resolution
-            final int factor = (maxDataPoints != -1 && dataPoints > maxDataPoints) ? dataPoints / maxDataPoints : 1;
-
-            int index = 0;
-            floorToBeginningOfInterval(interval, currentTime);
-            while (currentTime.isBefore(to) || currentTime.isEqual(to)) {
-                if (index % factor == 0) {
-                    String timestamp = Long.toString(currentTime.getMillis() / 1000);
-                    Object value = resultMap.get(timestamp);
-                    Long result = value == null ? 0L : Long.parseLong(String.valueOf(value));
-                    points.put(timestamp, result);
+            final int size = resultMap.size();
+            if (size > resolution) {
+                // using the absolute value guarantees, that there will always be enough values for the given resolution
+                final int factor = size / resolution;
+                // shortcut, no need to copy verbatim
+                if (factor != 1) {
+                    final Map<Object, Object> filteredResults = new LinkedHashMap<>(resolution);
+                    int index = 0;
+                    for (Map.Entry entry : resultMap.entrySet()) {
+                        // TODO: instead of sampling we might consider interpolation (compare SearchController)
+                        if (index % factor == 0) {
+                            filteredResults.put(entry.getKey(), entry.getValue());
+                        }
+                        index++;
+                    }
+                    return filteredResults;
                 }
-                index++;
-                nextStep(interval, currentTime);
             }
         }
-        return points;
-    }
-
-    private void nextStep(String interval, MutableDateTime currentTime) {
-        switch (interval) {
-            case "minute":
-                currentTime.addMinutes(1);
-                break;
-            case "hour":
-                currentTime.addHours(1);
-                break;
-            case "day":
-                currentTime.addDays(1);
-                break;
-            case "week":
-                currentTime.addWeeks(1);
-                break;
-            case "month":
-                currentTime.addMonths(1);
-                break;
-            case "quarter":
-                currentTime.addMonths(3);
-                break;
-            case "year":
-                currentTime.addYears(1);
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid duration specified: " + interval);
-        }
-    }
-
-    private void floorToBeginningOfInterval(String interval, MutableDateTime currentTime) {
-        switch (interval) {
-            case "minute":
-                currentTime.minuteOfDay().roundFloor();
-                break;
-            case "hour":
-                currentTime.hourOfDay().roundFloor();
-                break;
-            case "day":
-                currentTime.dayOfMonth().roundFloor();
-                break;
-            case "week":
-                currentTime.weekOfWeekyear().roundFloor();
-                break;
-            case "month":
-                currentTime.monthOfYear().roundFloor();
-                break;
-            case "quarter":
-                // set the month to the beginning of the quarter
-                int currentQuarter = ((currentTime.getMonthOfYear() - 1) / 3);
-                int startOfQuarter = (currentQuarter * 3) + 1;
-                currentTime.setMonthOfYear(startOfQuarter);
-                currentTime.monthOfYear().roundFloor();
-                break;
-            case "year":
-                currentTime.yearOfCentury().roundFloor();
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid duration specified: " + interval);
-        }
-    }
-
-    private Duration estimateIntervalStep(String interval) {
-        Duration step;
-        switch (interval) {
-            case "minute":
-                step = Minutes.ONE.toStandardDuration();
-                break;
-            case "hour":
-                step = Hours.ONE.toStandardDuration();
-                break;
-            case "day":
-                step = Days.ONE.toStandardDuration();
-                break;
-            case "week":
-                step = Weeks.ONE.toStandardDuration();
-                break;
-            case "month":
-                step = Days.days(31).toStandardDuration();
-                break;
-            case "quarter":
-                step = Days.days(31 * 3).toStandardDuration();
-                break;
-            case "year":
-                step = Days.days(365).toStandardDuration();
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid duration specified: " + interval);
-        }
-        return step;
+        return resultValue;
     }
 
     @BodyParser.Of(BodyParser.FormUrlEncoded.class)
@@ -372,39 +215,16 @@ public class DashboardsApiController extends AuthenticatedController {
                 streamId = params.get("streamid");
             }
 
-            final DashboardWidget widget;
+            DashboardWidget widget;
             try {
-                final DashboardWidget.Type widgetType = DashboardWidget.Type.valueOf(params.get("widgetType"));
-                switch (widgetType) {
-                    case SEARCH_RESULT_COUNT: {
-                        final Boolean trend = Boolean.parseBoolean(params.get("trend"));
-                        if (trend) {
-                            if (!rangeType.equals("relative")) {
-                                Logger.error("Cannot add search result count widget with trend on a non relative time range");
-                                return badRequest();
-                            }
-                            final Boolean lowerIsBetter = Boolean.parseBoolean(params.get("lowerIsBetter"));
-                            widget = new SearchResultCountWidget(dashboard, query, timerange, description, trend, lowerIsBetter);
-                        } else {
-                            widget = new SearchResultCountWidget(dashboard, query, timerange, description);
-                        }
+                switch (DashboardWidget.Type.valueOf(params.get("widgetType"))) {
+                    case SEARCH_RESULT_COUNT:
+                        widget = new SearchResultCountWidget(dashboard, query, timerange, description);
                         break;
-                    }
-                    case STREAM_SEARCH_RESULT_COUNT: {
+                    case STREAM_SEARCH_RESULT_COUNT:
                         if (!canReadStream(streamId)) return unauthorized();
-                        final Boolean trend = Boolean.parseBoolean(params.get("trend"));
-                        if (trend) {
-                            if (!rangeType.equals("relative")) {
-                                Logger.error("Cannot add search result count widget with trend on a non relative time range");
-                                return badRequest();
-                            }
-                            final Boolean lowerIsBetter = Boolean.parseBoolean(params.get("lowerIsBetter"));
-                            widget = new StreamSearchResultCountWidget(dashboard, query, timerange, description, trend, lowerIsBetter, streamId);
-                        } else {
-                            widget = new StreamSearchResultCountWidget(dashboard, query, timerange, description, streamId);
-                        }
+                        widget = new StreamSearchResultCountWidget(dashboard, query, timerange, description, streamId);
                         break;
-                    }
                     case FIELD_CHART:
                         Map<String, Object> config = new HashMap<String, Object>() {{
                             put("field", params.get("field"));
@@ -425,22 +245,6 @@ public class DashboardsApiController extends AuthenticatedController {
                         if (!canReadStream(streamId)) return unauthorized();
                         widget = new SearchResultChartWidget(dashboard, query, timerange, description, streamId, params.get("interval"));
                         break;
-                    case STATS_COUNT: {
-                        final String field = params.get("field");
-                        final String statsFunction = params.get("statsFunction");
-                        final Boolean trend = Boolean.parseBoolean(params.get("trend"));
-                        if (trend) {
-                            if (!rangeType.equals("relative")) {
-                                Logger.error("Cannot add statistical count widget with trend on a non relative time range");
-                                return badRequest();
-                            }
-                            final Boolean lowerIsBetter = Boolean.parseBoolean(params.get("lowerIsBetter"));
-                            widget = new StatisticalCountWidget(dashboard, query, timerange, description, trend, lowerIsBetter, field, statsFunction, streamId);
-                        } else {
-                            widget = new StatisticalCountWidget(dashboard, query, timerange, description, field, statsFunction, streamId);
-                        }
-                        break;
-                    }
                     default:
                         throw new IllegalArgumentException();
                 }
