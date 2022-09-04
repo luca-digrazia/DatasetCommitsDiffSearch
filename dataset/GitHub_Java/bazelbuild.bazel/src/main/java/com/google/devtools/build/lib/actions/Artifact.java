@@ -267,8 +267,7 @@ public class Artifact
    * <p> The directory name is always a relative path to the execution directory.
    */
   @SkylarkCallable(name = "dirname", structField = true,
-      doc = "The name of the directory containing this file. It's taken from "
-          + "<a href=\"#path\">path</a> and is always relative to the execution directory.")
+      doc = "The name of the directory containing this file.")
   public final String getDirname() {
     PathFragment parent = getExecPath().getParentDirectory();
     return (parent == null) ? "/" : parent.getSafePathString();
