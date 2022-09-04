@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -264,9 +265,10 @@ public final class CcToolchainProvider extends ToolchainInfo {
     return builtInIncludeDirectories;
   }
 
-  /** Returns the identifier of the toolchain as specified in the {@code CToolchain} proto. */
-  public String getToolchainIdentifier() {
-    return toolchainInfo.getToolchainIdentifier();
+  /** Returns the {@link CToolchain} for this toolchain. */
+  @VisibleForTesting
+  public CToolchain getToolchain() {
+    return toolchainInfo.getToolchain();
   }
 
   /**
