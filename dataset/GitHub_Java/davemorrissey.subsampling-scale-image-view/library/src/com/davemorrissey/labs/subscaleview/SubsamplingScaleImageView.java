@@ -494,11 +494,8 @@ public class SubsamplingScaleImageView extends View {
      */
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        PointF sCenter = getCenter();
-        if (readySent && sCenter != null) {
-            this.anim = null;
-            this.pendingScale = scale;
-            this.sPendingCenter = sCenter;
+        if (readySent) {
+            setScaleAndCenter(getScale(), getCenter());
         }
     }
 
