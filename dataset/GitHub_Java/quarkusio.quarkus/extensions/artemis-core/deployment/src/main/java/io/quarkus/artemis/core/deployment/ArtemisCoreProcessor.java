@@ -1,7 +1,11 @@
 package io.quarkus.artemis.core.deployment;
 
 import java.util.Collection;
+import java.util.Optional;
 
+import javax.enterprise.context.ApplicationScoped;
+
+import org.apache.activemq.artemis.api.core.client.ServerLocator;
 import org.apache.activemq.artemis.api.core.client.loadbalance.ConnectionLoadBalancingPolicy;
 import org.apache.activemq.artemis.api.core.client.loadbalance.FirstElementConnectionLoadBalancingPolicy;
 import org.apache.activemq.artemis.api.core.client.loadbalance.RandomConnectionLoadBalancingPolicy;
@@ -9,25 +13,23 @@ import org.apache.activemq.artemis.api.core.client.loadbalance.RandomStickyConne
 import org.apache.activemq.artemis.api.core.client.loadbalance.RoundRobinConnectionLoadBalancingPolicy;
 import org.apache.activemq.artemis.core.remoting.impl.netty.NettyConnectorFactory;
 import org.apache.activemq.artemis.spi.core.remoting.ConnectorFactory;
-import org.apache.commons.logging.impl.Jdk14Logger;
-import org.apache.commons.logging.impl.LogFactoryImpl;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.logging.Logger;
 
-import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.BeanContainerBuildItem;
-import io.quarkus.artemis.core.runtime.ArtemisBuildConfig;
-import io.quarkus.artemis.core.runtime.ArtemisCoreProducer;
-import io.quarkus.artemis.core.runtime.ArtemisCoreTemplate;
+import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.artemis.core.runtime.ArtemisCoreRecorder;
 import io.quarkus.artemis.core.runtime.ArtemisRuntimeConfig;
+import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
 public class ArtemisCoreProcessor {
 
@@ -45,11 +47,15 @@ public class ArtemisCoreProcessor {
     };
 
     @BuildStep
+    NativeImageConfigBuildItem config() {
+        return NativeImageConfigBuildItem.builder()
+                .addRuntimeInitializedClass("org.apache.activemq.artemis.api.core.ActiveMQBuffers")
+                .addRuntimeInitializedClass("org.apache.activemq.artemis.utils.RandomUtil").build();
+    }
+
+    @BuildStep
     void build(CombinedIndexBuildItem indexBuildItem,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
-
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
-                LogFactoryImpl.class.getName(), Jdk14Logger.class.getName()));
 
         Collection<ClassInfo> connectorFactories = indexBuildItem.getIndex()
                 .getAllKnownImplementors(DotName.createSimple(ConnectorFactory.class.getName()));
@@ -74,28 +80,46 @@ public class ArtemisCoreProcessor {
         for (Class c : BUILTIN_LOADBALANCING_POLICIES) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, c));
         }
-
     }
 
     @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    void load(ArtemisBuildConfig config, BuildProducer<AdditionalBeanBuildItem> additionalBean,
-            BuildProducer<FeatureBuildItem> feature) {
+    HealthBuildItem health(ArtemisBuildTimeConfig buildConfig, Optional<ArtemisJmsBuildItem> artemisJms) {
+        if (artemisJms.isPresent()) {
+            return null;
+        }
 
-        if (config.getProtocol() != ArtemisBuildConfig.Protocol.CORE) {
+        return new HealthBuildItem(
+                "io.quarkus.artemis.core.runtime.health.ServerLocatorHealthCheck",
+                buildConfig.healthEnabled);
+    }
+
+    @BuildStep
+    void load(BuildProducer<FeatureBuildItem> feature, Optional<ArtemisJmsBuildItem> artemisJms) {
+
+        if (artemisJms.isPresent()) {
             return;
         }
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.ARTEMIS_CORE));
-        additionalBean.produce(AdditionalBeanBuildItem.unremovableOf(ArtemisCoreProducer.class));
+        feature.produce(new FeatureBuildItem(Feature.ARTEMIS_CORE));
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    void configure(ArtemisBuildConfig buildConfig, ArtemisCoreTemplate template, ArtemisRuntimeConfig runtimeConfig,
-            BeanContainerBuildItem beanContainer) {
+    ArtemisCoreConfiguredBuildItem configure(ArtemisCoreRecorder recorder, ArtemisRuntimeConfig runtimeConfig,
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeanProducer, Optional<ArtemisJmsBuildItem> artemisJms) {
 
-        if (buildConfig.getProtocol() == ArtemisBuildConfig.Protocol.CORE) {
-            template.setConfig(runtimeConfig, beanContainer.getValue());
+        if (artemisJms.isPresent()) {
+            return null;
         }
+
+        SyntheticBeanBuildItem serverLocator = SyntheticBeanBuildItem.configure(ServerLocator.class)
+                .supplier(recorder.getServerLocatorSupplier(runtimeConfig))
+                .scope(ApplicationScoped.class)
+                .defaultBean()
+                .unremovable()
+                .setRuntimeInit()
+                .done();
+        syntheticBeanProducer.produce(serverLocator);
+
+        return new ArtemisCoreConfiguredBuildItem();
     }
 }
