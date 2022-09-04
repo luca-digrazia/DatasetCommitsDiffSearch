@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -186,8 +187,12 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
         Iterables.concat(
             Iterables.transform(
                 provider.getDirectAndroidResources(),
-                (ResourceContainer resourceContainer) ->
-                    resourceContainer.getArtifacts(resources))));
+                new Function<ResourceContainer, Iterable<Artifact>>() {
+                  @Override
+                  public Iterable<Artifact> apply(ResourceContainer resourceContainer) {
+                    return resourceContainer.getArtifacts(resources);
+                  }
+                })));
   }
 
   /** Helper class to provide information about IDLs related to this rule. */
