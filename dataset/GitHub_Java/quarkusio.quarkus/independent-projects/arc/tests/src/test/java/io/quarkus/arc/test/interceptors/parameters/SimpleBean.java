@@ -17,21 +17,6 @@ public class SimpleBean {
         this.val = val;
     }
 
-    @Simple
-    void setNumberVal(final Number val) {
-        this.val = val != null ? val.toString() : null;
-    }
-
-    @Simple
-    void setPrimitiveIntVal(final int val) {
-        this.val = Integer.toString(val);
-    }
-
-    @Simple
-    void setIntVal(final Integer val) {
-        this.val = val != null ? val.toString() : null;
-    }
-
     String getVal() {
         return val != null ? val.toString() : null;
     }

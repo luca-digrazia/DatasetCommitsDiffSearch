@@ -15,11 +15,7 @@ public class ParamInterceptor {
 
         Object[] params = ctx.getParameters();
         if (params.length == 1 && params[0] != null) {
-            if (params[0] instanceof CharSequence) {
-                params[0] = params[0].getClass().getSimpleName();
-            } else if (params[0] instanceof Number) {
-                params[0] = 123456;
-            }
+            params[0] = params[0].getClass().getSimpleName();
             ctx.setParameters(params);
         }
         return ctx.proceed();
