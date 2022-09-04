@@ -22,6 +22,7 @@ import java.math.BigInteger;
 /** Definition of a symlink in the output tree of a Fileset rule. */
 @AutoValue
 public abstract class FilesetOutputSymlink {
+  private static final Integer STRIPPED_METADATA = new Integer(-1);
 
   /** Final name of the symlink relative to the Fileset's output directory. */
   public abstract PathFragment getName();
@@ -43,9 +44,9 @@ public abstract class FilesetOutputSymlink {
   /**
    * Return the best effort metadata about the target. Currently this will be a FileStateValue for
    * source targets. For generated targets we try to return a FileArtifactValue when possible, or
-   * else this will be a synthetic digest of the target.
+   * else this will be a Integer hashcode of the target.
    */
-  public abstract HasDigest getMetadata();
+  public abstract Object getMetadata();
 
   /** true if the target is a generated artifact */
   public abstract boolean isGeneratedTarget();
@@ -65,7 +66,7 @@ public abstract class FilesetOutputSymlink {
 
   @Override
   public final String toString() {
-    if (getMetadata() == HasDigest.EMPTY) {
+    if (getMetadata() == STRIPPED_METADATA) {
       return String.format(
           "FilesetOutputSymlink(%s -> %s)",
           getName().getPathString(), getTargetPath().getPathString());
@@ -88,13 +89,13 @@ public abstract class FilesetOutputSymlink {
   @VisibleForTesting
   public static FilesetOutputSymlink createForTesting(
       PathFragment name, PathFragment target, PathFragment execRoot) {
-    return create(name, target, HasDigest.EMPTY, false, execRoot);
+    return create(name, target, STRIPPED_METADATA, false, execRoot);
   }
 
   @VisibleForTesting
   public static FilesetOutputSymlink createAlreadyRelativizedForTesting(
       PathFragment name, PathFragment target, boolean isRelativeToExecRoot) {
-    return createAlreadyRelativized(name, target, HasDigest.EMPTY, false, isRelativeToExecRoot);
+    return createAlreadyRelativized(name, target, STRIPPED_METADATA, false, isRelativeToExecRoot);
   }
 
   /**
@@ -114,7 +115,7 @@ public abstract class FilesetOutputSymlink {
   public static FilesetOutputSymlink create(
       PathFragment name,
       PathFragment target,
-      HasDigest metadata,
+      Object metadata,
       boolean isGeneratedTarget,
       PathFragment execRoot) {
     boolean isRelativeToExecRoot = false;
@@ -136,7 +137,7 @@ public abstract class FilesetOutputSymlink {
   public static FilesetOutputSymlink createAlreadyRelativized(
       PathFragment name,
       PathFragment target,
-      HasDigest metadata,
+      Object metadata,
       boolean isGeneratedTarget,
       boolean isRelativeToExecRoot) {
     return new AutoValue_FilesetOutputSymlink(

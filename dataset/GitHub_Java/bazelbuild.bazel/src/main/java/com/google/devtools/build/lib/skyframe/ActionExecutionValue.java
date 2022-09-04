@@ -86,10 +86,7 @@ public class ActionExecutionValue implements SkyValue {
 
   @Nullable private final NestedSet<Artifact> discoveredModules;
 
-  /**
-   * Transient because it can be reconstituted on demand, and {@link BigInteger} isn't serializable.
-   */
-  @Nullable private transient BigInteger valueFingerprint;
+  private BigInteger valueFingerprint;
 
   /**
    * @param artifactData Map from Artifacts to corresponding {@link ArtifactFileMetadata}.
