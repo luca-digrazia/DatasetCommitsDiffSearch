@@ -50,6 +50,7 @@ import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
+import org.jboss.logmanager.Level;
 
 import io.quarkus.agroal.deployment.JdbcDataSourceBuildItem;
 import io.quarkus.agroal.deployment.JdbcDataSourceSchemaReadyBuildItem;
@@ -71,6 +72,7 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
+import io.quarkus.deployment.builditem.LogCategoryBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -357,7 +359,7 @@ public final class HibernateOrmProcessor {
             List<JdbcDataSourceBuildItem> dataSourcesConfigured,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured,
-            List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
+            Optional<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
         if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
@@ -716,6 +718,13 @@ public final class HibernateOrmProcessor {
         }
     }
 
+    @BuildStep
+    public void produceLoggingCategories(BuildProducer<LogCategoryBuildItem> categories) {
+        if (hibernateConfig.log.bindParam) {
+            categories.produce(new LogCategoryBuildItem("org.hibernate.type.descriptor.sql.BasicBinder", Level.TRACE));
+        }
+    }
+
     private Optional<String> guessDialect(Optional<String> dbKind) {
         // For now select the latest dialect from the driver
         // later, we can keep doing that but also avoid DCE
@@ -760,7 +769,7 @@ public final class HibernateOrmProcessor {
             try {
                 byte[] bytes = IoUtil.readClassAsBytes(HibernateOrmProcessor.class.getClassLoader(), className);
                 byte[] enhanced = hibernateEntityEnhancer.enhance(className, bytes);
-                additionalClasses.produce(new GeneratedClassBuildItem(false, className, enhanced != null ? enhanced : bytes));
+                additionalClasses.produce(new GeneratedClassBuildItem(true, className, enhanced != null ? enhanced : bytes));
             } catch (IOException e) {
                 throw new RuntimeException("Failed to read Model class", e);
             }
