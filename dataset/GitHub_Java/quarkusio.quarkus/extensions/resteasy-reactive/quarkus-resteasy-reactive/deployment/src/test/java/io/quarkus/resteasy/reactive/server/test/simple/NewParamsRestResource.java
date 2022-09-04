@@ -1,5 +1,7 @@
 package io.quarkus.resteasy.reactive.server.test.simple;
 
+import java.util.Optional;
+
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -26,6 +28,8 @@ import org.jboss.resteasy.reactive.server.SimpleResourceInfo;
 import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
 import org.junit.jupiter.api.Assertions;
 
+import io.quarkus.runtime.BlockingOperationControl;
+import io.smallrye.common.annotation.Blocking;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 
@@ -42,11 +46,30 @@ public class NewParamsRestResource {
     @Path("params/{p}")
     public String params(@RestPath String p,
             @RestQuery String q,
+            @RestQuery Optional<String> q2,
+            @RestQuery Optional<Integer> q3,
             @RestHeader int h,
+            @RestHeader String xMyHeader,
+            @RestHeader("Test-Header-Param") String testHeaderParam,
+            @RestHeader("") String paramEmpty,
             @RestForm String f,
             @RestMatrix String m,
             @RestCookie String c) {
-        return "params: p: " + p + ", q: " + q + ", h: " + h + ", f: " + f + ", m: " + m + ", c: " + c;
+        return "params: p: " + p + ", q: " + q + ", h: " + h + ", xMyHeader: " + xMyHeader + ", testHeaderParam: "
+                + testHeaderParam + ", paramEmpty: "
+                + paramEmpty + ", f: " + f + ", m: " + m + ", c: "
+                + c + ", q2: "
+                + q2.orElse("empty") + ", q3: " + q3.orElse(-1);
+    }
+
+    @Blocking
+    @POST
+    @Path("form-blocking")
+    public String formBlocking(@RestForm String f) {
+        if (!BlockingOperationControl.isBlockingAllowed()) {
+            throw new RuntimeException("should not have dispatched");
+        }
+        return f;
     }
 
     @GET

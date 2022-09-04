@@ -9,6 +9,8 @@ import org.hamcrest.Matchers;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusUnitTest;
@@ -42,7 +44,7 @@ public class SimpleQuarkusRestTestCase {
                                     ParameterWithFromString.class, BeanParamSubClass.class, FieldInjectedSubClassResource.class,
                                     BeanParamSuperClass.class, IllegalClassExceptionMapper.class,
                                     MyParameterProvider.class, MyParameterConverter.class, MyParameter.class,
-                                    NewParamsRestResource.class);
+                                    NewParamsRestResource.class, InterfaceResource.class, InterfaceResourceImpl.class);
                 }
             });
 
@@ -183,6 +185,7 @@ public class SimpleQuarkusRestTestCase {
                 .then().body(Matchers.equalTo("VERTX-BUFFER"));
     }
 
+    @DisabledOnOs(OS.WINDOWS)
     @Test
     public void testAsync() {
         RestAssured.get("/simple/async/cs/ok")
@@ -294,6 +297,7 @@ public class SimpleQuarkusRestTestCase {
                 .formParam("f2", "v2")
                 .post("/simple/form-map")
                 .then()
+                .statusCode(200)
                 .contentType("application/x-www-form-urlencoded")
                 .body(Matchers.equalTo("f1=v1&f2=v2"));
     }
@@ -329,7 +333,7 @@ public class SimpleQuarkusRestTestCase {
                 .queryParam("queryList", "two")
                 .queryParam("int", "666")
                 .get("/injection/field")
-                .then().body(Matchers.equalTo("OK"));
+                .then().statusCode(200).body(Matchers.equalTo("OK"));
         RestAssured
                 .with()
                 .header("header", "one-header")
@@ -338,7 +342,7 @@ public class SimpleQuarkusRestTestCase {
                 .queryParam("queryList", "two")
                 .queryParam("int", "666")
                 .get("/injection/param")
-                .then().body(Matchers.equalTo("OK"));
+                .then().statusCode(200).body(Matchers.equalTo("OK"));
     }
 
     @Test
@@ -363,6 +367,7 @@ public class SimpleQuarkusRestTestCase {
                 .then().body(Matchers.equalTo("OK"));
     }
 
+    @DisabledOnOs(OS.WINDOWS)
     @Test
     public void testNewParams() {
         RestAssured.get("/new-params/myklass/myregex/context")
@@ -378,16 +383,28 @@ public class SimpleQuarkusRestTestCase {
                 .urlEncodingEnabled(false)
                 .cookie("c", "cv")
                 .queryParam("q", "qv")
+                .queryParam("q3", "999")
                 .header("h", "123")
+                .header("X-My-Header", "test")
+                .header("Test-Header-Param", "test")
+                .header("Param-Empty", "empty")
                 .formParam("f", "fv")
                 .post("/new-params/myklass;m=mv/myregex/params/pv")
                 .then()
                 .log().ifError()
-                .body(Matchers.equalTo("params: p: pv, q: qv, h: 123, f: fv, m: mv, c: cv"));
+                .body(Matchers
+                        .equalTo(
+                                "params: p: pv, q: qv, h: 123, xMyHeader: test, testHeaderParam: test, paramEmpty: empty, f: fv, m: mv, c: cv, q2: empty, q3: 999"));
         RestAssured.get("/new-params/myklass/myregex/sse")
                 .then()
                 .log().ifError()
                 .body(Matchers.equalTo("data:OK\n\n"));
+        RestAssured.with()
+                .urlEncodingEnabled(false)
+                .formParam("f", "fv")
+                .post("/new-params/myklass;m=mv/myregex/form-blocking")
+                .then()
+                .body(Matchers.equalTo("fv"));
     }
 
     @Test
@@ -400,5 +417,11 @@ public class SimpleQuarkusRestTestCase {
     public void bigDecimal() {
         RestAssured.get("/simple/bigDecimal/1.0")
                 .then().statusCode(200).body(Matchers.equalTo("1.0"));
+    }
+
+    @Test
+    public void testInterfaceResource() {
+        RestAssured.get("/iface")
+                .then().statusCode(200).body(Matchers.equalTo("Hello"));
     }
 }

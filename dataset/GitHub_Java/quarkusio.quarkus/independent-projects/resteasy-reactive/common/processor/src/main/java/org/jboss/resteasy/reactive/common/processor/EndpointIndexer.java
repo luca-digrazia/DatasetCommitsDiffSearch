@@ -12,7 +12,6 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.COOKIE_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.DEFAULT_VALUE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.DOUBLE;
-import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.DUMMY_ELEMENT_TYPE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.FLOAT;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.FORM_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.HEADER_PARAM;
@@ -240,8 +239,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         }
     }
 
-    protected abstract METHOD createResourceMethod(MethodInfo info, ClassInfo actualEndpointClass,
-            Map<String, Object> methodContext);
+    protected abstract METHOD createResourceMethod(MethodInfo info, Map<String, Object> methodContext);
 
     protected List<ResourceMethod> createEndpoints(ClassInfo currentClassInfo,
             ClassInfo actualEndpointInfo, Set<String> seenMethods,
@@ -375,41 +373,40 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
     }
 
     private ResourceMethod createResourceMethod(ClassInfo currentClassInfo, ClassInfo actualEndpointInfo,
-            String[] classProduces, String[] classConsumes, Set<String> classNameBindings, DotName httpMethod,
-            MethodInfo currentMethodInfo,
-            String methodPath, Set<String> classPathParameters, String classSseElementType) {
+            String[] classProduces, String[] classConsumes, Set<String> classNameBindings, DotName httpMethod, MethodInfo info,
+            String methodPath,
+            Set<String> classPathParameters, String classSseElementType) {
         try {
             Map<String, Object> methodContext = new HashMap<>();
             Set<String> pathParameters = new HashSet<>(classPathParameters);
             URLUtils.parsePathParameters(methodPath, pathParameters);
-            Map<DotName, AnnotationInstance>[] parameterAnnotations = new Map[currentMethodInfo.parameters().size()];
-            MethodParameter[] methodParameters = new MethodParameter[currentMethodInfo.parameters()
+            Map<DotName, AnnotationInstance>[] parameterAnnotations = new Map[info.parameters().size()];
+            MethodParameter[] methodParameters = new MethodParameter[info.parameters()
                     .size()];
-            for (int paramPos = 0; paramPos < currentMethodInfo.parameters().size(); ++paramPos) {
+            for (int paramPos = 0; paramPos < info.parameters().size(); ++paramPos) {
                 parameterAnnotations[paramPos] = new HashMap<>();
             }
-            for (AnnotationInstance i : currentMethodInfo.annotations()) {
+            for (AnnotationInstance i : info.annotations()) {
                 if (i.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
                     parameterAnnotations[i.target().asMethodParameter().position()].put(i.name(), i);
                 }
             }
-            String[] consumes = extractProducesConsumesValues(currentMethodInfo.annotation(CONSUMES), classConsumes);
+            String[] consumes = extractProducesConsumesValues(info.annotation(CONSUMES), classConsumes);
             boolean suspended = false;
             boolean sse = false;
             boolean formParamRequired = false;
             boolean multipart = false;
             boolean hasBodyParam = false;
-            TypeArgMapper typeArgMapper = new TypeArgMapper(currentMethodInfo.declaringClass(), index);
+            TypeArgMapper typeArgMapper = new TypeArgMapper(info.declaringClass(), index);
             for (int i = 0; i < methodParameters.length; ++i) {
                 Map<DotName, AnnotationInstance> anns = parameterAnnotations[i];
                 boolean encoded = anns.containsKey(ResteasyReactiveDotNames.ENCODED);
-                Type paramType = currentMethodInfo.parameters().get(i);
-                String errorLocation = "method " + currentMethodInfo + " on class " + currentMethodInfo.declaringClass();
+                Type paramType = info.parameters().get(i);
+                String errorLocation = "method " + info + " on class " + info.declaringClass();
 
                 PARAM parameterResult = extractParameterInfo(currentClassInfo, actualEndpointInfo,
                         existingConverters, additionalReaders,
-                        anns, paramType, errorLocation, false, hasRuntimeConverters, pathParameters,
-                        currentMethodInfo.parameterName(i),
+                        anns, paramType, errorLocation, false, hasRuntimeConverters, pathParameters, info.parameterName(i),
                         methodContext);
                 suspended |= parameterResult.isSuspended();
                 sse |= parameterResult.isSse();
@@ -419,8 +416,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                 if (type == ParameterType.BODY) {
                     if (hasBodyParam)
                         throw new RuntimeException(
-                                "Resource method " + currentMethodInfo + " can only have a single body parameter: "
-                                        + currentMethodInfo.parameterName(i));
+                                "Resource method " + info + " can only have a single body parameter: " + info.parameterName(i));
                     hasBodyParam = true;
                 }
                 String elementType = parameterResult.getElementType();
@@ -448,7 +444,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                 if (hasBodyParam) {
                     throw new RuntimeException(
                             "'@MultipartForm' cannot be used in a resource method that contains a body parameter. Offending method is '"
-                                    + currentMethodInfo.declaringClass().name() + "#" + currentMethodInfo + "'");
+                                    + info.declaringClass().name() + "#" + info.toString() + "'");
                 }
                 boolean validConsumes = false;
                 if (consumes != null) {
@@ -463,18 +459,18 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                 if (!validConsumes) {
                     throw new RuntimeException(
                             "'@MultipartForm' can only be used on methods that annotated with '@Consumes(MediaType.MULTIPART_FORM_DATA)'. Offending method is '"
-                                    + currentMethodInfo.declaringClass().name() + "#" + currentMethodInfo + "'");
+                                    + info.declaringClass().name() + "#" + info.toString() + "'");
                 }
             }
 
-            Type nonAsyncReturnType = getNonAsyncReturnType(currentMethodInfo.returnType());
+            Type nonAsyncReturnType = getNonAsyncReturnType(info.returnType());
             addWriterForType(additionalWriters, nonAsyncReturnType);
 
-            String[] produces = extractProducesConsumesValues(currentMethodInfo.annotation(PRODUCES), classProduces);
+            String[] produces = extractProducesConsumesValues(info.annotation(PRODUCES), classProduces);
             produces = applyDefaultProduces(produces, nonAsyncReturnType);
 
             String sseElementType = classSseElementType;
-            AnnotationInstance sseElementTypeAnnotation = currentMethodInfo.annotation(REST_SSE_ELEMENT_TYPE);
+            AnnotationInstance sseElementTypeAnnotation = info.annotation(REST_SSE_ELEMENT_TYPE);
             if (sseElementTypeAnnotation != null) {
                 sseElementType = sseElementTypeAnnotation.value().asString();
             }
@@ -485,25 +481,32 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                     sseElementType = defaultProducesForType[0];
                 }
             }
-            Set<String> nameBindingNames = nameBindingNames(currentMethodInfo, classNameBindings);
-            boolean blocking = isBlocking(currentMethodInfo, defaultBlocking);
-            // we want to allow "overriding" the blocking/non-blocking setting from an implementation class
-            // when the class defining the annotations is an interface
-            if (!actualEndpointInfo.equals(currentClassInfo) && Modifier.isInterface(currentClassInfo.flags())) {
-                MethodInfo actualMethodInfo = actualEndpointInfo.method(currentMethodInfo.name(),
-                        currentMethodInfo.parameters().toArray(new Type[0]));
-                if (actualMethodInfo != null) {
-                    blocking = isBlocking(actualMethodInfo, blocking);
+            Set<String> nameBindingNames = nameBindingNames(info, classNameBindings);
+            boolean blocking = defaultBlocking;
+            Map.Entry<AnnotationTarget, AnnotationInstance> blockingAnnotation = getInheritableAnnotation(info, BLOCKING);
+            Map.Entry<AnnotationTarget, AnnotationInstance> nonBlockingAnnotation = getInheritableAnnotation(info,
+                    NON_BLOCKING);
+            if ((blockingAnnotation != null) && (nonBlockingAnnotation != null)) {
+                if (blockingAnnotation.getKey().kind() == AnnotationTarget.Kind.METHOD) {
+                    // the most specific annotation was the @Blocking annotation on the method
+                    blocking = true;
+                } else {
+                    // the most specific annotation was the @NonBlocking annotation on the method
+                    blocking = false;
                 }
+            } else if ((blockingAnnotation != null) && (nonBlockingAnnotation == null)) {
+                blocking = true;
+            } else if ((nonBlockingAnnotation != null) && (blockingAnnotation == null)) {
+                blocking = false;
             }
 
-            ResourceMethod method = createResourceMethod(currentMethodInfo, actualEndpointInfo, methodContext)
+            ResourceMethod method = createResourceMethod(info, methodContext)
                     .setHttpMethod(httpMethod == null ? null : httpAnnotationToMethod.get(httpMethod))
                     .setPath(methodPath)
                     .setConsumes(consumes)
                     .setProduces(produces)
                     .setNameBindingNames(nameBindingNames)
-                    .setName(currentMethodInfo.name())
+                    .setName(info.name())
                     .setBlocking(blocking)
                     .setSuspended(suspended)
                     .setSse(sse)
@@ -511,49 +514,17 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                     .setFormParamRequired(formParamRequired)
                     .setMultipart(multipart)
                     .setParameters(methodParameters)
-                    .setSimpleReturnType(
-                            toClassName(currentMethodInfo.returnType(), currentClassInfo, actualEndpointInfo, index))
+                    .setSimpleReturnType(toClassName(info.returnType(), currentClassInfo, actualEndpointInfo, index))
                     // FIXME: resolved arguments ?
-                    .setReturnType(
-                            determineReturnType(currentMethodInfo, typeArgMapper, currentClassInfo, actualEndpointInfo, index));
-
-            if (httpMethod == null) {
-                handleClientSubResource(method, currentMethodInfo, index);
-            }
-
-            handleAdditionalMethodProcessing((METHOD) method, currentClassInfo, currentMethodInfo);
+                    .setReturnType(determineReturnType(info, typeArgMapper, currentClassInfo, actualEndpointInfo, index));
+            handleAdditionalMethodProcessing((METHOD) method, currentClassInfo, info);
             if (resourceMethodCallback != null) {
-                resourceMethodCallback.accept(new AbstractMap.SimpleEntry<>(currentMethodInfo, method));
+                resourceMethodCallback.accept(new AbstractMap.SimpleEntry<>(info, method));
             }
             return method;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to process method " + currentMethodInfo.declaringClass().name() + "#"
-                    + currentMethodInfo, e);
+            throw new RuntimeException("Failed to process method " + info.declaringClass().name() + "#" + info.toString(), e);
         }
-    }
-
-    protected void handleClientSubResource(ResourceMethod resourceMethod, MethodInfo method, IndexView index) {
-
-    }
-
-    private boolean isBlocking(MethodInfo info, boolean defaultValue) {
-        Map.Entry<AnnotationTarget, AnnotationInstance> blockingAnnotation = getInheritableAnnotation(info, BLOCKING);
-        Map.Entry<AnnotationTarget, AnnotationInstance> nonBlockingAnnotation = getInheritableAnnotation(info,
-                NON_BLOCKING);
-        if ((blockingAnnotation != null) && (nonBlockingAnnotation != null)) {
-            if (blockingAnnotation.getKey().kind() == AnnotationTarget.Kind.METHOD) {
-                // the most specific annotation was the @Blocking annotation on the method
-                return true;
-            } else {
-                // the most specific annotation was the @NonBlocking annotation on the method
-                return false;
-            }
-        } else if ((blockingAnnotation != null) && (nonBlockingAnnotation == null)) {
-            return true;
-        } else if ((nonBlockingAnnotation != null) && (blockingAnnotation == null)) {
-            return false;
-        }
-        return defaultValue;
     }
 
     protected void handleMultipart(ClassInfo multipartClassInfo) {
@@ -661,7 +632,7 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         return false;
     }
 
-    public static String[] extractProducesConsumesValues(AnnotationInstance annotation, String[] defaultValue) {
+    private static String[] extractProducesConsumesValues(AnnotationInstance annotation, String[] defaultValue) {
         String[] read = extractProducesConsumesValues(annotation);
         if (read == null) {
             return defaultValue;
@@ -946,11 +917,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                 builder.setOptional(true);
             } else if (convertible) {
                 throw new RuntimeException("Invalid parameter type '" + pt + "' used on method " + errorLocation);
-            } else {
-                // the "element" type is not of importance as in this case the signature is used at runtime to determine the proper types
-                elementType = DUMMY_ELEMENT_TYPE.toString();
-                addReaderForType(additionalReaders, pt);
-                typeHandled = true;
             }
         } else if ((paramType.name().equals(PATH_SEGMENT)) && (type == ParameterType.PATH)) {
             elementType = paramType.name().toString();
