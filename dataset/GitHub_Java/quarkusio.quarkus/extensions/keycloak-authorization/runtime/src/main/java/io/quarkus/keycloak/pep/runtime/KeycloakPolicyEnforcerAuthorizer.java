@@ -8,8 +8,6 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import javax.annotation.PostConstruct;
-import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import org.keycloak.AuthorizationContext;
@@ -21,8 +19,11 @@ import org.keycloak.representations.adapters.config.PolicyEnforcerConfig;
 
 import io.quarkus.oidc.OidcTenantConfig;
 import io.quarkus.oidc.common.runtime.OidcCommonConfig.Tls.Verification;
+import io.quarkus.oidc.runtime.OidcConfig;
+import io.quarkus.runtime.TlsConfig;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
+import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.security.HttpSecurityPolicy;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
@@ -31,9 +32,8 @@ import io.vertx.ext.web.RoutingContext;
 public class KeycloakPolicyEnforcerAuthorizer
         implements HttpSecurityPolicy, BiFunction<RoutingContext, SecurityIdentity, HttpSecurityPolicy.CheckResult> {
 
-    @Inject
-    KeycloakPolicyEnforcerConfigBean configBean;
-    private KeycloakAdapterPolicyEnforcer delegate;
+    private volatile KeycloakAdapterPolicyEnforcer delegate;
+    private volatile long readTimeout;
 
     @Override
     public Uni<CheckResult> checkPermission(RoutingContext request, Uni<SecurityIdentity> identity,
@@ -43,8 +43,7 @@ public class KeycloakPolicyEnforcerAuthorizer
 
     @Override
     public CheckResult apply(RoutingContext routingContext, SecurityIdentity identity) {
-        VertxHttpFacade httpFacade = new VertxHttpFacade(routingContext,
-                configBean.httpConfiguration.readTimeout.toMillis());
+        VertxHttpFacade httpFacade = new VertxHttpFacade(routingContext, readTimeout);
         AuthorizationContext result = delegate.authorize(httpFacade);
 
         if (result.isGranted()) {
@@ -92,10 +91,10 @@ public class KeycloakPolicyEnforcerAuthorizer
                 }).build();
     }
 
-    @PostConstruct
-    public void init() {
+    public void init(OidcConfig oidcConfig, KeycloakPolicyEnforcerConfig config, TlsConfig tlsConfig,
+            HttpConfiguration httpConfiguration) {
         AdapterConfig adapterConfig = new AdapterConfig();
-        String authServerUrl = configBean.oidcConfig.defaultTenant.getAuthServerUrl().get();
+        String authServerUrl = oidcConfig.defaultTenant.getAuthServerUrl().get();
 
         try {
             adapterConfig.setRealm(authServerUrl.substring(authServerUrl.lastIndexOf('/') + 1));
@@ -104,24 +103,22 @@ public class KeycloakPolicyEnforcerAuthorizer
             throw new RuntimeException("Failed to parse the realm name.", cause);
         }
 
-        adapterConfig.setResource(configBean.oidcConfig.defaultTenant.getClientId().get());
-        adapterConfig.setCredentials(getCredentials(configBean.oidcConfig.defaultTenant));
+        adapterConfig.setResource(oidcConfig.defaultTenant.getClientId().get());
+        adapterConfig.setCredentials(getCredentials(oidcConfig.defaultTenant));
 
-        boolean trustAll = configBean.oidcConfig.defaultTenant.tls.getVerification().isPresent()
-                ? configBean.oidcConfig.defaultTenant.tls.getVerification().get() == Verification.NONE
-                : configBean.tlsConfig.trustAll;
+        boolean trustAll = oidcConfig.defaultTenant.tls.getVerification().isPresent()
+                ? oidcConfig.defaultTenant.tls.getVerification().get() == Verification.NONE
+                : tlsConfig.trustAll;
         if (trustAll) {
             adapterConfig.setDisableTrustManager(true);
             adapterConfig.setAllowAnyHostname(true);
         }
 
-        if (configBean.oidcConfig.defaultTenant.proxy.host.isPresent()) {
-            adapterConfig.setProxyUrl(configBean.oidcConfig.defaultTenant.proxy.host.get() + ":"
-                    + configBean.oidcConfig.defaultTenant.proxy.port);
+        if (oidcConfig.defaultTenant.proxy.host.isPresent()) {
+            adapterConfig.setProxyUrl(oidcConfig.defaultTenant.proxy.host.get() + ":" + oidcConfig.defaultTenant.proxy.port);
         }
 
-        PolicyEnforcerConfig enforcerConfig = getPolicyEnforcerConfig(configBean.keycloakPolicyEnforcerConfig,
-                adapterConfig);
+        PolicyEnforcerConfig enforcerConfig = getPolicyEnforcerConfig(config, adapterConfig);
 
         if (enforcerConfig == null) {
             return;
@@ -129,6 +126,7 @@ public class KeycloakPolicyEnforcerAuthorizer
 
         adapterConfig.setPolicyEnforcerConfig(enforcerConfig);
 
+        this.readTimeout = httpConfiguration.readTimeout.toMillis();
         this.delegate = new KeycloakAdapterPolicyEnforcer(
                 new PolicyEnforcer(KeycloakDeploymentBuilder.build(adapterConfig), adapterConfig));
     }
