@@ -32,7 +32,6 @@ import java.util.Collection;
 import java.util.Enumeration;
 
 import javax.servlet.Servlet;
-import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.ext.Providers;
 
@@ -69,7 +68,6 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
     private static final DotName APPLICATION_PATH = DotName.createSimple("javax.ws.rs.ApplicationPath");
 
     private static final DotName PATH = DotName.createSimple("javax.ws.rs.Path");
-    private static final DotName DYNAMIC_FEATURE = DotName.createSimple(DynamicFeature.class.getName());
 
     private static final DotName XML_ROOT = DotName.createSimple("javax.xml.bind.annotation.XmlRootElement");
     private static final DotName JSONB_ANNOTATION = DotName.createSimple("javax.json.bind.annotation.JsonbAnnotation");
@@ -83,6 +81,7 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
             DotName.createSimple("javax.ws.rs.POST"),
             DotName.createSimple("javax.ws.rs.PUT"),
     };
+
 
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
@@ -107,11 +106,6 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
                 }
             }
         }
-
-        for (ClassInfo implementation : index.getAllKnownImplementors(DYNAMIC_FEATURE)) {
-            processorContext.addReflectiveClass(false, false, implementation.name().toString());
-        }
-
         AnnotationInstance appPath = app.iterator().next();
         String path = appPath.value().asString();
         String appClass = appPath.target().asClass().name().toString();
@@ -201,8 +195,6 @@ public class JaxrsScanningProcessor implements ResourceProcessor {
                 }
             }
         }
-
-
     }
 
     @Override
