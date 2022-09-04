@@ -18,6 +18,7 @@ package org.jboss.shamrock.scheduler.deployment;
 import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
@@ -42,6 +44,7 @@ import org.jboss.protean.arc.processor.BeanDeploymentValidator;
 import org.jboss.protean.arc.processor.BeanInfo;
 import org.jboss.protean.arc.processor.DotNames;
 import org.jboss.protean.arc.processor.ScopeInfo;
+import org.jboss.protean.arc.processor.Transformation;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.ClassOutput;
 import org.jboss.protean.gizmo.MethodCreator;
@@ -50,7 +53,7 @@ import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.shamrock.annotations.BuildProducer;
 import org.jboss.shamrock.annotations.BuildStep;
 import org.jboss.shamrock.annotations.Record;
-import org.jboss.shamrock.arc.deployment.AnnotationsTransformerBuildItem;
+import org.jboss.shamrock.arc.deployment.AnnotationTransformerBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanDeploymentValidatorBuildItem;
 import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
 import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
@@ -93,8 +96,8 @@ public class SchedulerProcessor {
     }
 
     @BuildStep
-    AnnotationsTransformerBuildItem annotationTransformer() {
-        return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
+    AnnotationTransformerBuildItem annotationTransformer() {
+        return new AnnotationTransformerBuildItem(new AnnotationsTransformer() {
 
             @Override
             public boolean appliesTo(org.jboss.jandex.AnnotationTarget.Kind kind) {
@@ -102,14 +105,14 @@ public class SchedulerProcessor {
             }
 
             @Override
-            public void transform(TransformationContext context) {
-                if (context.getAnnotations().isEmpty()) {
-                    // Class with no annotations but with @Scheduled method
-                    if (context.getTarget().asClass().annotations().containsKey(SCHEDULED_NAME) || context.getTarget().asClass().annotations().containsKey(SCHEDULEDS_NAME)) {
-                        LOGGER.infof("Found scheduled business methods on a class %s with no annotations - adding @Singleton", context.getTarget());
-                        context.transform().add(Singleton.class).done();
+            public Collection<AnnotationInstance> transform(AnnotationTarget target, Collection<AnnotationInstance> annotations) {
+                if (annotations.isEmpty()) {
+                    if (target.asClass().annotations().containsKey(SCHEDULED_NAME) || target.asClass().annotations().containsKey(SCHEDULEDS_NAME)) {
+                        LOGGER.infof("Found scheduled business methods on a class %s with no annotations - adding @Singleton", target.asClass().name());
+                        return Transformation.with(target, annotations).add(Singleton.class).done();
                     }
                 }
+                return annotations;
             }
         });
     }
@@ -221,11 +224,11 @@ public class SchedulerProcessor {
                 .build();
 
         MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, ScheduledExecution.class);
-        // InstanceHandle<Foo> handle = Arc.container().instanceByBeanId("1");
+        // InstanceHandle<Foo> handle = Arc.container().instance("1");
         // handle.get().ping();
         ResultHandle containerHandle = invoke.invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
         ResultHandle instanceHandle = invoke.invokeInterfaceMethod(
-                MethodDescriptor.ofMethod(ArcContainer.class, "instanceByBeanId", InstanceHandle.class, String.class), containerHandle,
+                MethodDescriptor.ofMethod(ArcContainer.class, "instance", InstanceHandle.class, String.class), containerHandle,
                 invoke.load(bean.getIdentifier()));
         ResultHandle beanHandle = invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle);
         if (method.parameters().isEmpty()) {

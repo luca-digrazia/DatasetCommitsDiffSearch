@@ -16,7 +16,9 @@
 
 package org.jboss.protean.arc.processor;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -47,11 +49,10 @@ import javax.interceptor.Interceptor;
 import javax.interceptor.InterceptorBinding;
 
 import org.jboss.jandex.DotName;
-import org.jboss.protean.arc.ComputingCache;
 
 public final class DotNames {
 
-    private static final ComputingCache<String, DotName> NAMES = new ComputingCache<>(DotNames::create);
+    private static final Map<String, DotName> NAMES = new ConcurrentHashMap<>();
 
     public static final DotName OBJECT = create(Object.class);
     public static final DotName OBSERVES = create(Observes.class);
@@ -97,7 +98,7 @@ public final class DotNames {
             return DotName.createComponentized(null, name);
         }
         String prefix = name.substring(0, name.lastIndexOf('.'));
-        DotName prefixName = NAMES.getValue(prefix);
+        DotName prefixName = NAMES.computeIfAbsent(prefix, DotNames::create);
         String local = name.substring(name.lastIndexOf('.') + 1);
         return DotName.createComponentized(prefixName, local);
     }

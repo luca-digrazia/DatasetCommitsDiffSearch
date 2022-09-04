@@ -89,7 +89,7 @@ public class BeanDeployment {
         long start = System.currentTimeMillis();
         this.resourceAnnotations = new HashSet<>(resourceAnnotations);
         this.index = index;
-        this.annotationStore = new AnnotationStore(annotationTransformers, buildContext);
+        this.annotationStore = new AnnotationStore(annotationTransformers);
 
         if (buildContext != null) {
             buildContext.putInternal(Key.ANNOTATION_STORE.asString(), annotationStore);
@@ -160,7 +160,7 @@ public class BeanDeployment {
         this.observers = observers;
         this.interceptorResolver = new InterceptorResolver(this);
 
-        LOGGER.infof("Bean deployment created in %s ms", System.currentTimeMillis() - start);
+        LOGGER.infof("Build deployment created in %s ms", System.currentTimeMillis() - start);
     }
     
     public Collection<BeanInfo> getBeans() {
