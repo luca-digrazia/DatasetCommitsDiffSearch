@@ -20,20 +20,18 @@ import com.google.common.util.concurrent.Service;
 import com.google.inject.TypeLiteral;
 import com.google.inject.multibindings.MapBinder;
 import com.google.inject.multibindings.Multibinder;
-import org.graylog2.audit.AuditEventType;
-import org.graylog2.audit.PluginAuditEventTypes;
-import org.graylog2.audit.formatter.AuditEventFormatter;
-import org.graylog2.plugin.alarms.AlertCondition;
+import org.graylog2.auditlog.AuditLogAppender;
+import org.graylog2.auditlog.StdOutAppender;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.indexer.retention.RetentionStrategy;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
+import org.graylog2.plugin.messageprocessors.MessageProcessor;
 import org.graylog2.plugin.inject.Graylog2Module;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.transports.Transport;
-import org.graylog2.plugin.messageprocessors.MessageProcessor;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.plugin.rest.PluginRestResource;
@@ -161,17 +159,8 @@ public abstract class PluginModule extends Graylog2Module {
         installPermissions(permissionsBinder(), permissionsClass);
     }
 
-    protected void addAuditEventTypes(Class<? extends PluginAuditEventTypes> auditEventTypesClass) {
-        installAuditEventTypes(auditEventTypesBinder(), auditEventTypesClass);
-    }
-
-    protected void addAuditEventFormatter(AuditEventType auditEventType, Class<? extends AuditEventFormatter> auditEventFormatterClass) {
-        installAuditEventFormatter(auditEventFormatterMapBinder(), auditEventType, auditEventFormatterClass);
-    }
-
-    protected void addAlertCondition(String name,
-                                     Class<? extends AlertCondition> alertConditionClass,
-                                     Class<? extends AlertCondition.Factory> alertConditionFactoryClass) {
-        installAlertConditionWithCustomName(alertConditionBinder(), name, alertConditionClass, alertConditionFactoryClass);
+    protected void addAuditLogAppender(Class<? extends AuditLogAppender> auditLogAppenderClass) {
+        final Multibinder<AuditLogAppender> appenders = Multibinder.newSetBinder(binder(), AuditLogAppender.class);
+        appenders.addBinding().to(auditLogAppenderClass);
     }
 }
