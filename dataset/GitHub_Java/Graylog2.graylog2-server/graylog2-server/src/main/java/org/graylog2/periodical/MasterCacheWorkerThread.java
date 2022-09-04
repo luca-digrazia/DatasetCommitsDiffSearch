@@ -77,7 +77,7 @@ public class MasterCacheWorkerThread implements Runnable {
                             try {
                                 LOG.debug("Reading message from {}.", cacheName);
                                 Message msg = cache.pop();
-                                targetBuffer.insertFailFast(msg, msg.getSourceInput());
+                                targetBuffer.insertFailFast(msg, (String) msg.getField(ProcessBuffer.SOURCE_INPUT_ATTR_NAME));
                                 writtenMessages.mark();
                             } catch (BufferOutOfCapacityException ex) {
                                 outOfCapacity.mark();

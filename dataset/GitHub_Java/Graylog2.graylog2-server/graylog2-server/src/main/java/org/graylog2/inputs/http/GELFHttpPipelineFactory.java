@@ -20,7 +20,6 @@
 package org.graylog2.inputs.http;
 
 import org.graylog2.Core;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
@@ -31,11 +30,11 @@ import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
 public class GELFHttpPipelineFactory implements ChannelPipelineFactory {
 
     private final Core graylogServer;
-    private final MessageInput sourceInput;
+    private final String sourceInputId;
 
-    public GELFHttpPipelineFactory(Core graylogServer, MessageInput sourceInput) {
+    public GELFHttpPipelineFactory(Core graylogServer, String sourceInputId) {
         this.graylogServer = graylogServer;
-        this.sourceInput = sourceInput;
+        this.sourceInputId = sourceInputId;
     }
 
     @Override
@@ -48,7 +47,7 @@ public class GELFHttpPipelineFactory implements ChannelPipelineFactory {
         // only add support for incoming compressed messages, we don't return much (if any) data to the client.
         pipeline.addLast("decompressor", new HttpContentDecompressor());
 
-        pipeline.addLast("handler", new GELFHttpHandler(graylogServer, sourceInput));
+        pipeline.addLast("handler", new GELFHttpHandler(graylogServer, sourceInputId));
 
         return pipeline;
     }

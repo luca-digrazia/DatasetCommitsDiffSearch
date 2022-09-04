@@ -29,7 +29,6 @@ import org.graylog2.Core;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,7 +64,7 @@ public class GELFProcessor {
         this.gelfParsedTime = server.metrics().timer(name(GELFProcessor.class, "gelfParsedTime"));
     }
 
-    public void messageReceived(GELFMessage message, MessageInput sourceInput) throws BufferOutOfCapacityException {
+    public void messageReceived(GELFMessage message, String sourceInputId) throws BufferOutOfCapacityException {
         incomingMessages.mark();
         
         // Convert to LogMessage
@@ -79,7 +78,7 @@ public class GELFProcessor {
         // Add to process buffer.
         LOG.debug("Adding received GELF message <{}> to process buffer: {}", lm.getId(), lm);
         processedMessages.mark();
-        server.getProcessBuffer().insertCached(lm, sourceInput);
+        server.getProcessBuffer().insertCached(lm, sourceInputId);
     }
 
     private Message parse(String message) {

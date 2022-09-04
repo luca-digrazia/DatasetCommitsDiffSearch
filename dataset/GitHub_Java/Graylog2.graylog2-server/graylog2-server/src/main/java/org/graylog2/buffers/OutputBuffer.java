@@ -29,7 +29,6 @@ import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.MessageEvent;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,7 +93,7 @@ public class OutputBuffer extends Buffer {
     }
 
     @Override
-    public void insertCached(Message message, MessageInput sourceInput) {
+    public void insertCached(Message message, String sourceInputId) {
         if (!hasCapacity()) {
             LOG.debug("Out of capacity. Writing to cache.");
             cachedMessages.mark();
@@ -106,7 +105,7 @@ public class OutputBuffer extends Buffer {
     }
 
     @Override
-    public void insertFailFast(Message message, MessageInput sourceInput) throws BufferOutOfCapacityException {
+    public void insertFailFast(Message message, String sourceInputIds) throws BufferOutOfCapacityException {
         if (!hasCapacity()) {
             LOG.debug("Rejecting message, because I am full and caching was disabled by input. Raise my size or add more processors.");
             rejectedMessages.mark();

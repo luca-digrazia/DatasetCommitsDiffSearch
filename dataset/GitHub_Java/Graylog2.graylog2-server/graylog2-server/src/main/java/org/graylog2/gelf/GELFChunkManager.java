@@ -25,7 +25,6 @@ import java.util.Map;
 
 import com.codahale.metrics.Meter;
 import org.graylog2.Core;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,12 +155,12 @@ public class GELFChunkManager extends Thread {
         return out.toByteArray();
     }
 
-    private MessageInput getSourceInput(String messageId) {
+    private String getSourceInput(String messageId) {
         try {
-            return chunks.get(messageId).get(0).getSourceInput();
+            return chunks.get(messageId).get(0).getSourceInputId();
         } catch(Exception e) {
             LOG.error("Could not get source input ID from chunked GELF message.", e);
-            return null;
+            return "unknown";
         }
     }
     
@@ -169,8 +168,8 @@ public class GELFChunkManager extends Thread {
         return chunks.containsKey(messageId);
     }
 
-    public void insert(GELFMessage msg, MessageInput sourceInput) {
-        insert(new GELFMessageChunk(msg, sourceInput));
+    public void insert(GELFMessage msg, String sourceInputId) {
+        insert(new GELFMessageChunk(msg, sourceInputId));
     }
 
     public void insert(GELFMessageChunk chunk) {

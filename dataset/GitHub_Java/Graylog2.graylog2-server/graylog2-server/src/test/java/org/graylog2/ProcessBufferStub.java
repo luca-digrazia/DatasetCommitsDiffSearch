@@ -23,7 +23,6 @@ package org.graylog2;
 import org.graylog2.buffers.BasicCache;
 import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.inputs.MessageInput;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
@@ -38,7 +37,7 @@ public class ProcessBufferStub extends ProcessBuffer {
     }
 
     @Override
-    public void insertCached(Message msg, MessageInput sourceInput) {
+    public void insertCached(Message msg, String sourceInputId) {
         serverStub.callsToProcessBufferInserter++;
         serverStub.lastInsertedToProcessBuffer = msg;
     }

@@ -22,7 +22,6 @@ package org.graylog2.inputs.syslog;
 
 import org.graylog2.Core;
 import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -37,12 +36,12 @@ public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
     
     private final Core server;
     private final Configuration config;
-    private final MessageInput sourceInput;
+    private final String inputId;
 
-    public SyslogTCPPipelineFactory(Core server, Configuration config, MessageInput sourceInput) {
+    public SyslogTCPPipelineFactory(Core server, Configuration config, String inputId) {
         this.server = server;
         this.config = config;
-        this.sourceInput = sourceInput;
+        this.inputId = inputId;
     }
 
     @Override
@@ -57,7 +56,7 @@ public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
                 
         ChannelPipeline p = Channels.pipeline();
         p.addLast("framer", new DelimiterBasedFrameDecoder(2 * 1024 * 1024, delimiter));
-        p.addLast("handler", new SyslogDispatcher(server, config, sourceInput));
+        p.addLast("handler", new SyslogDispatcher(server, config, inputId));
         return p;
     }
     
