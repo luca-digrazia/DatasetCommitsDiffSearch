@@ -17,6 +17,7 @@
 package org.graylog2.indexer.indices;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.action.ActionFuture;
@@ -29,17 +30,14 @@ import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest;
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesResponse;
 import org.elasticsearch.action.admin.indices.close.CloseIndexRequest;
 import org.elasticsearch.action.admin.indices.create.CreateIndexRequest;
+import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsRequest;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.action.admin.indices.flush.FlushRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexRequest;
-import org.elasticsearch.action.admin.indices.get.GetIndexResponse;
-import org.elasticsearch.action.admin.indices.mapping.put.PutMappingResponse;
+import org.elasticsearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.elasticsearch.action.admin.indices.open.OpenIndexRequest;
 import org.elasticsearch.action.admin.indices.optimize.OptimizeRequest;
-import org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest;
-import org.elasticsearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.elasticsearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsRequest;
@@ -47,10 +45,12 @@ import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.admin.indices.stats.ShardStats;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.count.CountRequest;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.action.support.replication.ReplicationType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.IndicesAdminClient;
 import org.elasticsearch.cluster.ClusterState;
@@ -59,16 +59,14 @@ import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.common.collect.UnmodifiableIterator;
 import org.elasticsearch.common.hppc.cursors.ObjectObjectCursor;
 import org.elasticsearch.common.settings.ImmutableSettings;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.search.SearchHit;
 import org.graylog2.configuration.ElasticsearchConfiguration;
-import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexNotFoundException;
+import org.graylog2.indexer.Mapping;
+import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.indexer.retention.IndexManagement;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,13 +87,11 @@ public class Indices implements IndexManagement {
 
     private final Client c;
     private final ElasticsearchConfiguration configuration;
-    private final IndexMapping indexMapping;
 
     @Inject
-    public Indices(Client client, ElasticsearchConfiguration configuration, IndexMapping indexMapping) {
+    public Indices(Client client, ElasticsearchConfiguration configuration) {
         this.c = client;
         this.configuration = configuration;
-        this.indexMapping = indexMapping;
     }
 
     public void move(String source, String target) {
@@ -129,11 +125,7 @@ public class Indices implements IndexManagement {
                 BulkResponse response = c.bulk(request.request()).actionGet();
 
                 LOG.info("Moving index <{}> to <{}>: Bulk indexed {} messages, took {} ms, failures: {}",
-                         source,
-                         target,
-                         response.getItems().length,
-                         response.getTookInMillis(),
-                         response.hasFailures());
+                        source, target, response.getItems().length, response.getTookInMillis(), response.hasFailures());
 
                 if (response.hasFailures()) {
                     throw new RuntimeException("Failed to move a message. Check your indexer log.");
@@ -168,6 +160,20 @@ public class Indices implements IndexManagement {
         return isr.actionGet().getIndices();
     }
 
+    public long getTotalNumberOfMessages() {
+        return c.count(new CountRequest(allIndicesAlias())).actionGet().getCount();
+    }
+
+    public long getTotalSize() {
+        return c.admin().indices().stats(
+                new IndicesStatsRequest().indices(allIndicesAlias()))
+                .actionGet()
+                .getTotal()
+                .getStore()
+                .getSize()
+                .getMb();
+    }
+
     public String allIndicesAlias() {
         return configuration.getIndexPrefix() + "_*";
     }
@@ -193,27 +199,35 @@ public class Indices implements IndexManagement {
     }
 
     public boolean create(String indexName) {
-        final Map<String, String> keywordLowercase = ImmutableMap.of(
-                "tokenizer", "keyword",
-                "filter", "lowercase");
-        final Map<String, Object> settings = ImmutableMap.of(
-                "number_of_shards", configuration.getShards(),
-                "number_of_replicas", configuration.getReplicas(),
-                "index.analysis.analyzer.analyzer_keyword", keywordLowercase);
+        Map<String, Object> settings = Maps.newHashMap();
+        settings.put("number_of_shards", configuration.getShards());
+        settings.put("number_of_replicas", configuration.getReplicas());
+        Map<String, String> keywordLowercase = Maps.newHashMap();
+        keywordLowercase.put("tokenizer", "keyword");
+        keywordLowercase.put("filter", "lowercase");
+        settings.put("index.analysis.analyzer.analyzer_keyword", keywordLowercase);
 
-        final CreateIndexRequest cir = c.admin().indices().prepareCreate(indexName).setSettings(settings).request();
-        if (!c.admin().indices().create(cir).actionGet().isAcknowledged()) {
+        CreateIndexRequest cir = new CreateIndexRequest(indexName);
+        cir.settings(settings);
+
+        final ActionFuture<CreateIndexResponse> createFuture = c.admin().indices().create(cir);
+        final boolean acknowledged = createFuture.actionGet().isAcknowledged();
+        if (!acknowledged) {
             return false;
         }
+        final PutMappingRequest mappingRequest = Mapping.getPutMappingRequest(c, indexName, configuration.getAnalyzer(),
+                configuration.isStoreTimestampsAsDocValues());
+        return c.admin().indices().putMapping(mappingRequest).actionGet().isAcknowledged();
+    }
 
-        final Map<String, Object> messageMapping = indexMapping.messageMapping(configuration.getAnalyzer());
-        final PutMappingResponse messageMappingResponse =
-                indexMapping.createMapping(indexName, IndexMapping.TYPE_MESSAGE, messageMapping).actionGet();
-        final Map<String, Object> metaMapping = indexMapping.metaMapping();
-        final PutMappingResponse metaMappingResponse =
-                indexMapping.createMapping(indexName, IndexMapping.TYPE_INDEX_RANGE, metaMapping).actionGet();
+    public ImmutableMap<String, IndexMetaData> getMetadata() {
+        Map<String, IndexMetaData> metaData = Maps.newHashMap();
 
-        return messageMappingResponse.isAcknowledged() && metaMappingResponse.isAcknowledged();
+        for (ObjectObjectCursor<String, IndexMetaData> next : c.admin().cluster().state(new ClusterStateRequest()).actionGet().getState().getMetaData().indices()) {
+            metaData.put(next.key, next.value);
+        }
+
+        return ImmutableMap.copyOf(metaData);
     }
 
     public Set<String> getAllMessageFields() {
@@ -224,7 +238,7 @@ public class Indices implements IndexManagement {
 
         for (ObjectObjectCursor<String, IndexMetaData> m : cs.getMetaData().indices()) {
             try {
-                MappingMetaData mmd = m.value.mapping(IndexMapping.TYPE_MESSAGE);
+                MappingMetaData mmd = m.value.mapping(Messages.TYPE);
                 if (mmd == null) {
                     // There is no mapping if there are no messages in the index.
                     continue;
@@ -247,7 +261,7 @@ public class Indices implements IndexManagement {
         b.setId(id);
         b.setSource(doc);
         b.setOpType(IndexRequest.OpType.INDEX);
-        b.setType(IndexMapping.TYPE_MESSAGE);
+        b.setType(Messages.TYPE);
         b.setConsistencyLevel(WriteConsistencyLevel.ONE);
 
         return b;
@@ -262,26 +276,6 @@ public class Indices implements IndexManagement {
         sb.put("index.blocks.metadata", false); // Allow getting metadata.
 
         c.admin().indices().updateSettings(new UpdateSettingsRequest(index).settings(sb.build())).actionGet();
-    }
-
-    public boolean isReadOnly(String index) {
-        final GetSettingsRequest request = c.admin().indices().prepareGetSettings(index).request();
-        final GetSettingsResponse response = c.admin().indices().getSettings(request).actionGet();
-
-        return response.getIndexToSettings().get(index).getAsBoolean("index.blocks.write", false);
-    }
-
-    public void setReadWrite(String index) {
-        Settings settings = ImmutableSettings.builder()
-                .put("index.blocks.write", false)
-                .put("index.blocks.read", false)
-                .put("index.blocks.metadata", false)
-                .build();
-
-        final UpdateSettingsRequest request = c.admin().indices().prepareUpdateSettings(index)
-                .setSettings(settings)
-                .request();
-        c.admin().indices().updateSettings(request).actionGet();
     }
 
     public void flush(String index) {
@@ -426,25 +420,5 @@ public class Indices implements IndexManagement {
 
         final ClusterHealthResponse response = c.admin().cluster().health(request).actionGet(5L, TimeUnit.MINUTES);
         return response.getStatus();
-    }
-
-    @Nullable
-    public DateTime indexCreationDate(String index) {
-        final GetIndexRequest indexRequest = c.admin().indices().prepareGetIndex()
-                .addFeatures(GetIndexRequest.Feature.SETTINGS)
-                .addIndices(index)
-                .request();
-        try {
-            final GetIndexResponse response = c.admin().indices()
-                    .getIndex(indexRequest).actionGet(1,TimeUnit.SECONDS);
-            final Settings settings = response.settings().get(index);
-            if (settings == null) {
-                return null;
-            }
-            return new DateTime(settings.getAsLong("creation_date", 0L), DateTimeZone.UTC);
-        } catch (ElasticsearchException e) {
-            LOG.warn("Unable to read creation_date for index " + index, e.getRootCause());
-            return null;
-        }
     }
 }
