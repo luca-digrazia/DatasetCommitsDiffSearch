@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.SortedMap;
 
 /**
@@ -170,7 +169,7 @@ public interface SpawnRunner {
     void lockOutputFiles() throws InterruptedException;
 
     /** Returns the timeout that should be applied for the given {@link Spawn} instance. */
-    Duration getTimeout();
+    long getTimeoutMillis();
 
     /** The files to which to write stdout and stderr. */
     FileOutErr getFileOutErr();
