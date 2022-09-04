@@ -13,10 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Streams;
+import com.google.devtools.build.lib.analysis.AspectCollection;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
@@ -27,6 +31,8 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiff;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
@@ -119,6 +125,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
       OrderedSetMultimap<Attribute, Dependency> deps;
       ImmutableMap<Label, ConfigMatchingProvider> configConditions =
           ((RuleConfiguredTarget) configuredTarget).getConfigConditions();
+      BuildOptions fromOptions = config.getOptions();
       try {
         // Note: Being able to pull the $resolved_toolchain_internal attr unconditionally from the
         // mapper relies on the fact that {@link PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR} exists
@@ -126,7 +133,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
         // DependencyResolver but passing to avoid passing a null and since we have the information
         // anyway.
         deps =
-            new FormatterDependencyResolver(eventHandler)
+            new FormatterDependencyResolver(configuredTarget, eventHandler)
                 .dependentNodeMap(
                     new TargetAndConfiguration(target, config),
                     hostConfiguration,
@@ -135,8 +142,9 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
                     ImmutableSet.copyOf(
                         ConfiguredAttributeMapper.of(target.getAssociatedRule(), configConditions)
                             .get(PlatformSemantics.RESOLVED_TOOLCHAINS_ATTR, BuildType.LABEL_LIST)),
+                    fromOptions,
                     trimmingTransitionFactory);
-      } catch (EvalException | InconsistentAspectOrderException e) {
+      } catch (EvalException | InvalidConfigurationException | InconsistentAspectOrderException e) {
         throw new InterruptedException(e.getMessage());
       }
       for (Map.Entry<Attribute, Dependency> attributeAndDep : deps.entries()) {
@@ -145,7 +153,6 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
           continue;
         }
         Dependency dep = attributeAndDep.getValue();
-        BuildOptions fromOptions = config.getOptions();
         List<BuildOptions> toOptions = dep.getTransition().apply(fromOptions);
         String hostConfigurationChecksum = hostConfiguration.checksum();
         addResult(
@@ -196,10 +203,18 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
   }
 
   private class FormatterDependencyResolver extends DependencyResolver {
+
+    private ConfiguredTarget ct;
     private final ExtendedEventHandler eventHandler;
 
-    private FormatterDependencyResolver(ExtendedEventHandler eventHandler) {
+    private FormatterDependencyResolver(ConfiguredTarget ct, ExtendedEventHandler eventHandler) {
+      this.ct = ct;
       this.eventHandler = eventHandler;
+    }
+
+    protected FormatterDependencyResolver setCt(ConfiguredTarget ct) {
+      this.ct = ct;
+      return this;
     }
 
     @Override
@@ -237,6 +252,30 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
           .filter(Objects::nonNull)
           .filter(partialResultMap::containsKey)
           .collect(Collectors.toMap(Function.identity(), partialResultMap::get));
+    }
+
+    @Override
+    protected List<BuildConfiguration> getConfigurations(
+        FragmentClassSet fragments,
+        Iterable<BuildOptions> buildOptions,
+        BuildOptions defaultOptions) {
+      Preconditions.checkArgument(
+          ct.getConfigurationKey().getFragments().equals(fragments.fragmentClasses()),
+          "Mismatch: %s %s",
+          ct,
+          fragments);
+      Dependency asDep =
+          Dependency.withTransitionAndAspects(
+              ct.getLabel(), NoTransition.INSTANCE, AspectCollection.EMPTY);
+      ImmutableList.Builder<BuildConfiguration> builder = ImmutableList.builder();
+      for (BuildOptions options : buildOptions) {
+        builder.add(
+            Iterables.getOnlyElement(
+                skyframeExecutor
+                    .getConfigurations(eventHandler, options, ImmutableList.<Dependency>of(asDep))
+                    .values()));
+      }
+      return builder.build();
     }
   }
 }

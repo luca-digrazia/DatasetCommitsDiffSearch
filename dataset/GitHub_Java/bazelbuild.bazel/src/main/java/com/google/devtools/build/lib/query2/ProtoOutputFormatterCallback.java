@@ -151,9 +151,7 @@ public class ProtoOutputFormatterCallback extends CqueryThreadsafeCallback {
 
   private class ConfiguredProtoOutputFormatter extends ProtoOutputFormatter {
     @Override
-    protected void addAttributes(
-        Build.Rule.Builder rulePb, Rule rule, Object extraDataForPostProcess)
-        throws InterruptedException {
+    protected void addAttributes(Build.Rule.Builder rulePb, Rule rule) throws InterruptedException {
       // We know <code>currentTarget</code> will be one of these two types of configured targets
       // because this method is only triggered in ProtoOutputFormatter.toTargetProtoBuffer when
       // the target in currentTarget is an instanceof Rule.
@@ -183,7 +181,7 @@ public class ProtoOutputFormatterCallback extends CqueryThreadsafeCallback {
         serializedAttributes.put(attr, serializedAttribute);
       }
       rulePb.addAllAttribute(serializedAttributes.values());
-      postProcess(rule, rulePb, serializedAttributes, extraDataForPostProcess);
+      postProcess(rule, rulePb, serializedAttributes);
     }
   }
 }

@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.QueryRuntimeHelper;
-import com.google.devtools.build.lib.runtime.QueryRuntimeHelper.Factory.CommandLineException;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorWrappingWalkableGraph;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.io.IOException;
@@ -60,21 +58,17 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
             "Queries based on analysis results are not allowed "
                 + "if incrementality state is not being kept");
       }
-      try (QueryRuntimeHelper queryRuntimeHelper =
-          env.getRuntime().getQueryRuntimeHelperFactory().create(env)) {
+      try {
         doPostAnalysisQuery(
             request,
             analysisResult.getConfigurationCollection().getHostConfiguration(),
             new TopLevelConfigurations(analysisResult.getTopLevelTargetsWithConfigs()),
-            queryRuntimeHelper,
             queryExpression);
       } catch (QueryException | IOException e) {
         if (!request.getKeepGoing()) {
           throw new ViewCreationFailedException("Error doing post analysis query", e);
         }
         env.getReporter().error(null, "Error doing post analysis query", e);
-      } catch (CommandLineException e) {
-        throw new PostAnalysisQueryCommandLineException(e.getMessage());
       }
     }
   }
@@ -89,7 +83,6 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
       BuildRequest request,
       BuildConfiguration hostConfiguration,
       TopLevelConfigurations topLevelConfigurations,
-      QueryRuntimeHelper queryRuntimeHelper,
       QueryExpression queryExpression)
       throws InterruptedException, QueryException, IOException {
     WalkableGraph walkableGraph =
@@ -102,7 +95,7 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
         postAnalysisQueryEnvironment.getDefaultOutputFormatters(
             postAnalysisQueryEnvironment.getAccessor(),
             env.getReporter(),
-            queryRuntimeHelper.getOutputStreamForQueryOutput(),
+            env.getReporter().getOutErr().getOutputStream(),
             env.getSkyframeExecutor(),
             hostConfiguration,
             runtime.getRuleClassProvider().getTrimmingTransitionFactory(),
@@ -125,7 +118,6 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
     if (result.isEmpty()) {
       env.getReporter().handle(Event.info("Empty query results"));
     }
-    queryRuntimeHelper.afterQueryOutputIsWritten();
   }
 
   /** Post analysis query specific command line exception. */

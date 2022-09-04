@@ -13,12 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
-import static java.util.stream.Collectors.joining;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment.TargetAccessor;
 import com.google.devtools.build.lib.query2.output.CqueryOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import java.io.IOException;
@@ -32,37 +31,29 @@ import java.util.List;
  * that is populated by child classes.
  */
 public abstract class CqueryThreadsafeCallback
-    extends ThreadSafeOutputFormatterCallback<ConfiguredTarget> {
+    extends NamedThreadSafeOutputFormatterCallback<ConfiguredTarget> {
 
+  protected final ExtendedEventHandler eventHandler;
   protected final CqueryOptions options;
   protected PrintStream printStream = null;
   protected final SkyframeExecutor skyframeExecutor;
+  protected final ConfiguredTargetAccessor accessor;
 
   private final List<String> result = new ArrayList<>();
 
   CqueryThreadsafeCallback(
-      CqueryOptions options, OutputStream out, SkyframeExecutor skyframeExecutor) {
+      ExtendedEventHandler eventHandler,
+      CqueryOptions options,
+      OutputStream out,
+      SkyframeExecutor skyframeExecutor,
+      TargetAccessor<ConfiguredTarget> accessor) {
+    this.eventHandler = eventHandler;
     this.options = options;
     if (out != null) {
       this.printStream = new PrintStream(out);
     }
     this.skyframeExecutor = skyframeExecutor;
-  }
-
-  public abstract String getName();
-
-  public static String callbackNames(Iterable<CqueryThreadsafeCallback> callbacks) {
-    return Streams.stream(callbacks).map(CqueryThreadsafeCallback::getName).collect(joining(", "));
-  }
-
-  public static CqueryThreadsafeCallback getCallback(
-      String type, Iterable<CqueryThreadsafeCallback> callbacks) {
-    for (CqueryThreadsafeCallback callback : callbacks) {
-      if (callback.getName().equals(type)) {
-        return callback;
-      }
-    }
-    return null;
+    this.accessor = (ConfiguredTargetAccessor) accessor;
   }
 
   public void addResult(String string) {
@@ -81,3 +72,4 @@ public abstract class CqueryThreadsafeCallback
     }
   }
 }
+
