@@ -24,13 +24,11 @@ import java.lang.reflect.Method;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import smile.data.measure.CategoricalMeasure;
-import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.type.*;
 import smile.data.vector.*;
 import smile.data.vector.Vector;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
@@ -108,82 +106,71 @@ class DataFrameImpl implements DataFrame {
                     StructField field = Arrays.stream(fields).filter(f -> f.name.equals(name)).findFirst().get();
 
                     if (type == int.class) {
-                        int i = 0;
                         int[] values = new int[size];
-                        for (T datum : data) values[i++] = (int) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (int) read.invoke(data.get(i));
                         IntVector vector = IntVector.of(field, values);
                         columns.add(vector);
                     } else if (type == double.class) {
-                        int i = 0;
                         double[] values = new double[size];
-                        for (T datum : data) values[i++] = (double) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (double) read.invoke(data.get(i));
                         DoubleVector vector = DoubleVector.of(field, values);
                         columns.add(vector);
                     } else if (type == boolean.class) {
-                        int i = 0;
                         boolean[] values = new boolean[size];
-                        for (T datum : data) values[i++] = (boolean) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (boolean) read.invoke(data.get(i));
                         BooleanVector vector = BooleanVector.of(field, values);
                         columns.add(vector);
                     } else if (type == short.class) {
-                        int i = 0;
                         short[] values = new short[size];
-                        for (T datum : data) values[i++] = (short) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (short) read.invoke(data.get(i));
                         ShortVector vector = ShortVector.of(field, values);
                         columns.add(vector);
                     } else if (type == long.class) {
-                        int i = 0;
                         long[] values = new long[size];
-                        for (T datum : data) values[i++] = (long) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (long) read.invoke(data.get(i));
                         LongVector vector = LongVector.of(field, values);
                         columns.add(vector);
                     } else if (type == float.class) {
-                        int i = 0;
                         float[] values = new float[size];
-                        for (T datum : data) values[i++] = (float) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (float) read.invoke(data.get(i));
                         FloatVector vector = FloatVector.of(field, values);
                         columns.add(vector);
                     } else if (type == byte.class) {
-                        int i = 0;
                         byte[] values = new byte[size];
-                        for (T datum : data) values[i++] = (byte) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (byte) read.invoke(data.get(i));
                         ByteVector vector = ByteVector.of(field, values);
                         columns.add(vector);
                     } else if (type == char.class) {
-                        int i = 0;
                         char[] values = new char[size];
-                        for (T datum : data) values[i++] = (char) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (char) read.invoke(data.get(i));
                         CharVector vector = CharVector.of(field, values);
                         columns.add(vector);
                     } else if (type == String.class) {
-                        int i = 0;
                         String[] values = new String[size];
-                        for (T datum : data) values[i++] = (String) read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = (String) read.invoke(data.get(i));
                         StringVector vector = StringVector.of(field, values);
                         columns.add(vector);
                     } else if (type.isEnum()) {
-                        int i = 0;
                         Object[] levels = type.getEnumConstants();
                         if (levels.length < Byte.MAX_VALUE + 1) {
                             byte[] values = new byte[size];
-                            for (T datum : data) values[i++] = (byte) ((Enum) read.invoke(datum)).ordinal();
+                            for (int i = 0; i < size; i++) values[i] = (byte) ((Enum) read.invoke(data.get(i))).ordinal();
                             ByteVector vector = ByteVector.of(field, values);
                             columns.add(vector);
                         } else if (levels.length < Short.MAX_VALUE + 1) {
                             short[] values = new short[size];
-                            for (T datum : data) values[i++] = (short) ((Enum) read.invoke(datum)).ordinal();
+                            for (int i = 0; i < size; i++) values[i] = (short) ((Enum) read.invoke(data.get(i))).ordinal();
                             ShortVector vector = ShortVector.of(field, values);
                             columns.add(vector);
                         } else {
                             int[] values = new int[size];
-                            for (T datum : data) values[i++] = ((Enum) read.invoke(datum)).ordinal();
+                            for (int i = 0; i < size; i++) values[i] = ((Enum) read.invoke(data.get(i))).ordinal();
                             IntVector vector = IntVector.of(field, values);
                             columns.add(vector);
                         }
                     } else {
-                        int i = 0;
                         Object[] values = new Object[size];
-                        for (T datum : data) values[i++] = read.invoke(datum);
+                        for (int i = 0; i < size; i++) values[i] = read.invoke(data.get(i));
                         Vector<?> vector = Vector.of(field, values);
                         columns.add(vector);
                     }
@@ -254,90 +241,80 @@ class DataFrameImpl implements DataFrame {
             StructField field = fields[j];
             switch (field.type.id()) {
                 case Integer: {
-                    int i = 0;
                     int[] values = new int[size];
-                    for (Tuple datum : data) values[i++] = datum.getInt(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getInt(j);
                     IntVector vector = IntVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Long: {
-                    int i = 0;
                     long[] values = new long[size];
-                    for (Tuple datum : data) values[i++] = datum.getLong(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getLong(j);
                     LongVector vector = LongVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Double: {
-                    int i = 0;
                     double[] values = new double[size];
-                    for (Tuple datum : data) values[i++] = datum.getDouble(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getDouble(j);
                     DoubleVector vector = DoubleVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Float: {
-                    int i = 0;
                     float[] values = new float[size];
-                    for (Tuple datum : data) values[i++] = datum.getFloat(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getFloat(j);
                     FloatVector vector = FloatVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Boolean: {
-                    int i = 0;
                     boolean[] values = new boolean[size];
-                    for (Tuple datum : data) values[i++] = datum.getBoolean(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getBoolean(j);
                     BooleanVector vector = BooleanVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Byte: {
-                    int i = 0;
                     byte[] values = new byte[size];
-                    for (Tuple datum : data) values[i++] = datum.getByte(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getByte(j);
                     ByteVector vector = ByteVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Short: {
-                    int i = 0;
                     short[] values = new short[size];
-                    for (Tuple datum : data) values[i++] = datum.getShort(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getShort(j);
                     ShortVector vector = ShortVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case Char: {
-                    int i = 0;
                     char[] values = new char[size];
-                    for (Tuple datum : data) values[i++] = datum.getChar(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getChar(j);
                     CharVector vector = CharVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 case String: {
-                    int i = 0;
                     String[] values = new String[size];
-                    for (Tuple datum : data) values[i++] = datum.getString(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).getString(j);
                     StringVector vector = StringVector.of(field, values);
                     columns.add(vector);
                     break;
                 }
 
                 default: {
-                    int i = 0;
                     Object[] values = new Object[size];
-                    for (Tuple datum : data) values[i++] = datum.get(j);
+                    for (int i = 0; i < size; i++) values[i] = data.get(i).get(j);
                     Vector vector = Vector.of(field, values);
                     columns.add(vector);
                 }
@@ -600,6 +577,196 @@ class DataFrameImpl implements DataFrame {
     @Override
     public Tuple get(int i) {
         return new DataFrameRow(i);
+    }
+
+    @Override
+    public DenseMatrix toMatrix() {
+        int nrows = nrows();
+        int ncols = ncols();
+        DataType[] types = types();
+
+        DenseMatrix m = Matrix.of(nrows, ncols, 0);
+        for (int j = 0; j < ncols; j++) {
+            DataType type = types[j];
+            switch (type.id()) {
+                case Double: {
+                    DoubleVector v = doubleVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
+                    break;
+                }
+
+                case Integer: {
+                    IntVector v = intVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getInt(i));
+                    break;
+                }
+
+                case Float: {
+                    FloatVector v = floatVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getFloat(i));
+                    break;
+                }
+
+                case Long: {
+                    LongVector v = longVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getLong(i));
+                    break;
+                }
+
+                case Boolean: {
+                    BooleanVector v = booleanVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
+                    break;
+                }
+
+                case Byte: {
+                    ByteVector v = byteVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getByte(i));
+                    break;
+                }
+
+                case Short: {
+                    ShortVector v = shortVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getShort(i));
+                    break;
+                }
+
+                case Char: {
+                    CharVector v = charVector(j);
+                    for (int i = 0; i < nrows; i++) m.set(i, j, v.getChar(i));
+                    break;
+                }
+
+                case String: {
+                    StringVector v = stringVector(j);
+                    for (int i = 0; i < nrows; i++) {
+                        String s = v.get(i);
+                        m.set(i, j, s == null ? Double.NaN : Double.valueOf(s));
+                    }
+                    break;
+                }
+
+                case Object: {
+                    Class clazz = ((ObjectType) type).getObjectClass();
+                    if (clazz == Boolean.class) {
+                        Vector<Boolean> v = vector(j);
+                        for (int i = 0; i < nrows; i++) {
+                            Boolean b = v.get(i);
+                            if (b != null)
+                                m.set(i, j, b.booleanValue() ? 1 : 0);
+                            else
+                                m.set(i, j, Double.NaN);
+                        }
+                    } else if (Number.class.isAssignableFrom(clazz)) {
+                        Vector<?> v = vector(j);
+                        for (int i = 0; i < nrows; i++) m.set(i, j, v.getDouble(i));
+                    } else {
+                        throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+                    }
+                    break;
+                }
+
+                default:
+                    throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+            }
+        }
+
+        return m;
+    }
+
+    @Override
+    public double[][] toArray() {
+        int nrows = nrows();
+        int ncols = ncols();
+        DataType[] types = types();
+
+        double[][] m = new double[nrows][ncols];
+        for (int j = 0; j < ncols; j++) {
+            DataType type = types[j];
+            switch (type.id()) {
+                case Double: {
+                    DoubleVector v = doubleVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getDouble(i);
+                    break;
+                }
+
+                case Integer: {
+                    IntVector v = intVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getInt(i);
+                    break;
+                }
+
+                case Float: {
+                    FloatVector v = floatVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getFloat(i);
+                    break;
+                }
+
+                case Long: {
+                    LongVector v = longVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getLong(i);
+                    break;
+                }
+
+                case Boolean: {
+                    BooleanVector v = booleanVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getDouble(i);
+                    break;
+                }
+
+                case Byte: {
+                    ByteVector v = byteVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getByte(i);
+                    break;
+                }
+
+                case Short: {
+                    ShortVector v = shortVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getShort(i);
+                    break;
+                }
+
+                case Char: {
+                    CharVector v = charVector(j);
+                    for (int i = 0; i < nrows; i++) m[i][j] = v.getChar(i);
+                    break;
+                }
+
+                case String: {
+                    StringVector v = stringVector(j);
+                    for (int i = 0; i < nrows; i++) {
+                        String s = v.get(i);
+                        m[i][j] = s == null ? Double.NaN : Double.valueOf(s);
+                    }
+                    break;
+                }
+
+                case Object: {
+                    Class clazz = ((ObjectType) type).getObjectClass();
+                    if (clazz == Boolean.class) {
+                        Vector<Boolean> v = vector(j);
+                        for (int i = 0; i < nrows; i++) {
+                            Boolean b = v.get(i);
+                            if (b != null)
+                                m[i][j] = b.booleanValue() ? 1 : 0;
+                            else
+                                m[i][j] = Double.NaN;
+                        }
+                    } else if (Number.class.isAssignableFrom(clazz)) {
+                        Vector<?> v = vector(j);
+                        for (int i = 0; i < nrows; i++) m[i][j] = v.getDouble(i);
+                    } else {
+                        throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+                    }
+                    break;
+                }
+
+                default:
+                    throw new UnsupportedOperationException(String.format("DataFrame.toMatrix() doesn't support type %s", type));
+            }
+        }
+
+        return m;
     }
 
     class DataFrameRow implements Tuple {
