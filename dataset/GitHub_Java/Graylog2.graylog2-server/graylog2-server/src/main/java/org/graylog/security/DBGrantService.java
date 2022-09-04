@@ -16,7 +16,7 @@
  */
 package org.graylog.security;
 
-import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.mongodb.BasicDBObject;
 import com.mongodb.client.MongoCollection;
@@ -65,10 +65,6 @@ public class DBGrantService extends PaginatedDbService<GrantDTO> {
                         .append(GrantDTO.FIELD_CAPABILITY, 1)
                         .append(GrantDTO.FIELD_TARGET, 1),
                 new BasicDBObject("unique", true));
-        db.createIndex(
-                new BasicDBObject(GrantDTO.FIELD_GRANTEE, 1)
-                        .append(GrantDTO.FIELD_TARGET, 1),
-                new BasicDBObject("unique", true));
         // TODO: Add more indices
 
         // TODO: Inline migration for development. Must be removed before shipping 4.0 GA!
@@ -106,60 +102,27 @@ public class DBGrantService extends PaginatedDbService<GrantDTO> {
         )).collect(ImmutableSet.toImmutableSet());
     }
 
-    public List<GrantDTO> getForTargetAndGrantee(GRN target, GRN grantee) {
-        return getForTargetAndGrantees(target, ImmutableSet.of(grantee));
-    }
-
     public List<GrantDTO> getForTargetAndGrantees(GRN target, Set<GRN> grantees) {
         return db.find(DBQuery.and(
                 DBQuery.is(GrantDTO.FIELD_TARGET, target),
                 DBQuery.in(GrantDTO.FIELD_GRANTEE, grantees))).toArray();
     }
 
-    public GrantDTO create(GrantDTO grantDTO, @Nullable User currentUser) {
-        return create(grantDTO, requireNonNull(currentUser, "currentUser cannot be null").getName());
-    }
-
-    public GrantDTO create(GrantDTO grantDTO, String creatorUsername) {
-        checkArgument(isNotBlank(creatorUsername), "creatorUsername cannot be null or empty");
+    public GrantDTO create(GrantDTO grantDTO, String userName) {
         final ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
-
+        checkArgument(isNotBlank(userName), "userName cannot be null or empty");
         return super.save(grantDTO.toBuilder()
-                .createdBy(creatorUsername)
+                .createdBy(userName)
                 .createdAt(now)
-                .updatedBy(creatorUsername)
+                .updatedBy(userName)
                 .updatedAt(now)
                 .build());
     }
 
-    public GrantDTO create(GRN grantee, Capability capability, GRN target, String creatorUsername) {
-        checkArgument(grantee != null, "grantee cannot be null");
-        checkArgument(capability != null, "capability cannot be null");
-        checkArgument(target != null, "target cannot be null");
+    public GrantDTO create(GrantDTO grantDTO, @Nullable User currentUser) {
+        final String userName = requireNonNull(currentUser, "currentUser cannot be null").getName();
 
-        return create(GrantDTO.of(grantee, capability, target), creatorUsername);
-    }
-
-    /**
-     * Ensure that a grant with the requested or a higher capability exists.
-     *
-     * @return the created, updated or existing grant
-     */
-    public GrantDTO ensure(GRN grantee, Capability capability, GRN target, String creatorUsername) {
-        final List<GrantDTO> existingGrants = getForTargetAndGrantee(target, grantee);
-        if (existingGrants.isEmpty()) {
-            return create(grantee, capability, target, creatorUsername);
-        }
-        // This should never happen
-        Preconditions.checkState(existingGrants.size() == 1);
-
-        final GrantDTO grantDTO = existingGrants.get(0);
-        // Only upgrade capabilities: VIEW < MANAGE < OWNER
-        if (capability.priority() > grantDTO.capability().priority()) {
-            final GrantDTO grantUpdate = grantDTO.toBuilder().capability(capability).build();
-            return save(grantUpdate);
-        }
-        return grantDTO;
+        return create(grantDTO, userName);
     }
 
     public GrantDTO update(GrantDTO updatedGrant, @Nullable User currentUser) {
@@ -175,9 +138,9 @@ public class DBGrantService extends PaginatedDbService<GrantDTO> {
                 .build());
     }
 
-    public ImmutableSet<GrantDTO> getAll() {
+    public ImmutableMap<String, Set<GrantDTO>> listAll() {
         try (final Stream<GrantDTO> stream = streamAll()) {
-            return stream.collect(ImmutableSet.toImmutableSet());
+            return ImmutableMap.of("grants", stream.collect(Collectors.toSet()));
         }
     }
 
@@ -206,13 +169,5 @@ public class DBGrantService extends PaginatedDbService<GrantDTO> {
                         GrantDTO::target,
                         Collectors.mapping(GrantDTO::grantee, Collectors.toSet())
                 ));
-    }
-
-    public boolean hasGrantFor(GRN grantee, Capability capability, GRN target) {
-        return db.findOne(DBQuery.and(
-                DBQuery.is(GrantDTO.FIELD_GRANTEE, grantee),
-                DBQuery.is(GrantDTO.FIELD_CAPABILITY, capability),
-                DBQuery.is(GrantDTO.FIELD_TARGET, target)
-        )) != null;
     }
 }

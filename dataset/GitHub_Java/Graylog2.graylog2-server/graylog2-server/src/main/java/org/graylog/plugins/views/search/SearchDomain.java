@@ -19,11 +19,9 @@ package org.graylog.plugins.views.search;
 import org.graylog.plugins.views.search.db.SearchDbService;
 import org.graylog.plugins.views.search.errors.PermissionException;
 import org.graylog.plugins.views.search.views.ViewDTO;
-import org.graylog.plugins.views.search.views.ViewService;
 import org.graylog2.plugin.database.users.User;
 
 import javax.inject.Inject;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -31,12 +29,12 @@ import java.util.stream.Collectors;
 
 public class SearchDomain {
     private final SearchDbService dbService;
-    private final ViewService viewService;
+    private final ViewPermissions viewPermissions;
 
     @Inject
-    public SearchDomain(SearchDbService dbService, ViewService viewService) {
+    public SearchDomain(SearchDbService dbService, ViewPermissions viewPermissions) {
         this.dbService = dbService;
-        this.viewService = viewService;
+        this.viewPermissions = viewPermissions;
     }
 
     public Optional<Search> getForUser(String id, User user, Predicate<ViewDTO> viewReadPermission) {
@@ -59,15 +57,7 @@ public class SearchDomain {
     }
 
     private boolean hasReadPermissionFor(User user, Predicate<ViewDTO> viewReadPermission, Search search) {
-        if (isOwned(search, user)) {
-            return true;
-        }
-        // Allowed if permissions exist for a referencing view
-        final Collection<ViewDTO> views = viewService.forSearch(search.id());
-        if (views.isEmpty())
-            return false;
-
-        return views.stream().anyMatch(viewReadPermission);
+        return isOwned(search, user) || viewPermissions.isSearchPermitted(search.id(), viewReadPermission);
     }
 
     private boolean isOwned(Search search, User user) {

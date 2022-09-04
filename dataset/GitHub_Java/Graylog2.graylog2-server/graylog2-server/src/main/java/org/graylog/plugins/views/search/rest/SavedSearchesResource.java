@@ -52,14 +52,11 @@ public class SavedSearchesResource extends RestResource {
             .build();
 
     private final ViewService dbService;
-    private final ViewPermissionChecks permissionChecks;
     private final SearchQueryParser searchQueryParser;
 
     @Inject
-    public SavedSearchesResource(ViewService dbService,
-                                 ViewPermissionChecks permissionChecks) {
+    public SavedSearchesResource(ViewService dbService) {
         this.dbService = dbService;
-        this.permissionChecks = permissionChecks;
         this.searchQueryParser = new SearchQueryParser(ViewDTO.FIELD_TITLE, SEARCH_FIELD_MAPPING);
     }
 
@@ -83,7 +80,7 @@ public class SavedSearchesResource extends RestResource {
             final PaginatedList<ViewDTO> result = dbService.searchPaginatedByType(
                     ViewDTO.Type.SEARCH,
                     searchQuery,
-                    view -> permissionChecks.allowedToSeeSavedSearch(getCurrentUser(), view, this::isPermitted),
+                    view -> isPermitted(ViewsRestPermissions.VIEW_READ, view.id()),
                     order,
                     sortField,
                     page,
