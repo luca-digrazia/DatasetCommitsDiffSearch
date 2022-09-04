@@ -32,7 +32,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.net.InetAddresses;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
@@ -41,7 +40,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
@@ -67,7 +65,7 @@ public class Message implements Messages {
     public static final String FIELD_LEVEL = "level";
     public static final String FIELD_STREAMS = "streams";
 
-    private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\.\\-@]*$");
+    private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\-@]*$");
 
     public static final ImmutableSet<String> RESERVED_FIELDS = ImmutableSet.of(
             // ElasticSearch fields.
@@ -116,7 +114,7 @@ public class Message implements Messages {
     public static final Function<Message, String> ID_FUNCTION = new MessageIdFunction();
 
     private final Map<String, Object> fields = Maps.newHashMap();
-    private Set<Stream> streams = Sets.newHashSet();
+    private List<Stream> streams = Lists.newArrayList();
     private String sourceInputId;
 
     // Used for drools to filter out messages.
@@ -257,6 +255,9 @@ public class Message implements Messages {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Ignoring invalid or reserved key {} for message {}", key, getId());
             }
+            if (key != null && key.contains(".")) {
+                LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}].", key, value, getId());
+            }
             return;
         }
 
@@ -349,32 +350,16 @@ public class Message implements Messages {
         return Collections.unmodifiableSet(fields.keySet());
     }
 
-    @Deprecated
     public void setStreams(final List<Stream> streams) {
-        this.streams = Sets.newHashSet(streams);
+        this.streams = Lists.newArrayList(streams);
     }
 
     public List<Stream> getStreams() {
-        return Lists.newArrayList(this.streams);
-    }
-
-    public void addStream(Stream stream) {
-        streams.add(stream);
-    }
-
-    public void addStreams(Collection<Stream> newStreams) {
-        streams.addAll(newStreams);
-    }
-
-    public void removeStream(Stream stream) {
-        streams.remove(stream);
+        return this.streams;
     }
 
     @SuppressWarnings("unchecked")
     public List<String> getStreamIds() {
-        if (!hasField(FIELD_STREAMS)) {
-            return Collections.emptyList();
-        }
         try {
             return Lists.<String>newArrayList(getFieldAs(List.class, FIELD_STREAMS));
         } catch (ClassCastException e) {
