@@ -23,12 +23,6 @@ package org.graylog2.messagehandlers.gelf;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
-import java.util.zip.DataFormatException;
-import org.graylog2.Log;
-import org.graylog2.Tools;
-import org.graylog2.database.MongoBridge;
-import org.graylog2.messagehandlers.common.MessageCounterHook;
-import org.graylog2.messagehandlers.common.ReceiveHookManager;
 
 /**
  * ChunkedGELFClient.java: Sep 14, 2010 6:38:38 PM
@@ -43,13 +37,9 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
      * Representing a GELF client based on more than one UDP message.
      *
      * @param clientMessage The raw data the GELF client sent. (JSON string)
-     * @throws UnsupportedEncodingException
-     * @throws InvalidGELFHeaderException
-     * @throws IOException 
-     * @throws DataFormatException
-     * @throws InvalidGELFCompressionMethodException
+     * @param threadName The name of the GELFClientHandlerThread that called this.
      */
-    public ChunkedGELFClientHandler(DatagramPacket clientMessage) throws UnsupportedEncodingException, InvalidGELFHeaderException, IOException, DataFormatException, InvalidGELFCompressionMethodException {
+    public ChunkedGELFClientHandler(DatagramPacket clientMessage) throws UnsupportedEncodingException, InvalidGELFHeaderException, IOException {
         GELFHeader header = GELF.extractGELFHeader(clientMessage);
 
         GELFClientChunk chunk = new GELFClientChunk();
@@ -57,100 +47,33 @@ public class ChunkedGELFClientHandler extends GELFClientHandlerBase implements G
         chunk.setSequenceCount(header.getSequenceCount());
         chunk.setSequenceNumber(header.getSequenceNumber());
         chunk.setData(GELF.extractData(clientMessage));
-        chunk.setArrival((int) (System.currentTimeMillis()/1000));
+
 
         // Insert the chunk.
-        ChunkedGELFMessage possiblyCompleteMessage = null;
+        int messageState = 0;
         try {
-            possiblyCompleteMessage = ChunkedGELFClientManager.getInstance().insertChunk(chunk);
+            messageState = ChunkedGELFClientManager.getInstance().insertChunk(chunk);
         } catch (InvalidGELFChunkException e) {
             throw new InvalidGELFHeaderException(e.toString());
         } catch (ForeignGELFChunkException e) {
             throw new InvalidGELFHeaderException(e.toString());
         }
 
-        // Catch the full message data if all chunks are complete.
-        if (possiblyCompleteMessage != null) {
-            ChunkedGELFMessage completeMessage = possiblyCompleteMessage;
+        // Fully handle message if complete.
+        if (messageState == ChunkedGELFClientManager.MESSAGE_IS_COMPLETE) {
+            // ALSO TEST IF MESSAGE HAS ALL CHUNKS NOT ONLY IF ENOUGH CHUNKS!
+            System.out.println("MESSAGE IS COMPLETE! HANDLING NOW!");
 
-            byte[] data = null;
-            String hash = null;
-            try {
-                hash = completeMessage.getHash();
-                Log.info("Chunked GELF message <" + hash + "> complete. Handling now.");
-                data = completeMessage.getData();
-            } catch (IncompleteGELFMessageException e) {
-                Log.warn("Tried to fetch information from incomplete chunked GELF message");
-                return;
-            }
-
-
-
-            // Determine compression type.
-            int type = GELF.getGELFType(data);
-
-            // Decompress.
-            switch (type) {
-                // Decompress ZLIB
-                case GELF.TYPE_ZLIB:
-                    Log.info("Chunked GELF message <" + hash + "> is ZLIB compressed.");
-                    this.clientMessage = Tools.decompressZlib(data);
-                    break;
-
-                // Decompress GZIP
-                case GELF.TYPE_GZIP:
-                    Log.info("Chunked GELF message <" + hash + "> is GZIP compressed.");
-                    this.clientMessage = Tools.decompressGzip(data);
-                    break;
-
-                // Unsupported encoding if not handled by prior cases.
-                default:
-                    throw new UnsupportedEncodingException();
-            }
-
-            // Remove message from chunk manager as it is being handled next.
-            ChunkedGELFClientManager.getInstance().dropMessage(hash);
         }
     }
 
     /**
      * Handles the client: Decodes JSON, Stores in MongoDB, ReceiveHooks
-     *
-     * @return boolean
+     * 
+     * @return
      */
     public boolean handle() {
-        // Don't handle if message is incomplete.
-        if (this.clientMessage == null) {
-            return true;
-        }
-
-        try {
-             // Fills properties with values from JSON.
-            try { this.parse(); } catch(Exception e) {
-                Log.warn("Could not parse GELF JSON: " + e.toString() + " - clientMessage was: " + this.clientMessage);
-                return false;
-            }
-
-            // Store in MongoDB.
-            // Connect to database.
-            MongoBridge m = new MongoBridge();
-
-
-            // Log if we are in debug mode.
-            Log.info("Got GELF message: " + message.toString());
-
-            // Insert message into MongoDB.
-            m.insertGelfMessage(message);
-
-            // This is doing the upcounting for RRD.
-            ReceiveHookManager.postProcess(new MessageCounterHook());
-        } catch(Exception e) {
-            Log.warn("Could not handle GELF client: " + e.toString());
-            return false;
-        }
-
         return true;
     }
-
 
 }
