@@ -87,7 +87,7 @@ public final class AndroidBinaryMobileInstall {
               .createSplitManifest(ruleContext, "android_resources", false)
               .packIncrementalBinaryWithDataAndResources(
                   ruleContext,
-                  getMobileInstallArtifact(ruleContext, "android_resources.ap_"),
+                  AndroidBinary.getDxArtifact(ruleContext, "android_resources.ap_"),
                   resourceDeps,
                   ruleContext.getTokenizedStringListAttr("nocompress_extensions"),
                   ruleContext.attributes().get("crunch_png", Type.BOOLEAN),
@@ -110,7 +110,7 @@ public final class AndroidBinaryMobileInstall {
 
       splitResourceApk = applicationManifest
           .createSplitManifest(ruleContext, "android_resources", false)
-          .packWithResources(getMobileInstallArtifact(ruleContext, "android_resources.ap_"),
+          .packWithResources(AndroidBinary.getDxArtifact(ruleContext, "android_resources.ap_"),
               ruleContext,
               resourceDeps,
               false, /* createSource */
@@ -224,7 +224,7 @@ public final class AndroidBinaryMobileInstall {
     // manager would complain about references to missing resources in the manifest during the
     // installation of each split (said references would eventually get installed, but it cannot
     // know that in advance)
-    Artifact resourceSplitApk = getMobileInstallArtifact(ruleContext, "android_resources.apk");
+    Artifact resourceSplitApk = AndroidBinary.getDxArtifact(ruleContext, "android_resources.apk");
     ApkActionsBuilder.create("split Android resource apk")
         .addInputZip(mobileInstallResourceApks.splitResourceApk.getArtifact())
         .setSignedApk(resourceSplitApk)
@@ -236,7 +236,7 @@ public final class AndroidBinaryMobileInstall {
       String splitName = "dex" + (i + 1);
       Artifact splitApkResources = createSplitApkResources(
           ruleContext, applicationManifest, splitName, true);
-      Artifact splitApk = getMobileInstallArtifact(ruleContext, splitName + ".apk");
+      Artifact splitApk = AndroidBinary.getDxArtifact(ruleContext, splitName + ".apk");
       ApkActionsBuilder.create("split dex apk " + (i + 1))
           .setClassesDex(dexingOutput.shardDexZips.get(i))
           .addInputZip(splitApkResources)
@@ -248,7 +248,7 @@ public final class AndroidBinaryMobileInstall {
 
     Artifact nativeSplitApkResources = createSplitApkResources(
         ruleContext, applicationManifest, "native", false);
-    Artifact nativeSplitApk = getMobileInstallArtifact(ruleContext, "native.apk");
+    Artifact nativeSplitApk = AndroidBinary.getDxArtifact(ruleContext, "native.apk");
     ApkActionsBuilder.create("split native apk")
         .addInputZip(nativeSplitApkResources)
         .setNativeLibs(nativeLibs)
@@ -259,7 +259,7 @@ public final class AndroidBinaryMobileInstall {
 
     Artifact javaSplitApkResources = createSplitApkResources(
         ruleContext, applicationManifest, "java_resources", false);
-    Artifact javaSplitApk = getMobileInstallArtifact(ruleContext, "java_resources.apk");
+    Artifact javaSplitApk = AndroidBinary.getDxArtifact(ruleContext, "java_resources.apk");
     ApkActionsBuilder.create("split Java resource apk")
         .addInputZip(javaSplitApkResources)
         .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
@@ -268,7 +268,7 @@ public final class AndroidBinaryMobileInstall {
         .registerActions(ruleContext);
     splitApkSetBuilder.add(javaSplitApk);
 
-    Artifact splitMainApkResources = getMobileInstallArtifact(ruleContext, "split_main.ap_");
+    Artifact splitMainApkResources = AndroidBinary.getDxArtifact(ruleContext, "split_main.ap_");
     ruleContext.registerAction(
         new SpawnAction.Builder()
             .useDefaultShellEnvironment()
@@ -285,7 +285,7 @@ public final class AndroidBinaryMobileInstall {
             .build(ruleContext));
 
     NestedSet<Artifact> splitApks = splitApkSetBuilder.build();
-    Artifact splitMainApk = getMobileInstallArtifact(ruleContext, "split_main.apk");
+    Artifact splitMainApk = AndroidBinary.getDxArtifact(ruleContext, "split_main.apk");
     Artifact splitStubDex = getStubDex(ruleContext, javaSemantics, true);
     ruleContext.assertNoErrors();
     ApkActionsBuilder.create("split main apk")
@@ -373,7 +373,7 @@ public final class AndroidBinaryMobileInstall {
               .build()
               .collapseToFunction();
     }
-    Artifact stubDeployJar = getMobileInstallArtifact(ruleContext,
+    Artifact stubDeployJar = AndroidBinary.getDxArtifact(ruleContext,
         split ? "split_stub_deploy.jar" : "stub_deploy.jar");
     new DeployArchiveBuilder(javaSemantics, ruleContext)
         .setOutputJar(stubDeployJar)
@@ -382,7 +382,7 @@ public final class AndroidBinaryMobileInstall {
         .build();
 
     Artifact stubDex =
-        getMobileInstallArtifact(
+        AndroidBinary.getDxArtifact(
             ruleContext,
             split ? "split_stub_application/classes.dex" : "stub_application/classes.dex");
     AndroidCommon.createDexAction(
@@ -493,7 +493,8 @@ public final class AndroidBinaryMobileInstall {
       ApplicationManifest mainManifest, String splitName, boolean hasCode) {
     Artifact splitManifest = mainManifest.createSplitManifest(ruleContext, splitName, hasCode)
         .getManifest();
-    Artifact splitResources = getMobileInstallArtifact(ruleContext, "split_" + splitName + ".ap_");
+    Artifact splitResources =
+        AndroidBinary.getDxArtifact(ruleContext, "split_" + splitName + ".ap_");
     AndroidSdkProvider sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     ruleContext.registerAction(
         new SpawnAction.Builder()
@@ -514,13 +515,5 @@ public final class AndroidBinaryMobileInstall {
             .build(ruleContext));
 
     return splitResources;
-  }
-
-  /**
-   * Returns an intermediate artifact used to support mobile-install.
-   */
-  private static Artifact getMobileInstallArtifact(RuleContext ruleContext, String baseName) {
-    return ruleContext.getUniqueDirectoryArtifact("_mobile_install", baseName,
-        ruleContext.getBinOrGenfilesDirectory());
   }
 }
