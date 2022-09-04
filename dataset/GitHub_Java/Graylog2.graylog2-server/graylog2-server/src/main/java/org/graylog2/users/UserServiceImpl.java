@@ -47,7 +47,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -62,7 +61,6 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
     private final Configuration configuration;
     private final RoleService roleService;
     private final UserImpl.Factory userFactory;
-    private final RestPermissions permissions;
     private final InMemoryRolePermissionResolver inMemoryRolePermissionResolver;
 
     @Inject
@@ -70,13 +68,11 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
                            final Configuration configuration,
                            final RoleService roleService,
                            final UserImpl.Factory userFactory,
-                           final RestPermissions permissions,
                            final InMemoryRolePermissionResolver inMemoryRolePermissionResolver) {
         super(mongoConnection);
         this.configuration = configuration;
         this.roleService = roleService;
         this.userFactory = userFactory;
-        this.permissions = permissions;
         this.inMemoryRolePermissionResolver = inMemoryRolePermissionResolver;
 
         // ensure that the users' roles array is indexed
@@ -193,9 +189,9 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         }
 
         if (user.getPermissions() == null) {
-            user.setPermissions(Lists.newArrayList(permissions.userSelfEditPermissions(username)));
+            user.setPermissions(Lists.newArrayList(RestPermissions.userSelfEditPermissions(username)));
         } else {
-            user.setPermissions(Lists.newArrayList(Sets.union(permissions.userSelfEditPermissions(username),
+            user.setPermissions(Lists.newArrayList(Sets.union(RestPermissions.userSelfEditPermissions(username),
                                                               Sets.newHashSet(user.getPermissions()))));
         }
 
@@ -305,24 +301,5 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         }
 
         return permSet.build().asList();
-    }
-
-    @Override
-    public void dissociateAllUsersFromRole(Role role) {
-        final Collection<User> usersInRole = loadAllForRole(role);
-        // remove role from any user still assigned
-        for (User user : usersInRole) {
-            if (user.isLocalAdmin()) {
-                continue;
-            }
-            final HashSet<String> roles = Sets.newHashSet(user.getRoleIds());
-            roles.remove(role.getId());
-            user.setRoleIds(roles);
-            try {
-                save(user);
-            } catch (ValidationException e) {
-                LOG.error("Unable to remove role {} from user {}", role.getName(), user);
-            }
-        }
     }
 }
