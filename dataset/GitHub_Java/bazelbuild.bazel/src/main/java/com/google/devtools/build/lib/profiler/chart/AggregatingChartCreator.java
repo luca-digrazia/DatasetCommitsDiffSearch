@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,10 @@
 
 package com.google.devtools.build.lib.profiler.chart;
 
-import com.google.devtools.build.lib.profiler.ProfileInfo;
-import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
-import com.google.devtools.build.lib.profiler.ProfilePhaseStatistics;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.Task;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -41,34 +38,35 @@ import java.util.Set;
 public class AggregatingChartCreator implements ChartCreator {
 
   /** The tasks in the 'actions' category. */
-  private static final Set<ProfilerTask> ACTION_TASKS = EnumSet.of(ProfilerTask.ACTION,
-      ProfilerTask.ACTION_SUBMIT);
+  private static final Set<ProfilerTask> ACTION_TASKS = EnumSet.of(ProfilerTask.ACTION);
 
   /** The tasks in the 'blaze internal' category. */
-  private static Set<ProfilerTask> BLAZE_TASKS =
-      EnumSet.of(ProfilerTask.CREATE_PACKAGE, ProfilerTask.PACKAGE_VALIDITY_CHECK,
-          ProfilerTask.CONFIGURED_TARGET, ProfilerTask.TRANSITIVE_CLOSURE,
-          ProfilerTask.EXCEPTION, ProfilerTask.INFO, ProfilerTask.UNKNOWN);
+  private static final Set<ProfilerTask> BLAZE_TASKS =
+      EnumSet.of(
+          ProfilerTask.CREATE_PACKAGE,
+          ProfilerTask.INFO,
+          ProfilerTask.UNKNOWN);
 
   /** The tasks in the 'locks' category. */
-  private static Set<ProfilerTask> LOCK_TASKS =
+  private static final Set<ProfilerTask> LOCK_TASKS =
       EnumSet.of(ProfilerTask.ACTION_LOCK, ProfilerTask.WAIT);
 
   /** The tasks in the 'VFS' category. */
-  private static Set<ProfilerTask> VFS_TASKS =
-      EnumSet.of(ProfilerTask.VFS_STAT, ProfilerTask.VFS_DIR, ProfilerTask.VFS_LINK,
-          ProfilerTask.VFS_MD5, ProfilerTask.VFS_DELETE, ProfilerTask.VFS_OPEN,
-          ProfilerTask.VFS_READ, ProfilerTask.VFS_WRITE, ProfilerTask.VFS_GLOB,
+  private static final Set<ProfilerTask> VFS_TASKS =
+      EnumSet.of(
+          ProfilerTask.VFS_STAT,
+          ProfilerTask.VFS_DIR,
+          ProfilerTask.VFS_READLINK,
+          ProfilerTask.VFS_MD5,
+          ProfilerTask.VFS_DELETE,
+          ProfilerTask.VFS_OPEN,
+          ProfilerTask.VFS_READ,
+          ProfilerTask.VFS_WRITE,
+          ProfilerTask.VFS_GLOB,
           ProfilerTask.VFS_XATTR);
 
   /** The data of the profiled build. */
   private final ProfileInfo info;
-
-  /**
-   * Statistics of the profiled build. This is expected to be a formatted
-   * string, ready to be printed out.
-   */
-  private final List<ProfilePhaseStatistics> statistics;
 
   /** If true, VFS related information is added to the chart. */
   private final boolean showVFS;
@@ -90,43 +88,37 @@ public class AggregatingChartCreator implements ChartCreator {
    * VFS related data to the generated chart.
    *
    * @param info the data of the profiled build
-   * @param statistics Statistics of the profiled build. This is expected to be
-   *        a formatted string, ready to be printed out.
    */
-  public AggregatingChartCreator(ProfileInfo info, List<ProfilePhaseStatistics> statistics) {
-    this(info, statistics, false);
+  public AggregatingChartCreator(ProfileInfo info) {
+    this(info, false);
   }
 
   /**
    * Creates the chart creator.
    *
    * @param info the data of the profiled build
-   * @param statistics Statistics of the profiled build. This is expected to be
-   *        a formatted string, ready to be printed out.
    * @param showVFS if true, VFS related information is added to the chart
    */
-  public AggregatingChartCreator(ProfileInfo info, List<ProfilePhaseStatistics> statistics,
-      boolean showVFS) {
+  public AggregatingChartCreator(ProfileInfo info, boolean showVFS) {
     this.info = info;
-    this.statistics = statistics;
     this.showVFS = showVFS;
   }
 
   @Override
-  public Chart create() {
-    Chart chart = new Chart(info.comment, statistics);
+  public Chart create(long minBarWidth) {
+    Chart chart = new Chart(minBarWidth);
     CommonChartCreator.createCommonChartItems(chart, info);
     createTypes(chart);
 
     for (ProfileInfo.Task task : info.allTasksById) {
       if (ACTION_TASKS.contains(task.type)) {
-        createBar(chart, task, actionType);
+        createBar(chart, info.getMinTaskStartTime(), task, actionType);
       } else if (LOCK_TASKS.contains(task.type)) {
-        createBar(chart, task, lockType);
+        createBar(chart, info.getMinTaskStartTime(), task, lockType);
       } else if (BLAZE_TASKS.contains(task.type)) {
-        createBar(chart, task, blazeType);
+        createBar(chart, info.getMinTaskStartTime(), task, blazeType);
       } else if (showVFS && VFS_TASKS.contains(task.type)) {
-        createBar(chart, task, vfsType);
+        createBar(chart, info.getMinTaskStartTime(), task, vfsType);
       }
     }
 
@@ -140,9 +132,11 @@ public class AggregatingChartCreator implements ChartCreator {
    * @param task the profiler task from which the bar is created
    * @param type the type of the bar
    */
-  private void createBar(Chart chart, Task task, ChartBarType type) {
+  private void createBar(Chart chart, long minTaskStartTime, Task task, ChartBarType type) {
     String label = task.type.description + ": " + task.getDescription();
-    chart.addBar(task.threadId, task.startTime, task.startTime + task.duration, type, label);
+    chart.addBar(task.threadId,
+        task.startTime - minTaskStartTime,
+        task.startTime - minTaskStartTime + task.durationNanos, type, label);
   }
 
   /**
@@ -152,7 +146,7 @@ public class AggregatingChartCreator implements ChartCreator {
    */
   private void createTypes(Chart chart) {
     actionType = chart.createType("Action processing", new Color(0x000099));
-    blazeType = chart.createType("Blaze internal processing", new Color(0x999999));
+    blazeType = chart.createType("Bazel internal processing", new Color(0x999999));
     lockType = chart.createType("Waiting for resources", new Color(0x990000));
     if (showVFS) {
       vfsType = chart.createType("File system access", new Color(0x009900));

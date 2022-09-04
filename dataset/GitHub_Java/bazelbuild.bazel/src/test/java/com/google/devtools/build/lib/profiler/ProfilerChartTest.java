@@ -15,8 +15,8 @@ package com.google.devtools.build.lib.profiler;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.clock.BlazeClock;
-import com.google.devtools.build.lib.profiler.Profiler.ProfiledTaskKinds;
 import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
 import com.google.devtools.build.lib.profiler.chart.AggregatingChartCreator;
 import com.google.devtools.build.lib.profiler.chart.Chart;
@@ -29,12 +29,17 @@ import com.google.devtools.build.lib.profiler.chart.ChartRow;
 import com.google.devtools.build.lib.profiler.chart.ChartVisitor;
 import com.google.devtools.build.lib.profiler.chart.Color;
 import com.google.devtools.build.lib.profiler.chart.DetailedChartCreator;
+import com.google.devtools.build.lib.profiler.chart.HtmlChartVisitor;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.vfs.Path;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -53,19 +58,18 @@ public class ProfilerChartTest extends FoundationTestCase {
     Runnable run = new Runnable() {
       @Override
       public void run() {
-        Profiler.instance().startTask(ProfilerTask.ACTION, "action");
-        Profiler.instance().completeTask(ProfilerTask.ACTION);
+        Profiler.instance().profile(ProfilerTask.ACTION, "action").close();
       }
     };
     int threads = 4; // there is one extra thread due due the event that finalizes the profiler
     ProfileInfo info = createProfileInfo(run, threads - 1);
     ChartCreator aggregatingCreator = new AggregatingChartCreator(info, true);
-    Chart aggregatedChart = aggregatingCreator.create();
+    Chart aggregatedChart = aggregatingCreator.create(/* minBarWidth= */ 0);
     assertThat(aggregatedChart.getRowCount()).isEqualTo(threads);
     assertThat(aggregatedChart.getSortedRows().get(0).getBars()).hasSize(1);
 
     ChartCreator detailedCreator = new DetailedChartCreator(info);
-    Chart detailedChart = detailedCreator.create();
+    Chart detailedChart = detailedCreator.create(/* minBarWidth= */ 0);
     assertThat(detailedChart.getSortedTypes()).hasSize(COMMON_CHART_TYPES + DETAILED_CHART_TYPES);
     assertThat(detailedChart.getRowCount()).isEqualTo(threads);
     assertThat(detailedChart.getSortedRows().get(0).getBars()).hasSize(1);
@@ -77,11 +81,11 @@ public class ProfilerChartTest extends FoundationTestCase {
       @Override
       public void run() {
         Profiler profiler = Profiler.instance();
-        profiler.startTask(ProfilerTask.ACTION, "action"); // Stays
-        task(profiler, ProfilerTask.REMOTE_EXECUTION, "remote execution"); // Removed
-        task(profiler, ProfilerTask.ACTION_CHECK, "check"); // Removed
-        task(profiler, ProfilerTask.ACTION_LOCK, "lock"); // Stays
-        profiler.completeTask(ProfilerTask.ACTION);
+        try (SilentCloseable c = profiler.profile(ProfilerTask.ACTION, "action")) { // Stays
+          task(profiler, ProfilerTask.REMOTE_EXECUTION, "remote execution"); // Removed
+          task(profiler, ProfilerTask.ACTION_CHECK, "check"); // Removed
+          task(profiler, ProfilerTask.ACTION_LOCK, "lock"); // Stays
+        }
         task(profiler, ProfilerTask.INFO, "info"); // Stays
         task(profiler, ProfilerTask.VFS_STAT, "stat"); // Stays, if showVFS
         task(profiler, ProfilerTask.WAIT, "wait"); // Stays
@@ -90,19 +94,19 @@ public class ProfilerChartTest extends FoundationTestCase {
     ProfileInfo info = createProfileInfo(run, 1);
 
     ChartCreator aggregatingCreator = new AggregatingChartCreator(info, true);
-    Chart aggregatedChart = aggregatingCreator.create();
+    Chart aggregatedChart = aggregatingCreator.create(/* minBarWidth= */ 0);
     assertThat(aggregatedChart.getSortedTypes())
         .hasSize(COMMON_CHART_TYPES + AGGREGATED_CHART_TYPES);
     assertThat(aggregatedChart.getSortedRows().get(0).getBars()).hasSize(5);
 
     ChartCreator aggregatingNoVfsCreator = new AggregatingChartCreator(info, false);
-    Chart aggregatedNoVfsChart = aggregatingNoVfsCreator.create();
+    Chart aggregatedNoVfsChart = aggregatingNoVfsCreator.create(/* minBarWidth= */ 0);
     assertThat(aggregatedNoVfsChart.getSortedTypes())
         .hasSize(COMMON_CHART_TYPES + AGGREGATED_CHART_NO_VFS_TYPES);
     assertThat(aggregatedNoVfsChart.getSortedRows().get(0).getBars()).hasSize(4);
 
     ChartCreator detailedCreator = new DetailedChartCreator(info);
-    Chart detailedChart = detailedCreator.create();
+    Chart detailedChart = detailedCreator.create(/* minBarWidth= */ 0);
     assertThat(detailedChart.getSortedTypes())
         .hasSize(COMMON_CHART_TYPES + ProfilerTask.values().length);
     assertThat(detailedChart.getSortedRows().get(0).getBars()).hasSize(7);
@@ -110,7 +114,7 @@ public class ProfilerChartTest extends FoundationTestCase {
 
   @Test
   public void testChart() throws Exception {
-    Chart chart = new Chart();
+    Chart chart = new Chart(/* minBarWidth= */ 0);
 
     ChartBarType type3 = chart.createType("name3", Color.GREEN);
     ChartBarType type2 = chart.createType("name2", Color.RED);
@@ -124,11 +128,11 @@ public class ProfilerChartTest extends FoundationTestCase {
     assertThat(types.get(2).getName()).isEqualTo(type3.getName());
     assertThat(types.get(2).getColor()).isEqualTo(type3.getColor());
 
-    assertThat(chart.lookUpType("name3")).isSameAs(type3);
-    assertThat(chart.lookUpType("name2")).isSameAs(type2);
-    assertThat(chart.lookUpType("name1")).isSameAs(type1);
+    assertThat(chart.lookUpType("name3")).isSameInstanceAs(type3);
+    assertThat(chart.lookUpType("name2")).isSameInstanceAs(type2);
+    assertThat(chart.lookUpType("name1")).isSameInstanceAs(type1);
 
-    assertThat(chart.lookUpType("wergl")).isSameAs(Chart.UNKNOWN_TYPE);
+    assertThat(chart.lookUpType("wergl")).isSameInstanceAs(Chart.UNKNOWN_TYPE);
     types = chart.getSortedTypes();
     assertThat(types).hasSize(4);
 
@@ -151,7 +155,7 @@ public class ProfilerChartTest extends FoundationTestCase {
     ChartBar bar = rows.get(0).getBars().get(0);
     assertThat(bar.getStart()).isEqualTo(2);
     assertThat(bar.getStop()).isEqualTo(3);
-    assertThat(bar.getType()).isSameAs(type1);
+    assertThat(bar.getType()).isSameInstanceAs(type1);
     assertThat(bar.getLabel()).isEqualTo("label1");
   }
 
@@ -203,13 +207,13 @@ public class ProfilerChartTest extends FoundationTestCase {
     assertThat(bar1.getRow()).isEqualTo(row1);
     assertThat(bar1.getStart()).isEqualTo(1);
     assertThat(bar1.getStop()).isEqualTo(2);
-    assertThat(bar1.getType()).isSameAs(type);
+    assertThat(bar1.getType()).isSameInstanceAs(type);
     assertThat(bar1.getLabel()).isEqualTo("label1");
   }
 
   @Test
   public void testVisitor() throws Exception {
-    Chart chart = new Chart();
+    Chart chart = new Chart(/* minBarWidth= */ 0);
     ChartBarType type3 = chart.createType("name3", Color.GREEN);
     ChartBarType type2 = chart.createType("name2", Color.RED);
     ChartBarType type1 = chart.createType("name1", Color.BLACK);
@@ -230,33 +234,58 @@ public class ProfilerChartTest extends FoundationTestCase {
     assertThat(visitor.lineCount).isEqualTo(0);
   }
 
+  @Test
+  public void testHtmlChartVisitorFormatColor() {
+    Locale defaultLocale = Locale.getDefault();
+
+    Locale.setDefault(Locale.GERMANY);
+    String black = HtmlChartVisitor.formatColor(Color.GRAY);
+    String[] grayComponents = black.split(",");
+    assertThat(grayComponents.length).isEqualTo(4);
+
+    Locale.setDefault(defaultLocale);
+  }
+
   private ProfileInfo createProfileInfo(Runnable runnable, int noOfRows) throws Exception {
     Scratch scratch = new Scratch();
     Path cacheDir = scratch.dir("/tmp");
     Path cacheFile = cacheDir.getRelative("profile1.dat");
     Profiler profiler = Profiler.instance();
-    profiler.start(ProfiledTaskKinds.ALL, cacheFile.getOutputStream(), "basic test", false,
-        BlazeClock.instance(), BlazeClock.instance().nanoTime());
+    try (OutputStream out = cacheFile.getOutputStream()) {
+      profiler.start(
+          ImmutableSet.copyOf(ProfilerTask.values()),
+          out,
+          Profiler.Format.BINARY_BAZEL_FORMAT,
+          "basic test",
+          "dummy_output_base",
+          UUID.randomUUID(),
+          false,
+          BlazeClock.instance(),
+          BlazeClock.instance().nanoTime(),
+          /* enabledCpuUsageProfiling= */ false,
+          /* slimProfile= */ false,
+          /* enableActionCountProfile= */ false);
 
-    // Write from multiple threads to generate multiple rows in the chart.
-    for (int i = 0; i < noOfRows; i++) {
-      Thread t = new Thread(runnable);
-      t.start();
-      t.join();
+      // Write from multiple threads to generate multiple rows in the chart.
+      for (int i = 0; i < noOfRows; i++) {
+        Thread t = new Thread(runnable);
+        t.start();
+        t.join();
+      }
+
+      profiler.stop();
     }
-
-    profiler.stop();
-    return ProfileInfo.loadProfile(cacheFile);
+    try (InputStream in = cacheFile.getInputStream()) {
+      return ProfileInfo.loadProfile(in);
+    }
   }
 
   private void task(final Profiler profiler, ProfilerTask task, String name) {
-    profiler.startTask(task, name);
-    try {
+    try (SilentCloseable c = profiler.profile(task, name)) {
       Thread.sleep(100);
     } catch (InterruptedException e) {
       // ignore
     }
-    profiler.completeTask(task);
   }
 
   private static final class TestingChartVisitor implements ChartVisitor {
@@ -270,11 +299,6 @@ public class ProfilerChartTest extends FoundationTestCase {
     @Override
     public void visit(Chart chart) {
       beginChartCount++;
-    }
-
-    @Override
-    public void endVisit(Chart chart) {
-      endChartCount++;
     }
 
     @Override
@@ -295,6 +319,11 @@ public class ProfilerChartTest extends FoundationTestCase {
     @Override
     public void visit(ChartLine chartLine) {
       lineCount++;
+    }
+
+    @Override
+    public void endVisit(Chart chart) {
+      endChartCount++;
     }
   }
 }

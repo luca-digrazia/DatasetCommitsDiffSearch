@@ -14,11 +14,10 @@
 
 package com.google.devtools.build.lib.profiler.chart;
 
-import com.google.devtools.build.lib.profiler.ProfileInfo;
-import com.google.devtools.build.lib.profiler.ProfileInfo.CriticalPathEntry;
-import com.google.devtools.build.lib.profiler.ProfileInfo.Task;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.CriticalPathEntry;
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.Task;
 import java.util.EnumSet;
 
 /**
@@ -40,8 +39,8 @@ public class DetailedChartCreator implements ChartCreator {
   }
 
   @Override
-  public Chart create() {
-    Chart chart = new Chart();
+  public Chart create(long minBarWidth) {
+    Chart chart = new Chart(minBarWidth);
     CommonChartCreator.createCommonChartItems(chart, info);
     createTypes(chart);
 
@@ -53,7 +52,7 @@ public class DetailedChartCreator implements ChartCreator {
     for (Task task : info.allTasksById) {
       String label = task.type.description + ": " + task.getDescription();
       ChartBarType type = chart.lookUpType(task.type.description);
-      long stop = task.startTime + task.duration;
+      long stop = task.startTime - info.getMinTaskStartTime() + task.durationNanos;
       CriticalPathEntry entry = null;
 
       // for top level tasks, check if they are on the critical path
@@ -67,12 +66,14 @@ public class DetailedChartCreator implements ChartCreator {
           }
           if (nextEntry != null) {
             // time is start and not stop as we traverse the critical back backwards
-            chart.addVerticalLine(task.threadId, nextEntry.task.threadId, task.startTime);
+            chart.addVerticalLine(task.threadId, nextEntry.task.threadId,
+                task.startTime - info.getMinTaskStartTime());
           }
         }
       }
 
-      chart.addBar(task.threadId, task.startTime, stop, type, (entry != null), label);
+      chart.addBar(task.threadId, task.startTime - info.getMinTaskStartTime(), stop, type,
+          entry != null, label);
     }
 
     return chart;
