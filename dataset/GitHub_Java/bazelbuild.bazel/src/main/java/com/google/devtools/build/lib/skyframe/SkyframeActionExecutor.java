@@ -1152,13 +1152,8 @@ public final class SkyframeActionExecutor {
       }
 
       try {
-        ActionExecutionValue actionExecutionValue;
-        try (SilentCloseable c =
-            profiler.profile(ProfilerTask.ACTION_COMPLETE, "actuallyCompleteAction")) {
-          actionExecutionValue =
-              actuallyCompleteAction(eventHandler, nextActionContinuationOrResult.get());
-        }
-        return new ActionCacheWriteStep(actionExecutionValue);
+        return new ActionCacheWriteStep(
+            actuallyCompleteAction(eventHandler, nextActionContinuationOrResult.get()));
       } catch (ActionExecutionException e) {
         return ActionStepOrResult.of(e);
       } finally {
@@ -1196,17 +1191,19 @@ public final class SkyframeActionExecutor {
         Preconditions.checkState(action.inputsDiscovered(),
             "Action %s successfully executed, but inputs still not known", action);
 
-        if (!checkOutputs(action, metadataHandler)) {
-          throw toActionExecutionException(
-              "not all outputs were created or valid",
-              null,
-              action,
-              outputAlreadyDumped ? null : fileOutErr);
+        try (SilentCloseable c =
+            profiler.profile(ProfilerTask.ACTION_COMPLETE, action.describe())) {
+          if (!checkOutputs(action, metadataHandler)) {
+            throw toActionExecutionException(
+                "not all outputs were created or valid",
+                null,
+                action,
+                outputAlreadyDumped ? null : fileOutErr);
+          }
         }
 
         if (outputService != null && finalizeActions) {
-          try (SilentCloseable c =
-              profiler.profile(ProfilerTask.INFO, "outputService.finalizeAction")) {
+          try {
             outputService.finalizeAction(action, metadataHandler);
           } catch (EnvironmentalExecException | IOException e) {
             logger.log(Level.WARNING, String.format("unable to finalize action: '%s'", action), e);
@@ -1296,7 +1293,7 @@ public final class SkyframeActionExecutor {
 
       @Override
       public ActionStepOrResult run(Environment env) {
-        try (SilentCloseable c = profiler.profile(ProfilerTask.INFO, "postprocessing.run")) {
+        try {
           postprocessing.run(env, action, metadataHandler, actionExecutionContext.getClientEnv());
           if (env.valuesMissing()) {
             return this;
