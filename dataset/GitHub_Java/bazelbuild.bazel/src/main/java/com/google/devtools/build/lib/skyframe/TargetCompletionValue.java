@@ -44,10 +44,9 @@ public class TargetCompletionValue implements SkyValue {
         targets,
         ct ->
             TargetCompletionKey.create(
-                ConfiguredTargetKey.builder()
-                    .setConfiguredTarget(ct)
-                    .setConfigurationKey(ct.getConfigurationKey())
-                    .build(),
+                // Can't build top-level targets in host configuration.
+                ConfiguredTargetKey.of(
+                    ct, ct.getConfigurationKey(), /*isHostConfiguration=*/ false),
                 ctx,
                 targetsToTest.contains(ct)));
   }
