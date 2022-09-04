@@ -498,7 +498,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         if (mCurrentState == GSYVideoPlayer.CURRENT_STATE_PAUSE && mTextureView != null
                 && (mFullPauseBitmap == null || mFullPauseBitmap.isRecycled()) && mShowPauseCover) {
             try {
-                initCover();
+                mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
             } catch (Exception e) {
                 e.printStackTrace();
                 mFullPauseBitmap = null;
@@ -520,20 +520,13 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             } else if (mShowPauseCover) {
                 //不在了说明已经播放过，还是暂停的话，我们拿回来就好
                 try {
-                    initCover();
+                    mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
                 } catch (Exception e) {
                     e.printStackTrace();
                     mFullPauseBitmap = null;
                 }
             }
         }
-    }
-
-    protected void initCover() {
-        Bitmap bitmap = Bitmap.createBitmap(
-                mTextureView.getSizeW(), mTextureView.getSizeH(), Bitmap.Config.RGB_565);
-        mFullPauseBitmap = mTextureView.getBitmap(bitmap);
-        //bitmap.recycle();
     }
 
 
