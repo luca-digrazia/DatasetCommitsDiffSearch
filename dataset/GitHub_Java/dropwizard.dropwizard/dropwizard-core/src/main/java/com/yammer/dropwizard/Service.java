@@ -31,15 +31,6 @@ public abstract class Service<T extends Configuration> {
     }
 
     /**
-     * Returns the name of the service.
-     *
-     * @return the service's name
-     */
-    public String getName() {
-        return getClass().getSimpleName();
-    }
-
-    /**
      * Initializes the service bootstrap.
      *
      * @param bootstrap the service bootstrap
