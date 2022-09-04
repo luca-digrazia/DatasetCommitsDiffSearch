@@ -118,7 +118,7 @@ public abstract class FileArtifactValue implements SkyValue {
    * Index used to resolve remote files.
    *
    * <p>0 indicates that no such information is available which can mean that it's either a local
-   * file, empty, or an omitted output.
+   * file or empty.
    */
   public int getLocationIndex() {
     return 0;
