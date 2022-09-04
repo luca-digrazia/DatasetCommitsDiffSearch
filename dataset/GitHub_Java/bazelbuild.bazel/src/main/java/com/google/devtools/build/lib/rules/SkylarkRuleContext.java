@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
@@ -180,7 +179,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
   private SkylarkRuleAttributesCollection attributesCollection;
   private SkylarkRuleAttributesCollection ruleAttributesCollection;
   private SkylarkClassObject splitAttributes;
-  private SkylarkDict<ClassObjectConstructor.Key, ToolchainInfo> toolchains;
 
   // TODO(bazel-team): we only need this because of the css_binary rule.
   private ImmutableMap<Artifact, Label> artifactsLabelMap;
@@ -281,10 +279,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
     }
 
     makeVariables = ruleContext.getConfigurationMakeVariableContext().collectMakeVariables();
-    toolchains =
-        ruleContext.getToolchainContext() == null
-            ? SkylarkDict.<ClassObjectConstructor.Key, ToolchainInfo>of(null)
-            : ruleContext.getToolchainContext().collectToolchains();
   }
 
   /**
@@ -303,7 +297,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
     splitAttributes = null;
     artifactsLabelMap = null;
     outputsObject = null;
-    toolchains = null;
   }
 
   public void checkMutable(String attrName) throws EvalException {
@@ -815,17 +808,6 @@ public final class SkylarkRuleContext implements SkylarkValue {
   public SkylarkDict<String, String> var() throws EvalException {
     checkMutable("var");
     return makeVariables;
-  }
-
-  @SkylarkCallable(structField = true, doc = "Toolchains required for this rule.")
-  public SkylarkDict<ClassObjectConstructor.Key, ToolchainInfo> toolchains() throws EvalException {
-    checkMutable("toolchains");
-    if (ruleAttributesCollection != null) {
-      // TODO(katre): Support toolchains on aspects.
-      throw new EvalException(
-          Location.BUILTIN, "'toolchains' is not available in aspect implementations");
-    }
-    return toolchains;
   }
 
   @Override

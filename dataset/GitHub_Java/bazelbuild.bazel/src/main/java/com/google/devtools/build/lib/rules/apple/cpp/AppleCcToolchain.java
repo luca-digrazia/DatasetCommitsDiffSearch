@@ -22,9 +22,8 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.XcodeConfig;
+import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import java.util.LinkedHashMap;
@@ -59,36 +58,37 @@ public class AppleCcToolchain extends CcToolchain {
       throws RuleErrorException {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
-    if (XcodeConfig.getXcodeVersion(ruleContext) == null) {
+    if (appleConfiguration.getXcodeVersion() == null) {
       ruleContext.throwWithRuleError("Xcode version must be specified to use an Apple CROSSTOOL");
     }
 
-    ApplePlatform platform = appleConfiguration.getSingleArchPlatform();
+    Platform platform = appleConfiguration.getSingleArchPlatform();
 
     Map<String, String> appleEnv = getEnvironmentBuildVariables(ruleContext);
 
     return ImmutableMap.<String, String>builder()
         .put(
             XCODE_VERSION_KEY,
-            XcodeConfig.getXcodeVersion(ruleContext).toStringWithMinimumComponents(2))
+            appleConfiguration.getXcodeVersion()
+                .toStringWithMinimumComponents(2))
         .put(
             IOS_SDK_VERSION_KEY,
-            XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.IOS_SIMULATOR)
+            appleConfiguration.getSdkVersionForPlatform(Platform.IOS_SIMULATOR)
                 .toStringWithMinimumComponents(2))
         .put(
             MACOS_SDK_VERSION_KEY,
-            XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.MACOS)
+            appleConfiguration.getSdkVersionForPlatform(Platform.MACOS)
                 .toStringWithMinimumComponents(2))
         .put(
             TVOS_SDK_VERSION_KEY,
-            XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.TVOS_SIMULATOR)
+            appleConfiguration.getSdkVersionForPlatform(Platform.TVOS_SIMULATOR)
                 .toStringWithMinimumComponents(2))
         .put(
             WATCHOS_SDK_VERSION_KEY,
-            XcodeConfig.getSdkVersionForPlatform(ruleContext, ApplePlatform.WATCHOS_SIMULATOR)
+            appleConfiguration.getSdkVersionForPlatform(Platform.WATCHOS_SIMULATOR)
                 .toStringWithMinimumComponents(2))
         .put(SDK_DIR_KEY, AppleToolchain.sdkDir())
-        .put(SDK_FRAMEWORK_DIR_KEY, AppleToolchain.sdkFrameworkDir(platform, ruleContext))
+        .put(SDK_FRAMEWORK_DIR_KEY, AppleToolchain.sdkFrameworkDir(platform, appleConfiguration))
         .put(
             PLATFORM_DEVELOPER_FRAMEWORK_DIR,
             AppleToolchain.platformDeveloperFrameworkDir(appleConfiguration))
@@ -101,9 +101,8 @@ public class AppleCcToolchain extends CcToolchain {
         .put(
             APPLE_SDK_PLATFORM_VALUE_KEY,
             appleEnv.getOrDefault(AppleConfiguration.APPLE_SDK_PLATFORM_ENV_NAME, ""))
-        .put(
-            VERSION_MIN_KEY,
-            XcodeConfig.getMinimumOsForPlatformType(ruleContext, platform.getType()).toString())
+        .put(VERSION_MIN_KEY,
+            appleConfiguration.getMinimumOsForPlatformType(platform.getType()).toString())
         .build();
   }
 
@@ -121,10 +120,9 @@ public class AppleCcToolchain extends CcToolchain {
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     builder.putAll(appleConfiguration.getAppleHostSystemEnv());
-    if (ApplePlatform.isApplePlatform(cppConfiguration.getTargetCpu())) {
-      builder.putAll(
-          appleConfiguration.appleTargetPlatformEnv(
-              ApplePlatform.forTargetCpu(cppConfiguration.getTargetCpu())));
+    if (Platform.isApplePlatform(cppConfiguration.getTargetCpu())) {
+      builder.putAll(appleConfiguration.appleTargetPlatformEnv(
+          Platform.forTargetCpu(cppConfiguration.getTargetCpu())));
     }
     return ImmutableMap.copyOf(builder);
   }

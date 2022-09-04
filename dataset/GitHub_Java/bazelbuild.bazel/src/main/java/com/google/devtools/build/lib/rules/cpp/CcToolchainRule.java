@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.rules.MakeVariableProvider;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses.LipoTransition;
 
 /**
@@ -59,11 +58,9 @@ public final class CcToolchainRule implements RuleDefinition {
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-    final Label zipper = env.getToolsLabel("//tools/zip:zipper");
     return builder
         .setUndocumented()
         .requiresConfigurationFragments(CppConfiguration.class)
-        .advertiseProvider(MakeVariableProvider.class)
         .add(attr("output_licenses", LICENSE))
         .add(attr("cpu", STRING).mandatory())
         .add(attr("all_files", LABEL).legacyAllowAnyFileType().cfg(HOST).mandatory())
@@ -88,24 +85,6 @@ public final class CcToolchainRule implements RuleDefinition {
                 .cfg(HOST)
                 .singleArtifact()
                 .value(env.getToolsLabel("//tools/cpp:link_dynamic_library")))
-        .add(
-            attr(":zipper", LABEL)
-                .cfg(HOST)
-                .singleArtifact()
-                .value(
-                    new LateBoundLabel<BuildConfiguration>() {
-                      @Override
-                      public Label resolve(
-                          Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-                        CppConfiguration cppConfiguration =
-                            configuration.getFragment(CppConfiguration.class);
-                        if (cppConfiguration.isLLVMOptimizedFdo()) {
-                          return zipper;
-                        } else {
-                          return null;
-                        }
-                      }
-                    }))
         .add(attr(":libc_top", LABEL).value(LIBC_TOP))
         .add(
             attr(":lipo_context_collector", LABEL)
