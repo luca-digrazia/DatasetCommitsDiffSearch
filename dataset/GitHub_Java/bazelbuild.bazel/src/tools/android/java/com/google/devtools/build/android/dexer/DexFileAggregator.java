@@ -19,9 +19,6 @@ import com.android.dex.Dex;
 import com.android.dex.DexFormat;
 import com.android.dex.FieldId;
 import com.android.dex.MethodId;
-import com.android.dex.ProtoId;
-import com.android.dex.TypeList;
-import com.android.dx.command.dexer.DxContext;
 import com.android.dx.merge.CollisionPolicy;
 import com.android.dx.merge.DexMerger;
 import com.google.auto.value.AutoValue;
@@ -58,17 +55,14 @@ class DexFileAggregator implements Closeable {
   private final int maxNumberOfIdxPerDex;
   private final int wasteThresholdPerDex;
   private final MultidexStrategy multidex;
-  private final DxContext context;
   private DexFileArchive dest;
   private int nextDexFileIndex = 0;
 
   public DexFileAggregator(
-      DxContext context,
       DexFileArchive dest,
       MultidexStrategy multidex,
       int maxNumberOfIdxPerDex,
       int wasteThresholdPerDex) {
-    this.context = context;
     this.dest = dest;
     this.multidex = multidex;
     this.maxNumberOfIdxPerDex = maxNumberOfIdxPerDex;
@@ -151,7 +145,7 @@ class DexFileAggregator implements Closeable {
         return dexes[0];
       default:
         try {
-          DexMerger dexMerger = new DexMerger(dexes, CollisionPolicy.FAIL, context);
+          DexMerger dexMerger = new DexMerger(dexes, CollisionPolicy.FAIL);
           dexMerger.setCompactWasteThreshold(wasteThresholdPerDex);
           return dexMerger.merge();
         } catch (BufferOverflowException e) {
@@ -201,13 +195,12 @@ class DexFileAggregator implements Closeable {
   abstract static class MethodDescriptor {
     static MethodDescriptor fromDex(Dex dex, int methodIndex) {
       MethodId method = dex.methodIds().get(methodIndex);
-      ProtoId proto = dex.protoIds().get(method.getProtoIndex());
       String name = dex.strings().get(method.getNameIndex());
       String declaringClass = typeName(dex, method.getDeclaringClassIndex());
-      String returnType = typeName(dex, proto.getReturnTypeIndex());
-      TypeList parameterTypeIndices = dex.readTypeList(proto.getParametersOffset());
+      String returnType = typeName(dex, dex.returnTypeIndexFromMethodIndex(methodIndex));
+      short[] parameterTypeIndices = dex.parameterTypeIndicesFromMethodIndex(methodIndex);
       ImmutableList.Builder<String> parameterTypes = ImmutableList.builder();
-      for (short parameterTypeIndex : parameterTypeIndices.getTypes()) {
+      for (short parameterTypeIndex : parameterTypeIndices) {
         parameterTypes.add(typeName(dex, parameterTypeIndex & 0xFFFF));
       }
       return new AutoValue_DexFileAggregator_MethodDescriptor(
