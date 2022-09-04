@@ -446,7 +446,9 @@ public final class ValidationEnvironment extends NodeVisitor {
             statement.getStartLocation(),
             "load() statements must be called before any other statement. "
                 + "First non-load() statement appears at "
-                + firstStatement);
+                + firstStatement
+                + ". Use --incompatible_bzl_disallow_load_after_statement=false to temporarily "
+                + "disable this check.");
       }
 
       if (firstStatement == null) {
@@ -457,7 +459,7 @@ public final class ValidationEnvironment extends NodeVisitor {
 
   private void validateToplevelStatements(List<Statement> statements) {
     // Check that load() statements are on top.
-    if (!isBuildFile) {
+    if (!isBuildFile && semantics.incompatibleBzlDisallowLoadAfterStatement()) {
       checkLoadAfterStatement(statements);
     }
 
