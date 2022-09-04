@@ -57,7 +57,7 @@ import static org.mockito.Mockito.when;
 
 public class ElasticsearchBackendUsingCorrectIndicesTest extends ElasticsearchBackendTestBase {
     private static Map<String, Provider<ESSearchTypeHandler<? extends SearchType>>> handlers = ImmutableMap.of(
-            MessageList.NAME, () -> new ESMessageList(new ESQueryDecorators.Fake()),
+            MessageList.NAME, ESMessageList::new,
             DateHistogram.NAME, ESDateHistogram::new
     );
     private static final QueryStringParser queryStringParser = new QueryStringParser();
