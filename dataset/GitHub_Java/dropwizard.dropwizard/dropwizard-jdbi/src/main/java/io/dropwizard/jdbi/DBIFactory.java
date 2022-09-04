@@ -58,10 +58,10 @@ public class DBIFactory {
     private static class SanerNamingStrategy extends DelegatingStatementNameStrategy {
         private SanerNamingStrategy() {
             super(NameStrategies.CHECK_EMPTY,
-                NameStrategies.CONTEXT_CLASS,
-                NameStrategies.CONTEXT_NAME,
-                NameStrategies.SQL_OBJECT,
-                statementContext -> RAW_SQL);
+                    NameStrategies.CONTEXT_CLASS,
+                    NameStrategies.CONTEXT_NAME,
+                    NameStrategies.SQL_OBJECT,
+                    statementContext -> RAW_SQL);
         }
     }
 
@@ -99,7 +99,7 @@ public class DBIFactory {
         environment.lifecycle().manage(dataSource);
         environment.healthChecks().register(name, new DBIHealthCheck(
                 environment.getHealthCheckExecutorService(),
-                configuration.getValidationQueryTimeout().orElseGet(() -> Duration.seconds(5)),
+                configuration.getValidationQueryTimeout().or(Duration.seconds(5)),
                 dbi,
                 validationQuery));
         dbi.setSQLLog(new LogbackLog(LOGGER, Level.TRACE));
@@ -146,11 +146,11 @@ public class DBIFactory {
         dbi.registerArgumentFactory(new OptionalZonedDateTimeArgumentFactory(timeZone));
 
         dbi.registerColumnMapper(new JodaDateTimeMapper(timeZone));
+        dbi.registerColumnMapper(new InstantMapper(timeZone));
         dbi.registerColumnMapper(new LocalDateMapper());
         dbi.registerColumnMapper(new LocalDateTimeMapper());
-        dbi.registerColumnMapper(new InstantMapper(timeZone));
-        dbi.registerColumnMapper(new OffsetDateTimeMapper(timeZone));
-        dbi.registerColumnMapper(new ZonedDateTimeMapper(timeZone));
+        dbi.registerColumnMapper(new OffsetDateTimeMapper());
+        dbi.registerColumnMapper(new ZonedDateTimeMapper());
 
         return dbi;
     }
