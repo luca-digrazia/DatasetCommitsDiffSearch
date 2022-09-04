@@ -64,7 +64,7 @@ public class EvaluationTest extends EvaluationTestCase {
             .build();
     ParserInput input = ParserInput.fromLines("print('hello'); x = 1//0; print('goodbye')");
     try {
-      EvalUtils.execOrEval(input, thread);
+      StarlarkFile.eval(input, thread);
       throw new AssertionError("execution succeeded unexpectedly");
     } catch (EvalException ex) {
       // ok, division by zero

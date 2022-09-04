@@ -113,7 +113,7 @@ final class Eval {
 
     // TODO(laurentlb): Could be moved to the Parser or the ValidationEnvironment?
     FunctionSignature sig = node.getSignature().getSignature();
-    if (sig.numMandatoryNamedOnly() > 0) {
+    if (sig.getShape().getMandatoryNamedOnly() > 0) {
       throw new EvalException(node.getLocation(), "Keyword-only argument is forbidden.");
     }
 
@@ -768,18 +768,17 @@ final class Eval {
     // Optimize allocations for the common case where they are no duplicates.
     ImmutableList.Builder<String> duplicatesBuilder = null;
     // Iterate over the arguments. We assume all positional arguments come before any keyword
-    // or star arguments, because the argument list was already validated by the Parser,
+    // or star arguments, because the argument list was already validated by
+    // Argument#validateFuncallArguments, as called by the Parser,
     // which should be the only place that build FuncallExpression-s.
     // Argument lists are typically short and functions are frequently called, so go by index
     // (O(1) for ImmutableList) to avoid the iterator overhead.
     for (int i = 0; i < call.getArguments().size(); i++) {
-      Argument arg = call.getArguments().get(i);
+      Argument.Passed arg = call.getArguments().get(i);
       Object value = Eval.eval(thread, arg.getValue());
-      if (arg instanceof Argument.Positional) {
-        // f(expr)
+      if (arg.isPositional()) {
         posargs.add(value);
-      } else if (arg instanceof Argument.Star) {
-        // f(*args): expand args
+      } else if (arg.isStar()) { // expand the starArg
         if (!(value instanceof Iterable)) {
           throw new EvalException(
               call.getLocation(),
@@ -788,8 +787,7 @@ final class Eval {
         for (Object starArgUnit : (Iterable<Object>) value) {
           posargs.add(starArgUnit);
         }
-      } else if (arg instanceof Argument.StarStar) {
-        // f(**kwargs): expand kwargs
+      } else if (arg.isStarStar()) { // expand the kwargs
         ImmutableList<String> duplicates =
             addKeywordArgsAndReturnDuplicates(kwargs, value, call.getLocation());
         if (duplicates != null) {
@@ -799,13 +797,11 @@ final class Eval {
           duplicatesBuilder.addAll(duplicates);
         }
       } else {
-        // f(id=expr)
-        String name = arg.getName();
-        if (addKeywordArgAndCheckIfDuplicate(kwargs, name, value)) {
+        if (addKeywordArgAndCheckIfDuplicate(kwargs, arg.getName(), value)) {
           if (duplicatesBuilder == null) {
             duplicatesBuilder = ImmutableList.builder();
           }
-          duplicatesBuilder.add(name);
+          duplicatesBuilder.add(arg.getName());
         }
       }
     }

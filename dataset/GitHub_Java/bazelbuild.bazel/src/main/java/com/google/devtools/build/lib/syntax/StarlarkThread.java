@@ -23,6 +23,7 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
@@ -284,9 +285,7 @@ public final class StarlarkThread implements Freezable {
    * #initialize}. It is illegal to use any other method in-between these two calls, or to call
    * {@link #initialize} on an already initialized {@link GlobalFrame}.
    */
-  // TODO(adonovan): move this to toplevel, call it "Module", and remove references to it from
-  // StarlarkThread.
-  public static final class GlobalFrame implements Frame, ValidationEnvironment.Module {
+  public static final class GlobalFrame implements Frame {
     /**
      * Final, except that it may be initialized after instantiation. Null mutability indicates that
      * this Frame is uninitialized.
@@ -296,7 +295,7 @@ public final class StarlarkThread implements Freezable {
     /** Final, except that it may be initialized after instantiation. */
     @Nullable private GlobalFrame universe;
 
-    // The label (an optional piece of metadata) associated with the file.
+    // The label (an optional piece of metatata) associated with the file.
     @Nullable private Object label;
 
     /** Bindings are maintained in order of creation. */
@@ -499,17 +498,6 @@ public final class StarlarkThread implements Freezable {
         }
       }
       return result.build();
-    }
-
-    @Override
-    public Set<String> getNames() {
-      return getTransitiveBindings().keySet();
-    }
-
-    @Override
-    public String getUndeclaredNameError(StarlarkSemantics semantics, String name) {
-      FlagGuardedValue v = restrictedBindings.get(name);
-      return v == null ? null : v.getErrorFromAttemptingAccess(semantics, name);
     }
 
     @Override
@@ -1172,6 +1160,16 @@ public final class StarlarkThread implements Freezable {
     return globalValue;
   }
 
+  /**
+   * Returns a map containing all bindings that are technically <i>present</i> but are
+   * <i>restricted</i> in the current frame with the current semantics. Such bindings should be
+   * treated unresolvable; this method should be invoked to prepare error messaging for evaluation
+   * environments where access of these restricted objects may have been attempted.
+   */
+  Map<String, FlagGuardedValue> getRestrictedBindings() {
+    return globalFrame.restrictedBindings;
+  }
+
   public StarlarkSemantics getSemantics() {
     return semantics;
   }
@@ -1203,7 +1201,7 @@ public final class StarlarkThread implements Freezable {
   // TODO(adonovan): push this up into the debugger once the exec API is finalized.
   public void debugExec(ParserInput input) throws SyntaxError, EvalException, InterruptedException {
     StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(file, getGlobals(), getSemantics(), /*isBuildFile=*/ false);
+    ValidationEnvironment.validateFile(file, this, /*isBuildFile=*/ false);
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
@@ -1433,4 +1431,32 @@ public final class StarlarkThread implements Freezable {
     MethodLibrary.addBindingsToBuilder(builder);
     return GlobalFrame.createForBuiltins(builder.build());
   }
+
+  /** An exception thrown by {@link #FAIL_FAST_HANDLER}. */
+  // TODO(bazel-team): Possibly extend RuntimeException instead of IllegalArgumentException.
+  // TODO(adonovan): move to EventCollectionApparatus.
+  public static class FailFastException extends IllegalArgumentException {
+    public FailFastException(String s) {
+      super(s);
+    }
+  }
+
+  /**
+   * A handler that immediately throws {@link FailFastException} whenever an error or warning
+   * occurs.
+   *
+   * <p>We do not reuse an existing unchecked exception type, because callers (e.g., test
+   * assertions) need to be able to distinguish between organically occurring exceptions and
+   * exceptions thrown by this handler.
+   */
+  // TODO(adonovan): move to EventCollectionApparatus.
+  public static final EventHandler FAIL_FAST_HANDLER =
+      new EventHandler() {
+        @Override
+        public void handle(Event event) {
+          if (EventKind.ERRORS_AND_WARNINGS.contains(event.getKind())) {
+            throw new FailFastException(event.toString());
+          }
+        }
+      };
 }
