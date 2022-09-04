@@ -33,7 +33,6 @@ import javax.persistence.PersistenceUnit;
 import javax.persistence.SharedCacheMode;
 import javax.persistence.metamodel.StaticMetamodel;
 import javax.persistence.spi.PersistenceUnitTransactionType;
-import javax.transaction.TransactionManager;
 
 import org.eclipse.microprofile.metrics.Metadata;
 import org.eclipse.microprofile.metrics.MetricType;
@@ -310,7 +309,6 @@ public final class HibernateOrmProcessor {
 
         final boolean enableORM = hasEntities(domainObjects, nonJpaModelBuildItems);
         final boolean hibernateReactivePresent = capabilities.isPresent(Capability.HIBERNATE_REACTIVE);
-        final boolean jtaPresent = capabilities.isPresent(Capability.TRANSACTIONS);
         //The Hibernate Reactive extension is able to handle registration of PersistenceProviders for both reactive and
         //traditional blocking Hibernate, by depending on this module and delegating to this code.
         //So when the Hibernate Reactive extension is present, trust that it will register its own PersistenceProvider
@@ -375,7 +373,7 @@ public final class HibernateOrmProcessor {
         beanContainerListener
                 .produce(new BeanContainerListenerBuildItem(
                         recorder.initMetadata(allDescriptors, scanner, integratorClasses, serviceContributorClasses,
-                                proxyDefinitions.getProxies(), strategy, jtaPresent)));
+                                proxyDefinitions.getProxies(), strategy)));
     }
 
     private MultiTenancyStrategy getMultiTenancyStrategy() {
@@ -495,8 +493,7 @@ public final class HibernateOrmProcessor {
     }
 
     @BuildStep
-    void registerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans, Capabilities capabilities,
-            CombinedIndexBuildItem combinedIndex,
+    void registerBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans, CombinedIndexBuildItem combinedIndex,
             List<PersistenceUnitDescriptorBuildItem> descriptors,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
         if (!hasEntities(jpaEntities, nonJpaModels)) {
@@ -505,10 +502,7 @@ public final class HibernateOrmProcessor {
 
         List<Class<?>> unremovableClasses = new ArrayList<>();
         unremovableClasses.add(JPAConfig.class);
-        if (capabilities.isPresent(Capability.TRANSACTIONS)) {
-            unremovableClasses.add(TransactionManager.class);
-            unremovableClasses.add(TransactionEntityManagers.class);
-        }
+        unremovableClasses.add(TransactionEntityManagers.class);
         unremovableClasses.add(RequestScopedEntityManagerHolder.class);
         if (getMultiTenancyStrategy() != MultiTenancyStrategy.NONE) {
             unremovableClasses.add(DataSourceTenantConnectionResolver.class);
