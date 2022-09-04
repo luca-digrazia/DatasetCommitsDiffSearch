@@ -7,9 +7,6 @@ import java.util.Date;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -21,8 +18,6 @@ import javax.ws.rs.core.Response;
 
 import org.jboss.resteasy.core.AbstractAsynchronousResponse;
 import org.jboss.resteasy.core.AbstractExecutionContext;
-import org.jboss.resteasy.core.ResteasyContext;
-import org.jboss.resteasy.core.ResteasyContext.CloseableContext;
 import org.jboss.resteasy.core.SynchronousDispatcher;
 import org.jboss.resteasy.plugins.server.BaseHttpRequest;
 import org.jboss.resteasy.specimpl.ResteasyHttpHeaders;
@@ -30,10 +25,8 @@ import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.jboss.resteasy.spi.NotImplementedYetException;
 import org.jboss.resteasy.spi.ResteasyAsynchronousContext;
 import org.jboss.resteasy.spi.ResteasyAsynchronousResponse;
-import org.jboss.resteasy.spi.RunnableWithException;
 
 import io.quarkus.arc.ManagedContext;
-import io.quarkus.runtime.BlockingOperationControl;
 import io.vertx.core.Context;
 import io.vertx.ext.web.RoutingContext;
 
@@ -58,7 +51,6 @@ public final class VertxHttpRequest extends BaseHttpRequest {
     private final Context context;
     private final ManagedContext requestContext;
     private final ManagedContext.ContextState requestContextState;
-    private final Executor executor;
 
     public VertxHttpRequest(Context context,
             RoutingContext routingContext,
@@ -67,11 +59,8 @@ public final class VertxHttpRequest extends BaseHttpRequest {
             String httpMethod,
             LazyHostSupplier remoteHost,
             SynchronousDispatcher dispatcher,
-            VertxHttpResponse response,
-            ManagedContext requestContext,
-            Executor executor) {
+            VertxHttpResponse response, ManagedContext requestContext) {
         super(uri);
-        this.executor = executor;
         this.context = context;
         this.response = response;
         this.httpHeaders = httpHeaders;
@@ -231,60 +220,6 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                 asyncResponse.complete();
         }
 
-        @Override
-        public CompletionStage<Void> executeAsyncIo(CompletionStage<Void> f) {
-            // check if this CF is already resolved
-            CompletableFuture<Void> ret = f.toCompletableFuture();
-            // if it's not resolved, we may need to suspend
-            if (!ret.isDone() && !isSuspended()) {
-                suspend();
-            }
-            return ret;
-        }
-
-        @Override
-        public CompletionStage<Void> executeBlockingIo(RunnableWithException f, boolean hasInterceptors) {
-            if (!Context.isOnEventLoopThread()) {
-                // we're blocking
-                try {
-                    f.run();
-                } catch (Exception e) {
-                    CompletableFuture<Void> ret = new CompletableFuture<>();
-                    ret.completeExceptionally(e);
-                    return ret;
-                }
-                return CompletableFuture.completedFuture(null);
-            } else if (!hasInterceptors) {
-                Map<Class<?>, Object> context = ResteasyContext.getContextDataMap();
-                // turn any sync request into async
-                if (!isSuspended()) {
-                    suspend();
-                }
-                CompletableFuture<Void> ret = new CompletableFuture<>();
-                this.request.context.executeBlocking(future -> {
-                    try (CloseableContext newContext = ResteasyContext.addCloseableContextDataLevel(context)) {
-                        f.run();
-                        future.complete();
-                    } catch (RuntimeException e) {
-                        throw e;
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }, res -> {
-                    if (res.succeeded())
-                        ret.complete(null);
-                    else
-                        ret.completeExceptionally(res.cause());
-                });
-                return ret;
-            } else {
-                CompletableFuture<Void> ret = new CompletableFuture<>();
-                ret.completeExceptionally(
-                        new RuntimeException("Cannot use blocking IO with interceptors when we're on the IO thread"));
-                return ret;
-            }
-        }
-
         /**
          * Vertx implementation of {@link AsyncResponse}.
          *
@@ -315,16 +250,7 @@ public final class VertxHttpRequest extends BaseHttpRequest {
                     done = true;
                     requestContext.activate(requestContextState);
                     requestContext.terminate();
-                    if (BlockingOperationControl.isBlockingAllowed()) {
-                        vertxFlush();
-                    } else {
-                        executor.execute(new Runnable() {
-                            @Override
-                            public void run() {
-                                vertxFlush();
-                            }
-                        });
-                    }
+                    vertxFlush();
                 }
             }
 

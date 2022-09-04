@@ -65,7 +65,6 @@ import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.InstanceHandle;
 import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.LoginConfig;
-import io.undertow.servlet.api.MimeMapping;
 import io.undertow.servlet.api.SecurityConstraint;
 import io.undertow.servlet.api.SecurityInfo;
 import io.undertow.servlet.api.ServletContainer;
@@ -311,11 +310,6 @@ public class UndertowDeploymentRecorder {
                                 factory.instanceFactory(listenerClass))));
     }
 
-    public void addMimeMapping(RuntimeValue<DeploymentInfo> info, String extension,
-            String mimeType) throws Exception {
-        info.getValue().addMimeMapping(new MimeMapping(extension, mimeType));
-    }
-
     public void addServletInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
     }
@@ -359,8 +353,7 @@ public class UndertowDeploymentRecorder {
         return new Handler<RoutingContext>() {
             @Override
             public void handle(RoutingContext event) {
-                VertxHttpExchange exchange = new VertxHttpExchange(event.request(), allocator, executorService, event,
-                        event.getBody());
+                VertxHttpExchange exchange = new VertxHttpExchange(event.request(), allocator, executorService, event);
                 Optional<MemorySize> maxBodySize = httpConfiguration.limits.maxBodySize;
                 if (maxBodySize.isPresent()) {
                     exchange.setMaxEntitySize(maxBodySize.get().asLongValue());

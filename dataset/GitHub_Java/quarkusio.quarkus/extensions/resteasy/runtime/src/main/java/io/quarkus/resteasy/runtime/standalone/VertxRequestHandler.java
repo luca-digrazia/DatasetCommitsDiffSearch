@@ -1,9 +1,7 @@
 package io.quarkus.resteasy.runtime.standalone;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.Executor;
 
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.CDI;
@@ -21,7 +19,6 @@ import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
-import io.quarkus.vertx.http.runtime.VertxInputStream;
 import io.quarkus.vertx.http.runtime.security.QuarkusHttpUser;
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
@@ -43,20 +40,18 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     protected final BeanContainer beanContainer;
     protected final CurrentIdentityAssociation association;
     protected final CurrentVertxRequest currentVertxRequest;
-    protected final Executor executor;
 
     public VertxRequestHandler(Vertx vertx,
             BeanContainer beanContainer,
             ResteasyDeployment deployment,
             String rootPath,
-            BufferAllocator allocator, Executor executor) {
+            BufferAllocator allocator) {
         this.vertx = vertx;
         this.beanContainer = beanContainer;
         this.dispatcher = new RequestDispatcher((SynchronousDispatcher) deployment.getDispatcher(),
                 deployment.getProviderFactory(), null, Thread.currentThread().getContextClassLoader());
         this.rootPath = rootPath;
         this.allocator = allocator;
-        this.executor = executor;
         Instance<CurrentIdentityAssociation> association = CDI.current().select(CurrentIdentityAssociation.class);
         this.association = association.isResolvable() ? association.get() : null;
         currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
@@ -66,26 +61,19 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     public void handle(RoutingContext request) {
         // have to create input stream here.  Cannot execute in another thread
         // otherwise request handlers may not get set up before request ends
-        InputStream is;
+        VertxInputStream is;
         try {
-            if (request.getBody() != null) {
-                is = new ByteArrayInputStream(request.getBody().getBytes());
-            } else {
-                is = new VertxInputStream(request.request());
-            }
+            is = new VertxInputStream(request.request());
         } catch (IOException e) {
             request.fail(e);
             return;
         }
 
-        executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    dispatch(request, is, new VertxBlockingOutput(request.request()));
-                } catch (Throwable e) {
-                    request.fail(e);
-                }
+        vertx.executeBlocking(event -> {
+            dispatch(request, is, new VertxBlockingOutput(request.request()));
+        }, false, event -> {
+            if (event.failed()) {
+                request.fail(event.cause());
             }
         });
     }
