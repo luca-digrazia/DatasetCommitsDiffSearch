@@ -37,9 +37,10 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionAllowlist;
 import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeProvider.WithLegacyStarlarkName;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
@@ -49,23 +50,22 @@ import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Mutability;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkCallable;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.syntax.Location;
 
 /**
  * A helper class to build Rule Configured Targets via runtime loaded rule implementations defined
@@ -302,9 +302,7 @@ public final class StarlarkRuleConfiguredTargetUtil {
       loc = info.getCreationLoc();
       if (getProviderKey(loc, info).equals(StructProvider.STRUCT.getKey())) {
 
-        if (context
-            .getStarlarkSemantics()
-            .getBool(BuildLanguageOptions.INCOMPATIBLE_DISALLOW_STRUCT_PROVIDER_SYNTAX)) {
+        if (context.getStarlarkSemantics().incompatibleDisallowStructProviderSyntax()) {
           throw Starlark.errorf(
               "Returning a struct from a rule implementation function is deprecated and will "
                   + "be removed soon. It may be temporarily re-enabled by setting "
@@ -404,9 +402,9 @@ public final class StarlarkRuleConfiguredTargetUtil {
         builder.addNativeDeclaredProvider(info);
       }
 
-      if (info.getProvider() instanceof BuiltinProvider.WithLegacyStarlarkName) {
-        BuiltinProvider.WithLegacyStarlarkName providerWithLegacyName =
-            (BuiltinProvider.WithLegacyStarlarkName) info.getProvider();
+      if (info.getProvider() instanceof NativeProvider.WithLegacyStarlarkName) {
+        WithLegacyStarlarkName providerWithLegacyName =
+            (WithLegacyStarlarkName) info.getProvider();
         if (shouldAddWithLegacyKey(oldStyleProviders, providerWithLegacyName)) {
           builder.addStarlarkTransitiveInfo(providerWithLegacyName.getStarlarkName(), info);
         }
@@ -425,9 +423,9 @@ public final class StarlarkRuleConfiguredTargetUtil {
     if (builder.containsProviderKey(info.getProvider().getKey())) {
       return false;
     }
-    if (info.getProvider() instanceof BuiltinProvider.WithLegacyStarlarkName) {
+    if (info.getProvider() instanceof NativeProvider.WithLegacyStarlarkName) {
       String canonicalLegacyKey =
-          ((BuiltinProvider.WithLegacyStarlarkName) info.getProvider()).getStarlarkName();
+          ((WithLegacyStarlarkName) info.getProvider()).getStarlarkName();
       // Add info using its modern key if it was specified using its canonical legacy key, or
       // if no provider was used using that canonical legacy key.
       return fieldName.equals(canonicalLegacyKey)
@@ -439,7 +437,7 @@ public final class StarlarkRuleConfiguredTargetUtil {
 
   @SuppressWarnings("deprecation") // For legacy migrations
   private static boolean shouldAddWithLegacyKey(
-      StructImpl oldStyleProviders, BuiltinProvider.WithLegacyStarlarkName provider)
+      StructImpl oldStyleProviders, WithLegacyStarlarkName provider)
       throws EvalException {
     String canonicalLegacyKey = provider.getStarlarkName();
     // Add info using its canonical legacy key if no provider was specified using that canonical
@@ -542,11 +540,10 @@ public final class StarlarkRuleConfiguredTargetUtil {
 
     if (context.getRuleContext().getRule().isAnalysisTest()) {
       // The Starlark Build API should already throw exception if the rule implementation attempts
-      // to register any actions. This is just a check of this invariant.
+      // to register any actions. This is just a sanity check of this invariant.
       Preconditions.checkState(
           context.getRuleContext().getAnalysisEnvironment().getRegisteredActions().isEmpty(),
-          "%s",
-          context.getRuleContext().getLabel());
+          "%s", context.getRuleContext().getLabel());
 
       executable = context.getRuleContext().createOutputArtifactScript();
     }
