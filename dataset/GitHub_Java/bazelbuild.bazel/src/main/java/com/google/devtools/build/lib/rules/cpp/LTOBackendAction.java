@@ -117,14 +117,14 @@ public final class LTOBackendAction extends SpawnAction {
     try {
       for (String line : FileSystemUtils.iterateLinesAsLatin1(imports.getPath())) {
         if (!line.isEmpty()) {
-          PathFragment execPath = PathFragment.create(line);
+          PathFragment execPath = new PathFragment(line);
           if (execPath.isAbsolute()) {
             throw new ActionExecutionException(
                 "Absolute paths not allowed in imports file " + imports.getPath() + ": " + execPath,
                 this,
                 false);
           }
-          importSet.add(PathFragment.create(line));
+          importSet.add(new PathFragment(line));
         }
       }
     } catch (IOException e) {

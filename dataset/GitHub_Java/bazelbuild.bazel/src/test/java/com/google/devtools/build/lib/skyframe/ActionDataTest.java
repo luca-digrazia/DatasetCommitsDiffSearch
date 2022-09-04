@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -59,6 +60,11 @@ public class ActionDataTest extends TimestampBuilderTestCase {
         } catch (IOException e) {
           throw new ActionExecutionException("failed: ", e, this, false);
         }
+      }
+
+      @Override
+      public ResourceSet estimateResourceConsumption(Executor executor) {
+        return ResourceSet.ZERO;
       }
 
       @Override
