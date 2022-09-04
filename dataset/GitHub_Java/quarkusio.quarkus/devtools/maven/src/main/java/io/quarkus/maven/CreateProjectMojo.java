@@ -1,6 +1,5 @@
 package io.quarkus.maven;
 
-import static io.quarkus.devtools.project.CodestartResourceLoadersBuilder.codestartLoadersBuilder;
 import static org.fusesource.jansi.Ansi.ansi;
 
 import java.io.BufferedWriter;
@@ -44,7 +43,6 @@ import io.quarkus.devtools.project.codegen.SourceType;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.components.Prompter;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.platform.descriptor.loader.json.ResourceLoader;
 import io.quarkus.platform.tools.ToolsUtils;
 import io.quarkus.platform.tools.maven.MojoMessageWriter;
 import io.quarkus.registry.ExtensionCatalogResolver;
@@ -77,13 +75,16 @@ public class CreateProjectMojo extends AbstractMojo {
     private String projectVersion;
 
     /**
-     * When true, do not include any code in the generated Quarkus project.
+     * When true, do not include any example code in the generated Quarkus project.
      */
-    @Parameter(property = "noCode", defaultValue = "false")
-    private boolean noCode;
+    @Parameter(property = "noExamples", defaultValue = "false")
+    private boolean noExamples;
 
-    @Parameter(property = "example")
-    private String example;
+    /**
+     * Choose which example(s) you want in the generated Quarkus application.
+     */
+    @Parameter(property = "examples")
+    private Set<String> examples;
 
     /**
      * Group ID of the target platform BOM
@@ -142,7 +143,7 @@ public class CreateProjectMojo extends AbstractMojo {
      * Set the package name of the generated classes.
      * <br />
      * If not set, {@link #projectGroupId} will be used as {@link #packageName}
-     * <p>
+     *
      * {@code packageName}
      */
     @Parameter(property = "packageName")
@@ -186,9 +187,6 @@ public class CreateProjectMojo extends AbstractMojo {
 
     @Parameter(property = "enableRegistryClient")
     private boolean enableRegistryClient;
-
-    @Parameter(property = "appConfig")
-    private String appConfig;
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -278,12 +276,8 @@ public class CreateProjectMojo extends AbstractMojo {
             final SourceType sourceType = CreateProject.determineSourceType(extensions);
             sanitizeOptions(sourceType);
 
-            final List<ResourceLoader> codestartsResourceLoader = codestartLoadersBuilder()
-                    .catalog(catalog)
-                    .artifactResolver(mvn)
-                    .build();
             QuarkusProject newProject = QuarkusProject.of(projectDirPath, catalog,
-                    codestartsResourceLoader, log, buildToolEnum);
+                    QuarkusProjectHelper.getResourceLoader(catalog, mvn), log, buildToolEnum);
             final CreateProject createProject = new CreateProject(newProject)
                     .groupId(projectGroupId)
                     .artifactId(projectArtifactId)
@@ -292,9 +286,8 @@ public class CreateProjectMojo extends AbstractMojo {
                     .className(className)
                     .packageName(packageName)
                     .extensions(extensions)
-                    .example(example)
-                    .noCode(noCode)
-                    .appConfig(appConfig);
+                    .overrideExamples(examples)
+                    .noExamples(noExamples);
             if (path != null) {
                 createProject.setValue("path", path);
             }
@@ -427,7 +420,7 @@ public class CreateProjectMojo extends AbstractMojo {
                         DEFAULT_VERSION);
             }
 
-            if (!noCode && StringUtils.isBlank(example)) {
+            if (examples.isEmpty()) {
                 if (extensions.isEmpty()) {
                     extensions = Arrays
                             .stream(prompter
@@ -437,8 +430,8 @@ public class CreateProjectMojo extends AbstractMojo {
                             .map(String::trim).filter(StringUtils::isNotEmpty).collect(Collectors.toSet());
                 }
                 String answer = prompter.promptWithDefaultValue(
-                        "Would you like some code to start (yes), or just an empty Quarkus project (no)", "yes");
-                noCode = answer.startsWith("n");
+                        "Do you want example code to get started (yes), or just an empty project (no)", "yes");
+                noExamples = answer.startsWith("n");
             }
         } catch (IOException e) {
             throw new MojoExecutionException("Unable to get user input", e);
