@@ -8,7 +8,7 @@ public class JVMInfoBinder implements MeterBinder {
 
     @Override
     public void bindTo(MeterRegistry registry) {
-        Counter.builder("jvm.info")
+        Counter.builder("jvm_info")
                 .description("JVM version info")
                 .tags("version", System.getProperty("java.runtime.version", "unknown"),
                         "vendor", System.getProperty("java.vm.vendor", "unknown"),
