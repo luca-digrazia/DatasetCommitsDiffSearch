@@ -24,7 +24,7 @@ public class QuarkusRestAsyncResponse implements AsyncResponse, Handler<Long> {
     private volatile boolean cancelled;
     private volatile TimeoutHandler timeoutHandler;
     // only used with lock, no need for volatile
-    private long timerId = -1;
+    private long timerId;
 
     public QuarkusRestAsyncResponse(QuarkusRestRequestContext context) {
         this.context = context;
