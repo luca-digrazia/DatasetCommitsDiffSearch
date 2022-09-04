@@ -25,7 +25,6 @@ public final class FeatureBuildItem extends MultiBuildItem {
     public static final String BEAN_VALIDATION = "bean-validation";
     public static final String JPA = "jpa";
     public static final String SCHEDULER = "scheduler";
-    public static final String SECURITY = "security";
     public static final String VERTX = "vertx";
 
     private final String info;
