@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.GraphTester.StringValue;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
-import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -223,7 +222,7 @@ public abstract class GraphTest {
     graph = getGraph(getNextVersion(startingVersion));
     NodeEntry sameEntry = Preconditions.checkNotNull(graph.get(null, Reason.OTHER, key));
     // Mark the node as dirty again and check that the reverse deps have been preserved.
-    sameEntry.markDirty(DirtyType.CHANGE);
+    assertThat(sameEntry.markDirty(true).wasCallRedundant()).isFalse();
     startEvaluation(sameEntry);
     sameEntry.markRebuilding();
     sameEntry.setValue(new StringValue("foo2"), getNextVersion(startingVersion));
@@ -369,7 +368,7 @@ public abstract class GraphTest {
                 throw new IllegalStateException(e);
               }
               try {
-                entry.markDirty(DirtyType.CHANGE);
+                assertThat(entry.markDirty(true).wasCallRedundant()).isFalse();
 
                 // Make some changes, like adding a dep and rdep.
                 entry.addReverseDepAndCheckIfDone(key("rdep"));

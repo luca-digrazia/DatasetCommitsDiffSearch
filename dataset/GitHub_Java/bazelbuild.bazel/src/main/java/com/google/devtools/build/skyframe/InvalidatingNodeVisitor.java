@@ -22,6 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
+import com.google.devtools.build.lib.concurrent.ExecutorParams;
 import com.google.devtools.build.lib.concurrent.ForkJoinQuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -34,6 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
@@ -86,6 +88,15 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
       TGraph graph,
       DirtyTrackingProgressReceiver progressReceiver,
       InvalidationState state) {
+    this(
+        graph, progressReceiver, state, AbstractQueueVisitor.EXECUTOR_FACTORY);
+  }
+
+  protected InvalidatingNodeVisitor(
+      TGraph graph,
+      DirtyTrackingProgressReceiver progressReceiver,
+      InvalidationState state,
+      Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
     this.executor =
         new AbstractQueueVisitor(
             /*parallelism=*/ DEFAULT_THREAD_COUNT,
@@ -93,6 +104,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
             /*units=*/ TimeUnit.SECONDS,
             /*failFastOnException=*/ true,
             "skyframe-invalidator",
+            executorFactory,
             errorClassifier);
     this.graph = Preconditions.checkNotNull(graph);
     this.progressReceiver = Preconditions.checkNotNull(progressReceiver);
@@ -128,13 +140,7 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
             }
           });
     }
-    try {
-      executor.awaitQuiescence(/*interruptWorkers=*/ true);
-    } catch (IllegalStateException e) {
-      // TODO(mschaller): Remove this wrapping after debugging the invalidation-after-OOMing-eval
-      // problem. The wrapping provides a stack trace showing what caused the invalidation.
-      throw new IllegalStateException(e);
-    }
+    executor.awaitQuiescence(/*interruptWorkers=*/ true);
 
     // Note: implementations that do not support interruption also do not update pendingVisitations.
     Preconditions.checkState(!getSupportInterruptions() || pendingVisitations.isEmpty(),
@@ -351,8 +357,9 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
     protected DirtyingNodeVisitor(
         QueryableGraph graph,
         DirtyTrackingProgressReceiver progressReceiver,
-        InvalidationState state) {
-      super(graph, progressReceiver, state);
+        InvalidationState state,
+        Function<ExecutorParams, ? extends ExecutorService> executorFactory) {
+      super(graph, progressReceiver, state, executorFactory);
       this.supportInterruptions = true;
     }
 
@@ -418,9 +425,6 @@ public abstract class InvalidatingNodeVisitor<TGraph extends QueryableGraph> {
       ArrayList<SkyKey> keysToGet = new ArrayList<>(size);
       for (SkyKey key : keys) {
         if (setToCheck.add(key)) {
-          Preconditions.checkState(
-              !isChanged || key.functionName().getHermeticity() == FunctionHermeticity.NONHERMETIC,
-              key);
           keysToGet.add(key);
         }
       }
