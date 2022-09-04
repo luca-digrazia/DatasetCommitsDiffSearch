@@ -60,7 +60,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
 
     ToolchainResolutionValue toolchainResolutionValue = result.get(key);
     assertThat(toolchainResolutionValue.toolchainLabel())
-        .isEqualTo(makeLabel("//toolchain:toolchain_2_impl"));
+        .isEqualTo(makeLabel("//toolchain:test_toolchain_2"));
   }
 
   @Test
@@ -203,7 +203,7 @@ public class ToolchainResolutionFunctionTest extends ToolchainTestCase {
 
     DeclaredToolchainInfo resolvedToolchain =
         ToolchainResolutionFunction.resolveConstraints(
-            toolchainType, execPlatform, targetPlatform, toolchains, null);
+            toolchainType, execPlatform, targetPlatform, toolchains);
     return assertThat(resolvedToolchain);
   }
 

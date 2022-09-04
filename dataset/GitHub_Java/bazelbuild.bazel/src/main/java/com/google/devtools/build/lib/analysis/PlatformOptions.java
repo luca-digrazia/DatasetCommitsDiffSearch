@@ -60,7 +60,7 @@ public class PlatformOptions extends FragmentOptions {
   @Option(
     name = "extra_toolchains",
     converter = LabelListConverter.class,
-    defaultValue = "@bazel_tools//tools/cpp:dummy_cc_toolchain",
+    defaultValue = "",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
     effectTags = {OptionEffectTag.UNKNOWN},
     metadataTags = {OptionMetadataTag.HIDDEN},
@@ -83,23 +83,10 @@ public class PlatformOptions extends FragmentOptions {
   )
   public List<ToolchainResolutionOverride> toolchainResolutionOverrides;
 
-  @Option(
-    name = "toolchain_resolution_debug",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.LOGGING,
-    effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-    help =
-        "Print debug information while finding toolchains for a rule. This might help developers "
-            + "of Bazel or Skylark rules with debugging failures due to missing toolchains."
-  )
-  public boolean toolchainResolutionDebug;
-
   @Override
-  public PlatformOptions getHost() {
+  public PlatformOptions getHost(boolean fallback) {
     PlatformOptions host = (PlatformOptions) getDefault();
     host.platforms = ImmutableList.of(this.hostPlatform);
-    host.hostPlatform = this.hostPlatform;
-    host.extraToolchains = this.extraToolchains;
     return host;
   }
 
