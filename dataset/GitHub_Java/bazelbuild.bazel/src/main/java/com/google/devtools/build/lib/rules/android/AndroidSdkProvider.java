@@ -13,18 +13,19 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.rules.android.AndroidStarlarkData.fromNoneable;
+import static com.google.devtools.build.lib.rules.android.AndroidSkylarkData.fromNoneable;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.java.BootClassPathInfo;
-import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidSdkProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidSdkProviderApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import javax.annotation.Nullable;
 
@@ -99,7 +100,7 @@ public final class AndroidSdkProvider extends NativeInfo
    * not specified.
    */
   public static AndroidSdkProvider fromRuleContext(RuleContext ruleContext) {
-    return ruleContext.getPrerequisite(":android_sdk", AndroidSdkProvider.PROVIDER);
+    return ruleContext.getPrerequisite(":android_sdk", Mode.TARGET, AndroidSdkProvider.PROVIDER);
   }
 
   /** Throws an error if the Android SDK cannot be found. */

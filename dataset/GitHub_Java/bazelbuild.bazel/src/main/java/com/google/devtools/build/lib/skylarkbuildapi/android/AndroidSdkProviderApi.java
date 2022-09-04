@@ -15,21 +15,27 @@ package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.FilesToRunProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
-import com.google.devtools.build.lib.skylarkbuildapi.TransitiveInfoCollectionApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.TransitiveInfoCollectionApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import javax.annotation.Nullable;
 
 /**
  * Configured targets implementing this provider can contribute Android Sdk information to the
  * compilation.
  */
-@SkylarkModule(name = "AndroidSdkInfo", doc = "", documented = false)
+@SkylarkModule(
+    name = "AndroidSdkInfo",
+    doc =
+        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
+            + "you will be broken when it is removed.",
+    documented = false)
 public interface AndroidSdkProviderApi<
         FileT extends FileApi,
         FilesToRunProviderT extends FilesToRunProviderApi<FileT>,
@@ -37,7 +43,7 @@ public interface AndroidSdkProviderApi<
     extends StructApi {
 
   /** Name of this info object. */
-  public static final String NAME = "AndroidSdkInfo";
+  String NAME = "AndroidSdkInfo";
 
   /** The value of build_tools_version. May be null or empty. */
   @SkylarkCallable(name = "build_tools_version", structField = true, doc = "", documented = false)
@@ -93,13 +99,7 @@ public interface AndroidSdkProviderApi<
   @SkylarkCallable(name = "aapt", structField = true, doc = "", documented = false)
   FilesToRunProviderT getAapt();
 
-  @SkylarkCallable(
-      name = "aapt2",
-      structField = true,
-      doc = "",
-      documented = false,
-      allowReturnNones = true)
-  @Nullable
+  @SkylarkCallable(name = "aapt2", structField = true, doc = "", documented = false)
   FilesToRunProviderT getAapt2();
 
   @SkylarkCallable(
@@ -121,8 +121,13 @@ public interface AndroidSdkProviderApi<
   FilesToRunProviderT getZipalign();
 
   /** The provider implementing this can construct the AndroidSdkInfo provider. */
-  @SkylarkModule(name = "Provider", doc = "", documented = false)
-  public interface Provider<
+  @SkylarkModule(
+      name = "Provider",
+      doc =
+          "Do not use this module. It is intended for migration purposes only. If you depend on "
+              + "it, you will be broken when it is removed.",
+      documented = false)
+  interface Provider<
           FileT extends FileApi,
           FilesToRunProviderT extends FilesToRunProviderApi<FileT>,
           TransT extends TransitiveInfoCollectionApi>
@@ -131,6 +136,7 @@ public interface AndroidSdkProviderApi<
     @SkylarkCallable(
         name = NAME,
         doc = "The <code>AndroidSdkInfo</code> constructor.",
+        documented = false,
         parameters = {
           @Param(
               name = "build_tools_version",
@@ -211,8 +217,7 @@ public interface AndroidSdkProviderApi<
               doc = "A files to run provider of AAPT2.",
               positional = true,
               named = false,
-              type = FilesToRunProviderApi.class,
-              noneable = true),
+              type = FilesToRunProviderApi.class),
           @Param(
               name = "apk_builder",
               doc = "A files to run provider of the Apk builder.",
@@ -238,6 +243,14 @@ public interface AndroidSdkProviderApi<
               positional = true,
               named = false,
               type = FilesToRunProviderApi.class),
+          @Param(
+              name = "system",
+              doc = "",
+              noneable = true,
+              defaultValue = "None",
+              positional = true,
+              named = false,
+              type = StarlarkValue.class),
         },
         selfCall = true)
     @SkylarkConstructor(objectType = AndroidSdkProviderApi.class)
@@ -254,11 +267,12 @@ public interface AndroidSdkProviderApi<
         FilesToRunProviderT mainDexListCreator,
         FilesToRunProviderT aidl,
         FilesToRunProviderT aapt,
-        /*noneable*/ Object aapt2,
+        FilesToRunProviderT aapt2,
         /*noneable*/ Object apkBuilder,
         FilesToRunProviderT apkSigner,
         FilesToRunProviderT proguard,
-        FilesToRunProviderT zipalign)
+        FilesToRunProviderT zipalign,
+        /*noneable*/ Object system)
         throws EvalException;
   }
 }
