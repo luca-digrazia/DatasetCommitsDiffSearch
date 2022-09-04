@@ -2,6 +2,7 @@ package org.graylog2;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import junit.framework.Assert;
@@ -14,9 +15,6 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
-import com.google.common.collect.Maps;
-import org.bson.types.ObjectId;
-import org.graylog2.indexer.EmbeddedElasticSearchClient;
 
 /**
  * Unit tests for {@link Configuration} class
@@ -31,7 +29,7 @@ public class ConfigurationTest {
     @Before
     public void setUp() {
 
-        validProperties = Maps.newHashMap();
+        validProperties = new HashMap<String, String>();
 
         try {
             tempFile = File.createTempFile("graylog", null);
@@ -50,6 +48,7 @@ public class ConfigurationTest {
         validProperties.put("mongodb_database", "test");
         validProperties.put("mongodb_host", "localhost");
         validProperties.put("mongodb_port", "27017");
+        validProperties.put("messages_collection_size", "1000");
         validProperties.put("use_gelf", "true");
         validProperties.put("gelf_listen_port", "12201");
 
@@ -71,6 +70,15 @@ public class ConfigurationTest {
         validProperties.put("mongodb_useauth", "true");
         validProperties.remove("mongodb_user");
         validProperties.remove("mongodb_password");
+
+        Configuration configuration = new Configuration();
+        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
+    }
+
+    @Test(expected = ValidationException.class)
+    public void testValidateSyslogProtocol() throws RepositoryException, ValidationException {
+
+        validProperties.put("syslog_protocol", "noValidProtocol");
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
@@ -224,66 +232,5 @@ public class ConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         Assert.assertEquals(2, configuration.getMongoReplicaSet().size());
-    }
-
-    @Test
-    public void testGetLibratoMetricsStreamFilter() throws RepositoryException, ValidationException {
-        ObjectId id1 = new ObjectId();
-        ObjectId id2 = new ObjectId();
-        ObjectId id3 = new ObjectId();
-        validProperties.put("libratometrics_stream_filter", id1.toString() + "," + id2.toString() + "," + id3.toString());
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(3, configuration.getLibratoMetricsStreamFilter().size());
-        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id1.toString()));
-        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id2.toString()));
-        Assert.assertTrue(configuration.getLibratoMetricsStreamFilter().contains(id3.toString()));
-    }
-
-    @Test
-    public void testGetLibratoMetricsPrefix() throws RepositoryException, ValidationException {
-        validProperties.put("libratometrics_prefix", "lolwut");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("lolwut", configuration.getLibratoMetricsPrefix());
-    }
-
-    @Test
-    public void testGetLibratoMetricsPrefixHasStandardValue() throws RepositoryException, ValidationException {
-        // Nothing set.
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("gl2", configuration.getLibratoMetricsPrefix());
-    }
-    
-    @Test
-    public void testGetRecentIndexStoreType() throws RepositoryException, ValidationException {
-        validProperties.put("recent_index_store_type", "mmapfs");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals("mmapfs", configuration.getRecentIndexStoreType());
-    }
-    
-    @Test
-    public void testGetRecentIndexStoreTypeHasStandardValue() throws RepositoryException, ValidationException {
-        // Nothing set.
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE, configuration.getRecentIndexStoreType());
-    }
-    
-    @Test
-    public void testGetRecentIndexStoreTypeFallsBackToStandardInCaseOfInvalidType() throws RepositoryException, ValidationException {
-        validProperties.put("recent_index_store_type", "LOLSOMETHINGINVALID");
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        Assert.assertEquals(EmbeddedElasticSearchClient.STANDARD_RECENT_INDEX_STORE_TYPE, configuration.getRecentIndexStoreType());
     }
 }
