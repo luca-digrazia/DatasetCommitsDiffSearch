@@ -19,6 +19,8 @@ import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import com.github.fommil.netlib.LAPACK;
 import org.netlib.util.intW;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Cholesky decomposition is a decomposition of a symmetric, positive-definite
@@ -50,7 +52,7 @@ import org.netlib.util.intW;
  * @author Haifeng Li
  */
 class Cholesky extends smile.math.matrix.Cholesky {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Cholesky.class);
+    private static final Logger logger = LoggerFactory.getLogger(Cholesky.class);
 
     /**
      * Constructor.

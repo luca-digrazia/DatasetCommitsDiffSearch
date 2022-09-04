@@ -13,12 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *******************************************************************************/
-package smile.nd4j;
-
-import smile.math.matrix.Matrix;
-import smile.math.matrix.DenseMatrix;
-import org.nd4j.linalg.api.ndarray.INDArray;
-import org.nd4j.linalg.factory.Nd4j;
+package smile.math.matrix;
 
 /**
  * Cholesky decomposition is a decomposition of a symmetric, positive-definite
@@ -49,16 +44,42 @@ import org.nd4j.linalg.factory.Nd4j;
  *
  * @author Haifeng Li
  */
-class Cholesky extends smile.math.matrix.Cholesky {
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Cholesky.class);
+public class Cholesky {
+
+    /**
+     * Array for internal storage of decomposition.
+     */
+    protected DenseMatrix L;
 
     /**
      * Constructor.
      * @param  L the lower triangular part of matrix contains the Cholesky
      *          factorization.
      */
-    public Cholesky(NDMatrix L) {
-        super(L);
+    public Cholesky(DenseMatrix L) {
+        if (L.nrows() != L.ncols()) {
+            throw new UnsupportedOperationException("Cholesky constructor on a non-square matrix");
+        }
+        this.L = L;
+    }
+
+    /**
+     * Returns lower triangular factor.
+     */
+    public DenseMatrix matrix() {
+        return L;
+    }
+
+    /**
+     * Returns the matrix determinant
+     */
+    public double det() {
+        double d = 1.0;
+        for (int i = 0; i < L.nrows(); i++) {
+            d *= L.get(i, i);
+        }
+
+        return d * d;
     }
 
     /**
@@ -93,16 +114,28 @@ class Cholesky extends smile.math.matrix.Cholesky {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", L.nrows(), L.ncols(), B.nrows(), B.ncols()));
         }
 
-        throw new UnsupportedOperationException("dpotrs is not supported by ND4J");
-        /*
-        intW info = new intW(0);
-        LAPACK.getInstance().dpotrs(NLMatrix.Lower, L.nrows(), B.ncols(), L.data(), L.ld(), B.data(), B.ld(), info);
+        int n = B.nrows();
+        int nrhs = B.ncols();
 
-        if (info.val < 0) {
-            logger.error("LAPACK DPOTRS error code: {}", info.val);
-            throw new IllegalArgumentException("LAPACK DPOTRS error code: " + info.val);
+        // Solve L*Y = B;
+        for (int k = 0; k < n; k++) {
+            for (int j = 0; j < nrhs; j++) {
+                for (int i = 0; i < k; i++) {
+                    B.sub(k, j, B.get(i, j) * L.get(k, i));
+                }
+                B.div(k, j, L.get(k, k));
+            }
         }
-        */
+
+        // Solve L'*X = Y;
+        for (int k = n - 1; k >= 0; k--) {
+            for (int j = 0; j < nrhs; j++) {
+                for (int i = k + 1; i < n; i++) {
+                    B.sub(k, j, B.get(i, j) * L.get(i, k));
+                }
+                B.div(k, j, L.get(k, k));
+            }
+        }
     }
 }
 

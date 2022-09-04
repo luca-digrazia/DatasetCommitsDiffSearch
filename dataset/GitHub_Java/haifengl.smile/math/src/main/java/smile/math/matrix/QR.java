@@ -15,8 +15,6 @@
  *******************************************************************************/
 package smile.math.matrix;
 
-import smile.math.Math;
-
 /**
  * For an m-by-n matrix A with m &ge; n, the QR decomposition is an m-by-n
  * orthogonal matrix Q and an n-by-n upper triangular matrix R such that
@@ -55,6 +53,11 @@ public class QR {
         this.qr = qr;
         this.tau = tau;
         this.singular = singular;
+    }
+
+    /** Returns the QR decomposition matrix. */
+    public DenseMatrix matrix() {
+        return qr;
     }
 
     /**
@@ -125,7 +128,7 @@ public class QR {
    /**
      * Solve the least squares A*x = b.
      * @param b   right hand side of linear system.
-    *  @param x   the output solution vector that minimizes the L2 norm of Q*R*x - b.
+     * @param x   the output solution vector that minimizes the L2 norm of A*x - b.
      * @exception  RuntimeException if matrix is rank deficient.
      */
     public void solve(double[] b, double[] x) {
@@ -142,7 +145,7 @@ public class QR {
         }
 
         double[] B = b.clone();
-        solve(Matrix.newInstance(B));
+        solve(Matrix.of(B));
         System.arraycopy(B, 0, x, 0, x.length);
     }
 
@@ -191,97 +194,6 @@ public class QR {
                     B.sub(i, j, B.get(k, j) * qr.get(i, k));
                 }
             }
-        }
-    }
-
-    /**
-     * Rank-1 update of the QR decomposition for A = A + u * v.
-     * Instead of a full decomposition from scratch in O(N<sup>3</sup>),
-     * we can update the QR factorization in O(N<sup>2</sup>).
-     * Note that u is modified during the update.
-     */
-    public void update(double[] u, double[] v) {
-        int m = qr.nrows();
-        int n = qr.ncols();
-
-        if (u.length != m || v.length != n) {
-            throw new IllegalArgumentException("u.length = " + u.length + " v.length = " + v.length);
-        }
-
-        int k;
-        for (k = m - 1; k >= 0; k--) {
-            if (u[k] != 0.0) {
-                break;
-            }
-        }
-
-        if (k < 0) {
-            return;
-        }
-
-        for (int i = k - 1; i >= 0; i--) {
-            rotate(i, u[i], -u[i + 1]);
-
-            if (u[i] == 0.0) {
-                u[i] = Math.abs(u[i + 1]);
-            } else if (Math.abs(u[i]) > Math.abs(u[i + 1])) {
-                u[i] = Math.abs(u[i]) * Math.sqrt(1.0 + Math.sqr(u[i + 1] / u[i]));
-            } else {
-                u[i] = Math.abs(u[i + 1]) * Math.sqrt(1.0 + Math.sqr(u[i] / u[i + 1]));
-            }
-        }
-
-        tau[0] += u[0] * v[0];
-        for (int i = 1; i < n; i++) {
-            qr.add(0, i, u[0] * v[i]);
-        }
-
-        for (int i = 0; i < k; i++) {
-            rotate(i, tau[i], -qr.get(i+1, i));
-        }
-
-        for (int i = 0; i < n; i++) {
-            if (tau[i] == 0.0) {
-                singular = true;
-            }
-        }
-    }
-
-    /*
-     * Utility used by update for Jacobi rotation on rows i and i+1 of qr.
-     * a and b are the parameters of the rotation:
-     * cos &theta; = a / sqrt(a<sup>2</sup>+b<sup>2</sub>)
-     * sin &theta; = b / sqrt(a<sup>2</sup>+b<sup>2</sub>)
-     */
-    private void rotate(int i, double a, double b) {
-        int n = qr.ncols();
-
-        double c, fact, s, w, y;
-        if (a == 0.0) {
-            c = 0.0;
-            s = (b >= 0.0 ? 1.0 : -1.0);
-        } else if (Math.abs(a) > Math.abs(b)) {
-            fact = b / a;
-            c = Math.copySign(1.0 / Math.sqrt(1.0 + (fact * fact)), a);
-            s = fact * c;
-        } else {
-            fact = a / b;
-            s = Math.copySign(1.0 / Math.sqrt(1.0 + (fact * fact)), b);
-            c = fact * s;
-        }
-
-        for (int j = i; j < n; j++) {
-            y = i == j ? tau[i] : qr.get(i, j);
-            w = qr.get(i+1, j);
-            qr.set(i, j, c * y - s * w);
-            qr.set(i+1, j, s * y + c * w);
-        }
-
-        for (int j = 0; j < n; j++) {
-            y = qr.get(i, j);
-            w = qr.get(i+1, j);
-            qr.set(i, j, c * y - s * w);
-            qr.set(i+1, j, s * y + c * w);
         }
     }
 }

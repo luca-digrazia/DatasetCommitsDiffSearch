@@ -16,7 +16,7 @@
 
 package smile.math.matrix;
 
-import smile.math.Math;
+import smile.math.MathEx;
 
 /**
  * For an m-by-n matrix A with m &ge; n, the LU decomposition is an m-by-n
@@ -87,48 +87,16 @@ public class LU {
         }
     }
 
+    /** Returns the LU decomposition matrix. */
+    public DenseMatrix matrix() {
+        return lu;
+    }
+
     /**
      * Returns true if the matrix is singular or false otherwise.
      */
     public boolean isSingular() {
         return singular;
-    }
-
-    /**
-     * Returns the lower triangular factor.
-     */
-    public DenseMatrix getL() {
-        int m = lu.nrows();
-        int n = lu.ncols();
-        DenseMatrix L = new ColumnMajorMatrix(m, n);
-        for (int i = 0; i < m; i++) {
-            L.set(i, i, 1.0);
-            for (int j = 0; j < i; j++) {
-                L.set(i, j, lu.get(i, j));
-            }
-        }
-        return L;
-    }
-
-    /**
-     * Returns the upper triangular factor.
-     */
-    public DenseMatrix getU() {
-        int n = lu.ncols();
-        DenseMatrix U = new ColumnMajorMatrix(n, n);
-        for (int i = 0; i < n; i++) {
-            for (int j = i; j < n; j++) {
-                U.set(i, j, lu.get(i, j));
-            }
-        }
-        return U;
-    }
-
-    /**
-     * Returns the pivot permutation vector.
-     */
-    public int[] getPivot() {
-        return piv;
     }
 
     /**
@@ -156,10 +124,11 @@ public class LU {
         int m = lu.nrows();
         int n = lu.ncols();
 
-        if (m != n)
+        if (m != n) {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", m, n));
+        }
 
-        DenseMatrix inv = new ColumnMajorMatrix(n, n);
+        DenseMatrix inv = Matrix.zeros(n, n);
         for (int i = 0; i < n; i++) {
             inv.set(i, piv[i], 1.0);
         }
@@ -171,51 +140,13 @@ public class LU {
     /**
      * Solve A * x = b.
      * @param b  right hand side of linear system.
-     *           On output, B will be overwritten with the solution matrix.
+     *           On output, b will be overwritten with the solution matrix.
      * @exception  RuntimeException  if matrix is singular.
      */
     public void solve(double[] b) {
-        int m = lu.nrows();
-        int n = lu.ncols();
-
-        if (m != n) {
-            throw new UnsupportedOperationException("The matrix is not square.");
-        }
-
-        if (b.length != m) {
-            throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but b is %d x 1", lu.nrows(), lu.ncols(), b.length));
-        }
-
-        if (isSingular()) {
-            throw new RuntimeException("Matrix is singular.");
-        }
-
-        double[] x = new double[b.length];
-        // Copy right hand side with pivoting
-        for (int i = 0; i < m; i++) {
-            x[i] = b[piv[i]];
-        }
-
-        // Solve L*Y = B(piv,:)
-        for (int k = 0; k < n; k++) {
-            for (int i = k + 1; i < n; i++) {
-                x[i] -= x[k] * lu.get(i, k);
-            }
-        }
-
-        // Solve U*X = Y;
-        for (int k = n - 1; k >= 0; k--) {
-            x[k] /= lu.get(k, k);
-
-            for (int i = 0; i < k; i++) {
-                x[i] -= x[k] * lu.get(i, k);
-            }
-        }
-
-        // Copy the result back to B.
-        for (int i = 0; i < m; i++) {
-            b[i] = x[i];
-        }
+        // B use b as the internal storage. Therefore b will contains the results.
+        DenseMatrix B = Matrix.of(b);
+        solve(B);
     }
 
     /**
@@ -227,7 +158,7 @@ public class LU {
     public void solve(DenseMatrix B) {
         int m = lu.nrows();
         int n = lu.ncols();
-        int nx = B.ncols();
+        int nrhs = B.ncols();
 
         if (B.nrows() != m)
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", lu.nrows(), lu.ncols(), B.nrows(), B.ncols()));
@@ -239,7 +170,7 @@ public class LU {
         DenseMatrix X = Matrix.zeros(B.nrows(), B.ncols());
 
         // Copy right hand side with pivoting
-        for (int j = 0; j < nx; j++) {
+        for (int j = 0; j < nrhs; j++) {
             for (int i = 0; i < m; i++) {
                 X.set(i, j, B.get(piv[i], j));
             }
@@ -248,7 +179,7 @@ public class LU {
         // Solve L*Y = B(piv,:)
         for (int k = 0; k < n; k++) {
             for (int i = k + 1; i < n; i++) {
-                for (int j = 0; j < nx; j++) {
+                for (int j = 0; j < nrhs; j++) {
                     X.sub(i, j, X.get(k, j) * lu.get(i, k));
                 }
             }
@@ -256,19 +187,19 @@ public class LU {
 
         // Solve U*X = Y;
         for (int k = n - 1; k >= 0; k--) {
-            for (int j = 0; j < nx; j++) {
+            for (int j = 0; j < nrhs; j++) {
                 X.div(k, j, lu.get(k, k));
             }
 
             for (int i = 0; i < k; i++) {
-                for (int j = 0; j < nx; j++) {
+                for (int j = 0; j < nrhs; j++) {
                     X.sub(i, j, X.get(k, j) * lu.get(i, k));
                 }
             }
         }
 
         // Copy the result back to B.
-        for (int j = 0; j < nx; j++) {
+        for (int j = 0; j < nrhs; j++) {
             for (int i = 0; i < m; i++) {
                 B.set(i, j, X.get(i, j));
             }
