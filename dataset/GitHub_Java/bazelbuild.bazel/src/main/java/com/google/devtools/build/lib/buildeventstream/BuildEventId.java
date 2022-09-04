@@ -99,21 +99,6 @@ public final class BuildEventId implements Serializable {
         BuildEventStreamProtos.BuildEventId.newBuilder().setOptionsParsed(optionsParsedId).build());
   }
 
-  public static BuildEventId workspaceStatusId() {
-    return new BuildEventId(
-        BuildEventStreamProtos.BuildEventId.newBuilder()
-            .setWorkspaceStatus(
-                BuildEventStreamProtos.BuildEventId.WorkspaceStatusId.getDefaultInstance())
-            .build());
-  }
-
-  public static BuildEventId configurationId(String id) {
-    BuildEventStreamProtos.BuildEventId.ConfigurationId configurationId =
-        BuildEventStreamProtos.BuildEventId.ConfigurationId.newBuilder().setId(id).build();
-    return new BuildEventId(
-        BuildEventStreamProtos.BuildEventId.newBuilder().setConfiguration(configurationId).build());
-  }
-
   private static BuildEventId targetPatternExpanded(List<String> targetPattern, boolean skipped) {
     BuildEventStreamProtos.BuildEventId.PatternExpandedId patternId =
         BuildEventStreamProtos.BuildEventId.PatternExpandedId.newBuilder()
