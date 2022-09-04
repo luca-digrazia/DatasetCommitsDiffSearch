@@ -26,7 +26,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
-import java.util.jar.JarInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.junit.Assert;
@@ -121,9 +120,7 @@ public class RClassGeneratorActionTest {
                 "--library",
                 libBarSymbols + "," + libBarManifest,
                 "--classJarOutput",
-                jarPath.toString(),
-                "--targetLabel",
-                "//foo:foo")
+                jarPath.toString())
             .toArray(new String[0]));
 
     assertThat(Files.exists(jarPath)).isTrue();
@@ -146,13 +143,8 @@ public class RClassGeneratorActionTest {
               "com/google/app/R$integer.class",
               "com/google/app/R$string.class",
               "com/google/app/R.class",
-              "META-INF/",
               "META-INF/MANIFEST.MF");
       ZipMtimeAsserter.assertEntries(zipEntries);
-    }
-    try (JarInputStream jar = new JarInputStream(Files.newInputStream(jarPath))) {
-      assertThat(jar.getManifest().getMainAttributes().getValue("Target-Label"))
-          .isEqualTo("//foo:foo");
     }
   }
 
@@ -197,7 +189,6 @@ public class RClassGeneratorActionTest {
               "com/google/bar/R$attr.class",
               "com/google/bar/R$drawable.class",
               "com/google/bar/R.class",
-              "META-INF/",
               "META-INF/MANIFEST.MF");
       ZipMtimeAsserter.assertEntries(zipEntries);
     }
@@ -241,7 +232,6 @@ public class RClassGeneratorActionTest {
               "com/google/app/R$integer.class",
               "com/google/app/R$string.class",
               "com/google/app/R.class",
-              "META-INF/",
               "META-INF/MANIFEST.MF");
       ZipMtimeAsserter.assertEntries(zipEntries);
     }
@@ -259,7 +249,7 @@ public class RClassGeneratorActionTest {
     try (ZipFile zip = new ZipFile(jarPath.toFile())) {
       List<? extends ZipEntry> zipEntries = Collections.list(zip.entries());
       Iterable<String> entries = getZipFilenames(zipEntries);
-      assertThat(entries).containsExactly("META-INF/", "META-INF/MANIFEST.MF");
+      assertThat(entries).containsExactly("META-INF/MANIFEST.MF");
       ZipMtimeAsserter.assertEntries(zipEntries);
     }
   }
@@ -308,7 +298,6 @@ public class RClassGeneratorActionTest {
               "com/custom/er/R$integer.class",
               "com/custom/er/R$string.class",
               "com/custom/er/R.class",
-              "META-INF/",
               "META-INF/MANIFEST.MF");
       ZipMtimeAsserter.assertEntries(zipEntries);
     }
@@ -339,7 +328,7 @@ public class RClassGeneratorActionTest {
     try (ZipFile zip = new ZipFile(jarPath.toFile())) {
       List<? extends ZipEntry> zipEntries = Collections.list(zip.entries());
       Iterable<String> entries = getZipFilenames(zipEntries);
-      assertThat(entries).containsExactly("META-INF/", "META-INF/MANIFEST.MF");
+      assertThat(entries).containsExactly("META-INF/MANIFEST.MF");
       ZipMtimeAsserter.assertEntries(zipEntries);
     }
   }

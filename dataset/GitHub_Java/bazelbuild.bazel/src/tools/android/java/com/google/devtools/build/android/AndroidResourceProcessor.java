@@ -118,6 +118,17 @@ public class AndroidResourceProcessor {
     public Path featureAfter;
 
     @Option(
+      name = "annotationJar",
+      defaultValue = "null",
+      converter = ExistingPathConverter.class,
+      category = "tool",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "Annotation Jar for builder invocations."
+    )
+    public Path annotationJar;
+
+    @Option(
       name = "androidJar",
       defaultValue = "null",
       converter = ExistingPathConverter.class,
