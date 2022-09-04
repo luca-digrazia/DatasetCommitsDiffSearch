@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import android.os.Bundle;
+import android.os.IBinder;
 import android.os.Parcelable;
 import android.util.SparseArray;
 
@@ -201,6 +202,12 @@ public class CustomShadowBundle {
 
 	@Implementation
 	public void putBundle(String key, Bundle value) {
+		mMap.put(key, value);
+	}
+
+	@Implementation
+	@Deprecated
+	public void putIBinder(String key, IBinder value) {
 		mMap.put(key, value);
 	}
 
