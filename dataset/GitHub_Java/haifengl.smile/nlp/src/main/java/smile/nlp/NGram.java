@@ -1,24 +1,22 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.nlp;
 
 import java.util.Arrays;
-import java.util.stream.Collectors;
 
 /**
  * An n-gram is a contiguous sequence of n words from a given sequence of text.
@@ -27,7 +25,7 @@ import java.util.stream.Collectors;
  *
  * @author Haifeng Li
  */
-public class NGram {
+public class NGram implements Comparable<NGram> {
 
     /**
      * Immutable word sequences.
@@ -35,21 +33,42 @@ public class NGram {
     public final String[] words;
 
     /**
+     * Frequency of n-gram in the corpus.
+     */
+    public int freq;
+
+    /**
      * Constructor.
      * @param words the n-gram word sequence.
      */
     public NGram(String[] words) {
+    	this(words, 0);
+    }
+
+    /**
+     * Constructor.
+     * @param words the n-gram word sequence.
+     * @param freq the frequency of n-gram in the corpus.
+     */
+    public NGram(String[] words, int freq) {
         this.words = words;
+        this.freq = freq;
     }
 
     @Override
     public String toString() {
-        return Arrays.stream(words).collect(Collectors.joining(", ", "[", "]"));
+    	StringBuilder sb = new StringBuilder();
+    	sb.append('(')
+          .append(Arrays.toString(words))
+          .append(", ")
+          .append(freq)
+          .append(')');
+        return sb.toString();
     }
 
     @Override
     public int hashCode() {
-        return Arrays.deepHashCode(words);
+    	return Arrays.deepHashCode(words);
     }
 
     @Override
@@ -63,6 +82,11 @@ public class NGram {
         }
 
         final NGram other = (NGram) obj;
-        return Arrays.equals(words, other.words);
+    	return Arrays.equals(words, other.words);
+    }
+
+    @Override
+    public int compareTo(NGram o) {
+        return freq - o.freq;
     }
 }
