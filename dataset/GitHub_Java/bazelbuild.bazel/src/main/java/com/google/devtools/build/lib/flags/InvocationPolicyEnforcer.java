@@ -193,7 +193,7 @@ public final class InvocationPolicyEnforcer {
    *
    * <p>Expands any policies on expansion flags.
    */
-  public static List<FlagPolicy> getEffectivePolicy(
+  private static List<FlagPolicy> getEffectivePolicy(
       InvocationPolicy invocationPolicy, OptionsParser parser) throws OptionsParsingException {
     if (invocationPolicy == null) {
       return ImmutableList.of();
