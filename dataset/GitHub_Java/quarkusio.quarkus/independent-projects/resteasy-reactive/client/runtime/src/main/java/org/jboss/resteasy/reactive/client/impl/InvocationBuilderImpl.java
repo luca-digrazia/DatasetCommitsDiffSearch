@@ -25,7 +25,7 @@ import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
-import org.jboss.resteasy.reactive.common.core.BlockingNotAllowedException;
+import org.jboss.resteasy.reactive.client.spi.ClientRestHandler;
 import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
@@ -38,22 +38,23 @@ public class InvocationBuilderImpl implements Invocation.Builder {
     final WebTargetImpl target;
     final RequestSpec requestSpec;
     final Map<String, Object> properties = new HashMap<>();
-    final ConfigurationImpl configuration;
     final ClientImpl restClient;
-    final HandlerChain handlerChain;
+    final ClientRestHandler[] handlerChain;
+    final ClientRestHandler[] abortHandlerChain;
     final ThreadSetupAction requestContext;
     final long readTimeoutMs;
 
     public InvocationBuilderImpl(URI uri, ClientImpl restClient, HttpClient httpClient,
             WebTargetImpl target,
-            ConfigurationImpl configuration, HandlerChain handlerChain, ThreadSetupAction requestContext) {
+            ConfigurationImpl configuration, ClientRestHandler[] handlerChain,
+            ClientRestHandler[] abortHandlerChain, ThreadSetupAction requestContext) {
         this.uri = uri;
         this.restClient = restClient;
         this.httpClient = httpClient;
         this.target = target;
         this.requestSpec = new RequestSpec(configuration);
-        this.configuration = configuration;
         this.handlerChain = handlerChain;
+        this.abortHandlerChain = abortHandlerChain;
         this.requestContext = requestContext;
         Object readTimeoutMs = configuration.getProperty(READ_TIMEOUT);
         if (readTimeoutMs == null) {
@@ -95,8 +96,8 @@ public class InvocationBuilderImpl implements Invocation.Builder {
 
     @Override
     public AsyncInvokerImpl async() {
-        return new AsyncInvokerImpl(restClient, httpClient, uri, requestSpec, configuration,
-                properties, handlerChain, requestContext);
+        return new AsyncInvokerImpl(restClient, httpClient, uri, requestSpec,
+                properties, handlerChain, abortHandlerChain, requestContext);
     }
 
     @Override
@@ -167,8 +168,8 @@ public class InvocationBuilderImpl implements Invocation.Builder {
 
     @Override
     public CompletionStageRxInvoker rx() {
-        return new AsyncInvokerImpl(restClient, httpClient, uri, requestSpec, configuration,
-                properties, handlerChain, requestContext);
+        return new AsyncInvokerImpl(restClient, httpClient, uri, requestSpec,
+                properties, handlerChain, abortHandlerChain, requestContext);
     }
 
     @Override
@@ -194,7 +195,7 @@ public class InvocationBuilderImpl implements Invocation.Builder {
 
     private <T> T unwrap(CompletableFuture<T> c) {
         if (Context.isOnEventLoopThread()) {
-            throw new BlockingNotAllowedException("Blocking REST client call made from the event loop. " +
+            throw new IllegalStateException("Blocking REST client call made from the event loop. " +
                     "If the code is executed from a RESTEasy Reactive resource, either annotate the resource method " +
                     "with `@Blocking` or use non-blocking client calls.");
         }
