@@ -54,7 +54,6 @@ public class DetailADPlayer2 extends GSYBaseADActivityDetail<NormalGSYVideoPlaye
             private int preSecond = 0;
             @Override
             public void onProgress(int progress, int secProgress, int currentPosition, int duration) {
-                //在5秒的时候弹出中间广告
                 int currentSecond = currentPosition / 1000;
                 if (currentSecond == 5 && currentSecond != preSecond) {
                     detailPlayer.getCurrentPlayer().onVideoPause();
@@ -99,9 +98,6 @@ public class DetailADPlayer2 extends GSYBaseADActivityDetail<NormalGSYVideoPlaye
 
     }
 
-    /**
-     * 需要片头广告
-     */
     @Override
     public boolean isNeedAdOnStart() {
         return true;
@@ -125,9 +121,6 @@ public class DetailADPlayer2 extends GSYBaseADActivityDetail<NormalGSYVideoPlaye
         gsyVideoPlayer.getBackButton().setVisibility(View.GONE);
     }
 
-    /**
-     * 公用的视频配置
-     */
     private GSYVideoOptionBuilder getCommonBuilder() {
         return new GSYVideoOptionBuilder()
                 .setCacheWithPlay(true)
