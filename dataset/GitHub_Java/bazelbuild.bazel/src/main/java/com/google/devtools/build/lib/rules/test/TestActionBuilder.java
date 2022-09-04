@@ -198,7 +198,7 @@ public final class TestActionBuilder {
     final boolean collectCodeCoverage = config.isCodeCoverageEnabled()
         && instrumentedFiles != null;
 
-    TreeMap<String, String> extraTestEnv = new TreeMap<>();
+    TreeMap<String, String> testEnv = new TreeMap<>();
 
     TestTargetExecutionSettings executionSettings;
     if (collectCodeCoverage) {
@@ -216,7 +216,7 @@ public final class TestActionBuilder {
           inputsBuilder.addTransitive(
               PrerequisiteArtifacts.nestedSet(ruleContext, "$lcov_merger", Mode.TARGET));
           // Pass this LcovMerger_deploy.jar path to collect_coverage.sh
-          extraTestEnv.put("LCOV_MERGER", lcovMerger.getExecPathString());
+          testEnv.put("LCOV_MERGER", lcovMerger.getExecPathString());
         }
       }
 
@@ -226,16 +226,15 @@ public final class TestActionBuilder {
       executionSettings = new TestTargetExecutionSettings(ruleContext, runfilesSupport,
           executable, instrumentedFileManifest, shards);
       inputsBuilder.add(instrumentedFileManifest);
-      // TODO(ulfjack): Is this even ever set? If yes, does this cost us a lot of memory?
       for (Pair<String, String> coverageEnvEntry : instrumentedFiles.getCoverageEnvironment()) {
-        extraTestEnv.put(coverageEnvEntry.getFirst(), coverageEnvEntry.getSecond());
+        testEnv.put(coverageEnvEntry.getFirst(), coverageEnvEntry.getSecond());
       }
     } else {
       executionSettings = new TestTargetExecutionSettings(ruleContext, runfilesSupport,
           executable, null, shards);
     }
 
-    extraTestEnv.putAll(extraEnv);
+    testEnv.putAll(extraEnv);
 
     if (config.getRunUnder() != null) {
       Artifact runUnderExecutable = executionSettings.getRunUnderExecutable();
@@ -287,7 +286,7 @@ public final class TestActionBuilder {
             ruleContext.getActionOwner(), inputs, testRuntime,
             testLog, cacheStatus,
             coverageArtifact,
-            testProperties, extraTestEnv, executionSettings,
+            testProperties, testEnv, executionSettings,
             shard, run, config, ruleContext.getWorkspaceName(),
             useTestRunner));
         results.add(cacheStatus);
