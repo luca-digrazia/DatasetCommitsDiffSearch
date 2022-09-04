@@ -30,11 +30,6 @@ public class DirectoryClassPathElement extends AbstractClassPathElement {
     }
 
     @Override
-    public Path getRoot() {
-        return root;
-    }
-
-    @Override
     public ClassPathResource getResource(String name) {
         Path file = root.resolve(name);
         Path normal = file.normalize();
