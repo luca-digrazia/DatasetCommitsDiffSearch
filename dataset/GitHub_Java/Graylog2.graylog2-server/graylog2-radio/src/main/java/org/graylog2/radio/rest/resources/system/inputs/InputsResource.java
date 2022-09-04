@@ -57,13 +57,13 @@ public class InputsResource extends RestResource {
     public String list() {
         List<Map<String, Object>> inputStates = Lists.newArrayList();
 
-        for (InputState inputState : radio.inputs().getInputStates()) {
+        for (InputState inputState : radio.inputs().getRunningInputs()) {
             inputStates.add(inputState.asMap());
         }
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("inputs", inputStates);
-        result.put("total", inputStates.size());
+        result.put("total", radio.inputs().runningCount());
 
         return json(result);
     }
