@@ -561,9 +561,6 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   public void testSiblings_SamePackageRdeps() {}
 
   @Override
-  public void testSiblings_MatchesTargetNamedAll() {}
-
-  @Override
   public void testSiblings_Simple() {}
 
   @Override
