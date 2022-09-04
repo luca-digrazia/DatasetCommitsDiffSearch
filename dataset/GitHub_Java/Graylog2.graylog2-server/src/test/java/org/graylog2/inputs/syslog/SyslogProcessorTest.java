@@ -50,6 +50,8 @@ public class SyslogProcessorTest {
 
         assertEquals(2, serverStub.callsToProcessBufferInserter);
 
+        assertTrue(lm.getShortMessage().matches(".*pam_unix\\(cron:session\\): session closed for user root.*"));
+        //assertEquals(InetAddress.getLocalHost().getCanonicalHostName(), lm.getHost());
         assertEquals("security/authorization", lm.getFacility());
         assertEquals(6, lm.getLevel());
         assertEquals(ValidNonStructuredMessage, lm.getFullMessage());
@@ -72,6 +74,8 @@ public class SyslogProcessorTest {
 
         assertEquals(2, serverStub.callsToProcessBufferInserter);
 
+        assertTrue(lm.getShortMessage().matches(".*evntslog - ID47 \\[exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"\\] BOMAn application event log entry.*"));
+        //assertEquals(InetAddress.getLocalHost().getCanonicalHostName(), lm.getHost());
         assertEquals("local4", lm.getFacility());
         assertEquals(5, lm.getLevel());
         assertEquals(ValidStructuredMessage, lm.getFullMessage());
