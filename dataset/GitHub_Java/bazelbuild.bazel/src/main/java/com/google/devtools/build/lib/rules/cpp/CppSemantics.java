@@ -14,22 +14,19 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.devtools.build.lib.actions.Artifact;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.StructImpl;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
-import com.google.devtools.build.lib.vfs.PathFragment;
+import net.starlark.java.eval.StarlarkValue;
 
-/**
- * Pluggable C++ compilation semantics.
- */
-public interface CppSemantics {
-  /**
-   * Returns the "effective source path" of a source file.
-   *
-   * <p>It is used, among other things, for computing the output path.
-   */
-  PathFragment getEffectiveSourcePath(Artifact source);
-
+/** Pluggable C++ compilation semantics. */
+public interface CppSemantics extends StarlarkValue {
   /**
    * Called before a C++ compile action is built.
    *
@@ -37,19 +34,42 @@ public interface CppSemantics {
    * minute.
    */
   void finalizeCompileActionBuilder(
-      RuleContext ruleContext, CppCompileActionBuilder actionBuilder);
+      BuildConfiguration configuration,
+      FeatureConfiguration featureConfiguration,
+      CppCompileActionBuilder actionBuilder,
+      RuleErrorConsumer ruleErrorConsumer);
 
-  /**
-   * Called before {@link CppCompilationContext}s are finalized.
-   *
-   * <p>Gives the semantics implementation the opportunity to change what the C++ rule propagates
-   * to dependent rules.
-   */
-  void setupCompilationContext(
-      RuleContext ruleContext, CppCompilationContext.Builder contextBuilder);
-
-  /**
-   * Determines the applicable mode of headers checking for the passed in ruleContext.
-   */
+  /** Determines the applicable mode of headers checking for the passed in ruleContext. */
   HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext);
+
+  /** Determines the applicable mode of headers checking in Starlark. */
+  HeadersCheckingMode determineStarlarkHeadersCheckingMode(
+      RuleContext ruleContext, CppConfiguration cppConfiguration, CcToolchainProvider toolchain);
+
+  /**
+   * Returns if include scanning is allowed.
+   *
+   * <p>If false, {@link CppCompileActionBuilder#setShouldScanIncludes(boolean)} has no effect.
+   */
+  boolean allowIncludeScanning();
+
+  /** Returns true iff this build should perform .d input pruning. */
+  boolean needsDotdInputPruning(BuildConfiguration configuration);
+
+  void validateAttributes(RuleContext ruleContext);
+
+  default void validateDeps(RuleContext ruleContext) {}
+
+  /** Returns true iff this build requires include validation. */
+  boolean needsIncludeValidation();
+
+  /** Provider for cc_shared_libraries * */
+  StructImpl getCcSharedLibraryInfo(TransitiveInfoCollection dep);
+
+  /** No-op in Bazel */
+  void validateLayeringCheckFeatures(
+      RuleContext ruleContext,
+      AspectDescriptor aspectDescriptor,
+      CcToolchainProvider ccToolchain,
+      ImmutableSet<String> unsupportedFeatures);
 }
