@@ -118,7 +118,7 @@ import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaOptions;
-import com.google.devtools.build.lib.rules.java.JavaPackageConfigurationRule;
+import com.google.devtools.build.lib.rules.java.JavaPluginConfigurationRule;
 import com.google.devtools.build.lib.rules.java.JavaRuleClasses.IjarBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeAlias;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeRule;
@@ -163,8 +163,10 @@ import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainRule;
 import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
-import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
+import com.google.devtools.build.lib.rules.repository.BindRule;
+import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
+import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
 import com.google.devtools.build.lib.rules.test.SkylarkTestingModule;
 import com.google.devtools.build.lib.rules.test.TestSuiteRule;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
@@ -269,6 +271,21 @@ public class BazelRuleClassProvider {
           } catch (IOException e) {
             throw new IllegalStateException(e);
           }
+        }
+
+        @Override
+        public ImmutableList<RuleSet> requires() {
+          return ImmutableList.of(CoreRules.INSTANCE);
+        }
+      };
+
+  public static final RuleSet CORE_WORKSPACE_RULES =
+      new RuleSet() {
+        @Override
+        public void init(Builder builder) {
+          builder.addRuleDefinition(new BindRule());
+          builder.addRuleDefinition(new WorkspaceBaseRule());
+          builder.addRuleDefinition(new LocalRepositoryRule());
         }
 
         @Override
@@ -397,7 +414,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new BazelJavaTestRule());
           builder.addRuleDefinition(new BazelJavaPluginRule());
           builder.addRuleDefinition(new JavaToolchainRule());
-          builder.addRuleDefinition(new JavaPackageConfigurationRule());
+          builder.addRuleDefinition(new JavaPluginConfigurationRule());
           builder.addRuleDefinition(new JavaRuntimeRule());
           builder.addRuleDefinition(new JavaRuntimeSuiteRule());
           builder.addRuleDefinition(new JavaRuntimeAlias.JavaRuntimeAliasRule());
@@ -405,11 +422,6 @@ public class BazelRuleClassProvider {
 
           builder.addRuleDefinition(new ExtraActionRule());
           builder.addRuleDefinition(new ActionListenerRule());
-
-          builder.addSkylarkAccessibleTopLevels("java_common",
-              new JavaSkylarkCommon(BazelJavaSemantics.INSTANCE));
-          builder.addSkylarkAccessibleTopLevels("JavaInfo", JavaInfo.PROVIDER);
-          builder.addSkylarkAccessibleTopLevels("java_proto_common", JavaProtoSkylarkCommon.class);
 
           try {
             builder.addWorkspaceFilePrefix(
@@ -474,6 +486,10 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidLocalTestBaseRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
+          builder.addSkylarkAccessibleTopLevels("java_common",
+              new JavaSkylarkCommon(BazelJavaSemantics.INSTANCE));
+          builder.addSkylarkAccessibleTopLevels("JavaInfo", JavaInfo.PROVIDER);
+          builder.addSkylarkAccessibleTopLevels("java_proto_common", JavaProtoSkylarkCommon.class);
 
           try {
             builder.addWorkspaceFilePrefix(
@@ -612,7 +628,7 @@ public class BazelRuleClassProvider {
 
         @Override
         public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CoreRules.INSTANCE, CoreWorkspaceRules.INSTANCE);
+          return ImmutableList.of(CoreRules.INSTANCE, CORE_WORKSPACE_RULES);
         }
       };
 
@@ -620,7 +636,7 @@ public class BazelRuleClassProvider {
       ImmutableSet.of(
           BAZEL_SETUP,
           CoreRules.INSTANCE,
-          CoreWorkspaceRules.INSTANCE,
+          CORE_WORKSPACE_RULES,
           GENERIC_RULES,
           ConfigRules.INSTANCE,
           PLATFORM_RULES,
