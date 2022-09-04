@@ -1,13 +1,17 @@
 package org.jboss.shamrock.restclient;
 
+import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
+import javax.enterprise.inject.Default;
 import javax.enterprise.inject.Produces;
+import javax.inject.Inject;
 import javax.ws.rs.Path;
 import javax.ws.rs.client.ClientRequestFilter;
 import javax.ws.rs.client.ClientResponseFilter;
@@ -27,22 +31,25 @@ import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
 import org.jboss.resteasy.client.jaxrs.internal.proxy.ResteasyClientProxy;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
-import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.BuildProducer;
-import javax.inject.Inject;
-
-import org.jboss.shamrock.deployment.builditem.AdditionalBeanBuildItem;
-import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
-import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import org.jboss.shamrock.deployment.cdi.GeneratedBeanBuildItem;
+import org.jboss.shamrock.deployment.ArchiveContext;
+import org.jboss.shamrock.deployment.BeanDeployment;
+import org.jboss.shamrock.deployment.ProcessorContext;
+import org.jboss.shamrock.deployment.ResourceProcessor;
+import org.jboss.shamrock.deployment.ShamrockConfig;
 import org.jboss.shamrock.restclient.runtime.DefaultResponseExceptionMapper;
 import org.jboss.shamrock.restclient.runtime.RestClientBase;
 import org.jboss.shamrock.restclient.runtime.RestClientProxy;
 
-class RestClientProcessor {
+class RestClientProcessor implements ResourceProcessor {
+
+    private static final Logger log = Logger.getLogger(RestClientProxy.class.getName());
+
+    private static final DotName REGISTER_REST_CLIENT = DotName.createSimple(RegisterRestClient.class.getName());
+    @Inject
+    private BeanDeployment beanDeployment;
+
+    @Inject
+    private ShamrockConfig config;
 
     private static final DotName[] CLIENT_ANNOTATIONS = {
             DotName.createSimple("javax.ws.rs.GET"),
@@ -57,44 +64,25 @@ class RestClientProcessor {
             DotName.createSimple(Path.class.getName())
     };
 
-    @Inject
-    BuildProducer<GeneratedClassBuildItem> generatedClass;
-
-    @Inject
-    BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
-
-    @Inject
-    BuildProducer<AdditionalBeanBuildItem> additionalBeans;
-
-    @Inject
-    BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition;
-
-    @Inject
-    BuildProducer<SubstrateResourceBuildItem> resources;
-
-    @Inject
-    CombinedIndexBuildItem combinedIndexBuildItem;
-
-    @BuildStep
-    public void build(BuildProducer<GeneratedBeanBuildItem> generatedBeans) throws Exception {
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
+    @Override
+    public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
+        processorContext.addReflectiveClass(false, false,
                 DefaultResponseExceptionMapper.class.getName(),
                 LogFactoryImpl.class.getName(),
-                Jdk14Logger.class.getName()));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ClientRequestFilter[].class.getName()));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, ClientResponseFilter[].class.getName()));
-        proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem("javax.ws.rs.ext.Providers"));
-        additionalBeans.produce(new AdditionalBeanBuildItem(RestClient.class));
-        resources.produce(new SubstrateResourceBuildItem("META-INF/services/javax.ws.rs.ext.Providers"));
+                Jdk14Logger.class.getName());
+        processorContext.addReflectiveClass(false, false, ClientRequestFilter[].class.getName());
+        processorContext.addReflectiveClass(false, false, ClientResponseFilter[].class.getName());
+        processorContext.addProxyDefinition("javax.ws.rs.ext.Providers");
+        beanDeployment.addAdditionalBean(RestClient.class);
+        processorContext.addResource("META-INF/services/javax.ws.rs.ext.Providers");
         //TODO: fix this, we don't want to just add all the providers
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "org.jboss.resteasy.core.ResteasyProviderFactoryImpl", "org.jboss.resteasy.client.jaxrs.internal.proxy.ProxyBuilderImpl"));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl"));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl"));
-        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, "org.jboss.resteasy.plugins.providers.jsonb.JsonBindingProvider", "org.jboss.resteasy.plugins.providers.jsonb.AbstractJsonBindingProvider"));
-        proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(ResteasyConfiguration.class.getName()));
+        processorContext.addReflectiveClass(false, false, "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl");
+        processorContext.addReflectiveClass(false, false, "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl");
+        processorContext.addReflectiveClass(true, true, "org.jboss.resteasy.plugins.providers.jsonb.JsonBindingProvider", "org.jboss.resteasy.plugins.providers.jsonb.AbstractJsonBindingProvider");
+        processorContext.addProxyDefinition(ResteasyConfiguration.class.getName());
         Map<DotName, ClassInfo> interfaces = new HashMap<>();
         for (DotName type : CLIENT_ANNOTATIONS) {
-            for (AnnotationInstance annotation : combinedIndexBuildItem.getIndex().getAnnotations(type)) {
+            for (AnnotationInstance annotation : archiveContext.getCombinedIndex().getAnnotations(type)) {
                 AnnotationTarget target = annotation.target();
                 ClassInfo theInfo;
                 if (target.kind() == AnnotationTarget.Kind.CLASS) {
@@ -113,19 +101,23 @@ class RestClientProcessor {
 
         for (Map.Entry<DotName, ClassInfo> entry : interfaces.entrySet()) {
             String iName = entry.getKey().toString();
-            proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(iName, ResteasyClientProxy.class.getName()));
-            proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem(iName, RestClientProxy.class.getName()));
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, iName));
+            processorContext.addProxyDefinition(iName, ResteasyClientProxy.class.getName());
+            processorContext.addProxyDefinition(iName, RestClientProxy.class.getName());
+            processorContext.addReflectiveClass(true, false, iName);
 
             //now generate CDI beans
             //TODO: do we need to check if CDI is enabled? Are we just assuming it always is?
             String className = iName + "$$RestClientProxy";
-            AtomicReference<byte[]> bytes = new AtomicReference<>();
+            AtomicReference<byte[]> bytes= new AtomicReference<>();
             try (ClassCreator creator = new ClassCreator(new ClassOutput() {
                 @Override
                 public void write(String name, byte[] data) {
-                    bytes.set(data);
-                    generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
+                    try {
+                        bytes.set(data);
+                        processorContext.addGeneratedClass(true, name, data);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }, className, null, RestClientBase.class.getName())) {
 
@@ -142,7 +134,12 @@ class RestClientProcessor {
                 ctor.invokeSpecialMethod(MethodDescriptor.ofConstructor(RestClientBase.class, Class.class), ctor.getThis(), ctor.loadClass(iName));
                 ctor.returnValue(null);
             }
-            generatedBeans.produce(new GeneratedBeanBuildItem(className, bytes.get()));
+            beanDeployment.addGeneratedBean(className, bytes.get());
         }
+    }
+
+    @Override
+    public int getPriority() {
+        return 1;
     }
 }
