@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.WrappingProvider;
@@ -45,7 +46,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.Builder;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -146,7 +146,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
                 attr(":dex_archive_android_sdk", LABEL)
                     .allowedRuleClasses("android_sdk", "filegroup")
                     .value(
-                        AndroidRuleClasses.getAndroidSdkLabel(
+                        new AndroidRuleClasses.AndroidSdkLabel(
                             Label.parseAbsoluteUnchecked(
                                 toolsRepository + AndroidRuleClasses.DEFAULT_SDK))))
             .requiresConfigurationFragments(AndroidConfiguration.class)
@@ -371,15 +371,13 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       ImmutableList<Artifact> bootclasspath,
       NestedSet<Artifact> classpath,
       Artifact result) {
-    CustomCommandLine.Builder args =
-        new CustomCommandLine.Builder()
+    CustomCommandLine args =
+        new Builder()
             .addExecPath("--input", jar)
             .addExecPath("--output", result)
             .addExecPaths(VectorArg.addBefore("--classpath_entry").each(classpath))
-            .addExecPaths(VectorArg.addBefore("--bootclasspath_entry").each(bootclasspath));
-    if (getAndroidConfig(ruleContext).checkDesugarDeps()) {
-      args.add("--emit_dependency_metadata_as_needed");
-    }
+            .addExecPaths(VectorArg.addBefore("--bootclasspath_entry").each(bootclasspath))
+            .build();
 
     // Just use params file, since classpaths can get long
     Artifact paramFile =
@@ -389,7 +387,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
         new ParameterFileWriteAction(
             ruleContext.getActionOwner(),
             paramFile,
-            args.build(),
+            args,
             ParameterFile.ParameterFileType.UNQUOTED,
             ISO_8859_1));
     ruleContext.registerAction(
@@ -403,7 +401,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
             .addOutput(result)
             .setMnemonic("Desugar")
             .setProgressMessage("Desugaring %s for Android", jar.prettyPrint())
-            .addCommandLine(CustomCommandLine.builder().addPrefixedExecPath("@", paramFile).build())
+            .setCommandLine(CustomCommandLine.builder().addPrefixedExecPath("@", paramFile).build())
             .build(ruleContext));
     return result;
   }
@@ -455,7 +453,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
             .setMnemonic("DexBuilder")
             .setProgressMessage(
                 "Dexing %s with applicable dexopts %s", jar.prettyPrint(), incrementalDexopts)
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder().addPrefixedExecPath("@", paramFile).build());
     if (getAndroidConfig(ruleContext).useWorkersWithDexbuilder()) {
       dexbuilder.setExecutionInfo(ExecutionRequirements.WORKER_MODE_ENABLED);

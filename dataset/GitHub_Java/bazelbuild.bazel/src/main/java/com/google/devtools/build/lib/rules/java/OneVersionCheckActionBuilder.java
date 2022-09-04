@@ -14,20 +14,18 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
-import java.util.function.Consumer;
+import com.google.devtools.build.lib.util.Preconditions;
 
 /** Utility for generating a call to the one-version binary. */
 public final class OneVersionCheckActionBuilder {
@@ -94,7 +92,9 @@ public final class OneVersionCheckActionBuilder {
     if (enforcementLevel == OneVersionEnforcementLevel.WARNING) {
       oneVersionArgsBuilder.add("--succeed_on_found_violations");
     }
-    oneVersionArgsBuilder.addAll("--inputs", jarAndTargetVectorArg(jarsToCheck));
+    oneVersionArgsBuilder.addAll(
+        "--inputs",
+        VectorArg.of(jarsToCheck).mapped(OneVersionCheckActionBuilder::jarAndTargetArg));
     CustomCommandLine oneVersionArgs = oneVersionArgsBuilder.build();
     ruleContext.registerAction(
         new SpawnAction.Builder()
@@ -102,21 +102,16 @@ public final class OneVersionCheckActionBuilder {
             .addInput(oneVersionWhitelist)
             .addTransitiveInputs(jarsToCheck)
             .setExecutable(oneVersionTool)
-            .addCommandLine(
-                oneVersionArgs,
-                ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).setUseAlways(true).build())
+            .setCommandLine(oneVersionArgs)
+            .alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED)
             .setMnemonic("JavaOneVersion")
             .setProgressMessage("Checking for one-version violations in %s", ruleContext.getLabel())
             .build(ruleContext));
     return outputArtifact;
   }
 
-  static VectorArg<String> jarAndTargetVectorArg(NestedSet<Artifact> jarsToCheck) {
-    return VectorArg.of(jarsToCheck).mapped(OneVersionCheckActionBuilder::expandToJarAndTarget);
-  }
-
-  private static void expandToJarAndTarget(Artifact jar, Consumer<String> args) {
-    args.accept(jar.getExecPathString() + "," + getArtifactOwnerGeneralizedLabel(jar));
+  private static String jarAndTargetArg(Artifact jar) {
+    return jar.getExecPathString() + "," + getArtifactOwnerGeneralizedLabel(jar);
   }
 
   private static String getArtifactOwnerGeneralizedLabel(Artifact artifact) {

@@ -1138,7 +1138,7 @@ public abstract class CompilationSupport {
               .addTransitiveInputs(j2ObjcDependencyMappingFiles)
               .addTransitiveInputs(j2ObjcHeaderMappingFiles)
               .addTransitiveInputs(j2ObjcArchiveSourceMappingFiles)
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder().addFormatted("@%s", paramFile.getExecPath()).build())
               .addOutput(prunedJ2ObjcArchive)
               .build(ruleContext));
@@ -1231,7 +1231,7 @@ public abstract class CompilationSupport {
                 appleConfiguration, appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcBinarySymbolStrip")
             .setExecutable(xcrunwrapper(ruleContext))
-            .addCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
+            .setCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
             .addOutput(strippedBinary)
             .addInput(binaryToLink)
             .build(ruleContext));
@@ -1288,7 +1288,7 @@ public abstract class CompilationSupport {
             ImmutableList.<PathFragment>of(),
             /*compiledModule=*/ true,
             /*moduleMapHomeIsCwd=*/ false,
-            /* generateSubmodules= */ false,
+            /*generateSubModules=*/ false,
             /*externDependencies=*/ true));
 
     return this;
@@ -1431,7 +1431,7 @@ public abstract class CompilationSupport {
     }
     ruleContext.registerAction(
         builder
-            .addCommandLine(cmdLine.add("--").addAll(args).build())
+            .setCommandLine(cmdLine.add("--").addAll(args).build())
             .addInputs(compilationArtifacts.getPrivateHdrs())
             .addTransitiveInputs(attributes.hdrs())
             .addTransitiveInputs(objcProvider.get(ObjcProvider.HEADER))

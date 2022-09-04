@@ -420,7 +420,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
         compileBuilder
             .setMnemonic("ObjcCompile")
             .setExecutable(xcrunwrapper(ruleContext))
-            .addCommandLine(commandLine)
+            .setCommandLine(commandLine)
             .addOutput(objFile)
             .addOutputs(gcnoFile.asSet())
             .addOutput(dotdFile.artifact())
@@ -467,7 +467,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
             getPchFile(),
             Optional.<Artifact>absent(),
             otherFlags,
-            /* collectCodeCoverage= */ false,
+            /* runCodeCoverage=*/ false,
             /* isCPlusPlusSource=*/ false);
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
@@ -510,7 +510,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
                 appleConfiguration, appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcLink")
             .setExecutable(libtool(ruleContext))
-            .addCommandLine(
+            .setCommandLine(
                 new CustomCommandLine.Builder()
                     .add("-static")
                     .addExecPath("-filelist", objList)
@@ -533,7 +533,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
                 appleConfiguration, appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcLink")
             .setExecutable(libtool(ruleContext))
-            .addCommandLine(
+            .setCommandLine(
                 new CustomCommandLine.Builder()
                     .add("-static")
                     .add("-arch_only", appleConfiguration.getSingleArchitecture())
@@ -634,7 +634,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
                 appleConfiguration, appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcLink")
             .setShellCommand(ImmutableList.of("/bin/bash", "-c"))
-            .addCommandLine(new SingleArgCommandLine(commandLine))
+            .setCommandLine(new SingleArgCommandLine(commandLine))
             .addOutput(binaryToLink)
             .addOutputs(dsymBundleZip.asSet())
             .addOutputs(linkmap.asSet())
