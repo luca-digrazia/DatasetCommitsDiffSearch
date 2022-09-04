@@ -87,6 +87,11 @@ public class NDMatrix extends DenseMatrix {
     }
 
     @Override
+    public String toString() {
+        return toString(false);
+    }
+
+    @Override
     public NDMatrix copy() {
         return new NDMatrix(A.dup());
     }

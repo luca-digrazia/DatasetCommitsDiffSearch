@@ -112,6 +112,11 @@ public class JMatrix extends DenseMatrix {
     }
 
     @Override
+    public String toString() {
+        return toString(false);
+    }
+
+    @Override
     public JMatrix copy() {
         JMatrix a = new JMatrix(nrows, ncols, A.clone());
         a.setSymmetric(isSymmetric());
@@ -1354,6 +1359,9 @@ public class JMatrix extends DenseMatrix {
             throw new IllegalArgumentException(String.format("Matrix is not square: %d x %d", nrows(), ncols()));
         }
 
+        // Always compute the eigen vectors.
+        boolean onlyValues = false;
+
         int n = nrows();
         double[] d = new double[n];
         double[] e = new double[n];
@@ -1365,7 +1373,7 @@ public class JMatrix extends DenseMatrix {
             // Tridiagonalize.
             tred2(V, d, e);
             // Diagonalize.
-            tql2(V, d, e);
+            tql2(V, d, e, n);
 
         } else {
             double[] scale = balance(this);
@@ -1374,6 +1382,7 @@ public class JMatrix extends DenseMatrix {
             V = Matrix.eye(n, n);
 
             eltran(this, V, perm);
+
             hqr2(this, V, d, e);
             balbak(V, scale);
             sort(d, e, V);
@@ -1476,6 +1485,7 @@ public class JMatrix extends DenseMatrix {
 
         // Householder reduction to tridiagonal form.
         for (int i = n - 1; i > 0; i--) {
+
             // Scale to avoid under/overflow.
             double scale = 0.0;
             double h = 0.0;
@@ -1490,6 +1500,7 @@ public class JMatrix extends DenseMatrix {
                     V.set(j, i, 0.0);
                 }
             } else {
+
                 // Generate Householder vector.
                 for (int k = 0; k < i; k++) {
                     d[k] /= scale;
@@ -1700,9 +1711,9 @@ public class JMatrix extends DenseMatrix {
      * On output, it contains the eigenvalues.
      * @param e on input, it contains the subdiagonal elements of the tridiagonal
      * matrix, with e[0] arbitrary. On output, its contents are destroyed.
+     * @param n the size of all parameter arrays.
      */
-    static void tql2(DenseMatrix V, double[] d, double[] e) {
-        int n = V.nrows();
+    static void tql2(DenseMatrix V, double[] d, double[] e, int n) {
         for (int i = 1; i < n; i++) {
             e[i - 1] = e[i];
         }
@@ -1711,6 +1722,7 @@ public class JMatrix extends DenseMatrix {
         double f = 0.0;
         double tst1 = 0.0;
         for (int l = 0; l < n; l++) {
+
             // Find small subdiagonal element
             tst1 = Math.max(tst1, Math.abs(d[l]) + Math.abs(e[l]));
             int m = l;
@@ -1720,9 +1732,13 @@ public class JMatrix extends DenseMatrix {
                 }
             }
 
+            if (m == n) {
+                logger.warn("tql2: m == n");
+            }
+
             // If m == l, d[l] is an eigenvalue,
             // otherwise, iterate.
-            if (m > l) {
+            if (m > l && m < n) {
                 int iter = 0;
                 do {
                     if (++iter >= 30) {

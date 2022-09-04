@@ -58,7 +58,7 @@ import java.util.Arrays;
  * 
  * @author Haifeng Li
  */
-public class BandMatrix implements Matrix, LinearSolver {
+public class BandMatrix extends Matrix implements LinearSolver {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -101,10 +101,7 @@ public class BandMatrix implements Matrix, LinearSolver {
      * or odd. respectively.
      */
     private double d;
-    /**
-     * True if the matrix is symmetric.
-     */
-    private boolean symmetric = false;
+
 
     /**
      * Constructor of an n-by-n band-diagonal matrix A with m subdiagonal
@@ -128,16 +125,6 @@ public class BandMatrix implements Matrix, LinearSolver {
         this.m1 = m1;
         this.m2 = m2;
         A = new double[n][m1+m2+1];
-    }
-
-    @Override
-    public boolean isSymmetric() {
-        return symmetric;
-    }
-
-    @Override
-    public void setSymmetric(boolean symmetric) {
-        this.symmetric = symmetric;
     }
 
     @Override

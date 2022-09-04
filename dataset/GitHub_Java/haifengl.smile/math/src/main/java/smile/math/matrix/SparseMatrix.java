@@ -39,7 +39,7 @@ import smile.math.Math;
  *
  * @author Haifeng Li
  */
-public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, SparseMatrix> {
+public class SparseMatrix extends Matrix implements MatrixMultiplication<SparseMatrix, SparseMatrix> {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -62,10 +62,6 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
      * The array of nonzero values stored column by column.
      */
     private double[] x;
-    /**
-     * True if the matrix is symmetric.
-     */
-    private boolean symmetric = false;
 
     /**
      * Constructor.
@@ -139,16 +135,6 @@ public class SparseMatrix implements Matrix, MatrixMultiplication<SparseMatrix, 
                 }
             }
         }
-    }
-
-    @Override
-    public boolean isSymmetric() {
-        return symmetric;
-    }
-
-    @Override
-    public void setSymmetric(boolean symmetric) {
-        this.symmetric = symmetric;
     }
 
     @Override
