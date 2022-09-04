@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator;
 import com.google.devtools.build.lib.analysis.LocationExpander.Options;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -47,10 +48,8 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.fileset.FilesetProvider;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -240,20 +239,7 @@ public final class RuleContext extends TargetContext
     }
   }
 
-  public RepositoryName getRepository() {
-    return rule.getRepository();
-  }
-
   @Override
-  public Root getBinDirectory() {
-    return getConfiguration().getBinDirectory(rule.getRepository());
-  }
-
-  @Override
-  public Root getMiddlemanDirectory() {
-    return getConfiguration().getMiddlemanDirectory(rule.getRepository());
-  }
-  
   public Rule getRule() {
     return rule;
   }
@@ -275,7 +261,7 @@ public final class RuleContext extends TargetContext
   /**
    * The configuration conditions that trigger this rule's configurable attributes.
    */
-  public ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions() {
+  ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions() {
     return configConditions;
   }
 

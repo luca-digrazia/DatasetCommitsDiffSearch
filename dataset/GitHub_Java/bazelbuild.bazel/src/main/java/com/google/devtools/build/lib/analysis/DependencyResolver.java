@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -22,11 +21,11 @@ import com.google.devtools.build.lib.analysis.AspectCollection.AspectCycleOnPath
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.TransitionResolver;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
@@ -62,10 +61,10 @@ import javax.annotation.Nullable;
  * <p>Includes logic to derive the right configurations depending on transition type.
  */
 public abstract class DependencyResolver {
-  private final TransitionResolver transitionResolver;
+  private final ConfigurationResolver configResolver;
 
   protected DependencyResolver(DynamicTransitionMapper transitionMapper) {
-    this.transitionResolver = new TransitionResolver(transitionMapper);
+    this.configResolver = new ConfigurationResolver(transitionMapper);
   }
 
   /**
@@ -368,17 +367,19 @@ public abstract class DependencyResolver {
         continue;
       }
 
-      LateBoundDefault<?, ?> lateBoundDefault = attribute.getLateBoundDefault();
+      @SuppressWarnings("unchecked")
+      LateBoundDefault<BuildConfiguration> lateBoundDefault =
+        (LateBoundDefault<BuildConfiguration>) attribute.getLateBoundDefault();
 
       Collection<BuildOptions> splitOptions =
           getSplitOptions(depResolver.rule, attribute, ruleConfig);
       if (!splitOptions.isEmpty() && !ruleConfig.isHostConfiguration()) {
         // Late-bound attribute with a split transition:
-        // Since we want to get the same results as TransitionResolver.evaluateTransition (but
+        // Since we want to get the same results as ConfigurationResolver.evaluateTransition (but
         // skip it since we've already applied the split), we want to make sure this logic
-        // doesn't do anything differently. TransitionResolver.evaluateTransition has additional
+        // doesn't do anything differently. ConfigurationResolver.evaluateTransition has additional
         // logic for host configs. So when we're in the host configuration we fall back to the
-        // non-split branch, which calls TransitionResolver.evaluateTransition, which returns its
+        // non-split branch, which calls ConfigurationResolver.evaluateTransition, which returns its
         // "host mode" result without ever looking at the split.
         Iterable<BuildConfiguration> splitConfigs =
             getConfigurations(ruleConfig.fragmentClasses(), splitOptions);
@@ -451,8 +452,20 @@ public abstract class DependencyResolver {
       throws EvalException, InterruptedException {
     Preconditions.checkArgument(attribute.isLateBound());
 
-    Object actualValue =
-        resolveLateBoundDefault(attribute.getLateBoundDefault(), rule, attributeMap, config);
+    @SuppressWarnings("unchecked")
+    LateBoundDefault<BuildConfiguration> lateBoundDefault =
+      (LateBoundDefault<BuildConfiguration>) attribute.getLateBoundDefault();
+
+    // TODO(bazel-team): This might be too expensive - can we cache this somehow?
+    if (!lateBoundDefault.getRequiredConfigurationFragments().isEmpty()) {
+      if (!config.hasAllFragments(lateBoundDefault.getRequiredConfigurationFragments())) {
+        return ImmutableList.<Label>of();
+      }
+    }
+
+    // TODO(bazel-team): We should check if the implementation tries to access an undeclared
+    // fragment.
+    Object actualValue = lateBoundDefault.resolve(rule, attributeMap, config);
     if (EvalUtils.isNullOrNone(actualValue)) {
       return ImmutableList.<Label>of();
     }
@@ -480,29 +493,6 @@ public abstract class DependencyResolver {
               attribute.getType(),
               EvalUtils.getDataTypeName(actualValue, true)));
     }
-  }
-
-  @VisibleForTesting(/* used to test LateBoundDefaults' default values */ )
-  public static <FragmentT, ValueT> ValueT resolveLateBoundDefault(
-      LateBoundDefault<FragmentT, ValueT> lateBoundDefault,
-      Rule rule,
-      AttributeMap attributeMap,
-      BuildConfiguration config) {
-    Class<FragmentT> fragmentClass = lateBoundDefault.getFragmentClass();
-    // TODO(b/65746853): remove this when nothing uses it anymore
-    if (BuildConfiguration.class.equals(fragmentClass)) {
-      return lateBoundDefault.resolve(rule, attributeMap, fragmentClass.cast(config));
-    }
-    if (Void.class.equals(fragmentClass)) {
-      return lateBoundDefault.resolve(rule, attributeMap, null);
-    }
-    FragmentT fragment =
-        fragmentClass.cast(
-            config.getFragment((Class<? extends BuildConfiguration.Fragment>) fragmentClass));
-    if (fragment == null) {
-      return null;
-    }
-    return lateBoundDefault.resolve(rule, attributeMap, fragment);
   }
 
   /**
@@ -714,7 +704,7 @@ public abstract class DependencyResolver {
       if (toTarget == null) {
         return; // Skip this round: we still need to Skyframe-evaluate the dep's target.
       }
-      Attribute.Transition transition = transitionResolver.evaluateTransition(
+      Attribute.Transition transition = configResolver.evaluateTransition(
           ruleConfig, rule, attributeAndOwner.attribute, toTarget);
       outgoingEdges.put(
           attributeAndOwner.attribute,
@@ -728,7 +718,7 @@ public abstract class DependencyResolver {
      * Resolves the given dep for the given attribute using a pre-prepared configuration.
      *
      * <p>Use this method with care: it skips Bazel's standard config transition semantics ({@link
-     * TransitionResolver#evaluateTransition}). That means attributes passed through here won't
+     * ConfigurationResolver#evaluateTransition}). That means attributes passed through here won't
      * obey standard rules on which configurations apply to their deps. This should only be done for
      * special circumstances that really justify the difference. When in doubt, use {@link
      * #resolveDep(AttributeAndOwner, Label)}.
@@ -741,7 +731,7 @@ public abstract class DependencyResolver {
       }
       outgoingEdges.put(
           attributeAndOwner.attribute,
-          transitionResolver.usesNullConfiguration(toTarget)
+          configResolver.usesNullConfiguration(toTarget)
               ? Dependency.withNullConfiguration(depLabel)
               : Dependency.withTransitionAndAspects(depLabel, new FixedTransition(
                     config.getOptions()), requiredAspects(attributeAndOwner, toTarget)));
