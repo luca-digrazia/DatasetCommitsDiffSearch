@@ -122,6 +122,7 @@ public class StarlarkSemanticsConsistencyTest {
         "--experimental_action_args=" + rand.nextBoolean(),
         "--experimental_disable_external_package=" + rand.nextBoolean(),
         "--experimental_sibling_repository_layout=" + rand.nextBoolean(),
+        "--experimental_allow_incremental_repository_updates=" + rand.nextBoolean(),
         "--experimental_builtins_bzl_path=" + rand.nextDouble(),
         "--experimental_cc_skylark_api_enabled_packages="
             + rand.nextDouble()
@@ -175,6 +176,7 @@ public class StarlarkSemanticsConsistencyTest {
         .experimentalActionArgs(rand.nextBoolean())
         .experimentalDisableExternalPackage(rand.nextBoolean())
         .experimentalSiblingRepositoryLayout(rand.nextBoolean())
+        .experimentalAllowIncrementalRepositoryUpdates(rand.nextBoolean())
         .experimentalBuiltinsBzlPath(String.valueOf(rand.nextDouble()))
         .experimentalCcStarlarkApiEnabledPackages(
             ImmutableList.of(String.valueOf(rand.nextDouble()), String.valueOf(rand.nextDouble())))

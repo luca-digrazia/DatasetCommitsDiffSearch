@@ -17,18 +17,17 @@ package com.google.devtools.build.skydoc.fakebuildapi.java;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
-import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
-import com.google.devtools.build.lib.starlarkbuildapi.StarlarkActionFactoryApi;
-import com.google.devtools.build.lib.starlarkbuildapi.StarlarkRuleContextApi;
-import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaCommonApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaToolchainStarlarkApiProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StarlarkActionFactoryApi;
+import com.google.devtools.build.lib.skylarkbuildapi.StarlarkRuleContextApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaCommonApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaToolchainStarlarkApiProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeProviderApi;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkList;
-import net.starlark.java.eval.StarlarkThread;
 
 /** Fake implementation of {@link JavaCommonApi}. */
 public class FakeJavaCommon
@@ -141,11 +140,6 @@ public class FakeJavaCommon
   @Override
   public FakeJavaInfo addConstraints(FakeJavaInfo javaInfo, Sequence<?> constraints) {
     return new FakeJavaInfo();
-  }
-
-  @Override
-  public Sequence<String> getConstraints(FakeJavaInfo javaInfo) {
-    return StarlarkList.empty();
   }
 
   @Override
