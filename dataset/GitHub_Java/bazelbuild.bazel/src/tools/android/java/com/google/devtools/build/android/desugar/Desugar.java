@@ -662,12 +662,7 @@ class Desugar {
       if (options.desugarInterfaceMethodBodiesIfNeeded) {
         visitor =
             new DefaultMethodClassFixer(
-                visitor,
-                classpathReader,
-                depsCollector,
-                coreLibrarySupport,
-                bootclasspathReader,
-                loader);
+                visitor, classpathReader, depsCollector, bootclasspathReader, loader);
         visitor =
             new InterfaceDesugaring(
                 visitor,
@@ -741,12 +736,7 @@ class Desugar {
         if (options.desugarInterfaceMethodBodiesIfNeeded) {
           visitor =
               new DefaultMethodClassFixer(
-                  visitor,
-                  classpathReader,
-                  depsCollector,
-                  coreLibrarySupport,
-                  bootclasspathReader,
-                  loader);
+                  visitor, classpathReader, depsCollector, bootclasspathReader, loader);
           visitor =
               new InterfaceDesugaring(
                   visitor,
