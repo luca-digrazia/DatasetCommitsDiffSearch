@@ -3,7 +3,6 @@ package com.shuyu.gsyvideoplayer.builder;
 import android.graphics.drawable.Drawable;
 import android.view.View;
 
-import com.shuyu.gsyvideoplayer.listener.GSYStateUiListener;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
 import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
 import com.shuyu.gsyvideoplayer.render.effect.NoEffect;
@@ -160,9 +159,6 @@ public class GSYVideoOptionBuilder {
 
     //滑动dialog进度条样式
     protected Drawable mDialogProgressBarDrawable;
-
-    ///状态监听
-    protected GSYStateUiListener mGSYStateUiListener;
 
     //滤镜
     protected GSYVideoGLView.ShaderInterface mEffectFilter = new NoEffect();
@@ -541,7 +537,6 @@ public class GSYVideoOptionBuilder {
 
     /**
      * 是否需要覆盖拓展类型，目前只针对exoPlayer内核模式有效
-     *
      * @param overrideExtension 比如传入 m3u8,mp4,avi 等类型
      */
     public GSYVideoOptionBuilder setOverrideExtension(String overrideExtension) {
@@ -577,14 +572,6 @@ public class GSYVideoOptionBuilder {
 
     public GSYVideoOptionBuilder setFullHideStatusBar(boolean statusBar) {
         this.mStatusBar = statusBar;
-        return this;
-    }
-
-    /***
-     * 状态监听
-     */
-    public GSYVideoOptionBuilder setGSYStateUiListener(GSYStateUiListener gsyStateUiListener) {
-        this.mGSYStateUiListener = gsyStateUiListener;
         return this;
     }
 
@@ -640,9 +627,6 @@ public class GSYVideoOptionBuilder {
         }
         if (mGSYVideoProgressListener != null) {
             gsyVideoPlayer.setGSYVideoProgressListener(mGSYVideoProgressListener);
-        }
-        if (mGSYStateUiListener != null) {
-            gsyVideoPlayer.setGSYStateUiListener(mGSYStateUiListener);
         }
         gsyVideoPlayer.setOverrideExtension(mOverrideExtension);
         gsyVideoPlayer.setAutoFullWithSize(mAutoFullWithSize);
