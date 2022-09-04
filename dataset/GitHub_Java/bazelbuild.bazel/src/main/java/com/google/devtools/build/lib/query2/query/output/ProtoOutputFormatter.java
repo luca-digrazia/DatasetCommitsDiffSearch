@@ -29,7 +29,6 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
-import com.google.common.hash.HashFunction;
 import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
@@ -62,6 +61,7 @@ import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.SourceFile;
 import com.google.devtools.build.lib.query2.query.aspectresolvers.AspectResolver;
 import com.google.devtools.build.lib.query2.query.output.QueryOptions.OrderOutput;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -73,7 +73,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.StarlarkThread;
 
 /**
  * An output formatter that outputs a protocol buffer representation
@@ -104,7 +103,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   private AspectResolver aspectResolver;
   private DependencyFilter dependencyFilter;
   private boolean relativeLocations;
-  private boolean displaySourceFileLocation;
   private boolean includeDefaultValues = true;
   private Predicate<String> ruleAttributePredicate = Predicates.alwaysTrue();
   private boolean flattenSelects = true;
@@ -112,8 +110,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   private boolean includeRuleInputsAndOutputs = true;
   private boolean includeSyntheticAttributeHash = false;
   private boolean includeInstantiationStack = false;
-  private boolean includeDefinitionStack = false;
-  private HashFunction hashFunction = null;
 
   @Nullable private EventHandler eventHandler;
 
@@ -123,13 +119,11 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   @Override
-  public void setOptions(
-      CommonQueryOptions options, AspectResolver aspectResolver, HashFunction hashFunction) {
-    super.setOptions(options, aspectResolver, hashFunction);
+  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
+    super.setOptions(options, aspectResolver);
     this.aspectResolver = aspectResolver;
     this.dependencyFilter = FormatUtils.getDependencyFilter(options);
     this.relativeLocations = options.relativeLocations;
-    this.displaySourceFileLocation = options.displaySourceFileLocation;
     this.includeDefaultValues = options.protoIncludeDefaultValues;
     this.ruleAttributePredicate = newAttributePredicate(options.protoOutputRuleAttributes);
     this.flattenSelects = options.protoFlattenSelects;
@@ -137,8 +131,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
     this.includeRuleInputsAndOutputs = options.protoIncludeRuleInputsAndOutputs;
     this.includeSyntheticAttributeHash = options.protoIncludeSyntheticAttributeHash;
     this.includeInstantiationStack = options.protoIncludeInstantiationStack;
-    this.includeDefinitionStack = options.protoIncludeDefinitionStack;
-    this.hashFunction = hashFunction;
   }
 
   @Override
@@ -271,14 +263,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
         }
       }
 
-      if (includeDefinitionStack && rule.getRuleClassObject().isStarlark()) {
-        for (StarlarkThread.CallStackEntry fr : rule.getRuleClassObject().getCallStack()) {
-          // Always report relative locations.
-          // (New fields needn't honor relativeLocations.)
-          rulePb.addDefinitionStack(
-              FormatUtils.getRootRelativeLocation(fr.location, rule.getPackage()) + ": " + fr.name);
-        }
-      }
       targetPb.setType(RULE);
       targetPb.setRule(rulePb);
     } else if (target instanceof OutputFile) {
@@ -304,8 +288,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
           .setName(label.toString());
 
       if (includeLocations) {
-        input.setLocation(
-            FormatUtils.getLocation(target, relativeLocations, displaySourceFileLocation));
+        input.setLocation(FormatUtils.getLocation(target, relativeLocations));
       }
 
       if (inputFile.getName().equals("BUILD")) {
@@ -379,7 +362,8 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
     return targetPb.build();
   }
 
-  protected void addAttributes(Build.Rule.Builder rulePb, Rule rule, Object extraDataForAttrHash) {
+  protected void addAttributes(Build.Rule.Builder rulePb, Rule rule, Object extraDataForAttrHash)
+      throws InterruptedException {
     Map<Attribute, Build.Attribute> serializedAttributes = Maps.newHashMap();
     AggregatingAttributeMapper attributeMapper = AggregatingAttributeMapper.of(rule);
     for (Attribute attr : rule.getAttributes()) {
@@ -388,7 +372,9 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       }
       Object attributeValue;
       if (flattenSelects || !attributeMapper.isConfigurable(attr.getName())) {
-        attributeValue = getFlattenedAttributeValues(attr.getType(), rule, attr);
+        attributeValue =
+            flattenAttributeValues(
+                attr.getType(), PossibleAttributeValues.forRuleAndAttribute(rule, attr));
       } else {
         attributeValue = attributeMapper.getSelectorList(attr.getName(), attr.getType());
       }
@@ -414,7 +400,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
               .setName("$internal_attr_hash")
               .setStringValue(
                   SyntheticAttributeHashCalculator.compute(
-                      rule, serializedAttributes, extraDataForAttrHash, hashFunction))
+                      rule, serializedAttributes, extraDataForAttrHash))
               .setType(Discriminator.STRING));
     }
   }
@@ -474,23 +460,20 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   /**
-   * Coerces the list {@code possibleValues} of values of type {@code attrType} to a single value of
-   * that type, in the following way:
+   * Coerces the list {@param possibleValues} of values of type {@param attrType} to a single
+   * value of that type, in the following way:
    *
    * <p>If the list contains a single value, return that value.
    *
    * <p>If the list contains zero or multiple values and the type is a scalar type, return {@code
    * null}.
    *
-   * <p>If the list contains zero or multiple values and the type is a collection or map type, merge
-   * the collections/maps in the list and return the merged collection/map.
+   * <p>If the list contains zero or multiple values and the type is a collection or map type,
+   * merge the collections/maps in the list and return the merged collection/map.
    */
   @Nullable
   @SuppressWarnings("unchecked")
-  private static Object getFlattenedAttributeValues(Type<?> attrType, Rule rule, Attribute attr) {
-    boolean treatMultipleAsNone = SCALAR_TYPES.contains(attrType);
-    Iterable<Object> possibleValues =
-        PossibleAttributeValues.forRuleAndAttribute(rule, attr, treatMultipleAsNone);
+  private static Object flattenAttributeValues(Type<?> attrType, Iterable<Object> possibleValues) {
 
     // If there is only one possible value, return it.
     if (Iterables.size(possibleValues) == 1) {
