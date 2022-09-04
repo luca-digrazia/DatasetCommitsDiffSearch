@@ -25,8 +25,8 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactFileMetadata;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
 import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
@@ -304,12 +304,15 @@ public class FilesystemValueChecker {
           Pair<SkyKey, ActionExecutionValue> keyAndValue = fileToKeyAndValue.get(artifact);
           ActionExecutionValue actionValue = keyAndValue.getSecond();
           SkyKey key = keyAndValue.getFirst();
-          FileArtifactValue lastKnownData = actionValue.getAllFileValues().get(artifact);
+          ArtifactFileMetadata lastKnownData = actionValue.getAllFileValues().get(artifact);
           try {
-            FileArtifactValue newData =
-                ActionMetadataHandler.fileArtifactValueFromArtifact(artifact, stat, tsgm);
-            if (newData.couldBeModifiedSince(lastKnownData)) {
-              updateIntraBuildModifiedCounter(stat != null ? stat.getLastChangeTime() : -1);
+            ArtifactFileMetadata newData =
+                ActionMetadataHandler.fileMetadataFromArtifact(artifact, stat, tsgm);
+            if (!newData.equals(lastKnownData)) {
+              updateIntraBuildModifiedCounter(
+                  stat != null ? stat.getLastChangeTime() : -1,
+                  lastKnownData.isSymlink(),
+                  newData.isSymlink());
               modifiedOutputFilesCounter.getAndIncrement();
               dirtyKeys.add(key);
             }
@@ -331,7 +334,8 @@ public class FilesystemValueChecker {
             // Count the changed directory as one "file".
             // TODO(bazel-team): There are no tests for this codepath.
             try {
-              updateIntraBuildModifiedCounter(path.exists() ? path.getLastModifiedTime() : -1);
+              updateIntraBuildModifiedCounter(
+                  path.exists() ? path.getLastModifiedTime() : -1, false, path.isSymbolicLink());
             } catch (IOException e) {
               // Do nothing here.
             }
@@ -344,8 +348,11 @@ public class FilesystemValueChecker {
     };
   }
 
-  private void updateIntraBuildModifiedCounter(long time) {
-    if (lastExecutionTimeRange != null && lastExecutionTimeRange.contains(time)) {
+  private void updateIntraBuildModifiedCounter(long time, boolean oldWasSymlink,
+      boolean newIsSymlink) {
+    if (lastExecutionTimeRange != null
+        && lastExecutionTimeRange.contains(time)
+        && !(oldWasSymlink && newIsSymlink)) {
       modifiedOutputFilesIntraBuildCounter.incrementAndGet();
     }
   }
@@ -403,22 +410,22 @@ public class FilesystemValueChecker {
       ImmutableSet<PathFragment> knownModifiedOutputFiles,
       Supplier<NavigableSet<PathFragment>> sortedKnownModifiedOutputFiles) {
     boolean isDirty = false;
-    for (Map.Entry<Artifact, FileArtifactValue> entry : actionValue.getAllFileValues().entrySet()) {
+    for (Map.Entry<Artifact, ArtifactFileMetadata> entry :
+        actionValue.getAllFileValues().entrySet()) {
       Artifact file = entry.getKey();
-      FileArtifactValue lastKnownData = entry.getValue();
-      if (!file.isMiddlemanArtifact() && shouldCheckFile(knownModifiedOutputFiles, file)) {
+      ArtifactFileMetadata lastKnownData = entry.getValue();
+      if (shouldCheckFile(knownModifiedOutputFiles, file)) {
         try {
-          FileArtifactValue fileMetadata =
-              ActionMetadataHandler.fileArtifactValueFromArtifact(file, null, tsgm);
+          ArtifactFileMetadata fileMetadata =
+              ActionMetadataHandler.fileMetadataFromArtifact(file, null, tsgm);
           FileArtifactValue fileValue = actionValue.getArtifactValue(file);
           boolean lastSeenRemotely = (fileValue != null) && fileValue.isRemote();
-          boolean trustRemoteValue =
-              fileMetadata.getType() == FileStateType.NONEXISTENT && lastSeenRemotely;
-          if (!trustRemoteValue && fileMetadata.couldBeModifiedSince(lastKnownData)) {
+          boolean trustRemoteValue = !fileMetadata.exists() && lastSeenRemotely;
+          if (!trustRemoteValue && !fileMetadata.equals(lastKnownData)) {
             updateIntraBuildModifiedCounter(
-                fileMetadata.getType() != FileStateType.NONEXISTENT
-                    ? file.getPath().getLastModifiedTime(Symlinks.FOLLOW)
-                    : -1);
+                fileMetadata.exists() ? file.getPath().getLastModifiedTime(Symlinks.FOLLOW) : -1,
+                lastKnownData.isSymlink(),
+                fileMetadata.isSymlink());
             modifiedOutputFilesCounter.getAndIncrement();
             isDirty = true;
           }
@@ -439,7 +446,9 @@ public class FilesystemValueChecker {
         Path path = artifact.getPath();
         // Count the changed directory as one "file".
         try {
-          updateIntraBuildModifiedCounter(path.exists() ? path.getLastModifiedTime() : -1);
+          updateIntraBuildModifiedCounter(path.exists()
+              ? path.getLastModifiedTime()
+              : -1, false, path.isSymbolicLink());
         } catch (IOException e) {
           // Do nothing here.
         }

@@ -519,7 +519,7 @@ public class FilesystemValueCheckerTest {
 
     // We're done fiddling with this... restore the original state
     outEmpty.getPath().delete();
-    dummyEmptyDir.deleteTree();
+    FileSystemUtils.deleteTree(dummyEmptyDir);
     FileSystemUtils.createDirectoryAndParents(outEmpty.getPath());
 
     /* **** Tests for files and directory contents ****/
