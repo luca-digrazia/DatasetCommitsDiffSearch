@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRING_DICT;
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -395,80 +395,32 @@ public final class AndroidRuleClasses {
           // build_tools_version is assumed to be the latest version if omitted.
           .add(attr("build_tools_version", STRING))
           // This is the Proguard that comes from the --proguard_top attribute.
-          .add(attr(":proguard", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .value(JavaSemantics.PROGUARD).exec())
+          .add(attr(":proguard", LABEL).cfg(HOST).value(JavaSemantics.PROGUARD).exec())
           // This is the Proguard in the BUILD file that contains the android_sdk rule. Used when
           // --proguard_top is not specified.
-          .add(attr("proguard", LABEL).mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
-          .add(attr("aapt", LABEL).mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
-          .add(attr("aapt2", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
-          .add(attr("dx", LABEL).mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
+          .add(attr("proguard", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
+          .add(attr("aapt", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
+          .add(attr("aapt2", LABEL).cfg(HOST).allowedFileTypes(ANY_FILE).exec())
+          .add(attr("dx", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
           .add(
               attr("main_dex_list_creator", LABEL)
                   .mandatory()
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .allowedFileTypes(ANY_FILE)
                   .exec())
-          .add(attr("adb", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
-          .add(attr("framework_aidl", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE))
-          .add(attr("aidl", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
+          .add(attr("adb", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
+          .add(attr("framework_aidl", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
+          .add(attr("aidl", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
           .add(attr("aidl_lib", LABEL).allowedFileTypes(JavaSemantics.JAR))
-          .add(attr("android_jar", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(JavaSemantics.JAR))
+          .add(attr("android_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(JavaSemantics.JAR))
           // TODO(b/67903726): Make this attribute mandatory after updating all android_sdk rules.
-          .add(attr("source_properties", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE))
-          .add(attr("shrinked_android_jar", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE))
-          .add(attr("annotations_jar", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE))
-          .add(attr("main_dex_classes", LABEL)
-              .mandatory().cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE))
-          .add(attr("apkbuilder", LABEL)
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
-          .add(attr("apksigner", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE)
-              .exec())
-          .add(attr("zipalign", LABEL)
-              .mandatory()
-              .cfg(HostTransition.INSTANCE)
-              .allowedFileTypes(ANY_FILE).exec())
+          .add(attr("source_properties", LABEL).cfg(HOST).allowedFileTypes(ANY_FILE))
+          .add(attr("shrinked_android_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
+          .add(attr("annotations_jar", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
+          .add(attr("main_dex_classes", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE))
+          .add(attr("apkbuilder", LABEL).cfg(HOST).allowedFileTypes(ANY_FILE).exec())
+          .add(attr("apksigner", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
+          .add(attr("zipalign", LABEL).mandatory().cfg(HOST).allowedFileTypes(ANY_FILE).exec())
           .add(
               attr(":java_toolchain", LABEL)
                   .useOutputLicenses()
@@ -563,12 +515,12 @@ public final class AndroidRuleClasses {
           // processed XML expressions into Java code.
           .add(
               attr(DataBinding.DATABINDING_ANNOTATION_PROCESSOR_ATTR, LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .value(env.getToolsLabel("//tools/android:databinding_annotation_processor")))
           // TODO(b/30816740): Remove this once legacy manifest merging is no longer supported.
           .add(
               attr("$android_manifest_merge_tool", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(AndroidRuleClasses.MANIFEST_MERGE_TOOL_LABEL)))
           .build();
@@ -603,12 +555,12 @@ public final class AndroidRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(
               attr("plugins", LABEL_LIST)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .allowedRuleClasses("java_plugin")
                   .legacyAllowAnyFileType())
           .add(
               attr(":java_plugins", LABEL_LIST)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .allowedRuleClasses("java_plugin")
                   .silentRuleClassFilter()
                   .value(JavaSemantics.JAVA_PLUGINS))
@@ -622,21 +574,21 @@ public final class AndroidRuleClasses {
           .add(attr("javacopts", STRING_LIST))
           .add(
               attr("$jarjar_bin", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:jarjar_bin")))
           .add(
               attr("$idlclass", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:IdlClass")))
           .add(
               attr("$desugar_java8_extra_bootclasspath", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .value(env.getToolsLabel("//tools/android:desugar_java8_extra_bootclasspath")))
           .add(
               attr("$android_resources_busybox", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(DEFAULT_RESOURCES_BUSYBOX)))
           .build();
@@ -715,7 +667,7 @@ public final class AndroidRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(
               attr("debug_key", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .legacyAllowAnyFileType()
                   .value(env.getToolsLabel("//tools/android:debug_keystore")))
           .add(
@@ -777,52 +729,52 @@ public final class AndroidRuleClasses {
           .add(attr(ResourceFilterFactory.DENSITIES_NAME, STRING_LIST))
           .add(
               attr("$build_incremental_dexmanifest", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(BUILD_INCREMENTAL_DEXMANIFEST_LABEL)))
           .add(
               attr("$stubify_manifest", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(STUBIFY_MANIFEST_LABEL)))
           .add(
               attr("$shuffle_jars", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:shuffle_jars")))
           .add(
               attr("$dexbuilder", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:dexbuilder")))
           .add(
               attr("$dexsharder", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:dexsharder")))
           .add(
               attr("$dexmerger", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:dexmerger")))
           .add(
               attr("$merge_dexzips", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:merge_dexzips")))
           .add(
               attr("$incremental_install", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(INCREMENTAL_INSTALL_LABEL)))
           .add(
               attr("$build_split_manifest", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(BUILD_SPLIT_MANIFEST_LABEL)))
           .add(
               attr("$strip_resources", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel(STRIP_RESOURCES_LABEL)))
           .add(
@@ -835,7 +787,7 @@ public final class AndroidRuleClasses {
                   .aspect(dexArchiveAspect, DexArchiveAspect.ONLY_DESUGAR_JAVA8))
           .add(
               attr("$desugar", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:desugar_java8")))
           /* <!-- #BLAZE_RULE($android_binary_base).ATTRIBUTE(dexopts) -->
@@ -940,7 +892,7 @@ public final class AndroidRuleClasses {
           .add(attr(":extra_proguard_specs", LABEL_LIST).value(JavaSemantics.EXTRA_PROGUARD_SPECS))
           .add(
               attr(":bytecode_optimizers", LABEL_LIST)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .value(JavaSemantics.BYTECODE_OPTIMIZERS))
           // We need the C++ toolchain for every sub-configuration to get the correct linker.
           .add(
@@ -1013,7 +965,7 @@ public final class AndroidRuleClasses {
           // deploy jar so that they can be added to the APK.
           .add(
               attr("$resource_extractor", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:resource_extractor")))
           .add(
@@ -1023,7 +975,7 @@ public final class AndroidRuleClasses {
                   .allowedFileTypes(NO_FILE))
           .add(
               attr("$instrumentation_test_check", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .value(
                       new Attribute.ComputedDefault() {
                         @Override
@@ -1036,7 +988,7 @@ public final class AndroidRuleClasses {
                   .exec())
           .add(
               attr("$zip_filter", LABEL)
-                  .cfg(HostTransition.INSTANCE)
+                  .cfg(HOST)
                   .exec()
                   .value(env.getToolsLabel("//tools/android:zip_filter")))
           .removeAttribute("data")
