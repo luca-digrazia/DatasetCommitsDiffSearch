@@ -3,7 +3,6 @@ package com.shuyu.gsyvideoplayer;
 
 import android.content.Context;
 import android.media.AudioManager;
-import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -259,7 +258,6 @@ public class GSYVideoManager implements IMediaPlayer.OnPreparedListener, IMediaP
             mediaPlayer.setOnInfoListener(GSYVideoManager.this);
             mediaPlayer.setOnVideoSizeChangedListener(GSYVideoManager.this);
             mediaPlayer.prepareAsync();
-
         } catch (Exception e) {
             e.printStackTrace();
         }
