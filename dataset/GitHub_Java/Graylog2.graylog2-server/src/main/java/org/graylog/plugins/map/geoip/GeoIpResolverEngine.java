@@ -28,7 +28,6 @@ import org.graylog2.plugin.Message;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -37,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.codahale.metrics.MetricRegistry.name;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class GeoIpResolverEngine {
     private static final Logger LOG = LoggerFactory.getLogger(GeoIpResolverEngine.class);
@@ -80,30 +80,28 @@ public class GeoIpResolverEngine {
     }
 
     protected Optional<Coordinates> extractGeoLocationInformation(Object fieldValue) {
-        final InetAddress ipAddress;
-        if (fieldValue instanceof InetAddress) {
-            ipAddress = (InetAddress) fieldValue;
-        } else if (fieldValue instanceof String) {
-            ipAddress = getIpFromFieldValue((String) fieldValue);
-        } else {
-            ipAddress = null;
+        if (!(fieldValue instanceof String) || isNullOrEmpty((String) fieldValue)) {
+            return Optional.empty();
         }
 
-        Coordinates coordinates = null;
-        if (ipAddress != null) {
+        final String stringFieldValue = (String) fieldValue;
+        final InetAddress ipAddress = this.getIpFromFieldValue(stringFieldValue);
+        if (ipAddress == null) {
+            return Optional.empty();
+        }
+
+        try {
             try (Timer.Context ignored = resolveTime.time()) {
                 final CityResponse response = databaseReader.city(ipAddress);
                 final Location location = response.getLocation();
-                coordinates = Coordinates.create(location.getLatitude(), location.getLongitude());
-            } catch (Exception e) {
-                LOG.debug("Could not get location from IP {}", ipAddress.getHostAddress(), e);
+                return Optional.of(Coordinates.create(location.getLatitude(), location.getLongitude()));
             }
+        } catch (Exception e) {
+            LOG.debug("Could not get location from IP {}", ipAddress.getHostAddress(), e);
+            return Optional.empty();
         }
-
-        return Optional.ofNullable(coordinates);
     }
 
-    @Nullable
     protected InetAddress getIpFromFieldValue(String fieldValue) {
         try {
             return InetAddresses.forString(fieldValue.trim());
