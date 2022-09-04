@@ -31,6 +31,7 @@ import org.hibernate.engine.spi.SelfDirtinessTracker;
 import org.hibernate.jpa.QueryHints;
 import org.junit.jupiter.api.Assertions;
 
+import io.quarkus.hibernate.orm.panache.Panache;
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Parameters;
@@ -42,10 +43,6 @@ import io.quarkus.panache.common.exception.PanacheQueryException;
  */
 @Path("test")
 public class TestEndpoint {
-
-    // fake unused injection point to force ArC to not remove this otherwise I can't mock it in the tests
-    @Inject
-    MockablePersonRepository mockablePersonRepository;
 
     @GET
     @Path("model")
@@ -154,24 +151,6 @@ public class TestEndpoint {
 
         Assertions.assertEquals(person, Person.find("name", "stef").firstResult());
         Assertions.assertEquals(person, Person.find("name", "stef").singleResult());
-
-        //named query
-        persons = Person.find("#Person.getByName", Parameters.with("name", "stef")).list();
-        Assertions.assertEquals(1, persons.size());
-        Assertions.assertEquals(person, persons.get(0));
-        Assertions.assertThrows(PanacheQueryException.class, () -> Person.find("#Person.namedQueryNotFound").list());
-        NamedQueryEntity.find("#NamedQueryMappedSuperClass.getAll").list();
-        NamedQueryEntity.find("#NamedQueryEntity.getAll").list();
-        NamedQueryWith2QueriesEntity.find("#NamedQueryWith2QueriesEntity.getAll1").list();
-        NamedQueryWith2QueriesEntity.find("#NamedQueryWith2QueriesEntity.getAll2").list();
-
-        //empty query
-        persons = Person.find("").list();
-        Assertions.assertEquals(1, persons.size());
-        Assertions.assertEquals(person, persons.get(0));
-        persons = Person.find(null).list();
-        Assertions.assertEquals(1, persons.size());
-        Assertions.assertEquals(person, persons.get(0));
 
         Person byId = Person.findById(person.id);
         Assertions.assertEquals(person, byId);
@@ -423,7 +402,7 @@ public class TestEndpoint {
         person3.persist();
 
         Sort sort1 = Sort.by("name", "status");
-        List<Person> order1 = Arrays.asList(person3, person2, person1);
+        List<Person> order1 = Arrays.asList(person3, person1, person2);
 
         List<Person> list = Person.findAll(sort1).list();
         Assertions.assertEquals(order1, list);
@@ -435,7 +414,7 @@ public class TestEndpoint {
         Assertions.assertEquals(order1, list);
 
         Sort sort2 = Sort.descending("name", "status");
-        List<Person> order2 = Arrays.asList(person1, person2);
+        List<Person> order2 = Arrays.asList(person2, person1);
 
         list = Person.find("name", sort2, "stef").list();
         Assertions.assertEquals(order2, list);
@@ -518,10 +497,6 @@ public class TestEndpoint {
     DogDao dogDao;
     @Inject
     AddressDao addressDao;
-    @Inject
-    NamedQueryRepository namedQueryRepository;
-    @Inject
-    NamedQueryWith2QueriesRepository namedQueryWith2QueriesRepository;
 
     @GET
     @Path("model-dao")
@@ -625,24 +600,6 @@ public class TestEndpoint {
         Assertions.assertEquals(person, personDao.find("name", "stef").firstResult());
         Assertions.assertEquals(person, personDao.find("name", "stef").singleResult());
         Assertions.assertEquals(person, personDao.find("name", "stef").singleResultOptional().get());
-
-        // named query
-        persons = personDao.find("#Person.getByName", Parameters.with("name", "stef")).list();
-        Assertions.assertEquals(1, persons.size());
-        Assertions.assertEquals(person, persons.get(0));
-        Assertions.assertThrows(PanacheQueryException.class, () -> personDao.find("#Person.namedQueryNotFound").list());
-        namedQueryRepository.find("#NamedQueryMappedSuperClass.getAll").list();
-        namedQueryRepository.find("#NamedQueryEntity.getAll").list();
-        namedQueryWith2QueriesRepository.find("#NamedQueryWith2QueriesEntity.getAll1").list();
-        namedQueryWith2QueriesRepository.find("#NamedQueryWith2QueriesEntity.getAll2").list();
-
-        //empty query
-        persons = personDao.find("").list();
-        Assertions.assertEquals(1, persons.size());
-        Assertions.assertEquals(person, persons.get(0));
-        persons = personDao.find(null).list();
-        Assertions.assertEquals(1, persons.size());
-        Assertions.assertEquals(person, persons.get(0));
 
         Person byId = personDao.findById(person.id);
         Assertions.assertEquals(person, byId);
@@ -750,7 +707,7 @@ public class TestEndpoint {
         personDao.persist(person3);
 
         Sort sort1 = Sort.by("name", "status");
-        List<Person> order1 = Arrays.asList(person3, person2, person1);
+        List<Person> order1 = Arrays.asList(person3, person1, person2);
 
         List<Person> list = personDao.findAll(sort1).list();
         Assertions.assertEquals(order1, list);
@@ -762,7 +719,7 @@ public class TestEndpoint {
         Assertions.assertEquals(order1, list);
 
         Sort sort2 = Sort.descending("name", "status");
-        List<Person> order2 = Arrays.asList(person1, person2);
+        List<Person> order2 = Arrays.asList(person2, person1);
 
         list = personDao.find("name", sort2, "stef").list();
         Assertions.assertEquals(order2, list);
@@ -846,24 +803,6 @@ public class TestEndpoint {
     }
 
     private void testPaging(PanacheQuery<Person> query) {
-        // No paging allowed until a page is setup
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.firstPage(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.previousPage(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.nextPage(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.lastPage(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.hasNextPage(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.hasPreviousPage(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.page(),
-                "UnsupportedOperationException should have thrown");
-        Assertions.assertThrows(UnsupportedOperationException.class, () -> query.pageCount(),
-                "UnsupportedOperationException should have thrown");
-
         // ints
         List<Person> persons = query.page(0, 3).list();
         Assertions.assertEquals(3, persons.size());
@@ -1082,34 +1021,6 @@ public class TestEndpoint {
     }
 
     @GET
-    @Path("projection")
-    @Transactional
-    public String testProjection() {
-        Assertions.assertEquals(1, Person.count());
-
-        PersonName person = Person.findAll().project(PersonName.class).firstResult();
-        Assertions.assertEquals("2", person.name);
-
-        person = Person.find("name", "2").project(PersonName.class).firstResult();
-        Assertions.assertEquals("2", person.name);
-
-        person = Person.find("name = ?1", "2").project(PersonName.class).firstResult();
-        Assertions.assertEquals("2", person.name);
-
-        person = Person.find("name = :name", Parameters.with("name", "2")).project(PersonName.class).firstResult();
-        Assertions.assertEquals("2", person.name);
-
-        PanacheQuery<PersonName> query = Person.findAll().project(PersonName.class).page(0, 2);
-        Assertions.assertEquals(1, query.list().size());
-        query.nextPage();
-        Assertions.assertEquals(0, query.list().size());
-
-        Assertions.assertEquals(1, Person.findAll().project(PersonName.class).count());
-
-        return "OK";
-    }
-
-    @GET
     @Path("model3")
     @Transactional
     public String testModel3() {
@@ -1296,67 +1207,6 @@ public class TestEndpoint {
         assertEquals(3L, Cat.find("FROM Cat WHERE owner = ?1", owner).count());
         assertEquals(3L, Cat.find("owner", owner).count());
         assertEquals(1L, CatOwner.find("name = ?1", "8254").count());
-
-        return "OK";
-    }
-
-    @GET
-    @Path("9025")
-    @Transactional
-    public String testBug9025() {
-        Fruit apple = new Fruit("apple", "red");
-        Fruit orange = new Fruit("orange", "orange");
-        Fruit banana = new Fruit("banana", "yellow");
-
-        Fruit.persist(apple, orange, banana);
-
-        PanacheQuery<Fruit> query = Fruit.find(
-                "select name, color from Fruit").page(Page.ofSize(1));
-
-        List<Fruit> results = query.list();
-
-        int pageCount = query.pageCount();
-
-        return "OK";
-    }
-
-    @GET
-    @Path("9036")
-    @Transactional
-    public String testBug9036() {
-        Person.deleteAll();
-
-        Person emptyPerson = new Person();
-        emptyPerson.persist();
-
-        Person deadPerson = new Person();
-        deadPerson.name = "Stef";
-        deadPerson.status = Status.DECEASED;
-        deadPerson.persist();
-
-        Person livePerson = new Person();
-        livePerson.name = "Stef";
-        livePerson.status = Status.LIVING;
-        livePerson.persist();
-
-        assertEquals(3, Person.count());
-        assertEquals(3, Person.listAll().size());
-
-        // should be filtered
-        PanacheQuery<Person> query = Person.findAll(Sort.by("id")).filter("Person.isAlive").filter("Person.hasName",
-                Parameters.with("name", "Stef"));
-        assertEquals(1, query.count());
-        assertEquals(1, query.list().size());
-        assertEquals(livePerson, query.list().get(0));
-        assertEquals(1, query.stream().count());
-        assertEquals(livePerson, query.firstResult());
-        assertEquals(livePerson, query.singleResult());
-
-        // these should be unaffected
-        assertEquals(3, Person.count());
-        assertEquals(3, Person.listAll().size());
-
-        Person.deleteAll();
 
         return "OK";
     }
