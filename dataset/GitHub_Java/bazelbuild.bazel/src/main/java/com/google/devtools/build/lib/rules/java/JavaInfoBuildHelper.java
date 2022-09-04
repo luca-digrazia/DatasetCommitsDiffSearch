@@ -448,12 +448,11 @@ final class JavaInfoBuildHelper {
             .setSourcePathEntries(sourcepathEntries)
             .setJavacOpts(
                 ImmutableList.<String>builder()
-                    .addAll(toolchainProvider.getJavacOptions())
                     .addAll(
-                        javaSemantics.getCompatibleJavacOptions(
+                        JavaCommon.computeToolchainJavacOpts(
                             skylarkRuleContext.getRuleContext(), toolchainProvider))
                     .addAll(
-                        JavaCommon.computePerPackageJavacOpts(
+                        javaSemantics.getCompatibleJavacOptions(
                             skylarkRuleContext.getRuleContext(), toolchainProvider))
                     .addAll(javacOpts)
                     .build());

@@ -367,14 +367,12 @@ public interface JavaCommonApi<FileT extends FileApi, JavaInfoT extends JavaInfo
             named = true,
             type = TransitiveInfoCollectionApi.class,
             doc = "A label pointing to a java_toolchain rule to used to find the ijar tool."),
-      },
-      useLocation = true)
+      })
   public FileApi runIjar(
       SkylarkActionFactoryT actions,
       FileT jar,
       Object targetLabel,
-      TransitiveInfoCollectionT javaToolchain,
-      Location location)
+      TransitiveInfoCollectionT javaToolchain)
       throws EvalException;
 
   @SkylarkCallable(
@@ -414,14 +412,10 @@ public interface JavaCommonApi<FileT extends FileApi, JavaInfoT extends JavaInfo
             named = true,
             type = TransitiveInfoCollectionApi.class,
             doc = "A label pointing to a java_toolchain rule to used to find the stamp_jar tool."),
-      },
-      useLocation = true)
+      })
   public FileApi stampJar(
-      SkylarkActionFactoryT actions,
-      FileT jar,
-      Label targetLabel,
-      TransitiveInfoCollectionT javaToolchain,
-      Location location)
+      SkylarkActionFactoryT actions, FileT jar, Label targetLabel,
+      TransitiveInfoCollectionT javaToolchain)
       throws EvalException;
 
   @SkylarkCallable(
@@ -472,16 +466,14 @@ public interface JavaCommonApi<FileT extends FileApi, JavaInfoT extends JavaInfo
             type = TransitiveInfoCollectionApi.class,
             doc = "A label pointing to a JDK to be used for packing sources."),
       },
-      allowReturnNones = true,
-      useLocation = true)
+      allowReturnNones = true)
   public FileApi packSources(
       SkylarkActionFactoryT actions,
       FileT outputJar,
       SkylarkList<FileT> sourceFiles,
       SkylarkList<FileT> sourceJars,
       TransitiveInfoCollectionT javaToolchain,
-      TransitiveInfoCollectionT hostJavabase,
-      Location location)
+      TransitiveInfoCollectionT hostJavabase)
       throws EvalException;
 
   @SkylarkCallable(

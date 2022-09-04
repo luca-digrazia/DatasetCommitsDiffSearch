@@ -53,6 +53,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file("a/BUILD",
         "load(':rule.bzl', 'jrule')",
         "java_runtime(name='jvm', srcs=[], java_home='/foo/bar/')",
+        "java_runtime_suite(name='suite', default=':jvm')",
         "java_runtime_alias(name='alias')",
         "jrule(name='r')");
 
@@ -66,7 +67,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         ")",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--javabase=//a:jvm");
+    useConfiguration("--javabase=//a:suite");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked") PathFragment javaExecutable =
         (PathFragment) ct.get("java_executable");
@@ -81,6 +82,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file("a/BUILD",
         "load(':rule.bzl', 'jrule')",
         "java_runtime(name='jvm', srcs=[], java_home='foo/bar')",
+        "java_runtime_suite(name='suite', default=':jvm')",
         "java_runtime_alias(name='alias')",
         "jrule(name='r')");
 
@@ -94,7 +96,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         ")",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--javabase=//a:jvm");
+    useConfiguration("--javabase=//a:suite");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked") PathFragment javaExecutable =
         (PathFragment) ct.get("java_executable");
@@ -109,6 +111,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file("a/BUILD",
         "load(':rule.bzl', 'jrule')",
         "java_runtime(name='jvm', srcs=[], java_home='/foo/bar/')",
+        "java_runtime_suite(name='suite', default=':jvm')",
         "java_runtime_alias(name='alias')",
         "jrule(name='r')");
 
@@ -121,7 +124,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         ")",
         "jrule = rule(_impl, attrs = { '_java_runtime': attr.label(default=Label('//a:alias'))})");
 
-    useConfiguration("--javabase=//a:jvm");
+    useConfiguration("--javabase=//a:suite");
     ConfiguredTarget ct = getConfiguredTarget("//a:r");
     @SuppressWarnings("unchecked") PathFragment javaHome =
         (PathFragment) ct.get("java_home");
@@ -306,7 +309,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertThat(prettyArtifactNames(outputJar.getSrcJars()))
         .containsExactly("java/test/libdep-src.jar");
     assertThat(outputs.getJdeps().getFilename()).isEqualTo("libdep.jdeps");
-    assertThat(outputs.getNativeHeaders().getFilename()).isEqualTo("libdep-native-header.jar");
   }
 
   /**
