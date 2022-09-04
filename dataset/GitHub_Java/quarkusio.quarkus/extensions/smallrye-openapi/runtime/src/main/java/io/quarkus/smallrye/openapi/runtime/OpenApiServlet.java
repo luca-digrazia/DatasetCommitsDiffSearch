@@ -68,9 +68,8 @@ public class OpenApiServlet extends HttpServlet {
         String oai = getCachedOaiString(format);
 
         addCorsResponseHeaders(resp);
-        resp.setHeader("Content-Type", format.getMimeType());
-        resp.setCharacterEncoding("UTF-8");
-        resp.getWriter().print(oai);
+        resp.addHeader("Content-Type", format.getMimeType());
+        resp.getOutputStream().print(oai);
     }
 
     void setOpenApiDocument(OpenApiDocument document) {
