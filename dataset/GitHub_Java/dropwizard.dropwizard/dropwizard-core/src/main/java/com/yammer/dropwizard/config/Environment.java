@@ -1,12 +1,14 @@
 package com.yammer.dropwizard.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.sun.jersey.spi.container.servlet.ServletContainer;
 import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import com.yammer.dropwizard.json.ObjectMapperFactory;
-import com.yammer.dropwizard.setup.*;
+import com.yammer.dropwizard.setup.AdminEnvironment;
+import com.yammer.dropwizard.setup.JerseyEnvironment;
+import com.yammer.dropwizard.setup.LifecycleEnvironment;
+import com.yammer.dropwizard.setup.ServletEnvironment;
 import com.yammer.dropwizard.validation.Validator;
 import com.yammer.metrics.core.HealthCheck;
 import org.eclipse.jetty.server.Server;
@@ -24,7 +26,7 @@ public class Environment {
     private final String name;
     private final Set<HealthCheck> healthChecks;
 
-    private final JsonEnvironment jsonEnvironment;
+    private final ObjectMapperFactory objectMapperFactory;
     private Validator validator;
 
     private final AtomicReference<ServletContainer> jerseyServletContainer;
@@ -49,7 +51,7 @@ public class Environment {
                        ObjectMapperFactory objectMapperFactory,
                        Validator validator) {
         this.name = name;
-        this.jsonEnvironment = new JsonEnvironment(objectMapperFactory.copy());
+        this.objectMapperFactory = objectMapperFactory;
         this.validator = validator;
         final DropwizardResourceConfig jerseyConfig = new DropwizardResourceConfig(false);
 
@@ -85,8 +87,9 @@ public class Environment {
         return servletEnvironment;
     }
 
-    public JsonEnvironment getJsonEnvironment() {
-        return jsonEnvironment;
+
+    public ObjectMapperFactory getObjectMapperFactory() {
+        return objectMapperFactory;
     }
 
     public String getName() {
@@ -109,7 +112,7 @@ public class Environment {
         return ImmutableSet.copyOf(healthChecks);
     }
 
-    ServletContextHandler getServletContext() {
+    ServletContextHandler getServletContextHandler() {
         return servletContext;
     }
 
@@ -123,9 +126,5 @@ public class Environment {
 
     ServletContextHandler getAdminContext() {
         return adminContext;
-    }
-
-    ObjectMapper buildObjectMapper() {
-        return jsonEnvironment.buildObjectMapper();
     }
 }
