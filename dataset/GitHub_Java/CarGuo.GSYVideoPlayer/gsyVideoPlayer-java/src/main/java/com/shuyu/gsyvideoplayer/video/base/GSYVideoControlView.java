@@ -418,14 +418,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             touchDoubleUp();
             return super.onDoubleTap(e);
         }
-
-        @Override
-        public boolean onSingleTapConfirmed(MotionEvent e) {
-            if (!mChangePosition && !mChangeVolume && !mBrightness) {
-                onClickUiToggle();
-            }
-            return super.onSingleTapConfirmed(e);
-        }
     });
 
     /**
@@ -709,6 +701,9 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             if (mBottomProgressBar != null)
                 mBottomProgressBar.setProgress(progress);
         }
+        if (!mChangePosition && !mChangeVolume && !mBrightness) {
+            onClickUiToggle();
+        }
 
         mTouchingProgressBar = false;
         dismissProgressDialog();
@@ -897,7 +892,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             if (progress != 0) mProgressBar.setProgress(progress);
         }
         if (secProgress > 94) secProgress = 100;
-        if (secProgress != 0 && !getGSYVideoManager().isCacheFile()) {
+        if (secProgress != 0 && !mCacheFile) {
             mProgressBar.setSecondaryProgress(secProgress);
         }
         mTotalTimeTextView.setText(CommonUtil.stringForTime(totalTime));
@@ -906,7 +901,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
         if (mBottomProgressBar != null) {
             if (progress != 0) mBottomProgressBar.setProgress(progress);
-            if (secProgress != 0 && !getGSYVideoManager().isCacheFile())
+            if (secProgress != 0 && !mCacheFile)
                 mBottomProgressBar.setSecondaryProgress(secProgress);
         }
     }
