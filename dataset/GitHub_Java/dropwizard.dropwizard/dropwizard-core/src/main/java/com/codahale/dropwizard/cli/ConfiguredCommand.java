@@ -51,7 +51,7 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
     @Override
     @SuppressWarnings("unchecked")
     public final void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
-        final T configuration = parseConfiguration(bootstrap.getConfigurationSourceProvider(),
+        final T configuration = parseConfiguration(bootstrap.getConfigurationProvider(),
                                                    namespace.getString("file"),
                                                    getConfigurationClass(),
                                                    bootstrap.getObjectMapper());

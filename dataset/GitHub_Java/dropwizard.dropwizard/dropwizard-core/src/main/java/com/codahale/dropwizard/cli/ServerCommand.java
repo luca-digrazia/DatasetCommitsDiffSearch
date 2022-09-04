@@ -40,7 +40,6 @@ public class ServerCommand<T extends Configuration> extends EnvironmentCommand<T
         } catch (Exception e) {
             LOGGER.error("Unable to start server, shutting down", e);
             server.stop();
-            throw e;
         }
     }
 }

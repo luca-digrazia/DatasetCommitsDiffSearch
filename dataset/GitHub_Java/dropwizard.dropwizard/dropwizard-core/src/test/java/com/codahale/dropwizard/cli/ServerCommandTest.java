@@ -15,7 +15,6 @@ import org.junit.Test;
 import java.io.IOException;
 
 import static org.fest.assertions.api.Assertions.assertThat;
-import static org.fest.assertions.api.Assertions.failBecauseExceptionWasNotThrown;
 import static org.mockito.Mockito.*;
 
 public class ServerCommandTest {
@@ -84,13 +83,7 @@ public class ServerCommandTest {
             }
         });
 
-        try {
-            command.run(environment, namespace, configuration);
-            failBecauseExceptionWasNotThrown(IOException.class);
-        } catch (IOException e) {
-            assertThat(e.getMessage())
-                    .isEqualTo("oh crap");
-        }
+        command.run(environment, namespace, configuration);
 
         assertThat(server.isStarted())
                 .isFalse();
