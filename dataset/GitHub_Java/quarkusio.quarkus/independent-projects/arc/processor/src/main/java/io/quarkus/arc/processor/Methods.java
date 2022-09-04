@@ -41,8 +41,6 @@ final class Methods {
     public static final String CLINIT = "<clinit>";
     // copied from java.lang.reflect.Modifier.SYNTHETIC
     static final int SYNTHETIC = 0x00001000;
-    // copied from java.lang.reflect.Modifier.BRIDGE
-    static final int BRIDGE = 0x00000040;
     public static final String TO_STRING = "toString";
 
     private static final List<String> IGNORED_METHODS = initIgnoredMethods();
@@ -59,10 +57,6 @@ final class Methods {
 
     static boolean isSynthetic(MethodInfo method) {
         return (method.flags() & SYNTHETIC) != 0;
-    }
-
-    static boolean isBridge(MethodInfo method) {
-        return (method.flags() & BRIDGE) != 0;
     }
 
     static void addDelegatingMethods(IndexView index, ClassInfo classInfo, Map<MethodKey, MethodInfo> methods,
@@ -264,7 +258,7 @@ final class Methods {
     }
 
     private static boolean skipForSubclass(MethodInfo method) {
-        if (Modifier.isStatic(method.flags()) || isBridge(method)) {
+        if (Modifier.isStatic(method.flags())) {
             return true;
         }
         if (IGNORED_METHODS.contains(method.name())) {

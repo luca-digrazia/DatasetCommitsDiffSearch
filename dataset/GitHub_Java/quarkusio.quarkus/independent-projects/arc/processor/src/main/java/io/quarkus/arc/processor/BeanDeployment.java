@@ -199,15 +199,12 @@ public class BeanDeployment {
         for (ContextRegistrar contextRegistrar : contextRegistrars) {
             contextRegistrar.register(registrationContext);
         }
-        return registrationContext;
-    }
-
-    void registerScopes() {
         if (buildContext != null) {
             List<ScopeInfo> allScopes = Arrays.stream(BuiltinScope.values()).map(i -> i.getInfo()).collect(Collectors.toList());
             allScopes.addAll(customContexts.keySet());
             buildContext.putInternal(Key.SCOPES.asString(), Collections.unmodifiableList(allScopes));
         }
+        return registrationContext;
     }
 
     BeanRegistrar.RegistrationContext registerBeans(List<BeanRegistrar> beanRegistrars) {
@@ -1066,7 +1063,6 @@ public class BeanDeployment {
             Consumer<BytecodeTransformer> bytecodeTransformerConsumer) {
 
         Map<String, List<BeanInfo>> namedBeans = new HashMap<>();
-        Set<DotName> classesReceivingNoArgsCtor = new HashSet<>();
 
         for (BeanInfo bean : beans) {
             if (bean.getName() != null) {
@@ -1077,7 +1073,7 @@ public class BeanDeployment {
                 }
                 named.add(bean);
             }
-            bean.validate(errors, validators, bytecodeTransformerConsumer, classesReceivingNoArgsCtor);
+            bean.validate(errors, validators, bytecodeTransformerConsumer);
         }
 
         if (!namedBeans.isEmpty()) {
