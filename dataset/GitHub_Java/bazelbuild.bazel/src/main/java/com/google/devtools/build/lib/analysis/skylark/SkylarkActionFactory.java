@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SingleStringArgFormatter;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
-import com.google.devtools.build.lib.analysis.BashCommandConstructor;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
@@ -325,12 +324,10 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
           ImmutableMap.copyOf(TargetUtils.getExecutionInfo(ruleContext.getRule()));
       String helperScriptSuffix = String.format(".run_shell_%d.sh", runShellOutputCounter++);
       String command = (String) commandUnchecked;
-      PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
-      BashCommandConstructor constructor =
-          CommandHelper.buildBashCommandConstructor(
-              executionInfo, shExecutable, helperScriptSuffix);
       Artifact helperScript =
-          CommandHelper.commandHelperScriptMaybe(ruleContext, command, constructor);
+          CommandHelper.shellCommandHelperScriptMaybe(
+              ruleContext, command, helperScriptSuffix, executionInfo);
+      PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
       if (helperScript == null) {
         builder.setShellCommand(shExecutable, command);
       } else {
@@ -561,14 +558,15 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     if (EvalUtils.toBoolean(useDefaultShellEnv)) {
       builder.useDefaultShellEnvironment();
     }
-
-    ImmutableMap<String, String> executionInfo =
-        TargetUtils.getFilteredExecutionInfo(
-            executionRequirementsUnchecked,
-            ruleContext.getRule(),
-            starlarkSemantics.incompatibleAllowTagsPropagation());
-    builder.setExecutionInfo(executionInfo);
-
+    if (executionRequirementsUnchecked != Runtime.NONE) {
+      builder.setExecutionInfo(
+          TargetUtils.filter(
+              SkylarkDict.castSkylarkDictOrNoneToDict(
+                  executionRequirementsUnchecked,
+                  String.class,
+                  String.class,
+                  "execution_requirements")));
+    }
     if (inputManifestsUnchecked != Runtime.NONE) {
       for (RunfilesSupplier supplier : SkylarkList.castSkylarkListOrNoneToList(
           inputManifestsUnchecked, RunfilesSupplier.class, "runfiles suppliers")) {
@@ -580,7 +578,8 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   private String getMnemonic(Object mnemonicUnchecked) {
-    String mnemonic = mnemonicUnchecked == Runtime.NONE ? "Action" : (String) mnemonicUnchecked;
+    String mnemonic =
+        mnemonicUnchecked == Runtime.NONE ? "SkylarkAction" : (String) mnemonicUnchecked;
     if (ruleContext.getConfiguration().getReservedActionMnemonics().contains(mnemonic)) {
       mnemonic = mangleMnemonic(mnemonic);
     }
@@ -588,7 +587,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   }
 
   private static String mangleMnemonic(String mnemonic) {
-    return mnemonic + "FromStarlark";
+    return mnemonic + "FromSkylark";
   }
 
   @Override
