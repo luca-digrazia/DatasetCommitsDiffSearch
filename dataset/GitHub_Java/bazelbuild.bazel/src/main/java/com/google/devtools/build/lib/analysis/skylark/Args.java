@@ -141,12 +141,6 @@ public abstract class Args implements CommandLineArgsApi {
     }
 
     @Override
-    public boolean isImmutable() {
-      return true; // immutable but not directly hashable (though may be hashed as an element of,
-      // say, a struct).
-    }
-
-    @Override
     public ImmutableSet<Artifact> getDirectoryArtifacts() {
       return directoryInputs;
     }
@@ -382,18 +376,18 @@ public abstract class Args implements CommandLineArgsApi {
         throws EvalException {
       StarlarkCustomCommandLine.VectorArg.Builder vectorArg;
       if (value instanceof Depset) {
-        Depset starlarkNestedSet = (Depset) value;
-        NestedSet<?> nestedSet = starlarkNestedSet.getSet();
+        Depset skylarkNestedSet = (Depset) value;
+        NestedSet<?> nestedSet = skylarkNestedSet.getSet();
         if (expandDirectories) {
           potentialDirectoryArtifacts.add(nestedSet);
         }
         vectorArg = new StarlarkCustomCommandLine.VectorArg.Builder(nestedSet);
       } else {
-        Sequence<?> starlarkList = (Sequence) value;
+        Sequence<?> skylarkList = (Sequence) value;
         if (expandDirectories) {
-          scanForDirectories(starlarkList);
+          scanForDirectories(skylarkList);
         }
-        vectorArg = new StarlarkCustomCommandLine.VectorArg.Builder(starlarkList);
+        vectorArg = new StarlarkCustomCommandLine.VectorArg.Builder(skylarkList);
       }
       validateFormatString("format_each", formatEach);
       validateFormatString("format_joined", formatJoined);
