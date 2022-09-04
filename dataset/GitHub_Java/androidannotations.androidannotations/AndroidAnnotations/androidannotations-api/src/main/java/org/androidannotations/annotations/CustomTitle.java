@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,22 +22,9 @@ import java.lang.annotation.Target;
 
 /**
  * Use it on activities to set a custom title layout.
- * <p/>
+ * 
  * The activity must be annotated with {@link EActivity}.
- * <p/>
- * <blockquote>
  * 
- * Example :
- * 
- * <pre>
- * &#064;CustomTitle(R.string.activityTitle)
- * &#064;EActivity(R.layout.main)
- * public class MyActivity extends Activity {
- * 
- * }
- * </pre>
- * 
- * </blockquote>
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)

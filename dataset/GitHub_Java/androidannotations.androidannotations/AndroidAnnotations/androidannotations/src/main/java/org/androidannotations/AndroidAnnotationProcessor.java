@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -477,7 +477,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new PostValidator(processingEnv));
 		modelValidator.register(new PutValidator(processingEnv));
 		modelValidator.register(new AcceptValidator(processingEnv));
-		modelValidator.register(new AppValidator(processingEnv));
+		modelValidator.register(new AppValidator(processingEnv, androidManifest));
 		modelValidator.register(new OptionsMenuValidator(processingEnv, rClass));
 		modelValidator.register(new OptionsItemValidator(processingEnv, rClass));
 		modelValidator.register(new NoTitleValidator(processingEnv));
