@@ -35,7 +35,7 @@ import org.graylog2.rest.models.system.inputs.responses.InputStateSummary;
 import org.graylog2.rest.models.system.inputs.responses.InputStatesList;
 import org.graylog2.rest.models.system.inputs.responses.InputSummary;
 import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.MessageInputFactory;
+import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
 
 import javax.inject.Inject;
@@ -54,7 +54,7 @@ import java.util.stream.Collectors;
 @Api(value = "System/InputStates", description = "Message input states of this node")
 @Path("/system/inputstates")
 @Produces(MediaType.APPLICATION_JSON)
-public class InputStatesResource extends AbstractInputsResource {
+public class InputStatesResource extends RestResource {
     private final InputRegistry inputRegistry;
     private final EventBus serverEventBus;
     private final InputService inputService;
@@ -62,9 +62,7 @@ public class InputStatesResource extends AbstractInputsResource {
     @Inject
     public InputStatesResource(InputRegistry inputRegistry,
                                EventBus serverEventBus,
-                               InputService inputService,
-                               MessageInputFactory messageInputFactory) {
-        super(messageInputFactory.getAvailableInputs());
+                               InputService inputService) {
         this.inputRegistry = inputRegistry;
         this.serverEventBus = serverEventBus;
         this.inputService = inputService;
@@ -134,28 +132,13 @@ public class InputStatesResource extends AbstractInputsResource {
 
     private InputStateSummary getInputStateSummary(IOState<MessageInput> inputState) {
         final MessageInput messageInput = inputState.getStoppable();
-        return InputStateSummary.create(
-                messageInput.getId(),
+        return InputStateSummary.create(messageInput.getId(),
                 inputState.getState().toString(),
                 inputState.getStartedAt(),
                 inputState.getDetailedMessage(),
-                InputSummary.create(
-                        messageInput.getTitle(),
-                        messageInput.isGlobal(),
-                        messageInput.getName(),
-                        messageInput.getContentPack(),
-                        messageInput.getId(),
-                        messageInput.getCreatedAt(),
-                        messageInput.getType(),
-                        messageInput.getCreatorUserId(),
-                        // Ensure password masking!
-                        maskPasswordsInConfiguration(
-                                messageInput.getConfiguration().getSource(),
-                                messageInput.getRequestedConfiguration()
-                        ),
-                        messageInput.getStaticFields(),
-                        messageInput.getNodeId()
-                )
-        );
+                InputSummary.create(messageInput.getTitle(), messageInput.isGlobal(),
+                        messageInput.getName(), messageInput.getContentPack(), messageInput.getId(),
+                        messageInput.getCreatedAt(), messageInput.getType(), messageInput.getCreatorUserId(),
+                        messageInput.getConfiguration().getSource(), messageInput.getStaticFields(), messageInput.getNodeId()));
     }
 }
