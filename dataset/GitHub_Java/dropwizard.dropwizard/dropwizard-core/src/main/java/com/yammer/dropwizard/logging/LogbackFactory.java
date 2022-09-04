@@ -23,7 +23,6 @@ public class LogbackFactory {
                                                      LoggerContext context,
                                                      String name) {
         final SyslogFormatter layout = new SyslogFormatter(context, syslog.getTimeZone(), name);
-        layout.setOutputPatternAsHeader(false);
         layout.setContext(context);
         layout.start();
 

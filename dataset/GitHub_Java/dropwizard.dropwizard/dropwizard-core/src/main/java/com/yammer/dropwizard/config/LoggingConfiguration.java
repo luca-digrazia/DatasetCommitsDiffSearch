@@ -1,7 +1,6 @@
 package com.yammer.dropwizard.config;
 
 import ch.qos.logback.classic.Level;
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.yammer.dropwizard.validation.ValidationMethod;
 import org.codehaus.jackson.annotate.JsonProperty;
@@ -29,9 +28,6 @@ public class LoggingConfiguration {
         @JsonProperty
         private TimeZone timeZone = UTC;
 
-        @JsonProperty
-        private String logFormat;
-
         public boolean isEnabled() {
             return enabled;
         }
@@ -54,10 +50,6 @@ public class LoggingConfiguration {
 
         public void setTimeZone(TimeZone timeZone) {
             this.timeZone = timeZone;
-        }
-
-        public Optional<String> getLogFormat() {
-            return Optional.fromNullable(logFormat);
         }
     }
 
@@ -84,9 +76,6 @@ public class LoggingConfiguration {
         @NotNull
         @JsonProperty
         private TimeZone timeZone = UTC;
-
-        @JsonProperty
-        private String logFormat;
 
         @ValidationMethod(message = "must have logging.file.currentLogFilename and " +
                 "logging.file.archivedLogFilenamePattern if logging.file.enabled is true")
@@ -117,10 +106,6 @@ public class LoggingConfiguration {
         public TimeZone getTimeZone() {
             return timeZone;
         }
-
-        public Optional<String> getLogFormat() {
-            return Optional.fromNullable(logFormat);
-        }
     }
 
     public static class SyslogConfiguration {
@@ -147,9 +132,6 @@ public class LoggingConfiguration {
         @JsonProperty
         private TimeZone timeZone = UTC;
 
-        @JsonProperty
-        private String logFormat;
-
         public boolean isEnabled() {
             return enabled;
         }
@@ -168,10 +150,6 @@ public class LoggingConfiguration {
 
         public TimeZone getTimeZone() {
             return timeZone;
-        }
-
-        public Optional<String> getLogFormat() {
-            return Optional.fromNullable(logFormat);
         }
     }
 
