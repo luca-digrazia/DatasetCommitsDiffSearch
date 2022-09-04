@@ -38,10 +38,12 @@ public class TemplateResponseFilter {
                         new Variant(selected.getLanguage(), selected.getMediaType().toString(), selected.getEncoding()));
                 mediaType = selected.getMediaType();
             } else {
-                mediaType = responseContext.getMediaType();
+                // TODO we should use the default
+                mediaType = null;
             }
         } else {
-            mediaType = responseContext.getMediaType();
+            // TODO how to get media type from non-variant templates?
+            mediaType = null;
         }
 
         return instance.createUni().chain(r -> {
