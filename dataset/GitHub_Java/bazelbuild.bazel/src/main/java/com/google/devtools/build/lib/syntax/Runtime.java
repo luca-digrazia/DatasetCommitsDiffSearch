@@ -94,11 +94,8 @@ public final class Runtime {
     }
   }
 
-  @SkylarkSignature(
-      name = "<unbound>",
-      returnType = UnboundMarker.class,
-      documented = false,
-      doc = "Marker for unbound values in cases where neither Starlark None nor Java null can do.")
+  @SkylarkSignature(name = "<unbound>", returnType = UnboundMarker.class, documented = false,
+      doc = "Marker for unbound values in cases where neither Skylark None nor Java null can do.")
   public static final UnboundMarker UNBOUND = new UnboundMarker();
 
   @SkylarkSignature(name = "None", returnType = NoneType.class,
@@ -324,13 +321,7 @@ public final class Runtime {
    */
   private static final BuiltinRegistry builtins = new BuiltinRegistry();
 
-  /**
-   * Retrieve the static instance containing information on all known Skylark builtins.
-   *
-   * @deprecated do not use a static singleton registry -- instead set up the Skylark environment
-   *     with 'global' objects
-   */
-  @Deprecated
+  /** Retrieve the static instance containing information on all known Skylark builtins. */
   public static BuiltinRegistry getBuiltinRegistry() {
     return builtins;
   }

@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.skylarkbuildapi.repository;
 
 import com.google.common.collect.ImmutableMap.Builder;
 import com.google.devtools.build.lib.skylarkbuildapi.Bootstrap;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
 
 /**
  * A {@link Bootstrap} for repository-related libraries of the build API.
@@ -31,6 +31,6 @@ public class RepositoryBootstrap implements Bootstrap {
 
   @Override
   public void addBindingsToBuilder(Builder<String, Object> builder) {
-    Starlark.addMethods(builder, repositoryModuleApi);
+    Runtime.setupSkylarkLibrary(builder, repositoryModuleApi);
   }
 }
