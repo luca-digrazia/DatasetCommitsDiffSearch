@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.math.matrix;
 
 import java.util.Random;
@@ -93,9 +91,9 @@ public class SparseMatrixTest {
      * Test of size method, of class SparseMatrix.
      */
     @Test
-    public void testLength() {
-        System.out.println("length");
-        assertEquals(7, sm.length());
+    public void testNvals() {
+        System.out.println("nvals");
+        assertEquals(7, sm.size());
     }
 
     /**
@@ -121,7 +119,7 @@ public class SparseMatrixTest {
         SparseMatrix c = sm.abmm(sm);
         assertEquals(c.nrows(), 3);
         assertEquals(c.ncols(), 3);
-        assertEquals(c.length(), 9);
+        assertEquals(c.size(), 9);
         for (int i = 0; i < C.length; i++) {
             for (int j = 0; j < C[i].length; j++) {
                 assertEquals(C[i][j], c.get(i, j), 1E-7);
@@ -138,7 +136,7 @@ public class SparseMatrixTest {
         SparseMatrix c = sm.aat();
         assertEquals(c.nrows(), 3);
         assertEquals(c.ncols(), 3);
-        assertEquals(c.length(), 9);
+        assertEquals(c.size(), 9);
         for (int i = 0; i < C.length; i++) {
             for (int j = 0; j < C[i].length; j++) {
                 assertEquals(C[i][j], c.get(i, j), 1E-7);
@@ -146,9 +144,42 @@ public class SparseMatrixTest {
         }
     }
 
+    /**
+     * Load sparse matrix.
+     */
+    @SuppressWarnings("resource")
+    SparseMatrix loadMatrix(String file) {
+        int nrows, ncols;
+        int[] colIndex, rowIndex;
+        double[] data;
+
+        Scanner scanner = new Scanner(getClass().getResourceAsStream(file));
+
+        nrows = scanner.nextInt();
+        ncols = scanner.nextInt();
+        int n = scanner.nextInt();
+
+        colIndex = new int[ncols + 1];
+        rowIndex = new int[n];
+        data = new double[n];
+
+        for (int i = 0; i <= ncols; i++) {
+            colIndex[i] = scanner.nextInt() - 1;
+        }
+
+        for (int i = 0; i < n; i++) {
+            rowIndex[i] = scanner.nextInt() - 1;
+        }
+
+        for (int i = 0; i < n; i++) {
+            data[i] = scanner.nextDouble();
+        }
+
+        return new SparseMatrix(nrows, ncols, data, rowIndex, colIndex);
+    }
+
     @Test
-    public void testIteration() {
-        System.out.println("iteration");
+    public void nonZeroIterator() {
         Random rand = new Random();
         double[][] d = new double[1000][2000];
         int nonzeroCount = 10000;
@@ -170,49 +201,58 @@ public class SparseMatrixTest {
 
         // verify all values and the number of non-zeros
         AtomicInteger k = new AtomicInteger(0);
-        for (SparseMatrix.Entry e : m) {
-            assertEquals(d[e.i][e.j], e.x, 0);
-            assertEquals(d[e.i][e.j], m.get(e.i, e.j), 0);
+        m.foreachNonzero((i, j, x) -> {
+            assertEquals(d[i][j], x, 0);
+            assertEquals(d[i][j], m.get(i, j), 0);
             k.incrementAndGet();
-        }
+        });
         assertEquals(nonzeroCount, k.get());
 
         // iterate over just a few columns
         k.set(0);
-        m.iterator(100, 400).forEachRemaining(e -> {
-            assertTrue(e.j >= 100);
-            assertTrue(e.j < 400);
-            assertEquals(d[e.i][e.j], e.x, 0);
-            assertEquals(d[e.i][e.j], m.get(e.i, e.j), 0);
+        m.foreachNonzero(100, 400, (i, j, x) -> {
+            assertTrue(j >= 100);
+            assertTrue(j < 400);
+            assertEquals(d[i][j], x, 0);
+            assertEquals(d[i][j], m.get(i, j), 0);
             k.incrementAndGet();
         });
         assertEquals(limitedNonZeros, k.get());
 
         k.set(0);
-        m.nonzeros().forEach(e -> {
-            assertEquals(d[e.i][e.j], e.x, 0);
-            assertEquals(d[e.i][e.j], m.get(e.i, e.j), 0);
-            k.incrementAndGet();
-        });
+        m.nonzeros()
+                .forEach(
+                        entry -> {
+                            int i = entry.row;
+                            int j = entry.col;
+                            double x = entry.value;
+
+                            assertEquals(d[i][j], x, 0);
+                            assertEquals(d[i][j], m.get(i, j), 0);
+                            k.incrementAndGet();
+                        }
+                );
         assertEquals(nonzeroCount, k.get());
 
         k.set(0);
-        m.nonzeros(100, 400).forEach(e -> {
-            System.out.println(e);
-            assertTrue(e.j >= 100);
-            assertTrue(e.j < 400);
+        m.nonzeros(100, 400)
+                .forEach(
+                        entry -> {
+                            int col = entry.col;
 
-            assertEquals(d[e.i][e.j], e.x, 0);
-            assertEquals(d[e.i][e.j], m.get(e.i, e.j), 0);
-            k.incrementAndGet();
-        });
+                            assertTrue(col >= 100);
+                            assertTrue(col < 400);
+
+                            assertEquals(d[entry.row][col], entry.value, 0);
+                            assertEquals(d[entry.row][col], m.get(entry.row, col), 0);
+                            k.incrementAndGet();
+                        }
+                );
         assertEquals(limitedNonZeros, k.get());
     }
 
     @Test
-    public void benchmarkIterationSpeed() {
-        System.out.println("speed");
-
+    public void iterationSpeed() {
         Random rand = new Random();
         double[][] d = new double[1000][2000];
         for (int i = 0; i < 500000; i++) {
@@ -228,51 +268,28 @@ public class SparseMatrixTest {
         double t0 = System.nanoTime() / 1e9;
         double[] sum1 = new double[2000];
         for (int rep = 0; rep < 1000; rep++) {
-            m.iterator().forEachRemaining(e -> sum1[e.j] += e.x);
+            m.foreachNonzero(
+                    (i, j, x) -> sum1[j] += x
+            );
         }
         double t1 = System.nanoTime() / 1e9;
         double sum = 0;
         for (double v : sum1) {
             sum += v;
         }
-        System.out.printf("iterator: %.3f (%.2f)\n", (t1 - t0), sum);
+        System.out.printf("%.3f (%.2f)\n", (t1 - t0), sum);
 
         t0 = System.nanoTime() / 1e9;
         double[] sum2 = new double[2000];
         for (int rep = 0; rep < 1000; rep++) {
-            m.nonzeros().forEach(e -> sum2[e.j] += e.x);
+            m.nonzeros()
+                    .forEach(entry -> sum2[entry.col] += entry.value);
         }
         t1 = System.nanoTime() / 1e9;
         sum = 0;
         for (double v : sum2) {
             sum += v;
         }
-        System.out.printf("stream: %.3f (%.2f)\n", (t1 - t0), sum);
-    }
-
-    @Test(expected = Test.None.class)
-    public void testText() throws Exception {
-        System.out.println("text");
-        SparseMatrix data = SparseMatrix.text(smile.util.Paths.getTestData("matrix/08blocks.txt"));
-        assertEquals(592, data.length());
-        assertEquals(300, data.nrows());
-        assertEquals(300, data.ncols());
-        assertEquals(94.0, data.get(36, 0), 1E-7);
-        assertEquals(1.0, data.get(0, 1), 1E-7);
-        assertEquals(33.0, data.get(36, 1), 1E-7);
-        assertEquals(95.0, data.get(299, 299), 1E-7);
-    }
-
-    @Test(expected = Test.None.class)
-    public void testHarwell() throws Exception {
-        System.out.println("HB exchange format");
-        SparseMatrix data = SparseMatrix.harwell(smile.util.Paths.getTestData("matrix/5by5_rua.hb"));
-        assertEquals(13, data.length());
-        assertEquals(5, data.nrows());
-        assertEquals(5, data.ncols());
-        assertEquals(11.0, data.get(0, 0), 1E-7);
-        assertEquals(31.0, data.get(2, 0), 1E-7);
-        assertEquals(51.0, data.get(4, 0), 1E-7);
-        assertEquals(55.0, data.get(4, 4), 1E-7);
+        System.out.printf("%.3f (%.2f)\n", (t1 - t0), sum);
     }
 }
