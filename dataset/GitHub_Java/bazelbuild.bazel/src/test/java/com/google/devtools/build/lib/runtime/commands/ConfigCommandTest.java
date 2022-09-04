@@ -85,7 +85,6 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
     params.addAll(TestConstants.PRODUCT_SPECIFIC_FLAGS);
     params.add("//test:buildme");
     params.add("--nobuild"); // Execution phase isn't necessary to collect configurations.
-    params.add("--trim_test_configuration"); // TODO(twigg): Remove once default.
     Collections.addAll(params, args);
     dispatcher.exec(params, "my client", outErr);
   }
@@ -116,7 +115,7 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
             .filter(fragment -> fragment.name.endsWith(fragmentOptions))
             .flatMap(fragment -> fragment.options.entrySet().stream())
             .filter(setting -> setting.getKey().equals(optionName))
-            .map(Map.Entry::getValue)
+            .map(entry -> entry.getValue())
             .collect(Collectors.toList());
     if (ans.size() > 1) {
       throw new NoSuchElementException(
@@ -140,7 +139,7 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
 
   /** Converts a list of {@code a.b.d} strings to {@code d} form. * */
   private static List<String> getBaseNames(List<String> list) {
-    return list.stream().map(ConfigCommandTest::getBaseName).collect(Collectors.toList());
+    return list.stream().map(entry -> getBaseName(entry)).collect(Collectors.toList());
   }
 
   @Test
@@ -148,10 +147,10 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
     analyzeTarget();
     JsonObject fullJson =
         JsonParser.parseString(callConfigCommand().outAsLatin1()).getAsJsonObject();
-    // Should be: target configuration, target configuration without test, host configuration
+    // Should be one ID for the target configuration and one for the host.
     assertThat(fullJson).isNotNull();
     assertThat(fullJson.has("configuration-IDs")).isTrue();
-    assertThat(fullJson.get("configuration-IDs").getAsJsonArray().size()).isEqualTo(3);
+    assertThat(fullJson.get("configuration-IDs").getAsJsonArray().size()).isEqualTo(2);
   }
 
   @Test
@@ -251,14 +250,13 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
       assertThat(config).isNotNull();
       numConfigs++;
     }
-    assertThat(numConfigs).isEqualTo(3); // Host + target + target w/o test.
+    assertThat(numConfigs).isEqualTo(2); // Host + target.
   }
 
   @Test
   public void compareConfigs() throws Exception {
-    // Do not trim test configuration for now to make 'finding' the configurations easier.
-    analyzeTarget("--action_env=a=1", "--notrim_test_configuration");
-    analyzeTarget("--action_env=b=2", "--notrim_test_configuration");
+    analyzeTarget("--action_env=a=1");
+    analyzeTarget("--action_env=b=2");
     String targetConfig1Hash = null;
     String targetConfig2Hash = null;
 
@@ -304,9 +302,8 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
 
   @Test
   public void compareConfigsHashPrefix() throws Exception {
-    // Do not trim test configuration for now to make 'finding' the configurations easier.
-    analyzeTarget("--action_env=a=1", "--notrim_test_configuration");
-    analyzeTarget("--action_env=b=2", "--notrim_test_configuration");
+    analyzeTarget("--action_env=a=1");
+    analyzeTarget("--action_env=b=2");
     String targetConfig1Hash = null;
     String targetConfig2Hash = null;
 
@@ -345,9 +342,8 @@ public class ConfigCommandTest extends BuildIntegrationTestCase {
 
   @Test
   public void compareConfigs_hostConfig() throws Exception {
-    // Do not trim test configuration for now to make 'finding' the configurations easier.
-    analyzeTarget("--action_env=a=1", "--notrim_test_configuration");
-    analyzeTarget("--action_env=b=2", "--notrim_test_configuration");
+    analyzeTarget("--action_env=a=1");
+    analyzeTarget("--action_env=b=2");
     String targetConfigHash = null;
 
     // Find a target configuration hash.
