@@ -229,7 +229,7 @@ public final class JavaConfiguration extends Fragment {
     this.pluginList = ImmutableList.copyOf(javaOptions.pluginList);
   }
 
-  @AutoCodec.Instantiator
+  @AutoCodec.Constructor
   JavaConfiguration(
       ImmutableList<String> commandLineJavacFlags,
       Label javaLauncherLabel,
