@@ -17,9 +17,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
 /**
@@ -163,44 +163,34 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   }
 
   @Override
-  public final void visitAllLabels(BiConsumer<Attribute, Label> consumer) {
-    visitLabels(DependencyFilter.ALL_DEPS, consumer);
+  public Collection<DepEdge> visitLabels() {
+    return visitLabels(ruleClass.getAttributes());
   }
 
   @Override
-  public final void visitLabels(Attribute attribute, Consumer<Label> consumer) {
-    visitLabels(
-        ImmutableList.of(attribute),
-        DependencyFilter.ALL_DEPS,
-        (attr, label) -> consumer.accept(label));
+  public Collection<DepEdge> visitLabels(Attribute attribute) {
+    return visitLabels(ImmutableList.of(attribute));
   }
 
-  @Override
-  public final void visitLabels(DependencyFilter filter, BiConsumer<Attribute, Label> consumer) {
-    visitLabels(ruleClass.getAttributes(), filter, consumer);
-  }
-
-  private void visitLabels(
-      List<Attribute> attributes, DependencyFilter filter, BiConsumer<Attribute, Label> consumer) {
+  private Collection<DepEdge> visitLabels(Iterable<Attribute> attributes) {
+    List<DepEdge> edges = new ArrayList<>();
     Type.LabelVisitor visitor =
         (label, attribute) -> {
           if (label != null) {
             Label absoluteLabel = ruleLabel.resolveRepositoryRelative(label);
-            consumer.accept(attribute, absoluteLabel);
+            edges.add(AttributeMap.DepEdge.create(absoluteLabel, attribute));
           }
         };
     for (Attribute attribute : attributes) {
       Type<?> type = attribute.getType();
       // TODO(bazel-team): clean up the typing / visitation interface so we don't have to
       // special-case these types.
-      if (type != BuildType.OUTPUT
-          && type != BuildType.OUTPUT_LIST
-          && type != BuildType.NODEP_LABEL
-          && type != BuildType.NODEP_LABEL_LIST
-          && filter.test(rule, attribute)) {
+      if (type != BuildType.OUTPUT && type != BuildType.OUTPUT_LIST
+          && type != BuildType.NODEP_LABEL && type != BuildType.NODEP_LABEL_LIST) {
         visitLabels(attribute, type, visitor);
       }
     }
+    return edges;
   }
 
   /** Visits all labels reachable from the given attribute. */
