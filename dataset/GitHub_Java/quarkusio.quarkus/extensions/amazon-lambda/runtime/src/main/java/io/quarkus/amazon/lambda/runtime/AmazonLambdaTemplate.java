@@ -5,27 +5,18 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.amazonaws.services.lambda.runtime.ClientContext;
-import com.amazonaws.services.lambda.runtime.CognitoIdentity;
-import org.jboss.logging.Logger;
-
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
 
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.Application;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Template;
 
 @Template
 public class AmazonLambdaTemplate {
-
-    private static final Logger log = Logger.getLogger(AmazonLambdaTemplate.class);
-
-    protected static final String QUARKUS_INTERNAL_AWS_LAMBDA_TEST_API = "quarkus-internal.aws-lambda.test-api";
 
     public void start(Class<? extends RequestHandler> handlerClass,
             ShutdownContext context,
@@ -36,9 +27,6 @@ public class AmazonLambdaTemplate {
         final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         AtomicBoolean running = new AtomicBoolean(true);
         ObjectReader objectReader = mapper.readerFor(handlerType.getValue());
-        ObjectReader cognitoIdReader = mapper.readerFor(CognitoIdentity.class);
-        ObjectReader clientCtxReader = mapper.readerFor(ClientContext.class);
-
         context.addShutdownTask(new Runnable() {
             @Override
             public void run() {
@@ -52,7 +40,7 @@ public class AmazonLambdaTemplate {
 
                 try {
                     URL requestUrl = new URL(
-                            "http://" + runtimeApi() + "/2018-06-01/runtime/invocation/next");
+                            "http://" + System.getenv("AWS_LAMBDA_RUNTIME_API") + "/2018-06-01/runtime/invocation/next");
                     while (running.get()) {
 
                         HttpURLConnection requestConnection = (HttpURLConnection) requestUrl.openConnection();
@@ -61,13 +49,11 @@ public class AmazonLambdaTemplate {
                             Object response;
                             try {
                                 Object val = objectReader.readValue(requestConnection.getInputStream());
-                                response = handler.handleRequest(val,
-                                        new AmazonLambdaContext(requestConnection, cognitoIdReader, clientCtxReader));
+                                response = handler.handleRequest(val, null);
                             } catch (Exception e) {
-                                log.error("Failed to run lambda", e);
                                 FunctionError fe = new FunctionError(e.getClass().getName(), e.getMessage());
                                 URL responseUrl = new URL(
-                                        "http://" + runtimeApi() + "/2018-06-01/runtime/invocation/"
+                                        "http://" + System.getenv("AWS_LAMBDA_RUNTIME_API") + "/2018-06-01/runtime/invocation/"
                                                 + requestId + "/error");
 
                                 HttpURLConnection responseConnection = (HttpURLConnection) responseUrl.openConnection();
@@ -82,7 +68,7 @@ public class AmazonLambdaTemplate {
                             }
 
                             URL responseUrl = new URL(
-                                    "http://" + runtimeApi() + "/2018-06-01/runtime/invocation/"
+                                    "http://" + System.getenv("AWS_LAMBDA_RUNTIME_API") + "/2018-06-01/runtime/invocation/"
                                             + requestId + "/response");
 
                             HttpURLConnection responseConnection = (HttpURLConnection) responseUrl.openConnection();
@@ -92,13 +78,7 @@ public class AmazonLambdaTemplate {
                             while (responseConnection.getInputStream().read() != -1) {
 
                             }
-                        } catch (Exception e) {
-                            log.error("Error running lambda", e);
-                            Application app = Application.currentApplication();
-                            if (app != null) {
-                                app.stop();
-                            }
-                            return;
+
                         } finally {
                             requestConnection.getInputStream().close();
                         }
@@ -107,9 +87,8 @@ public class AmazonLambdaTemplate {
 
                 } catch (Exception e) {
                     try {
-                        log.error("Lambda init error", e);
                         URL errorUrl = new URL(
-                                "http://" + runtimeApi() + "/2018-06-01/runtime/init/error");
+                                "http://" + System.getenv("AWS_LAMBDA_RUNTIME_API") + "/runtime/init/error");
                         HttpURLConnection responseConnection = (HttpURLConnection) errorUrl.openConnection();
                         responseConnection.setDoOutput(true);
                         responseConnection.setRequestMethod("POST");
@@ -119,27 +98,15 @@ public class AmazonLambdaTemplate {
 
                         }
                     } catch (Exception ex) {
-                        log.error("Failed to report init error", ex);
+                        ex.printStackTrace();
                     } finally {
-                        //our main loop is done, time to shutdown
-                        Application app = Application.currentApplication();
-                        if (app != null) {
-                            app.stop();
-                        }
+                        System.exit(1);
                     }
                 }
             }
         }, "Lambda Thread");
         t.start();
 
-    }
-
-    private String runtimeApi() {
-        String testApi = System.getProperty(QUARKUS_INTERNAL_AWS_LAMBDA_TEST_API);
-        if (testApi != null) {
-            return testApi;
-        }
-        return System.getenv("AWS_LAMBDA_RUNTIME_API");
     }
 
     public RuntimeValue<Class<?>> discoverParameterTypes(Class<? extends RequestHandler> handlerClass) {
