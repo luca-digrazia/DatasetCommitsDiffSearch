@@ -25,7 +25,6 @@ import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.io.IOException;
 import java.util.Collections;
@@ -52,7 +51,6 @@ public class RolesService {
         return Collections.emptySet();
     }
 
-    @Nullable
     public RoleResponse load(String roleName) {
         try {
             return api.path(routes.RolesResource().read(roleName), RoleResponse.class).execute();
@@ -62,7 +60,6 @@ public class RolesService {
         return null;
     }
 
-    @Nullable
     public RoleResponse create(RoleResponse newRole) {
         try {
             return api.path(routes.RolesResource().create(), RoleResponse.class).body(newRole).execute();
@@ -72,7 +69,6 @@ public class RolesService {
         }
     }
 
-    @Nullable
     public RoleMembershipResponse getMembers(String roleName) {
         try {
             return api.path(routes.RolesResource().getMembers(roleName), RoleMembershipResponse.class).execute();
@@ -102,7 +98,6 @@ public class RolesService {
         }
     }
 
-    @Nullable
     public RoleResponse updateRole(String oldRoleName, RoleResponse role) {
         try {
             final RoleResponse response = api.path(routes.RolesResource().update(oldRoleName), RoleResponse.class).body(
