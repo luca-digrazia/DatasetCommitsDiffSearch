@@ -15,16 +15,16 @@
 package com.google.devtools.build.lib.skylarkbuildapi;
 
 import com.google.devtools.build.lib.collect.nestedset.Depset;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.ParamType;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.ParamType;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
-import net.starlark.java.annot.StarlarkMethod;
 
 /** Command line args module. */
 @StarlarkBuiltin(
@@ -111,7 +111,7 @@ import net.starlark.java.annot.StarlarkMethod;
             + ")\n"
             + "</pre>")
 public interface CommandLineArgsApi extends StarlarkValue {
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "add",
       doc = "Appends an argument to this command line.",
       parameters = {
@@ -149,7 +149,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
       Object argNameOrValue, Object value, Object format, StarlarkThread thread)
       throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "add_all",
       doc =
           "Appends multiple arguments to this command line. For depsets, the items are "
@@ -209,14 +209,9 @@ public interface CommandLineArgsApi extends StarlarkValue {
                     + "processed before appending. If this param is not provided, the standard "
                     + "conversion is used."
                     + ""
-                    + "<p>The function is passed either one or two positional arguments: the item "
-                    + "to convert, followed by an optional "
-                    + "<a href='DirectoryExpander.html'><code>DirectoryExpander"
-                    + "</code></a>. The second argument will be passed only if the supplied "
-                    + "function is user-defined (not built-in) and declares more than one "
-                    + "parameter."
-                    + "<p>The return value's type depends on how many arguments are to be produced "
-                    + "for the item:"
+                    + "<p>The function takes in the item as a positional parameter and must have "
+                    + "no other parameters. The return value's type depends on how many arguments "
+                    + "are to be produced for the item:"
                     + "<ul>"
                     + "<li>In the common case when each item turns into one string, the function "
                     + "    should return that string."
@@ -228,13 +223,6 @@ public interface CommandLineArgsApi extends StarlarkValue {
                     + "Returning a single string or <code>None</code> has the same effect as "
                     + "returning a list of length 1 or length 0 respectively. However, it is more "
                     + "efficient and readable to avoid creating a list where it is not needed."
-                    + ""
-                    + "<p>Ordinarily, items that are directories are automatically expanded to "
-                    + "their contents when <code>expand_directories=True</code> is set. However, "
-                    + "this will not expand directories contained inside other values -- for "
-                    + "instance, when the items are structs that have directories as fields. In "
-                    + "this situation, the <code>DirectoryExpander</code> argument can be applied "
-                    + "to manually obtain the files of a given directory."
                     + ""
                     + "<p><i>Warning:</i> <a href='globals.html#print'><code>print()</code></a> "
                     + "statements that are executed during the call to <code>map_each</code> will "
@@ -320,7 +308,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
       StarlarkThread thread)
       throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "add_joined",
       doc =
           "Appends an argument to this command line by concatenating together multiple values "
@@ -436,7 +424,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
       StarlarkThread thread)
       throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "use_param_file",
       doc =
           "Spills the args to a params file, replacing them with a pointer to the param file. "
@@ -471,7 +459,7 @@ public interface CommandLineArgsApi extends StarlarkValue {
       })
   CommandLineArgsApi useParamsFile(String paramFileArg, Boolean useAlways) throws EvalException;
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "set_param_file_format",
       doc = "Sets the format of the param file when written to disk",
       parameters = {
