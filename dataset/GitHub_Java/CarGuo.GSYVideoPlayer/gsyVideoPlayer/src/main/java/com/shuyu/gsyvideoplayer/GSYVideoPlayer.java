@@ -488,14 +488,10 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
      **/
     @Override
     protected void setSmallVideoTextureView(View.OnTouchListener onTouchListener) {
-        mTextureViewContainer.setOnTouchListener(onTouchListener);
+        mTextureView.setOnTouchListener(onTouchListener);
         mProgressBar.setOnTouchListener(null);
         mFullscreenButton.setOnTouchListener(null);
-        mFullscreenButton.setVisibility(INVISIBLE);
-        mProgressBar.setVisibility(INVISIBLE);
-        mCurrentTimeTextView.setVisibility(INVISIBLE);
-        mTotalTimeTextView.setVisibility(INVISIBLE);
-        mTextureViewContainer.setOnClickListener(null);
+        mTextureView.setOnClickListener(null);
         mSmallClose.setVisibility(VISIBLE);
         mSmallClose.setOnClickListener(new OnClickListener() {
             @Override
