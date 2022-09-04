@@ -15,12 +15,12 @@
  */
 package com.googlecode.androidannotations.processing;
 
-import static com.sun.codemodel.JExpr.invoke;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.lang.annotation.Annotation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
@@ -28,6 +28,7 @@ import javax.lang.model.element.TypeElement;
 import com.googlecode.androidannotations.annotations.EViewGroup;
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
+import com.googlecode.androidannotations.helper.AnnotationHelper;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
@@ -43,7 +44,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 
-public class EViewGroupProcessor implements ElementProcessor {
+public class EViewGroupProcessor extends AnnotationHelper implements ElementProcessor {
 
 	private static final String ALREADY_INFLATED_COMMENT = "" // +
 			+ "The mAlreadyInflated_ hack is needed because of an Android bug\n" // +
@@ -63,7 +64,8 @@ public class EViewGroupProcessor implements ElementProcessor {
 
 	private final APTCodeModelHelper codeModelHelper;
 
-	public EViewGroupProcessor(IRClass rClass) {
+	public EViewGroupProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
+		super(processingEnv);
 		this.rClass = rClass;
 		codeModelHelper = new APTCodeModelHelper();
 	}
@@ -132,7 +134,7 @@ public class EViewGroupProcessor implements ElementProcessor {
 		if (layoutIdValue != Id.DEFAULT_VALUE) {
 			IRInnerClass rInnerClass = rClass.get(Res.LAYOUT);
 			contentViewId = rInnerClass.getIdStaticRef(layoutIdValue, holder);
-			ifNotInflated.invoke("inflate").arg(invoke("getContext")).arg(contentViewId).arg(JExpr._this());
+			ifNotInflated.invoke("inflate").arg(JExpr.invoke("getContext")).arg(contentViewId).arg(JExpr._this());
 		}
 		ifNotInflated.invoke(holder.afterSetContentView);
 
