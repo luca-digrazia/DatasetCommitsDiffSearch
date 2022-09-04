@@ -22,7 +22,6 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
-import org.jboss.protean.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 
 final class Beans {
 
@@ -43,7 +42,7 @@ final class Beans {
         boolean isAlternative = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
 
-        for (AnnotationInstance annotation : beanDeployment.getAnnotations(beanClass)) {
+        for (AnnotationInstance annotation : beanClass.classAnnotations()) {
             if (beanDeployment.getQualifier(annotation.name()) != null) {
                 qualifiers.add(annotation);
             } else if (annotation.name().equals(DotNames.ALTERNATIVE)) {
@@ -116,7 +115,7 @@ final class Beans {
             alternativePriority = declaringBean.getAlternativePriority();
             if (alternativePriority == null) {
                 // Declaring bean itself does not have to be an alternive and can only have @Priority
-                alternativePriority = declaringBean.getTarget().get().asClass().classAnnotations().stream().filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
+                alternativePriority = declaringBean.getTarget().asClass().classAnnotations().stream().filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
                         .map(a -> a.value().asInt()).orElse(null);
             }
         }
@@ -167,7 +166,7 @@ final class Beans {
             alternativePriority = declaringBean.getAlternativePriority();
             if (alternativePriority == null) {
                 // Declaring bean itself does not have to be an alternive and can only have @Priority
-                alternativePriority = declaringBean.getTarget().get().asClass().classAnnotations().stream().filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
+                alternativePriority = declaringBean.getTarget().asClass().classAnnotations().stream().filter(a -> a.name().equals(DotNames.PRIORITY)).findAny()
                         .map(a -> a.value().asInt()).orElse(null);
             }
         }
@@ -206,21 +205,20 @@ final class Beans {
         return false;
     }
 
-    static boolean matches(BeanInfo bean, TypeAndQualifiers typeAndQualifiers) {
+    static boolean matches(BeanInfo bean, InjectionPointInfo injectionPoint) {
         // Bean has all the required qualifiers
-        for (AnnotationInstance requiredQualifier : typeAndQualifiers.qualifiers) {
+        for (AnnotationInstance requiredQualifier : injectionPoint.requiredQualifiers) {
             if (!hasQualifier(bean, requiredQualifier)) {
                 return false;
             }
         }
         // Bean has a bean type that matches the required type
-        return matchesType(bean, typeAndQualifiers.type);
+        return matchesType(bean, injectionPoint.requiredType);
     }
 
     static boolean matchesType(BeanInfo bean, Type requiredType) {
-        BeanResolver beanResolver = bean.getDeployment().getBeanResolver();
         for (Type beanType : bean.getTypes()) {
-            if (beanResolver.matches(requiredType, beanType)) {
+            if (bean.getDeployment().getBeanResolver().matches(requiredType, beanType)) {
                 return true;
             }
         }
@@ -232,8 +230,13 @@ final class Beans {
             // Skip built-in beans
             return;
         }
-        List<BeanInfo> resolved = deployment.getBeanResolver().resolve(injectionPoint.getTypeAndQualifiers());
-        BeanInfo selected = null;
+        List<BeanInfo> resolved = new ArrayList<>();
+        for (BeanInfo b : deployment.getBeans()) {
+            if (matches(b, injectionPoint)) {
+                resolved.add(b);
+            }
+        }
+        BeanInfo selected;
         if (resolved.isEmpty()) {
             throw new UnsatisfiedResolutionException(injectionPoint + " on " + bean);
         } else if (resolved.size() > 1) {
@@ -248,19 +251,9 @@ final class Beans {
             if (resolvedAmbiguity.size() == 1) {
                 selected = resolvedAmbiguity.get(0);
             } else if (resolvedAmbiguity.size() > 1) {
-                // Keep only the highest priorities
                 resolvedAmbiguity.sort(Beans::compareAlternativeBeans);
-                Integer highest = getAlternativePriority(resolvedAmbiguity.get(0));
-                for (Iterator<BeanInfo> iterator = resolvedAmbiguity.iterator(); iterator.hasNext();) {
-                    if (!highest.equals(getAlternativePriority(iterator.next()))) {
-                        iterator.remove();
-                    }
-                }
-                if (resolved.size() == 1) {
-                    selected = resolvedAmbiguity.get(0);
-                }
-            }
-            if (selected == null) {
+                selected = resolvedAmbiguity.get(0);
+            } else {
                 throw new AmbiguousResolutionException(
                         injectionPoint + " on " + bean + "\nBeans:\n" + resolved.stream().map(Object::toString).collect(Collectors.joining("\n")));
             }
@@ -268,10 +261,6 @@ final class Beans {
             selected = resolved.get(0);
         }
         injectionPoint.resolve(selected);
-    }
-
-    private static Integer getAlternativePriority(BeanInfo bean) {
-        return bean.getDeclaringBean() != null ? bean.getDeclaringBean().getAlternativePriority() : bean.getAlternativePriority();
     }
 
     private static int compareAlternativeBeans(BeanInfo bean1, BeanInfo bean2) {
@@ -286,12 +275,9 @@ final class Beans {
     }
 
     static boolean hasQualifier(ClassInfo requiredInfo, AnnotationInstance required, Collection<AnnotationInstance> qualifiers) {
-        List<AnnotationValue> binding = new ArrayList<>();
-        for (AnnotationValue val : required.values()) {
-            if (!requiredInfo.method(val.name()).hasAnnotation(DotNames.NONBINDING)) {
-                binding.add(val);
-            }
-        }
+        List<AnnotationValue> binding = required.values().stream().filter(v -> {
+            return !requiredInfo.method(v.name()).hasAnnotation(DotNames.NONBINDING);
+        }).collect(Collectors.toList());
         for (AnnotationInstance qualifier : qualifiers) {
             if (required.name().equals(qualifier.name())) {
                 // Must have the same annotation member value for each member which is not annotated @Nonbinding
