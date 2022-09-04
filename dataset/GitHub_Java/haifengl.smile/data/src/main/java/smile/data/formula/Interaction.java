@@ -22,59 +22,42 @@ import java.util.stream.Collectors;
 import smile.data.type.StructType;
 
 /**
- * Factor crossing. The crossing of a*b interpreted as a+b+a:b.
- * The ^ operator indicates crossing to the specified degree.
- * For example (a+b+c)^2 is identical to (a+b+c)*(a+b+c) which
- * in turn expands to a formula containing the main effects
- * for a, b and c together with their second-order interactions.
+ * The interaction of all the factors appearing in the term.
+ * The interaction of one factor with another is that each
+ * of its levels is tested in each level of the other factor.
+ * For example, in a test of influences on crop yield, a watering
+ * regime factor (W: wet and dry) is crossed with a sowing density
+ * factor (D: high and low) when the response to the wet regime
+ * is tested at both high and low sowing density, and so is the
+ * response to the dry regime. If each of the four combinations
+ * of levels has replicate observations, then a cross-factored
+ * analysis can test for an interaction between the two treatment
+ * factors in their effect on the response.
  *
  * @author Haifeng Li
  */
-class FactorCrossing implements HyperTerm {
-    /** The order of interactions. */
-    private int order;
-    /** The children factors. */
+class Interaction implements HyperTerm {
+    /** The factors of interaction. */
     private List<String> factors;
     /** The terms after binding. */
-    private List<Term> terms;
+    private List<OneHotEncoderInteraction> terms;
 
     /**
      * Constructor.
      *
-     * @param factors the factors to be crossed.
+     * @param factors the factors of interaction.
      */
-    @SafeVarargs
-    public FactorCrossing(String... factors) {
-        this(factors.length, factors);
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param order the order of interactions.
-     * @param factors the factors to be crossed.
-     */
-    @SafeVarargs
-    public FactorCrossing(int order, String... factors) {
+    public Interaction(String... factors) {
         if (factors.length < 2) {
-            throw new IllegalArgumentException("Cross constructor takes at least two factors");
+            throw new IllegalArgumentException("Interaction() takes at least two factors");
         }
 
-        if (order < 2 || order > factors.length) {
-            throw new IllegalArgumentException("Invalid order of interactions: " + order);
-        }
-
-        this.order = order;
         this.factors = Arrays.asList(factors);
     }
 
     @Override
     public String toString() {
-        if (order < factors.size()) {
-            return factors.stream().collect(Collectors.joining(" + ", "(", ")^"+order));
-        } else {
-            return factors.stream().collect(Collectors.joining(" x ", "(", ")"));
-        }
+        return factors.stream().collect(Collectors.joining(":"));
     }
 
     @Override
@@ -94,8 +77,8 @@ class FactorCrossing implements HyperTerm {
         OneHot factor = new OneHot(factors.get(factors.size() - 1));
         factor.bind(schema);
         encoders.addAll(factor.terms().stream()
-                        .map(term -> Collections.singletonList(term))
-                        .collect(Collectors.toList())
+                .map(term -> Collections.singletonList(term))
+                .collect(Collectors.toList())
         );
 
         for (int i = factors.size() - 2; i >= 0; i--) {
@@ -120,22 +103,9 @@ class FactorCrossing implements HyperTerm {
             );
         }
 
-        // add single factor terms
-        terms = factors.stream()
-                .map(name -> {
-                    Variable column = new Variable(name);
-                    column.bind(schema);
-                    return column;
-                })
+        terms = encoders.stream()
+                .filter(list -> list.size() == factors.size())
+                .map(list -> new OneHotEncoderInteraction(list))
                 .collect(Collectors.toList());
-
-        // add interactions in ascending order
-        for (int i = 2; i <= order; i++) {
-            final int size = i;
-            terms.addAll(encoders.stream()
-                    .filter(list -> list.size() == size)
-                    .map(list -> new OneHotEncoderInteraction(list))
-                    .collect(Collectors.toList()));
-        }
     }
 }

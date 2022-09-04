@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.data.formula;
 
@@ -26,11 +26,7 @@ import smile.data.type.DataType;
 import smile.data.type.DataTypes;
 import smile.data.type.StructType;
 
-/**
- * The interaction of one-hot term.
- *
- * @author Haifeng Li
- */
+/** The interaction of one-hot term. */
 class OneHotEncoderInteraction extends AbstractTerm {
     /** The one-hot encoders. */
     List<OneHotEncoder> encoders;
