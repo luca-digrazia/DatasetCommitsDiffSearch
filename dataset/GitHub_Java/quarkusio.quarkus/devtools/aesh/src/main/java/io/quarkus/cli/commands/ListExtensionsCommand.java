@@ -1,18 +1,14 @@
 package io.quarkus.cli.commands;
 
-import java.io.File;
-import java.io.IOException;
-
 import org.aesh.command.Command;
 import org.aesh.command.CommandDefinition;
 import org.aesh.command.CommandException;
 import org.aesh.command.CommandResult;
 import org.aesh.command.invocation.CommandInvocation;
 import org.aesh.command.option.Option;
-import org.aesh.io.Resource;
 
-import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.generators.BuildTool;
+import io.quarkus.dependencies.Extension;
+import io.quarkus.maven.utilities.MojoUtils;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -23,36 +19,24 @@ public class ListExtensionsCommand implements Command<CommandInvocation> {
     @Option(shortName = 'h', hasValue = false)
     private boolean help;
 
-    @Option(shortName = 'a', hasValue = false, description = "Display all extensions or just the installable.")
-    private boolean all = false;
+    @Option(shortName = 'n', hasValue = false, description = "Only display the extension names")
+    private boolean name;
 
-    @Option(shortName = 'f', hasValue = true, description = "Select the output format among 'name' (display the name only), 'concise' (display name and description) and 'full' (concise format and version related columns).")
-    private String format = "concise";
-
-    @Option(shortName = 's', hasValue = true, description = "Search filter on extension list. The format is based on Java Pattern.")
-    private String searchPattern;
-
-    @Option(shortName = 'p', description = "path to the project")
-    private Resource path;
+    @Option(shortName = 'a', hasValue = false, description = "Display name, group-id, artifact-id and version (default behaviour)")
+    private boolean all;
 
     public CommandResult execute(CommandInvocation commandInvocation) throws CommandException, InterruptedException {
         if (help) {
             commandInvocation.println(commandInvocation.getHelpInfo("quarkus list-extensions"));
+        } else if (name) {
+            for (Extension ext : MojoUtils.loadExtensions()) {
+                commandInvocation.println(ext.getName());
+            }
+
         } else {
-            try {
-                BuildTool builtTool = BuildTool.MAVEN;
-                FileProjectWriter writer = null;
-                if (path != null) {
-                    File projectDirectory = new File(path.getAbsolutePath());
-                    if (new File(projectDirectory, "build.gradle").exists()
-                            || new File(projectDirectory, "build.gradle.kts").exists()) {
-                        builtTool = BuildTool.GRADLE;
-                    }
-                    writer = new FileProjectWriter(projectDirectory);
-                }
-                new ListExtensions(writer, builtTool).listExtensions(all, format, searchPattern);
-            } catch (IOException e) {
-                throw new CommandException("Unable to list extensions", e);
+            for (Extension ext : MojoUtils.loadExtensions()) {
+                commandInvocation.println(
+                        ext.getName() + " (" + ext.getGroupId() + ":" + ext.getArtifactId() + ":" + ext.getVersion() + ")");
             }
         }
         return CommandResult.SUCCESS;
