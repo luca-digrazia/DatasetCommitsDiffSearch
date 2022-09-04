@@ -32,14 +32,14 @@ import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
+import io.quarkus.arc.deployment.BeanDeploymentValidatorBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
-import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
-import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.AnnotationsTransformer;
+import io.quarkus.arc.processor.BeanDeploymentValidator;
+import io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext;
 import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -125,64 +125,66 @@ public class SchedulerProcessor {
     }
 
     @BuildStep
-    void validateBeanDeployment(
-            ValidationPhaseBuildItem validationPhase,
-            BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods,
-            BuildProducer<ValidationErrorBuildItem> errors) {
+    BeanDeploymentValidatorBuildItem beanDeploymentValidator(
+            BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods) {
 
-        AnnotationStore annotationStore = validationPhase.getContext().get(BuildExtension.Key.ANNOTATION_STORE);
+        return new BeanDeploymentValidatorBuildItem(new BeanDeploymentValidator() {
 
-        // We need to collect all business methods annotated with @Scheduled first
-        for (BeanInfo bean : validationPhase.getContext().get(BuildExtension.Key.BEANS)) {
-            if (bean.isClassBean()) {
-                // TODO: inherited business methods?
-                for (MethodInfo method : bean.getTarget().get().asClass().methods()) {
+            @Override
+            public void validate(ValidationContext validationContext) {
 
-                    List<AnnotationInstance> schedules;
+                AnnotationStore annotationStore = validationContext.get(Key.ANNOTATION_STORE);
 
-                    AnnotationInstance scheduledAnnotation = annotationStore.getAnnotation(method, SCHEDULED_NAME);
-                    if (scheduledAnnotation != null) {
-                        schedules = Collections.singletonList(scheduledAnnotation);
-                    } else {
-                        AnnotationInstance scheduledsAnnotation = annotationStore.getAnnotation(method, SCHEDULES_NAME);
-                        if (scheduledsAnnotation != null) {
-                            schedules = new ArrayList<>();
-                            for (AnnotationInstance scheduledInstance : scheduledsAnnotation.value().asNestedArray()) {
-                                schedules.add(scheduledInstance);
+                // We need to collect all business methods annotated with @Scheduled first
+                for (BeanInfo bean : validationContext.get(Key.BEANS)) {
+                    if (bean.isClassBean()) {
+                        // TODO: inherited business methods?
+                        for (MethodInfo method : bean.getTarget().get().asClass().methods()) {
+
+                            List<AnnotationInstance> schedules;
+
+                            AnnotationInstance scheduledAnnotation = annotationStore.getAnnotation(method, SCHEDULED_NAME);
+                            if (scheduledAnnotation != null) {
+                                schedules = Collections.singletonList(scheduledAnnotation);
+                            } else {
+                                AnnotationInstance scheduledsAnnotation = annotationStore.getAnnotation(method, SCHEDULES_NAME);
+                                if (scheduledsAnnotation != null) {
+                                    schedules = new ArrayList<>();
+                                    for (AnnotationInstance scheduledInstance : scheduledsAnnotation.value().asNestedArray()) {
+                                        schedules.add(scheduledInstance);
+                                    }
+                                } else {
+                                    schedules = null;
+                                }
                             }
-                        } else {
-                            schedules = null;
-                        }
-                    }
 
-                    if (schedules != null) {
-                        // Validate method params and return type
-                        List<Type> params = method.parameters();
-                        if (params.size() > 1
-                                || (params.size() == 1 && !params.get(0).equals(SCHEDULED_EXECUTION_TYPE))) {
-                            throw new IllegalStateException(String.format(
-                                    "Invalid scheduled business method parameters %s [method: %s, bean: %s]", params,
-                                    method, bean));
-                        }
-                        if (!method.returnType().kind().equals(Type.Kind.VOID)) {
-                            throw new IllegalStateException(
-                                    String.format("Scheduled business method must return void [method: %s, bean: %s]",
+                            if (schedules != null) {
+                                // Validate method params and return type
+                                List<Type> params = method.parameters();
+                                if (params.size() > 1
+                                        || (params.size() == 1 && !params.get(0).equals(SCHEDULED_EXECUTION_TYPE))) {
+                                    throw new IllegalStateException(String.format(
+                                            "Invalid scheduled business method parameters %s [method: %s, bean: %s]", params,
                                             method, bean));
-                        }
-                        // Validate cron() and every() expressions
-                        for (AnnotationInstance scheduled : schedules) {
-                            Throwable error = validateScheduled(scheduled);
-                            if (error != null) {
-                                errors.produce(new ValidationErrorBuildItem(error));
+                                }
+                                if (!method.returnType().kind().equals(Type.Kind.VOID)) {
+                                    throw new IllegalStateException(
+                                            String.format("Scheduled business method must return void [method: %s, bean: %s]",
+                                                    method, bean));
+                                }
+                                // Validate cron() and every() expressions
+                                for (AnnotationInstance scheduled : schedules) {
+                                    validateScheduled(validationContext, scheduled);
+                                }
+                                scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(bean, method, schedules));
+                                LOGGER.debugf("Found scheduled business method %s declared on %s", method, bean);
                             }
                         }
-                        scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(bean, method, schedules));
-                        LOGGER.debugf("Found scheduled business method %s declared on %s", method, bean);
+
                     }
                 }
-
             }
-        }
+        });
     }
 
     @BuildStep
@@ -214,7 +216,7 @@ public class SchedulerProcessor {
             config.put(SchedulerDeploymentRecorder.INVOKER_KEY, invokerClass);
             List<Scheduled> schedules = new ArrayList<>();
             for (AnnotationInstance scheduled : businessMethod.getSchedules()) {
-                schedules.add(annotationProxy.builder(scheduled, Scheduled.class).build(classOutput));
+                schedules.add(annotationProxy.from(scheduled, Scheduled.class));
             }
             config.put(SchedulerDeploymentRecorder.SCHEDULES_KEY, schedules);
             config.put(SchedulerDeploymentRecorder.DESC_KEY,
@@ -303,25 +305,26 @@ public class SchedulerProcessor {
         return generatedName.replace('/', '.');
     }
 
-    private Throwable validateScheduled(AnnotationInstance schedule) {
+    private void validateScheduled(ValidationContext validationContext, AnnotationInstance schedule) {
         AnnotationValue cronValue = schedule.value("cron");
         if (cronValue != null && !cronValue.asString().trim().isEmpty()) {
             String cron = cronValue.asString().trim();
             if (SchedulerConfiguration.isConfigValue(cron)) {
                 // Don't validate config property
-                return null;
+                return;
             }
             try {
                 new CronExpression(cron);
             } catch (ParseException e) {
-                return new IllegalStateException("Invalid cron() expression on: " + schedule, e);
+                validationContext
+                        .addDeploymentProblem(new IllegalStateException("Invalid cron() expression on: " + schedule, e));
             }
         } else {
             AnnotationValue everyValue = schedule.value("every");
             if (everyValue != null && !everyValue.asString().trim().isEmpty()) {
                 String every = everyValue.asString().trim();
                 if (SchedulerConfiguration.isConfigValue(every)) {
-                    return null;
+                    return;
                 }
                 if (Character.isDigit(every.charAt(0))) {
                     every = "PT" + every;
@@ -329,13 +332,14 @@ public class SchedulerProcessor {
                 try {
                     Duration.parse(every);
                 } catch (Exception e) {
-                    return new IllegalStateException("Invalid every() expression on: " + schedule, e);
+                    validationContext
+                            .addDeploymentProblem(new IllegalStateException("Invalid every() expression on: " + schedule, e));
                 }
             } else {
-                return new IllegalStateException("@Scheduled must declare either cron() or every(): " + schedule);
+                validationContext.addDeploymentProblem(
+                        new IllegalStateException("@Scheduled must declare either cron() or every(): " + schedule));
             }
         }
-        return null;
     }
 
 }

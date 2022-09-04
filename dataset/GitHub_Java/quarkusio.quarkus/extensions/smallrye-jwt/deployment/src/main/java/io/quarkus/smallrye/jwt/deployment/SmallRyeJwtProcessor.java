@@ -176,6 +176,7 @@ class SmallRyeJwtProcessor {
      * @return JCAProviderBuildItem for SHA256withRSA signature provider
      */
     @BuildStep
+    @Record(ExecutionTime.STATIC_INIT)
     JCAProviderBuildItem registerRSASigProvider() {
         return new JCAProviderBuildItem(config.rsaSigProvider);
     }

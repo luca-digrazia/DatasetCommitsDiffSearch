@@ -1,6 +1,5 @@
 package io.quarkus.netty.deployment;
 
-import java.util.Optional;
 import java.util.function.Supplier;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -14,11 +13,9 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
-import io.quarkus.netty.BossEventLoopGroup;
-import io.quarkus.netty.MainEventLoopGroup;
+import io.quarkus.netty.BossGroup;
 import io.quarkus.netty.runtime.NettyRecorder;
 
 class NettyProcessor {
@@ -29,9 +26,7 @@ class NettyProcessor {
     private static final Logger log = Logger.getLogger(NettyProcessor.class);
 
     @BuildStep
-    SubstrateConfigBuildItem build(BuildProducer<JniBuildItem> jni) {
-        boolean enableJni = false;
-
+    SubstrateConfigBuildItem build() {
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
         reflectiveClass
                 .produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioServerSocketChannel"));
@@ -53,47 +48,6 @@ class NettyProcessor {
             //ignore
             log.debug("Not registering Netty HTTP classes as they were not found");
         }
-
-        try {
-            Class.forName("io.netty.channel.unix.UnixChannel");
-            enableJni = true;
-            builder.addRuntimeInitializedClass("io.netty.channel.unix.Errors")
-                    .addRuntimeInitializedClass("io.netty.channel.unix.FileDescriptor")
-                    .addRuntimeInitializedClass("io.netty.channel.unix.IovArray")
-                    .addRuntimeInitializedClass("io.netty.channel.unix.Limits");
-        } catch (ClassNotFoundException e) {
-            //ignore
-            log.debug("Not registering Netty native unix classes as they were not found");
-        }
-
-        try {
-            Class.forName("io.netty.channel.epoll.EpollMode");
-            enableJni = true;
-            builder.addRuntimeInitializedClass("io.netty.channel.epoll.Epoll")
-                    .addRuntimeInitializedClass("io.netty.channel.epoll.EpollEventArray")
-                    .addRuntimeInitializedClass("io.netty.channel.epoll.EpollEventLoop")
-                    .addRuntimeInitializedClass("io.netty.channel.epoll.Native");
-        } catch (ClassNotFoundException e) {
-            //ignore
-            log.debug("Not registering Netty native epoll classes as they were not found");
-        }
-
-        try {
-            Class.forName("io.netty.channel.kqueue.AcceptFilter");
-            enableJni = true;
-            builder.addRuntimeInitializedClass("io.netty.channel.kqueue.KQueue")
-                    .addRuntimeInitializedClass("io.netty.channel.kqueue.KQueueEventArray")
-                    .addRuntimeInitializedClass("io.netty.channel.kqueue.KQueueEventLoop")
-                    .addRuntimeInitializedClass("io.netty.channel.kqueue.Native");
-        } catch (ClassNotFoundException e) {
-            //ignore
-            log.debug("Not registering Netty native kqueue classes as they were not found");
-        }
-
-        if (enableJni) {
-            jni.produce(new JniBuildItem());
-        }
-
         return builder //TODO: make configurable
                 .build();
     }
@@ -101,27 +55,19 @@ class NettyProcessor {
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     void createExecutors(BuildProducer<RuntimeBeanBuildItem> runtimeBeanBuildItemBuildProducer,
-            Optional<EventLoopSupplierBuildItem> loopSupplierBuildItem,
             NettyRecorder recorder) {
         //TODO: configuration
-        Supplier<Object> boss;
-        Supplier<Object> main;
-        if (loopSupplierBuildItem.isPresent()) {
-            boss = (Supplier) loopSupplierBuildItem.get().getBossSupplier();
-            main = (Supplier) loopSupplierBuildItem.get().getMainSupplier();
-        } else {
-            boss = recorder.createEventLoop(1);
-            main = recorder.createEventLoop(0);
-        }
+        Supplier<Object> boss = recorder.createEventLoop(1);
+        Supplier<Object> worker = recorder.createEventLoop(0);
+
         runtimeBeanBuildItemBuildProducer.produce(RuntimeBeanBuildItem.builder(EventLoopGroup.class)
                 .setSupplier(boss)
                 .setScope(ApplicationScoped.class)
-                .addQualifier(BossEventLoopGroup.class)
+                .addQualifier(BossGroup.class)
                 .build());
         runtimeBeanBuildItemBuildProducer.produce(RuntimeBeanBuildItem.builder(EventLoopGroup.class)
-                .setSupplier(main)
+                .setSupplier(worker)
                 .setScope(ApplicationScoped.class)
-                .addQualifier(MainEventLoopGroup.class)
                 .build());
     }
 

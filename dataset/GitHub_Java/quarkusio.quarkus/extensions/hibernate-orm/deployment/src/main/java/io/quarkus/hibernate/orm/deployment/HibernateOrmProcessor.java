@@ -33,7 +33,6 @@ import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.hibernate.loader.BatchFetchStyle;
 import org.hibernate.service.spi.ServiceContributor;
-import org.hibernate.tool.hbm2ddl.MultipleLinesSqlCommandExtractor;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.CompositeIndex;
@@ -93,7 +92,6 @@ import io.quarkus.hibernate.orm.runtime.dialect.QuarkusPostgreSQL95Dialect;
 public final class HibernateOrmProcessor {
 
     private static final String HIBERNATE_ORM_CONFIG_PREFIX = "quarkus.hibernate-orm.";
-    private static final String NO_SQL_LOAD_SCRIPT_FILE = "no-file";
 
     private static final DotName PERSISTENCE_CONTEXT = DotName.createSimple(PersistenceContext.class.getName());
     private static final DotName PERSISTENCE_UNIT = DotName.createSimple(PersistenceUnit.class.getName());
@@ -105,13 +103,8 @@ public final class HibernateOrmProcessor {
     HibernateOrmConfig hibernateConfig;
 
     @BuildStep
-    List<HotDeploymentWatchedFileBuildItem> hotDeploymentWatchedFiles() {
-        List<HotDeploymentWatchedFileBuildItem> watchedFiles = new ArrayList<>();
-        watchedFiles.add(new HotDeploymentWatchedFileBuildItem("META-INF/persistence.xml"));
-        getSqlLoadScript().ifPresent(script -> {
-            watchedFiles.add(new HotDeploymentWatchedFileBuildItem(script));
-        });
-        return watchedFiles;
+    HotDeploymentWatchedFileBuildItem configFile() {
+        return new HotDeploymentWatchedFileBuildItem("META-INF/persistence.xml");
     }
 
     @SuppressWarnings("unchecked")
@@ -128,6 +121,7 @@ public final class HibernateOrmProcessor {
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorProducer,
             BuildProducer<SubstrateResourceBuildItem> resourceProducer,
+            BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentProducer,
             BuildProducer<SystemPropertyBuildItem> systemPropertyProducer,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<JpaEntitiesBuildItem> domainObjectsProducer,
@@ -167,7 +161,7 @@ public final class HibernateOrmProcessor {
         // handle the implicit persistence unit
         List<ParsedPersistenceXmlDescriptor> allDescriptors = new ArrayList<>(explicitDescriptors.size() + 1);
         allDescriptors.addAll(explicitDescriptors);
-        handleHibernateORMWithNoPersistenceXml(allDescriptors, resourceProducer, systemPropertyProducer,
+        handleHibernateORMWithNoPersistenceXml(allDescriptors, resourceProducer, hotDeploymentProducer, systemPropertyProducer,
                 archiveRoot, driverBuildItem, applicationArchivesBuildItem);
 
         for (ParsedPersistenceXmlDescriptor descriptor : allDescriptors) {
@@ -228,9 +222,7 @@ public final class HibernateOrmProcessor {
                 resources.produce(new SubstrateResourceBuildItem(
                         (String) i.getDescriptor().getProperties().get("javax.persistence.sql-load-script-source")));
             } else {
-                getSqlLoadScript().ifPresent(script -> {
-                    resources.produce(new SubstrateResourceBuildItem(script));
-                });
+                resources.produce(new SubstrateResourceBuildItem("import.sql"));
             }
         }
     }
@@ -318,16 +310,6 @@ public final class HibernateOrmProcessor {
         recorder.startAllPersistenceUnits(beanContainer.getValue());
     }
 
-    private Optional<String> getSqlLoadScript() {
-        // Explicit file or default Hibernate ORM file.
-        String script = hibernateConfig.sqlLoadScript.orElse("import.sql");
-        if (NO_SQL_LOAD_SCRIPT_FILE.equalsIgnoreCase(script)) {
-            return Optional.empty();
-        } else {
-            return Optional.of(script);
-        }
-    }
-
     private boolean hasEntities(JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels) {
         return !jpaEntities.getEntityClassNames().isEmpty() || !nonJpaModels.isEmpty();
     }
@@ -352,6 +334,7 @@ public final class HibernateOrmProcessor {
     private void handleHibernateORMWithNoPersistenceXml(
             List<ParsedPersistenceXmlDescriptor> descriptors,
             BuildProducer<SubstrateResourceBuildItem> resourceProducer,
+            BuildProducer<HotDeploymentWatchedFileBuildItem> hotDeploymentProducer,
             BuildProducer<SystemPropertyBuildItem> systemProperty,
             ArchiveRootBuildItem root,
             Optional<DataSourceDriverBuildItem> driverBuildItem,
@@ -435,29 +418,34 @@ public final class HibernateOrmProcessor {
                 }
 
                 // sql-load-script
-                Optional<String> importFile = getSqlLoadScript();
+                // explicit file or default one
+                String importFile = hibernateConfig.sqlLoadScript.orElse("import.sql"); //default Hibernate ORM file imported
 
-                if (!importFile.isPresent()) {
-                    // explicitly set a no file and ignore all other operations
-                    desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES, NO_SQL_LOAD_SCRIPT_FILE);
-                } else {
-                    Path loadScriptPath = applicationArchivesBuildItem.getRootArchive().getChildPath(importFile.get());
+                Optional<Path> loadScriptPath = Optional
+                        .ofNullable(applicationArchivesBuildItem.getRootArchive().getChildPath(importFile));
 
-                    if (loadScriptPath != null && !Files.isDirectory(loadScriptPath)) {
-                        // enlist resource if present
-                        String resourceAsString = root.getArchiveRoot().relativize(loadScriptPath).toString();
-                        resourceProducer.produce(new SubstrateResourceBuildItem(resourceAsString));
-                        desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES, importFile.get());
-                        desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES_SQL_EXTRACTOR,
-                                MultipleLinesSqlCommandExtractor.class.getName());
+                // we enroll for hot deployment even if the file does not exist
+                hotDeploymentProducer.produce(new HotDeploymentWatchedFileBuildItem(importFile));
 
-                    } else if (hibernateConfig.sqlLoadScript.isPresent()) {
-                        //raise exception if explicit file is not present (i.e. not the default)
-                        throw new ConfigurationError(
-                                "Unable to find file referenced in '" + HIBERNATE_ORM_CONFIG_PREFIX + "sql-load-script="
-                                        + hibernateConfig.sqlLoadScript.get() + "'. Remove property or add file to your path.");
-                    }
-                }
+                // enlist resource if present
+                loadScriptPath
+                        .filter(path -> !Files.isDirectory(path))
+                        .ifPresent(path -> {
+                            String resourceAsString = root.getArchiveRoot().relativize(loadScriptPath.get()).toString();
+                            resourceProducer.produce(new SubstrateResourceBuildItem(resourceAsString));
+                            desc.getProperties().setProperty(AvailableSettings.HBM2DDL_IMPORT_FILES, importFile);
+                        });
+
+                //raise exception if explicit file is not present (i.e. not the default)
+                hibernateConfig.sqlLoadScript
+                        .filter(o -> !loadScriptPath.filter(path -> !Files.isDirectory(path)).isPresent())
+                        .ifPresent(
+                                c -> {
+                                    throw new ConfigurationError(
+                                            "Unable to find file referenced in '" + HIBERNATE_ORM_CONFIG_PREFIX
+                                                    + "sql-load-script="
+                                                    + c + "'. Remove property or add file to your path.");
+                                });
 
                 // Caching
                 Map<String, String> cacheConfigEntries = HibernateConfigUtil

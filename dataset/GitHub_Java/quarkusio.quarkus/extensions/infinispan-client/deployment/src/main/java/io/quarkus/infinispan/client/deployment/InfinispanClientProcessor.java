@@ -3,7 +3,6 @@ package io.quarkus.infinispan.client.deployment;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,7 +13,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import org.infinispan.client.hotrod.annotation.ClientListener;
 import org.infinispan.client.hotrod.configuration.NearCacheMode;
@@ -29,10 +27,8 @@ import org.infinispan.protostream.EnumMarshaller;
 import org.infinispan.protostream.FileDescriptorSource;
 import org.infinispan.protostream.MessageMarshaller;
 import org.infinispan.protostream.RawProtobufMarshaller;
-import org.infinispan.protostream.SerializationContextInitializer;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Type;
@@ -47,13 +43,10 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
-import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
-import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.infinispan.client.runtime.InfinispanClientBuildTimeConfig;
 import io.quarkus.infinispan.client.runtime.InfinispanClientProducer;
 import io.quarkus.infinispan.client.runtime.InfinispanClientRuntimeConfig;
@@ -78,18 +71,12 @@ class InfinispanClientProcessor {
             BuildProducer<SystemPropertyBuildItem> systemProperties,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
-            BuildProducer<NativeImageConfigBuildItem> nativeImageConfig,
-            DeploymentClassLoaderBuildItem classLoaderBuildItem,
             ApplicationIndexBuildItem applicationIndexBuildItem) throws ClassNotFoundException, IOException {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.INFINISPAN_CLIENT));
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(InfinispanClientProducer.class));
         systemProperties.produce(new SystemPropertyBuildItem("io.netty.noUnsafe", "true"));
         hotDeployment.produce(new HotDeploymentWatchedFileBuildItem(HOTROD_CLIENT_PROPERTIES));
-
-        // Enable SSL support by default
-        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.INFINISPAN_CLIENT));
 
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         InputStream stream = cl.getResourceAsStream(HOTROD_CLIENT_PROPERTIES);
@@ -118,8 +105,6 @@ class InfinispanClientProcessor {
 
         InfinispanClientProducer.replaceProperties(properties);
 
-        Index index = applicationIndexBuildItem.getIndex();
-
         // This is always non null
         Object marshaller = properties.get(ConfigurationProperties.MARSHALLER);
 
@@ -129,50 +114,30 @@ class InfinispanClientProcessor {
             Path metaPath = applicationArchive.getChildPath(META_INF);
 
             if (metaPath != null) {
-                try (Stream<Path> dirElements = Files.list(metaPath)) {
-                    Iterator<Path> protoFiles = dirElements
-                            .filter(Files::isRegularFile)
-                            .filter(p -> p.toString().endsWith(PROTO_EXTENSION))
-                            .iterator();
-                    // We monitor the entire meta inf directory if properties are available
-                    if (protoFiles.hasNext()) {
-                        // Quarkus doesn't currently support hot deployment watching directories
-                        //                hotDeployment.produce(new HotDeploymentConfigFileBuildItem(META_INF));
-                    }
+                Iterator<Path> protoFiles = Files.list(metaPath)
+                        .filter(Files::isRegularFile)
+                        .filter(p -> p.toString().endsWith(PROTO_EXTENSION))
+                        .iterator();
+                // We monitor the entire meta inf directory if properties are available
+                if (protoFiles.hasNext()) {
+                    // Quarkus doesn't currently support hot deployment watching directories
+                    //                hotDeployment.produce(new HotDeploymentConfigFileBuildItem(META_INF));
+                }
 
-                    while (protoFiles.hasNext()) {
-                        Path path = protoFiles.next();
-                        byte[] bytes = Files.readAllBytes(path);
-                        // This uses the default file encoding - should we enforce UTF-8?
-                        properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + path.getFileName().toString(),
-                                new String(bytes, StandardCharsets.UTF_8));
-                    }
+                while (protoFiles.hasNext()) {
+                    Path path = protoFiles.next();
+                    byte[] bytes = Files.readAllBytes(path);
+                    // This uses the default file encoding - should we enforce UTF-8?
+                    properties.put(InfinispanClientProducer.PROTOBUF_FILE_PREFIX + path.getFileName().toString(),
+                            new String(bytes, StandardCharsets.UTF_8));
                 }
             }
 
             InfinispanClientProducer.handleProtoStreamRequirements(properties);
-            ClassLoader classLoader = classLoaderBuildItem.getClassLoader();
-            Set<ClassInfo> initializerClasses = index.getAllKnownImplementors(DotName.createSimple(
-                    SerializationContextInitializer.class.getName()));
-            Set<SerializationContextInitializer> initializers = new HashSet<>(initializerClasses.size());
-            for (ClassInfo ci : initializerClasses) {
-                Class<?> initializerClass = classLoader.loadClass(ci.toString());
-                try {
-                    SerializationContextInitializer sci = (SerializationContextInitializer) initializerClass
-                            .getDeclaredConstructor().newInstance();
-                    initializers.add(sci);
-                } catch (InstantiationException | IllegalAccessException | InvocationTargetException
-                        | NoSuchMethodException e) {
-                    // This shouldn't ever be possible as annotation processor should generate empty constructor
-                    throw new RuntimeException(e);
-                }
-            }
-            if (!initializers.isEmpty()) {
-                properties.put(InfinispanClientProducer.PROTOBUF_INITIALIZERS, initializers);
-            }
         }
 
         // Add any user project listeners to allow reflection in native code
+        Index index = applicationIndexBuildItem.getIndex();
         List<AnnotationInstance> listenerInstances = index.getAnnotations(
                 DotName.createSimple(ClientListener.class.getName()));
         for (AnnotationInstance instance : listenerInstances) {
@@ -184,9 +149,6 @@ class InfinispanClientProcessor {
 
         // This is required for netty to work properly
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "io.netty.channel.socket.nio.NioSocketChannel"));
-        nativeImageConfig.produce(NativeImageConfigBuildItem.builder()
-                .addRuntimeInitializedClass("org.infinispan.client.hotrod.impl.transport.netty.TransportHelper")
-                .build());
         // We use reflection to have continuous queries work
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false,
                 "org.infinispan.client.hotrod.event.impl.ContinuousQueryImpl$ClientEntryListener"));

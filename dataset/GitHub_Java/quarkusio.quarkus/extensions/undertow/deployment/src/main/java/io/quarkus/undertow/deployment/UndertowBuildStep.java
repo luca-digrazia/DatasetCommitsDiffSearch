@@ -90,25 +90,29 @@ import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.RuntimeReinitializedClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.ServiceUtil;
+import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
 import io.quarkus.runtime.RuntimeValue;
+import io.quarkus.undertow.runtime.HttpBuildConfig;
+import io.quarkus.undertow.runtime.HttpConfig;
 import io.quarkus.undertow.runtime.HttpSessionContext;
 import io.quarkus.undertow.runtime.ServletProducer;
 import io.quarkus.undertow.runtime.ServletSecurityInfoProxy;
 import io.quarkus.undertow.runtime.ServletSecurityInfoSubstitution;
 import io.quarkus.undertow.runtime.UndertowDeploymentRecorder;
 import io.quarkus.undertow.runtime.UndertowHandlersConfServletExtension;
-import io.quarkus.vertx.http.deployment.DefaultRouteBuildItem;
+import io.quarkus.undertow.runtime.filters.CORSRecorder;
+import io.undertow.Undertow;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.HttpMethodSecurityInfo;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
 import io.undertow.servlet.handlers.DefaultServlet;
-import io.vertx.core.Handler;
-import io.vertx.core.http.HttpServerRequest;
 
 //TODO: break this up, it is getting too big
 public class UndertowBuildStep {
@@ -132,14 +136,27 @@ public class UndertowBuildStep {
             ServletDeploymentManagerBuildItem servletDeploymentManagerBuildItem,
             List<HttpHandlerWrapperBuildItem> wrappers,
             ShutdownContextBuildItem shutdown,
-            Consumer<DefaultRouteBuildItem> undertowProducer,
-            ExecutorBuildItem executorBuildItem) throws Exception {
-        Handler<HttpServerRequest> ut = recorder.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
+            Consumer<UndertowBuildItem> undertowProducer,
+            LaunchModeBuildItem launchMode,
+            ExecutorBuildItem executorBuildItem,
+            CORSRecorder corsRecorder,
+            HttpConfig config) throws Exception {
+        corsRecorder.setHttpConfig(config);
+        RuntimeValue<Undertow> ut = recorder.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
                 servletDeploymentManagerBuildItem.getDeploymentManager(),
-                wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
-
-        undertowProducer.accept(new DefaultRouteBuildItem(ut));
+                config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()),
+                launchMode.getLaunchMode());
+        undertowProducer.accept(new UndertowBuildItem(ut));
         return new ServiceStartBuildItem("undertow");
+    }
+
+    @BuildStep()
+    @Record(STATIC_INIT)
+    public void buildCorsFilter(CORSRecorder corsRecorder, HttpBuildConfig buildConfig,
+            BuildProducer<ServletExtensionBuildItem> extensionProducer) {
+        if (buildConfig.corsEnabled) {
+            extensionProducer.produce(new ServletExtensionBuildItem(corsRecorder.buildCORSExtension()));
+        }
     }
 
     @BuildStep
@@ -154,6 +171,25 @@ public class UndertowBuildStep {
             }
         }));
         listeners.produce(new ListenerBuildItem(HttpSessionContext.class.getName()));
+    }
+
+    @BuildStep
+    SubstrateConfigBuildItem config() {
+        return SubstrateConfigBuildItem.builder()
+                .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerResponseConduit")
+                .addRuntimeInitializedClass("io.undertow.server.protocol.ajp.AjpServerRequestConduit")
+                .build();
+    }
+
+    @BuildStep
+    void runtimeReinit(BuildProducer<RuntimeReinitializedClassBuildItem> producer) {
+        producer.produce(new RuntimeReinitializedClassBuildItem("org.wildfly.common.net.HostName"));
+        producer.produce(new RuntimeReinitializedClassBuildItem("org.wildfly.common.os.Process"));
+    }
+
+    @BuildStep
+    public void kubernetes(HttpConfig config, BuildProducer<KubernetesPortBuildItem> portProducer) {
+        portProducer.produce(new KubernetesPortBuildItem(config.port, "http"));
     }
 
     /**
@@ -187,21 +223,11 @@ public class UndertowBuildStep {
     public List<ServletContainerInitializerBuildItem> servletContainerInitializer(
             ApplicationArchivesBuildItem archives,
             CombinedIndexBuildItem combinedIndexBuildItem,
-            List<BlacklistedServletContainerInitializerBuildItem> blacklistedBuildItems,
             BuildProducer<AdditionalBeanBuildItem> beans) throws IOException {
-
-        Set<String> blacklistedClassNames = new HashSet<>();
-        for (BlacklistedServletContainerInitializerBuildItem bi : blacklistedBuildItems) {
-            blacklistedClassNames.add(bi.getSciClass());
-        }
         List<ServletContainerInitializerBuildItem> ret = new ArrayList<>();
         Set<String> initializers = ServiceUtil.classNamesNamedIn(Thread.currentThread().getContextClassLoader(),
                 SERVLET_CONTAINER_INITIALIZER);
-
         for (String initializer : initializers) {
-            if (blacklistedClassNames.contains(initializer)) {
-                continue;
-            }
             beans.produce(AdditionalBeanBuildItem.unremovableOf(initializer));
             ClassInfo sci = combinedIndexBuildItem.getIndex().getClassByName(DotName.createSimple(initializer));
             if (sci != null) {
@@ -243,34 +269,21 @@ public class UndertowBuildStep {
             Consumer<ReflectiveClassBuildItem> reflectiveClasses,
             LaunchModeBuildItem launchMode,
             ShutdownContextBuildItem shutdownContext,
-            KnownPathsBuildItem knownPaths,
-            ServletConfig servletConfig) throws Exception {
+            KnownPathsBuildItem knownPaths) throws Exception {
 
         ObjectSubstitutionBuildItem.Holder holder = new ObjectSubstitutionBuildItem.Holder(ServletSecurityInfo.class,
                 ServletSecurityInfoProxy.class, ServletSecurityInfoSubstitution.class);
         substitutions.produce(new ObjectSubstitutionBuildItem(holder));
-        reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName()));
+        reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(),
+                "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
+
+        RuntimeValue<DeploymentInfo> deployment = recorder.createDeployment("test", knownPaths.knownFiles,
+                knownPaths.knownDirectories,
+                launchMode.getLaunchMode(), shutdownContext);
 
         WebMetaData webMetaData = webMetadataBuildItem.getWebMetaData();
         final IndexView index = combinedIndexBuildItem.getIndex();
         processAnnotations(index, webMetaData);
-
-        String contextPath;
-        if (servletConfig.contextPath.isPresent()) {
-            if (!servletConfig.contextPath.get().startsWith("/")) {
-                contextPath = "/" + servletConfig.contextPath;
-            } else {
-                contextPath = servletConfig.contextPath.get();
-            }
-        } else if (webMetaData.getDefaultContextPath() != null) {
-            contextPath = webMetaData.getDefaultContextPath();
-        } else {
-            contextPath = "/";
-        }
-        RuntimeValue<DeploymentInfo> deployment = recorder.createDeployment("test", knownPaths.knownFiles,
-                knownPaths.knownDirectories,
-                launchMode.getLaunchMode(), shutdownContext, contextPath);
-
         //add servlets
         if (webMetaData.getServlets() != null) {
             for (ServletMetaData servlet : webMetaData.getServlets()) {
@@ -488,7 +501,28 @@ public class UndertowBuildStep {
                     servlet.setAsyncSupported(asyncSupported.asBoolean());
                 }
                 AnnotationValue initParamsValue = annotation.value("initParams");
-                servlet.setInitParam(getInitParams(initParamsValue));
+                if (initParamsValue != null) {
+                    AnnotationInstance[] initParamsAnnotations = initParamsValue.asNestedArray();
+                    if (initParamsAnnotations != null && initParamsAnnotations.length > 0) {
+                        List<ParamValueMetaData> initParams = new ArrayList<ParamValueMetaData>();
+                        for (AnnotationInstance initParamsAnnotation : initParamsAnnotations) {
+                            ParamValueMetaData initParam = new ParamValueMetaData();
+                            AnnotationValue initParamName = initParamsAnnotation.value("name");
+                            AnnotationValue initParamValue = initParamsAnnotation.value();
+                            AnnotationValue initParamDescription = initParamsAnnotation.value("description");
+                            initParam.setParamName(initParamName.asString());
+                            initParam.setParamValue(initParamValue.asString());
+                            if (initParamDescription != null) {
+                                Descriptions descriptions = getDescription(initParamDescription.asString());
+                                if (descriptions != null) {
+                                    initParam.setDescriptions(descriptions);
+                                }
+                            }
+                            initParams.add(initParam);
+                        }
+                        servlet.setInitParam(initParams);
+                    }
+                }
                 AnnotationValue descriptionValue = annotation.value("description");
                 AnnotationValue displayNameValue = annotation.value("displayName");
                 AnnotationValue smallIconValue = annotation.value("smallIcon");
@@ -552,7 +586,28 @@ public class UndertowBuildStep {
                     filter.setAsyncSupported(asyncSupported.asBoolean());
                 }
                 AnnotationValue initParamsValue = annotation.value("initParams");
-                filter.setInitParam(getInitParams(initParamsValue));
+                if (initParamsValue != null) {
+                    AnnotationInstance[] initParamsAnnotations = initParamsValue.asNestedArray();
+                    if (initParamsAnnotations != null && initParamsAnnotations.length > 0) {
+                        List<ParamValueMetaData> initParams = new ArrayList<ParamValueMetaData>();
+                        for (AnnotationInstance initParamsAnnotation : initParamsAnnotations) {
+                            ParamValueMetaData initParam = new ParamValueMetaData();
+                            AnnotationValue initParamName = initParamsAnnotation.value("name");
+                            AnnotationValue initParamValue = initParamsAnnotation.value();
+                            AnnotationValue initParamDescription = initParamsAnnotation.value("description");
+                            initParam.setParamName(initParamName.asString());
+                            initParam.setParamValue(initParamValue.asString());
+                            if (initParamDescription != null) {
+                                Descriptions descriptions = getDescription(initParamDescription.asString());
+                                if (descriptions != null) {
+                                    initParam.setDescriptions(descriptions);
+                                }
+                            }
+                            initParams.add(initParam);
+                        }
+                        filter.setInitParam(initParams);
+                    }
+                }
                 AnnotationValue descriptionValue = annotation.value("description");
                 AnnotationValue displayNameValue = annotation.value("displayName");
                 AnnotationValue smallIconValue = annotation.value("smallIcon");
@@ -785,34 +840,6 @@ public class UndertowBuildStep {
                 annotationMD.setServletSecurity(servletSecurity);
             }
         }
-    }
-
-    private List<ParamValueMetaData> getInitParams(AnnotationValue initParamsValue) {
-        List<ParamValueMetaData> paramValuesMetaData = new ArrayList<>();
-        if (initParamsValue == null) {
-            return paramValuesMetaData;
-        }
-
-        AnnotationInstance[] initParamsAnnotations = initParamsValue.asNestedArray();
-        if (initParamsAnnotations != null && initParamsAnnotations.length > 0) {
-            for (AnnotationInstance initParamsAnnotation : initParamsAnnotations) {
-                ParamValueMetaData initParam = new ParamValueMetaData();
-                AnnotationValue initParamName = initParamsAnnotation.value("name");
-                AnnotationValue initParamValue = initParamsAnnotation.value();
-                AnnotationValue initParamDescription = initParamsAnnotation.value("description");
-                initParam.setParamName(initParamName.asString());
-                initParam.setParamValue(initParamValue.asString());
-                if (initParamDescription != null) {
-                    Descriptions descriptions = getDescription(initParamDescription.asString());
-                    if (descriptions != null) {
-                        initParam.setDescriptions(descriptions);
-                    }
-                }
-                paramValuesMetaData.add(initParam);
-            }
-        }
-
-        return paramValuesMetaData;
     }
 
     /**

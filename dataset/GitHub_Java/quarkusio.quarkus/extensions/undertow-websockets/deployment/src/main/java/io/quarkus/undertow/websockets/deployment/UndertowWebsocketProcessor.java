@@ -4,7 +4,6 @@ import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import javax.websocket.ClientEndpoint;
@@ -27,13 +26,13 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.undertow.deployment.ServletContextAttributeBuildItem;
+import io.quarkus.undertow.deployment.UndertowBuildItem;
 import io.quarkus.undertow.websockets.runtime.UndertowWebsocketRecorder;
 import io.undertow.websockets.jsr.JsrWebSocketFilter;
 import io.undertow.websockets.jsr.UndertowContainerProvider;
@@ -45,11 +44,6 @@ public class UndertowWebsocketProcessor {
     private static final DotName CLIENT_ENDPOINT = DotName.createSimple(ClientEndpoint.class.getName());
     private static final DotName SERVER_APPLICATION_CONFIG = DotName.createSimple(ServerApplicationConfig.class.getName());
     private static final DotName ENDPOINT = DotName.createSimple(Endpoint.class.getName());
-
-    @BuildStep
-    void holdConfig(BuildProducer<FeatureBuildItem> feature, HotReloadConfig hotReloadConfig) {
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.UNDERTOW_WEBSOCKETS));
-    }
 
     @BuildStep
     void scanForAnnotatedEndpoints(CombinedIndexBuildItem indexBuildItem,
@@ -83,8 +77,10 @@ public class UndertowWebsocketProcessor {
     @Record(ExecutionTime.STATIC_INIT)
     public ServletContextAttributeBuildItem deploy(final CombinedIndexBuildItem indexBuildItem,
             UndertowWebsocketRecorder recorder,
-            BuildProducer<ReflectiveClassBuildItem> reflection,
+            BuildProducer<ReflectiveClassBuildItem> reflection, BuildProducer<FeatureBuildItem> feature,
             List<AnnotatedWebsocketEndpointBuildItem> annotatedEndpoints) throws Exception {
+
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.UNDERTOW_WEBSOCKETS));
 
         final Set<String> endpoints = new HashSet<>();
         final Set<String> config = new HashSet<>();
@@ -151,8 +147,8 @@ public class UndertowWebsocketProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    ServiceStartBuildItem setupWorker(UndertowWebsocketRecorder recorder, ExecutorBuildItem exec) {
-        recorder.setupWorker(exec.getExecutorProxy());
+    ServiceStartBuildItem setupWorker(UndertowWebsocketRecorder recorder, UndertowBuildItem undertow) {
+        recorder.setupWorker(undertow.getUndertow());
         return new ServiceStartBuildItem("Websockets");
     }
 
@@ -175,11 +171,11 @@ public class UndertowWebsocketProcessor {
         /**
          * The security key for remote hot deployment
          */
-        Optional<String> password;
+        String password;
 
         /**
          * The remote URL to connect to
          */
-        Optional<String> url;
+        String url;
     }
 }

@@ -21,7 +21,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
-import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.narayana.jta.runtime.NarayanaJtaProducers;
 import io.quarkus.narayana.jta.runtime.NarayanaJtaRecorder;
 import io.quarkus.narayana.jta.runtime.TransactionManagerConfiguration;
@@ -42,12 +41,6 @@ class NarayanaJtaProcessor {
 
     @Inject
     BuildProducer<RuntimeInitializedClassBuildItem> runtimeInit;
-
-    @BuildStep()
-    public SubstrateSystemPropertyBuildItem substrateSystemPropertyBuildItem() {
-        return new SubstrateSystemPropertyBuildItem("CoordinatorEnvironmentBean.transactionStatusManagerEnable",
-                String.valueOf(transactions.enableTransactionStatusManager));
-    }
 
     /**
      * The transactions configuration.
@@ -79,8 +72,6 @@ class NarayanaJtaProcessor {
         //we want to force Arjuna to init at static init time
         Properties defaultProperties = PropertiesFactory.getDefaultProperties();
         recorder.setDefaultProperties(defaultProperties);
-        // This must be done before setNodeName as the code in setNodeName will create a TSM based on the value of this property
-        recorder.setTransactionStatusManagerEnabled(transactions);
         recorder.setNodeName(transactions);
         recorder.setDefaultTimeout(transactions);
     }

@@ -176,25 +176,6 @@ public class BytecodeRecorderImpl implements RecorderContext {
         }
     }
 
-    private static boolean isProxiable(Class<?> returnType) {
-
-        if (returnType.isPrimitive()) {
-            return false;
-        }
-        if (Modifier.isFinal(returnType.getModifiers())) {
-            return false;
-        }
-        boolean returnInterface = returnType.isInterface();
-        if (!returnInterface) {
-            try {
-                returnType.getConstructor();
-            } catch (NoSuchMethodException e) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     public <T> T getRecordingProxy(Class<T> theClass) {
         if (existingProxyClasses.containsKey(theClass)) {
             return theClass.cast(existingProxyClasses.get(theClass));
@@ -216,13 +197,10 @@ public class BytecodeRecorderImpl implements RecorderContext {
                             && returnType.equals(String.class)) {
                         return proxyName;
                     }
-
-                    boolean voidMethod = method.getReturnType().equals(void.class);
-                    if (!voidMethod && !isProxiable(method.getReturnType())) {
-                        throw new RuntimeException("Cannot use " + method
-                                + " as a recorder method as the return type cannot be proxied. Use RuntimeValue to wrap the return value instead.");
+                    if (returnType.isPrimitive()) {
+                        return 0;
                     }
-                    if (voidMethod) {
+                    if (Modifier.isFinal(returnType.getModifiers())) {
                         return null;
                     }
                     ProxyInstance instance = getProxyInstance(returnType);
@@ -244,6 +222,13 @@ public class BytecodeRecorderImpl implements RecorderContext {
 
     private ProxyInstance getProxyInstance(Class<?> returnType) throws InstantiationException, IllegalAccessException {
         boolean returnInterface = returnType.isInterface();
+        if (!returnInterface) {
+            try {
+                returnType.getConstructor();
+            } catch (NoSuchMethodException e) {
+                return null;
+            }
+        }
         ProxyFactory<?> proxyFactory = returnValueProxy.get(returnType);
         if (proxyFactory == null) {
             ProxyConfiguration<Object> proxyConfiguration = new ProxyConfiguration<Object>()

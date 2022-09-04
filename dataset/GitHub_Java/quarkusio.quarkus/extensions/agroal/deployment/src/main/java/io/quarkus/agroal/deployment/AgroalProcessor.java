@@ -45,7 +45,6 @@ import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
 class AgroalProcessor {
 
@@ -243,11 +242,5 @@ class AgroalProcessor {
         }
 
         classCreator.close();
-    }
-
-    @BuildStep
-    HealthBuildItem addHealthCheck(AgroalBuildTimeConfig agroalBuildTimeConfig) {
-        return new HealthBuildItem("io.quarkus.agroal.runtime.health.DataSourceHealthCheck",
-                agroalBuildTimeConfig.healthEnabled, "datasource");
     }
 }

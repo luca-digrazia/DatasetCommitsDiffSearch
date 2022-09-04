@@ -1,16 +1,16 @@
 package io.quarkus.runtime.annotations;
 
+import static io.quarkus.runtime.annotations.ConfigPhase.BUILD_TIME;
 import static java.lang.annotation.ElementType.TYPE;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
-import static io.quarkus.runtime.annotations.ConfigPhase.BUILD_TIME;
 
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /**
- * Indicate that the given item is a configuration root.  Instances of classes with this annotation will
- * be made available to build steps or run time templates, according to the {@linkplain #phase() phase} of the
+ * Indicate that the given item is a configuration root. Instances of classes with this annotation will
+ * be made available to build steps or run time recorders, according to the {@linkplain #phase() phase} of the
  * value.
  */
 @Retention(RUNTIME)

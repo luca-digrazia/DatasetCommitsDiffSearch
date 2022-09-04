@@ -21,7 +21,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
@@ -49,6 +48,7 @@ import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBundleBuildItem;
 import io.quarkus.extest.runtime.*;
 import io.quarkus.extest.runtime.beans.CommandServlet;
 import io.quarkus.extest.runtime.beans.PublicKeyProducer;
@@ -74,13 +74,15 @@ public final class TestProcessor {
 
     @Inject
     BuildProducer<SubstrateResourceBuildItem> resource;
+    @Inject
+    BuildProducer<SubstrateResourceBundleBuildItem> resourceBundle;
 
     TestConfigRoot configRoot;
     TestBuildTimeConfig buildTimeConfig;
     TestBuildAndRunTimeConfig buildAndRunTimeConfig;
 
     /**
-     * Register an extension capability and feature
+     * Register a extension capability and feature
      *
      * @return test-extension feature build item
      */
@@ -92,15 +94,15 @@ public final class TestProcessor {
     /**
      * Register a custom bean defining annotation
      *
-     * @return BeanDefiningAnnotationBuildItem
+     * @return
      */
     @BuildStep
-    BeanDefiningAnnotationBuildItem registerBeanDefiningAnnotations() {
+    BeanDefiningAnnotationBuildItem registerBeanDefinningAnnotations() {
         return new BeanDefiningAnnotationBuildItem(TEST_ANNOTATION, TEST_ANNOTATION_SCOPE);
     }
 
     @BuildStep
-    void registerNativeImageResources() {
+    void registerNativeImageReources() {
         resource.produce(new SubstrateResourceBuildItem("/DSAPublicKey.encoded"));
     }
 
@@ -124,7 +126,7 @@ public final class TestProcessor {
      *
      * @param recorder - runtime recorder
      * @return RuntimeServiceBuildItem
-     * @throws JAXBException - on resource unmarshal failure
+     * @throws JAXBException
      */
     @BuildStep
     @Record(STATIC_INIT)
@@ -134,9 +136,9 @@ public final class TestProcessor {
         Unmarshaller unmarshaller = context.createUnmarshaller();
         InputStream is = getClass().getResourceAsStream("/config.xml");
         if (is != null) {
-            log.info("Have XmlConfig, loading");
+            log.infof("Have XmlConfig, loading");
             XmlConfig config = (XmlConfig) unmarshaller.unmarshal(is);
-            log.info("Loaded XmlConfig, creating service");
+            log.infof("Loaded XmlConfig, creating service");
             RuntimeValue<RuntimeXmlConfigService> service = recorder.initRuntimeService(config);
             serviceBuildItem = new RuntimeServiceBuildItem(service);
         }
@@ -149,8 +151,8 @@ public final class TestProcessor {
      * @param recorder - runtime recorder
      * @param shutdownContextBuildItem - ShutdownContext information
      * @param serviceBuildItem - previously created RuntimeXmlConfigService container
-     * @return ServiceStartBuildItem - build item indicating the RuntimeXmlConfigService startup
-     * @throws IOException - on resource load failure
+     * @return ServiceStartBuildItem - build item indicating the RuntimeXmlConfigService startuup
+     * @throws IOException - on failure
      */
     @BuildStep
     @Record(RUNTIME_INIT)
@@ -192,9 +194,9 @@ public final class TestProcessor {
         // Register how to serialize DSAPublicKey
         ObjectSubstitutionBuildItem.Holder<DSAPublicKey, KeyProxy> holder = new ObjectSubstitutionBuildItem.Holder(
                 DSAPublicKey.class, KeyProxy.class, DSAPublicKeyObjectSubstitution.class);
-        ObjectSubstitutionBuildItem keySub = new ObjectSubstitutionBuildItem(holder);
-        substitutions.produce(keySub);
-        log.info("loadDSAPublicKey run");
+        ObjectSubstitutionBuildItem keysub = new ObjectSubstitutionBuildItem(holder);
+        substitutions.produce(keysub);
+        log.infof("loadDSAPublicKey run");
         return new PublicKeyBuildItem(publicKey);
     }
 
@@ -212,15 +214,16 @@ public final class TestProcessor {
     }
 
     /**
-     * Register a servlet used for interacting with the native image for testing
+     * Register a servlet used for interacting with native image for testing
      *
      * @return ServletBuildItem
      */
     @BuildStep
     ServletBuildItem createServlet() {
-        return ServletBuildItem.builder("commands", CommandServlet.class.getName())
+        ServletBuildItem servletBuildItem = ServletBuildItem.builder("commands", CommandServlet.class.getName())
                 .addMapping("/commands/*")
                 .build();
+        return servletBuildItem;
     }
 
     /**
@@ -342,7 +345,7 @@ public final class TestProcessor {
                 if (isConfigConsumer) {
                     Class<IConfigConsumer> beanClass = (Class<IConfigConsumer>) Class.forName(beanClassInfo.name().toString());
                     testBeanProducer.produce(new TestBeanBuildItem(beanClass));
-                    log.infof("The configured bean: %s", beanClass);
+                    log.infof("Configured bean: %s", beanClass);
                 }
             } catch (ClassNotFoundException e) {
                 log.warn("Failed to load bean class", e);
@@ -434,21 +437,5 @@ public final class TestProcessor {
                 .finalFieldsWritable(true)
                 .build();
         classes.produce(finalField);
-    }
-
-    @BuildStep(onlyIf = Never.class)
-    void neverRunThisOne() {
-        throw new IllegalStateException("Not supposed to run!");
-    }
-
-    public static final class Never implements BooleanSupplier {
-        TestBuildTimeConfig config;
-
-        public boolean getAsBoolean() {
-            if (config == null) {
-                throw new IllegalStateException("Expected config");
-            }
-            return false;
-        }
     }
 }

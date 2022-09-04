@@ -8,7 +8,4 @@ package io.quarkus.runtime;
 public interface ShutdownContext {
 
     void addShutdownTask(Runnable runnable);
-
-    // these are executed after all the ones add via addShutdownTask in the reverse order from which they were added
-    void addLastShutdownTask(Runnable runnable);
 }

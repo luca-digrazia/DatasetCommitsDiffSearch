@@ -4,19 +4,14 @@ import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 import static java.nio.file.Files.walk;
 
 import java.io.IOException;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -40,10 +35,6 @@ import io.quarkus.flyway.runtime.FlywayRuntimeConfig;
 import io.quarkus.flyway.runtime.graal.QuarkusPathLocationScanner;
 
 class FlywayProcessor {
-
-    private static final String JAR_APPLICATION_MIGRATIONS_PROTOCOL = "jar";
-    private static final String FILE_APPLICATION_MIGRATIONS_PROTOCOL = "file";
-
     /**
      * Flyway internal resources that must be added to the native image
      */
@@ -91,7 +82,7 @@ class FlywayProcessor {
 
     /**
      * Handles all the operations that can be recorded in the RUNTIME_INIT execution time phase
-     *
+     * 
      * @param recorder Used to set the runtime config
      * @param flywayRuntimeConfig The Flyway configuration
      * @param dataSourceInitializedBuildItem Added this dependency to be sure that Agroal is initialized first
@@ -138,45 +129,19 @@ class FlywayProcessor {
                 Enumeration<URL> migrations = Thread.currentThread().getContextClassLoader().getResources(location);
                 while (migrations.hasMoreElements()) {
                     URL path = migrations.nextElement();
-                    LOGGER.infov("Adding application migrations in path ''{0}'' using protocol ''{1}''", path.getPath(),
-                            path.getProtocol());
-                    final Set<String> applicationMigrations;
-                    if (JAR_APPLICATION_MIGRATIONS_PROTOCOL.equals(path.getProtocol())) {
-                        try (final FileSystem fileSystem = initFileSystem(path.toURI())) {
-                            applicationMigrations = getApplicationMigrationsFromPath(location, path);
-                        }
-                    } else if (FILE_APPLICATION_MIGRATIONS_PROTOCOL.equals(path.getProtocol())) {
-                        applicationMigrations = getApplicationMigrationsFromPath(location, path);
-                    } else {
-                        LOGGER.warnv(
-                                "Unsupported URL protocol ''{0}'' for path ''{1}''. Migration files will not be discovered.",
-                                path.getProtocol(), path.getPath());
-                        applicationMigrations = null;
-                    }
-                    if (applicationMigrations != null) {
-                        resources.addAll(applicationMigrations);
-                    }
+                    LOGGER.info("Adding application migrations in path: " + path);
+                    Set<String> applicationMigrations = walk(Paths.get(path.toURI()))
+                            .filter(Files::isRegularFile)
+                            .map(it -> Paths.get(location, it.getFileName().toString()).toString())
+                            .peek(it -> LOGGER.debug("Discovered: " + it))
+                            .collect(Collectors.toSet());
+                    resources.addAll(applicationMigrations);
                 }
             }
             return resources;
         } catch (IOException | URISyntaxException e) {
             throw e;
         }
-    }
-
-    private Set<String> getApplicationMigrationsFromPath(final String location, final URL path)
-            throws IOException, URISyntaxException {
-        return walk(Paths.get(path.toURI()))
-                .filter(Files::isRegularFile)
-                .map(it -> Paths.get(location, it.getFileName().toString()).toString())
-                .peek(it -> LOGGER.debug("Discovered: " + it))
-                .collect(Collectors.toSet());
-    }
-
-    private FileSystem initFileSystem(final URI uri) throws IOException {
-        final Map<String, String> env = new HashMap<>();
-        env.put("create", "true");
-        return FileSystems.newFileSystem(uri, env);
     }
 
     private List<String> generateDatabasesSQLFiles() {
