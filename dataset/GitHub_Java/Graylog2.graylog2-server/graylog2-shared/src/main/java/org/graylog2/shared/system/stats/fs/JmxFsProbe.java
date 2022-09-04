@@ -16,7 +16,6 @@
  */
 package org.graylog2.shared.system.stats.fs;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.io.File;
@@ -29,13 +28,10 @@ public class JmxFsProbe implements FsProbe {
     private final Set<File> locations;
 
     @Inject
-    public JmxFsProbe(@Named("message_journal_dir") @Nullable File journalDirectory) {
+    public JmxFsProbe(@Named("message_journal_dir") File journalDirectory) {
         this.locations = new HashSet<>();
 
-        // this is nullable for radio support, where this configuration object isn't present and thus not bound
-        if (journalDirectory != null) {
-            locations.add(journalDirectory);
-        }
+        locations.add(journalDirectory);
     }
 
     @Override
