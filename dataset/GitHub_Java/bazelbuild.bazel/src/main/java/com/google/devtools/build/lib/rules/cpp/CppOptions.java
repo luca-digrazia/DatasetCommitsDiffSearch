@@ -129,6 +129,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "crosstool_top",
     defaultValue = "@bazel_tools//tools/cpp:toolchain",
+    category = "version",
     converter = LabelConverter.class,
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {
@@ -143,6 +144,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "compiler",
     defaultValue = "null",
+    category = "version",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EXECUTION},
     help = "The C++ compiler to use for compiling the target."
@@ -155,6 +157,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "cc_output_directory_tag",
     defaultValue = "",
+    category = "misc",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Specifies a suffix to be added to the configuration directory."
@@ -164,6 +167,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "glibc",
     defaultValue = "null",
+    category = "version",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -177,6 +181,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "start_end_lib",
     defaultValue = "true",
+    category = "strategy", // but also adds edges to the action graph
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -191,6 +196,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "interface_shared_objects",
     defaultValue = "true",
+    category = "strategy", // but also adds edges to the action graph
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -207,6 +213,7 @@ public class CppOptions extends FragmentOptions {
     name = "fission",
     defaultValue = "no",
     converter = FissionOptionConverter.class,
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -223,6 +230,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "build_test_dwp",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -235,6 +243,7 @@ public class CppOptions extends FragmentOptions {
     name = "dynamic_mode",
     defaultValue = "default",
     converter = DynamicModeConverter.class,
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -246,19 +255,21 @@ public class CppOptions extends FragmentOptions {
   public DynamicMode dynamicMode;
 
   @Option(
-    name = "experimental_drop_fully_static_linking_mode",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
-    help =
-        "If enabled, bazel will not scan linkopts for -static. Rules have to define their fully"
-            + " static linking mode through 'link_fully_static_binary' feature."
+      name = "experimental_drop_fully_static_linking_mode",
+      defaultValue = "false",
+      category = "semantics",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
+      help =
+          "If enabled, bazel will not scan linkopts for -static. Rules have to define their fully"
+              + " static linking mode through 'link_fully_static_binary' feature."
   )
   public boolean dropFullyStaticLinkingMode;
 
   @Option(
     name = "experimental_link_compile_output_separately",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     metadataTags = {OptionMetadataTag.EXPERIMENTAL},
@@ -272,6 +283,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "force_pic",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -284,6 +296,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "force_ignore_dash_static",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "If set, '-static' options in the linkopts of cc_* rules will be ignored."
@@ -293,6 +306,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "process_headers_in_dependencies",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {OptionEffectTag.EXECUTION},
     help =
@@ -305,6 +319,7 @@ public class CppOptions extends FragmentOptions {
     name = "copt",
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to gcc."
@@ -314,6 +329,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "cxxopt",
     defaultValue = "",
+    category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -325,6 +341,7 @@ public class CppOptions extends FragmentOptions {
     name = "conlyopt",
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional option to pass to gcc when compiling C source files."
@@ -334,6 +351,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "linkopt",
     defaultValue = "",
+    category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -344,6 +362,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "ltoindexopt",
     defaultValue = "",
+    category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -354,6 +373,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "ltobackendopt",
     defaultValue = "",
+    category = "flags",
     allowMultiple = true,
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -365,6 +385,7 @@ public class CppOptions extends FragmentOptions {
     name = "stripopt",
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to strip when generating a '<name>.stripped' binary."
@@ -374,6 +395,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "custom_malloc",
     defaultValue = "null",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -386,6 +408,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "experimental_shortened_obj_file_path",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -401,6 +424,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "legacy_whole_archive",
     defaultValue = "true",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -414,6 +438,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "strip",
     defaultValue = "sometimes",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -427,6 +452,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "fdo_instrument",
     defaultValue = "null",
+    category = "flags",
     implicitRequirements = {"--copt=-Wno-error"},
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
@@ -454,6 +480,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "fdo_optimize",
     defaultValue = "null",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -508,6 +535,7 @@ public class CppOptions extends FragmentOptions {
     name = "lipo",
     defaultValue = "off",
     converter = LipoModeConverter.class,
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -534,6 +562,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "lipo_context",
     defaultValue = "null",
+    category = "flags",
     converter = LabelConverter.class,
     implicitRequirements = {"--linkopt=-Wl,--warn-unresolved-symbols"},
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
@@ -623,6 +652,7 @@ public class CppOptions extends FragmentOptions {
     name = "experimental_stl",
     converter = LabelConverter.class,
     defaultValue = "null",
+    category = "version",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES},
     metadataTags = {OptionMetadataTag.EXPERIMENTAL},
@@ -635,6 +665,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "save_temps",
     defaultValue = "false",
+    category = "what",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -649,6 +680,7 @@ public class CppOptions extends FragmentOptions {
     allowMultiple = true,
     converter = PerLabelOptions.PerLabelOptionsConverter.class,
     defaultValue = "",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -671,6 +703,7 @@ public class CppOptions extends FragmentOptions {
     allowMultiple = true,
     converter = PerLabelOptions.PerLabelOptionsConverter.class,
     defaultValue = "",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -691,6 +724,7 @@ public class CppOptions extends FragmentOptions {
     name = "host_crosstool_top",
     defaultValue = "null",
     converter = LabelConverter.class,
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -708,6 +742,7 @@ public class CppOptions extends FragmentOptions {
     name = "host_copt",
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to gcc for host tools."
@@ -718,6 +753,7 @@ public class CppOptions extends FragmentOptions {
     name = "host_cxxopt",
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Additional options to pass to gcc for host tools."
@@ -725,28 +761,31 @@ public class CppOptions extends FragmentOptions {
   public List<String> hostCxxoptList;
 
   @Option(
-    name = "host_conlyopt",
-    allowMultiple = true,
-    defaultValue = "",
-    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
-    help = "Additional option to pass to gcc when compiling C source files for host tools."
+      name = "host_conlyopt",
+      allowMultiple = true,
+      defaultValue = "",
+      category = "flags",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+      help = "Additional option to pass to gcc when compiling C source files for host tools."
   )
   public List<String> hostConlyoptList;
 
   @Option(
-    name = "host_linkopt",
-    defaultValue = "",
-    allowMultiple = true,
-    documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-    effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
-    help = "Additional option to pass to gcc when linking host tools."
+      name = "host_linkopt",
+      defaultValue = "",
+      category = "flags",
+      allowMultiple = true,
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
+      help = "Additional option to pass to gcc when linking host tools."
   )
   public List<String> hostLinkoptList;
 
   @Option(
     name = "grte_top",
     defaultValue = "null", // The default value is chosen by the toolchain.
+    category = "version",
     converter = LibcTopLabelConverter.class,
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -759,6 +798,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "host_grte_top",
     defaultValue = "null", // The default value is chosen by the toolchain.
+    category = "version",
     converter = LibcTopLabelConverter.class,
     documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
@@ -771,6 +811,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "output_symbol_counts",
     defaultValue = "false",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -782,6 +823,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "experimental_inmemory_dotd_files",
     defaultValue = "false",
+    category = "experimental",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -798,6 +840,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "prune_cpp_modules",
     defaultValue = "true",
+    category = "strategy",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {
       OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -811,6 +854,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "parse_headers_verifies_modules",
     defaultValue = "false",
+    category = "strategy",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.CHANGES_INPUTS},
     help =
@@ -822,6 +866,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "experimental_omitfp",
     defaultValue = "false",
+    category = "semantics",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES, OptionEffectTag.AFFECTS_OUTPUTS},
     metadataTags = {OptionMetadataTag.EXPERIMENTAL},
@@ -834,6 +879,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "share_native_deps",
     defaultValue = "true",
+    category = "strategy",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
     help =
@@ -845,6 +891,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "strict_system_includes",
     defaultValue = "false",
+    category = "strategy",
     documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
     effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EAGERNESS_TO_EXIT},
     help =
@@ -868,6 +915,7 @@ public class CppOptions extends FragmentOptions {
   @Option(
     name = "experimental_use_llvm_covmap",
     defaultValue = "false",
+    category = "experimental",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {
       OptionEffectTag.CHANGES_INPUTS,
