@@ -128,17 +128,15 @@ public final class CqueryCommand implements BlazeCommand {
       topLevelTargets = new ArrayList<>(targetPatternSet);
     }
     BlazeRuntime runtime = env.getRuntime();
-
     BuildRequest request =
-        BuildRequest.builder()
-            .setCommandName(getClass().getAnnotation(Command.class).name())
-            .setId(env.getCommandId())
-            .setOptions(options)
-            .setStartupOptions(runtime.getStartupOptionsProvider())
-            .setOutErr(env.getReporter().getOutErr())
-            .setTargets(topLevelTargets)
-            .setStartTimeMillis(env.getCommandStartTime())
-            .build();
+        BuildRequest.create(
+            getClass().getAnnotation(Command.class).name(),
+            options,
+            runtime.getStartupOptionsProvider(),
+            topLevelTargets,
+            env.getReporter().getOutErr(),
+            env.getCommandId(),
+            env.getCommandStartTime());
     DetailedExitCode detailedExitCode =
         new CqueryBuildTool(env, expr).processRequest(request, null).getDetailedExitCode();
     return BlazeCommandResult.detailedExitCode(detailedExitCode);
