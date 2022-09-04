@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache.KeyType;
-import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCacheHitEvent;
 import com.google.devtools.build.lib.buildeventstream.FetchEvent;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.clock.JavaClock;
@@ -54,7 +53,6 @@ public class HttpDownloader {
 
   protected final RepositoryCache repositoryCache;
   private List<Path> distdir = ImmutableList.of();
-  private float timeoutScaling = 1.0f;
 
   public HttpDownloader(RepositoryCache repositoryCache) {
     this.repositoryCache = repositoryCache;
@@ -62,10 +60,6 @@ public class HttpDownloader {
 
   public void setDistdir(List<Path> distdir) {
     this.distdir = ImmutableList.copyOf(distdir);
-  }
-
-  public void setTimeoutScaling(float timeoutScaling) {
-    this.timeoutScaling = timeoutScaling;
   }
 
   /**
@@ -81,8 +75,6 @@ public class HttpDownloader {
    * @param output destination filename if {@code type} is <i>absent</i>, otherwise output directory
    * @param eventHandler CLI progress reporter
    * @param clientEnv environment variables in shell issuing this command
-   * @param repo the name of the external repository for which the file was fetched; used only for
-   *     reporting
    * @throws IllegalArgumentException on parameter badness, which should be checked beforehand
    * @throws IOException if download was attempted and ended up failing
    * @throws InterruptedException if this thread is being cast into oblivion
@@ -93,25 +85,13 @@ public class HttpDownloader {
       Optional<String> type,
       Path output,
       ExtendedEventHandler eventHandler,
-      Map<String, String> clientEnv,
-      String repo)
+      Map<String, String> clientEnv)
       throws IOException, InterruptedException {
     if (Thread.interrupted()) {
       throw new InterruptedException();
     }
 
-    URL mainUrl; // The "main" URL for this request
-    // Used for reporting only and determining the file name only.
-    if (urls.isEmpty()) {
-      if (type.isPresent() && !Strings.isNullOrEmpty(type.get())) {
-        mainUrl = new URL("http://nonexistent.example.org/cacheprobe." + type.get());
-      } else {
-        mainUrl = new URL("http://nonexistent.example.org/cacheprobe");
-      }
-    } else {
-      mainUrl = urls.get(0);
-    }
-    Path destination = getDownloadDestination(mainUrl, type, output);
+    Path destination = getDownloadDestination(urls.get(0), type, output);
 
     // Is set to true if the value should be cached by the sha256 value provided
     boolean isCachingByProvidedSha256 = false;
@@ -135,16 +115,11 @@ public class HttpDownloader {
           Path cachedDestination = repositoryCache.get(sha256, destination, KeyType.SHA256);
           if (cachedDestination != null) {
             // Cache hit!
-            eventHandler.post(new RepositoryCacheHitEvent(repo, sha256, mainUrl));
             return cachedDestination;
           }
         } catch (IOException e) {
           // Ignore error trying to get. We'll just download again.
         }
-      }
-
-      if (urls.isEmpty()) {
-        throw new IOException("Cache miss and no url specified");
       }
 
       for (Path dir : distdir) {
@@ -186,8 +161,7 @@ public class HttpDownloader {
     Sleeper sleeper = new JavaSleeper();
     Locale locale = Locale.getDefault();
     ProxyHelper proxyHelper = new ProxyHelper(clientEnv);
-    HttpConnector connector =
-        new HttpConnector(locale, eventHandler, proxyHelper, sleeper, timeoutScaling);
+    HttpConnector connector = new HttpConnector(locale, eventHandler, proxyHelper, sleeper);
     ProgressInputStream.Factory progressInputStreamFactory =
         new ProgressInputStream.Factory(locale, clock, eventHandler);
     HttpStream.Factory httpStreamFactory = new HttpStream.Factory(progressInputStreamFactory);
