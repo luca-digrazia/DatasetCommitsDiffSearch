@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import javax.ws.rs.Priorities;
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.ext.MessageBodyWriter;
@@ -18,6 +19,7 @@ public class ResourceWriter {
     private List<String> mediaTypeStrings = new ArrayList<>();
     private RuntimeType constraint;
     private boolean builtin = true;
+    private Integer priority = Priorities.USER;
     private volatile List<MediaType> mediaTypes;
     private volatile ServerMediaType serverMediaType;
     private volatile MessageBodyWriter<?> instance;
@@ -57,6 +59,14 @@ public class ResourceWriter {
         this.builtin = builtin;
     }
 
+    public Integer getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Integer priority) {
+        this.priority = priority;
+    }
+
     public MessageBodyWriter<?> instance() {
         if (instance == null) {
             synchronized (this) {
@@ -73,24 +83,21 @@ public class ResourceWriter {
         if (mediaTypes == null) {
             //todo: does this actually need to be threadsafe?
             synchronized (this) {
-                List<MediaType> ret = new ArrayList<>();
-                for (String i : mediaTypeStrings) {
-                    ret.add(MediaType.valueOf(i));
+                List<MediaType> mts = new ArrayList<>(mediaTypeStrings.size());
+                for (int i = 0; i < mediaTypeStrings.size(); i++) {
+                    mts.add(MediaType.valueOf(mediaTypeStrings.get(i)));
                 }
-                mediaTypes = Collections.unmodifiableList(ret);
+                mediaTypes = Collections.unmodifiableList(mts);
             }
         }
         return mediaTypes;
     }
 
-    public List<MediaType> modifiableMediaTypes() {
-        return new ArrayList<>(mediaTypes());
-    }
-
     public ServerMediaType serverMediaType() {
         if (serverMediaType == null) {
             synchronized (this) {
-                serverMediaType = new ServerMediaType(mediaTypes(), StandardCharsets.UTF_8.name());
+                // a MessageBodyWriter should always return its configured media type when negotiating, hence the 'false' for 'useSuffix'
+                serverMediaType = new ServerMediaType(mediaTypes(), StandardCharsets.UTF_8.name(), false, false);
             }
         }
         return serverMediaType;
@@ -114,8 +121,9 @@ public class ResourceWriter {
     /**
      * The comparison for now is simple:
      * 1) Application provided writers come first
-     * 2) Then the more specific the media type, the higher the priority
-     * 3) Finally we compare the number of media types
+     * 2) Writers higher priority come first (same as writer interceptors)
+     * 3) Then the more specific the media type, the higher the priority
+     * 4) Finally we compare the number of media types
      */
     public static class ResourceWriterComparator implements Comparator<ResourceWriter> {
 
@@ -126,6 +134,11 @@ public class ResourceWriter {
             int builtInCompare = Boolean.compare(o1.isBuiltin(), o2.isBuiltin());
             if (builtInCompare != 0) {
                 return builtInCompare;
+            }
+
+            int priorityCompare = Integer.compare(o2.getPriority(), o1.getPriority());
+            if (priorityCompare != 0) {
+                return priorityCompare;
             }
 
             List<MediaType> mediaTypes1 = o1.mediaTypes();
@@ -144,7 +157,7 @@ public class ResourceWriter {
                 return mediaTypeCompare;
             }
 
-            // TODO: not sure if this makes sense but was added to make the sorting more deterministic
+            // done to make the sorting result deterministic
             return Integer.compare(mediaTypes1.size(), mediaTypes2.size());
         }
     }

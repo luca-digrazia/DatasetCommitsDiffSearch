@@ -111,9 +111,7 @@ import io.quarkus.resteasy.reactive.spi.DynamicFeatureBuildItem;
 import io.quarkus.resteasy.reactive.spi.ExceptionMapperBuildItem;
 import io.quarkus.resteasy.reactive.spi.JaxrsFeatureBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyReaderBuildItem;
-import io.quarkus.resteasy.reactive.spi.MessageBodyReaderOverrideBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyWriterBuildItem;
-import io.quarkus.resteasy.reactive.spi.MessageBodyWriterOverrideBuildItem;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.security.AuthenticationCompletionException;
 import io.quarkus.security.AuthenticationFailedException;
@@ -235,8 +233,6 @@ public class ResteasyReactiveProcessor {
             List<DynamicFeatureBuildItem> dynamicFeatures,
             List<MessageBodyReaderBuildItem> additionalMessageBodyReaders,
             List<MessageBodyWriterBuildItem> additionalMessageBodyWriters,
-            List<MessageBodyReaderOverrideBuildItem> messageBodyReaderOverrideBuildItems,
-            List<MessageBodyWriterOverrideBuildItem> messageBodyWriterOverrideBuildItems,
             List<JaxrsFeatureBuildItem> features,
             List<ServerDefaultProducesHandlerBuildItem> serverDefaultProducesHandlers,
             Optional<RequestContextFactoryBuildItem> requestContextFactoryBuildItem,
@@ -463,8 +459,7 @@ public class ResteasyReactiveProcessor {
 
             ServerSerialisers serialisers = new ServerSerialisers();
             SerializersUtil.setupSerializers(recorder, reflectiveClass, additionalMessageBodyReaders,
-                    additionalMessageBodyWriters, messageBodyReaderOverrideBuildItems, messageBodyWriterOverrideBuildItems,
-                    beanContainerBuildItem, applicationResultBuildItem, serialisers,
+                    additionalMessageBodyWriters, beanContainerBuildItem, applicationResultBuildItem, serialisers,
                     RuntimeType.SERVER);
             // built-ins
 
