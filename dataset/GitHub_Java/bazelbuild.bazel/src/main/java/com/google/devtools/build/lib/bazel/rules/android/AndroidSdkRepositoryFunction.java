@@ -391,25 +391,14 @@ public class AndroidSdkRepositoryFunction extends RepositoryFunction {
     return pathFragments.build();
   }
 
-  /**
-   * Gets DirectoryListingValues for subdirectories of the directory or returns null.
-   *
-   * Ignores all non-directory files.
-   */
+  /** Gets DirectoryListingValues for subdirectories of the directory or returns null. */
   private static ImmutableMap<PathFragment, DirectoryListingValue> getSubdirectoryListingValues(
       final Path root, final PathFragment path, DirectoryListingValue directory, Environment env)
       throws RepositoryFunctionException, InterruptedException {
     Map<PathFragment, SkyKey> skyKeysForSubdirectoryLookups =
         Maps.transformEntries(
             Maps.uniqueIndex(
-                Iterables.filter(
-                    directory.getDirents(),
-                    new Predicate<Dirent>() {
-                      @Override
-                      public boolean apply(Dirent dirent) {
-                        return dirent.getType().equals(Dirent.Type.DIRECTORY);
-                      }
-                    }),
+                directory.getDirents(),
                 new Function<Dirent, PathFragment>() {
                   @Override
                   public PathFragment apply(Dirent input) {
