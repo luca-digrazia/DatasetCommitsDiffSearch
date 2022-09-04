@@ -16,12 +16,9 @@ package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.SkylarkInfo;
-import com.google.devtools.build.lib.skyframe.serialization.EnumCodec;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -215,13 +212,15 @@ public enum ApplePlatform implements SkylarkValue {
   }
 
   /** Returns a Skylark struct that contains the instances of this enum. */
-  public static Info getSkylarkStruct() {
-    Provider constructor = new NativeProvider<Info>(Info.class, "platforms") {};
+  public static SkylarkClassObject getSkylarkStruct() {
+    ClassObjectConstructor constructor =
+        new NativeClassObjectConstructor<SkylarkClassObject>(
+            SkylarkClassObject.class, "platforms") {};
     HashMap<String, Object> fields = new HashMap<>();
     for (ApplePlatform type : values()) {
       fields.put(type.skylarkKey, type);
     }
-    return new SkylarkInfo(constructor, fields, Location.BUILTIN);
+    return new SkylarkClassObject(constructor, fields);
   }
 
   @Override
@@ -289,20 +288,20 @@ public enum ApplePlatform implements SkylarkValue {
     }
 
     /** Returns a Skylark struct that contains the instances of this enum. */
-    public static Info getSkylarkStruct() {
-      Provider constructor = new NativeProvider<Info>(Info.class, "platform_types") {};
+    public static SkylarkClassObject getSkylarkStruct() {
+      ClassObjectConstructor constructor =
+          new NativeClassObjectConstructor<SkylarkClassObject>(
+              SkylarkClassObject.class, "platform_types") {};
       HashMap<String, Object> fields = new HashMap<>();
       for (PlatformType type : values()) {
         fields.put(type.skylarkKey, type);
       }
-      return new SkylarkInfo(constructor, fields, Location.BUILTIN);
+      return new SkylarkClassObject(constructor, fields);
     }
 
     @Override
     public void repr(SkylarkPrinter printer) {
       printer.append(toString());
     }
-
-    static final EnumCodec<PlatformType> CODEC = new EnumCodec<>(PlatformType.class);
   }
 }
