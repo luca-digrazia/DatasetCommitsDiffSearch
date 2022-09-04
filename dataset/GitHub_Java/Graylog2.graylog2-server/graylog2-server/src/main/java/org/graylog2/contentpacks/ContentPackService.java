@@ -361,6 +361,7 @@ public class ContentPackService {
 
         final ImmutableSet.Builder<Entity> entities = ImmutableSet.builder();
         for (EntityDescriptor entityDescriptor : resolvedEntities) {
+            // don't export default streams
             if (EntityDescriptorIds.isDefaultStreamDescriptor(entityDescriptor)) {
                 continue;
             }
