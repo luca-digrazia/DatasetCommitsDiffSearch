@@ -77,9 +77,10 @@ class MainClassBuildStep {
         TryBlock tryBlock = mv.tryBlock();
         for (StaticBytecodeRecorderBuildItem holder : staticInitTasks) {
             if (!holder.getBytecodeRecorder().isEmpty()) {
-                holder.getBytecodeRecorder().writeBytecode(classOutput.getClassOutput());
+                String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
+                holder.getBytecodeRecorder().writeBytecode(classOutput.getClassOutput(), className);
 
-                ResultHandle dup = tryBlock.newInstance(ofConstructor(holder.getBytecodeRecorder().getClassName()));
+                ResultHandle dup = tryBlock.newInstance(ofConstructor(className));
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
         }
@@ -105,8 +106,9 @@ class MainClassBuildStep {
         tryBlock = mv.tryBlock();
         for (MainBytecodeRecorderBuildItem holder : mainMethod) {
             if (!holder.getBytecodeRecorder().isEmpty()) {
-                holder.getBytecodeRecorder().writeBytecode(classOutput.getClassOutput());
-                ResultHandle dup = tryBlock.newInstance(ofConstructor(holder.getBytecodeRecorder().getClassName()));
+                String className = getClass().getName() + "$$Proxy" + COUNT.incrementAndGet();
+                holder.getBytecodeRecorder().writeBytecode(classOutput.getClassOutput(), className);
+                ResultHandle dup = tryBlock.newInstance(ofConstructor(className));
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup, startupContext);
             }
         }
