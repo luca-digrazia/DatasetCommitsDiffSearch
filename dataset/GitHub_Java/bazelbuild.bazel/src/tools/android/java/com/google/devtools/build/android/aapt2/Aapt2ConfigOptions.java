@@ -93,6 +93,16 @@ public class Aapt2ConfigOptions extends OptionsBase {
   public List<String> uncompressedExtensions;
 
   @Option(
+      name = "assetsToIgnore",
+      defaultValue = "",
+      converter = CommaSeparatedOptionListConverter.class,
+      category = "config",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "A list of assets extensions to ignore.")
+  public List<String> assetsToIgnore;
+
+  @Option(
       name = "debug",
       defaultValue = "false",
       category = "config",
@@ -117,7 +127,7 @@ public class Aapt2ConfigOptions extends OptionsBase {
 
   @Option(
       name = "split",
-      defaultValue = "null",
+      defaultValue = "required but ignored due to allowMultiple",
       category = "config",
       documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},

@@ -136,9 +136,11 @@ public class ResourceLinker {
 
   private Revision buildToolsVersion;
   private List<String> densities = ImmutableList.of();
+  private Path androidJar;
   private Profiler profiler = Profiler.empty();
   private List<String> uncompressedExtensions = ImmutableList.of();
   private List<String> resourceConfigs = ImmutableList.of();
+  private Path baseApk;
   private List<CompiledResources> include = ImmutableList.of();
   private List<Path> assetDirs = ImmutableList.of();
   private boolean conditionalKeepRules = false;
@@ -195,6 +197,11 @@ public class ResourceLinker {
 
   public ResourceLinker conditionalKeepRules(boolean conditionalKeepRules) {
     this.conditionalKeepRules = conditionalKeepRules;
+    return this;
+  }
+
+  public ResourceLinker baseApkToLinkAgainst(Path baseApk) {
+    this.baseApk = baseApk;
     return this;
   }
 
@@ -294,20 +301,10 @@ public class ResourceLinker {
 
   private List<String> compiledResourcesToPaths(
       CompiledResources compiled, Predicate<DirectoryEntry> shouldKeep) {
-    // NB: "include" can have duplicates, in particular because Aapt2ResourcePackagingAction
-    // creates this by concatenating two different options.  Since the *last* definition of anything
-    // takes precedence, keep the last instance of each entry.
-    List<Path> dedupedZips =
-        Stream.concat(include.stream(), Stream.of(compiled))
-            .map(CompiledResources::getZip)
-            .collect(ImmutableList.toImmutableList())
-            .reverse()
-            .stream()
-            .distinct()
-            .collect(ImmutableList.toImmutableList())
-            .reverse();
-
-    return dedupedZips.stream()
+    // Using sequential streams to maintain the overlay order for aapt2.
+    return Stream.concat(include.stream(), Stream.of(compiled))
+        .sequential()
+        .map(CompiledResources::getZip)
         .map(z -> executorService.submit(() -> filterZip(z, shouldKeep)))
         .map(rethrowLinkError(Future::get))
         // the process will always take as long as the longest Future
@@ -321,6 +318,10 @@ public class ResourceLinker {
             .resolve("filtered")
             // make absolute paths relative so that resolve will make a new path.
             .resolve(path.isAbsolute() ? path.subpath(1, path.getNameCount()) : path);
+    // TODO(b/74258184): How can this path already exist?
+    if (Files.exists(outPath)) {
+      return outPath;
+    }
     Files.createDirectories(outPath.getParent());
     try (FileChannel inChannel = FileChannel.open(path, StandardOpenOption.READ);
         FileChannel outChannel =
@@ -500,8 +501,11 @@ public class ResourceLinker {
     Path attributes = workingDirectory.resolve("tool.attributes");
     // extract tool annotations from the compile resources.
     final SdkToolAttributeWriter writer = new SdkToolAttributeWriter(attributes);
+    final AndroidCompiledDataDeserializer compiledDataDeserializer =
+        AndroidCompiledDataDeserializer.create();
     for (CompiledResources resources : FluentIterable.from(include).append(compiled)) {
-      AndroidCompiledDataDeserializer.readAttributes(resources)
+      compiledDataDeserializer
+          .readAttributes(resources)
           .forEach((key, value) -> value.writeResource((FullyQualifiedName) key, writer));
     }
     writer.flush();
@@ -606,6 +610,11 @@ public class ResourceLinker {
     return this;
   }
 
+  public ResourceLinker using(Path androidJar) {
+    this.androidJar = androidJar;
+    return this;
+  }
+
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
@@ -614,8 +623,10 @@ public class ResourceLinker {
         .add("buildToolsVersion", buildToolsVersion)
         .add("workingDirectory", workingDirectory)
         .add("densities", densities)
+        .add("androidJar", androidJar)
         .add("uncompressedExtensions", uncompressedExtensions)
         .add("resourceConfigs", resourceConfigs)
+        .add("baseApk", baseApk)
         .toString();
   }
 }
