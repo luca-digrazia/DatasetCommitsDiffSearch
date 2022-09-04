@@ -17,7 +17,6 @@
 
 package smile.manifold;
 
-import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Optional;
 import smile.graph.Graph;
@@ -52,22 +51,21 @@ import smile.netlib.ARPACK;
  * 
  * @author Haifeng Li
  */
-public class LLE implements Serializable {
-    private static final long serialVersionUID = 2L;
+public class LLE {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(LLE.class);
 
     /**
      * The original sample index.
      */
-    public final int[] index;
+    private int[] index;
     /**
      * Coordinate matrix.
      */
-    public final double[][] coordinates;
+    private double[][] coordinates;
     /**
      * Nearest neighbor graph.
      */
-    public Graph graph;
+    private Graph graph;
 
     /**
      * Constructor.
@@ -196,6 +194,29 @@ public class LLE implements Serializable {
         }
 
         return new LLE(index, coordinates, graph);
+    }
+
+    /**
+     * Returns the original sample index. Because LLE is applied to the largest
+     * connected component of k-nearest neighbor graph, we record the the original
+     * indices of samples in the largest component.
+     */
+    public int[] getIndex() {
+        return index;
+    }
+
+    /**
+     * Returns the coordinates of projected data.
+     */
+    public double[][] getCoordinates() {
+        return coordinates;
+    }
+
+    /**
+     * Returns the nearest neighbor graph.
+     */
+    public Graph getNearestNeighborGraph() {
+        return graph;
     }
 
     /**

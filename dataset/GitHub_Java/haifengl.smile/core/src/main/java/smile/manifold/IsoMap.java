@@ -17,7 +17,6 @@
 
 package smile.manifold;
 
-import java.io.Serializable;
 import java.util.Optional;
 import smile.graph.Graph;
 import smile.graph.Graph.Edge;
@@ -69,22 +68,21 @@ import smile.math.matrix.EVD;
  * 
  * @author Haifeng Li
  */
-public class IsoMap implements Serializable {
-    private static final long serialVersionUID = 2L;
+public class IsoMap {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(IsoMap.class);
 
     /**
      * The original sample index.
      */
-    public final int[] index;
+    private int[] index;
     /**
      * The coordinates.
      */
-    public final double[][] coordinates;
+    private double[][] coordinates;
     /**
      * The nearest neighbor graph.
      */
-    public final Graph graph;
+    private Graph graph;
 
     /**
      * Constructor.
@@ -184,5 +182,28 @@ public class IsoMap implements Serializable {
         }
 
         return new IsoMap(index, coordinates, graph);
+    }
+
+    /**
+     * Returns the original sample index. Because IsoMap is applied to the largest
+     * connected component of k-nearest neighbor graph, we record the the original
+     * indices of samples in the largest component.
+     */
+    public int[] getIndex() {
+        return index;
+    }
+
+    /**
+     * Returns the coordinates of projected data.
+     */
+    public double[][] getCoordinates() {
+        return coordinates;
+    }
+
+    /**
+     * Returns the nearest neighbor graph.
+     */
+    public Graph getNearestNeighborGraph() {
+        return graph;
     }
 }
