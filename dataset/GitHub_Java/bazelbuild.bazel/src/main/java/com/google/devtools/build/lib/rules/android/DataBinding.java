@@ -61,9 +61,10 @@ import java.util.function.Consumer;
  */
 public final class DataBinding {
   /** The rule attribute supplying data binding's annotation processor. */
-  static final String DATABINDING_ANNOTATION_PROCESSOR_ATTR = "$databinding_annotation_processor";
+  public static final String DATABINDING_ANNOTATION_PROCESSOR_ATTR =
+      "$databinding_annotation_processor";
 
-  private static final String ENABLE_DATA_BINDING_ATTR = "enable_data_binding";
+  public static final String ENABLE_DATA_BINDING_ATTR = "enable_data_binding";
 
   /** Contains Android Databinding configuration and resource generation information. */
   public interface DataBindingContext {
@@ -94,11 +95,11 @@ public final class DataBinding {
      * for each layout file with data binding expressions. Since this may produce multiple files,
      * outputs are zipped up into a single container.
      */
-    default void supplyLayoutInfo(Consumer<Artifact> consumer) {}
+    void supplyLayoutInfo(Consumer<Artifact> consumer);
 
     /** The javac flags that are needed to configure data binding's annotation processor. */
-    default void supplyJavaCoptsUsing(
-        RuleContext ruleContext, boolean isBinary, Consumer<Iterable<String>> consumer) {}
+    void supplyJavaCoptsUsing(
+        RuleContext ruleContext, boolean isBinary, Consumer<Iterable<String>> consumer);
 
     /**
      * Adds data binding's annotation processor as a plugin to the given Java compilation context.
@@ -106,8 +107,8 @@ public final class DataBinding {
      * <p>This, in conjunction with {@link #createAnnotationFile} extends the Java compilation to
      * translate data binding .xml into corresponding classes.
      */
-    default void supplyAnnotationProcessor(
-        RuleContext ruleContext, BiConsumer<JavaPluginInfoProvider, Iterable<Artifact>> consumer) {}
+    void supplyAnnotationProcessor(
+        RuleContext ruleContext, BiConsumer<JavaPluginInfoProvider, Iterable<Artifact>> consumer);
 
     /**
      * Processes deps that also apply data binding.
@@ -116,9 +117,7 @@ public final class DataBinding {
      * @return the deps' metadata outputs. These need to be staged as compilation inputs to the
      *     current rule.
      */
-    default ImmutableList<Artifact> processDeps(RuleContext ruleContext) {
-      return ImmutableList.of();
-    }
+    ImmutableList<Artifact> processDeps(RuleContext ruleContext);
 
     /**
      * Creates and adds the generated Java source for data binding annotation processor to read and
@@ -128,10 +127,8 @@ public final class DataBinding {
      * <p>This triggers the annotation processor. Annotation processor settings are configured
      * separately in {@link #supplyJavaCoptsUsing(RuleContext, boolean, Consumer)}.
      */
-    default ImmutableList<Artifact> addAnnotationFileToSrcs(
-        ImmutableList<Artifact> srcs, RuleContext ruleContext) {
-      return srcs;
-    };
+    ImmutableList<Artifact> addAnnotationFileToSrcs(
+        ImmutableList<Artifact> srcs, RuleContext ruleContext);
 
     /**
      * Adds the appropriate {@link UsesDataBindingProvider} for a rule if it should expose one.
@@ -139,13 +136,7 @@ public final class DataBinding {
      * <p>A rule exposes {@link UsesDataBindingProvider} if either it or its deps set {@code
      * enable_data_binding = 1}.
      */
-    default void addProvider(RuleConfiguredTargetBuilder builder, RuleContext ruleContext) {
-      maybeAddProvider(new ArrayList<>(), builder, ruleContext);
-    }
-
-    default AndroidResources processResources(AndroidResources resources) {
-      return resources;
-    }
+    void addProvider(RuleConfiguredTargetBuilder builder, RuleContext ruleContext);
   }
 
   private static final class EnabledDataBindingContext implements DataBindingContext {
@@ -158,51 +149,13 @@ public final class DataBinding {
 
     @Override
     public void supplyLayoutInfo(Consumer<Artifact> consumer) {
-      consumer.accept(layoutInfoFile());
-    }
-
-    Artifact layoutInfoFile() {
-      return actionConstructionContext.getUniqueDirectoryArtifact("databinding", "layout-info.zip");
+      consumer.accept(getLayoutInfoFile(actionConstructionContext));
     }
 
     @Override
     public void supplyJavaCoptsUsing(
         RuleContext ruleContext, boolean isBinary, Consumer<Iterable<String>> consumer) {
-      ImmutableList.Builder<String> flags = ImmutableList.builder();
-      String metadataOutputDir = getDataBindingExecPath(ruleContext).getPathString();
-
-      // Directory where the annotation processor looks for deps metadata output. The annotation
-      // processor automatically appends {@link DEP_METADATA_INPUT_DIR} to this path. Individual
-      // files can be anywhere under this directory, recursively.
-      flags.add(createProcessorFlag("bindingBuildFolder", metadataOutputDir));
-
-      // Directory where the annotation processor should write this rule's metadata output. The
-      // annotation processor automatically appends {@link METADATA_OUTPUT_DIR} to this path.
-      flags.add(createProcessorFlag("generationalFileOutDir", metadataOutputDir));
-
-      // Path to the Android SDK installation (if available).
-      flags.add(createProcessorFlag("sdkDir", "/not/used"));
-
-      // Whether the current rule is a library or binary.
-      flags.add(createProcessorFlag("artifactType", isBinary ? "APPLICATION" : "LIBRARY"));
-
-      // The path where data binding's resource processor wrote its output (the data binding XML
-      // expressions). The annotation processor reads this file to translate that XML into Java.
-      flags.add(createProcessorFlag("xmlOutDir", getDataBindingExecPath(ruleContext).toString()));
-
-      // Unused.
-      flags.add(createProcessorFlag("exportClassListTo", "/tmp/exported_classes"));
-
-      // The Java package for the current rule.
-      flags.add(createProcessorFlag("modulePackage", AndroidCommon.getJavaPackage(ruleContext)));
-
-      // The minimum Android SDK compatible with this rule.
-      flags.add(createProcessorFlag("minApi", "14")); // TODO(gregce): update this
-
-      // If enabled, produces cleaner output for Android Studio.
-      flags.add(createProcessorFlag("printEncodedErrors", "0"));
-
-      consumer.accept(flags.build());
+      consumer.accept(getJavacOpts(ruleContext, isBinary));
     }
 
     @Override
@@ -218,15 +171,7 @@ public final class DataBinding {
 
     @Override
     public ImmutableList<Artifact> processDeps(RuleContext ruleContext) {
-      ImmutableList.Builder<Artifact> dataBindingJavaInputs = ImmutableList.builder();
-      if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
-        dataBindingJavaInputs.add(layoutInfoFile());
-      }
-      for (Artifact dataBindingDepMetadata : getTransitiveMetadata(ruleContext, "deps")) {
-        dataBindingJavaInputs.add(
-            symlinkDepsMetadataIntoOutputTree(ruleContext, dataBindingDepMetadata));
-      }
-      return dataBindingJavaInputs.build();
+      return DataBinding.processDeps(ruleContext);
     }
 
     @Override
@@ -270,14 +215,38 @@ public final class DataBinding {
     public int hashCode() {
       return actionConstructionContext.hashCode();
     }
-
-    @Override
-    public AndroidResources processResources(AndroidResources resources) {
-      return resources;
-    }
   }
 
-  private static final DataBindingContext DISABLED_CONTEXT = new DataBindingContext() {};
+  private static final class DisabledDataBindingContext implements DataBindingContext {
+    @Override
+    public void supplyLayoutInfo(Consumer<Artifact> consumer) {
+      // pass
+    }
+
+    @Override
+    public void supplyJavaCoptsUsing(
+        RuleContext ruleContext, boolean isBinary, Consumer<Iterable<String>> consumer) {}
+
+    @Override
+    public void supplyAnnotationProcessor(
+        RuleContext ruleContext, BiConsumer<JavaPluginInfoProvider, Iterable<Artifact>> consumer) {}
+
+    @Override
+    public ImmutableList<Artifact> processDeps(RuleContext ruleContext) {
+      return ImmutableList.of();
+    }
+
+    @Override
+    public ImmutableList<Artifact> addAnnotationFileToSrcs(
+        ImmutableList<Artifact> srcs, RuleContext ruleContext) {
+      return srcs;
+    }
+
+    @Override
+    public void addProvider(RuleConfiguredTargetBuilder builder, RuleContext ruleContext) {
+      maybeAddProvider(new ArrayList<>(), builder, ruleContext);
+    }
+  }
 
   /** Supplies a databinding context from a rulecontext. */
   public static DataBindingContext contextFrom(RuleContext ruleContext) {
@@ -303,7 +272,7 @@ public final class DataBinding {
 
   /** Supplies a disabled (no-op) DataBindingContext. */
   public static DataBindingContext asDisabledDataBindingContext() {
-    return DISABLED_CONTEXT;
+    return new DisabledDataBindingContext();
   }
 
   /**
@@ -311,7 +280,7 @@ public final class DataBinding {
    * applied. The full file paths include prefixes as implemented in {@link #getMetadataOutputs}.
    */
   private static final ImmutableList<String> METADATA_OUTPUT_SUFFIXES =
-      ImmutableList.of("setter_store.bin", "layoutinfo.bin", "br.bin");
+      ImmutableList.<String>of("setter_store.bin", "layoutinfo.bin", "br.bin");
 
   /** The directory where the annotation processor looks for dep metadata. */
   private static final String DEP_METADATA_INPUT_DIR = "dependent-lib-artifacts";
@@ -326,10 +295,9 @@ public final class DataBinding {
    * additional compile/runtime dependencies. But rules with data binding disabled will fail if data
    * binding expressions appear in their layout resources.
    */
-  private static boolean isEnabled(RuleContext ruleContext) {
+  public static boolean isEnabled(RuleContext ruleContext) {
     return ruleContext.attributes().has(ENABLE_DATA_BINDING_ATTR, Type.BOOLEAN)
-        && Boolean.TRUE.equals(
-            ruleContext.attributes().get(ENABLE_DATA_BINDING_ATTR, Type.BOOLEAN));
+        && ruleContext.attributes().get(ENABLE_DATA_BINDING_ATTR, Type.BOOLEAN);
   }
 
   /** Returns this rule's data binding base output dir (as an execroot-relative path). */
@@ -349,6 +317,77 @@ public final class DataBinding {
         binRelativeBasePath.getRelative(relativePath), ruleContext.getBinOrGenfilesDirectory());
   }
 
+  /**
+   * Returns the file where data binding's resource processing produces binding xml. For example,
+   * given:
+   *
+   * <pre>{@code
+   * <layout>
+   *   <data>
+   *     <variable name="foo" type="String" />
+   *   </data>
+   * </layout>
+   * <LinearLayout>
+   *   ...
+   * </LinearLayout>
+   * }</pre>
+   *
+   * <p>data binding strips out and processes this part:
+   *
+   * <pre>{@code
+   * <data>
+   *   <variable name="foo" type="String" />
+   * </data>
+   * }</pre>
+   *
+   * for each layout file with data binding expressions. Since this may produce multiple files,
+   * outputs are zipped up into a single container.
+   */
+  static Artifact getLayoutInfoFile(ActionConstructionContext context) {
+    return getSuffixedInfoFile(context, "");
+  }
+
+  /** Gets a layout info file with the specified suffix (for use in having different outputs) */
+  static Artifact getSuffixedInfoFile(ActionConstructionContext context, String suffix) {
+    return context.getUniqueDirectoryArtifact("databinding", "layout-info" + suffix + ".zip");
+  }
+
+  /** The javac flags that are needed to configure data binding's annotation processor. */
+  static ImmutableList<String> getJavacOpts(RuleContext ruleContext, boolean isBinary) {
+    ImmutableList.Builder<String> flags = ImmutableList.builder();
+    String metadataOutputDir = getDataBindingExecPath(ruleContext).getPathString();
+
+    // Directory where the annotation processor looks for deps metadata output. The annotation
+    // processor automatically appends {@link DEP_METADATA_INPUT_DIR} to this path. Individual
+    // files can be anywhere under this directory, recursively.
+    flags.add(createProcessorFlag("bindingBuildFolder", metadataOutputDir));
+    // Directory where the annotation processor should write this rule's metadata output. The
+    // annotation processor automatically appends {@link METADATA_OUTPUT_DIR} to this path.
+    flags.add(createProcessorFlag("generationalFileOutDir", metadataOutputDir));
+    // Path to the Android SDK installation (if available).
+    flags.add(createProcessorFlag("sdkDir", "/not/used"));
+    // Whether the current rule is a library or binary.
+    flags.add(createProcessorFlag("artifactType", isBinary ? "APPLICATION" : "LIBRARY"));
+    // The path where data binding's resource processor wrote its output (the data binding XML
+    // expressions). The annotation processor reads this file to translate that XML into Java.
+    flags.add(createProcessorFlag("xmlOutDir", getDataBindingExecPath(ruleContext).toString()));
+    // Unused.
+    flags.add(createProcessorFlag("exportClassListTo", "/tmp/exported_classes"));
+    // The Java package for the current rule.
+    flags.add(createProcessorFlag("modulePackage", AndroidCommon.getJavaPackage(ruleContext)));
+    // The minimum Android SDK compatible with this rule.
+    flags.add(createProcessorFlag("minApi", "14")); // TODO(gregce): update this
+    // If enabled, the annotation processor reports detailed output about its activities.
+    // addProcessorFlag(attributes, "enableDebugLogs", "1");
+    // If enabled, produces cleaner output for Android Studio.
+    flags.add(createProcessorFlag("printEncodedErrors", "0"));
+    // Specifies whether the current rule is a test. Currently unused.
+    //    addDataBindingProcessorFlag(attributes, "isTestVariant", "false");
+    // Specifies that data binding is only used for test instrumentation. Currently unused.
+    // addDataBindingProcessorFlag(attributes, "enableForTests", null);
+    return flags.build();
+  }
+
   /** Turns a key/value pair into a javac annotation processor flag received by data binding. */
   private static String createProcessorFlag(String flag, String value) {
     return String.format("-Aandroid.databinding.%s=%s", flag, value);
@@ -356,12 +395,13 @@ public final class DataBinding {
 
   /**
    * Creates and returns the generated Java source that data binding's annotation processor reads to
-   * translate layout info xml into the classes that end user code consumes.
+   * translate layout info xml (from {@link #getLayoutInfoFile} into the classes that end user code
+   * consumes.
    *
    * <p>This mostly just triggers the annotation processor. Annotation processor settings are
    * configured separately.
    */
-  private static Artifact createAnnotationFile(RuleContext ruleContext) {
+  static Artifact createAnnotationFile(RuleContext ruleContext) {
     String contents;
     try {
       contents =
@@ -426,7 +466,7 @@ public final class DataBinding {
     if (!AndroidResources.definesAndroidResources(ruleContext.attributes())) {
       // If this rule doesn't define local resources, no resource processing was done, so it
       // doesn't produce data binding output.
-      return ImmutableList.of();
+      return ImmutableList.<Artifact>of();
     }
     ImmutableList.Builder<Artifact> outputs = ImmutableList.<Artifact>builder();
     String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
@@ -439,6 +479,25 @@ public final class DataBinding {
               String.format("%s/%s-%s-%s", METADATA_OUTPUT_DIR, javaPackage, javaPackage, suffix)));
     }
     return outputs.build();
+  }
+
+  /**
+   * Processes deps that also apply data binding.
+   *
+   * @param ruleContext the current rule
+   * @return the deps' metadata outputs. These need to be staged as compilation inputs to the
+   *     current rule.
+   */
+  private static ImmutableList<Artifact> processDeps(RuleContext ruleContext) {
+    ImmutableList.Builder<Artifact> dataBindingJavaInputs = ImmutableList.<Artifact>builder();
+    if (AndroidResources.definesAndroidResources(ruleContext.attributes())) {
+      dataBindingJavaInputs.add(DataBinding.getLayoutInfoFile(ruleContext));
+    }
+    for (Artifact dataBindingDepMetadata : getTransitiveMetadata(ruleContext, "deps")) {
+      dataBindingJavaInputs.add(
+          symlinkDepsMetadataIntoOutputTree(ruleContext, dataBindingDepMetadata));
+    }
+    return dataBindingJavaInputs.build();
   }
 
   /**
