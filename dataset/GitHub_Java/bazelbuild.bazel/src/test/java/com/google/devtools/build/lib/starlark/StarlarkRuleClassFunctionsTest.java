@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.syntax.FileOptions;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.SyntaxError;
@@ -1338,7 +1337,7 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testStructMutabilityShallow() throws Exception {
-    assertThat(Starlark.isImmutable(makeStruct("a", 1))).isTrue();
+    assertThat(EvalUtils.isImmutable(makeStruct("a", 1))).isTrue();
   }
 
   private static StarlarkList<Object> makeList(@Nullable Mutability mu) {
@@ -1347,14 +1346,14 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testStructMutabilityDeep() throws Exception {
-    assertThat(Starlark.isImmutable(Tuple.<Object>of(makeList(null)))).isTrue();
-    assertThat(Starlark.isImmutable(makeStruct("a", makeList(null)))).isTrue();
-    assertThat(Starlark.isImmutable(makeBigStruct(null))).isTrue();
+    assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(null)))).isTrue();
+    assertThat(EvalUtils.isImmutable(makeStruct("a", makeList(null)))).isTrue();
+    assertThat(EvalUtils.isImmutable(makeBigStruct(null))).isTrue();
 
     Mutability mu = Mutability.create("test");
-    assertThat(Starlark.isImmutable(Tuple.<Object>of(makeList(mu)))).isFalse();
-    assertThat(Starlark.isImmutable(makeStruct("a", makeList(mu)))).isFalse();
-    assertThat(Starlark.isImmutable(makeBigStruct(mu))).isFalse();
+    assertThat(EvalUtils.isImmutable(Tuple.<Object>of(makeList(mu)))).isFalse();
+    assertThat(EvalUtils.isImmutable(makeStruct("a", makeList(mu)))).isFalse();
+    assertThat(EvalUtils.isImmutable(makeBigStruct(mu))).isFalse();
   }
 
   @Test
