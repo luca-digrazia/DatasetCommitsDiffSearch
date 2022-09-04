@@ -193,26 +193,16 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       registerObjFilelistAction(getObjFiles(compilationArtifacts, intermediateArtifacts), objList);
   
       extension.addVariableCategory(VariableCategory.ARCHIVE_VARIABLES);
-
+      
       helper =
           createCcLibraryHelper(
-                  objcProvider,
-                  compilationArtifacts,
-                  extension.build(),
-                  extraCompileArgs,
-                  ccToolchain,
-                  fdoSupport)
+                  objcProvider, compilationArtifacts, extension.build(), ccToolchain, fdoSupport)
               .setLinkType(LinkTargetType.OBJC_ARCHIVE)
               .addLinkActionInput(objList);
     } else {
       helper =
           createCcLibraryHelper(
-              objcProvider,
-              compilationArtifacts,
-              extension.build(),
-              extraCompileArgs,
-              ccToolchain,
-              fdoSupport);
+              objcProvider, compilationArtifacts, extension.build(), ccToolchain, fdoSupport);
     }
 
     Info info = helper.build();
@@ -400,7 +390,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       ObjcProvider objcProvider,
       CompilationArtifacts compilationArtifacts,
       VariablesExtension extension,
-      ExtraCompileArgs extraCompileArgs,
       CcToolchainProvider ccToolchain,
       FdoSupportProvider fdoSupport) {
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
@@ -450,7 +439,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                         ruleContext
                             .getFragment(ObjcConfiguration.class)
                             .getCoptsForCompilationMode())
-                    .addAll(extraCompileArgs)
                     .build())
             .addIncludeDirs(objcProvider.get(INCLUDE))
             .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))

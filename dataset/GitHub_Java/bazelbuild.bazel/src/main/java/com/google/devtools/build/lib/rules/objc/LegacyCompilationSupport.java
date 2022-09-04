@@ -289,7 +289,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
       commandLine.add("-g");
     }
 
-    ImmutableList<String> coverageFlags = ImmutableList.of();
+    List<String> coverageFlags = ImmutableList.of();
     if (collectCodeCoverage) {
       if (buildConfiguration.isLLVMCoverageMapFormatEnabled()) {
         coverageFlags = CLANG_LLVM_COVERAGE_FLAGS;
@@ -299,19 +299,19 @@ public class LegacyCompilationSupport extends CompilationSupport {
     }
 
     commandLine
-        .add(ImmutableList.copyOf(compileFlagsForClang(appleConfiguration)))
+        .add(compileFlagsForClang(appleConfiguration))
         .add(commonLinkAndCompileFlagsForClang(objcProvider, objcConfiguration, appleConfiguration))
         .add(objcConfiguration.getCoptsForCompilationMode())
         .addBeforeEachPath(
             "-iquote", ObjcCommon.userHeaderSearchPaths(objcProvider, buildConfiguration))
-        .addBeforeEachExecPath("-include", ImmutableList.copyOf(pchFile.asSet()))
-        .addBeforeEachPath("-I", ImmutableList.copyOf(priorityHeaders))
+        .addBeforeEachExecPath("-include", pchFile.asSet())
+        .addBeforeEachPath("-I", priorityHeaders)
         .addBeforeEachPath("-I", objcProvider.get(INCLUDE))
         .addBeforeEachPath("-isystem", objcProvider.get(INCLUDE_SYSTEM))
-        .add(ImmutableList.copyOf(otherFlags))
+        .add(otherFlags)
         .addFormatEach("-D%s", objcProvider.get(DEFINE))
         .add(coverageFlags)
-        .add(ImmutableList.copyOf(getCompileRuleCopts()));
+        .add(getCompileRuleCopts());
 
     // Add input source file arguments
     commandLine.add("-c");
@@ -529,13 +529,10 @@ public class LegacyCompilationSupport extends CompilationSupport {
             .setCommandLine(
                 new CustomCommandLine.Builder()
                     .add("-static")
-                    .add("-arch_only")
-                    .add(appleConfiguration.getSingleArchitecture())
-                    .add("-syslibroot")
-                    .add(AppleToolchain.sdkDir())
-                    .add("-o")
-                    .add(outputArchive.getExecPathString())
-                    .addExecPaths(ImmutableList.copyOf(inputArtifacts))
+                    .add("-arch_only").add(appleConfiguration.getSingleArchitecture())
+                    .add("-syslibroot").add(AppleToolchain.sdkDir())
+                    .add("-o").add(outputArchive.getExecPathString())
+                    .addExecPaths(inputArtifacts)
                     .build())
             .addInputs(inputArtifacts)
             .addOutput(outputArchive)
@@ -663,7 +660,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
       Iterable<Artifact> bazelBuiltLibraries,
       Optional<Artifact> linkmap,
       Optional<Artifact> bitcodeSymbolMap) {
-    ImmutableList<String> libraryNames = libraryNames(objcProvider);
+    Iterable<String> libraryNames = libraryNames(objcProvider);
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
             .addPath(xcrunwrapper(ruleContext).getExecutable().getExecPath());
@@ -727,12 +724,12 @@ public class LegacyCompilationSupport extends CompilationSupport {
         .add("@executable_path/Frameworks")
         .add("-fobjc-link-runtime")
         .add(DEFAULT_LINKER_FLAGS)
-        .addBeforeEach("-framework", ImmutableList.copyOf(frameworkNames(objcProvider)))
+        .addBeforeEach("-framework", frameworkNames(objcProvider))
         .addBeforeEach("-weak_framework", SdkFramework.names(objcProvider.get(WEAK_SDK_FRAMEWORK)))
         .addFormatEach("-l%s", libraryNames)
         .addExecPath("-o", linkedBinary)
         .addBeforeEachExecPath("-force_load", forceLinkArtifacts)
-        .add(ImmutableList.copyOf(extraLinkArgs))
+        .add(extraLinkArgs)
         .add(objcProvider.get(ObjcProvider.LINKOPT));
 
     if (buildConfiguration.isCodeCoverageEnabled()) {
@@ -822,9 +819,8 @@ public class LegacyCompilationSupport extends CompilationSupport {
   }
 
   /** Returns a list of clang flags used for all link and compile actions executed through clang. */
-  private ImmutableList<String> commonLinkAndCompileFlagsForClang(
-      ObjcProvider provider,
-      ObjcConfiguration objcConfiguration,
+  private List<String> commonLinkAndCompileFlagsForClang(
+      ObjcProvider provider, ObjcConfiguration objcConfiguration,
       AppleConfiguration appleConfiguration) {
     ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
     ApplePlatform platform = appleConfiguration.getSingleArchPlatform();
