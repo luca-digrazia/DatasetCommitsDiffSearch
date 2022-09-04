@@ -2,7 +2,6 @@ package io.quarkus.deployment.logging;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -46,7 +45,6 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.logging.CategoryBuildTimeConfig;
-import io.quarkus.runtime.logging.InheritableLevel;
 import io.quarkus.runtime.logging.LogBuildTimeConfig;
 import io.quarkus.runtime.logging.LogConfig;
 import io.quarkus.runtime.logging.LogMetricsHandlerRecorder;
@@ -191,9 +189,9 @@ public final class LoggingResourceProcessor {
         generateLogManagerLogger(output, LoggingResourceProcessor.generateMinLevelDefault(minLevel.getName()));
     }
 
-    private static void generateCategoryMinLevelLoggers(Map<String, CategoryBuildTimeConfig> categories, Level rootMinLevel,
+    private static void generateCategoryMinLevelLoggers(Map<String, CategoryBuildTimeConfig> categories, Level minLevel,
             ClassOutput output) {
-        generateMinLevelCompute(categories, rootMinLevel, output);
+        generateMinLevelCompute(categories, minLevel.toString(), output);
         generateDefaultLoggerNode(output);
         generateLogManagerLogger(output, LoggingResourceProcessor::generateMinLevelCheckCategory);
     }
@@ -204,7 +202,7 @@ public final class LoggingResourceProcessor {
         return method.ifTrue(method.invokeStaticMethod(IS_MIN_LEVEL_ENABLED, levelIntValue, nameAlias));
     }
 
-    private static void generateMinLevelCompute(Map<String, CategoryBuildTimeConfig> categories, Level rootMinLevel,
+    private static void generateMinLevelCompute(Map<String, CategoryBuildTimeConfig> categories, String defaultMinLevelName,
             ClassOutput output) {
         try (ClassCreator cc = ClassCreator.builder().setFinal(true)
                 .className(MIN_LEVEL_COMPUTE_CLASS_NAME)
@@ -219,8 +217,7 @@ public final class LoggingResourceProcessor {
                 BytecodeCreator current = mc;
                 for (Map.Entry<String, CategoryBuildTimeConfig> entry : categories.entrySet()) {
                     final String category = entry.getKey();
-                    final int categoryLevelIntValue = getLogMinLevel(entry.getKey(), entry.getValue(), categories, rootMinLevel)
-                            .intValue();
+                    final int categoryLevelIntValue = entry.getValue().minLevel.getLevel().intValue();
 
                     ResultHandle equalsResult = current.invokeVirtualMethod(
                             MethodDescriptor.ofMethod(Object.class, "equals", boolean.class, Object.class),
@@ -230,7 +227,7 @@ public final class LoggingResourceProcessor {
                     try (BytecodeCreator false1 = equalsBranch.falseBranch()) {
                         ResultHandle startsWithResult = false1.invokeVirtualMethod(
                                 MethodDescriptor.ofMethod(String.class, "startsWith", boolean.class, String.class),
-                                name, false1.load(category + "."));
+                                name, false1.load(category));
 
                         BranchResult startsWithBranch = false1.ifTrue(startsWithResult);
 
@@ -246,30 +243,12 @@ public final class LoggingResourceProcessor {
                     equalsBranch.trueBranch().returnValue(equalsBranch.trueBranch().load(true));
                 }
 
-                final ResultHandle infoLevelIntValue = getLogManagerLevelIntValue(rootMinLevel.toString(), current);
+                final ResultHandle infoLevelIntValue = getLogManagerLevelIntValue(defaultMinLevelName, current);
                 final BranchResult isInfoOrHigherBranch = current.ifIntegerGreaterEqual(level, infoLevelIntValue);
                 isInfoOrHigherBranch.trueBranch().returnValue(isInfoOrHigherBranch.trueBranch().load(true));
                 isInfoOrHigherBranch.falseBranch().returnValue(isInfoOrHigherBranch.falseBranch().load(false));
             }
         }
-    }
-
-    private static Level getLogMinLevel(String categoryName, CategoryBuildTimeConfig categoryConfig,
-            Map<String, CategoryBuildTimeConfig> categories,
-            Level rootMinLevel) {
-        if (Objects.isNull(categoryConfig))
-            return rootMinLevel;
-
-        final InheritableLevel inheritableLevel = categoryConfig.minLevel;
-        if (!inheritableLevel.isInherited())
-            return inheritableLevel.getLevel();
-
-        int lastDotIndex = categoryName.lastIndexOf('.');
-        if (lastDotIndex == -1)
-            return rootMinLevel;
-
-        String parent = categoryName.substring(0, lastDotIndex);
-        return getLogMinLevel(parent, categories.get(parent), categories, rootMinLevel);
     }
 
     private static void generateDefaultLoggerNode(ClassOutput output) {
