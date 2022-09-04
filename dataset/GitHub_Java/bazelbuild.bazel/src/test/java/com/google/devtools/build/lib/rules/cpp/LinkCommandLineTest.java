@@ -23,9 +23,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactRoot.RootType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -57,8 +57,9 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
 
   private Artifact scratchArtifact(String s) {
     Path execRoot = outputBase.getRelative("exec");
-    Path outputRoot = execRoot.getRelative("root");
-    ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, outputRoot);
+    String outSegment = "root";
+    Path outputRoot = execRoot.getRelative(outSegment);
+    ArtifactRoot root = ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, outSegment);
     try {
       return ActionsTestUtil.createArtifact(
           root, scratch.overwriteFile(outputRoot.getRelative(s).toString()));
@@ -97,11 +98,8 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
                     ImmutableSet.of(),
                     "MOCK_LINKER_TOOL",
                     /* supportsEmbeddedRuntimes= */ true,
-                    /* supportsInterfaceSharedLibraries= */ false,
-                    /* doNotSplitLinkingCmdline= */ true))
-            .addAll(
-                CppActionConfigs.getFeaturesToAppearLastInFeaturesList(
-                    ImmutableSet.of(), /* doNotSplitLinkingCmdline= */ true))
+                    /* supportsInterfaceSharedLibraries= */ false))
+            .addAll(CppActionConfigs.getFeaturesToAppearLastInFeaturesList(ImmutableSet.of()))
             .build();
 
     ImmutableList<CToolchain.ActionConfig> actionConfigs =
@@ -113,7 +111,7 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
             /* supportsInterfaceSharedLibraries= */ false,
             /* existingActionConfigNames= */ ImmutableSet.of());
 
-    return CcToolchainFeaturesTest.buildFeatures(features, actionConfigs)
+    return CcToolchainTestHelper.buildFeatures(features, actionConfigs)
         .getFeatureConfiguration(
             ImmutableSet.of(
                 Link.LinkTargetType.EXECUTABLE.getActionName(),
@@ -249,7 +247,6 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
             .setActionName(LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName())
             .setLinkTargetType(LinkTargetType.NODEPS_DYNAMIC_LIBRARY)
             .setLinkingMode(Link.LinkingMode.STATIC)
-            .doNotSplitLinkingCmdLine()
             .build();
     assertThat(linkConfig.getRawLinkArgv()).contains("@foo/bar.param");
   }
@@ -336,7 +333,6 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
             .setLinkTargetType(LinkTargetType.DYNAMIC_LIBRARY)
             .forceToolPath("foo/bar/linker")
             .setParamFile(paramFile)
-            .doNotSplitLinkingCmdLine()
             .build();
     Pair<List<String>, List<String>> result = linkConfig.splitCommandline();
     assertThat(result.first).containsExactly("foo/bar/linker", "@some/file.params").inOrder();
@@ -391,11 +387,8 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
     FileSystem fs = scratch.getFileSystem();
     Path execRoot = fs.getPath(TestUtils.tmpDir());
     PathFragment execPath = PathFragment.create("out").getRelative(name);
-    return new SpecialArtifact(
-        ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out")),
-        execPath,
-        ActionsTestUtil.NULL_ARTIFACT_OWNER,
-        SpecialArtifactType.TREE);
+    return ActionsTestUtil.createTreeArtifactWithGeneratingAction(
+        ArtifactRoot.asDerivedRoot(execRoot, RootType.Output, "out"), execPath);
   }
 
   private void verifyArguments(
@@ -410,12 +403,8 @@ public final class LinkCommandLineTest extends BuildViewTestCase {
   public void testTreeArtifactLink() throws Exception {
     SpecialArtifact testTreeArtifact = createTreeArtifact("library_directory");
 
-    TreeFileArtifact library0 =
-        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
-            testTreeArtifact, "library0.o");
-    TreeFileArtifact library1 =
-        ActionsTestUtil.createTreeFileArtifactWithNoGeneratingAction(
-            testTreeArtifact, "library1.o");
+    TreeFileArtifact library0 = TreeFileArtifact.createTreeOutput(testTreeArtifact, "library0.o");
+    TreeFileArtifact library1 = TreeFileArtifact.createTreeOutput(testTreeArtifact, "library1.o");
 
     ArtifactExpander expander =
         new ArtifactExpander() {
