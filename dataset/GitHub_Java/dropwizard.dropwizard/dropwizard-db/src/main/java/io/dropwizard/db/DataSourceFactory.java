@@ -397,7 +397,7 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     private Duration evictionInterval = Duration.seconds(5);
 
     @NotNull
-    @MinDuration(value = 50, unit = TimeUnit.MILLISECONDS)
+    @MinDuration(1)
     private Duration validationInterval = Duration.seconds(30);
 
     private Optional<String> validatorClassName = Optional.empty();
