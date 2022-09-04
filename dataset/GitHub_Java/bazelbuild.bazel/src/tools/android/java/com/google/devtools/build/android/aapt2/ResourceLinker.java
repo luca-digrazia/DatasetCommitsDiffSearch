@@ -459,8 +459,8 @@ public class ResourceLinker {
               String comment = dirEntry.getComment();
               byte[] extra = dirEntry.getExtraData();
               zipOut.nextEntry(
-                  dirEntry.clone(filename, extra, comment).set(CENTIM, DosTime.EPOCHISH.time));
-              zipOut.write(header.clone(filename, extra).set(LOCTIM, DosTime.EPOCHISH.time));
+                  dirEntry.clone(filename, extra, comment).set(CENTIM, DosTime.EPOCH.time));
+              zipOut.write(header.clone(filename, extra).set(LOCTIM, DosTime.EPOCH.time));
               zipOut.write(data);
               if ((header.get(LOCFLG) & LocalFileHeader.SIZE_MASKED_FLAG) != 0) {
                 DataDescriptor desc =
@@ -563,8 +563,6 @@ public class ResourceLinker {
   }
 
   /** Link a proto apk to produce an apk. */
-  // aapt2 has a "convert" command which has similar behavior, but at the time of writing, will
-  // not compress any files in the res/ directory.
   public Path link(ProtoApk protoApk, Path resourceIds) {
     try {
       final Path protoApkPath = protoApk.asApkPath();
