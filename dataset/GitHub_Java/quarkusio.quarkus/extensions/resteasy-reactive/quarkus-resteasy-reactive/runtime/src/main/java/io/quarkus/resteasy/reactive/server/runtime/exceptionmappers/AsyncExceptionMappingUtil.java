@@ -1,14 +1,15 @@
 package io.quarkus.resteasy.reactive.server.runtime.exceptionmappers;
 
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import javax.ws.rs.core.Response;
 
 import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.RestResponse;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 import org.jboss.resteasy.reactive.server.spi.AsyncExceptionMapperContext;
 
-import io.quarkus.resteasy.reactive.server.runtime.NotFoundExceptionMapper;
 import io.smallrye.mutiny.Uni;
 
 /**
@@ -18,10 +19,13 @@ import io.smallrye.mutiny.Uni;
  */
 public final class AsyncExceptionMappingUtil {
 
-    private static final Logger log = Logger.getLogger(NotFoundExceptionMapper.class);
+    private static final Logger log = Logger.getLogger(AsyncExceptionMappingUtil.class);
 
     private static final Response DEFAULT_RESPONSE = Response.status(Response.Status.INTERNAL_SERVER_ERROR)
             .entity("Internal Server Error").build();
+
+    static final Response DEFAULT_UNAUTHORIZED_RESPONSE = Response.status(Response.Status.UNAUTHORIZED)
+            .entity("Not Authenticated").build();
 
     private AsyncExceptionMappingUtil() {
     }
@@ -47,5 +51,15 @@ public final class AsyncExceptionMappingUtil {
                 context.resume();
             }
         });
+    }
+
+    public static void handleUniRestResponse(Uni<? extends RestResponse<?>> asyncResponse,
+            AsyncExceptionMapperContext context) {
+        handleUniResponse(asyncResponse.map(new Function<RestResponse<?>, Response>() {
+            @Override
+            public Response apply(RestResponse<?> t) {
+                return t != null ? t.toResponse() : null;
+            }
+        }), context);
     }
 }
