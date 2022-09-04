@@ -18,26 +18,38 @@ package com.googlecode.androidannotations.processing;
 import java.lang.annotation.Annotation;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.annotations.NoTitle;
+import com.googlecode.androidannotations.annotations.rest.RestService;
+import com.googlecode.androidannotations.helper.ModelConstants;
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
 
-public class NoTitleProcessor implements ElementProcessor {
+public class RestServiceProcessor implements ElementProcessor {
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return NoTitle.class;
+		return RestService.class;
 	}
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
-		EBeanHolder holder = activitiesHolder.getRelativeEBeanHolder(element);
+		String fieldName = element.getSimpleName().toString();
 
-		JFieldRef noTitle = holder.refClass("android.view.Window").staticRef("FEATURE_NO_TITLE");
+		TypeMirror fieldTypeMirror = element.asType();
+		String interfaceName = fieldTypeMirror.toString();
 
-		holder.init.body().invoke("requestWindowFeature").arg(noTitle);
+		String generatedClassName = interfaceName + ModelConstants.GENERATION_SUFFIX;
+
+		JBlock methodBody = holder.init.body();
+
+		JFieldRef field = JExpr.ref(fieldName);
+
+		methodBody.assign(field, JExpr._new(holder.refClass(generatedClassName)));
 	}
 
 }

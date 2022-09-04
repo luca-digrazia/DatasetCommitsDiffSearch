@@ -273,6 +273,7 @@ public class RoboGuiceProcessor implements ElementProcessor {
 						return listenerClasses;
 
 					}
+
 				}
 			}
 		}

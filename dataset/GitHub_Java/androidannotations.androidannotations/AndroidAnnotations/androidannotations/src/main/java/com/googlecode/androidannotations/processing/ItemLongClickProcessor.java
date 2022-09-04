@@ -18,7 +18,6 @@ package com.googlecode.androidannotations.processing;
 import java.lang.annotation.Annotation;
 import java.util.List;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
@@ -26,7 +25,6 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.ItemLongClick;
-import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -44,12 +42,10 @@ import com.sun.codemodel.JVar;
  * @author Pierre-Yves Ricau
  * @author Mathieu Boniface
  */
-public class ItemLongClickProcessor implements ElementProcessor {
+public class ItemLongClickProcessor extends MultipleResIdsBasedProcessor implements ElementProcessor {
 
-	private IdAnnotationHelper helper;
-
-	public ItemLongClickProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
+	public ItemLongClickProcessor(IRClass rClass) {
+		super(rClass);
 	}
 
 	@Override
@@ -71,7 +67,7 @@ public class ItemLongClickProcessor implements ElementProcessor {
 		boolean hasItemParameter = parameters.size() == 1;
 
 		ItemLongClick annotation = element.getAnnotation(ItemLongClick.class);
-		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "ItemLongClicked", holder);
+		List<JFieldRef> idsRefs = extractQualifiedIds(element, annotation.value(), "ItemLongClicked", holder);
 
 		JDefinedClass onItemClickListenerClass = codeModel.anonymousClass(holder.refClass("android.widget.AdapterView.OnItemLongClickListener"));
 		JMethod onItemLongClickMethod = onItemClickListenerClass.method(JMod.PUBLIC, codeModel.BOOLEAN, "onItemLongClick");
@@ -97,14 +93,8 @@ public class ItemLongClickProcessor implements ElementProcessor {
 
 		if (hasItemParameter) {
 			VariableElement parameter = parameters.get(0);
-			
-			TypeMirror parameterType = parameter.asType();
-			if (parameterType.getKind() == TypeKind.INT) {
-				itemClickCall.arg(onItemClickPositionParam);
-			} else {
-				String parameterTypeQualifiedName = parameterType.toString();
-				itemClickCall.arg(JExpr.cast(holder.refClass(parameterTypeQualifiedName), JExpr.invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
-			}
+			String parameterQualifiedName = parameter.asType().toString();
+			itemClickCall.arg(JExpr.cast(holder.refClass(parameterQualifiedName), JExpr.invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
 		}
 
 		for (JFieldRef idRef : idsRefs) {

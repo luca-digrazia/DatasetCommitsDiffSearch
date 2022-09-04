@@ -13,25 +13,27 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-package com.googlecode.androidannotations.processing;
+package com.googlecode.androidannotations.validation;
 
 import java.lang.annotation.Annotation;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.SystemService;
+import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
+import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AndroidSystemServices;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JFieldRef;
+import com.googlecode.androidannotations.model.AnnotationElements;
 
-public class SystemServiceProcessor implements ElementProcessor {
+public class SystemServiceValidator implements ElementValidator {
 
 	private final AndroidSystemServices androidSystemServices;
+	private ValidatorHelper validatorHelper;
 
-	public SystemServiceProcessor(AndroidSystemServices androidSystemServices) {
+	public SystemServiceValidator(ProcessingEnvironment processingEnv, AndroidSystemServices androidSystemServices) {
+		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
+		validatorHelper = new ValidatorHelper(annotationHelper);
 		this.androidSystemServices = androidSystemServices;
 	}
 
@@ -41,20 +43,17 @@ public class SystemServiceProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+	public boolean validate(Element element, AnnotationElements validatedElements) {
 
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+		IsValid valid = new IsValid();
 
-		String fieldName = element.getSimpleName().toString();
+		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
 
-		TypeMirror serviceType = element.asType();
-		String fieldTypeQualifiedName = serviceType.toString();
+		validatorHelper.androidService(androidSystemServices, element, valid);
 
-		JFieldRef serviceRef = androidSystemServices.getServiceConstant(serviceType, holder);
+		validatorHelper.isNotPrivate(element, valid);
 
-		JBlock methodBody = holder.init.body();
-
-		methodBody.assign(JExpr.ref(fieldName), JExpr.cast(holder.refClass(fieldTypeQualifiedName), holder.contextRef.invoke("getSystemService").arg(serviceRef)));
+		return valid.isValid();
 	}
 
 }

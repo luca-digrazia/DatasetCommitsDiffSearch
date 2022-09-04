@@ -19,35 +19,44 @@ import java.lang.annotation.Annotation;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.annotations.Extra;
-import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
-import com.googlecode.androidannotations.helper.ValidatorHelper;
+import com.googlecode.androidannotations.helper.IdAnnotationHelper;
+import com.googlecode.androidannotations.helper.IdValidatorHelper;
+import com.googlecode.androidannotations.model.AndroidRes;
 import com.googlecode.androidannotations.model.AnnotationElements;
+import com.googlecode.androidannotations.rclass.IRClass;
 
-public class ExtraValidator implements ElementValidator {
+public class ResValidator implements ElementValidator {
 
-	private ValidatorHelper validatorHelper;
+	private final AndroidRes androidValue;
+	private IdValidatorHelper validatorHelper;
 
-	public ExtraValidator(ProcessingEnvironment processingEnv) {
-		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
-		validatorHelper = new ValidatorHelper(annotationHelper);
+	public ResValidator(AndroidRes androidValue, ProcessingEnvironment processingEnv, IRClass rClass) {
+		this.androidValue = androidValue;
+		IdAnnotationHelper annotationHelper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
+		validatorHelper = new IdValidatorHelper(annotationHelper);
 	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return Extra.class;
+		return androidValue.getTarget();
 	}
 
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
+
 		IsValid valid = new IsValid();
 
 		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
 
-		validatorHelper.isNotPrivate(element, valid);
+		TypeMirror fieldTypeMirror = element.asType();
 
-		validatorHelper.hasExtraValue(element, valid);
+		validatorHelper.allowedType(element, valid, fieldTypeMirror, androidValue.getAllowedTypes());
+
+		validatorHelper.idExists(element, androidValue.getRInnerClass(), valid);
+
+		validatorHelper.isNotPrivate(element, valid);
 
 		return valid.isValid();
 	}

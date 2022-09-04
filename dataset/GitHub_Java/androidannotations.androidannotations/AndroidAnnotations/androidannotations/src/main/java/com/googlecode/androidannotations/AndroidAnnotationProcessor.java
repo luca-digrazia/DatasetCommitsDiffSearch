@@ -51,7 +51,6 @@ import com.googlecode.androidannotations.annotations.NoTitle;
 import com.googlecode.androidannotations.annotations.OptionsItem;
 import com.googlecode.androidannotations.annotations.OptionsMenu;
 import com.googlecode.androidannotations.annotations.RoboGuice;
-import com.googlecode.androidannotations.annotations.RootContext;
 import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.Touch;
 import com.googlecode.androidannotations.annotations.Trace;
@@ -120,7 +119,6 @@ import com.googlecode.androidannotations.processing.PrefProcessor;
 import com.googlecode.androidannotations.processing.ResProcessor;
 import com.googlecode.androidannotations.processing.RestServiceProcessor;
 import com.googlecode.androidannotations.processing.RoboGuiceProcessor;
-import com.googlecode.androidannotations.processing.RootContextProcessor;
 import com.googlecode.androidannotations.processing.SharedPrefProcessor;
 import com.googlecode.androidannotations.processing.SystemServiceProcessor;
 import com.googlecode.androidannotations.processing.TouchProcessor;
@@ -163,7 +161,6 @@ import com.googlecode.androidannotations.validation.PrefValidator;
 import com.googlecode.androidannotations.validation.ResValidator;
 import com.googlecode.androidannotations.validation.RestServiceValidator;
 import com.googlecode.androidannotations.validation.RoboGuiceValidator;
-import com.googlecode.androidannotations.validation.RootContextValidator;
 import com.googlecode.androidannotations.validation.RunnableValidator;
 import com.googlecode.androidannotations.validation.SharedPrefValidator;
 import com.googlecode.androidannotations.validation.SystemServiceValidator;
@@ -234,7 +231,6 @@ import com.sun.codemodel.JCodeModel;
 		Fullscreen.class, //
 		RestService.class, //
 		Enhanced.class, //
-		RootContext.class, //
 		Trace.class //
 })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
@@ -383,13 +379,12 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new NoTitleValidator(processingEnv));
 		modelValidator.register(new FullscreenValidator(processingEnv));
 		modelValidator.register(new RestServiceValidator(processingEnv));
-		modelValidator.register(new RootContextValidator(processingEnv));
-		if (traceActivated()) {
-			modelValidator.register(new TraceValidator(processingEnv));
-		}
 		modelValidator.register(new RunnableValidator(UiThreadDelayed.class, processingEnv));
 		modelValidator.register(new RunnableValidator(UiThread.class, processingEnv));
 		modelValidator.register(new RunnableValidator(Background.class, processingEnv));
+		if (traceActivated()) {
+			modelValidator.register(new TraceValidator(processingEnv));
+		}
 		return modelValidator;
 	}
 
@@ -449,7 +444,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new NoTitleProcessor());
 		modelProcessor.register(new FullscreenProcessor());
 		modelProcessor.register(new RestServiceProcessor());
-		modelProcessor.register(new RootContextProcessor());
 		modelProcessor.register(new TraceProcessor());
 		modelProcessor.register(new UiThreadProcessor());
 		modelProcessor.register(new UiThreadDelayedProcessor());

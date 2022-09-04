@@ -15,21 +15,14 @@
  */
 package com.googlecode.androidannotations.processing;
 
-import static com.sun.codemodel.JExpr._null;
-import static com.sun.codemodel.JExpr.lit;
-
 import java.lang.annotation.Annotation;
 import java.util.List;
 
-import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.ItemSelect;
-import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
@@ -46,12 +39,10 @@ import com.sun.codemodel.JVar;
  * @author Pierre-Yves Ricau
  * @author Mathieu Boniface
  */
-public class ItemSelectedProcessor implements ElementProcessor {
+public class ItemSelectedProcessor extends MultipleResIdsBasedProcessor implements ElementProcessor {
 
-	private IdAnnotationHelper helper;
-
-	public ItemSelectedProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		helper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
+	public ItemSelectedProcessor(IRClass rClass) {
+		super(rClass);
 	}
 
 	@Override
@@ -68,8 +59,10 @@ public class ItemSelectedProcessor implements ElementProcessor {
 		ExecutableElement executableElement = (ExecutableElement) element;
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 
+		boolean hasItemParameter = parameters.size() == 2;
+
 		ItemSelect annotation = element.getAnnotation(ItemSelect.class);
-		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "ItemSelected", holder);
+		List<JFieldRef> idsRefs = extractQualifiedIds(element, annotation.value(), "ItemSelected", holder);
 
 		JDefinedClass onItemSelectedListenerClass = codeModel.anonymousClass(holder.refClass("android.widget.AdapterView.OnItemSelectedListener"));
 		JMethod onItemSelectedMethod = onItemSelectedListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onItemSelected");
@@ -85,24 +78,11 @@ public class ItemSelectedProcessor implements ElementProcessor {
 		JInvocation itemSelectedCall = onItemSelectedMethod.body().invoke(methodName);
 
 		itemSelectedCall.arg(JExpr.TRUE);
-		
-		boolean hasItemParameter = parameters.size() == 2;
-		boolean secondParameterIsInt = false;
-		String secondParameterQualifiedName = null;
-		if (hasItemParameter) {
-			VariableElement secondParameter = parameters.get(1);
-			TypeMirror secondParameterType = secondParameter.asType();
-			secondParameterQualifiedName = secondParameterType.toString();
-			secondParameterIsInt = secondParameterType.getKind() == TypeKind.INT;
-		}
 
 		if (hasItemParameter) {
-
-			if (secondParameterIsInt) {
-				itemSelectedCall.arg(onItemClickPositionParam);
-			} else {
-				itemSelectedCall.arg(JExpr.cast(holder.refClass(secondParameterQualifiedName), JExpr.invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
-			}
+			VariableElement parameter = parameters.get(1);
+			String parameterQualifiedName = parameter.asType().toString();
+			itemSelectedCall.arg(JExpr.cast(holder.refClass(parameterQualifiedName), JExpr.invoke(onItemClickParentParam, "getAdapter").invoke("getItem").arg(onItemClickPositionParam)));
 		}
 
 		JMethod onNothingSelectedMethod = onItemSelectedListenerClass.method(JMod.PUBLIC, codeModel.VOID, "onNothingSelected");
@@ -113,11 +93,7 @@ public class ItemSelectedProcessor implements ElementProcessor {
 
 		nothingSelectedCall.arg(JExpr.FALSE);
 		if (hasItemParameter) {
-			if (secondParameterIsInt) {
-				nothingSelectedCall.arg(lit(-1));
-			} else {
-				nothingSelectedCall.arg(_null());
-			}
+			nothingSelectedCall.arg(JExpr._null());
 		}
 
 		for (JFieldRef idRef : idsRefs) {

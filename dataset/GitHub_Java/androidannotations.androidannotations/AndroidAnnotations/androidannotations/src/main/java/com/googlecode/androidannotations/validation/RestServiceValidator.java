@@ -20,35 +20,37 @@ import java.lang.annotation.Annotation;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 
-import com.googlecode.androidannotations.annotations.Extra;
+import com.googlecode.androidannotations.annotations.rest.Rest;
+import com.googlecode.androidannotations.annotations.rest.RestService;
 import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
 import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 
-public class ExtraValidator implements ElementValidator {
+public class RestServiceValidator implements ElementValidator {
 
 	private ValidatorHelper validatorHelper;
 
-	public ExtraValidator(ProcessingEnvironment processingEnv) {
+	public RestServiceValidator(ProcessingEnvironment processingEnv) {
 		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
 		validatorHelper = new ValidatorHelper(annotationHelper);
 	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return Extra.class;
+		return RestService.class;
 	}
 
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
+
 		IsValid valid = new IsValid();
 
 		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
 
-		validatorHelper.hasExtraValue(element, valid);
-
+		validatorHelper.typeHasAnnotation(Rest.class, element, valid);
+		
 		return valid.isValid();
 	}
 

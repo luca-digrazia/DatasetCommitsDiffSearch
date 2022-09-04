@@ -18,9 +18,10 @@ package com.googlecode.androidannotations.processing;
 import java.lang.annotation.Annotation;
 
 import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.annotations.FromHtml;
 import com.googlecode.androidannotations.annotations.Id;
+import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.googlecode.androidannotations.rclass.IRInnerClass;
@@ -29,29 +30,33 @@ import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JFieldRef;
 
-public class FromHtmlProcessor implements ElementProcessor {
+public class ViewByIdProcessor implements ElementProcessor {
 
 	private final IRClass rClass;
 
-	public FromHtmlProcessor(IRClass rClass) {
+	public ViewByIdProcessor(IRClass rClass) {
 		this.rClass = rClass;
 	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return FromHtml.class;
+		return ViewById.class;
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+
 		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
 		String fieldName = element.getSimpleName().toString();
 
-		FromHtml annotation = element.getAnnotation(FromHtml.class);
+		TypeMirror uiFieldTypeMirror = element.asType();
+		String typeQualifiedName = uiFieldTypeMirror.toString();
+
+		ViewById annotation = element.getAnnotation(ViewById.class);
 		int idValue = annotation.value();
 
-		IRInnerClass rInnerClass = rClass.get(Res.STRING);
+		IRInnerClass rInnerClass = rClass.get(Res.ID);
 		JFieldRef idRef;
 		if (idValue == Id.DEFAULT_VALUE) {
 			idRef = rInnerClass.getIdStaticRef(fieldName, holder);
@@ -61,6 +66,7 @@ public class FromHtmlProcessor implements ElementProcessor {
 
 		JBlock methodBody = holder.afterSetContentView.body();
 
-		methodBody._if(JExpr.ref(fieldName).ne(JExpr._null()))._then().invoke(JExpr.ref(fieldName), "setText").arg(holder.refClass("android.text.Html").staticInvoke("fromHtml").arg(JExpr.invoke("getString").arg(idRef)));
+		methodBody.assign(JExpr.ref(fieldName), JExpr.cast(holder.refClass(typeQualifiedName), JExpr.invoke("findViewById").arg(idRef)));
 	}
+
 }

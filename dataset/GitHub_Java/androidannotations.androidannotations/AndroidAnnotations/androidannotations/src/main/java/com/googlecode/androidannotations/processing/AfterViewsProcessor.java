@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,15 +16,11 @@
 package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
-import java.util.List;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.AfterViews;
 import com.sun.codemodel.JCodeModel;
-import com.sun.codemodel.JInvocation;
 
 public class AfterViewsProcessor implements ElementProcessor {
 
@@ -34,21 +30,12 @@ public class AfterViewsProcessor implements ElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) {
-		
-		ActivityHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
-		
-		String methodName = element.getSimpleName().toString();
-		
-		ExecutableElement executableElement = (ExecutableElement) element;
-		List<? extends VariableElement> parameters = executableElement.getParameters();
-		boolean hasBundleParameter = parameters.size() == 1;
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
-		JInvocation methodCall = holder.afterSetContentView.body().invoke(methodName);
-		
-		if (hasBundleParameter) {
-			methodCall.arg(holder.afterSetContentViewSavedInstanceStateParam);
-		}
+		String methodName = element.getSimpleName().toString();
+
+		holder.afterSetContentView.body().invoke(methodName);
 	}
 
 }

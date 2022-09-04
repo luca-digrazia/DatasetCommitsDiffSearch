@@ -20,34 +20,40 @@ import java.lang.annotation.Annotation;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 
-import com.googlecode.androidannotations.annotations.Extra;
+import com.googlecode.androidannotations.annotations.App;
+import com.googlecode.androidannotations.helper.AndroidManifest;
 import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
 import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 
-public class ExtraValidator implements ElementValidator {
+public class AppValidator implements ElementValidator {
 
 	private ValidatorHelper validatorHelper;
+	private final AndroidManifest manifest;
 
-	public ExtraValidator(ProcessingEnvironment processingEnv) {
+	public AppValidator(ProcessingEnvironment processingEnv, AndroidManifest manifest) {
+		this.manifest = manifest;
 		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
 		validatorHelper = new ValidatorHelper(annotationHelper);
 	}
 
 	@Override
 	public Class<? extends Annotation> getTarget() {
-		return Extra.class;
+		return App.class;
 	}
 
 	@Override
 	public boolean validate(Element element, AnnotationElements validatedElements) {
+
 		IsValid valid = new IsValid();
 
 		validatorHelper.enclosingElementHasEBeanAnnotation(element, validatedElements, valid);
 
-		validatorHelper.isNotPrivate(element, valid);
+		validatorHelper.extendsApplication(element, valid);
 
-		validatorHelper.hasExtraValue(element, valid);
+		validatorHelper.registeredInManifest(element, manifest, valid);
+
+		validatorHelper.isNotPrivate(element, valid);
 
 		return valid.isValid();
 	}
