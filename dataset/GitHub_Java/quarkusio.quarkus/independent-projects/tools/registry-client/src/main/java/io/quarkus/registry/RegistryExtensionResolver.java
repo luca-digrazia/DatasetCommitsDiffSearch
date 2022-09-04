@@ -8,7 +8,6 @@ import io.quarkus.registry.catalog.PlatformCatalog;
 import io.quarkus.registry.client.RegistryClient;
 import io.quarkus.registry.config.RegistryConfig;
 import io.quarkus.registry.util.GlobUtil;
-import java.util.Iterator;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
@@ -21,13 +20,15 @@ class RegistryExtensionResolver {
 
     private final RegistryConfig config;
     private final RegistryClient extensionResolver;
+    private final int index;
 
     private Pattern recognizedQuarkusVersions;
 
     RegistryExtensionResolver(RegistryClient extensionResolver,
-            MessageWriter log) throws RegistryResolutionException {
+            MessageWriter log, int index) throws RegistryResolutionException {
         this.extensionResolver = Objects.requireNonNull(extensionResolver, "Registry extension resolver is null");
         this.config = extensionResolver.resolveRegistryConfig();
+        this.index = index;
 
         String versionExpr = config.getQuarkusVersions() == null ? null
                 : config.getQuarkusVersions().getRecognizedVersionsExpression();
@@ -38,6 +39,10 @@ class RegistryExtensionResolver {
 
     String getId() {
         return config.getId();
+    }
+
+    int getIndex() {
+        return index;
     }
 
     int checkQuarkusVersion(String quarkusVersion) {
@@ -64,22 +69,8 @@ class RegistryExtensionResolver {
         return extensionResolver.resolvePlatforms(quarkusCoreVersion);
     }
 
-    Platform resolveDefaultPlatform() throws RegistryResolutionException {
-        final PlatformCatalog platformsCatalog = resolvePlatformCatalog();
-        final ArtifactCoords defaultCoords = platformsCatalog.getDefaultPlatform();
-        for (Platform p : platformsCatalog.getPlatforms()) {
-            if (defaultCoords.equals(p.getBom())) {
-                return p;
-            }
-        }
-        final StringBuilder buf = new StringBuilder();
-        buf.append("Failed to locate the default platform ").append(defaultCoords).append(" in the catalog of ");
-        final Iterator<Platform> i = platformsCatalog.getPlatforms().iterator();
-        buf.append(i.next().getBom());
-        while (i.hasNext()) {
-            buf.append(", ").append(i.next().getBom());
-        }
-        throw new RegistryResolutionException(buf.toString());
+    Platform resolveRecommendedPlatform() throws RegistryResolutionException {
+        return resolvePlatformCatalog().getRecommendedPlatform();
     }
 
     ExtensionCatalog resolveNonPlatformExtensions(String quarkusCoreVersion) throws RegistryResolutionException {
@@ -88,5 +79,9 @@ class RegistryExtensionResolver {
 
     ExtensionCatalog resolvePlatformExtensions(ArtifactCoords platform) throws RegistryResolutionException {
         return extensionResolver.resolvePlatformExtensions(platform);
+    }
+
+    void clearCache() throws RegistryResolutionException {
+        extensionResolver.clearCache();
     }
 }
