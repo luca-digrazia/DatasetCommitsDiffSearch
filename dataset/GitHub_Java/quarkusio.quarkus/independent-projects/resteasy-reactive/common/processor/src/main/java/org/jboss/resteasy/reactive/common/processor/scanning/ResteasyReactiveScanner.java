@@ -186,7 +186,7 @@ public class ResteasyReactiveScanner {
             }
             httpAnnotationToMethod.put(httpMethodInstance.target().asClass().name(), httpMethodInstance.value().asString());
         }
-        return new ResourceScanningResult(index, scannedResources,
+        return new ResourceScanningResult(scannedResources,
                 scannedResourcePaths, possibleSubResources, pathInterfaces, resourcesThatNeedCustomProducer, beanParams,
                 httpAnnotationToMethod, methodExceptionMappers);
     }

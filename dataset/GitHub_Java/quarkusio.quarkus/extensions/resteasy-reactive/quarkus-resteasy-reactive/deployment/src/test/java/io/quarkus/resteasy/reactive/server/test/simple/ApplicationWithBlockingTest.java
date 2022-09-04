@@ -36,12 +36,6 @@ public class ApplicationWithBlockingTest {
 
         RestAssured.get("/tname/nonblocking")
                 .then().body(Matchers.containsString("loop"), Matchers.not(Matchers.containsString("executor")));
-
-        RestAssured.get("/tname2/blocking")
-                .then().body(Matchers.containsString("executor"), Matchers.not(Matchers.containsString("loop")));
-
-        RestAssured.get("/tname2/nonblocking")
-                .then().body(Matchers.containsString("loop"), Matchers.not(Matchers.containsString("executor")));
     }
 
     @Blocking
@@ -51,24 +45,6 @@ public class ApplicationWithBlockingTest {
 
     @Path("tname")
     public static class ThreadNameResource {
-
-        @Path("blocking")
-        @GET
-        public String threadName() {
-            return Thread.currentThread().getName();
-        }
-
-        @NonBlocking
-        @Path("nonblocking")
-        @GET
-        public String nonBlocking() {
-            return Thread.currentThread().getName();
-        }
-    }
-
-    @Blocking // this should have no effect
-    @Path("tname2")
-    public static class ThreadNameResourceWithBlocking {
 
         @Path("blocking")
         @GET
