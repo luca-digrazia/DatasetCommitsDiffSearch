@@ -143,27 +143,27 @@ public class DataSources {
         boolean isLegacy = matchingSupportEntry.isLegacy;
         if (!isLegacy) {
             if (!dataSourceJdbcRuntimeConfig.url.isPresent()) {
-                String errorMessage;
                 if (!legacyDataSourceRuntimeConfig.url.isPresent()) {
-                    // we don't have any URL configuration so using a standard message
+                    String errorMessage;
                     if (DataSourceUtil.isDefault(dataSourceName)) {
                         errorMessage = "quarkus.datasource.jdbc.url has not been defined";
                     } else {
                         errorMessage = "quarkus.datasource." + dataSourceName + ".jdbc.url has not been defined";
                     }
+                    throw new ConfigurationException(errorMessage);
                 } else {
-                    // the user mixed legacy configuration and the new style, let's use an appropriate message
+                    String errorMessage;
                     if (DataSourceUtil.isDefault(dataSourceName)) {
-                        errorMessage = "Using legacy quarkus.datasource.url with a db-kind is not supported, please use "
-                                + " quarkus.datasource.jdbc.url instead. See https://quarkus.io/guides/datasource for more information.";
+                        errorMessage = "quarkus.datasource.url is deprecated and will be removed in a future version - it is "
+                                + "recommended to switch to quarkus.datasource.jdbc.url. See https://quarkus.io/guides/datasource";
                     } else {
-                        errorMessage = "Using legacy quarkus.datasource." + dataSourceName
-                                + ".url with a db-kind is not supported, please use "
-                                + "quarkus.datasource." + dataSourceName + ".jdbc.url "
-                                + "instead. See https://quarkus.io/guides/datasource for more information.";
+                        errorMessage = "quarkus.datasource." + dataSourceName
+                                + ".url is deprecated and will be removed in a future version - it is " +
+                                "recommended to switch to quarkus.datasource." + dataSourceName
+                                + ".jdbc.url. See https://quarkus.io/guides/datasource";
                     }
+                    throw new ConfigurationException(errorMessage);
                 }
-                throw new ConfigurationException(errorMessage);
             }
         } else {
             if (!legacyDataSourceRuntimeConfig.url.isPresent()) {
