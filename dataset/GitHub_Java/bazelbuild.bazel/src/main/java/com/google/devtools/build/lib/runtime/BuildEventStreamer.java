@@ -16,17 +16,21 @@ package com.google.devtools.build.lib.runtime;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.nullToEmpty;
+import static com.google.devtools.build.lib.events.Event.of;
+import static com.google.devtools.build.lib.events.EventKind.PROGRESS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.Subscribe;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.actions.ActionExecutedEvent;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
@@ -36,11 +40,13 @@ import com.google.devtools.build.lib.analysis.BuildInfoEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
 import com.google.devtools.build.lib.buildeventstream.AbortedEvent;
+import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildCompletingEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Aborted.AbortReason;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
+import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.ChainableEvent;
@@ -56,7 +62,11 @@ import com.google.devtools.build.lib.buildtool.buildevent.NoAnalyzeEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.NoExecutionEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
+import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
+import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -64,18 +74,30 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
- * Streamer in charge of listening to {@link BuildEvent} and post them to each of the {@link
- * BuildEventTransport}.
+ * Listens for {@link BuildEvent}s and streams them to the provided {@link BuildEventTransport}s.
+ *
+ * <p>The streamer takes care of closing all {@link BuildEventTransport}s. It does so after having
+ * received a {@link BuildCompleteEvent}. Furthermore, it emits two event types to the
+ * {@code eventBus}. After having received the first {@link BuildEvent} it emits a
+ * {@link AnnounceBuildEventTransportsEvent} that contains a list of all its transports.
+ * Furthermore, after a transport has been closed, it emits
+ * a {@link BuildEventTransportClosedEvent}.
  */
-public class BuildEventStreamer {
-  private static final Logger logger = Logger.getLogger(BuildEventStreamer.class.getName());
+public class BuildEventStreamer implements EventHandler {
 
   private final Collection<BuildEventTransport> transports;
+  private final Reporter reporter;
   private final BuildEventStreamOptions options;
   private Set<BuildEventId> announcedEvents;
   private final Set<BuildEventId> postedEvents = new HashSet<>();
@@ -97,9 +119,7 @@ public class BuildEventStreamer {
   // True, if we already closed the stream.
   private boolean closed;
 
-  /** Holds the futures for the closing of each transport */
-  private ImmutableMap<BuildEventTransport, ListenableFuture<Void>> closeFuturesMap =
-      ImmutableMap.of();
+  private static final Logger logger = Logger.getLogger(BuildEventStreamer.class.getName());
 
   /**
    * Provider for stdout and stderr output.
@@ -123,9 +143,11 @@ public class BuildEventStreamer {
   /** Creates a new build event streamer. */
   private BuildEventStreamer(
       Collection<BuildEventTransport> transports,
+      @Nullable Reporter reporter,
       BuildEventStreamOptions options,
       CountingArtifactGroupNamer artifactGroupNamer) {
     this.transports = transports;
+    this.reporter = reporter;
     this.options = options;
     this.announcedEvents = null;
     this.progressCount = 0;
@@ -135,8 +157,9 @@ public class BuildEventStreamer {
   /** Creates a new build event streamer with default options. */
   public BuildEventStreamer(
       Collection<BuildEventTransport> transports,
+      @Nullable Reporter reporter,
       CountingArtifactGroupNamer namer) {
-    this(transports, new BuildEventStreamOptions(), namer);
+    this(transports, reporter, new BuildEventStreamOptions(), namer);
   }
 
   public void registerOutErrProvider(OutErrProvider outErrProvider) {
@@ -172,6 +195,10 @@ public class BuildEventStreamer {
           // stream may not be empty.
           announcedEvents.add(progress.getEventId());
           postedEvents.add(progress.getEventId());
+        }
+
+        if (reporter != null) {
+          reporter.post(new AnnounceBuildEventTransportsEvent(transports));
         }
 
         if (!bufferedStdoutStderrPairs.isEmpty()) {
@@ -294,6 +321,23 @@ public class BuildEventStreamer {
     }
   }
 
+  private ScheduledFuture<?> bepUploadWaitEvent(ScheduledExecutorService executor) {
+    final long startNanos = System.nanoTime();
+    return executor.scheduleAtFixedRate(
+        () -> {
+          long deltaNanos = System.nanoTime() - startNanos;
+          long deltaSeconds = TimeUnit.NANOSECONDS.toSeconds(deltaNanos);
+          Event waitEvt =
+              of(PROGRESS, null, "Waiting for Build Event Protocol upload: " + deltaSeconds + "s");
+          if (reporter != null) {
+            reporter.handle(waitEvt);
+          }
+        },
+        0,
+        1,
+        TimeUnit.SECONDS);
+  }
+
   public synchronized boolean isClosed() {
     return closed;
   }
@@ -302,27 +346,59 @@ public class BuildEventStreamer {
     close(null);
   }
 
-  public synchronized void close(@Nullable AbortReason reason) {
-    if (closed) {
-      return;
-    }
-    closed = true;
-    if (reason != null) {
-      abortReason = reason;
+  public void close(@Nullable AbortReason reason) {
+    synchronized (this) {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      if (reason != null) {
+        abortReason = reason;
+      }
+
+      if (finalEventsToCome == null) {
+        // This should only happen if there's a crash. Try to clean up as best we can.
+        clearEventsAndPostFinalProgress(null);
+      }
     }
 
-    if (finalEventsToCome == null) {
-      // This should only happen if there's a crash. Try to clean up as best we can.
-      clearEventsAndPostFinalProgress(null);
-    }
 
-    ImmutableMap.Builder<BuildEventTransport, ListenableFuture<Void>> closeFuturesMapBuilder =
-        ImmutableMap.builder();
-    for (final BuildEventTransport transport : transports) {
-      ListenableFuture<Void> closeFuture = transport.close();
-      closeFuturesMapBuilder.put(transport, closeFuture);
+    ScheduledExecutorService executor = null;
+    try {
+      executor = Executors.newSingleThreadScheduledExecutor(
+          new ThreadFactoryBuilder().setNameFormat("build-event-streamer-%d").build());
+      List<ListenableFuture<Void>> closeFutures = new ArrayList<>(transports.size());
+      for (final BuildEventTransport transport : transports) {
+        ListenableFuture<Void> closeFuture = transport.close();
+        closeFuture.addListener(
+            () -> {
+              if (reporter != null) {
+                reporter.post(new BuildEventTransportClosedEvent(transport));
+              }
+            },
+            executor);
+        closeFutures.add(closeFuture);
+      }
+
+      try {
+        if (closeFutures.isEmpty()) {
+          // Don't spam events if there is nothing to close.
+          return;
+        }
+
+        ScheduledFuture<?> f = bepUploadWaitEvent(executor);
+        // Wait for all transports to close, ignoring interrupts.
+        Uninterruptibles.getUninterruptibly(Futures.allAsList(closeFutures));
+        f.cancel(true);
+      } catch (ExecutionException e) {
+        logger.log(Level.SEVERE, "Failed to close a build event transport", e);
+        LoggingUtil.logToRemote(Level.SEVERE, "Failed to close a build event transport", e);
+      }
+    } finally {
+      if (executor != null) {
+        executor.shutdown();
+      }
     }
-    closeFuturesMap = closeFuturesMapBuilder.build();
   }
 
   private void maybeReportArtifactSet(
@@ -363,6 +439,9 @@ public class BuildEventStreamer {
     }
     post(event);
   }
+
+  @Override
+  public void handle(Event event) {}
 
   @Subscribe
   public void buildInterrupted(BuildInterruptedEvent event) {
@@ -556,6 +635,11 @@ public class BuildEventStreamer {
     consumeAsPairsofStrings(leftIterable, rightIterable, biConsumer, biConsumer);
   }
 
+  @VisibleForTesting
+  public ImmutableSet<BuildEventTransport> getTransports() {
+    return ImmutableSet.copyOf(transports);
+  }
+
   private synchronized void clearEventsAndPostFinalProgress(ChainableEvent event) {
     clearPendingEvents();
     Iterable<String> allOut = ImmutableList.of();
@@ -642,24 +726,20 @@ public class BuildEventStreamer {
     return event instanceof TestSummary && (((TestSummary) event).totalRuns() == 0);
   }
 
-  /**
-   * Returns the map from BEP transports to their corresponding closing future.
-   *
-   * <p>If this method is called before calling {@link #close()} then it will return an empty map.
-   */
-  public synchronized ImmutableMap<BuildEventTransport, ListenableFuture<Void>>
-      getCloseFuturesMap() {
-    return closeFuturesMap;
-  }
-
   /** A builder for {@link BuildEventStreamer}. */
   public static class Builder {
     private Set<BuildEventTransport> buildEventTransports;
+    private Reporter cmdLineReporter;
     private BuildEventStreamOptions besStreamOptions;
     private CountingArtifactGroupNamer artifactGroupNamer;
 
     public Builder buildEventTransports(Set<BuildEventTransport> value) {
       this.buildEventTransports = value;
+      return this;
+    }
+
+    public Builder cmdLineReporter(Reporter value) {
+      this.cmdLineReporter = value;
       return this;
     }
 
@@ -676,6 +756,7 @@ public class BuildEventStreamer {
     public BuildEventStreamer build() {
       return new BuildEventStreamer(
           checkNotNull(buildEventTransports),
+          checkNotNull(cmdLineReporter),
           checkNotNull(besStreamOptions),
           checkNotNull(artifactGroupNamer));
     }
