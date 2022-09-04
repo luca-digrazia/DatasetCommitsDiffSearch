@@ -77,7 +77,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
           "preprocess-assemble",
           "c-compile",
           "c++-compile");
-  private final CcToolchainProvider ccToolchain;
 
   /**
    * Creates a new CompilationSupport instance that uses the c++ rule backend
@@ -105,7 +104,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
       IntermediateArtifacts intermediateArtifacts,
       CompilationAttributes compilationAttributes) {
     super(ruleContext, buildConfiguration, intermediateArtifacts, compilationAttributes);
-    this.ccToolchain = CppHelper.getToolchain(ruleContext, ":cc_toolchain");
   }
 
   @Override
@@ -161,11 +159,11 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         .build();
     
     CppLinkAction fullyLinkAction =
-        new CppLinkActionBuilder(ruleContext, outputArchive, ccToolchain)
+        new CppLinkActionBuilder(ruleContext, outputArchive)
             .addActionInputs(objcProvider.getObjcLibraries())
             .addActionInputs(objcProvider.getCcLibraries())
             .addActionInputs(objcProvider.get(IMPORTED_LIBRARY).toSet())
-            .setCrosstoolInputs(ccToolchain.getLink())
+            .setCrosstoolInputs(CppHelper.getToolchain(ruleContext).getLink())
             .setLinkType(LinkTargetType.OBJC_FULLY_LINKED_ARCHIVE)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .setLibraryIdentifier(libraryIdentifier)
@@ -223,14 +221,14 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
    
     Artifact binaryToLink = getBinaryToLink();
     CppLinkAction executableLinkAction =
-        new CppLinkActionBuilder(ruleContext, binaryToLink, ccToolchain)
+        new CppLinkActionBuilder(ruleContext, binaryToLink)
             .setMnemonic("ObjcLink")
             .addActionInputs(bazelBuiltLibraries)
             .addActionInputs(objcProvider.getCcLibraries())
             .addTransitiveActionInputs(objcProvider.get(IMPORTED_LIBRARY))
             .addTransitiveActionInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
             .addTransitiveActionInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
-            .setCrosstoolInputs(ccToolchain.getLink())
+            .setCrosstoolInputs(CppHelper.getToolchain(ruleContext).getLink())
             .addActionInputs(prunedJ2ObjcArchives)
             .addActionInput(inputFileList)
             .setLinkType(linkType)
@@ -260,8 +258,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                     includeProcessing,
                     ruleContext.getFragment(ObjcConfiguration.class)),
                 getFeatureConfiguration(ruleContext),
-                CcLibraryHelper.SourceCategory.CC_AND_OBJC,
-                ccToolchain)
+                CcLibraryHelper.SourceCategory.CC_AND_OBJC)
             .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
             .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
             .addSources(privateHdrs)

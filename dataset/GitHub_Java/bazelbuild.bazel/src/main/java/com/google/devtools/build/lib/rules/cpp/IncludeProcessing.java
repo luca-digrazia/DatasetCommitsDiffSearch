@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScannerSupplier;
-import com.google.devtools.build.lib.rules.cpp.IncludeScanner.IncludeScanningHeaderData;
 import javax.annotation.Nullable;
 
 /** Used as an interface to thin header inputs to compile actions for C++-like compiles. */
@@ -27,7 +26,6 @@ public interface IncludeProcessing {
   Iterable<Artifact> determineAdditionalInputs(
       @Nullable IncludeScannerSupplier includeScannerSupplier,
       CppCompileAction action,
-      ActionExecutionContext actionExecutionContext,
-      IncludeScanningHeaderData includeScanningHeaderData)
+      ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException;
 }

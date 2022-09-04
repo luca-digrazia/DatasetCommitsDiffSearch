@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
@@ -297,15 +296,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         PathFragment parent = Preconditions.checkNotNull(
             path.getParentDirectory(), "Must pass in files, not root directory");
         Preconditions.checkArgument(!parent.isAbsolute(), path);
-        try {
-          SkyKey depKey =
-              ContainingPackageLookupValue.key(PackageIdentifier.discoverFromExecPath(path, true));
-          depKeys.put(path, depKey);
-          keysRequested.add(depKey);
-        } catch (LabelSyntaxException e) {
-          throw new PackageRootResolutionException(
-              String.format("Could not find the external repository for %s", path), e);
-        }
+        SkyKey depKey =
+            ContainingPackageLookupValue.key(PackageIdentifier.createInMainRepo(parent));
+        depKeys.put(path, depKey);
+        keysRequested.add(depKey);
       }
 
       Map<SkyKey,
@@ -321,8 +315,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         try {
           value = (ContainingPackageLookupValue) values.get(depKeys.get(path)).get();
         } catch (NoSuchPackageException | InconsistentFilesystemException e) {
-          throw new PackageRootResolutionException(
-              String.format("Could not determine containing package for %s", path), e);
+          throw new PackageRootResolutionException("Could not determine containing package for "
+              + path, e);
         }
 
         if (value == null) {
@@ -331,10 +325,8 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         }
         if (value.hasContainingPackage()) {
           // We have found corresponding root for current execPath.
-          result.put(path,
-              Root.computeSourceRoot(
-                  value.getContainingPackageRoot(),
-                  value.getContainingPackageName().getRepository()));
+          result.put(path, Root.asSourceRoot(value.getContainingPackageRoot(),
+              value.getContainingPackageName().getRepository().isMain()));
         } else {
           // We haven't found corresponding root for current execPath.
           result.put(path, null);
