@@ -14,7 +14,9 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -38,13 +40,18 @@ final class TransitiveInfoProviderMapImmutableMapBased implements TransitiveInfo
   }
 
   @Override
-  public Iterable<Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>>
-      entries() {
+  public ImmutableSet<Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>>
+      entrySet() {
     return map.entrySet();
   }
 
   @Override
-  public Iterable<TransitiveInfoProvider> values() {
+  public ImmutableCollection<TransitiveInfoProvider> values() {
     return map.values();
+  }
+
+  @Override
+  public TransitiveInfoProviderMapBuilder toBuilder() {
+    return new TransitiveInfoProviderMapBuilder().addAll(map.values());
   }
 }

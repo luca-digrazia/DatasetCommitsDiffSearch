@@ -162,11 +162,7 @@ public final class JavaProvider extends SkylarkClassObject implements Transitive
         "transitive_runtime_jars", SkylarkNestedSet.of(
             Artifact.class,
             providers.getProvider(JavaCompilationArgsProvider.class)
-                .getRecursiveJavaCompilationArgs().getRuntimeJars()),
-        "compile_jars", SkylarkNestedSet.of(
-            Artifact.class,
-            providers.getProvider(JavaCompilationArgsProvider.class)
-                .getJavaCompilationArgs().getCompileTimeJars())
+                .getRecursiveJavaCompilationArgs().getRuntimeJars())
     ));
     this.providers = providers;
   }
@@ -186,8 +182,7 @@ public final class JavaProvider extends SkylarkClassObject implements Transitive
     }
 
     public static Builder copyOf(JavaProvider javaProvider) {
-      return new Builder(
-          new TransitiveInfoProviderMapBuilder().addAll(javaProvider.getProviders()));
+      return new Builder(javaProvider.getProviders().toBuilder());
     }
 
     public <P extends TransitiveInfoProvider> Builder addProvider(

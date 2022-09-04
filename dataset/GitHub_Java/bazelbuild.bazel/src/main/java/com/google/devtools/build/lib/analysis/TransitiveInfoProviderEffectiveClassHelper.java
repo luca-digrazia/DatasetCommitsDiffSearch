@@ -15,17 +15,17 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
  * Provides the effective class for the provider. The effective class is inferred as the sole class
- * in the provider's inheritance hierarchy that implements {@link TransitiveInfoProvider} directly.
+ * in the provider's inheritence hierarchy that implements {@link TransitiveInfoProvider} directly.
  * This allows for simple subclasses such as those created by AutoValue, but will fail if there's
  * any ambiguity as to which implementor of the {@link TransitiveInfoProvider} is intended. If the
  * provider implements multiple TransitiveInfoProvider interfaces, prefer the explicit put builder
@@ -53,7 +53,7 @@ class TransitiveInfoProviderEffectiveClassHelper {
                         } else if (TransitiveInfoProvider.class.isAssignableFrom(clazz)) {
                           result.addAll(
                               getDirectImplementations(
-                                  clazz.asSubclass(TransitiveInfoProvider.class)));
+                                  (Class<? extends TransitiveInfoProvider>) clazz));
                         }
                       }
 
@@ -62,7 +62,7 @@ class TransitiveInfoProviderEffectiveClassHelper {
                           && TransitiveInfoProvider.class.isAssignableFrom(superclass)) {
                         result.addAll(
                             getDirectImplementations(
-                                superclass.asSubclass(TransitiveInfoProvider.class)));
+                                (Class<? extends TransitiveInfoProvider>) superclass));
                       }
                       return result;
                     }
@@ -83,12 +83,10 @@ class TransitiveInfoProviderEffectiveClassHelper {
                   });
 
   // TODO(arielb): see if these can be made private?
-  @SuppressWarnings("unchecked")
   static <T extends TransitiveInfoProvider> Class<T> get(T provider) {
     return get((Class<T>) provider.getClass());
   }
 
-  @SuppressWarnings("unchecked")
   static <T extends TransitiveInfoProvider> Class<T> get(Class<T> providerClass) {
     return (Class<T>) EFFECTIVE_PROVIDER_CLASS_CACHE.getUnchecked(providerClass);
   }

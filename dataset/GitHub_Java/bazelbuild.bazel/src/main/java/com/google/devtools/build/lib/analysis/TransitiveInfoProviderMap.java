@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.analysis;
 
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableSet;
 import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -21,11 +23,15 @@ import javax.annotation.concurrent.Immutable;
 /** Provides a mapping between a TransitiveInfoProvider class and an instance. */
 @Immutable
 public interface TransitiveInfoProviderMap {
+
   /** Returns the instance for the provided providerClass, or <tt>null</tt> if not present. */
   @Nullable
   <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass);
 
-  Iterable<Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>> entries();
+  ImmutableSet<Map.Entry<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>>
+      entrySet();
 
-  Iterable<TransitiveInfoProvider> values();
+  ImmutableCollection<TransitiveInfoProvider> values();
+
+  TransitiveInfoProviderMapBuilder toBuilder();
 }
