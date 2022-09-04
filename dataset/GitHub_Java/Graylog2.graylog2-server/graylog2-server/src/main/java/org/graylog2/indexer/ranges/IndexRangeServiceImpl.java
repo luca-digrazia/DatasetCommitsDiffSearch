@@ -21,7 +21,6 @@ import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
@@ -45,11 +44,8 @@ public class IndexRangeServiceImpl extends PersistedServiceImpl implements Index
     }
 
     @Override
-    public IndexRange get(String index) throws NotFoundException {
+    public IndexRange get(String index) {
         DBObject dbo = findOne(IndexRangeImpl.class, new BasicDBObject("index", index));
-
-        if (dbo == null)
-            throw new NotFoundException("Index " + index + " not found.");
 
         return new IndexRangeImpl((ObjectId) dbo.get("_id"), dbo.toMap());
     }
@@ -77,12 +73,8 @@ public class IndexRangeServiceImpl extends PersistedServiceImpl implements Index
 
     @Override
     public void destroy(String index) {
-        try {
-            final IndexRange range = get(index);
-            destroy(range);
-        } catch (NotFoundException e) {
-            return;
-        }
+        IndexRange range = get(index);
+        destroy(range);
 
         String x = "Removed range meta-information of [" + index + "]";
         LOG.info(x);
