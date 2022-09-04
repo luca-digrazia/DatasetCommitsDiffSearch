@@ -2,7 +2,6 @@ package io.quarkus.container.image.jib.deployment;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -45,17 +44,5 @@ public class JibConfig {
      * Custom labels to add to the generated image
      */
     @ConfigItem
-    public Map<String, String> labels;
-
-    /**
-     * The username to use to authenticate with the registry used to pull the base JVM image
-     */
-    @ConfigItem
-    public Optional<String> baseRegistryUsername;
-
-    /**
-     * The password to use to authenticate with the registry used to pull the base JVM image
-     */
-    @ConfigItem
-    public Optional<String> baseRegistryPassword;
+    Map<String, String> labels;
 }
