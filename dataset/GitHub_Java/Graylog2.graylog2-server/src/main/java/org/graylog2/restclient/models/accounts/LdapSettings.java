@@ -95,7 +95,7 @@ public class LdapSettings {
 
     public boolean delete() {
         try {
-            api.path(routes.LdapResource().deleteLdapSettings()).expect(Http.Status.NO_CONTENT).execute();
+            api.delete().path("/system/ldap/settings").expect(Http.Status.NO_CONTENT).execute();
             return true;
         } catch (APIException e) {
             log.error("Unable to remove LDAP settings", e);
