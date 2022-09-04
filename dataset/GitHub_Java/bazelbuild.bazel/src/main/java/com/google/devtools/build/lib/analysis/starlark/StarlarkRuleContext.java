@@ -462,7 +462,7 @@ public final class StarlarkRuleContext implements StarlarkRuleContextApi<Constra
         }
       }
 
-      splitAttrInfos.put(attr.getPublicName(), Dict.immutableCopyOf(splitPrereqsMap));
+      splitAttrInfos.put(attr.getPublicName(), Dict.copyOf(null, splitPrereqsMap));
     }
 
     return StructProvider.STRUCT.create(

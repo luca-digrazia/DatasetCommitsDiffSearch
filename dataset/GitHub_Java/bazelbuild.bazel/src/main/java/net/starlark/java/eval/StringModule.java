@@ -337,18 +337,18 @@ final class StringModule implements StarlarkValue {
     if (maxSplitO != Starlark.NONE) {
       maxSplit = Starlark.toInt(maxSplitO, "maxsplit");
     }
-    StarlarkList<String> res = StarlarkList.of(thread.mutability());
+    StarlarkList.Builder<String> res = StarlarkList.builder();
     int start = 0;
     while (true) {
       int end = self.indexOf(sep, start);
       if (end < 0 || maxSplit-- == 0) {
-        res.addElement(self.substring(start));
+        res.add(self.substring(start));
         break;
       }
-      res.addElement(self.substring(start, end));
+      res.add(self.substring(start, end));
       start = end + sep.length();
     }
-    return res;
+    return res.build(thread.mutability());
   }
 
   @StarlarkMethod(
@@ -654,9 +654,8 @@ final class StringModule implements StarlarkValue {
             doc = "Whether the line breaks should be included in the resulting list.")
       },
       useStarlarkThread = true)
-  public Sequence<String> splitLines(String self, boolean keepEnds, StarlarkThread thread)
-      throws EvalException {
-    StarlarkList<String> result = StarlarkList.of(thread.mutability());
+  public Sequence<String> splitLines(String self, boolean keepEnds, StarlarkThread thread) {
+    StarlarkList.Builder<String> result = StarlarkList.builder();
     Matcher matcher = SPLIT_LINES_PATTERN.matcher(self);
     while (matcher.find()) {
       String line = matcher.group("line");
@@ -666,14 +665,14 @@ final class StringModule implements StarlarkValue {
         break;
       }
       if (keepEnds && !trailingBreak) {
-        result.addElement(line + lineBreak);
+        result.add(line + lineBreak);
       } else {
-        result.addElement(line);
+        result.add(line);
       }
     }
     // TODO(adonovan): spec should state that result is mutable,
     // as in Python[23] and go.starlark.net.
-    return result;
+    return result.build(thread.mutability());
   }
 
   @StarlarkMethod(
@@ -858,12 +857,11 @@ final class StringModule implements StarlarkValue {
       parameters = {@Param(name = "self", doc = "This string.")})
   public Sequence<String> elems(String self) {
     // TODO(adonovan): opt: return a new type that is lazily iterable.
-    char[] chars = self.toCharArray();
-    Object[] strings = new Object[chars.length];
-    for (int i = 0; i < chars.length; i++) {
-      strings[i] = String.valueOf(chars[i]);
+    StarlarkList.Builder<String> res = StarlarkList.builder();
+    for (char c : self.toCharArray()) {
+      res.add(String.valueOf(c));
     }
-    return StarlarkList.wrap(null, strings);
+    return res.buildImmutable();
   }
 
   @StarlarkMethod(
