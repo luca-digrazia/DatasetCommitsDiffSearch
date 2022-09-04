@@ -318,14 +318,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     }
     CcCompilationHelper compilationHelper =
         new CcCompilationHelper(
-                ruleContext,
-                ruleContext,
-                ruleContext.getLabel(),
-                CppHelper.getGrepIncludes(ruleContext),
-                semantics,
-                featureConfiguration,
-                ccToolchain,
-                fdoContext)
+                ruleContext, semantics, featureConfiguration, ccToolchain, fdoContext)
             .fromCommon(common, /* additionalCopts= */ ImmutableList.of())
             .addPrivateHeaders(common.getPrivateHeaders())
             .addSources(common.getSources())
