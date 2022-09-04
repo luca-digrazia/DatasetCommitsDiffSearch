@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -233,8 +234,19 @@ public final class ConfigurationFragmentPolicy {
    */
   private boolean hasLegalFragmentName(
       Class<?> configurationFragment, Transition transition) {
-    return requiredConfigurationFragmentNames
-        .containsEntry(transition, SkylarkModule.Resolver.resolveName(configurationFragment));
+    String name = SkylarkModule.Resolver.resolveName(configurationFragment);
+    if (requiredConfigurationFragmentNames.containsEntry(transition, name)) {
+      return true;
+    } else if (transition == ConfigurationTransition.HOST) {
+      // We can get rid of this check when we remove ConfigurationTransition.HOST. This essentially
+      // makes ConfigurationTransition.HOST and HostTransition.INSTANCE interchangeable.
+      for (Map.Entry<Transition, String> entry : requiredConfigurationFragmentNames.entries()) {
+        if (entry.getKey().isHostTransition() && entry.getValue().equals(name)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**

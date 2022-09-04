@@ -58,11 +58,11 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
+import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraCompileArgs;
 import com.google.devtools.build.lib.rules.objc.J2ObjcSource.SourceType;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
@@ -135,7 +135,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   @Override
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     return ConfigAwareAspectBuilder.of(addAdditionalAttributes(new AspectDefinition.Builder(this)))
-        .requiresHostConfigurationFragments(JavaConfiguration.class)
+        .requiresHostConfigurationFragments(Jvm.class)
         .originalBuilder()
         .propagateAlongAttribute("deps")
         .propagateAlongAttribute("exports")
@@ -556,7 +556,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
             .addInputs(sources)
             .addInputs(sourceJars)
             .addTransitiveInputs(compileTimeJars)
-            .addTransitiveInputs(JavaRuntimeInfo.forHost(ruleContext).javaBaseInputsMiddleman())
+            .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
             .addTransitiveInputs(depsHeaderMappingFiles)
             .addTransitiveInputs(depsClassMappingFiles)
             .addInput(paramFile)

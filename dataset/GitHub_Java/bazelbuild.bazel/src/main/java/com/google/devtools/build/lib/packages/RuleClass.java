@@ -30,7 +30,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -39,12 +38,10 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate;
 import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTemplate.CannotPrecomputeDefaultsException;
+import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
-import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory.AttributeValues;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
@@ -68,7 +65,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
@@ -175,23 +171,22 @@ public class RuleClass {
     }
   }
 
-  /** A factory or builder class for rule implementations. */
-  public interface ConfiguredTargetFactory<
-      TConfiguredTarget, TContext, TActionConflictException extends Throwable> {
+  /**
+   * A factory or builder class for rule implementations.
+   */
+  public interface ConfiguredTargetFactory<TConfiguredTarget, TContext> {
     /**
      * Returns a fully initialized configured target instance using the given context.
      *
      * @throws RuleErrorException if configured target creation could not be completed due to rule
-     *     errors
-     * @throws TActionConflictException if there were conflicts during action registration
+     *    errors
      */
-    TConfiguredTarget create(TContext ruleContext)
-        throws InterruptedException, RuleErrorException, TActionConflictException;
+    TConfiguredTarget create(TContext ruleContext) throws InterruptedException, RuleErrorException;
 
     /**
-     * Exception indicating that configured target creation could not be completed. General error
-     * messaging should be done via {@link RuleErrorConsumer}; this exception only interrupts
-     * configured target creation in cases where it can no longer continue.
+     * Exception indicating that configured target creation could not be completed. Error messaging
+     * should be done via {@link RuleErrorConsumer}; this exception only interrupts configured
+     * target creation in cases where it can no longer continue.
      */
     public static final class RuleErrorException extends Exception {}
   }
@@ -386,69 +381,38 @@ public class RuleClass {
     }
 
     /** A predicate that filters rule classes based on their names. */
-    @AutoCodec
     public static class RuleClassNamePredicate {
-
-      private static final RuleClassNamePredicate UNSPECIFIED_INSTANCE =
-          new RuleClassNamePredicate(ImmutableSet.of(), PredicateType.UNSPECIFIED, null);
-
-      private final ImmutableSet<String> ruleClassNames;
-
-      private final PredicateType predicateType;
 
       private final Predicate<String> ruleClassNamePredicate;
       private final Predicate<RuleClass> ruleClassPredicate;
       // if non-null, used ONLY for checking overlap
       @Nullable private final Set<?> overlappable;
 
-      @VisibleForSerialization
-      enum PredicateType {
-        ONLY,
-        All_EXCEPT,
-        UNSPECIFIED
+      private RuleClassNamePredicate(
+          Predicate<String> ruleClassNamePredicate, @Nullable Set<?> overlappable) {
+        this(
+            ruleClassNamePredicate,
+            new DescribedPredicate<>(
+                Predicates.compose(ruleClassNamePredicate, RuleClass::getName),
+                ruleClassNamePredicate.toString()),
+            overlappable);
       }
 
-      @VisibleForSerialization
-      RuleClassNamePredicate(
-          ImmutableSet<String> ruleClassNames, PredicateType predicateType, Set<?> overlappable) {
-        this.ruleClassNames = ruleClassNames;
-        this.predicateType = predicateType;
+      private RuleClassNamePredicate(
+          Predicate<String> ruleClassNamePredicate,
+          Predicate<RuleClass> ruleClassPredicate,
+          @Nullable Set<?> overlappable) {
+        this.ruleClassNamePredicate = ruleClassNamePredicate;
+        this.ruleClassPredicate = ruleClassPredicate;
         this.overlappable = overlappable;
-
-        switch (predicateType) {
-          case All_EXCEPT:
-            Predicate<String> containing = only(ruleClassNames).asPredicateOfRuleClassName();
-            ruleClassNamePredicate =
-                new DescribedPredicate<>(
-                    Predicates.not(containing), "all but " + containing.toString());
-            ruleClassPredicate =
-                new DescribedPredicate<>(
-                    Predicates.compose(ruleClassNamePredicate, RuleClass::getName),
-                    ruleClassNamePredicate.toString());
-            break;
-          case ONLY:
-            ruleClassNamePredicate =
-                new DescribedPredicate<>(
-                    Predicates.in(ruleClassNames), StringUtil.joinEnglishList(ruleClassNames));
-            ruleClassPredicate =
-                new DescribedPredicate<>(
-                    Predicates.compose(ruleClassNamePredicate, RuleClass::getName),
-                    ruleClassNamePredicate.toString());
-            break;
-          case UNSPECIFIED:
-            ruleClassNamePredicate = Predicates.alwaysTrue();
-            ruleClassPredicate = Predicates.alwaysTrue();
-            break;
-          default:
-            // This shouldn't happen normally since the constructor is private and within this file.
-            throw new IllegalArgumentException(
-                "Predicate type was not specified when constructing a RuleClassNamePredicate.");
-        }
       }
 
       public static RuleClassNamePredicate only(Iterable<String> ruleClassNamesAsIterable) {
         ImmutableSet<String> ruleClassNames = ImmutableSet.copyOf(ruleClassNamesAsIterable);
-        return new RuleClassNamePredicate(ruleClassNames, PredicateType.ONLY, ruleClassNames);
+        return new RuleClassNamePredicate(
+            new DescribedPredicate<>(
+                Predicates.in(ruleClassNames), StringUtil.joinEnglishList(ruleClassNames)),
+            ruleClassNames);
       }
 
       public static RuleClassNamePredicate only(String... ruleClasses) {
@@ -458,7 +422,11 @@ public class RuleClass {
       public static RuleClassNamePredicate allExcept(String... ruleClasses) {
         ImmutableSet<String> ruleClassNames = ImmutableSet.copyOf(ruleClasses);
         Preconditions.checkState(!ruleClassNames.isEmpty(), "Use unspecified() instead");
-        return new RuleClassNamePredicate(ruleClassNames, PredicateType.All_EXCEPT, null);
+        Predicate<String> containing = only(ruleClassNames).asPredicateOfRuleClassName();
+        return new RuleClassNamePredicate(
+            new DescribedPredicate<>(
+                Predicates.not(containing), "all but " + containing.toString()),
+            null);
       }
 
       /**
@@ -468,7 +436,7 @@ public class RuleClass {
        * Predicates.<RuleClass>alwaysTrue()}, which is a sentinel value for other parts of bazel.
        */
       public static RuleClassNamePredicate unspecified() {
-        return UNSPECIFIED_INSTANCE;
+        return new RuleClassNamePredicate(Predicates.alwaysTrue(), Predicates.alwaysTrue(), null);
       }
 
       public final Predicate<String> asPredicateOfRuleClassName() {
@@ -495,7 +463,7 @@ public class RuleClass {
 
       @Override
       public int hashCode() {
-        return Objects.hash(ruleClassNames, predicateType);
+        return ruleClassNamePredicate.hashCode();
       }
 
       @Override
@@ -503,8 +471,7 @@ public class RuleClass {
         // NOTE: Specifically not checking equality of ruleClassPredicate.
         // By construction, if the name predicates are equals, the rule class predicates are, too.
         return obj instanceof RuleClassNamePredicate
-            && ruleClassNames.equals(((RuleClassNamePredicate) obj).ruleClassNames)
-            && predicateType.equals(((RuleClassNamePredicate) obj).predicateType);
+            && ruleClassNamePredicate.equals(((RuleClassNamePredicate) obj).ruleClassNamePredicate);
       }
 
       @Override
@@ -549,14 +516,14 @@ public class RuleClass {
      * A RuleTransitionFactory which always returns the same transition.
      */
     private static final class FixedTransitionFactory implements RuleTransitionFactory {
-      private final ConfigurationTransition transition;
+      private final Transition transition;
 
-      private FixedTransitionFactory(ConfigurationTransition transition) {
+      private FixedTransitionFactory(Transition transition) {
         this.transition = transition;
       }
 
       @Override
-      public ConfigurationTransition buildTransitionFor(Rule rule) {
+      public Transition buildTransitionFor(Rule rule) {
         return transition;
       }
     }
@@ -588,7 +555,7 @@ public class RuleClass {
     private ImplicitOutputsFunction implicitOutputsFunction = ImplicitOutputsFunction.NONE;
     private RuleTransitionFactory transitionFactory;
     private RuleTransitionFactory outgoingTransitionFactory;
-    private ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory = null;
+    private ConfiguredTargetFactory<?, ?> configuredTargetFactory = null;
     private PredicateWithMessage<Rule> validityPredicate =
         PredicatesWithMessage.<Rule>alwaysTrue();
     private Predicate<String> preferredDependencyPredicate = Predicates.alwaysFalse();
@@ -686,12 +653,7 @@ public class RuleClass {
           skylark && (type == RuleClassType.NORMAL || type == RuleClassType.TEST);
       Preconditions.checkState(
           (type == RuleClassType.ABSTRACT)
-              == (configuredTargetFactory == null && configuredTargetFunction == null),
-          "Bad combo for %s: %s %s %s",
-          name,
-          type,
-          configuredTargetFactory,
-          configuredTargetFunction);
+          == (configuredTargetFactory == null && configuredTargetFunction == null));
       if (!workspaceOnly) {
         Preconditions.checkState(skylarkExecutable == (configuredTargetFunction != null));
         Preconditions.checkState(skylarkExecutable == (ruleDefinitionEnvironment != null));
@@ -703,7 +665,6 @@ public class RuleClass {
       return new RuleClass(
           name,
           key,
-          type,
           skylark,
           skylarkExecutable,
           skylarkTestable,
@@ -755,7 +716,7 @@ public class RuleClass {
      *
      * <p>The value is inherited by subclasses.
      */
-    public Builder requiresConfigurationFragments(ConfigurationTransition transition,
+    public Builder requiresConfigurationFragments(Transition transition,
         Class<?>... configurationFragments) {
       configurationFragmentPolicy.requiresConfigurationFragments(
           transition,
@@ -787,8 +748,8 @@ public class RuleClass {
      * fragments to be present in the given configuration that isn't the rule's configuration but
      * is also readable by the rule.
      *
-     * <p>In contrast to {@link #requiresConfigurationFragments(ConfigurationTransition, Class...)},
-     * this method takes Skylark module names of fragments instead of their classes.
+     * <p>In contrast to {@link #requiresConfigurationFragments(Transition, Class...)}, this method
+     * takes Skylark module names of fragments instead of their classes.
      * *
      * <p>You probably don't want to use this, because rules generally shouldn't read configurations
      * other than their own. If you want to declare host config fragments, see
@@ -796,8 +757,8 @@ public class RuleClass {
      *
      * <p>The value is inherited by subclasses.
      */
-    public Builder requiresConfigurationFragmentsBySkylarkModuleName(
-        ConfigurationTransition transition, Collection<String> configurationFragmentNames) {
+    public Builder requiresConfigurationFragmentsBySkylarkModuleName(Transition transition,
+        Collection<String> configurationFragmentNames) {
       configurationFragmentPolicy.requiresConfigurationFragmentsBySkylarkModuleName(transition,
           configurationFragmentNames);
       return this;
@@ -877,7 +838,7 @@ public class RuleClass {
      * <p>If you need the transition to depend on the rule it's being applied to, use
      * {@link #cfg(RuleTransitionFactory)}.
      */
-    public Builder cfg(ConfigurationTransition transition) {
+    public Builder cfg(Transition transition) {
       Preconditions.checkState(type != RuleClassType.ABSTRACT,
           "Setting not inherited property (cfg) of abstract rule class '%s'", name);
       Preconditions.checkState(this.transitionFactory == null,
@@ -890,8 +851,8 @@ public class RuleClass {
     /**
      * Applies the given transition factory to all incoming edges for this rule class.
      *
-     * <p>Unlike{@link #cfg(ConfigurationTransition)}, the factory can examine the rule when
-     * deciding what transition to use.
+     * <p>Unlike{@link #cfg(Transition)}, the factory can examine the rule when deciding what
+     * transition to use.
      */
     public Builder cfg(RuleTransitionFactory transitionFactory) {
       Preconditions.checkState(type != RuleClassType.ABSTRACT,
@@ -919,7 +880,7 @@ public class RuleClass {
       return this;
     }
 
-    public Builder factory(ConfiguredTargetFactory<?, ?, ?> factory) {
+    public Builder factory(ConfiguredTargetFactory<?, ?> factory) {
       this.configuredTargetFactory = factory;
       return this;
     }
@@ -1191,7 +1152,6 @@ public class RuleClass {
    */
   private final String targetKind;
 
-  private final RuleClassType type;
   private final boolean isSkylark;
   private final boolean skylarkExecutable;
   private final boolean skylarkTestable;
@@ -1234,8 +1194,10 @@ public class RuleClass {
    */
   private final RuleTransitionFactory outgoingTransitionFactory;
 
-  /** The factory that creates configured targets from this rule. */
-  private final ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory;
+  /**
+   * The factory that creates configured targets from this rule.
+   */
+  private final ConfiguredTargetFactory<?, ?> configuredTargetFactory;
 
   /**
    * The constraint the package name of the rule instance must fulfill
@@ -1313,7 +1275,6 @@ public class RuleClass {
   RuleClass(
       String name,
       String key,
-      RuleClassType type,
       boolean isSkylark,
       boolean skylarkExecutable,
       boolean skylarkTestable,
@@ -1326,7 +1287,7 @@ public class RuleClass {
       boolean isConfigMatcher,
       RuleTransitionFactory transitionFactory,
       RuleTransitionFactory outgoingRuleTransitionFactory,
-      ConfiguredTargetFactory<?, ?, ?> configuredTargetFactory,
+      ConfiguredTargetFactory<?, ?> configuredTargetFactory,
       PredicateWithMessage<Rule> validityPredicate,
       Predicate<String> preferredDependencyPredicate,
       AdvertisedProviderSet advertisedProviders,
@@ -1342,7 +1303,6 @@ public class RuleClass {
       Attribute... attributes) {
     this.name = name;
     this.key = key;
-    this.type = type;
     this.isSkylark = isSkylark;
     this.targetKind = name + Rule.targetKindSuffix();
     this.skylarkExecutable = skylarkExecutable;
@@ -1430,9 +1390,8 @@ public class RuleClass {
   }
 
   @SuppressWarnings("unchecked")
-  public <CT, RC, ACE extends Throwable>
-      ConfiguredTargetFactory<CT, RC, ACE> getConfiguredTargetFactory() {
-    return (ConfiguredTargetFactory<CT, RC, ACE>) configuredTargetFactory;
+  public <CT, RC> ConfiguredTargetFactory<CT, RC> getConfiguredTargetFactory() {
+    return (ConfiguredTargetFactory<CT, RC>) configuredTargetFactory;
   }
 
   /**
@@ -1440,11 +1399,6 @@ public class RuleClass {
    */
   public String getName() {
     return name;
-  }
-
-  /** Returns the type of rule that this RuleClass represents. Only for use during serialization. */
-  public RuleClassType getRuleClassType() {
-    return type;
   }
 
   /** Returns a unique key. Used for profiling purposes. */

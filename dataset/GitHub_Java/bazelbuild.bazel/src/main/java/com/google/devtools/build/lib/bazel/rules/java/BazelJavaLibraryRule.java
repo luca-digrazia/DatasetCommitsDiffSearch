@@ -28,10 +28,10 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
 
 /**
@@ -42,8 +42,7 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
   public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
 
     return ConfigAwareRuleClassBuilder.of(builder)
-        // For getting the host Java executable.
-        .requiresHostConfigurationFragments(JavaConfiguration.class)
+        .requiresHostConfigurationFragments(Jvm.class) // For getting the host Java executable.
         .originalBuilder()
         .requiresConfigurationFragments(JavaConfiguration.class, CppConfiguration.class)
         /* <!-- #BLAZE_RULE(java_library).IMPLICIT_OUTPUTS -->
@@ -157,7 +156,6 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
                 .allowedFileTypes())
         .advertiseProvider(JavaSourceInfoProvider.class)
         .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
-        .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
         .build();
   }
 

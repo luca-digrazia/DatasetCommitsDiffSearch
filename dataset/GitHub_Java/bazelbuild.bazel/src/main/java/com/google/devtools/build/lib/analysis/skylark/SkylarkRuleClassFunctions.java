@@ -336,7 +336,10 @@ public class SkylarkRuleClassFunctions {
                 "Expected list of strings or dictionary of string -> string for 'fields'");
             fieldNames = dict.keySet();
           }
-          return SkylarkProvider.createUnexportedSchemaful(fieldNames, location);
+          return new SkylarkProvider(
+              "<no name>", // name is set on export.
+              fieldNames,
+              location);
         }
       };
 
