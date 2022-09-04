@@ -82,9 +82,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean enableVMInspection;
 
-    @Parameter(defaultValue = "true")
-    private boolean fullStackTraces;
-
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
 
@@ -181,12 +178,6 @@ public class NativeImageMojo extends AbstractMojo {
             }
             if (enableVMInspection) {
                 command.add("-H:+AllowVMInspection");
-            }
-            if (fullStackTraces) {
-                command.add("-H:+StackTrace");
-            }
-            else {
-                command.add("-H:-StackTrace");
             }
             System.out.println(command);
             Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), null, outputDirectory);
