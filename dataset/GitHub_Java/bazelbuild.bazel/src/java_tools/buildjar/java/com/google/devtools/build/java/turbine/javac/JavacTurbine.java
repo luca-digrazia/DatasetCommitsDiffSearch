@@ -123,54 +123,35 @@ public class JavacTurbine implements AutoCloseable {
     this.turbineOptions = turbineOptions;
   }
 
-  /** Creates the compilation javacopts from {@link TurbineOptions}. */
-  @VisibleForTesting
-  static ImmutableList<String> processJavacopts(TurbineOptions turbineOptions) {
-    ImmutableList<String> javacopts =
-        JavacOptions.removeBazelSpecificFlags(turbineOptions.javacOpts());
+  Result compile() throws IOException {
+    ImmutableList.Builder<String> argbuilder = ImmutableList.builder();
 
-    ImmutableList.Builder<String> builder = ImmutableList.builder();
-    builder.addAll(javacopts);
+    argbuilder.addAll(JavacOptions.removeBazelSpecificFlags(turbineOptions.javacOpts()));
 
     // Disable compilation of implicit source files.
     // This is insurance: the sourcepath is empty, so we don't expect implicit sources.
-    builder.add("-implicit:none");
+    argbuilder.add("-implicit:none");
 
     // Disable debug info
-    builder.add("-g:none");
+    argbuilder.add("-g:none");
 
     // Enable MethodParameters
-    builder.add("-parameters");
+    argbuilder.add("-parameters");
 
     // Compile-time jars always use Java 8
-    if (javacopts.contains("--release")) {
-      // javac doesn't allow mixing -source and --release, so use --release if it's already present
-      // in javacopts.
-      builder.add("--release");
-      builder.add("8");
-    } else {
-      builder.add("-source");
-      builder.add("8");
-      builder.add("-target");
-      builder.add("8");
-    }
+    argbuilder.add("-source");
+    argbuilder.add("8");
+    argbuilder.add("-target");
+    argbuilder.add("8");
 
+    ImmutableList<Path> processorpath;
     if (!turbineOptions.processors().isEmpty()) {
-      builder.add("-processor");
-      builder.add(Joiner.on(',').join(turbineOptions.processors()));
+      argbuilder.add("-processor");
+      argbuilder.add(Joiner.on(',').join(turbineOptions.processors()));
+      processorpath = asPaths(turbineOptions.processorPath());
+    } else {
+      processorpath = ImmutableList.of();
     }
-
-    return builder.build();
-  }
-
-  Result compile() throws IOException {
-
-    ImmutableList<String> javacopts = processJavacopts(turbineOptions);
-
-    ImmutableList<Path> processorpath =
-        !turbineOptions.processors().isEmpty()
-            ? asPaths(turbineOptions.processorPath())
-            : ImmutableList.of();
 
     ImmutableList<Path> sources =
         ImmutableList.<Path>builder()
@@ -181,7 +162,7 @@ public class JavacTurbine implements AutoCloseable {
     JavacTurbineCompileRequest.Builder requestBuilder =
         JavacTurbineCompileRequest.builder()
             .setSources(sources)
-            .setJavacOptions(javacopts)
+            .setJavacOptions(argbuilder.build())
             .setBootClassPath(asPaths(turbineOptions.bootClassPath()))
             .setProcessorClassPath(processorpath);
 
