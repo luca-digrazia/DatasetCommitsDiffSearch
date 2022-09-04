@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplic
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 
 /**
  * Rule class definitions for C++ rules.
@@ -55,7 +56,10 @@ public class CppRuleClasses {
       // This attribute connects a target to the LIPO context target configured with the
       // lipo input collector configuration.
       CppConfiguration cppConfiguration = configuration.getFragment(CppConfiguration.class);
-      return cppConfiguration.isLipoOptimization() ? cppConfiguration.getLipoContextLabel() : null;
+      return !cppConfiguration.isLipoContextCollector()
+          && (cppConfiguration.getLipoMode() == LipoMode.BINARY)
+          ? cppConfiguration.getLipoContextLabel()
+          : null;
     }
   };
 
@@ -278,12 +282,6 @@ public class CppRuleClasses {
    * A string constant for the ThinLTO feature.
    */
   public static final String THIN_LTO = "thin_lto";
-
-  /**
-   * A string constant for the PDB file generation feature, should only be used for toolchains
-   * targeting Windows that include a linker producing PDB files
-   */
-  public static final String GENERATE_PDB_FILE = "generate_pdb_file";
 
   /*
    * A string constant for the fdo_instrument feature.

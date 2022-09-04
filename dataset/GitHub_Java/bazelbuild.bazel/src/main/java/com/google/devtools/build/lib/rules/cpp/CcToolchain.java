@@ -229,15 +229,14 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             getBuiltinIncludes(ruleContext),
             coverageEnvironment.build(),
             ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST),
-            getEnvironment(ruleContext),
-            cppConfiguration.getBuiltInIncludeDirectories());
+            getEnvironment(ruleContext));
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
-            .addProvider(provider)
-            .addNativeDeclaredProvider(provider)
-            .addProvider(fdoSupport.getFdoSupport().createFdoSupportProvider(ruleContext))
+            .add(CcToolchainProvider.class, provider)
+            .add(FdoSupportProvider.class,
+                fdoSupport.getFdoSupport().createFdoSupportProvider(ruleContext))
             .setFilesToBuild(new NestedSetBuilder<Artifact>(Order.STABLE_ORDER).build())
-            .addProvider(RunfilesProvider.simple(Runfiles.EMPTY));
+            .add(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
 
     // If output_license is specified on the cc_toolchain rule, override the transitive licenses
     // with that one. This is necessary because cc_toolchain is used in the target configuration,
