@@ -24,6 +24,11 @@ package org.graylog2.plugin.streams;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonValue;
+import com.google.common.collect.ImmutableMap;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public enum StreamRuleType {
     EXACT(1, "match exactly", "match exactly"),
@@ -46,7 +51,7 @@ public enum StreamRuleType {
         return value;
     }
 
-    public static StreamRuleType fromInteger(final int numeric) {
+    public static StreamRuleType fromInteger(@JsonProperty("value") final int numeric) {
         for (final StreamRuleType streamRuleType : StreamRuleType.values()) {
             if (streamRuleType.value == numeric) {
                 return streamRuleType;
