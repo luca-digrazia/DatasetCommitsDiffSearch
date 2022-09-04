@@ -38,10 +38,15 @@ public final class DoubleArrayList implements Serializable {
     private int size;
 
     /**
+     * The default capacity for new lists.
+     */
+    private static final int DEFAULT_CAPACITY = 10;
+
+    /**
      * Constructs an empty list.
      */
     public DoubleArrayList() {
-        this(10);
+        this(DEFAULT_CAPACITY);
     }
 
     /**
@@ -60,7 +65,7 @@ public final class DoubleArrayList implements Serializable {
      * @param values the initial values of array list.
      */
     public DoubleArrayList(double[] values) {
-        this(Math.max(values.length, 10));
+        this(Math.max(values.length, DEFAULT_CAPACITY));
         add(values);
     }
 
