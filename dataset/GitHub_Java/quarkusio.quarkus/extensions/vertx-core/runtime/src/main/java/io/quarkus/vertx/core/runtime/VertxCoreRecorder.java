@@ -5,6 +5,7 @@ import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemKeyCertO
 import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePemTrustOptions;
 import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxKeyCertOptions;
 import static io.quarkus.vertx.core.runtime.SSLConfigHelper.configurePfxTrustOptions;
+import static io.vertx.core.file.impl.FileResolver.CACHE_DIR_BASE_PROP_NAME;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -15,10 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -46,12 +44,8 @@ import io.vertx.core.VertxOptions;
 import io.vertx.core.dns.AddressResolverOptions;
 import io.vertx.core.eventbus.EventBusOptions;
 import io.vertx.core.file.FileSystemOptions;
-import io.vertx.core.file.impl.FileResolver;
 import io.vertx.core.http.ClientAuth;
-import io.vertx.core.impl.VertxBuilder;
 import io.vertx.core.impl.VertxImpl;
-import io.vertx.core.impl.VertxThread;
-import io.vertx.core.spi.VertxThreadFactory;
 import io.vertx.core.spi.resolver.ResolverProvider;
 
 @Recorder
@@ -194,28 +188,22 @@ public class VertxCoreRecorder {
         }
 
         Vertx vertx;
-
-        if (conf != null && conf.cluster != null && conf.cluster.clustered) {
+        if (options.getEventBusOptions().isClustered()) {
             CompletableFuture<Vertx> latch = new CompletableFuture<>();
-            new VertxBuilder(options)
-                    .executorServiceFactory(new QuarkusExecutorFactory(conf))
-                    .init().clusteredVertx(new Handler<AsyncResult<Vertx>>() {
-                        @Override
-                        public void handle(AsyncResult<Vertx> ar) {
-                            if (ar.failed()) {
-                                latch.completeExceptionally(ar.cause());
-                            } else {
-                                latch.complete(ar.result());
-                            }
-                        }
-                    });
+            Vertx.clusteredVertx(options, new Handler<AsyncResult<Vertx>>() {
+                @Override
+                public void handle(AsyncResult<Vertx> ar) {
+                    if (ar.failed()) {
+                        latch.completeExceptionally(ar.cause());
+                    } else {
+                        latch.complete(ar.result());
+                    }
+                }
+            });
             vertx = latch.join();
         } else {
-            vertx = new VertxBuilder(options)
-                    .executorServiceFactory(new QuarkusExecutorFactory(conf))
-                    .init().vertx();
+            vertx = Vertx.vertx(options);
         }
-
         vertx.exceptionHandler(new Handler<Throwable>() {
             @Override
             public void handle(Throwable error) {
@@ -245,7 +233,7 @@ public class VertxCoreRecorder {
             initializeClusterOptions(conf, options);
         }
 
-        String fileCacheDir = System.getProperty(FileResolver.CACHE_DIR_BASE_PROP_NAME);
+        String fileCacheDir = System.getProperty(CACHE_DIR_BASE_PROP_NAME);
         if (fileCacheDir == null) {
             File tmp = new File(System.getProperty("java.io.tmpdir", ".") + File.separator + VERTX_CACHE);
             if (!tmp.isDirectory()) {
@@ -355,6 +343,7 @@ public class VertxCoreRecorder {
 
     private static void initializeClusterOptions(VertxConfiguration conf, VertxOptions options) {
         ClusterConfiguration cluster = conf.cluster;
+        options.getEventBusOptions().setClustered(cluster.clustered);
         options.getEventBusOptions().setClusterPingReplyInterval(cluster.pingReplyInterval.toMillis());
         options.getEventBusOptions().setClusterPingInterval(cluster.pingInterval.toMillis());
         if (cluster.host != null) {
@@ -375,6 +364,7 @@ public class VertxCoreRecorder {
         opts.setAcceptBacklog(eb.acceptBacklog.orElse(-1));
         opts.setClientAuth(ClientAuth.valueOf(eb.clientAuth.toUpperCase()));
         opts.setConnectTimeout((int) (Math.min(Integer.MAX_VALUE, eb.connectTimeout.toMillis())));
+        // todo: use timeUnit cleverly
         opts.setIdleTimeout(
                 eb.idleTimeout.isPresent() ? (int) Math.max(1, Math.min(Integer.MAX_VALUE, eb.idleTimeout.get().getSeconds()))
                         : 0);
@@ -445,20 +435,6 @@ public class VertxCoreRecorder {
                 return threads;
             }
         };
-    }
-
-    public ThreadFactory createThreadFactory() {
-        AtomicInteger threadCount = new AtomicInteger(0);
-        return runnable -> {
-            VertxThread thread = VertxThreadFactory.INSTANCE.newVertxThread(runnable,
-                    "executor-thread-" + threadCount.getAndIncrement(), true, 0, null);
-            thread.setDaemon(true);
-            return thread;
-        };
-    }
-
-    public void setupExecutorFactory(ExecutorService executorProxy) {
-        QuarkusExecutorFactory.sharedExecutor = executorProxy;
     }
 
     public static Supplier<Vertx> recoverFailedStart(VertxConfiguration config) {
