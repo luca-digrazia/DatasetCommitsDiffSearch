@@ -98,18 +98,20 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     }
     SpawnResult spawnResult;
     ExecException ex = null;
-    try (CacheHandle cacheHandle = cache.lookup(spawn, context)) {
-      if (cacheHandle.hasResult()) {
-        spawnResult = Preconditions.checkNotNull(cacheHandle.getResult());
-      } else {
-        // Actual execution.
-        spawnResult = spawnRunner.execAsync(spawn, context).get();
-        if (cacheHandle.willStore()) {
-          cacheHandle.store(spawnResult);
+    try {
+      try (CacheHandle cacheHandle = cache.lookup(spawn, context)) {
+        if (cacheHandle.hasResult()) {
+          spawnResult = Preconditions.checkNotNull(cacheHandle.getResult());
+        } else {
+          // Actual execution.
+          spawnResult = spawnRunner.execAsync(spawn, context).get();
+          if (cacheHandle.willStore()) {
+            cacheHandle.store(spawnResult);
+          }
         }
       }
     } catch (IOException e) {
-      throw new EnvironmentalExecException("Unexpected IO error", e);
+      throw new EnvironmentalExecException("Unexpected IO error.", e);
     } catch (SpawnExecException e) {
       ex = e;
       spawnResult = e.getSpawnResult();

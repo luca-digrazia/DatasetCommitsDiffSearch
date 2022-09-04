@@ -17,14 +17,20 @@ import static com.google.common.base.StandardSystemProperty.USER_NAME;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.stream.Collectors.joining;
 
+import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.ArtifactOwner;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildInfo;
@@ -39,6 +45,7 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.runtime.GotOptionsEvent;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
 import com.google.devtools.build.lib.shell.BadExitStatusException;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -47,6 +54,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.NetUtil;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -69,28 +77,57 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
   static class BazelWorkspaceStatusAction extends WorkspaceStatusAction {
     private final Artifact stableStatus;
     private final Artifact volatileStatus;
+    private final Supplier<Options> options;
     private final String username;
     private final String hostname;
+    private final Supplier<ImmutableMap<String, String>> clientEnv;
+
+    @SuppressWarnings("unused") // Read by serialization.
+    private final Path workspace;
 
     @AutoCodec.VisibleForSerialization
     BazelWorkspaceStatusAction(
-        Artifact stableStatus, Artifact volatileStatus, String username, String hostname) {
+        Supplier<Options> options,
+        Supplier<ImmutableMap<String, String>> clientEnv,
+        Path workspace,
+        Artifact stableStatus,
+        Artifact volatileStatus,
+        String hostname) {
       super(
           ActionOwner.SYSTEM_ACTION_OWNER,
           Artifact.NO_ARTIFACTS,
           ImmutableList.of(stableStatus, volatileStatus));
+      this.options = Preconditions.checkNotNull(options);
       this.stableStatus = stableStatus;
       this.volatileStatus = volatileStatus;
-      this.username = username;
+      this.username = USER_NAME.value();
       this.hostname = hostname;
+      this.clientEnv = clientEnv;
+      this.workspace = workspace;
+    }
+
+    private com.google.devtools.build.lib.shell.Command getGetWorkspaceStatusCommand(
+        Options options, ImmutableMap<String, String> clientEnv) {
+      return options.workspaceStatusCommand.equals(PathFragment.EMPTY_FRAGMENT)
+          ? null
+          : new CommandBuilder()
+              .addArgs(options.workspaceStatusCommand.toString())
+              // Pass client env, because certain SCM client(like
+              // perforce, git) relies on environment variables to work
+              // correctly.
+              .setEnv(clientEnv)
+              .setWorkingDir(workspace)
+              .useShell(true)
+              .build();
     }
 
     private String getAdditionalWorkspaceStatus(
         Options options,
+        ImmutableMap<String, String> clientEnv,
         ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       com.google.devtools.build.lib.shell.Command getWorkspaceStatusCommand =
-          actionExecutionContext.getContext(WorkspaceStatusAction.Context.class).getCommand();
+          getGetWorkspaceStatusCommand(options, clientEnv);
       try {
         if (getWorkspaceStatusCommand != null) {
           actionExecutionContext
@@ -151,23 +188,22 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     }
 
     @Override
-    public void prepare(Path execRoot) throws IOException {
+    public void prepare(FileSystem fileSystem, Path execRoot) throws IOException {
       // The default implementation of this method deletes all output files; override it to keep
       // the old stableStatus around. This way we can reuse the existing file (preserving its mtime)
       // if the contents haven't changed.
-      deleteOutput(volatileStatus);
+      deleteOutput(fileSystem, volatileStatus);
     }
 
     @Override
     public ActionResult execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
-      WorkspaceStatusAction.Context context =
-          actionExecutionContext.getContext(WorkspaceStatusAction.Context.class);
-      Options options = context.getOptions();
-      ImmutableMap<String, String> clientEnv = context.getClientEnv();
+      Options options = this.options.get();
+      ImmutableMap<String, String> clientEnv = this.clientEnv.get();
       try {
         Map<String, String> statusMap =
-            parseWorkspaceStatus(getAdditionalWorkspaceStatus(options, actionExecutionContext));
+            parseWorkspaceStatus(
+                getAdditionalWorkspaceStatus(options, clientEnv, actionExecutionContext));
         Map<String, String> volatileMap = new TreeMap<>();
         Map<String, String> stableMap = new TreeMap<>();
 
@@ -258,36 +294,55 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     }
   }
 
-  private static class BazelStatusActionFactory implements WorkspaceStatusAction.Factory {
+  private class BazelStatusActionFactory implements WorkspaceStatusAction.Factory {
+
     @Override
-    public Map<String, String> createDummyWorkspaceStatus(
-        WorkspaceStatusAction.DummyEnvironment env) {
+    public Map<String, String> createDummyWorkspaceStatus() {
       return ImmutableMap.of();
     }
 
     @Override
     public WorkspaceStatusAction createWorkspaceStatusAction(
-        WorkspaceStatusAction.Environment env) {
-      Artifact stableArtifact = env.createStableArtifact("stable-status.txt");
-      Artifact volatileArtifact = env.createVolatileArtifact("volatile-status.txt");
+        ArtifactFactory factory, ArtifactOwner artifactOwner, String workspaceName) {
+      ArtifactRoot root = env.getDirectories().getBuildDataDirectory(workspaceName);
+
+      Artifact stableArtifact = factory.getDerivedArtifact(
+          PathFragment.create("stable-status.txt"), root, artifactOwner);
+      Artifact volatileArtifact = factory.getConstantMetadataArtifact(
+          PathFragment.create("volatile-status.txt"), root, artifactOwner);
+
       return new BazelWorkspaceStatusAction(
-          stableArtifact, volatileArtifact, USER_NAME.value(), NetUtil.getCachedShortHostName());
+          () -> options,
+          () -> ImmutableMap.copyOf(env.getClientEnv()),
+          env.getDirectories().getWorkspace(),
+          stableArtifact,
+          volatileArtifact,
+          getHostname());
     }
+  }
+
+  /**
+   * Returns cached short hostname.
+   *
+   * <p>Hostname lookup performs reverse DNS lookup which in bad cases can take seconds. To speed up
+   * builds we only lookup hostname once and cache the result. Therefore if the hostname changes
+   * during bazel server lifetime, bazel will not see the change.
+   */
+  private static String getHostname() {
+    return NetUtil.getCachedShortHostName();
   }
 
   @ExecutionStrategy(contextType = WorkspaceStatusAction.Context.class)
   private static final class BazelWorkspaceStatusActionContext
       implements WorkspaceStatusAction.Context {
-    private final CommandEnvironment env;
+    private final WorkspaceStatusAction.Options options;
 
-    private BazelWorkspaceStatusActionContext(CommandEnvironment env) {
-      this.env = env;
+    private BazelWorkspaceStatusActionContext(WorkspaceStatusAction.Options options) {
+      this.options = options;
     }
 
     @Override
     public ImmutableMap<String, Key> getStableKeys() {
-      WorkspaceStatusAction.Options options =
-          env.getOptions().getOptions(WorkspaceStatusAction.Options.class);
       ImmutableMap.Builder<String, Key> builder = ImmutableMap.builder();
       builder.put(
           BuildInfo.BUILD_EMBED_LABEL, Key.of(KeyType.STRING, options.embedLabel, "redacted"));
@@ -306,32 +361,21 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
           BuildInfo.BUILD_SCM_STATUS,
           Key.of(KeyType.STRING, "", "redacted"));
     }
+  }
 
-    @Override
-    public WorkspaceStatusAction.Options getOptions() {
-      return env.getOptions().getOptions(WorkspaceStatusAction.Options.class);
-    }
+  private CommandEnvironment env;
+  private WorkspaceStatusAction.Options options;
 
-    @Override
-    public ImmutableMap<String, String> getClientEnv() {
-      return ImmutableMap.copyOf(env.getClientEnv());
-    }
+  @Override
+  public void beforeCommand(CommandEnvironment env) {
+    this.env = env;
+    env.getEventBus().register(this);
+  }
 
-    @Override
-    public com.google.devtools.build.lib.shell.Command getCommand() {
-      WorkspaceStatusAction.Options options =
-          env.getOptions().getOptions(WorkspaceStatusAction.Options.class);
-      return options.workspaceStatusCommand.equals(PathFragment.EMPTY_FRAGMENT)
-          ? null
-          : new CommandBuilder()
-              .addArgs(options.workspaceStatusCommand.toString())
-              // Pass client env to allow SCM clients (like git) relying on environment variables to
-              // work correctly.
-              .setEnv(env.getClientEnv())
-              .setWorkingDir(env.getWorkspace())
-              .useShell(true)
-              .build();
-    }
+  @Override
+  public void afterCommand() {
+    this.env = null;
+    this.options = null;
   }
 
   @Override
@@ -339,6 +383,11 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     return "build".equals(command.name())
         ? ImmutableList.<Class<? extends OptionsBase>>of(WorkspaceStatusAction.Options.class)
         : ImmutableList.<Class<? extends OptionsBase>>of();
+  }
+
+  @Subscribe
+  public void gotOptionsEvent(GotOptionsEvent event) {
+    options = event.getOptions().getOptions(WorkspaceStatusAction.Options.class);
   }
 
   @Override
@@ -349,7 +398,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
 
   @Override
   public void executorInit(CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
-    builder.addActionContext(new BazelWorkspaceStatusActionContext(env));
+    builder.addActionContext(new BazelWorkspaceStatusActionContext(options));
   }
 
 }

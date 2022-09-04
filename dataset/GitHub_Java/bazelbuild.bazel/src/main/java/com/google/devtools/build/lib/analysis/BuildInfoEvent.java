@@ -17,9 +17,8 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
@@ -47,17 +46,17 @@ public final class BuildInfoEvent
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventIdUtil.workspaceStatusId();
+    return BuildEventId.workspaceStatusId();
   }
 
   @Override
   public Collection<BuildEventId> getChildrenEvents() {
-    return ImmutableList.of();
+    return ImmutableList.<BuildEventId>of();
   }
 
   @Override
   public Collection<BuildEventId> postedAfter() {
-    return ImmutableList.of(BuildEventIdUtil.buildStartedId());
+    return ImmutableList.<BuildEventId>of(BuildEventId.buildStartedId());
   }
 
   @Override
