@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc. and/or its affiliates
+ * and other contributors as indicated by the @author tags.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.quarkus.gradle;
 
 import java.io.BufferedReader;
@@ -10,9 +26,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
@@ -88,15 +106,13 @@ public class AppModelGradleResolver implements AppModelResolver {
         final List<AppDependency> userDeps = new ArrayList<>();
         Map<ModuleIdentifier, ModuleVersionIdentifier> userModules = new HashMap<>();
         for (ResolvedArtifact a : compileCp.getResolvedConfiguration().getResolvedArtifacts()) {
-            final File f = a.getFile();
-
-            if (!"jar".equals(a.getExtension()) && !f.isDirectory()) {
+            if (!"jar".equals(a.getExtension())) {
                 continue;
             }
-
             userModules.put(getModuleId(a), a.getModuleVersion().getId());
             userDeps.add(toAppDependency(a));
 
+            final File f = a.getFile();
             final Dependency dep;
             if (f.isDirectory()) {
                 dep = processQuarkusDir(a, f.toPath().resolve(BootstrapConstants.META_INF));
@@ -119,6 +135,10 @@ public class AppModelGradleResolver implements AppModelResolver {
             for (ResolvedArtifact a : rc.getResolvedArtifacts()) {
                 final ModuleVersionIdentifier userVersion = userModules.get(getModuleId(a));
                 if (userVersion != null) {
+                    if (!userVersion.equals(a.getModuleVersion().getId())) {
+                        project.getLogger().warn("User dependency " + userVersion + " overrides Quarkus platform dependency "
+                                + a.getModuleVersion().getId());
+                    }
                     continue;
                 }
                 deploymentDeps.add(toAppDependency(a));
