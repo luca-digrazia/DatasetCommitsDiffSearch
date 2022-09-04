@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.test.TestActionContext;
 import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction.ResolvedPaths;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.TestFileNameConstants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
@@ -150,7 +149,11 @@ public class StandaloneTestStrategy extends TestStrategy {
               && attempt < maxAttempts;
           attempt++) {
         processFailedTestAttempt(
-            attempt, actionExecutionContext, action, dataBuilder, standaloneTestResult);
+            attempt,
+            actionExecutionContext,
+            action,
+            dataBuilder,
+            standaloneTestResult.testResultData());
         standaloneTestResult =
             executeTestAttempt(
                 action,
@@ -164,11 +167,10 @@ public class StandaloneTestStrategy extends TestStrategy {
       processLastTestAttempt(attempt, dataBuilder, standaloneTestResult.testResultData());
       ImmutableList<Pair<String, Path>> testOutputs = action.getTestOutputsMapping(execRoot);
       actionExecutionContext
-          .getEventHandler()
+          .getEventBus()
           .post(
               new TestAttempt(
                   action,
-                  standaloneTestResult.executionInfo(),
                   attempt,
                   standaloneTestResult.testResultData().getStatus(),
                   standaloneTestResult.testResultData().getStartTimeMillisEpoch(),
@@ -192,7 +194,7 @@ public class StandaloneTestStrategy extends TestStrategy {
       ActionExecutionContext actionExecutionContext,
       TestRunnerAction action,
       Builder dataBuilder,
-      StandaloneTestResult result)
+      TestResultData data)
       throws IOException {
     ImmutableList.Builder<Pair<String, Path>> testOutputsBuilder = new ImmutableList.Builder<>();
     // Rename outputs
@@ -236,16 +238,14 @@ public class StandaloneTestStrategy extends TestStrategy {
     }
 
     // Add the test log to the output
-    TestResultData data = result.testResultData();
     dataBuilder.addFailedLogs(testLog.toString());
     dataBuilder.addTestTimes(data.getTestTimes(0));
     dataBuilder.addAllTestProcessTimes(data.getTestProcessTimesList());
     actionExecutionContext
-        .getEventHandler()
+        .getEventBus()
         .post(
             new TestAttempt(
                 action,
-                result.executionInfo(),
                 attempt,
                 data.getStatus(),
                 data.getStartTimeMillisEpoch(),
@@ -258,8 +258,6 @@ public class StandaloneTestStrategy extends TestStrategy {
 
   private void processLastTestAttempt(int attempt, Builder dataBuilder, TestResultData data) {
     dataBuilder.setHasCoverage(data.getHasCoverage());
-    dataBuilder.setRemotelyCached(data.getRemotelyCached());
-    dataBuilder.setIsRemoteStrategy(data.getIsRemoteStrategy());
     dataBuilder.setStatus(
         data.getStatus() == BlazeTestStatus.PASSED && attempt > 1
             ? BlazeTestStatus.FLAKY
@@ -333,8 +331,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     long startTime = actionExecutionContext.getClock().currentTimeMillis();
     SpawnActionContext spawnActionContext = actionExecutionContext.getSpawnActionContext(spawn);
     List<SpawnResult> spawnResults = ImmutableList.of();
-    BuildEventStreamProtos.TestResult.ExecutionInfo.Builder executionInfo =
-        BuildEventStreamProtos.TestResult.ExecutionInfo.newBuilder();
     try {
       try {
         if (executionOptions.testOutput.equals(TestOutputFormat.STREAMED)) {
@@ -374,7 +370,6 @@ public class StandaloneTestStrategy extends TestStrategy {
           // set. We fall back to the time measured here for backwards compatibility.
           SpawnResult primaryResult = Iterables.getOnlyElement(spawnResults);
           duration = primaryResult.getWallTime().orElse(Duration.ofMillis(duration)).toMillis();
-          extractExecutionInfo(primaryResult, builder, executionInfo);
         }
 
         builder.setStartTimeMillisEpoch(startTime);
@@ -399,31 +394,9 @@ public class StandaloneTestStrategy extends TestStrategy {
         builder.setHasCoverage(true);
       }
 
-      return StandaloneTestResult.builder()
-          .setSpawnResults(spawnResults)
-          .setTestResultData(builder.build())
-          .setExecutionInfo(executionInfo.build())
-          .build();
+      return StandaloneTestResult.create(spawnResults, builder.build());
     } catch (IOException e) {
       throw new TestExecException(e.getMessage());
-    }
-  }
-
-  private static void extractExecutionInfo(
-      SpawnResult spawnResult,
-      TestResultData.Builder result,
-      BuildEventStreamProtos.TestResult.ExecutionInfo.Builder executionInfo) {
-    if (spawnResult.isCacheHit()) {
-      result.setRemotelyCached(true);
-      executionInfo.setCachedRemotely(true);
-    }
-    String strategy = spawnResult.getRunnerName();
-    if (strategy != null) {
-      executionInfo.setStrategy(strategy);
-      result.setIsRemoteStrategy(strategy.equals("remote"));
-    }
-    if (spawnResult.getExecutorHostName() != null) {
-      executionInfo.setHostname(spawnResult.getExecutorHostName());
     }
   }
 
