@@ -84,7 +84,8 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
   private SequentialBuildDriver driver;
   private RecordingDifferencer differencer;
   private Path emptyPackagePath;
-  private static final String IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING = "config/ignored.txt";
+  private static final String BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING =
+      "config/blacklisted.txt";
 
   protected abstract CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy();
 
@@ -133,9 +134,9 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
         new DirectoryListingStateFunction(
             externalFilesHelper, new AtomicReference<>(UnixGlob.DEFAULT_SYSCALLS)));
     skyFunctions.put(
-        SkyFunctions.IGNORED_PACKAGE_PREFIXES,
-        new IgnoredPackagePrefixesFunction(
-            PathFragment.create(IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING)));
+        SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
+        new BlacklistedPackagePrefixesFunction(
+            PathFragment.create(BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING)));
     RuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
     skyFunctions.put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider));
     skyFunctions.put(
@@ -146,7 +147,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
                 .getPackageFactoryBuilderForTesting(directories)
                 .build(ruleClassProvider, fileSystem),
             directories,
-            /*bzlLoadFunctionForInlining=*/ null));
+            /*starlarkImportLookupFunctionForInlining=*/ null));
     skyFunctions.put(
         SkyFunctions.EXTERNAL_PACKAGE,
         new ExternalPackageFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
@@ -201,7 +202,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
             .setNumThreads(SkyframeExecutor.DEFAULT_THREAD_COUNT)
-            .setEventHandler(NullEventHandler.INSTANCE)
+            .setEventHander(NullEventHandler.INSTANCE)
             .build();
     return driver.<PackageLookupValue>evaluate(
         ImmutableList.of(packageIdentifierSkyKey), evaluationContext);
@@ -237,12 +238,13 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
   }
 
   @Test
-  public void testIgnoredPackage() throws Exception {
-    scratch.file("ignored/subdir/BUILD");
-    scratch.file("ignored/BUILD");
-    Path ignored = scratch.overwriteFile(IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING, "ignored");
+  public void testBlacklistedPackage() throws Exception {
+    scratch.file("blacklisted/subdir/BUILD");
+    scratch.file("blacklisted/BUILD");
+    Path blacklist =
+        scratch.overwriteFile(BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING, "blacklisted");
 
-    ImmutableSet<String> pkgs = ImmutableSet.of("ignored/subdir", "ignored");
+    ImmutableSet<String> pkgs = ImmutableSet.of("blacklisted/subdir", "blacklisted");
     for (String pkg : pkgs) {
       PackageLookupValue packageLookupValue = lookupPackage(pkg);
       assertThat(packageLookupValue.packageExists()).isFalse();
@@ -250,12 +252,12 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
       assertThat(packageLookupValue.getErrorMsg()).isNotNull();
     }
 
-    scratch.overwriteFile(IGNORED_PACKAGE_PREFIXES_FILE_PATH_STRING, "not_ignored");
-    RootedPath rootedIgnoreFile =
+    scratch.overwriteFile(BLACKLISTED_PACKAGE_PREFIXES_FILE_PATH_STRING, "not_blacklisted");
+    RootedPath rootedBlacklist =
         RootedPath.toRootedPath(
-            Root.fromPath(ignored.getParentDirectory().getParentDirectory()),
-            PathFragment.create("config/ignored.txt"));
-    differencer.invalidate(ImmutableSet.of(FileStateValue.key(rootedIgnoreFile)));
+            Root.fromPath(blacklist.getParentDirectory().getParentDirectory()),
+            PathFragment.create("config/blacklisted.txt"));
+    differencer.invalidate(ImmutableSet.of(FileStateValue.key(rootedBlacklist)));
     for (String pkg : pkgs) {
       PackageLookupValue packageLookupValue = lookupPackage(pkg);
       assertThat(packageLookupValue.packageExists()).isTrue();

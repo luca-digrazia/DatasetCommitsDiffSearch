@@ -30,8 +30,8 @@ import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.bazel.repository.downloader.DownloadManager;
-import com.google.devtools.build.lib.bazel.repository.starlark.StarlarkRepositoryFunction;
-import com.google.devtools.build.lib.bazel.repository.starlark.StarlarkRepositoryModule;
+import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryFunction;
+import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryModule;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -41,14 +41,13 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue.SuccessfulRepositoryDirectoryValue;
 import com.google.devtools.build.lib.skyframe.ASTFileLookupFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
-import com.google.devtools.build.lib.skyframe.BzlLoadFunction;
+import com.google.devtools.build.lib.skyframe.BlacklistedPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.ContainingPackageLookupFunction;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.ExternalPackageFunction;
 import com.google.devtools.build.lib.skyframe.FileFunction;
 import com.google.devtools.build.lib.skyframe.FileStateFunction;
-import com.google.devtools.build.lib.skyframe.IgnoredPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.LocalRepositoryLookupFunction;
 import com.google.devtools.build.lib.skyframe.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
@@ -57,9 +56,10 @@ import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossReposit
 import com.google.devtools.build.lib.skyframe.PrecomputedFunction;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
+import com.google.devtools.build.lib.skyframe.StarlarkImportLookupFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceASTFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceFileFunction;
-import com.google.devtools.build.lib.starlarkbuildapi.repository.RepositoryBootstrap;
+import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryBootstrap;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.ManualClock;
@@ -105,7 +105,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
   private SequentialBuildDriver driver;
   private TestManagedDirectoriesKnowledge managedDirectoriesKnowledge;
   private RecordingDifferencer differencer;
-  private TestStarlarkRepositoryFunction testStarlarkRepositoryFunction;
+  private TestSkylarkRepositoryFunction testSkylarkRepositoryFunction;
   private Path rootPath;
 
   @Before
@@ -120,14 +120,14 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
     managedDirectoriesKnowledge = new TestManagedDirectoriesKnowledge();
     DownloadManager downloader = Mockito.mock(DownloadManager.class);
     RepositoryFunction localRepositoryFunction = new LocalRepositoryFunction();
-    testStarlarkRepositoryFunction =
-        new TestStarlarkRepositoryFunction(rootPath, downloader, managedDirectoriesKnowledge);
+    testSkylarkRepositoryFunction =
+        new TestSkylarkRepositoryFunction(rootPath, downloader, managedDirectoriesKnowledge);
     ImmutableMap<String, RepositoryFunction> repositoryHandlers =
         ImmutableMap.of(LocalRepositoryRule.NAME, localRepositoryFunction);
     delegatorFunction =
         new RepositoryDelegatorFunction(
             repositoryHandlers,
-            testStarlarkRepositoryFunction,
+            testSkylarkRepositoryFunction,
             new AtomicBoolean(true),
             ImmutableMap::of,
             directories,
@@ -149,7 +149,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
     TestRuleClassProvider.addStandardRules(builder);
     builder
         .clearWorkspaceFileSuffixForTesting()
-        .addStarlarkBootstrap(new RepositoryBootstrap(new StarlarkRepositoryModule()));
+        .addSkylarkBootstrap(new RepositoryBootstrap(new SkylarkRepositoryModule()));
     ConfiguredRuleClassProvider ruleClassProvider = builder.build();
 
     PackageFactory pkgFactory =
@@ -185,7 +185,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
                         ruleClassProvider,
                         pkgFactory,
                         directories,
-                        /*bzlLoadFunctionForInlining=*/ null))
+                        /*starlarkImportLookupFunctionForInlining=*/ null))
                 .put(SkyFunctions.REPOSITORY, new RepositoryLoaderFunction())
                 .put(
                     SkyFunctions.LOCAL_REPOSITORY_LOOKUP,
@@ -200,17 +200,17 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
                     SkyFunctions.AST_FILE_LOOKUP,
                     new ASTFileLookupFunction(ruleClassProvider, fileSystem.getDigestFunction()))
                 .put(
-                    SkyFunctions.BZL_LOAD,
-                    BzlLoadFunction.create(
+                    SkyFunctions.STARLARK_IMPORTS_LOOKUP,
+                    StarlarkImportLookupFunction.create(
                         ruleClassProvider,
                         pkgFactory,
                         fileSystem.getDigestFunction(),
                         CacheBuilder.newBuilder().build()))
                 .put(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, new ContainingPackageLookupFunction())
                 .put(
-                    SkyFunctions.IGNORED_PACKAGE_PREFIXES,
-                    new IgnoredPackagePrefixesFunction(
-                        /*ignoredPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
+                    SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
+                    new BlacklistedPackagePrefixesFunction(
+                        /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
                 .put(SkyFunctions.RESOLVED_HASH_VALUES, new ResolvedHashesFunction())
                 .build(),
             differencer);
@@ -243,7 +243,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
             .setNumThreads(8)
-            .setEventHandler(eventHandler)
+            .setEventHander(eventHandler)
             .build();
     EvaluationResult<SkyValue> result = driver.evaluate(ImmutableList.of(key), evaluationContext);
     assertThat(result.hasError()).isFalse();
@@ -333,20 +333,20 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
 
     loadRepo("repo1");
 
-    assertThat(testStarlarkRepositoryFunction.isFetchCalled()).isTrue();
-    testStarlarkRepositoryFunction.reset();
+    assertThat(testSkylarkRepositoryFunction.isFetchCalled()).isTrue();
+    testSkylarkRepositoryFunction.reset();
 
     loadRepo("repo1");
     // Nothing changed, fetch does not happen.
-    assertThat(testStarlarkRepositoryFunction.isFetchCalled()).isFalse();
-    testStarlarkRepositoryFunction.reset();
+    assertThat(testSkylarkRepositoryFunction.isFetchCalled()).isFalse();
+    testSkylarkRepositoryFunction.reset();
 
     // Delete managed directory, fetch should happen again.
     Path managedDirectory = rootPath.getRelative("dir1");
     managedDirectory.deleteTree();
     loadRepo("repo1");
-    assertThat(testStarlarkRepositoryFunction.isFetchCalled()).isTrue();
-    testStarlarkRepositoryFunction.reset();
+    assertThat(testSkylarkRepositoryFunction.isFetchCalled()).isTrue();
+    testSkylarkRepositoryFunction.reset();
 
     // Change managed directories declaration, fetch should happen.
     // NB: we are making sure that managed directories exist to check only the declaration changes
@@ -362,14 +362,14 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
             RepositoryName.create("@repo1")));
     loadRepo("repo1");
 
-    assertThat(testStarlarkRepositoryFunction.isFetchCalled()).isTrue();
-    testStarlarkRepositoryFunction.reset();
+    assertThat(testSkylarkRepositoryFunction.isFetchCalled()).isTrue();
+    testSkylarkRepositoryFunction.reset();
 
     managedDirectoriesKnowledge.setManagedDirectories(ImmutableMap.of());
     loadRepo("repo1");
 
-    assertThat(testStarlarkRepositoryFunction.isFetchCalled()).isTrue();
-    testStarlarkRepositoryFunction.reset();
+    assertThat(testSkylarkRepositoryFunction.isFetchCalled()).isTrue();
+    testSkylarkRepositoryFunction.reset();
   }
 
   private void loadRepo(String strippedRepoName) throws InterruptedException {
@@ -382,7 +382,7 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
             .setNumThreads(8)
-            .setEventHandler(eventHandler)
+            .setEventHander(eventHandler)
             .build();
     EvaluationResult<SkyValue> result = driver.evaluate(ImmutableList.of(key), evaluationContext);
     assertThat(result.hasError()).isFalse();
@@ -390,12 +390,12 @@ public class RepositoryDelegatorTest extends FoundationTestCase {
     assertThat(repositoryDirectoryValue.repositoryExists()).isTrue();
   }
 
-  private static class TestStarlarkRepositoryFunction extends StarlarkRepositoryFunction {
+  private static class TestSkylarkRepositoryFunction extends SkylarkRepositoryFunction {
     private boolean fetchCalled = false;
     private final Path workspaceRoot;
     private final TestManagedDirectoriesKnowledge managedDirectoriesKnowledge;
 
-    private TestStarlarkRepositoryFunction(
+    private TestSkylarkRepositoryFunction(
         Path workspaceRoot,
         DownloadManager downloader,
         TestManagedDirectoriesKnowledge managedDirectoriesKnowledge) {

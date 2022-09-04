@@ -117,7 +117,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
                 .getPackageFactoryBuilderForTesting(directories)
                 .build(ruleClassProvider, fileSystem),
             directories,
-            /*bzlLoadFunctionForInlining=*/ null));
+            /*starlarkImportLookupFunctionForInlining=*/ null));
     skyFunctions.put(
         SkyFunctions.EXTERNAL_PACKAGE,
         new ExternalPackageFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER));
@@ -152,7 +152,7 @@ public class LocalRepositoryLookupFunctionTest extends FoundationTestCase {
         EvaluationContext.newBuilder()
             .setKeepGoing(false)
             .setNumThreads(SkyframeExecutor.DEFAULT_THREAD_COUNT)
-            .setEventHandler(NullEventHandler.INSTANCE)
+            .setEventHander(NullEventHandler.INSTANCE)
             .build();
     return driver.<LocalRepositoryLookupValue>evaluate(
         ImmutableList.of(directoryKey), evaluationContext);

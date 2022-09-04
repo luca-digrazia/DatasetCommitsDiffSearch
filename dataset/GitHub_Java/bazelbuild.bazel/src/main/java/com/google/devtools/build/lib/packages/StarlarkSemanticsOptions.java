@@ -44,15 +44,15 @@ import java.util.List;
  *   <li>Add a new {@code @Option}-annotated field to this class. The field name and default value
  *       should be the same as in {@link StarlarkSemantics}, and the option name in the annotation
  *       should be that name written in snake_case. Add a line to set the new field in {@link
- *       #toStarlarkSemantics}.
+ *       #toSkylarkSemantics}.
  *   <li>Add a line to set the new field in both {@link
- *       StarlarkSemanticsConsistencyTest#buildRandomOptions} and {@link
- *       StarlarkSemanticsConsistencyTest#buildRandomSemantics}.
+ *       SkylarkSemanticsConsistencyTest#buildRandomOptions} and {@link
+ *       SkylarkSemanticsConsistencyTest#buildRandomSemantics}.
  *   <li>Update manual documentation in site/docs/skylark/backward-compatibility.md. Also remember
  *       to update this when flipping a flag's default value.
  *   <li>Boolean semantic flags can toggle Starlark methods on or off. To do this, add a new entry
  *       to {@link StarlarkSemantics#FlagIdentifier}. Then, specify the identifier in {@code
- *       StarlarkCallable.enableOnlyWithFlag} or {@code StarlarkCallable.disableWithFlag}.
+ *       SkylarkCallable.enableOnlyWithFlag} or {@code SkylarkCallable.disableWithFlag}.
  * </ul>
  *
  * For both readability and correctness, the relative order of the options in all of these locations
@@ -78,7 +78,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "experimental_action_args",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
@@ -118,7 +118,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       help =
           "Passes list of packages that can use the C++ Starlark API. Don't enable this flag yet, "
               + "we will be making breaking changes.")
-  public List<String> experimentalCcStarlarkApiEnabledPackages;
+  public List<String> experimentalCcSkylarkApiEnabledPackages;
 
   @Option(
       name = "experimental_enable_android_migration_apis",
@@ -528,7 +528,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN})
-  public boolean internalStarlarkFlagTestCanary;
+  public boolean internalSkylarkFlagTestCanary;
 
   @Option(
       name = "incompatible_do_not_split_linking_cmdline",
@@ -629,7 +629,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   private static final Interner<StarlarkSemantics> INTERNER = BlazeInterners.newWeakInterner();
 
   /** Constructs a {@link StarlarkSemantics} object corresponding to this set of option values. */
-  public StarlarkSemantics toStarlarkSemantics() {
+  public StarlarkSemantics toSkylarkSemantics() {
     StarlarkSemantics semantics =
         StarlarkSemantics.builder()
             // <== Add new options here in alphabetic order ==>
@@ -639,7 +639,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
                 experimentalAllowIncrementalRepositoryUpdates)
             .experimentalAllowTagsPropagation(experimentalAllowTagsPropagation)
             .experimentalBuildSettingApi(experimentalBuildSettingApi)
-            .experimentalCcStarlarkApiEnabledPackages(experimentalCcStarlarkApiEnabledPackages)
+            .experimentalCcSkylarkApiEnabledPackages(experimentalCcSkylarkApiEnabledPackages)
             .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
             .experimentalGoogleLegacyApi(experimentalGoogleLegacyApi)
             .experimentalNinjaActions(experimentalNinjaActions)
@@ -669,7 +669,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleStringReplaceCount(incompatibleStringReplaceCount)
             .incompatibleVisibilityPrivateAttributesAtDefinition(
                 incompatibleVisibilityPrivateAttributesAtDefinition)
-            .internalStarlarkFlagTestCanary(internalStarlarkFlagTestCanary)
+            .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
             .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
             .incompatibleUseCcConfigureFromRulesCc(incompatibleUseCcConfigureFromRulesCc)
             .incompatibleDepsetForLibrariesToLinkGetter(incompatibleDepsetForLibrariesToLinkGetter)

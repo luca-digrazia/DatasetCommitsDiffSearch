@@ -16,11 +16,15 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.FileStateValue;
+import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -31,11 +35,14 @@ import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtensio
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue.WorkspaceFileKey;
+import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledgeImpl;
 import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledgeImpl.ManagedDirectoriesListener;
+import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -43,18 +50,21 @@ import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.Injectable;
+import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.Mockito;
+import org.mockito.hamcrest.MockitoHamcrest;
 
 /**
  * Test for {@link WorkspaceFileFunction}.
@@ -62,7 +72,76 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
+  private WorkspaceFileFunction workspaceSkyFunc;
+  private ExternalPackageFunction externalSkyFunc;
+  private WorkspaceASTFunction astSkyFunc;
+  private FakeFileValue fakeWorkspaceFileValue;
   private TestManagedDirectoriesKnowledge testManagedDirectoriesKnowledge;
+
+  static class FakeFileValue extends FileValue {
+    private boolean exists;
+    private long size;
+
+    FakeFileValue() {
+      super();
+      exists = true;
+      size = 0L;
+    }
+
+    @Override
+    public RootedPath realRootedPath() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public FileStateValue realFileStateValue() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean exists() {
+      return exists;
+    }
+
+    @Override
+    public boolean isFile() {
+      return exists;
+    }
+
+    @Override
+    public ImmutableList<RootedPath> logicalChainDuringResolution() {
+      throw new UnsupportedOperationException();
+    }
+
+    void setExists(boolean exists) {
+      this.exists = exists;
+    }
+
+    @Override
+    public long getSize() {
+      return size;
+    }
+
+    void setSize(long size) {
+      this.size = size;
+    }
+  }
+
+  @Before
+  public final void setUp() throws Exception {
+    ConfiguredRuleClassProvider ruleClassProvider =
+        TestRuleClassProvider.getRuleClassProvider(true);
+    workspaceSkyFunc =
+        new WorkspaceFileFunction(
+            ruleClassProvider,
+            pkgFactory,
+            directories,
+            /*starlarkImportLookupFunctionForInlining=*/ null);
+    externalSkyFunc =
+        new ExternalPackageFunction(BazelSkyframeExecutorConstants.EXTERNAL_PACKAGE_HELPER);
+    astSkyFunc = new WorkspaceASTFunction(ruleClassProvider);
+    fakeWorkspaceFileValue = new FakeFileValue();
+  }
 
   @Override
   protected ManagedDirectoriesKnowledge getManagedDirectoriesKnowledge() {
@@ -81,6 +160,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
   private RootedPath createWorkspaceFile(String... contents) throws IOException {
     Path workspacePath = scratch.overwriteFile("WORKSPACE", contents);
+    fakeWorkspaceFileValue.setSize(workspacePath.getFileSize());
     return RootedPath.toRootedPath(
         Root.fromPath(workspacePath.getParentDirectory()),
         PathFragment.create(workspacePath.getBaseName()));
@@ -105,7 +185,57 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     public void describeTo(Description description) {}
   }
 
-  private <T extends SkyValue> EvaluationResult<T> eval(SkyKey key) throws InterruptedException {
+  private SkyFunction.Environment getEnv() throws InterruptedException {
+    PathPackageLocator locator = Mockito.mock(PathPackageLocator.class);
+    Mockito.when(locator.getPathEntries())
+        .thenReturn(ImmutableList.of(Root.fromPath(directories.getWorkspace())));
+
+    SkyFunction.Environment env = Mockito.mock(SkyFunction.Environment.class);
+    Mockito.when(env.getValue(MockitoHamcrest.argThat(new SkyKeyMatchers(FileValue.FILE))))
+        .then(
+            invocation -> {
+              SkyKey key = (SkyKey) invocation.getArguments()[0];
+              String path = ((RootedPath) key.argument()).getRootRelativePath().getPathString();
+              FakeFileValue result = new FakeFileValue();
+              result.setExists(path.equals("WORKSPACE"));
+              return result;
+            });
+    Mockito.when(
+            env.getValue(
+                MockitoHamcrest.argThat(new SkyKeyMatchers(WorkspaceFileValue.WORKSPACE_FILE))))
+        .then(
+            invocation -> {
+              SkyKey key = (SkyKey) invocation.getArguments()[0];
+              return workspaceSkyFunc.compute(key, getEnv());
+            });
+    Mockito.when(
+            env.getValue(MockitoHamcrest.argThat(new SkyKeyMatchers(SkyFunctions.WORKSPACE_AST))))
+        .then(
+            invocation -> {
+              SkyKey key = (SkyKey) invocation.getArguments()[0];
+              return astSkyFunc.compute(key, getEnv());
+            });
+    Mockito.when(
+            env.getValue(MockitoHamcrest.argThat(new SkyKeyMatchers(SkyFunctions.PRECOMPUTED))))
+        .then(
+            invocation -> {
+              SkyKey key = (SkyKey) invocation.getArguments()[0];
+              if (key.equals(PrecomputedValue.STARLARK_SEMANTICS.getKeyForTesting())) {
+                return new PrecomputedValue(StarlarkSemantics.DEFAULT);
+              } else if (key.equals(
+                  RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE
+                      .getKeyForTesting())) {
+                return new PrecomputedValue(Optional.<RootedPath>absent());
+              } else if (key.equals(PrecomputedValue.PATH_PACKAGE_LOCATOR.getKeyForTesting())) {
+                return new PrecomputedValue(locator);
+              } else {
+                return null;
+              }
+            });
+    return env;
+  }
+
+  private EvaluationResult<WorkspaceFileValue> eval(SkyKey key) throws InterruptedException {
     getSkyframeExecutor()
         .invalidateFilesUnderPathForTesting(
             reporter,
@@ -116,7 +246,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testLoadToChunkMapSimple() throws Exception {
+  public void testImportToChunkMapSimple() throws Exception {
     scratch.file("a.bzl", "a = 'a'");
     scratch.file("b.bzl", "b = 'b'");
     scratch.file("BUILD", "");
@@ -130,17 +260,17 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     SkyKey key1 = WorkspaceFileValue.key(workspace, 1);
     EvaluationResult<WorkspaceFileValue> result1 = eval(key1);
     WorkspaceFileValue value1 = result1.get(key1);
-    assertThat(value1.getLoadToChunkMap()).containsEntry("//:a.bzl", 1);
+    assertThat(value1.getImportToChunkMap()).containsEntry("//:a.bzl", 1);
 
     SkyKey key2 = WorkspaceFileValue.key(workspace, 2);
     EvaluationResult<WorkspaceFileValue> result2 = eval(key2);
     WorkspaceFileValue value2 = result2.get(key2);
-    assertThat(value2.getLoadToChunkMap()).containsEntry("//:a.bzl", 1);
-    assertThat(value2.getLoadToChunkMap()).containsEntry("//:b.bzl", 2);
+    assertThat(value2.getImportToChunkMap()).containsEntry("//:a.bzl", 1);
+    assertThat(value2.getImportToChunkMap()).containsEntry("//:b.bzl", 2);
   }
 
   @Test
-  public void testLoadToChunkMapDoesNotOverrideDuplicate() throws Exception {
+  public void testImportToChunkMapDoesNotOverrideDuplicate() throws Exception {
     scratch.file("a.bzl", "a = 'a'");
     scratch.file("BUILD", "");
     RootedPath workspace =
@@ -153,13 +283,13 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     SkyKey key1 = WorkspaceFileValue.key(workspace, 1);
     EvaluationResult<WorkspaceFileValue> result1 = eval(key1);
     WorkspaceFileValue value1 = result1.get(key1);
-    assertThat(value1.getLoadToChunkMap()).containsEntry("//:a.bzl", 1);
+    assertThat(value1.getImportToChunkMap()).containsEntry("//:a.bzl", 1);
 
     SkyKey key2 = WorkspaceFileValue.key(workspace, 2);
     EvaluationResult<WorkspaceFileValue> result2 = eval(key2);
     WorkspaceFileValue value2 = result2.get(key2);
-    assertThat(value2.getLoadToChunkMap()).containsEntry("//:a.bzl", 1);
-    assertThat(value2.getLoadToChunkMap()).doesNotContainEntry("//:a.bzl", 2);
+    assertThat(value2.getImportToChunkMap()).containsEntry("//:a.bzl", 1);
+    assertThat(value2.getImportToChunkMap()).doesNotContainEntry("//:a.bzl", 2);
   }
 
   @Test
@@ -193,7 +323,11 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
   @Test
   public void setTestManagedDirectoriesKnowledge() throws Exception {
-    StarlarkSemantics semantics = getStarlarkSemantics();
+    PrecomputedValue precomputedValue =
+        (PrecomputedValue)
+            getEnv().getValue(PrecomputedValue.STARLARK_SEMANTICS.getKeyForTesting());
+    StarlarkSemantics semantics =
+        (StarlarkSemantics) Preconditions.checkNotNull(precomputedValue).get();
     Injectable injectable = getSkyframeExecutor().injectable();
     try {
       StarlarkSemantics semanticsWithManagedDirectories =
@@ -250,7 +384,11 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
   @Test
   public void testManagedDirectories() throws Exception {
-    StarlarkSemantics semantics = getStarlarkSemantics();
+    PrecomputedValue precomputedValue =
+        (PrecomputedValue)
+            getEnv().getValue(PrecomputedValue.STARLARK_SEMANTICS.getKeyForTesting());
+    StarlarkSemantics semantics =
+        (StarlarkSemantics) Preconditions.checkNotNull(precomputedValue).get();
     Injectable injectable = getSkyframeExecutor().injectable();
     try {
       StarlarkSemantics semanticsWithManagedDirectories =
@@ -364,9 +502,10 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
   @Test
   public void testInvalidRepo() throws Exception {
     RootedPath workspacePath = createWorkspaceFile("workspace(name = 'foo$')");
-    SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value =
+        (PackageValue) externalSkyFunc
+            .compute(ExternalPackageFunction.key(workspacePath), getEnv());
+    Package pkg = value.getPackage();
     assertThat(pkg.containsErrors()).isTrue();
     MoreAsserts.assertContainsEvent(pkg.getEvents(), "foo$ is not a legal workspace name");
   }
@@ -377,8 +516,8 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     RootedPath workspacePath = createWorkspaceFile(lines);
 
     SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value = (PackageValue) externalSkyFunc.compute(key, getEnv());
+    Package pkg = value.getPackage();
     assertThat(getLabelMapping(pkg, "foo/bar"))
         .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
     MoreAsserts.assertNoEvents(pkg.getEvents());
@@ -390,8 +529,8 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     RootedPath workspacePath = createWorkspaceFile(lines);
 
     SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value = (PackageValue) externalSkyFunc.compute(key, getEnv());
+    Package pkg = value.getPackage();
     assertThat(getLabelMapping(pkg, "foo/bar"))
         .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
     MoreAsserts.assertNoEvents(pkg.getEvents());
@@ -403,9 +542,10 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     String[] lines = {"bind(name = 'foo:bar', actual = '//bar/baz')"};
     RootedPath workspacePath = createWorkspaceFile(lines);
 
-    SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value =
+        (PackageValue) externalSkyFunc
+            .compute(ExternalPackageFunction.key(workspacePath), getEnv());
+    Package pkg = value.getPackage();
     assertThat(pkg.containsErrors()).isTrue();
     MoreAsserts.assertContainsEvent(pkg.getEvents(), "target names may not contain ':'");
   }
@@ -416,22 +556,25 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     String[] lines = {"bind(name = 'foo/bar', actual = '//external:bar:baz')"};
     RootedPath workspacePath = createWorkspaceFile(lines);
 
-    SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value =
+        (PackageValue) externalSkyFunc
+            .compute(ExternalPackageFunction.key(workspacePath), getEnv());
+    Package pkg = value.getPackage();
     assertThat(pkg.containsErrors()).isTrue();
     MoreAsserts.assertContainsEvent(pkg.getEvents(), "target names may not contain ':'");
   }
 
   @Test
   public void testNoWorkspaceFile() throws Exception {
-    // Create and immediately delete to make sure we got the right file.
-    RootedPath workspacePath = createWorkspaceFile();
-    workspacePath.asPath().delete();
+    // Even though the WORKSPACE exists, Skyframe thinks it doesn't, so it doesn't.
+    String[] lines = {"bind(name = 'foo/bar', actual = '//foo:bar')"};
+    RootedPath workspacePath = createWorkspaceFile(lines);
+    fakeWorkspaceFileValue.setExists(false);
 
-    SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value =
+        (PackageValue) externalSkyFunc
+            .compute(ExternalPackageFunction.key(workspacePath), getEnv());
+    Package pkg = value.getPackage();
     assertThat(pkg.containsErrors()).isFalse();
     MoreAsserts.assertNoEvents(pkg.getEvents());
   }
@@ -444,8 +587,8 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     RootedPath workspacePath = createWorkspaceFile(lines);
 
     SkyKey key = ExternalPackageFunction.key(workspacePath);
-    EvaluationResult<PackageValue> evaluationResult = eval(key);
-    Package pkg = evaluationResult.get(key).getPackage();
+    PackageValue value = (PackageValue) externalSkyFunc.compute(key, getEnv());
+    Package pkg = value.getPackage();
     assertThat(getLabelMapping(pkg, "foo/bar"))
         .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
     MoreAsserts.assertNoEvents(pkg.getEvents());
@@ -472,7 +615,11 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
   @Test
   public void testDoNotSymlinkInExecroot() throws Exception {
-    StarlarkSemantics semantics = getStarlarkSemantics();
+    PrecomputedValue precomputedValue =
+        (PrecomputedValue)
+            getEnv().getValue(PrecomputedValue.STARLARK_SEMANTICS.getKeyForTesting());
+    StarlarkSemantics semantics =
+        (StarlarkSemantics) Preconditions.checkNotNull(precomputedValue).get();
     Injectable injectable = getSkyframeExecutor().injectable();
 
     try {

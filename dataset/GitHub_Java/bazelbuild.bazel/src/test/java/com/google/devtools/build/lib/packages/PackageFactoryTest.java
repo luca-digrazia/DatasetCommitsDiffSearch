@@ -150,8 +150,9 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     assertThat(pkg.getRule("has_dupe")).isNotNull();
     assertThat(pkg.getRule("dep")).isNotNull();
     assertThat(pkg.getRule("has_dupe").containsErrors()).isTrue();
-    // All rules in an errant package are themselves errant.
-    assertThat(pkg.getRule("dep").containsErrors()).isTrue();
+    assertThat(pkg.getRule("dep").containsErrors()).isTrue(); // because all rules in an
+    // errant package are
+    // themselves errant.
   }
 
   @Test

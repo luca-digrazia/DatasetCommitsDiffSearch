@@ -99,7 +99,7 @@ public class ExternalPackageHelperTest extends BuildViewTestCase {
       EvaluationContext.newBuilder()
           .setKeepGoing(false)
           .setNumThreads(SkyframeExecutor.DEFAULT_THREAD_COUNT)
-          .setEventHandler(NullEventHandler.INSTANCE)
+          .setEventHander(NullEventHandler.INSTANCE)
           .build();
 
   private SequentialBuildDriver driver;
@@ -152,7 +152,7 @@ public class ExternalPackageHelperTest extends BuildViewTestCase {
                 .getPackageFactoryBuilderForTesting(directories)
                 .build(ruleClassProvider, fileSystem),
             directories,
-            /*bzlLoadFunctionForInlining=*/ null));
+            /*starlarkImportLookupFunctionForInlining=*/ null));
     skyFunctions.put(
         SkyFunctions.PACKAGE,
         new PackageFunction(

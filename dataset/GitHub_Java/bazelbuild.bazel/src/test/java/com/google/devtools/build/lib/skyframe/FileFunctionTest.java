@@ -104,7 +104,7 @@ public class FileFunctionTest {
       EvaluationContext.newBuilder()
           .setKeepGoing(false)
           .setNumThreads(DEFAULT_THREAD_COUNT)
-          .setEventHandler(NullEventHandler.INSTANCE)
+          .setEventHander(NullEventHandler.INSTANCE)
           .build();
 
   private InMemoryFileSystem fs;
@@ -186,7 +186,7 @@ public class FileFunctionTest {
                             .builder(directories)
                             .build(ruleClassProvider, fs),
                         directories,
-                        /*bzlLoadFunctionForInlining=*/ null))
+                        /*starlarkImportLookupFunctionForInlining=*/ null))
                 .put(
                     SkyFunctions.EXTERNAL_PACKAGE,
                     new ExternalPackageFunction(
@@ -1011,7 +1011,7 @@ public class FileFunctionTest {
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
             .setNumThreads(DEFAULT_THREAD_COUNT)
-            .setEventHandler(eventHandler)
+            .setEventHander(eventHandler)
             .build();
     EvaluationResult<FileValue> result = driver.evaluate(keys, evaluationContext);
     assertThat(result.hasError()).isTrue();
@@ -1161,7 +1161,7 @@ public class FileFunctionTest {
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
             .setNumThreads(DEFAULT_THREAD_COUNT)
-            .setEventHandler(eventHandler)
+            .setEventHander(eventHandler)
             .build();
     EvaluationResult<FileValue> result = driver.evaluate(keys, evaluationContext);
     assertThat(result.hasError()).isTrue();
@@ -1222,7 +1222,7 @@ public class FileFunctionTest {
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
             .setNumThreads(DEFAULT_THREAD_COUNT)
-            .setEventHandler(eventHandler)
+            .setEventHander(eventHandler)
             .build();
     EvaluationResult<FileValue> result =
         driver.evaluate(ImmutableList.of(keyABC), evaluationContext);
@@ -1265,7 +1265,7 @@ public class FileFunctionTest {
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
             .setNumThreads(DEFAULT_THREAD_COUNT)
-            .setEventHandler(eventHandler)
+            .setEventHander(eventHandler)
             .build();
     EvaluationResult<FileValue> result =
         driver.evaluate(ImmutableList.of(keyDir1AB), evaluationContext);
@@ -1308,7 +1308,7 @@ public class FileFunctionTest {
         EvaluationContext.newBuilder()
             .setKeepGoing(true)
             .setNumThreads(1)
-            .setEventHandler(NullEventHandler.INSTANCE)
+            .setEventHander(NullEventHandler.INSTANCE)
             .build();
     EvaluationResult<FileValue> result =
         driver.evaluate(ImmutableList.of(fooKey), evaluationContext);
