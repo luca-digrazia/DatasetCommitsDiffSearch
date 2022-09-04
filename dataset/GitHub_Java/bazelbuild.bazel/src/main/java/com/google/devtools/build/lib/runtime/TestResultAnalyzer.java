@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,7 +83,6 @@ public class TestResultAnalyzer {
    */
   public boolean differentialAnalyzeAndReport(
       Collection<ConfiguredTarget> testTargets,
-      Collection<ConfiguredTarget> skippedTargets,
       AggregatingTestListener listener,
       TestResultNotifier notifier) {
 
@@ -115,14 +113,11 @@ public class TestResultAnalyzer {
     Preconditions.checkState(summaries.size() == testTargets.size());
 
     notifier.notify(summaries, totalRun);
-    // skipped targets are not in passCount since they have NO_STATUS
-    Set<ConfiguredTarget> testTargetsSet = new HashSet<>(testTargets);
-    Set<ConfiguredTarget> skippedTargetsSet = new HashSet<>(skippedTargets);
-    return passCount == Sets.difference(testTargetsSet, skippedTargetsSet).size();
+    return passCount == testTargets.size();
   }
 
   private static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
-    return status.getNumber() > other.getNumber() ? status : other;
+    return status.ordinal() > other.ordinal() ? status : other;
   }
 
   /**
