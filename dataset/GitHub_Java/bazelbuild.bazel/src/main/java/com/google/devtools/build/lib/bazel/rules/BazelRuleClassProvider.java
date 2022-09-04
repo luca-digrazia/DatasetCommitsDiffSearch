@@ -16,19 +16,12 @@ package com.google.devtools.build.lib.bazel.rules;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.Builder;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
-import com.google.devtools.build.lib.analysis.ShellConfiguration;
-import com.google.devtools.build.lib.analysis.ShellConfiguration.ShellExecutableProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.ActionEnvironmentProvider;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.BazelAarImportRule;
@@ -68,8 +61,6 @@ import com.google.devtools.build.lib.rules.android.AndroidInstrumentationInfo;
 import com.google.devtools.build.lib.rules.android.AndroidInstrumentationTestRule;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidLocalTestBaseRule;
-import com.google.devtools.build.lib.rules.android.AndroidLocalTestConfiguration;
-import com.google.devtools.build.lib.rules.android.AndroidNativeLibsInfo;
 import com.google.devtools.build.lib.rules.android.AndroidNeverlinkAspect;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesInfo;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses;
@@ -77,6 +68,7 @@ import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidToo
 import com.google.devtools.build.lib.rules.android.AndroidSkylarkCommon;
 import com.google.devtools.build.lib.rules.android.ApkInfo;
 import com.google.devtools.build.lib.rules.android.DexArchiveAspect;
+import com.google.devtools.build.lib.rules.android.NativeLibsZipsInfo;
 import com.google.devtools.build.lib.rules.config.ConfigRules;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoAspect;
@@ -92,94 +84,12 @@ import com.google.devtools.build.lib.rules.python.PythonOptions;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.rules.test.TestingSupportRules;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
-import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import java.io.IOException;
-import java.util.Map;
-import java.util.TreeMap;
-import javax.annotation.Nullable;
 
 /** A rule class provider implementing the rules Bazel knows. */
 public class BazelRuleClassProvider {
   public static final String TOOLS_REPOSITORY = "@bazel_tools";
-
-  /** Command-line options. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
-  public static class StrictActionEnvOptions extends FragmentOptions {
-    @Option(
-        name = "experimental_strict_action_env",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        help =
-            "If true, Bazel uses an environment with a static value for PATH and does not "
-                + "inherit LD_LIBRARY_PATH or TMPDIR. Use --action_env=ENV_VARIABLE if you want to "
-                + "inherit specific environment variables from the client, but note that doing so "
-                + "can prevent cross-user caching if a shared cache is used."
-    )
-    public boolean useStrictActionEnv;
-
-    @Override
-    public StrictActionEnvOptions getHost() {
-      StrictActionEnvOptions host = (StrictActionEnvOptions) getDefault();
-      host.useStrictActionEnv = useStrictActionEnv;
-      return host;
-    }
-  }
-
-  private static final PathFragment FALLBACK_SHELL = PathFragment.create("/bin/bash");
-
-  public static final ShellExecutableProvider SHELL_EXECUTABLE = (BuildOptions options) ->
-      ShellConfiguration.Loader.determineShellExecutable(
-          OS.getCurrent(),
-          options.get(ShellConfiguration.Options.class),
-          FALLBACK_SHELL);
-
-  public static final ActionEnvironmentProvider SHELL_ACTION_ENV = (BuildOptions options) -> {
-    boolean strictActionEnv = options.get(StrictActionEnvOptions.class).useStrictActionEnv;
-    OS os = OS.getCurrent();
-    PathFragment shellExecutable = SHELL_EXECUTABLE.getShellExecutable(options);
-    TreeMap<String, String> env = new TreeMap<>();
-
-    // All entries in the builder that have a value of null inherit the value from the client
-    // environment, which is only known at execution time - we don't want to bake the client env
-    // into the configuration since any change to the configuration requires rerunning the full
-    // analysis phase.
-    if (!strictActionEnv) {
-      env.put("LD_LIBRARY_PATH", null);
-    }
-
-    if (strictActionEnv) {
-      env.put("PATH", pathOrDefault(os, null, shellExecutable));
-    } else if (os == OS.WINDOWS) {
-      // TODO(ulfjack): We want to add the MSYS root to the PATH, but that prevents us from
-      // inheriting PATH from the client environment. For now we use System.getenv even though
-      // that is incorrect. We should enable strict_action_env by default and then remove this
-      // code, but that change may break Windows users who are relying on the MSYS root being in
-      // the PATH.
-      env.put("PATH", pathOrDefault(
-          os, System.getenv("PATH"), shellExecutable));
-    } else {
-      // The previous implementation used System.getenv (which uses the server's environment), and
-      // fell back to a hard-coded "/bin:/usr/bin" if PATH was not set.
-      env.put("PATH", null);
-    }
-
-    // Shell environment variables specified via options take precedence over the
-    // ones inherited from the fragments. In the long run, these fragments will
-    // be replaced by appropriate default rc files anyway.
-    for (Map.Entry<String, String> entry :
-        options.get(BuildConfiguration.Options.class).actionEnvironment) {
-      env.put(entry.getKey(), entry.getValue());
-    }
-
-    return ActionEnvironment.split(env);
-  };
 
   /** Used by the build encyclopedia generator. */
   public static ConfiguredRuleClassProvider create() {
@@ -203,17 +113,16 @@ public class BazelRuleClassProvider {
               .setPrelude("//tools/build_rules:prelude_bazel")
               .setNativeLauncherLabel("//tools/launcher:launcher")
               .setRunfilesPrefix(Label.DEFAULT_REPOSITORY_DIRECTORY)
-              .setPrerequisiteValidator(new BazelPrerequisiteValidator())
-              .setActionEnvironmentProvider(SHELL_ACTION_ENV);
+              .setPrerequisiteValidator(new BazelPrerequisiteValidator());
 
-          builder.addConfigurationOptions(ShellConfiguration.Options.class);
-          builder.addConfigurationFragment(new ShellConfiguration.Loader(
-              SHELL_EXECUTABLE,
-              ShellConfiguration.Options.class,
-              StrictActionEnvOptions.class));
-          builder.addUniversalConfigurationFragment(ShellConfiguration.class);
-          builder.addConfigurationOptions(StrictActionEnvOptions.class);
+          builder.setUniversalConfigurationFragment(BazelConfiguration.class);
+          builder.addConfigurationFragment(new BazelConfiguration.Loader());
+          builder.addConfigurationOptions(BazelConfiguration.Options.class);
           builder.addConfigurationOptions(BuildConfiguration.Options.class);
+          builder.addWorkspaceFileSuffix(
+              "register_toolchains('@bazel_tools//tools/cpp:dummy_cc_toolchain')\n");
+          builder.addWorkspaceFileSuffix(
+              "register_toolchains('@bazel_tools//tools/cpp:dummy_cc_toolchain_type')\n");
         }
 
         @Override
@@ -280,9 +189,6 @@ public class BazelRuleClassProvider {
           String toolsRepository = checkNotNull(builder.getToolsRepository());
 
           builder.addConfig(AndroidConfiguration.Options.class, new AndroidConfiguration.Loader());
-          builder.addConfig(
-              AndroidLocalTestConfiguration.Options.class,
-              new AndroidLocalTestConfiguration.Loader());
 
           AndroidNeverlinkAspect androidNeverlinkAspect = new AndroidNeverlinkAspect();
           DexArchiveAspect dexArchiveAspect = new DexArchiveAspect(toolsRepository);
@@ -317,7 +223,7 @@ public class BazelRuleClassProvider {
           builder.addSkylarkAccessibleTopLevels(
               AndroidResourcesInfo.PROVIDER.getName(), AndroidResourcesInfo.PROVIDER);
           builder.addSkylarkAccessibleTopLevels(
-              AndroidNativeLibsInfo.PROVIDER.getName(), AndroidNativeLibsInfo.PROVIDER);
+              NativeLibsZipsInfo.PROVIDER.getName(), NativeLibsZipsInfo.PROVIDER);
 
           try {
             builder.addWorkspaceFilePrefix(
@@ -406,34 +312,4 @@ public class BazelRuleClassProvider {
           // This rule set is a little special: it needs to depend on every configuration fragment
           // that has Make variables, so we put it last.
           ToolchainRules.INSTANCE);
-
-  @VisibleForTesting
-  public static String pathOrDefault(OS os, @Nullable String path, @Nullable PathFragment sh) {
-    // TODO(ulfjack): The default PATH should be set from the exec platform, which may be different
-    // from the local machine. For now, this can be overridden with --action_env=PATH=<value>, so
-    // at least there's a workaround.
-    if (os != OS.WINDOWS) {
-      return "/bin:/usr/bin";
-    }
-
-    // Attempt to compute the MSYS root (the real Windows path of "/") from `sh`.
-    if (sh != null && sh.getParentDirectory() != null) {
-      String newPath = sh.getParentDirectory().getPathString();
-      if (sh.getParentDirectory().endsWith(PathFragment.create("usr/bin"))) {
-        newPath +=
-            ";" + sh.getParentDirectory().getParentDirectory().replaceName("bin").getPathString();
-      } else if (sh.getParentDirectory().endsWith(PathFragment.create("bin"))) {
-        newPath +=
-            ";" + sh.getParentDirectory().replaceName("usr").getRelative("bin").getPathString();
-      }
-      newPath = newPath.replace('/', '\\');
-
-      if (path != null) {
-        newPath += ";" + path;
-      }
-      return newPath;
-    } else {
-      return null;
-    }
-  }
 }

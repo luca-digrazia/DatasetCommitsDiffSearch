@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -64,7 +63,7 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     validateRuleContext(ruleContext);
 
     // The wrapper script that invokes the test entry point.
@@ -256,7 +255,7 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
   }
 
   private static ImmutableList<Artifact> getDataDeps(RuleContext ruleContext) {
-    return ruleContext.getPrerequisiteArtifacts("data", Mode.DONT_CHECK).list();
+    return ruleContext.getPrerequisiteArtifacts("data", Mode.DATA).list();
   }
 
   /**

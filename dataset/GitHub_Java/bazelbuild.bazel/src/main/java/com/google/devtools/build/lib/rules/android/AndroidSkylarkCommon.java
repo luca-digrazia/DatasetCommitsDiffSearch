@@ -29,6 +29,7 @@ public class AndroidSkylarkCommon {
 
   @SkylarkCallable(
     name = "create_device_broker_info",
+    doc = "",
     documented = false,
     parameters = {@Param(name = "type", type = String.class)}
   )

@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 
@@ -44,8 +43,7 @@ public final class AndroidDeviceBrokerInfo extends NativeInfo {
       new NativeProvider<AndroidDeviceBrokerInfo>(
           AndroidDeviceBrokerInfo.class, SKYLARK_NAME, SIGNATURE) {
         @Override
-        protected AndroidDeviceBrokerInfo createInstanceFromSkylark(
-            Object[] args, Environment env, Location loc) {
+        protected AndroidDeviceBrokerInfo createInstanceFromSkylark(Object[] args, Location loc) {
           return new AndroidDeviceBrokerInfo(/*deviceBrokerType=*/ (String) args[0]);
         }
       };

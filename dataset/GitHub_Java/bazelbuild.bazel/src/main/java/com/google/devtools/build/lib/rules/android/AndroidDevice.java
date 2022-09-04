@@ -331,7 +331,7 @@ public class AndroidDevice implements RuleConfiguredTargetFactory {
               .addOutput(images)
               .addInputs(commonDependencies)
               .setMnemonic("AndroidDeviceBoot")
-              .setProgressMessage("Creating Android image for %s", ruleContext.getLabel())
+              .setProgressMessage("creating android images...")
               .setExecutionInfo(constraints)
               .setExecutable(unifiedLauncher)
               // Boot resource estimation:

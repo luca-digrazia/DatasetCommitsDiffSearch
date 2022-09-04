@@ -25,13 +25,13 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
+import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -105,14 +105,21 @@ public class AarImport implements RuleConfiguredTargetFactory {
     // build could be empty. The resources zip and merged jars are added here as a sanity check for
     // Bazel developers so that `bazel build java/com/my_aar_import` will fail if the resource
     // processing or jar merging steps fail.
-    NestedSet<Artifact> filesToBuild =
-        NestedSetBuilder.<Artifact>stableOrder().add(resourcesZip).add(mergedJar).build();
+    NestedSetBuilder<Artifact> filesToBuildBuilder =
+        NestedSetBuilder.<Artifact>stableOrder().add(resourcesZip).add(mergedJar);
 
     Artifact nativeLibs = createAarArtifact(ruleContext, "native_libs.zip");
     ruleContext.registerAction(createAarNativeLibsFilterActions(ruleContext, aar, nativeLibs));
 
     JavaRuleOutputJarsProvider.Builder jarProviderBuilder =
         new JavaRuleOutputJarsProvider.Builder().addOutputJar(mergedJar, null, ImmutableList.of());
+    for (TransitiveInfoCollection export : ruleContext.getPrerequisites("exports", Mode.TARGET)) {
+      for (OutputJar jar :
+          JavaInfo.getProvider(JavaRuleOutputJarsProvider.class, export).getOutputJars()) {
+        jarProviderBuilder.addOutputJar(jar);
+        filesToBuildBuilder.add(jar.getClassJar());
+      }
+    }
 
     ImmutableList<TransitiveInfoCollection> targets =
         ImmutableList.<TransitiveInfoCollection>builder()
@@ -133,27 +140,24 @@ public class AarImport implements RuleConfiguredTargetFactory {
             .addCompileTimeJarAsFullJar(mergedJar)
             .build());
 
-    JavaCompilationArgsProvider javaCompilationArgsProvider =
-        JavaCompilationArgsProvider.create(
-            common.collectJavaCompilationArgs(
-                /* recursive = */ false,
-                JavaCommon.isNeverLink(ruleContext),
-                /* srcLessDepsExport = */ false),
-            common.collectJavaCompilationArgs(
-                /* recursive = */ true,
-                JavaCommon.isNeverLink(ruleContext),
-                /* srcLessDepsExport = */ false));
-
-    JavaInfo.Builder javaInfoBuilder =
+    JavaInfo javaInfo =
         JavaInfo.Builder.create()
-            .addProvider(JavaCompilationArgsProvider.class, javaCompilationArgsProvider)
-            .addProvider(JavaRuleOutputJarsProvider.class, jarProviderBuilder.build());
-
-    common.addTransitiveInfoProviders(
-        ruleBuilder, javaInfoBuilder, filesToBuild, /*classJar=*/ null);
+            .addProvider(
+                JavaCompilationArgsProvider.class,
+                JavaCompilationArgsProvider.create(
+                    common.collectJavaCompilationArgs(
+                        /* recursive = */ false,
+                        JavaCommon.isNeverLink(ruleContext),
+                        /* srcLessDepsExport = */ false),
+                    common.collectJavaCompilationArgs(
+                        /* recursive = */ true,
+                        JavaCommon.isNeverLink(ruleContext),
+                        /* srcLessDepsExport = */ false)))
+            .addProvider(JavaRuleOutputJarsProvider.class, jarProviderBuilder.build())
+            .build();
 
     return ruleBuilder
-        .setFilesToBuild(filesToBuild)
+        .setFilesToBuild(filesToBuildBuilder.build())
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
@@ -163,7 +167,7 @@ public class AarImport implements RuleConfiguredTargetFactory {
                 AndroidCommon.collectTransitiveNativeLibs(ruleContext).add(nativeLibs).build()))
         .addProvider(
             JavaRuntimeJarProvider.class, new JavaRuntimeJarProvider(ImmutableList.of(mergedJar)))
-        .addNativeDeclaredProvider(javaInfoBuilder.build())
+        .addNativeDeclaredProvider(javaInfo)
         .build();
   }
 
