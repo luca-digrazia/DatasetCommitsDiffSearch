@@ -1,4 +1,4 @@
-/*
+package lib;/*
  * Copyright 2013-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
@@ -16,14 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-package lib;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.google.common.collect.Lists;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
@@ -38,6 +31,8 @@ import lib.security.RethrowingFirstSuccessfulStrategy;
 import lib.security.ServerRestInterfaceRealm;
 import models.LocalAdminUser;
 import models.ModelFactoryModule;
+import models.Node;
+import models.UserService;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.authc.AuthenticationListener;
 import org.apache.shiro.authc.Authenticator;
@@ -48,16 +43,6 @@ import org.apache.shiro.mgt.DefaultSubjectDAO;
 import org.apache.shiro.realm.Realm;
 import org.apache.shiro.realm.SimpleAccountRealm;
 import org.graylog2.logback.appender.AccessLog;
-import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.lib.DateTools;
-import org.graylog2.restclient.lib.Graylog2MasterUnavailableException;
-import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.lib.ServerNodesRefreshService;
-import org.graylog2.restclient.lib.Tools;
-import org.graylog2.restclient.lib.Version;
-import org.graylog2.restclient.models.Node;
-import org.graylog2.restclient.models.SessionService;
-import org.graylog2.restclient.models.UserService;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,9 +51,8 @@ import play.Configuration;
 import play.GlobalSettings;
 import play.api.mvc.EssentialFilter;
 import play.libs.F;
-import play.libs.Json;
 import play.mvc.Http;
-import play.mvc.Result;
+import play.mvc.SimpleResult;
 
 import java.io.File;
 import java.net.URI;
@@ -76,6 +60,9 @@ import java.util.List;
 
 import static play.mvc.Results.internalServerError;
 
+/**
+ *
+ */
 @SuppressWarnings("unused")
 public class Global extends GlobalSettings {
     private static final Logger log = LoggerFactory.getLogger(Global.class);
@@ -97,16 +84,14 @@ public class Global extends GlobalSettings {
 
     @Override
     public void onStart(Application app) {
-        log.info("Graylog2 web interface version {} starting up.", Version.VERSION);
-
         final String appSecret = app.configuration().getString("application.secret");
         if (appSecret == null || appSecret.isEmpty()) {
             log.error("Please configure application.secret in your conf/graylog2-web-interface.conf");
             throw new IllegalStateException("No application.secret configured.");
         }
         if (appSecret.length() < 16) {
-            log.error("Please configure application.secret in your conf/graylog2-web-interface.conf to be longer than 16 characters. Suggested is using pwgen -N 1 -s 96 or similar");
-            throw new IllegalStateException("application.secret is too short, use at least 16 characters! Suggested is to use pwgen -N 1 -s 96 or similar");
+            log.error("Please configure application.secret in your conf/graylog2-web-interface.conf to be longer than 16 characters. Suggested is using pwgen -s 96 or similar");
+            throw new IllegalStateException("application.secret is too short, use at least 16 characters! Suggested is to use pwgen -s 96 or similar");
         }
 
         final String graylog2ServerUris = app.configuration().getString("graylog2-server.uris", "");
@@ -135,17 +120,13 @@ public class Global extends GlobalSettings {
         }
         log.info("Using application default timezone {}", DateTools.getApplicationTimeZone());
 
-        final ObjectMapper objectMapper = buildObjectMapper();
-        Json.setObjectMapper(objectMapper);
-
-        final List<Module> modules = Lists.newArrayList();
+        List<Module> modules = Lists.newArrayList();
         modules.add(new AbstractModule() {
             @Override
             protected void configure() {
                 bind(URI[].class).annotatedWith(Names.named("Initial Nodes")).toInstance(initialNodes);
                 bind(Long.class).annotatedWith(Names.named("Default Timeout"))
-                        .toInstance(org.graylog2.restclient.lib.Configuration.apiTimeout("DEFAULT"));
-                bind(ObjectMapper.class).toInstance(objectMapper);
+                        .toInstance(lib.Configuration.apiTimeout("DEFAULT"));
             }
         });
         modules.add(new ModelFactoryModule());
@@ -157,7 +138,6 @@ public class Global extends GlobalSettings {
         injector.getInstance(ServerNodesRefreshService.class).start();
         // TODO replace with custom AuthenticatedAction filter
         RedirectAuthenticator.userService = injector.getInstance(UserService.class);
-        RedirectAuthenticator.sessionService = injector.getInstance(SessionService.class);
 
         // temporarily disabled for preview to prevent confusion.
 //        LocalAdminUserRealm localAdminRealm = new LocalAdminUserRealm("local-accounts");
@@ -188,15 +168,6 @@ public class Global extends GlobalSettings {
 
     }
 
-    private ObjectMapper buildObjectMapper() {
-        return new ObjectMapper()
-                .registerModules(new GuavaModule(), new JodaModule())
-                .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
-                .enable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .disable(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES)
-                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
-    }
-
     @Override
     public void onStop(Application app) {
         injector.getInstance(ApiClient.class).stop();
@@ -215,14 +186,14 @@ public class Global extends GlobalSettings {
     }
 
     @Override
-    public F.Promise<Result> onError(Http.RequestHeader request, Throwable t) {
+    public F.Promise<SimpleResult> onError(Http.RequestHeader request, Throwable t) {
         if (t.getCause() instanceof Graylog2MasterUnavailableException) {
             final ServerNodes serverNodes = injector.getInstance(ServerNodes.class);
             final List<Node> configuredNodes = serverNodes.getConfiguredNodes();
             final List<Node> nodesEverConnectedTo = serverNodes.all(true);
 
-            return F.Promise.<Result>pure(internalServerError(
-                            views.html.disconnected.no_master.render(Http.Context.current(), configuredNodes, nodesEverConnectedTo, serverNodes))
+            return F.Promise.<SimpleResult>pure(internalServerError(
+                    views.html.disconnected.no_master.render(Http.Context.current(), configuredNodes, nodesEverConnectedTo, serverNodes))
             );
         }
         return super.onError(request, t);
@@ -277,7 +248,7 @@ public class Global extends GlobalSettings {
         final String passwordHash = config.getString("local-user.password-sha2");
         if (passwordHash == null) {
             log.warn("No password hash for local user {} set. " +
-                            "If you lose connection to the graylog2-server at {}, you will be unable to log in!",
+                    "If you lose connection to the graylog2-server at {}, you will be unable to log in!",
                     username, config.getString("graylog2-server"));
             return;
         }

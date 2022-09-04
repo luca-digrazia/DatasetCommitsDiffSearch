@@ -28,10 +28,8 @@ import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
 import models.ModelFactoryModule;
-import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.lib.ServerNodes;
-import org.graylog2.restclient.models.Node;
-import org.graylog2.restclient.models.api.responses.cluster.NodeSummaryResponse;
+import models.Node;
+import models.api.responses.cluster.NodeSummaryResponse;
 
 import javax.annotation.Nullable;
 import java.net.URI;
