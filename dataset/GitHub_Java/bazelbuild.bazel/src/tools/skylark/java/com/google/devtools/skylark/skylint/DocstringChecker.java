@@ -33,10 +33,6 @@ import java.util.List;
 
 /** Checks the existence of docstrings. */
 public class DocstringChecker extends SyntaxTreeVisitor {
-  private static final String MISSING_DOCSTRING_CATEGORY = "missing-docstring";
-  private static final String INCONSISTENT_DOCSTRING_CATEGORY = "inconsistent-docstring";
-  private static final String BAD_DOCSTRING_FORMAT_CATEGORY = "bad-docstring-format";
-
   private final List<Issue> issues = new ArrayList<>();
   private boolean containsReturnWithValue = false;
 
@@ -55,7 +51,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       // This location is invalid if the file is empty but this edge case is not worth the trouble.
       Location end = new Location(2, 1);
       LocationRange range = new LocationRange(start, end);
-      issues.add(new Issue(MISSING_DOCSTRING_CATEGORY, "file has no module docstring", range));
+      issues.add(new Issue("file has no module docstring", range));
     } else {
       List<DocstringParseError> errors = new ArrayList<>();
       DocstringUtils.parseDocstring(moduleDocstring, errors);
@@ -80,8 +76,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
     StringLiteral functionDocstring = extractDocstring(node.getStatements());
     if (functionDocstring == null && !node.getIdentifier().getName().startsWith("_")) {
       issues.add(
-          Issue.create(
-              MISSING_DOCSTRING_CATEGORY,
+          new Issue(
               "function '" + node.getIdentifier().getName() + "' has no docstring",
               node.getLocation()));
     }
@@ -107,8 +102,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       List<Issue> issues) {
     if (functionReturnsWithValue && docstring.returns.isEmpty()) {
       issues.add(
-          Issue.create(
-              INCONSISTENT_DOCSTRING_CATEGORY,
+          new Issue(
               "incomplete docstring: the return value is not documented",
               docstringLiteral.getLocation()));
     }
@@ -139,8 +133,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
       List<Issue> issues) {
     if (documentedParams.isEmpty() && !declaredParams.isEmpty()) {
       issues.add(
-          Issue.create(
-              INCONSISTENT_DOCSTRING_CATEGORY,
+          new Issue(
               "incomplete docstring: the function parameters are not documented",
               docstringLiteral.getLocation()));
       return;
@@ -148,8 +141,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
     for (String param : declaredParams) {
       if (!documentedParams.contains(param)) {
         issues.add(
-            Issue.create(
-                INCONSISTENT_DOCSTRING_CATEGORY,
+            new Issue(
                 "incomplete docstring: parameter '" + param + "' not documented",
                 docstringLiteral.getLocation()));
       }
@@ -157,8 +149,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
     for (String param : documentedParams) {
       if (!declaredParams.contains(param)) {
         issues.add(
-            Issue.create(
-                INCONSISTENT_DOCSTRING_CATEGORY,
+            new Issue(
                 "inconsistent docstring: parameter '"
                     + param
                     + "' appears in docstring but not in function signature",
@@ -175,8 +166,7 @@ public class DocstringChecker extends SyntaxTreeVisitor {
               + "Documentation order: "
               + String.join(", ", documentedParams)
               + "\n";
-      issues.add(
-          Issue.create(INCONSISTENT_DOCSTRING_CATEGORY, message, docstringLiteral.getLocation()));
+      issues.add(new Issue(message, docstringLiteral.getLocation()));
     }
   }
 
@@ -195,9 +185,6 @@ public class DocstringChecker extends SyntaxTreeVisitor {
     }
     Location start = new Location(startLine, startColumn);
     Location end = new Location(startLine, startColumn + error.line.length() - 1);
-    return new Issue(
-        BAD_DOCSTRING_FORMAT_CATEGORY,
-        "bad docstring format: " + error.message,
-        new LocationRange(start, end));
+    return new Issue("invalid docstring format: " + error.message, new LocationRange(start, end));
   }
 }
