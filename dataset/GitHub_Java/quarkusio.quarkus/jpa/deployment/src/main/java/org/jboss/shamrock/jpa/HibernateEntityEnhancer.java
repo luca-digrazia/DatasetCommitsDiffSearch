@@ -1,7 +1,6 @@
 package org.jboss.shamrock.jpa;
 
 import java.util.Objects;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.hibernate.bytecode.enhance.spi.DefaultEnhancementContext;
@@ -17,13 +16,9 @@ import org.objectweb.asm.Opcodes;
  * this function adapts the Shamrock bytecode transformer API - which uses ASM - to use the Entity Enhancement API of
  * Hibernate ORM, which exposes a simple byte array.
  *
- * N.B. For enhancement the hardcoded tool of choice is the Byte Buddy based enhancer.
- * This is not configurable, and we enforce the ORM environment to use the "noop" enhancer as we require all
- * entities to be enhanced at build time.
- *
  * @author Sanne Grinovero  <sanne@hibernate.org>
  */
-public final class HibernateEntityEnhancer implements BiFunction<String, ClassVisitor, ClassVisitor> {
+public final class HibernateEntityEnhancer implements Function<String, Function<ClassVisitor, ClassVisitor>> {
 
     private final Enhancer enhancer;
     private final KnownDomainObjects classnameWhitelist;
@@ -32,18 +27,33 @@ public final class HibernateEntityEnhancer implements BiFunction<String, ClassVi
         Objects.requireNonNull(classnameWhitelist);
         this.classnameWhitelist = classnameWhitelist;
         BytecodeProvider provider = new org.hibernate.bytecode.internal.bytebuddy.BytecodeProviderImpl();
-        DefaultEnhancementContext enhancementContext = new DefaultEnhancementContext() {
-            @Override
-            public ClassLoader getLoadingClassLoader() {
-                return Thread.currentThread().getContextClassLoader();
-            }
-        };
-        this.enhancer = provider.getEnhancer(enhancementContext);
+        this.enhancer = provider.getEnhancer(new DefaultEnhancementContext());
     }
 
     @Override
-    public ClassVisitor apply(String className, ClassVisitor outputClassVisitor) {
-        return new HibernateEnhancingClassVisitor(className, outputClassVisitor);
+    public Function<ClassVisitor, ClassVisitor> apply(String classname) {
+        if (classnameWhitelist.contains(classname))
+            return new HibernateTransformingVisitorFunction(classname);
+        else
+            return null;
+    }
+
+    /**
+     * Having to convert a ClassVisitor into another, this allows visitor chaining: the returned ClassVisitor needs to
+     * refer to the previous ClassVisitor in the chain to forward input events (optionally transformed).
+     */
+    private class HibernateTransformingVisitorFunction implements Function<ClassVisitor, ClassVisitor> {
+
+        private final String className;
+
+        public HibernateTransformingVisitorFunction(String className) {
+            this.className = className;
+        }
+
+        @Override
+        public ClassVisitor apply(ClassVisitor outputClassVisitor) {
+            return new HibernateEnhancingClassVisitor(className, outputClassVisitor);
+        }
     }
 
     private class HibernateEnhancingClassVisitor extends ClassVisitor {
