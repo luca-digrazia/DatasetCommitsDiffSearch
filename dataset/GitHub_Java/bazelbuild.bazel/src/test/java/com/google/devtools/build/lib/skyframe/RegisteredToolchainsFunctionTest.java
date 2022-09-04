@@ -104,7 +104,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
 
     // Verify that the target registered with the extra_toolchains flag is first in the list.
     assertToolchainLabels(result.get(toolchainsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:extra_toolchain_impl"), makeLabel("//toolchain:toolchain_1_impl"))
         .inOrder();
   }
@@ -146,7 +146,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
 
     // Verify that the target registered with the extra_toolchains flag is first in the list.
     assertToolchainLabels(result.get(toolchainsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:extra_toolchain_impl_1"),
             makeLabel("//extra:extra_toolchain_impl_2"),
             makeLabel("//toolchain:toolchain_1_impl"))
@@ -250,7 +250,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
         requestToolchainsFromSkyframe(toolchainsKey);
     assertThatEvaluationResult(result).hasNoError();
     assertToolchainLabels(result.get(toolchainsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:extra_toolchain1_impl"),
             makeLabel("//extra:extra_toolchain2_impl"),
             makeLabel("//extra/more:more_toolchain_impl"));
@@ -278,7 +278,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
   }
 
   @Test
-  public void testRegisteredToolchainsValue_equalsAndHashCode() throws Exception {
+  public void testRegisteredToolchainsValue_equalsAndHashCode() {
     DeclaredToolchainInfo toolchain1 =
         DeclaredToolchainInfo.builder()
             .toolchainType(ToolchainTypeInfo.create(makeLabel("//test:toolchain")))
