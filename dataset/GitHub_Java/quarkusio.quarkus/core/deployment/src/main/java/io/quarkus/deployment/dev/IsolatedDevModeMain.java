@@ -23,9 +23,8 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
-import org.apache.maven.shared.utils.cli.CommandLineException;
-import org.apache.maven.shared.utils.cli.CommandLineUtils;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.jboss.logging.Logger;
 
@@ -44,7 +43,6 @@ import io.quarkus.builder.BuildStep;
 import io.quarkus.deployment.CodeGenerator;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
 import io.quarkus.deployment.codegen.CodeGenData;
-import io.quarkus.deployment.dev.testing.MessageFormat;
 import io.quarkus.deployment.dev.testing.TestSupport;
 import io.quarkus.deployment.steps.ClassTransformingBuildStep;
 import io.quarkus.deployment.util.FSWatchUtil;
@@ -99,58 +97,22 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                                 }
                                 final CountDownLatch latch = new CountDownLatch(1);
                                 QuarkusConsole.INSTANCE.pushInputHandler(new InputHandler() {
-                                    ConsoleStatus promptHandler;
-                                    StringBuilder reading;
-
                                     @Override
                                     public void handleInput(int[] keys) {
-
                                         for (int i : keys) {
-                                            if (reading != null) {
-                                                if (i == '\n') {
-                                                    try {
-                                                        context.setArgs(
-                                                                CommandLineUtils.translateCommandline(reading.toString()));
-                                                        reading = null;
-                                                        QuarkusConsole.INSTANCE.popInputHandler();
-                                                        latch.countDown();
-                                                    } catch (CommandLineException e) {
-                                                        log.error("Failed to parse command line", e);
-                                                        setRestartPrompt(promptHandler);
-                                                        reading = null;
-                                                    }
-                                                } else {
-                                                    reading.append((char) i);
-                                                }
+                                            if (i == 'q') {
+                                                System.exit(0);
                                             } else {
-                                                if (i == 'q') {
-                                                    System.exit(0);
-                                                } else if (i == 'e') {
-                                                    promptHandler.doReadLine();
-                                                    reading = new StringBuilder();
-                                                    break; //discard all further input
-                                                } else {
-                                                    QuarkusConsole.INSTANCE.popInputHandler();
-                                                    latch.countDown();
-                                                }
+                                                QuarkusConsole.INSTANCE.popInputHandler();
+                                                latch.countDown();
                                             }
                                         }
                                     }
 
                                     @Override
                                     public void promptHandler(ConsoleStatus promptHandler) {
-                                        this.promptHandler = promptHandler;
-                                        promptHandler.setStatus("\u001B[91mQuarkus application exited with code " + integer
-                                                + MessageFormat.RESET);
-                                        setRestartPrompt(promptHandler);
-                                    }
-
-                                    private void setRestartPrompt(ConsoleStatus promptHandler) {
-                                        promptHandler.setPrompt("Press [" + MessageFormat.BLUE + "q" + MessageFormat.RESET
-                                                + "] or Ctrl + C to quit, [" + MessageFormat.BLUE + "e" + MessageFormat.RESET
-                                                + "] to edit command line args (currently '" + MessageFormat.GREEN
-                                                + String.join(" ", context.getArgs()) + MessageFormat.RESET
-                                                + "'), or any other key to restart");
+                                        promptHandler.setPrompt("\u001B[91mQuarkus application exited with code " + integer
+                                                + "\nPress [q] or Ctrl + C to quit, any other key to restart");
                                     }
                                 });
                                 try {
@@ -433,7 +395,7 @@ public class IsolatedDevModeMain implements BiConsumer<CuratedApplication, Map<S
                     codeGens.addAll(
                             CodeGenerator.init(
                                     deploymentClassLoader,
-                                    module.getSourceParents(),
+                                    module.getSourceParents().stream().map(Paths::get).collect(Collectors.toSet()),
                                     Paths.get(module.getPreBuildOutputDir()),
                                     Paths.get(module.getTargetDir()),
                                     sourcePath -> module.addSourcePaths(singleton(sourcePath.toAbsolutePath().toString()))));

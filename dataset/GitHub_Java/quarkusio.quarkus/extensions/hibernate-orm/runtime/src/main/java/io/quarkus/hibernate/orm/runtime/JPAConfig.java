@@ -1,27 +1,20 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package io.quarkus.hibernate.orm.runtime;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import javax.annotation.PreDestroy;
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.context.BeforeDestroyed;
+import javax.enterprise.event.Observes;
+import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
@@ -33,57 +26,95 @@ public class JPAConfig {
 
     private static final Logger LOGGER = Logger.getLogger(JPAConfig.class.getName());
 
-    private final AtomicBoolean jtaEnabled;
+    private final Map<String, Set<String>> entityPersistenceUnitMapping;
 
     private final Map<String, LazyPersistenceUnit> persistenceUnits;
 
-    private final AtomicReference<String> defaultPersistenceUnitName;
+    @Inject
+    public JPAConfig(JPAConfigSupport jpaConfigSupport) {
+        this.entityPersistenceUnitMapping = Collections.unmodifiableMap(jpaConfigSupport.entityPersistenceUnitMapping);
 
-    public JPAConfig() {
-        this.jtaEnabled = new AtomicBoolean();
-        this.persistenceUnits = new HashMap<>();
-        this.defaultPersistenceUnitName = new AtomicReference<String>();
-    }
-
-    void setJtaEnabled(boolean value) {
-        jtaEnabled.set(value);
-    }
-
-    public EntityManagerFactory getEntityManagerFactory(String unitName) {
-        if (unitName == null || unitName.isEmpty()) {
-            if (persistenceUnits.size() == 1) {
-                String defaultUnitName = defaultPersistenceUnitName.get();
-                return defaultUnitName != null ? persistenceUnits.get(defaultUnitName).get()
-                        : persistenceUnits.values().iterator().next().get();
-            } else {
-                throw new IllegalStateException("Unable to identify the default PU: " + persistenceUnits);
-            }
+        Map<String, LazyPersistenceUnit> persistenceUnitsBuilder = new HashMap<>();
+        for (String persistenceUnitName : jpaConfigSupport.persistenceUnitNames) {
+            persistenceUnitsBuilder.put(persistenceUnitName, new LazyPersistenceUnit(persistenceUnitName));
         }
-        return persistenceUnits.get(unitName).get();
-    }
-
-    void registerPersistenceUnit(String unitName) {
-        persistenceUnits.put(unitName, new LazyPersistenceUnit(unitName));
+        this.persistenceUnits = persistenceUnitsBuilder;
     }
 
     void startAll() {
-        for(Map.Entry<String, LazyPersistenceUnit> i : persistenceUnits.entrySet()) {
-            i.getValue().get();
+        List<CompletableFuture<?>> start = new ArrayList<>();
+        //start PU's in parallel, for faster startup
+        //also works around https://github.com/quarkusio/quarkus/issues/17304 to some extent
+        //as the main thread is now no longer polluted with ThreadLocals by default
+        //this is not a complete fix, but will help as long as the test methods
+        //don't access the datasource directly, but only over HTTP calls
+        for (Map.Entry<String, LazyPersistenceUnit> i : persistenceUnits.entrySet()) {
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            start.add(future);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        i.getValue().get();
+                        future.complete(null);
+                    } catch (Throwable t) {
+                        future.completeExceptionally(t);
+                    }
+                }
+            }, "JPA Startup Thread: " + i.getKey()).start();
+        }
+        for (CompletableFuture<?> i : start) {
+            try {
+                i.get();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e.getCause());
+            }
         }
     }
 
-    void initDefaultPersistenceUnit() {
-        if (persistenceUnits.size() == 1) {
-            defaultPersistenceUnitName.set(persistenceUnits.keySet().iterator().next());
+    public EntityManagerFactory getEntityManagerFactory(String unitName) {
+        LazyPersistenceUnit lazyPersistenceUnit = null;
+        if (unitName == null) {
+            if (persistenceUnits.size() == 1) {
+                lazyPersistenceUnit = persistenceUnits.values().iterator().next();
+            }
+        } else {
+            lazyPersistenceUnit = persistenceUnits.get(unitName);
         }
+
+        if (lazyPersistenceUnit == null) {
+            throw new IllegalArgumentException(
+                    String.format(Locale.ROOT, "Unable to find an EntityManagerFactory for persistence unit '%s'", unitName));
+        }
+
+        return lazyPersistenceUnit.get();
     }
 
-    boolean isJtaEnabled() {
-        return jtaEnabled.get();
+    /**
+     * Returns the registered persistence units.
+     *
+     * @return Set containing the names of all registered persistence units.
+     */
+    public Set<String> getPersistenceUnits() {
+        return persistenceUnits.keySet();
     }
 
-    @PreDestroy
-    void destroy() {
+    /**
+     * Returns the set of persistence units an entity is attached to.
+     */
+    public Set<String> getPersistenceUnitsForEntity(String entityClass) {
+        return entityPersistenceUnitMapping.getOrDefault(entityClass, Collections.emptySet());
+    }
+
+    /**
+     * Need to shutdown all instances of Hibernate ORM before the actual destroy event,
+     * as it might need to use the datasources during shutdown.
+     *
+     * @param event ignored
+     */
+    void destroy(@Observes @BeforeDestroyed(ApplicationScoped.class) Object event) {
         for (LazyPersistenceUnit factory : persistenceUnits.values()) {
             try {
                 factory.close();
@@ -91,6 +122,10 @@ public class JPAConfig {
                 LOGGER.warn("Unable to close the EntityManagerFactory: " + factory, e);
             }
         }
+    }
+
+    @PreDestroy
+    void destroy() {
         persistenceUnits.clear();
     }
 
@@ -105,12 +140,12 @@ public class JPAConfig {
         }
 
         EntityManagerFactory get() {
-            if(value == null) {
+            if (value == null) {
                 synchronized (this) {
-                    if(closed) {
+                    if (closed) {
                         throw new IllegalStateException("Persistence unit is closed");
                     }
-                    if(value == null) {
+                    if (value == null) {
                         value = Persistence.createEntityManagerFactory(name);
                     }
                 }
@@ -122,7 +157,7 @@ public class JPAConfig {
             closed = true;
             EntityManagerFactory emf = this.value;
             this.value = null;
-            if(emf != null) {
+            if (emf != null) {
                 emf.close();
             }
         }
