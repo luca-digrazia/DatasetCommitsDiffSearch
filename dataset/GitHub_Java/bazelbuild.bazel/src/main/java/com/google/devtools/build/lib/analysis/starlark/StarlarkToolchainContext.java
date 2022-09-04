@@ -43,9 +43,9 @@ public abstract class StarlarkToolchainContext implements ToolchainContextApi {
       new ToolchainContextApi() {
         @Override
         public Object getIndex(
-            StarlarkThread starlarkThread, StarlarkSemantics semantics, Object key) {
-          // TODO(jcater): throw Starlark.errorf instead of returning NONE.
-          return Starlark.NONE;
+            StarlarkThread starlarkThread, StarlarkSemantics semantics, Object key)
+            throws EvalException {
+          throw Starlark.errorf("Toolchains are not valid in this context");
         }
 
         @Override
@@ -95,7 +95,6 @@ public abstract class StarlarkToolchainContext implements ToolchainContextApi {
                     .label(),
                 bazelStarlarkContext.getRepoMapping(),
                 bazelStarlarkContext.getConvertedLabelsInPackage());
-
         return context.convert((String) key);
       } catch (LabelSyntaxException e) {
         throw Starlark.errorf("Unable to parse toolchain label '%s': %s", key, e.getMessage());
