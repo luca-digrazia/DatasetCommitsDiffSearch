@@ -377,8 +377,7 @@ class ApiClientImpl implements ApiClient {
                     return responseClass.cast(response.getResponseBody("UTF-8"));
                 }
 
-                if (expectedResponseCodes.contains(response.getStatusCode())
-                        || (response.getStatusCode() >= 200 && response.getStatusCode() < 300)) {
+                if (response.getStatusCode() >= 200 && response.getStatusCode() < 300) {
                     T result;
                     try {
                         if (responseContentType.is(MediaType.JSON_UTF_8.withoutParameters())) {
@@ -421,7 +420,8 @@ class ApiClientImpl implements ApiClient {
                 log.warn("Timed out requesting {}", request);
                 target.markFailure();
             }
-            throw new APIException(request, new IllegalStateException("Unhandled error condition in API client"));
+            // TODO should this throw an exception instead?
+            return null;
         }
 
         @Override
@@ -462,19 +462,20 @@ class ApiClientImpl implements ApiClient {
                     node.touch();
                     results.put(node, deserializeJson(response, responseClass));
                 } catch (InterruptedException e) {
-                    log.error("API call Interrupted", e);
+                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
                     node.markFailure();
                 } catch (ExecutionException e) {
-                    log.error("API call failed to execute.", e);
+                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
                     node.markFailure();
                 } catch (IOException e) {
-                    log.error("API failed due to IO error", e);
+                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
                     node.markFailure();
                 } catch (TimeoutException e) {
-                    log.error("API call timed out", e);
+                    e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
                     node.markFailure();
                 }
             }
+
 
             return results;
         }
