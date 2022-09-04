@@ -19,7 +19,6 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirs
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
@@ -30,11 +29,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
-import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.SkylarkProvider;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
@@ -50,7 +45,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -90,20 +84,6 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
       ImmutableSet.of(FOUNDATION_FRAMEWORK_FLAG);
   private static final ImmutableSet<String> COCOA_FEATURE_FLAGS =
       ImmutableSet.of(COCOA_FRAMEWORK_FLAG);
-
-  @Before
-  public void setupMyInfo() throws Exception {
-    scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
-
-    scratch.file("myinfo/BUILD");
-  }
-
-  private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
-    Provider.Key key =
-        new SkylarkProvider.SkylarkKey(
-            Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
-    return (StructImpl) configuredTarget.get(key);
-  }
 
   @Test
   public void testOutputDirectoryWithMandatoryMinimumVersion() throws Exception {
@@ -647,11 +627,10 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _test_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   provider = dep[apple_common.AppleDylibBinary]",
-        "   return MyInfo(",
+        "   return struct(",
         "      binary = provider.binary,",
         "      objc = provider.objc,",
         "      dep_dir = dir(dep),",
@@ -682,12 +661,11 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
     useConfiguration("--ios_multi_cpus=armv7,arm64");
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
 
-    assertThat(myInfo.getValue("binary")).isInstanceOf(Artifact.class);
-    assertThat(myInfo.getValue("objc")).isInstanceOf(ObjcProvider.class);
+    assertThat(skylarkTarget.get("binary")).isInstanceOf(Artifact.class);
+    assertThat(skylarkTarget.get("objc")).isInstanceOf(ObjcProvider.class);
 
-    List<String> depProviders = (List<String>) myInfo.getValue("dep_dir");
+    List<String> depProviders = (List<String>) skylarkTarget.getValue("dep_dir");
     assertThat(depProviders).doesNotContain("AppleExecutableBinary");
     assertThat(depProviders).doesNotContain("AppleLoadableBundleBinary");
   }
@@ -698,11 +676,10 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _test_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   provider = dep[apple_common.AppleExecutableBinary]",
-        "   return MyInfo(",
+        "   return struct(",
         "      binary = provider.binary,",
         "      objc = provider.objc,",
         "      dep_dir = dir(dep),",
@@ -733,12 +710,11 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
     useConfiguration("--ios_multi_cpus=armv7,arm64");
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
 
-    assertThat(myInfo.getValue("binary")).isInstanceOf(Artifact.class);
-    assertThat(myInfo.getValue("objc")).isInstanceOf(ObjcProvider.class);
+    assertThat(skylarkTarget.get("binary")).isInstanceOf(Artifact.class);
+    assertThat(skylarkTarget.get("objc")).isInstanceOf(ObjcProvider.class);
 
-    List<String> depProviders = (List<String>) myInfo.getValue("dep_dir");
+    List<String> depProviders = (List<String>) skylarkTarget.get("dep_dir");
     assertThat(depProviders).doesNotContain("AppleDylibBinary");
     assertThat(depProviders).doesNotContain("AppleLoadableBundleBinary");
   }
@@ -749,11 +725,10 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _test_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   provider = dep[apple_common.AppleLoadableBundleBinary]",
-        "   return MyInfo(",
+        "   return struct(",
         "      binary = provider.binary,",
         "      dep_dir = dir(dep),",
         "   )",
@@ -783,11 +758,10 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
     useConfiguration("--ios_multi_cpus=armv7,arm64");
     ConfiguredTarget skylarkTarget = getConfiguredTarget("//examples/apple_skylark:my_target");
-    StructImpl myInfo = getMyInfoFromTarget(skylarkTarget);
 
-    assertThat((Artifact) myInfo.getValue("binary")).isNotNull();
+    assertThat((Artifact) skylarkTarget.get("binary")).isNotNull();
 
-    List<String> depProviders = (List<String>) myInfo.getValue("dep_dir");
+    List<String> depProviders = (List<String>) skylarkTarget.get("dep_dir");
     assertThat(depProviders).doesNotContain("AppleExecutableBinary");
     assertThat(depProviders).doesNotContain("AppleDylibBinary");
   }
@@ -834,8 +808,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
     CommandAction linkAction = (CommandAction) getGeneratingAction(binArtifact);
 
-    assertThat(linkAction.getArguments())
-        .containsAtLeastElementsIn(IMPLICIT_NON_MAC_FRAMEWORK_FLAGS);
+    assertThat(linkAction.getArguments()).containsAllIn(IMPLICIT_NON_MAC_FRAMEWORK_FLAGS);
   }
 
   @Test
@@ -850,8 +823,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
     CommandAction linkAction = (CommandAction) getGeneratingAction(binArtifact);
 
-    assertThat(linkAction.getArguments())
-        .containsAtLeastElementsIn(IMPLICIT_NON_MAC_FRAMEWORK_FLAGS);
+    assertThat(linkAction.getArguments()).containsAllIn(IMPLICIT_NON_MAC_FRAMEWORK_FLAGS);
   }
 
   @Test
@@ -866,8 +838,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
     CommandAction linkAction = (CommandAction) getGeneratingAction(binArtifact);
 
-    assertThat(linkAction.getArguments())
-        .containsAtLeastElementsIn(IMPLICIT_NON_MAC_FRAMEWORK_FLAGS);
+    assertThat(linkAction.getArguments()).containsAllIn(IMPLICIT_NON_MAC_FRAMEWORK_FLAGS);
   }
 
   @Test
@@ -882,7 +853,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
     CommandAction linkAction = (CommandAction) getGeneratingAction(binArtifact);
 
-    assertThat(linkAction.getArguments()).containsAtLeastElementsIn(IMPLICIT_MAC_FRAMEWORK_FLAGS);
+    assertThat(linkAction.getArguments()).containsAllIn(IMPLICIT_MAC_FRAMEWORK_FLAGS);
     assertThat(linkAction.getArguments())
         .containsNoneOf(COCOA_FRAMEWORK_FLAG, UIKIT_FRAMEWORK_FLAG);
   }
@@ -900,8 +871,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Artifact binArtifact = getFirstArtifactEndingWith(lipoAction.getInputs(), "x/x_bin");
     CommandAction linkAction = (CommandAction) getGeneratingAction(binArtifact);
 
-    assertThat(linkAction.getArguments()).containsAtLeastElementsIn(IMPLICIT_MAC_FRAMEWORK_FLAGS);
-    assertThat(linkAction.getArguments()).containsAtLeastElementsIn(COCOA_FEATURE_FLAGS);
+    assertThat(linkAction.getArguments()).containsAllIn(IMPLICIT_MAC_FRAMEWORK_FLAGS);
+    assertThat(linkAction.getArguments()).containsAllIn(COCOA_FEATURE_FLAGS);
     assertThat(linkAction.getArguments()).doesNotContain(UIKIT_FRAMEWORK_FLAG);
   }
 
@@ -1189,11 +1160,10 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     scratch.file("examples/rule/BUILD");
     scratch.file(
         "examples/rule/apple_rules.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def _test_rule_impl(ctx):",
         "   dep = ctx.attr.deps[0]",
         "   provider = dep[apple_common.AppleDebugOutputs]",
-        "   return MyInfo(",
+        "   return struct(",
         "      outputs_map=provider.outputs_map,",
         "   )",
         "test_rule = rule(implementation = _test_rule_impl,",
@@ -1228,7 +1198,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     @SuppressWarnings("unchecked")
     SkylarkDict<String, SkylarkDict<String, Artifact>> outputMap =
         (SkylarkDict<String, SkylarkDict<String, Artifact>>)
-            getMyInfoFromTarget(skylarkTarget).getValue("outputs_map");
+            skylarkTarget.get("outputs_map");
     return outputMap;
   }
 

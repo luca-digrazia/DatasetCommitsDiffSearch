@@ -48,7 +48,6 @@ public abstract class StarlarkSemantics {
     INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
         StarlarkSemantics::incompatibleDisableObjcProviderResources),
     INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(StarlarkSemantics::incompatibleNoOutputAttrDefault),
-    INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM(StarlarkSemantics::incompatibleNoRuleOutputsParam),
     INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(StarlarkSemantics::incompatibleNoTargetOutputGroup),
     INCOMPATIBLE_NO_ATTR_LICENSE(StarlarkSemantics::incompatibleNoAttrLicense),
     INCOMPATIBLE_OBJC_FRAMEWORK_CLEANUP(StarlarkSemantics::incompatibleObjcFrameworkCleanup),
@@ -120,8 +119,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalEnableAndroidMigrationApis();
 
-  public abstract boolean experimentalGoogleLegacyApi();
-
   public abstract ImmutableList<String> experimentalJavaCommonCreateProviderEnabledPackages();
 
   public abstract boolean experimentalPlatformsApi();
@@ -154,8 +151,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisallowNativeInBuildFile();
 
-  public abstract boolean incompatibleDisallowOldOctalNotation();
-
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
 
   public abstract boolean incompatibleDisallowStructProviderSyntax();
@@ -169,8 +164,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleNoKwargsInBuildFiles();
 
   public abstract boolean incompatibleNoOutputAttrDefault();
-
-  public abstract boolean incompatibleNoRuleOutputsParam();
 
   public abstract boolean incompatibleNoSupportToolsInActionInputs();
 
@@ -210,7 +203,6 @@ public abstract class StarlarkSemantics {
           .experimentalBuildSettingApi(false)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalEnableAndroidMigrationApis(false)
-          .experimentalGoogleLegacyApi(false)
           .experimentalJavaCommonCreateProviderEnabledPackages(ImmutableList.of())
           .experimentalPlatformsApi(false)
           .experimentalRestrictNamedParams(false)
@@ -227,7 +219,6 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(true)
           .incompatibleDisallowNativeInBuildFile(false)
-          .incompatibleDisallowOldOctalNotation(false)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowStructProviderSyntax(false)
           .incompatibleExpandDirectories(true)
@@ -235,7 +226,6 @@ public abstract class StarlarkSemantics {
           .incompatibleNoAttrLicense(true)
           .incompatibleNoKwargsInBuildFiles(false)
           .incompatibleNoOutputAttrDefault(true)
-          .incompatibleNoRuleOutputsParam(false)
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(true)
@@ -258,8 +248,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalCcSkylarkApiEnabledPackages(List<String> value);
 
     public abstract Builder experimentalEnableAndroidMigrationApis(boolean value);
-
-    public abstract Builder experimentalGoogleLegacyApi(boolean value);
 
     public abstract Builder experimentalJavaCommonCreateProviderEnabledPackages(List<String> value);
 
@@ -291,8 +279,6 @@ public abstract class StarlarkSemantics {
 
     public abstract Builder incompatibleDisallowLoadLabelsToCrossPackageBoundaries(boolean value);
 
-    public abstract Builder incompatibleDisallowOldOctalNotation(boolean value);
-
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
 
     public abstract Builder incompatibleDisallowNativeInBuildFile(boolean value);
@@ -308,8 +294,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleNoAttrLicense(boolean value);
 
     public abstract Builder incompatibleNoOutputAttrDefault(boolean value);
-
-    public abstract Builder incompatibleNoRuleOutputsParam(boolean value);
 
     public abstract Builder incompatibleNoSupportToolsInActionInputs(boolean value);
 

@@ -90,17 +90,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       help = "If set to true, enables the APIs required to support the Android Starlark migration.")
   public boolean experimentalEnableAndroidMigrationApis;
 
-  @Option(
-      name = "experimental_google_legacy_api",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "If set to true, exposes a number of experimental pieces of Starlark build API "
-              + "pertaining to Google legacy code.")
-  public boolean experimentalGoogleLegacyApi;
-
   // This flag is declared in StarlarkSemanticsOptions instead of JavaOptions because there is no
   // way to retrieve the java configuration from the Java implementation of
   // java_common.create_provider.
@@ -343,21 +332,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
               + "instead return a list of provider instances.")
   public boolean incompatibleDisallowStructProviderSyntax;
 
-  @Option(
-      name = "incompatible_disallow_old_octal_notation",
-      defaultValue = "false",
-      category = "incompatible changes",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, octal numbers like `0123` are forbidden, they should be written "
-              + "`0o123` instead. See https://github.com/bazelbuild/bazel/issues/8059")
-  public boolean incompatibleDisallowOldOctalNotation;
-
   /** Controls legacy arguments to ctx.actions.Args#add. */
   @Option(
       name = "incompatible_disallow_old_style_args_add",
@@ -426,18 +400,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
           "If set to true, disables the `default` parameter of the `attr.output` and "
               + "`attr.output_list` attribute definition functions.")
   public boolean incompatibleNoOutputAttrDefault;
-
-  @Option(
-      name = "incompatible_no_rule_outputs_param",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, disables the `outputs` parameter of the `rule()` Starlark function.")
-  public boolean incompatibleNoRuleOutputsParam;
 
   @Option(
       name = "incompatible_no_support_tools_in_action_inputs",
@@ -584,7 +546,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .experimentalBuildSettingApi(experimentalBuildSettingApi)
         .experimentalCcSkylarkApiEnabledPackages(experimentalCcSkylarkApiEnabledPackages)
         .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
-        .experimentalGoogleLegacyApi(experimentalGoogleLegacyApi)
         .experimentalJavaCommonCreateProviderEnabledPackages(
             experimentalJavaCommonCreateProviderEnabledPackages)
         .experimentalPlatformsApi(experimentalPlatformsApi)
@@ -603,7 +564,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(
             incompatibleDisallowLoadLabelsToCrossPackageBoundaries)
         .incompatibleDisallowNativeInBuildFile(incompatibleDisallowNativeInBuildFile)
-        .incompatibleDisallowOldOctalNotation(incompatibleDisallowOldOctalNotation)
         .incompatibleDisallowOldStyleArgsAdd(incompatibleDisallowOldStyleArgsAdd)
         .incompatibleDisallowStructProviderSyntax(incompatibleDisallowStructProviderSyntax)
         .incompatibleExpandDirectories(incompatibleExpandDirectories)
@@ -611,7 +571,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         .incompatibleNoAttrLicense(incompatibleNoAttrLicense)
         .incompatibleNoKwargsInBuildFiles(incompatibleNoKwargsInBuildFiles)
         .incompatibleNoOutputAttrDefault(incompatibleNoOutputAttrDefault)
-        .incompatibleNoRuleOutputsParam(incompatibleNoRuleOutputsParam)
         .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
         .incompatibleNoTransitiveLoads(incompatibleNoTransitiveLoads)
