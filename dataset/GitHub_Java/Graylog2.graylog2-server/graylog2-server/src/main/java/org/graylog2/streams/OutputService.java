@@ -39,8 +39,6 @@ public interface OutputService {
 
     void destroy(Output model) throws NotFoundException;
 
-    Output update(String id, Map<String, Object> deltas);
-
     /**
      * @return the total number of outputs
      */
