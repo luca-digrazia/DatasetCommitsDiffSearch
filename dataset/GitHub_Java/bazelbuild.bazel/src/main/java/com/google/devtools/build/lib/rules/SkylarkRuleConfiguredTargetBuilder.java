@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
@@ -69,7 +68,6 @@ public final class SkylarkRuleConfiguredTargetBuilder {
   public static ConfiguredTarget buildRule(
       RuleContext ruleContext,
       BaseFunction ruleImplementation,
-      SkylarkSemanticsOptions skylarkSemantics,
       Map<String, Class<? extends TransitiveInfoProvider>> registeredProviderTypes)
       throws InterruptedException {
     String expectFailure = ruleContext.attributes().get("expect_failure", Type.STRING);
@@ -80,7 +78,6 @@ public final class SkylarkRuleConfiguredTargetBuilder {
           .setCallerLabel(ruleContext.getLabel())
           .setGlobals(
               ruleContext.getRule().getRuleClassObject().getRuleDefinitionEnvironment().getGlobals())
-          .setSemantics(skylarkSemantics)
           .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
           .build(); // NB: loading phase functions are not available: this is analysis already,
                     // so we do *not* setLoadingPhase().
@@ -197,7 +194,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
   }
 
   public static NestedSet<Artifact> convertToOutputGroupValue(Location loc, String outputGroup,
-      Object objects) throws EvalException {
+      SkylarkValue objects) throws EvalException {
     NestedSet<Artifact> artifacts;
 
     String typeErrorMessage =
@@ -306,9 +303,9 @@ public final class SkylarkRuleConfiguredTargetBuilder {
         dataRunfiles = cast("data_runfiles", provider, Runfiles.class, loc);
       } else if (key.equals("default_runfiles")) {
         defaultRunfiles = cast("default_runfiles", provider, Runfiles.class, loc);
-      } else if (key.equals("output_groups") && !isDefaultProvider) {
+      } else if (key.equals("output_groups")) {
         addOutputGroups(provider.getValue(key), loc, builder);
-      } else if (key.equals("instrumented_files") && !isDefaultProvider) {
+      } else if (key.equals("instrumented_files")) {
         SkylarkClassObject insStruct =
             cast("instrumented_files", provider, SkylarkClassObject.class, loc);
         Location insLoc = insStruct.getCreationLoc();
@@ -348,7 +345,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
                 InstrumentedFilesCollector.NO_METADATA_COLLECTOR,
                 Collections.<Artifact>emptySet());
         builder.addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider);
-      } else if (registeredProviderTypes.containsKey(key) && !isDefaultProvider) {
+      } else if (registeredProviderTypes.containsKey(key)) {
         Class<? extends TransitiveInfoProvider> providerType = registeredProviderTypes.get(key);
         TransitiveInfoProvider providerField = cast(key, provider, providerType, loc);
         builder.addProvider(providerType, providerField);

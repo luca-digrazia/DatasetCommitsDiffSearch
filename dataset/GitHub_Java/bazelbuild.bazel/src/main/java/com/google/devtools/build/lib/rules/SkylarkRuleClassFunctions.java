@@ -194,31 +194,18 @@ public class SkylarkRuleClassFunctions {
   @SkylarkSignature(
     name = "DefaultInfo",
     returnType = ClassObjectConstructor.class,
-    doc =
-        "A provider that is provided by every rule, even if it iss not returned explicitly. "
-            + "A <code>DefaultInfo</code> accepts the following parameters:"
-            + "<li><code>files</code></li>"
-            + "<ul><li><code>runfiles</code></li>"
-            + "<li><code>data_runfiles</code></li>"
-            + "<li><code>default_runfiles</code></li>"
-            + "</ul>"
-            + "Each instance of the default provider contains the following standard "
-            + "fields: "
-            + "<li><code>files</code></li>"
-            + "<li><code>files_to_run</code></li>"
-            + "<ul><li><code>data_runfiles</code></li>"
-            + "<li><code>default_runfiles</code></li>"
-            + "</ul>"
+    doc = "A provider that is provided by every rule, even if it iss not returned explicitly. "
+        + "A <code>DefaultInfo</code> accepts all special parameters that can be returned "
+        + "from rule implementation function in a struct, which are <code>runfiles</code>, "
+        + "<code>data_runfiles</code>, <code>default_runfiles</code>, "
+        + "<code>output_groups</code>, <code>instrumented_files</code>, and all "
+        + "<a href=\"skylark-provider.html\">providers</a> that are available on built-in rules. "
+        + "Each instance of the default provider contains the following standard fields: "
+        + "<code>data_runfiles</code>, <code>default_runfiles</code>, <code>files</code>, "
+        + "and <code>files_to_run</code>. The values of these fields are equivalent to the "
+        + "values of the corresponding fields of the target the default provider belongs to."
   )
   private static final ClassObjectConstructor defaultInfo = DefaultProvider.SKYLARK_CONSTRUCTOR;
-
-  @SkylarkSignature(
-    name = "OutputGroupInfo",
-    returnType = ClassObjectConstructor.class,
-    doc = "todo"
-  )
-  private static final ClassObjectConstructor outputGroupInfo =
-      OutputGroupProvider.SKYLARK_CONSTRUCTOR;
 
   // TODO(bazel-team): Move to a "testing" namespace module. Normally we'd pass an objectType
   // to @SkylarkSignature to do this, but that doesn't work here because we're exposing an already-
@@ -239,7 +226,7 @@ public class SkylarkRuleClassFunctions {
   )
   private static final ClassObjectConstructor actions = ActionsProvider.SKYLARK_CONSTRUCTOR;
 
-  @SkylarkSignature(name = "provider", returnType = ClassObjectConstructor.class, doc =
+  @SkylarkSignature(name = "provider", returnType = SkylarkClassObjectConstructor.class, doc =
       "Creates a declared provider 'constructor'. The return value of this"
           + "function can be used to create \"struct-like\" values. Example:<br>"
           + "<pre class=\"language-python\">data = provider()\n"
@@ -249,7 +236,7 @@ public class SkylarkRuleClassFunctions {
   )
   private static final BuiltinFunction provider =
       new BuiltinFunction("provider") {
-        public ClassObjectConstructor invoke(Location location) {
+        public SkylarkClassObjectConstructor invoke(Location location) {
           return new SkylarkClassObjectConstructor(
               "<no name>", // name is set on export.
               location);
@@ -1058,7 +1045,7 @@ public class SkylarkRuleClassFunctions {
   )
   private static final BuiltinFunction output_group = new BuiltinFunction("output_group") {
     public SkylarkNestedSet invoke(TransitiveInfoCollection self, String group) {
-      OutputGroupProvider provider = OutputGroupProvider.get(self);
+      OutputGroupProvider provider = self.getProvider(OutputGroupProvider.class);
       NestedSet<Artifact> result = provider != null
           ? provider.getOutputGroup(group)
           : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);

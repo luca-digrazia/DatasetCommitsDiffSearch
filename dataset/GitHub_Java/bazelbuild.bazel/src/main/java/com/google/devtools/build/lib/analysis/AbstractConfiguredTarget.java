@@ -24,13 +24,11 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.PackageSpecification;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.annotation.Nullable;
 
 /**
@@ -43,9 +41,6 @@ public abstract class AbstractConfiguredTarget
   private final BuildConfiguration configuration;
 
   private final NestedSet<PackageSpecification> visibility;
-
-  // Cached on-demand default provider
-  private final AtomicReference<DefaultProvider> defaultProvider = new AtomicReference<>();
 
   // Accessors for Skylark
   private static final String DATA_RUNFILES_FIELD = "data_runfiles";
@@ -111,13 +106,15 @@ public abstract class AbstractConfiguredTarget
 
   @Override
   public Object getValue(String name) {
+    // Standard fields should be proxied to their default provider object
+    DefaultProvider defaultProvider =
+        (DefaultProvider) get(DefaultProvider.SKYLARK_CONSTRUCTOR.getKey());
     switch (name) {
       case FILES_FIELD:
       case DEFAULT_RUNFILES_FIELD:
       case DATA_RUNFILES_FIELD:
       case FilesToRunProvider.SKYLARK_NAME:
-        // Standard fields should be proxied to their default provider object
-        return getDefaultProvider().getValue(name);
+        return defaultProvider.getValue(name);
       case LABEL_FIELD:
         return getLabel();
       default:
@@ -133,10 +130,14 @@ public abstract class AbstractConfiguredTarget
           EvalUtils.getDataTypeName(key)));
     }
     ClassObjectConstructor constructor = (ClassObjectConstructor) key;
-    Object declaredProvider = get(constructor.getKey());
-    if (declaredProvider != null) {
-      return declaredProvider;
+    SkylarkProviders provider = getProvider(SkylarkProviders.class);
+    if (provider != null) {
+      Object declaredProvider = provider.getDeclaredProvider(constructor.getKey());
+      if (declaredProvider != null) {
+        return declaredProvider;
+      }
     }
+    // Either provider or declaredProvider is null
     throw new EvalException(loc, String.format(
         "Object of type Target doesn't contain declared provider %s",
         constructor.getPrintableName()));
@@ -173,31 +174,5 @@ public abstract class AbstractConfiguredTarget
         LABEL_FIELD,
         FILES_FIELD,
         FilesToRunProvider.SKYLARK_NAME);
-  }
-
-  private DefaultProvider getDefaultProvider() {
-    if (defaultProvider.get() == null) {
-      defaultProvider.compareAndSet(
-          null,
-          DefaultProvider.build(
-              getProvider(RunfilesProvider.class),
-              getProvider(FileProvider.class),
-              getProvider(FilesToRunProvider.class)));
-    }
-    return defaultProvider.get();
-  }
-
-  /** Returns a declared provider provided by this target. Only meant to use from Skylark. */
-  @Nullable
-  @Override
-  public SkylarkClassObject get(ClassObjectConstructor.Key providerKey) {
-    if (providerKey.equals(DefaultProvider.SKYLARK_CONSTRUCTOR.getKey())) {
-      return getDefaultProvider();
-    }
-    SkylarkProviders skylarkProviders = getProvider(SkylarkProviders.class);
-    if (skylarkProviders != null) {
-      return skylarkProviders.getDeclaredProvider(providerKey);
-    }
-    return null;
   }
 }
