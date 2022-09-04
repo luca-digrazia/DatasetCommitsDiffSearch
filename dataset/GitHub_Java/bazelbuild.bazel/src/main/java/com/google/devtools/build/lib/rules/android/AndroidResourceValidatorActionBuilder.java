@@ -193,7 +193,7 @@ public class AndroidResourceValidatorActionBuilder {
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage(
-                "Linking static android resource library for %s", ruleContext.getLabel())
+                "Linking static android resource library for " + ruleContext.getLabel())
             .setMnemonic("AndroidResourceLink")
             .build(context));
 
@@ -262,7 +262,7 @@ public class AndroidResourceValidatorActionBuilder {
             .setCommandLine(builder.build())
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
-            .setProgressMessage("Validating Android resources for %s", ruleContext.getLabel())
+            .setProgressMessage("Validating Android resources for " + ruleContext.getLabel())
             .setMnemonic("AndroidResourceValidator")
             .build(context));
 
