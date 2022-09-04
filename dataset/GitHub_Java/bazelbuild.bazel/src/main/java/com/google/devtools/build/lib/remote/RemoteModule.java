@@ -19,7 +19,6 @@ import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ServerCapabilities;
 import com.google.auth.Credentials;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.base.Throwables;
@@ -28,11 +27,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
-import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
@@ -42,11 +38,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
-import com.google.devtools.build.lib.authandtls.CallCredentialsProvider;
 import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
-import com.google.devtools.build.lib.authandtls.Netrc;
-import com.google.devtools.build.lib.authandtls.NetrcCredentials;
-import com.google.devtools.build.lib.authandtls.NetrcParser;
 import com.google.devtools.build.lib.bazel.repository.downloader.Downloader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.LocalFilesArtifactUploader;
@@ -87,7 +79,6 @@ import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.AsynchronousFileOutputStream;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsBase;
@@ -97,11 +88,8 @@ import io.grpc.ClientInterceptor;
 import io.grpc.Context;
 import io.grpc.ManagedChannel;
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.Executors;
 
 /** RemoteModule provides distributed cache and remote execution for Bazel. */
@@ -159,7 +147,7 @@ public final class RemoteModule extends BlazeModule {
     return !Strings.isNullOrEmpty(options.remoteDownloader);
   }
 
-  private static void verifyServerCapabilities(
+  private void verifyServerCapabilities(
       RemoteOptions remoteOptions,
       ReferenceCountedChannel channel,
       CallCredentials credentials,
@@ -188,36 +176,6 @@ public final class RemoteModule extends BlazeModule {
         digestUtil.getDigestFunction(),
         env.getReporter(),
         requirement);
-  }
-
-  private void initHttpAndDiskCache(
-      CommandEnvironment env,
-      AuthAndTLSOptions authAndTlsOptions,
-      RemoteOptions remoteOptions,
-      DigestUtil digestUtil) {
-    Credentials creds;
-    try {
-      creds = newCredentials(env, authAndTlsOptions, remoteOptions);
-    } catch (IOException e) {
-      handleInitFailure(env, e, Code.CREDENTIALS_INIT_FAILURE);
-      return;
-    }
-    RemoteCacheClient cacheClient;
-    try {
-      cacheClient =
-          RemoteCacheClientFactory.create(
-              remoteOptions,
-              creds,
-              Preconditions.checkNotNull(env.getWorkingDirectory(), "workingDirectory"),
-              digestUtil);
-    } catch (IOException e) {
-      handleInitFailure(env, e, Code.CACHE_INIT_FAILURE);
-      return;
-    }
-    RemoteCache remoteCache = new RemoteCache(cacheClient, remoteOptions, digestUtil);
-    actionContextProvider =
-        RemoteActionContextProvider.createForRemoteCaching(
-            env, remoteCache, /* retryScheduler= */ null, digestUtil);
   }
 
   @Override
@@ -258,6 +216,7 @@ public final class RemoteModule extends BlazeModule {
     if (enableRemoteDownloader && !enableGrpcCache) {
       throw createOptionsExitException(
           "The remote downloader can only be used in combination with gRPC caching",
+          ExitCode.COMMAND_LINE_ERROR,
           FailureDetails.RemoteOptions.Code.DOWNLOADER_WITHOUT_GRPC_CACHE);
     }
 
@@ -269,6 +228,7 @@ public final class RemoteModule extends BlazeModule {
     if ((enableHttpCache || enableDiskCache) && enableRemoteExecution) {
       throw createOptionsExitException(
           "Cannot combine gRPC based remote execution with disk caching or HTTP-based caching",
+          ExitCode.COMMAND_LINE_ERROR,
           FailureDetails.RemoteOptions.Code.EXECUTION_WITH_INVALID_CACHE);
     }
 
@@ -282,7 +242,29 @@ public final class RemoteModule extends BlazeModule {
     cleanAndCreateRemoteLogsDir(logDir);
 
     if ((enableHttpCache || enableDiskCache) && !enableGrpcCache) {
-      initHttpAndDiskCache(env, authAndTlsOptions, remoteOptions, digestUtil);
+      Credentials creds;
+      try {
+        creds = GoogleAuthUtils.newCredentials(authAndTlsOptions);
+      } catch (IOException e) {
+        handleInitFailure(env, e, Code.CREDENTIALS_INIT_FAILURE);
+        return;
+      }
+      RemoteCacheClient cacheClient;
+      try {
+        cacheClient =
+            RemoteCacheClientFactory.create(
+                remoteOptions,
+                creds,
+                Preconditions.checkNotNull(env.getWorkingDirectory(), "workingDirectory"),
+                digestUtil);
+      } catch (IOException e) {
+        handleInitFailure(env, e, Code.CACHE_INIT_FAILURE);
+        return;
+      }
+      RemoteCache remoteCache = new RemoteCache(cacheClient, remoteOptions, digestUtil);
+      actionContextProvider =
+          RemoteActionContextProvider.createForRemoteCaching(
+              env, remoteCache, /* retryScheduler= */ null, digestUtil);
       return;
     }
 
@@ -392,18 +374,13 @@ public final class RemoteModule extends BlazeModule {
       }
     }
 
-    CallCredentialsProvider callCredentialsProvider;
+    CallCredentials credentials;
     try {
-      callCredentialsProvider =
-          GoogleAuthUtils.newCallCredentialsProvider(
-              newCredentials(env, authAndTlsOptions, remoteOptions));
+      credentials = GoogleAuthUtils.newCallCredentials(authAndTlsOptions);
     } catch (IOException e) {
       handleInitFailure(env, e, Code.CREDENTIALS_INIT_FAILURE);
       return;
     }
-
-    CallCredentials credentials = callCredentialsProvider.getCallCredentials();
-
     RemoteRetrier retrier =
         new RemoteRetrier(
             remoteOptions,
@@ -479,7 +456,7 @@ public final class RemoteModule extends BlazeModule {
         new ByteStreamUploader(
             remoteOptions.remoteInstanceName,
             cacheChannel.retain(),
-            callCredentialsProvider,
+            credentials,
             remoteOptions.remoteTimeout.getSeconds(),
             retrier);
 
@@ -487,7 +464,7 @@ public final class RemoteModule extends BlazeModule {
     RemoteCacheClient cacheClient =
         new GrpcCacheClient(
             cacheChannel.retain(),
-            callCredentialsProvider,
+            credentials,
             remoteOptions,
             retrier,
             digestUtil,
@@ -514,7 +491,7 @@ public final class RemoteModule extends BlazeModule {
               retryScheduler,
               Retrier.ALLOW_ALL_CALLS);
       GrpcRemoteExecutor remoteExecutor =
-          new GrpcRemoteExecutor(execChannel.retain(), callCredentialsProvider, execRetrier);
+          new GrpcRemoteExecutor(execChannel.retain(), credentials, execRetrier, remoteOptions);
       execChannel.release();
       RemoteExecutionCache remoteCache =
           new RemoteExecutionCache(cacheClient, remoteOptions, digestUtil);
@@ -603,7 +580,7 @@ public final class RemoteModule extends BlazeModule {
     return testProvider.getTestParams().getOutputs();
   }
 
-  private static NestedSet<Artifact> getArtifactsToBuild(
+  private static NestedSet<? extends ActionInput> getArtifactsToBuild(
       ConfiguredTarget buildTarget, TopLevelArtifactContext topLevelArtifactContext) {
     return TopLevelArtifactHelper.getAllArtifactsToBuild(buildTarget, topLevelArtifactContext)
         .getImportantArtifacts();
@@ -622,67 +599,26 @@ public final class RemoteModule extends BlazeModule {
       CommandEnvironment env,
       BuildRequest request,
       BuildOptions buildOptions,
-      AnalysisResult analysisResult) {
+      Iterable<ConfiguredTarget> configuredTargets) {
     // The actionContextProvider may be null if remote execution is disabled or if there was an
-    // error during initialization.
+    // error during
+    // initialization.
     if (remoteOutputsMode != null
         && remoteOutputsMode.downloadToplevelOutputsOnly()
         && actionContextProvider != null) {
       boolean isTestCommand = env.getCommandName().equals("test");
       TopLevelArtifactContext artifactContext = request.getTopLevelArtifactContext();
-      Set<ActionInput> filesToDownload = new HashSet<>();
-      for (ConfiguredTarget configuredTarget : analysisResult.getTargetsToBuild()) {
+      ImmutableSet.Builder<ActionInput> filesToDownload = ImmutableSet.builder();
+      for (ConfiguredTarget configuredTarget : configuredTargets) {
         if (isTestCommand && isTestRule(configuredTarget)) {
-          // When running a test download the test.log and test.xml. These are never symlinks.
+          // When running a test download the test.log and test.xml.
           filesToDownload.addAll(getTestOutputs(configuredTarget));
         } else {
-          fetchSymlinkDependenciesRecursively(
-              analysisResult.getActionGraph(),
-              filesToDownload,
-              getArtifactsToBuild(configuredTarget, artifactContext).toList());
-          fetchSymlinkDependenciesRecursively(
-              analysisResult.getActionGraph(), filesToDownload, getRunfiles(configuredTarget));
+          filesToDownload.addAll(getArtifactsToBuild(configuredTarget, artifactContext).toList());
+          filesToDownload.addAll(getRunfiles(configuredTarget));
         }
       }
-      actionContextProvider.setFilesToDownload(ImmutableSet.copyOf(filesToDownload));
-    }
-  }
-
-  // This is a short-term fix for top-level outputs that are symlinks. Unfortunately, we cannot
-  // reliably tell after analysis whether actions will create symlinks (the RE protocol allows any
-  // action to generate and return symlinks), but at least we can handle basic C++ rules with this
-  // change.
-  // TODO(ulfjack): I think we should separate downloading files from action execution. That would
-  // also resolve issues around action invalidation - we currently invalidate actions to trigger
-  // downloads of top-level outputs when the top-level targets change.
-  private static void fetchSymlinkDependenciesRecursively(
-      ActionGraph actionGraph, Set<ActionInput> builder, List<Artifact> inputs) {
-    for (Artifact input : inputs) {
-      // Only fetch recursively if we don't have the file to avoid visiting nodes multiple times.
-      if (builder.add(input)) {
-        fetchSymlinkDependenciesRecursively(actionGraph, builder, input);
-      }
-    }
-  }
-
-  private static void fetchSymlinkDependenciesRecursively(
-      ActionGraph actionGraph, Set<ActionInput> builder, Artifact artifact) {
-    if (!(actionGraph.getGeneratingAction(artifact) instanceof ActionExecutionMetadata)) {
-      // The top-level artifact could be a tree artifact, in which case the generating action may
-      // be an ActionTemplate, which does not implement ActionExecutionMetadata. We don't handle
-      // this case right now, so exit.
-      return;
-    }
-    ActionExecutionMetadata action =
-        (ActionExecutionMetadata) actionGraph.getGeneratingAction(artifact);
-    if (action.mayInsensitivelyPropagateInputs()) {
-      List<Artifact> inputs = action.getInputs().toList();
-      if (inputs.size() > 5) {
-        logger.atWarning().log(
-            "Action with a lot of inputs insensitively propagates them; this could be performance"
-                + " problem");
-      }
-      fetchSymlinkDependenciesRecursively(actionGraph, builder, inputs);
+      actionContextProvider.setFilesToDownload(filesToDownload.build());
     }
   }
 
@@ -700,7 +636,7 @@ public final class RemoteModule extends BlazeModule {
     }
   }
 
-  private static void checkClientServerCompatibility(
+  private void checkClientServerCompatibility(
       ServerCapabilities capabilities,
       RemoteOptions remoteOptions,
       DigestFunction.Value digestFunction,
@@ -886,9 +822,10 @@ public final class RemoteModule extends BlazeModule {
   }
 
   private static AbruptExitException createOptionsExitException(
-      String message, FailureDetails.RemoteOptions.Code remoteExecutionCode) {
+      String message, ExitCode exitCode, FailureDetails.RemoteOptions.Code remoteExecutionCode) {
     return new AbruptExitException(
         DetailedExitCode.of(
+            exitCode,
             FailureDetail.newBuilder()
                 .setMessage(message)
                 .setRemoteOptions(
@@ -939,81 +876,5 @@ public final class RemoteModule extends BlazeModule {
   @VisibleForTesting
   RemoteActionContextProvider getActionContextProvider() {
     return actionContextProvider;
-  }
-
-  /**
-   * Create a new {@link Credentials} object by parsing the .netrc file with following order to
-   * search it:
-   *
-   * <ol>
-   *   <li>If environment variable $NETRC exists, use it as the path to the .netrc file
-   *   <li>Fallback to $HOME/.netrc
-   * </ol>
-   *
-   * @return the {@link Credentials} object or {@code null} if there is no .netrc file.
-   * @throws IOException in case the credentials can't be constructed.
-   */
-  @VisibleForTesting
-  static Credentials newCredentialsFromNetrc(Map<String, String> clientEnv, FileSystem fileSystem)
-      throws IOException {
-    String netrcFileString =
-        Optional.ofNullable(clientEnv.get("NETRC"))
-            .orElseGet(
-                () ->
-                    Optional.ofNullable(clientEnv.get("HOME"))
-                        .map(home -> home + "/.netrc")
-                        .orElse(null));
-    if (netrcFileString == null) {
-      return null;
-    }
-
-    Path netrcFile = fileSystem.getPath(netrcFileString);
-    if (netrcFile.exists()) {
-      try {
-        Netrc netrc = NetrcParser.parseAndClose(netrcFile.getInputStream());
-        return new NetrcCredentials(netrc);
-      } catch (IOException e) {
-        throw new IOException(
-            "Failed to parse " + netrcFile.getPathString() + ": " + e.getMessage(), e);
-      }
-    } else {
-      return null;
-    }
-  }
-
-  /**
-   * Create a new {@link Credentials} with following order:
-   *
-   * <ol>
-   *   <li>If authentication enabled by flags, use it to create credentials
-   *   <li>Use .netrc to provide credentials if exists
-   *   <li>Otherwise, return {@code null}
-   * </ol>
-   *
-   * @throws IOException in case the credentials can't be constructed.
-   */
-  private static Credentials newCredentials(
-      CommandEnvironment env, AuthAndTLSOptions authAndTlsOptions, RemoteOptions remoteOptions)
-      throws IOException {
-    Credentials creds = GoogleAuthUtils.newCredentials(authAndTlsOptions);
-
-    // Fallback to .netrc if it exists
-    if (creds == null) {
-      try {
-        creds = newCredentialsFromNetrc(env.getClientEnv(), env.getRuntime().getFileSystem());
-      } catch (IOException e) {
-        env.getReporter().handle(Event.warn(e.getMessage()));
-      }
-
-      if (creds != null && Ascii.toLowerCase(remoteOptions.remoteCache).startsWith("http://")) {
-        env.getReporter()
-            .handle(
-                Event.warn(
-                    "Username and password from .netrc is transmitted in plaintext."
-                        + " Please consider using an HTTPS endpoint."));
-      }
-    }
-
-    return creds;
   }
 }
