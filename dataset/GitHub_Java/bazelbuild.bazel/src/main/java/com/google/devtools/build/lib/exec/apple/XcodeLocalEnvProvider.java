@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.exec.apple;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
@@ -65,7 +64,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
 
   @Override
   public Map<String, String> rewriteLocalEnv(
-      Map<String, String> env, BinTools binTools, String fallbackTmpDir) throws IOException {
+      Map<String, String> env, Path execRoot, String fallbackTmpDir) throws IOException {
     boolean containsXcodeVersion = env.containsKey(AppleConfiguration.XCODE_VERSION_ENV_NAME);
     boolean containsAppleSdkVersion =
         env.containsKey(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME);
@@ -92,7 +91,7 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
     String developerDir = "";
     if (containsXcodeVersion) {
       String version = env.get(AppleConfiguration.XCODE_VERSION_ENV_NAME);
-      developerDir = getDeveloperDir(binTools, DottedVersion.fromString(version));
+      developerDir = getDeveloperDir(execRoot, DottedVersion.fromString(version));
       newEnvBuilder.put("DEVELOPER_DIR", developerDir);
     }
     if (containsAppleSdkVersion) {
@@ -215,16 +214,16 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
    * operation, always call {@link #getDeveloperDir(Path, DottedVersion)} instead, which does
    * caching.
    *
-   * @param binTools the {@link BinTools}, used to locate the cache file
+   * @param execRoot the execution root path, used to locate the cache file
    * @param version the xcode version number to look up
    * @return an absolute path to the root of the Xcode developer directory
    * @throws IOException if there is an issue with obtaining the path from the spawned process,
    *     either because there is no installed xcode with the given version, or there was an
    *     unexpected issue finding or running the tool
    */
-  private static String queryDeveloperDir(BinTools binTools, DottedVersion version)
+  private static String queryDeveloperDir(Path execRoot, DottedVersion version)
       throws IOException {
-    String xcodeLocatorPath = binTools.getEmbeddedPath("xcode-locator").getPathString();
+    String xcodeLocatorPath = execRoot.getRelative("_bin/xcode-locator").getPathString();
     try {
       CommandResult xcodeLocatorResult =
           new Command(new String[] {xcodeLocatorPath, version.toString()}).execute();
@@ -274,21 +273,21 @@ public final class XcodeLocalEnvProvider implements LocalEnvProvider {
    * external sources in the system. Values are cached in-memory throughout the lifetime of the
    * Bazel server.
    *
-   * @param binTools the {@link BinTools} path, used to locate the cache file
+   * @param execRoot the execution root path, used to locate the cache file
    * @param version the xcode version number to look up
    * @return an absolute path to the root of the Xcode developer directory
    * @throws IOException if there is an issue with obtaining the path from the spawned process,
    *     either because there is no installed xcode with the given version, or there was an
    *     unexpected issue finding or running the tool
    */
-  private static String getDeveloperDir(BinTools binTools, DottedVersion version)
+  private static String getDeveloperDir(Path execRoot, DottedVersion version)
       throws IOException {
     try {
       return developerDirCache.computeIfAbsent(
           version.toString(),
           (key) -> {
             try {
-              String developerDir = queryDeveloperDir(binTools, version);
+              String developerDir = queryDeveloperDir(execRoot, version);
               log.info("Queried Xcode developer dir with key " + key + " and got " + developerDir);
               return developerDir;
             } catch (IOException e) {
