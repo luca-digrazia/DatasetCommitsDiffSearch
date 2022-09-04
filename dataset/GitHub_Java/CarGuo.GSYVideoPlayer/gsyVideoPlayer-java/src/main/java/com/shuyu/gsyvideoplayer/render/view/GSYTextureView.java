@@ -34,6 +34,7 @@ public class GSYTextureView extends TextureView implements TextureView.SurfaceTe
 
     private MeasureHelper measureHelper;
 
+    private SurfaceTexture mSaveTexture;
     private Surface mSurface;
 
     public GSYTextureView(Context context) {
@@ -58,7 +59,12 @@ public class GSYTextureView extends TextureView implements TextureView.SurfaceTe
 
     @Override
     public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-        mSurface = new Surface(surface);
+        if (mSaveTexture == null) {
+            mSaveTexture = surface;
+            mSurface = new Surface(surface);
+        } else {
+            setSurfaceTexture(mSaveTexture);
+        }
         if (mIGSYSurfaceListener != null) {
             mIGSYSurfaceListener.onSurfaceAvailable(mSurface);
         }
@@ -75,9 +81,9 @@ public class GSYTextureView extends TextureView implements TextureView.SurfaceTe
     public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
         //清空释放
         if (mIGSYSurfaceListener != null) {
-            mIGSYSurfaceListener.onSurfaceAvailable(mSurface);
+            mIGSYSurfaceListener.onSurfaceDestroyed(mSurface);
         }
-        return true;
+        return (mSaveTexture == null);
     }
 
     @Override
