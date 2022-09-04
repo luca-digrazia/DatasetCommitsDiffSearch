@@ -71,8 +71,6 @@ public class AppleCrosstoolTransition implements PatchTransition {
   public static void setAppleCrosstoolTransitionConfiguration(BuildOptions from,
       BuildOptions to, String cpu) {
     Label crosstoolTop = from.get(AppleCommandLineOptions.class).appleCrosstoolTop;
-    Label libcTop = from.get(AppleCommandLineOptions.class).appleLibcTop;
-    String cppCompiler = from.get(AppleCommandLineOptions.class).cppCompiler;
 
     BuildConfiguration.Options toOptions = to.get(BuildConfiguration.Options.class);
     CppOptions toCppOptions = to.get(CppOptions.class);
@@ -81,8 +79,7 @@ public class AppleCrosstoolTransition implements PatchTransition {
       // If neither the CPU nor the Crosstool changes, do nothing. This is so that C++ to
       // Objective-C dependencies work if the top-level configuration is already an Apple one.
       // Removing the configuration distinguisher (which can't be set from the command line) and
-      // putting the platform type in the output directory name, which would obviate the need for
-      // this hack.
+      // putting the platform type in the output directory name would remove the need for this hack.
       // TODO(b/112834725): Remove this branch by unifying the distinguisher and the platform type.
       return;
     }
@@ -91,8 +88,14 @@ public class AppleCrosstoolTransition implements PatchTransition {
     toCppOptions.crosstoolTop = crosstoolTop;
     to.get(AppleCommandLineOptions.class).configurationDistinguisher =
         ConfigurationDistinguisher.APPLE_CROSSTOOL;
-    to.get(CppOptions.class).cppCompiler = cppCompiler;
-    to.get(CppOptions.class).libcTopLabel = libcTop;
+
+    // --compiler = "compiler" for all OSX toolchains.  We do not support asan/tsan, cfi, etc. on
+    // darwin.
+    to.get(CppOptions.class).cppCompiler = "compiler";
+
+    // OSX toolchains always use the runtime of the platform they are targeting (i.e. we do not
+    // support custom production environments).
+    to.get(CppOptions.class).libcTopLabel = null;
 
     // OSX toolchains do not support fission.
     to.get(CppOptions.class).fissionModes = ImmutableList.of();
