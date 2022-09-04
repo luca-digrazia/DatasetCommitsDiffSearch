@@ -15,7 +15,6 @@ import org.eclipse.microprofile.metrics.annotation.Counted;
 import org.eclipse.microprofile.metrics.annotation.Gauge;
 import org.eclipse.microprofile.metrics.annotation.Metered;
 import org.eclipse.microprofile.metrics.annotation.Metric;
-import org.eclipse.microprofile.metrics.annotation.SimplyTimed;
 import org.eclipse.microprofile.metrics.annotation.Timed;
 
 @Path("/metricsresource")
@@ -43,13 +42,6 @@ public class MetricsResource {
     @Path("/meter")
     @Metered(name = "meter")
     public String meter() {
-        return "OK";
-    }
-
-    @GET
-    @Path("/simpletimer")
-    @SimplyTimed(name = "simple_timer_metric")
-    public String simpleTimer() {
         return "OK";
     }
 
