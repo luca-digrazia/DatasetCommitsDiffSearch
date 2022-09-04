@@ -16,9 +16,8 @@
  */
 package org.graylog2.indexer;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
-
 import org.elasticsearch.index.query.RangeQueryBuilder;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
@@ -39,15 +38,12 @@ import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 
-import java.util.Map;
-import java.util.Optional;
+import java.util.Collections;
+import java.util.Set;
 import java.util.SortedSet;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.startsWith;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class IndexHelperTest {
@@ -69,46 +65,38 @@ public class IndexHelperTest {
 
     @Test
     public void testGetOldestIndices() {
-        final Map<String, Integer> indexNumbers = ImmutableMap.<String, Integer>builder()
-                .put("graylog_production_1", 1)
-                .put("graylog_production_7",7)
-                .put("graylog_production_0",0)
-                .put("graylog_production_2",2)
-                .put("graylog_production_4",4)
-                .put("graylog_production_6",6)
-                .put("graylog_production_3",3)
-                .put("graylog_production_5",5)
-                .put("graylog_production_8",8)
-                .put("graylog_production_9",9)
-                .put("graylog_production_10",10)
-                .put("graylog_production_110",110)
-                .put("graylog_production_125",125)
-                .put("graylog_production_20",20)
-                .put("graylog_production_21",21)
-                .build();
+        final Set<String> indices = ImmutableSet.<String>builder()
+            .add("graylog2_production_1")
+            .add("graylog2_production_7")
+            .add("graylog2_production_0")
+            .add("graylog2_production_2")
+            .add("graylog2_production_4")
+            .add("graylog2_production_6")
+            .add("graylog2_production_3")
+            .add("graylog2_production_5")
+            .add("graylog2_production_8")
+            .add("graylog2_production_9")
+            .add("graylog2_production_10")
+            .add("graylog2_production_110")
+            .add("graylog2_production_125")
+            .add("graylog2_production_20")
+            .add("graylog2_production_21")
+            .build();
 
-        final IndexSet indexSet = mock(IndexSet.class);
-        when(indexSet.extractIndexNumber(anyString())).thenAnswer(
-                invocationOnMock -> Optional.ofNullable(indexNumbers.get(invocationOnMock.<String>getArgument(0))));
-        when(indexSet.getManagedIndicesNames()).thenReturn(indexNumbers.keySet().toArray(new String[0]));
-        when(indexSet.getIndexPrefix()).thenReturn("graylog_production");
-
-        assertThat(IndexHelper.getOldestIndices(indexSet, 7)).containsOnly(
-            "graylog_production_0",
-            "graylog_production_1",
-            "graylog_production_2",
-            "graylog_production_3",
-            "graylog_production_4",
-            "graylog_production_5",
-            "graylog_production_6");
-        assertThat(IndexHelper.getOldestIndices(indexSet, 1)).containsOnly("graylog_production_0");
+        assertThat(IndexHelper.getOldestIndices(indices, 7)).containsOnly(
+            "graylog2_production_0",
+            "graylog2_production_1",
+            "graylog2_production_2",
+            "graylog2_production_3",
+            "graylog2_production_4",
+            "graylog2_production_5",
+            "graylog2_production_6");
+        assertThat(IndexHelper.getOldestIndices(indices, 1)).containsOnly("graylog2_production_0");
     }
 
     @Test
     public void testGetOldestIndicesWithEmptySetAndTooHighOffset() {
-        final IndexSet indexSet = mock(IndexSet.class);
-        when(indexSet.getManagedIndicesNames()).thenReturn(new String[0]);
-        assertThat(IndexHelper.getOldestIndices(indexSet, 9001)).isEmpty();
+        assertThat(IndexHelper.getOldestIndices(Collections.<String>emptySet(), 9001)).isEmpty();
     }
 
     @Test
@@ -124,16 +112,17 @@ public class IndexHelperTest {
             .build();
 
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
+        when(indexRangeService.get("graylog_2")).thenReturn(indexRangeLatest);
 
         final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, absoluteRange, null))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, absoluteRange))
             .containsExactly(indexRangeLatest, indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, keywordRange, null))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, keywordRange))
             .containsExactly(indexRangeLatest, indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, relativeRange, null))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, relativeRange))
             .containsExactly(indexRangeLatest, indexRange0, indexRange1);
     }
 
@@ -153,11 +142,11 @@ public class IndexHelperTest {
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, absoluteRange, null))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, absoluteRange))
             .containsExactly(indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, keywordRange, null))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, keywordRange))
             .containsExactly(indexRange0, indexRange1);
-        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, relativeRange, null))
+        assertThat(IndexHelper.determineAffectedIndicesWithRanges(indexRangeService, relativeRange))
             .containsExactly(indexRange0, indexRange1);
     }
 
@@ -174,16 +163,17 @@ public class IndexHelperTest {
             .build();
 
         when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
+        when(indexRangeService.get("graylog_2")).thenReturn(indexRangeLatest);
 
         final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange, null))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange))
             .containsExactly(indexRangeLatest.indexName(), indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, keywordRange, null))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, keywordRange))
             .containsExactly(indexRangeLatest.indexName(), indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, relativeRange, null))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, relativeRange))
             .containsExactly(indexRangeLatest.indexName(), indexRange0.indexName(), indexRange1.indexName());
     }
 
@@ -203,11 +193,11 @@ public class IndexHelperTest {
         final TimeRange keywordRange = KeywordRange.create("1 day ago");
         final TimeRange relativeRange = RelativeRange.create(3600);
 
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange, null))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange))
             .containsOnly(indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, keywordRange, null))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, keywordRange))
             .containsOnly(indexRange0.indexName(), indexRange1.indexName());
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, relativeRange, null))
+        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, relativeRange))
             .containsOnly(indexRange0.indexName(), indexRange1.indexName());
     }
 
@@ -227,29 +217,5 @@ public class IndexHelperTest {
             .hasFieldOrPropertyWithValue("name", "timestamp")
             .hasFieldOrPropertyWithValue("from", Tools.buildElasticSearchTimeFormat(from))
             .hasFieldOrPropertyWithValue("to", Tools.buildElasticSearchTimeFormat(to));
-    }
-
-    @Test
-    public void determineAffectedIndicesFilterIndexPrefix() throws Exception {
-        final DateTime now = DateTime.now(DateTimeZone.UTC);
-        final MongoIndexRange indexRange0 = MongoIndexRange.create("graylog_0", now, now.plusDays(1), now, 0);
-        final MongoIndexRange indexRange1 = MongoIndexRange.create("graylog_1", now.plusDays(1), now.plusDays(2), now, 0);
-        final MongoIndexRange b0 = MongoIndexRange.create("b_0", now.plusDays(1), now.plusDays(2), now, 0);
-        final MongoIndexRange b1 = MongoIndexRange.create("b_1", now.plusDays(1), now.plusDays(2), now, 0);
-        final SortedSet<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR)
-                .add(indexRange0)
-                .add(indexRange1)
-                .add(b0)
-                .add(b1)
-                .build();
-
-        when(indexRangeService.find(any(DateTime.class), any(DateTime.class))).thenReturn(indices);
-
-        final TimeRange absoluteRange = AbsoluteRange.create(now.minusDays(1), now.plusDays(1));
-        final IndexSet indexSet = mock(IndexSet.class);
-        when(indexSet.isManagedIndex(startsWith("b_"))).thenReturn(true);
-
-        assertThat(IndexHelper.determineAffectedIndices(indexRangeService, absoluteRange, indexSet))
-                .containsOnly(b0.indexName(), b1.indexName());
     }
 }

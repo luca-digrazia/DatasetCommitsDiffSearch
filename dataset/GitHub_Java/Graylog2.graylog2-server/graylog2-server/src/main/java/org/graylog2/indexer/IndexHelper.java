@@ -20,39 +20,42 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 public class IndexHelper {
-    public static Set<String> getOldestIndices(IndexSet indexSet, int count) {
-        final String[] managedIndicesNames = indexSet.getManagedIndicesNames();
-        if (count <= 0 || managedIndicesNames.length <= count) {
-            return Collections.emptySet();
+    private static final Logger LOG = LoggerFactory.getLogger(IndexHelper.class);
+
+    public static Set<String> getOldestIndices(Set<String> indexNames, int count) {
+        Set<String> r = Sets.newHashSet();
+
+        if (count < 0 || indexNames.size() <= count) {
+            return r;
         }
 
-        final List<Integer> numbers = new ArrayList<>(managedIndicesNames.length);
-        for (String indexName : managedIndicesNames) {
-            indexSet.extractIndexNumber(indexName).ifPresent(numbers::add);
+        Set<Integer> numbers = Sets.newHashSet();
+
+        for (String indexName : indexNames) {
+            numbers.add(Deflector.extractIndexNumber(indexName));
         }
 
-        final List<String> sorted = prependPrefixes(indexSet.getIndexPrefix(), Tools.asSortedList(numbers));
+        List<String> sorted = prependPrefixes(getPrefix(indexNames), Tools.asSortedList(numbers));
 
-        return Sets.newHashSet(sorted.subList(0, count));
+        // Add last x entries to return set.
+        r.addAll(sorted.subList(0, count));
+
+        return r;
     }
 
-    @Nullable
     public static QueryBuilder getTimestampRangeFilter(TimeRange range) throws InvalidRangeFormatException {
         if (range == null) {
             return null;
@@ -63,7 +66,16 @@ public class IndexHelper {
                 .lte(Tools.buildElasticSearchTimeFormat(range.getTo()));
     }
 
-    private static List<String> prependPrefixes(String prefix, List<Integer> numbers) {
+    private static String getPrefix(Set<String> names) {
+        if (names.isEmpty()) {
+            return "";
+        }
+
+        String name = (String) names.toArray()[0];
+        return name.substring(0, name.lastIndexOf("_"));
+    }
+
+    public static List<String> prependPrefixes(String prefix, List<Integer> numbers) {
         List<String> r = Lists.newArrayList();
 
         for (int number : numbers) {
@@ -74,9 +86,8 @@ public class IndexHelper {
     }
 
     public static Set<String> determineAffectedIndices(IndexRangeService indexRangeService,
-                                                       TimeRange range,
-                                                       IndexSet indexSet) {
-        final Set<IndexRange> indexRanges = determineAffectedIndicesWithRanges(indexRangeService, range, indexSet);
+                                                       TimeRange range) {
+        final Set<IndexRange> indexRanges = determineAffectedIndicesWithRanges(indexRangeService, range);
         final ImmutableSet.Builder<String> indices = ImmutableSet.builder();
         for (IndexRange indexRange : indexRanges) {
             indices.add(indexRange.indexName());
@@ -86,14 +97,9 @@ public class IndexHelper {
     }
 
     public static Set<IndexRange> determineAffectedIndicesWithRanges(IndexRangeService indexRangeService,
-                                                                     TimeRange range,
-                                                                     IndexSet indexSet) {
+                                                                     TimeRange range) {
         final ImmutableSortedSet.Builder<IndexRange> indices = ImmutableSortedSet.orderedBy(IndexRange.COMPARATOR);
         for (IndexRange indexRange : indexRangeService.find(range.getFrom(), range.getTo())) {
-            // if we only consider a certain index set, filter the index ranges by it.
-            if (indexSet != null && !indexSet.isManagedIndex(indexRange.indexName())) {
-                continue;
-            }
             indices.add(indexRange);
         }
 
